@@ -9,11 +9,12 @@ The front-end app, wired to the live Supabase project `spacework-company`.
 - `supabase/*.sql` - the database schema (already deployed)
 
 ## Deploy (to see and use it live)
-It's a static site, so deploy like the marketing site:
-1. Cloudflare Pages -> **Create project -> Direct Upload**.
-2. Name it e.g. `orbit` (or connect a subdomain like `erp.spacework.ai`).
-3. Upload the **`spacework-erp` folder** (or a zip of it).
-4. Open the deployed URL.
+The code is already pushed to GitHub: **`kevingemayel/orbit`** (branch `main`).
+It's a static site, so connect it to Cloudflare Pages once (your usual git flow):
+1. Cloudflare Pages -> **Create project -> Connect to Git** -> pick **`orbit`**.
+2. Build settings: **Framework preset: None**, **Build command: (empty)**, **Build output dir: `/`** (root - index.html is at the root).
+3. **Save and Deploy.** Future `git push` to `main` auto-deploys.
+4. (Optional) map a subdomain like `erp.spacework.ai`.
 
 ## First login (attach yourself as owner)
 The org is currently owned by a throwaway test user. To become the owner:
