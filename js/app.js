@@ -14,7 +14,7 @@
   // ---- modules / nav ----
   var MENU = [
     { grp: "Overview", items: [["dashboard", "Dashboard"]] },
-    { grp: "Accounting", items: [["accounts", "Chart of Accounts"], ["trial", "Trial Balance"], ["journals", "Journals"]] },
+    { grp: "Accounting", items: [["accounts", "Chart of Accounts"], ["trial", "Trial Balance"], ["pl", "Profit & Loss"], ["bs", "Balance Sheet"]] },
     { grp: "Sales", items: [["clients", "Customers"], ["invoices", "Invoices"]] },
     { grp: "Company", items: [["companies", "Companies"]] }
   ];
@@ -121,6 +121,10 @@
     if (S.view === "dashboard") return viewDashboard(c);
     if (S.view === "accounts") return viewAccounts(c);
     if (S.view === "trial") return viewTrial(c);
+    if (S.view === "pl") return viewPL(c);
+    if (S.view === "bs") return viewBS(c);
+    if (S.view === "clients") return viewClients(c);
+    if (S.view === "invoices") return viewInvoices(c);
     if (S.view === "companies") return viewCompanies(c);
     // stubs for modules whose screens are next
     c.innerHTML = cp(navLabel(S.view), S.company.name) +
@@ -256,6 +260,68 @@
     }).join("");
     document.getElementById("co").innerHTML = '<div class="card"><h3>' + (res.data || []).length + ' companies</h3>' +
       "<table><thead><tr><th>Name</th><th>Legal name</th><th>Currency</th><th>Country</th><th>Role</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+  }
+
+  // ========================= PROFIT & LOSS =========================
+  async function viewPL(c) {
+    c.innerHTML = cp("Profit & Loss", S.company.name + "  ·  " + S.company.currency_code) + '<div class="wrap" id="pl">Loading...</div>';
+    var rows = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var inc = rows.filter(function (r) { return (r.type_code || "").indexOf("income") === 0; });
+    var exp = rows.filter(function (r) { return (r.type_code || "").indexOf("expense") === 0; });
+    var incT = 0, expT = 0;
+    var incRows = inc.map(function (r) { var v = Number(r.credit) - Number(r.debit); incT += v; return line3(r.code, r.name, v); }).join("");
+    var expRows = exp.map(function (r) { var v = Number(r.debit) - Number(r.credit); expT += v; return line3(r.code, r.name, v); }).join("");
+    document.getElementById("pl").innerHTML =
+      '<div class="card"><h3>Income</h3><table><tbody>' + (incRows || empty3()) + total3("Total income", incT) + "</tbody></table></div>" +
+      '<div class="card" style="margin-top:14px"><h3>Expenses</h3><table><tbody>' + (expRows || empty3()) + total3("Total expenses", expT) + "</tbody></table></div>" +
+      '<div class="card" style="margin-top:14px"><table><tbody>' + total3("Net result", incT - expT) + "</tbody></table></div>";
+  }
+  // ========================= BALANCE SHEET =========================
+  async function viewBS(c) {
+    c.innerHTML = cp("Balance Sheet", S.company.name + "  ·  as of today") + '<div class="wrap" id="bs">Loading...</div>';
+    var rows = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    function group(prefix, flip) {
+      var g = rows.filter(function (r) { return (r.type_code || "").indexOf(prefix) === 0; });
+      var t = 0; var html = g.map(function (r) { var v = flip ? Number(r.credit) - Number(r.debit) : Number(r.balance); t += v; return line3(r.code, r.name, v); }).join("");
+      return { html: html, total: t };
+    }
+    var a = group("asset", false), l = group("liability", true), e = group("equity", true);
+    var result = 0; rows.forEach(function (r) { var tc = r.type_code || ""; if (tc.indexOf("income") === 0) result += Number(r.credit) - Number(r.debit); if (tc.indexOf("expense") === 0) result -= (Number(r.debit) - Number(r.credit)); });
+    document.getElementById("bs").innerHTML =
+      '<div class="card"><h3>Assets</h3><table><tbody>' + (a.html || empty3()) + total3("Total assets", a.total) + "</tbody></table></div>" +
+      '<div class="card" style="margin-top:14px"><h3>Liabilities</h3><table><tbody>' + (l.html || empty3()) + total3("Total liabilities", l.total) + "</tbody></table></div>" +
+      '<div class="card" style="margin-top:14px"><h3>Equity</h3><table><tbody>' + (e.html || empty3()) + line3("", "Current year result", result) + total3("Total equity", e.total + result) + "</tbody></table></div>";
+  }
+  function line3(code, name, v) { return "<tr><td class='num muted' style='text-align:left;width:80px'>" + esc(code) + "</td><td>" + esc(name) + "</td><td class='num'>" + money(v) + "</td></tr>"; }
+  function total3(name, v) { return "<tr style='font-weight:700'><td></td><td>" + esc(name) + "</td><td class='num'>" + money(v) + "</td></tr>"; }
+  function empty3() { return "<tr><td colspan='3' class='muted' style='padding:16px'>No entries yet.</td></tr>"; }
+
+  // ========================= CUSTOMERS =========================
+  async function viewClients(c) {
+    c.innerHTML = cp("Customers", (S.org ? S.org.name : "")) + '<div class="wrap" id="cl">Loading...</div>';
+    var res = await sb.from("partners").select("*").eq("is_customer", true).order("name");
+    var rows = (res.data || []).map(function (p) {
+      return "<tr><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(p.email || "") + "</td><td class='muted'>" + esc(p.phone || "") + "</td><td class='muted'>" + esc(p.city || "") + "</td></tr>";
+    }).join("");
+    document.getElementById("cl").innerHTML = '<div class="card"><h3>' + (res.data || []).length + ' customers</h3>' +
+      "<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>City</th></tr></thead><tbody>" + (rows || "<tr><td colspan='4' class='muted' style='padding:16px'>No customers yet.</td></tr>") + "</tbody></table></div>";
+  }
+  // ========================= INVOICES =========================
+  async function viewInvoices(c) {
+    c.innerHTML = cp("Invoices", S.company.name) + '<div class="wrap" id="iv">Loading...</div>';
+    var res = await sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").order("invoice_date", { ascending: false });
+    var data = res.data || [];
+    var st = { not_paid: "warn", partial: "warn", paid: "good", draft: "" };
+    var rows = data.map(function (i) {
+      var badge = i.state === "draft" ? "Draft" : (i.payment_state === "paid" ? "Paid" : i.payment_state === "partial" ? "Partial" : "Unpaid");
+      return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td><span class='badge'>" + badge + "</span></td></tr>";
+    }).join("");
+    var totBilled = data.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+    var totDue = data.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    document.getElementById("iv").innerHTML =
+      '<div class="kpis"><div class="kpi"><div class="l">Total billed</div><div class="n">' + S.company.currency_code + " " + money(totBilled) + '</div></div><div class="kpi"><div class="l">Outstanding</div><div class="n">' + S.company.currency_code + " " + money(totDue) + "</div></div></div>" +
+      '<div class="card"><h3>' + data.length + ' customer invoices</h3>' +
+      "<table><thead><tr><th>Number</th><th>Customer</th><th>Date</th><th class='num'>Total</th><th>Status</th></tr></thead><tbody>" + (rows || "<tr><td colspan='5' class='muted' style='padding:16px'>No invoices yet.</td></tr>") + "</tbody></table></div>";
   }
 
   // ---- start ----
