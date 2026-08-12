@@ -1,0 +1,4 @@
+dumps/
+projects.env
+*.log
+.DS_Store
