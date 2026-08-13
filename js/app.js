@@ -207,7 +207,7 @@
   }
   function closeDropdowns() { document.querySelectorAll("[data-dd]").forEach(function (d) { d.remove(); }); }
   document.addEventListener("click", function (e) {
-    if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava")) return;
+    if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest(".o-filtbtn")) return;
     closeDropdowns();
   });
 
