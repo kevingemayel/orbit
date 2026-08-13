@@ -1,0 +1,13 @@
+# Cloudflare Pages headers
+# Always revalidate the app shell and its assets so a new deploy is picked up
+# immediately (browser sends If-None-Match; server answers 200 or 304).
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/js/*
+  Cache-Control: no-cache
+/css/*
+  Cache-Control: no-cache
+/config.js
+  Cache-Control: no-cache
