@@ -1454,7 +1454,7 @@
 
   async function renderGeneralLedger() {
     document.getElementById("o-main").innerHTML = repChrome("General Ledger", true, true);
-    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(renderGeneralLedger);
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
     var lines = (await sb.from("journal_lines")
@@ -1485,7 +1485,7 @@
 
   async function renderPartnerLedger() {
     document.getElementById("o-main").innerHTML = repChrome("Partner Ledger", true);
-    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var cc = S.company.currency_code, rep = document.getElementById("rep");
     var lines = (await sb.from("journal_lines")
       .select("debit,credit,label,partner_id, accounts!inner(code,name,type_code), journal_entries!inner(date,entry_number,ref,state), partners(name)")
@@ -1510,7 +1510,7 @@
   async function renderAged(which) {
     var isRecv = which === "recv", title = isRecv ? "Aged Receivable" : "Aged Payable";
     document.getElementById("o-main").innerHTML = repChrome(title, true);
-    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var cc = S.company.currency_code, rep = document.getElementById("rep");
     var types = isRecv ? ["out_invoice", "out_refund"] : ["in_invoice", "in_refund"];
     var invs = (await sb.from("invoices").select("partner_id,invoice_date,due_date,amount_residual,move_type, partners(name)").eq("company_id", S.company.id).in("move_type", types).eq("state", "posted")).data || [];
@@ -1540,7 +1540,7 @@
 
   async function renderTaxReport() {
     document.getElementById("o-main").innerHTML = repChrome("VAT / Tax Report", false, true);
-    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(renderTaxReport);
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
     var rows = (await sb.from("invoice_lines").select("price_subtotal,price_total, invoices!inner(move_type,state,invoice_date), taxes(name)")
