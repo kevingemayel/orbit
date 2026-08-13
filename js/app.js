@@ -48,7 +48,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Consolidation", "rep.cons"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["VAT / Tax Report", "rep.tax"], ["Consolidation", "rep.cons"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
     },
@@ -109,7 +109,7 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
-    "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting",
+    "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -298,6 +298,7 @@
       case "rep.partner": return renderPartnerLedger();
       case "rep.aged.recv": return renderAged("recv");
       case "rep.aged.pay": return renderAged("pay");
+      case "rep.tax": return renderTaxReport();
       case "rep.cons": return renderConsolidation();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
@@ -1463,6 +1464,36 @@
     rep.innerHTML = repHead(title, cc) + (partners.length
       ? '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Partner</td>' + cols.map(function (c) { return '<td class="num">' + c + '</td>'; }).join("") + '<td class="num">Total</td></tr></thead><tbody>' + body + totRow + '</tbody></table></div>'
       : '<div class="o-empty">Nothing outstanding.</div>');
+  }
+
+  async function renderTaxReport() {
+    document.getElementById("o-main").innerHTML = repChrome("VAT / Tax Report");
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code, rep = document.getElementById("rep");
+    var rows = (await sb.from("invoice_lines").select("price_subtotal,price_total, invoices!inner(move_type,state), taxes(name)")
+      .eq("company_id", S.company.id).eq("invoices.state", "posted")).data || [];
+    var sales = {}, purch = {};
+    rows.forEach(function (r) {
+      var mt = (r.invoices && r.invoices.move_type) || "out_invoice";
+      var isSale = mt.indexOf("out") === 0, sign = mt.indexOf("refund") >= 0 ? -1 : 1;
+      var base = Number(r.price_subtotal || 0) * sign, tax = (Number(r.price_total || 0) - Number(r.price_subtotal || 0)) * sign;
+      var nm = (r.taxes && r.taxes.name) || "No tax / exempt";
+      var bag = isSale ? sales : purch, e = bag[nm] || (bag[nm] = { base: 0, tax: 0 });
+      e.base += base; e.tax += tax;
+    });
+    function section(title, bag) {
+      var keys = Object.keys(bag).sort(), tb = 0, tt = 0;
+      var body = keys.map(function (k) { var e = bag[k]; tb += e.base; tt += e.tax; return '<tr><td>' + esc(k) + '</td><td class="num">' + money(e.base) + '</td><td class="num">' + money(e.tax) + '</td></tr>'; }).join("");
+      return { html: '<tr class="sec"><td colspan="3">' + title + '</td></tr>' + (body || '<tr><td class="muted">None.</td><td></td><td></td></tr>') + '<tr class="tot"><td>Total ' + title + '</td><td class="num">' + money(tb) + '</td><td class="num">' + money(tt) + '</td></tr>', tax: tt };
+    }
+    var s = section("Sales (output VAT)", sales), p = section("Purchases (input VAT)", purch);
+    var net = s.tax - p.tax;
+    rep.innerHTML = repHead("VAT / Tax Report", cc) +
+      '<table class="o-rt"><thead><tr><td>Tax</td><td class="num">Net base</td><td class="num">Tax amount</td></tr></thead><tbody>' +
+      s.html + p.html +
+      '<tr class="tot"><td>' + (net >= 0 ? 'VAT payable' : 'VAT credit (refundable)') + '</td><td class="num"></td><td class="num">' + money(Math.abs(net)) + '</td></tr>' +
+      '</tbody></table>' +
+      '<div class="sub" style="margin-top:14px">Output VAT is tax you collected on sales; input VAT is tax you paid on purchases. Payable = output minus input. Credit notes are netted out. Posted documents only.</div>';
   }
 
   // ============================ CONSOLIDATION ============================
