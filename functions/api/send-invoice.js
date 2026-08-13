@@ -37,6 +37,10 @@ export async function onRequestPost(context) {
 
     stage = "parse";
     const body = await request.json().catch(() => ({}));
+    if (body.probe_url && /^https:\/\//.test(body.probe_url)) {
+      try { const p = await tfetch(body.probe_url, { method: body.probe_method || "GET" }, 8000); return json({ ok: true, probe: body.probe_url, status: p.status }); }
+      catch (e) { return json({ ok: false, probe: body.probe_url, errName: String(e && e.name), errMsg: String(e && e.message) }, 200); }
+    }
     const invId = body.invoice_id;
     if (!invId) return json({ error: "Missing invoice id." }, 400);
     if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 500);
