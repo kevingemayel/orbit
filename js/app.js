@@ -68,6 +68,15 @@
         { label: "Products", action: "products" }
       ]
     },
+    inventory: {
+      name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
+      menus: [
+        { label: "Overview", action: "inv.onhand" },
+        { label: "Operations", action: "inv.moves" },
+        { label: "Products", action: "products" },
+        { label: "Configuration", items: [["Warehouses", "wh"]] }
+      ]
+    },
     settings: {
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
@@ -85,9 +94,10 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings"
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
+    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory"
   };
-  var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
+  var SOON = [["CRM", "◎", "#e11d48"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
   // ============================ AUTH ============================
@@ -270,6 +280,9 @@
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
+      case "inv.onhand": return renderOnHand();
+      case "inv.moves": return renderList(cfgStockMoves());
+      case "wh": return renderList(cfgWarehouses());
       default: return renderDashboard();
     }
   }
@@ -1459,6 +1472,141 @@
       document.querySelectorAll("#appr [data-size]").forEach(function (x) { x.onclick = function () { S.ui.size = x.dataset.size; saveUI(); applyFontScale(); draw(); }; });
     }
     draw();
+  }
+
+  // ============================ INVENTORY ============================
+  var INV = null;
+  async function ensureInventory() {
+    if (INV && INV.company === S.company.id) return INV;
+    var whs = (await sb.from("warehouses").select("id").eq("company_id", S.company.id).limit(1)).data || [];
+    var whId;
+    if (!whs.length) { var w = await sb.from("warehouses").insert({ company_id: S.company.id, name: "Main Warehouse", code: "WH" }).select("id").single(); if (w.error) { toast("Inventory setup failed: " + w.error.message); return null; } whId = w.data.id; }
+    else whId = whs[0].id;
+    var locs = (await sb.from("stock_locations").select("id,name,usage").eq("company_id", S.company.id)).data || [];
+    async function ensureLoc(usage, name) {
+      var l = locs.filter(function (x) { return x.usage === usage; })[0];
+      if (l) return l.id;
+      var r = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: whId, name: name, usage: usage }).select("id").single();
+      return r.data ? r.data.id : null;
+    }
+    INV = { company: S.company.id, whId: whId, stock: await ensureLoc("internal", "Stock"), supplier: await ensureLoc("supplier", "Vendors"), customer: await ensureLoc("customer", "Customers"), adjust: await ensureLoc("inventory", "Inventory Adjustment") };
+    return INV;
+  }
+  async function onHandMap() {
+    var locs = (await sb.from("stock_locations").select("id,usage").eq("company_id", S.company.id)).data || [];
+    var internal = {}; locs.forEach(function (l) { if (l.usage === "internal") internal[l.id] = 1; });
+    var moves = (await sb.from("stock_moves").select("product_id,quantity,location_id,location_dest_id").eq("company_id", S.company.id).eq("state", "done")).data || [];
+    var oh = {};
+    moves.forEach(function (m) {
+      var q = Number(m.quantity) || 0;
+      if (internal[m.location_dest_id]) oh[m.product_id] = (oh[m.product_id] || 0) + q;
+      if (internal[m.location_id]) oh[m.product_id] = (oh[m.product_id] || 0) - q;
+    });
+    return oh;
+  }
+  async function renderOnHand() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("On Hand") +
+      '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-adj">Adjust</button>' +
+      '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    await ensureInventory();
+    var oh = await onHandMap();
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
+    var body = document.getElementById("o-body");
+    wireInvBtns(prods);
+    if (!prods.length) { body.innerHTML = '<div class="o-empty">No products yet. Add products (set type to <b>Storable</b>) in the Products screen, then Receive stock.</div>'; return; }
+    var list = storable.length ? storable : prods;
+    var rows = list.map(function (p) {
+      var q = oh[p.id] || 0, val = q * Number(p.cost_price || 0);
+      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
+    }).join("");
+    var totVal = list.reduce(function (s, p) { return s + (oh[p.id] || 0) * Number(p.cost_price || 0); }, 0);
+    body.innerHTML = '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
+      "<tr style='font-weight:700'><td></td><td>Total stock value</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
+  }
+  function wireInvBtns(prods) {
+    var r = document.getElementById("i-recv"), d = document.getElementById("i-deliv"), a = document.getElementById("i-adj");
+    if (r) r.onclick = function () { openStockModal("receive", prods); };
+    if (d) d.onclick = function () { openStockModal("deliver", prods); };
+    if (a) a.onclick = function () { openStockModal("adjust", prods); };
+  }
+  function openStockModal(kind, prods) {
+    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment" };
+    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
+    if (!storable.length) storable = prods;
+    if (!storable.length) { toast("Add a product first (Products screen)"); return; }
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "stockmodal";
+    var opts = storable.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
+      '<div><label>Product</label><select id="k-prod">' + opts + '</select></div>' +
+      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label><input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
+      (kind === "adjust" ? '<div style="font-size:12px;color:var(--ink3)">Records a move for the difference versus current on-hand.</div>' : "") +
+      '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : "Confirm") + '</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("k-cancel").onclick = function () { m.remove(); };
+    document.getElementById("k-save").onclick = async function () {
+      var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
+      if (isNaN(qty)) { toast("Enter a quantity"); return; }
+      var inv = await ensureInventory(); if (!inv) return;
+      var src, dest, q = qty;
+      if (kind === "receive") { src = inv.supplier; dest = inv.stock; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
+      else if (kind === "deliver") { src = inv.stock; dest = inv.customer; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
+      else { var cur = (await onHandMap())[pid] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = inv.stock; q = diff; } else { src = inv.stock; dest = inv.adjust; q = -diff; } }
+      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Stock updated"); renderOnHand();
+    };
+  }
+  function cfgStockMoves() {
+    return {
+      title: "Stock Moves", pageSize: 80,
+      fetch: function () {
+        return Promise.all([
+          sb.from("stock_moves").select("*, products(name)").eq("company_id", S.company.id).order("date", { ascending: false }),
+          sb.from("stock_locations").select("id,name,usage").eq("company_id", S.company.id)
+        ]).then(function (res) {
+          var locMap = {}; (res[1].data || []).forEach(function (l) { locMap[l.id] = l; });
+          return (res[0].data || []).map(function (m) { m._src = locMap[m.location_id]; m._dest = locMap[m.location_dest_id]; return m; });
+        });
+      },
+      searchText: function (m) { return (m.products ? m.products.name : "") + " " + (m._src ? m._src.name : "") + " " + (m._dest ? m._dest.name : ""); },
+      columns: [
+        { label: "Date", get: function (m) { return '<span class="muted">' + esc((m.date || "").slice(0, 10)) + '</span>'; } },
+        { label: "Product", get: function (m) { return '<b>' + esc(m.products ? m.products.name : "") + '</b>'; } },
+        { label: "From", get: function (m) { return '<span class="muted">' + esc(m._src ? m._src.name : "") + '</span>'; } },
+        { label: "To", get: function (m) { return '<span class="muted">' + esc(m._dest ? m._dest.name : "") + '</span>'; } },
+        { label: "Quantity", num: true, get: function (m) { return Number(m.quantity); } }
+      ],
+      groupBy: [{ label: "Product", get: function (m) { return m.products ? m.products.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }]
+    };
+  }
+  function cfgWarehouses() {
+    return {
+      title: "Warehouses", pageSize: 50,
+      fetch: function () { return sb.from("warehouses").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (w) { return (w.name || "") + " " + (w.code || ""); },
+      columns: [
+        { label: "Name", get: function (w) { return '<b>' + esc(w.name) + '</b>'; } },
+        { label: "Code", get: function (w) { return '<span class="muted">' + esc(w.code || "") + '</span>'; } }
+      ],
+      onNew: function () { openWarehouseModal(); }
+    };
+  }
+  function openWarehouseModal() {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "whmodal";
+    m.innerHTML = '<div class="sheet"><h3>New warehouse</h3><div class="form">' +
+      '<div class="row2"><div><label>Name</label><input id="w-name" placeholder="Main Warehouse"></div><div><label>Code</label><input id="w-code" placeholder="WH"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="w-cancel">Cancel</button><button class="btn pri" id="w-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("w-cancel").onclick = function () { m.remove(); };
+    document.getElementById("w-save").onclick = async function () {
+      var name = document.getElementById("w-name").value.trim(); if (!name) { toast("Name required"); return; }
+      var r = await sb.from("warehouses").insert({ company_id: S.company.id, name: name, code: document.getElementById("w-code").value.trim() });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Warehouse added"); renderView();
+    };
   }
 
   // ---- start ----
