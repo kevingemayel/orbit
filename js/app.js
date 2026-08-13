@@ -9,8 +9,29 @@
   var cfg = window.APP_CONFIG || {};
   var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
   var root = document.getElementById("root");
-  var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [] };
+  var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
+  var FIXED_APP_THEMES = ["corporate", "blue", "pink"];
+  function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "system", size: u.size || "normal" }; } catch (e) { } return { theme: "system", font: "system", size: "normal" }; }
+  function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
+  function fontStack(f) { return ({ system: '"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif', inter: '"Inter",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
+  function applyTheme() {
+    var de = document.documentElement;
+    if (S.ui.theme && S.ui.theme !== "system") de.setAttribute("data-theme", S.ui.theme); else de.removeAttribute("data-theme");
+    de.style.setProperty("--ui", fontStack(S.ui.font));
+    applyAppColor(); applyFontScale();
+  }
+  function applyAppColor() {
+    var s = document.documentElement.style;
+    if (FIXED_APP_THEMES.indexOf(S.ui.theme) >= 0) { s.removeProperty("--app"); s.removeProperty("--app2"); }
+    else if (S.app && APPS[S.app]) { s.setProperty("--app", APPS[S.app].color); s.setProperty("--app2", APPS[S.app].color2); }
+    else { s.removeProperty("--app"); s.removeProperty("--app2"); }
+  }
+  function applyFontScale() {
+    var z = ({ small: 0.92, normal: 1, large: 1.1 })[S.ui.size] || 1;
+    var m = document.getElementById("o-main"); if (m) m.style.zoom = z;
+    var h = document.querySelector(".o-home"); if (h) h.style.zoom = z;
+  }
 
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
@@ -51,6 +72,7 @@
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
         { label: "Companies", action: "companies" },
+        { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
         { label: "Exchange Rates", action: "rates" },
         { label: "Chart of Accounts", action: "accounts" }
@@ -63,7 +85,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting"
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -137,14 +159,13 @@
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
+    applyFontScale();
   }
 
   function openApp(key) {
     S.app = key;
-    var a = APPS[key];
-    document.documentElement.style.setProperty("--app", a.color);
-    document.documentElement.style.setProperty("--app2", a.color2);
-    go(a.home);
+    applyAppColor();
+    go(APPS[key].home);
   }
 
   // ============================ SHELL ============================
@@ -172,6 +193,7 @@
     document.querySelectorAll(".o-menu .mi").forEach(function (mi) {
       mi.onclick = function (e) { onMenuClick(mi, a.menus[+mi.dataset.mi]); };
     });
+    applyAppColor(); applyFontScale();
   }
   function companySelectHTML(scope) {
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
@@ -218,7 +240,7 @@
   // ============================ ROUTER ============================
   function go(action) {
     S.action = action;
-    if (!S.app) { S.app = ACTION_APP[action] || "accounting"; var a0 = APPS[S.app]; document.documentElement.style.setProperty("--app", a0.color); document.documentElement.style.setProperty("--app2", a0.color2); }
+    if (!S.app) { S.app = ACTION_APP[action] || "accounting"; applyAppColor(); }
     if (!document.getElementById("o-main")) renderShell();
     else { /* keep shell, but ensure menu highlights current app */ }
     routeAction(action);
@@ -247,6 +269,7 @@
       case "rep.cons": return renderConsolidation();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
+      case "appearance": return renderAppearance();
       default: return renderDashboard();
     }
   }
@@ -1407,7 +1430,39 @@
     }
   }
 
+  // ============================ APPEARANCE (THEME) ============================
+  function renderAppearance() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Appearance") + '</div><div class="o-form-bg"><div class="appr" id="appr"></div></div></div>';
+    wireBc();
+    var THEMES = [
+      ["system", "System", ["#f3f5f8", "#1f5fbf", "#152030"]],
+      ["light", "Light", ["#ffffff", "#1f5fbf", "#152030"]],
+      ["dark", "Dark", ["#141a23", "#5b9bf0", "#0c1016"]],
+      ["corporate", "Corporate", ["#eef1f5", "#1f4e79", "#1f4e79"]],
+      ["colorful", "Colorful", ["#f6f4ff", "#7c3aed", "#db2777"]],
+      ["blue", "Blue", ["#eef4fc", "#2563eb", "#1d4ed8"]],
+      ["pink", "Pink", ["#fdf2f7", "#db2777", "#be185d"]]
+    ];
+    var FONTS = [["system", "System"], ["inter", "Inter"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]];
+    var SIZES = [["small", "Small"], ["normal", "Normal"], ["large", "Large"]];
+    function draw() {
+      document.getElementById("appr").innerHTML =
+        '<h3>Theme</h3><div class="themes">' + THEMES.map(function (t) {
+          return '<div class="th' + (S.ui.theme === t[0] ? " on" : "") + '" data-theme="' + t[0] + '"><div class="sw">' + t[2].map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</div><div class="nm">' + t[1] + (S.ui.theme === t[0] ? " &#10003;" : "") + '</div></div>';
+        }).join("") + '</div>' +
+        '<h3>Font</h3><div class="opts">' + FONTS.map(function (f) { return '<button class="opt' + (S.ui.font === f[0] ? " on" : "") + '" data-font="' + f[0] + '">' + f[1] + '</button>'; }).join("") + '</div>' +
+        '<h3>Text size</h3><div class="opts">' + SIZES.map(function (s) { return '<button class="opt' + (S.ui.size === s[0] ? " on" : "") + '" data-size="' + s[0] + '">' + s[1] + '</button>'; }).join("") + '</div>' +
+        '<div class="hint">Saved on this device; applies across the whole app instantly.</div>';
+      document.querySelectorAll("#appr [data-theme]").forEach(function (x) { x.onclick = function () { S.ui.theme = x.dataset.theme; saveUI(); applyTheme(); draw(); }; });
+      document.querySelectorAll("#appr [data-font]").forEach(function (x) { x.style.fontFamily = fontStack(x.dataset.font); x.onclick = function () { S.ui.font = x.dataset.font; saveUI(); applyTheme(); draw(); }; });
+      document.querySelectorAll("#appr [data-size]").forEach(function (x) { x.onclick = function () { S.ui.size = x.dataset.size; saveUI(); applyFontScale(); draw(); }; });
+    }
+    draw();
+  }
+
   // ---- start ----
+  applyTheme();
   sb.auth.onAuthStateChange(function (_e, session) { if (!session) renderLogin("in"); });
   boot();
 })();
