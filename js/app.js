@@ -1346,6 +1346,9 @@
 
   // ============================ REPORTS ============================
   var REP_PERIOD = "year";
+  var PERIODS = [["year", "This year"], ["quarter", "This quarter"], ["month", "This month"], ["lastyear", "Last year"], ["all", "All time"]];
+  function periodSelect() { return '<select id="rp-period" class="o-filtbtn" style="margin-right:8px">' + PERIODS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === REP_PERIOD ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>'; }
+  function wirePeriod(rerender) { var el = document.getElementById("rp-period"); if (el) el.onchange = function () { REP_PERIOD = this.value; rerender(); }; }
   function periodRange(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
     function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
@@ -1375,13 +1378,11 @@
   async function renderReport(kind) {
     var titles = { pl: "Profit and Loss", bs: "Balance Sheet", tb: "Trial Balance" };
     var pr = periodRange(REP_PERIOD);
-    var periods = [["year", "This year"], ["quarter", "This quarter"], ["month", "This month"], ["lastyear", "Last year"], ["all", "All time"]];
-    var psel = '<select id="rp-period" class="o-filtbtn" style="margin-right:8px">' + periods.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === REP_PERIOD ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + psel + '<button class="o-filtbtn" id="rp-print">Print</button></div>' +
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-print">Print</button></div>' +
       '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
-    document.getElementById("rp-period").onchange = function () { REP_PERIOD = this.value; renderReport(kind); };
+    wirePeriod(function () { renderReport(kind); });
     var asOf = pr.to || today();
     var rows = await computeRows(kind === "pl" ? pr.from : null, pr.to);
     var cc = S.company.currency_code, rep = document.getElementById("rep");
@@ -1413,17 +1414,19 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
-  function repChrome(title, wide) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
+  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + '<button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
   function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>'; }
 
   async function renderGeneralLedger() {
-    document.getElementById("o-main").innerHTML = repChrome("General Ledger", true);
+    document.getElementById("o-main").innerHTML = repChrome("General Ledger", true, true);
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
-    var cc = S.company.currency_code, rep = document.getElementById("rep");
+    wirePeriod(renderGeneralLedger);
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
     var lines = (await sb.from("journal_lines")
       .select("debit,credit,label, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state), partners(name)")
       .eq("company_id", S.company.id).eq("journal_entries.state", "posted")).data || [];
-    if (!lines.length) { rep.innerHTML = repHead("General Ledger", cc) + '<div class="o-empty">No posted journal entries yet.</div>'; return; }
+    lines = lines.filter(function (l) { var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return false; if (pr.from && d < pr.from) return false; if (pr.to && d > pr.to) return false; return true; });
+    if (!lines.length) { rep.innerHTML = repHead("General Ledger - " + pr.label, cc) + '<div class="o-empty">No posted journal entries in this period.</div>'; return; }
     var byAcc = {};
     lines.forEach(function (l) { var a = l.accounts || {}; var k = (a.code || "zz") + "|" + (a.name || ""); (byAcc[k] || (byAcc[k] = [])).push(l); });
     var keys = Object.keys(byAcc).sort();
@@ -1440,7 +1443,7 @@
       gtd += atd; gtc += atc;
       html += '<tr class="tot"><td colspan="4">Total ' + esc(parts[0]) + '</td><td class="num">' + money(atd) + '</td><td class="num">' + money(atc) + '</td><td class="num">' + money(atd - atc) + '</td></tr>';
     });
-    rep.innerHTML = repHead("General Ledger", cc) +
+    rep.innerHTML = repHead("General Ledger - " + pr.label, cc) +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Date</td><td>Entry</td><td>Partner</td><td>Label</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Balance</td></tr></thead><tbody>' +
       html + '<tr class="tot"><td colspan="4">Grand Total</td><td class="num">' + money(gtd) + '</td><td class="num">' + money(gtc) + '</td><td class="num">' + money(gtd - gtc) + '</td></tr></tbody></table></div>';
   }
@@ -1501,11 +1504,13 @@
   }
 
   async function renderTaxReport() {
-    document.getElementById("o-main").innerHTML = repChrome("VAT / Tax Report");
+    document.getElementById("o-main").innerHTML = repChrome("VAT / Tax Report", false, true);
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
-    var cc = S.company.currency_code, rep = document.getElementById("rep");
-    var rows = (await sb.from("invoice_lines").select("price_subtotal,price_total, invoices!inner(move_type,state), taxes(name)")
+    wirePeriod(renderTaxReport);
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var rows = (await sb.from("invoice_lines").select("price_subtotal,price_total, invoices!inner(move_type,state,invoice_date), taxes(name)")
       .eq("company_id", S.company.id).eq("invoices.state", "posted")).data || [];
+    rows = rows.filter(function (r) { var d = r.invoices ? r.invoices.invoice_date : null; if (!d) return false; if (pr.from && d < pr.from) return false; if (pr.to && d > pr.to) return false; return true; });
     var sales = {}, purch = {};
     rows.forEach(function (r) {
       var mt = (r.invoices && r.invoices.move_type) || "out_invoice";
@@ -1522,7 +1527,7 @@
     }
     var s = section("Sales (output VAT)", sales), p = section("Purchases (input VAT)", purch);
     var net = s.tax - p.tax;
-    rep.innerHTML = repHead("VAT / Tax Report", cc) +
+    rep.innerHTML = repHead("VAT / Tax Report - " + pr.label, cc) +
       '<table class="o-rt"><thead><tr><td>Tax</td><td class="num">Net base</td><td class="num">Tax amount</td></tr></thead><tbody>' +
       s.html + p.html +
       '<tr class="tot"><td>' + (net >= 0 ? 'VAT payable' : 'VAT credit (refundable)') + '</td><td class="num"></td><td class="num">' + money(Math.abs(net)) + '</td></tr>' +
