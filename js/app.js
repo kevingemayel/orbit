@@ -73,7 +73,7 @@
       menus: [
         { label: "Overview", action: "inv.onhand" },
         { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Replenishment", "inv.reorder"]] },
-        { label: "Products", action: "products" },
+        { label: "Products", items: [["Products", "products"], ["Lots / Serials", "lots"]] },
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"]] }
       ]
     },
@@ -95,7 +95,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory"
+    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -285,6 +285,7 @@
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
+      case "lots": return renderLots();
       default: return renderDashboard();
     }
   }
@@ -1600,9 +1601,12 @@
     var locField = "";
     if (kind === "transfer") locField = '<div class="row2"><div><label>From location</label>' + fhint("__from", "The stock location the goods leave.") + '<select id="k-from">' + locOpts + '</select></div><div><label>To location</label>' + fhint("__to", "The stock location the goods arrive at.") + '<select id="k-to">' + locOpts + '</select></div></div>';
     else if (inv.internal.length > 1) locField = '<div><label>Location</label>' + fhint("__loc", "Which warehouse / stock location this affects.") + '<select id="k-loc">' + locOpts + '</select></div>';
+    var lotField = "";
+    if (kind === "receive") lotField = '<div class="row2"><div><label>Lot / Serial (optional)</label>' + fhint("__lot", "A batch or serial number for traceability. Leave blank if not tracked.") + '<input id="k-lot" placeholder="e.g. LOT-2026-014"></div><div><label>Expiry (optional)</label>' + fhint("__exp", "Best-before / expiry date for this lot, if any.") + '<input id="k-exp" type="date"></div></div>';
+    else if (kind === "deliver") lotField = '<div><label>Lot / Serial (optional)</label>' + fhint("__lot", "The batch/serial being shipped, for traceability.") + '<input id="k-lot" placeholder="lot shipped"></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
       '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + locField +
-      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
+      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' + lotField +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
@@ -1618,6 +1622,8 @@
       var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id); }
+      var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
+      if (lotName && r.data && r.data.id) { var lotId = await findOrCreateLot(pid, lotName, document.getElementById("k-exp") ? document.getElementById("k-exp").value : null); if (lotId) await sb.from("stock_move_lines").insert({ company_id: S.company.id, move_id: r.data.id, lot_id: lotId, quantity: q }); }
       m.remove(); toast(kind === "transfer" ? "Transferred between locations" : "Stock updated & posted to the ledger"); renderOnHand();
     };
   }
@@ -1773,6 +1779,36 @@
     }
     body.querySelectorAll(".rr-min, .rr-max").forEach(function (inp) { inp.addEventListener("change", function () { saveRule(inp.dataset.id).then(function () { toast("Rule saved"); renderReorder(); }); }); });
     body.querySelectorAll(".rr-order").forEach(function (b) { b.onclick = function () { openStockModal("receive", storable); setTimeout(function () { var ps = document.getElementById("k-prod"); if (ps) ps.value = b.dataset.id; var qi = document.getElementById("k-qty"); if (qi) qi.value = b.dataset.need; }, 200); }; });
+  }
+  async function findOrCreateLot(productId, name, expiry) {
+    var ex = (await sb.from("stock_lots").select("id").eq("company_id", S.company.id).eq("product_id", productId).eq("name", name).maybeSingle()).data;
+    if (ex) return ex.id;
+    var r = await sb.from("stock_lots").insert({ company_id: S.company.id, product_id: productId, name: name, expiry_date: expiry || null }).select("id").single();
+    return r.data ? r.data.id : null;
+  }
+  async function lotOnHand() {
+    var locs = (await sb.from("stock_locations").select("id,usage").eq("company_id", S.company.id)).data || [];
+    var internal = {}; locs.forEach(function (l) { if (l.usage === "internal") internal[l.id] = 1; });
+    var lines = (await sb.from("stock_move_lines").select("lot_id,quantity, stock_moves(location_id,location_dest_id)").eq("company_id", S.company.id)).data || [];
+    var by = {};
+    lines.forEach(function (l) { var mv = l.stock_moves; if (!mv || !l.lot_id) return; var q = Number(l.quantity) || 0; if (internal[mv.location_dest_id]) by[l.lot_id] = (by[l.lot_id] || 0) + q; if (internal[mv.location_id]) by[l.lot_id] = (by[l.lot_id] || 0) - q; });
+    return by;
+  }
+  async function renderLots() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Lots / Serials") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var lots = (await sb.from("stock_lots").select("*, products(name)").eq("company_id", S.company.id).order("name")).data || [];
+    var oh = await lotOnHand();
+    var body = document.getElementById("o-body");
+    if (!lots.length) { body.innerHTML = '<div class="o-empty">No lots or serial numbers yet. Add a <b>Lot / Serial</b> when you Receive stock and it will appear here with its on-hand and expiry.</div>'; return; }
+    var todayS = today(), soon = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+    var rows = lots.map(function (l) {
+      var q = oh[l.id] || 0, exp = l.expiry_date || "";
+      var st = exp ? (exp < todayS ? '<span class="badge unpaid">Expired</span>' : (exp <= soon ? '<span class="badge partial">Expiring soon</span>' : '<span class="badge paid">OK</span>')) : '<span class="muted">-</span>';
+      return "<tr><td><b>" + esc(l.name) + "</b></td><td>" + esc(l.products ? l.products.name : "") + "</td><td class='num'>" + q + "</td><td class='muted'>" + esc(exp || "-") + "</td><td>" + st + "</td></tr>";
+    }).join("");
+    body.innerHTML = '<table class="o-list"><thead><tr><th>Lot / Serial</th><th>Product</th><th class="num">On Hand</th><th>Expiry</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
 
   // ---- start ----
