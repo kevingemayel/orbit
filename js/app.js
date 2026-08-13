@@ -551,9 +551,9 @@
     var ref = (S.org && S.org.ref_currency) || "USD";
     var m = document.createElement("div"); m.className = "modal on"; m.id = "ratemodal";
     m.innerHTML = '<div class="sheet"><h3>New exchange rate</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-      '<div><label>Currency code</label><input id="r-code" placeholder="e.g. EUR" style="text-transform:uppercase"></div>' +
-      '<div class="row2"><div><label>Date</label><input id="r-date" type="date" value="' + today() + '"></div><div><label>Type</label><select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
-      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label><input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09"></div>' +
+      '<div><label>Currency code</label>' + fhint("Currency code", "The 3-letter code of the currency you are quoting, e.g. EUR or LBP.") + '<input id="r-code" placeholder="e.g. EUR" style="text-transform:uppercase"></div>' +
+      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + today() + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
+      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09"></div>' +
       '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button><button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("r-cancel").onclick = function () { m.remove(); };
@@ -839,9 +839,9 @@
     var defSubject = docName + " " + (inv.number || "") + " from " + S.company.name;
     var m = document.createElement("div"); m.className = "modal on"; m.id = "sendmodal";
     m.innerHTML = '<div class="sheet wide"><h3>Email ' + esc(inv.number || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px;max-height:76vh;overflow:auto">' +
-      '<div class="row2"><div><label>To</label><input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
-      '<div><label>Subject</label><input id="s-subj" value="' + esc(defSubject) + '"></div></div>' +
-      '<div><label>Message to the customer (optional)</label><textarea id="s-note" rows="3" placeholder="e.g. Hi, please find your invoice attached below. Payment is due within 30 days. Thank you!"></textarea></div>' +
+      '<div class="row2"><div><label>To</label>' + fhint("To", "Where the email is sent. Defaults to the customer's email; you can change it.") + '<input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
+      '<div><label>Subject</label>' + fhint("Subject") + '<input id="s-subj" value="' + esc(defSubject) + '"></div></div>' +
+      '<div><label>Message to the customer (optional)</label>' + fhint("__note", "A short cover note shown at the top of the email, above the invoice.") + '<textarea id="s-note" rows="3" placeholder="e.g. Hi, please find your invoice attached below. Payment is due within 30 days. Thank you!"></textarea></div>' +
       '<div><label>Preview &mdash; this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>' +
       '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri" id="s-send" style="background:var(--app);border-color:var(--app)">Send email</button></div></div>';
     document.body.appendChild(m);
@@ -886,7 +886,45 @@
       '<div style="margin-top:28px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center">' + esc(co.name || "Space Work") + ' &middot; sent via Orbit</div>' +
       '</div></body></html>';
   }
-  function fld(label, valueHtml) { return '<div class="o-fld"><label>' + esc(label) + '</label><div class="v">' + valueHtml + '</div></div>'; }
+  var FIELD_DESC = {
+    "Customer": "The client this document is billed to. Pick from your customers.",
+    "Vendor": "The supplier this document comes from. Pick from your vendors.",
+    "Reference": "Optional: your internal note or the other party's document/PO number.",
+    "Reference / Note": "Optional note shown on the order, e.g. a PO number or terms.",
+    "Invoice Date": "Date the invoice is issued. Drives the accounting period it lands in.",
+    "Bill Date": "Date shown on the vendor's bill.",
+    "Order Date": "Date the order is placed.",
+    "Due Date": "When payment is expected. Used for aging and reminders.",
+    "Journal": "The accounting journal this posts to (set automatically).",
+    "Currency": "Currency of this document. Defaults to your company currency.",
+    "Narration": "Free-text notes stored on the underlying journal entry.",
+    "Source": "Where this entry originated (e.g. an invoice or a stock move).",
+    "Email": "Address used to email invoices and documents to this contact.",
+    "Phone": "Contact phone number.",
+    "Tax / VAT no.": "The party's tax / VAT registration number, for compliant invoices.",
+    "Street": "Street address line.",
+    "City": "City or town.",
+    "Country": "Country.",
+    "Type": "The kind of record. Changes how it behaves in the app.",
+    "Sales Price": "Default unit price used when you sell this product.",
+    "Cost": "Unit cost. Used for margins and for stock valuation.",
+    "Status": "Active records are usable; archived ones are hidden from lists.",
+    "Income Account": "Revenue account credited when this product is sold. Blank uses the default (7000).",
+    "Expense Account": "Expense account debited when this product is bought. Blank uses the default (6000).",
+    "Sales Tax": "Tax applied by default when selling this product.",
+    "Purchase Tax": "Tax applied by default when buying this product.",
+    "Code": "Short unique code, e.g. the account number.",
+    "Name": "A clear label to identify this record.",
+    "Product": "The item this movement applies to.",
+    "Quantity": "Number of units.",
+    "To": "The recipient's email address.",
+    "Subject": "The email subject line your customer will see."
+  };
+  function fld(label, valueHtml, desc) {
+    desc = desc || FIELD_DESC[label] || "";
+    return '<div class="o-fld"><div class="lbl"><label>' + esc(label) + '</label>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
+  }
+  function fhint(label, fallback) { var d = FIELD_DESC[label] || fallback || ""; return d ? '<div class="fd">' + esc(d) + '</div>' : ""; }
   async function createCreditNote(inv, lines, isSale) {
     var moveType = isSale ? "out_refund" : "in_refund";
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
@@ -1188,9 +1226,9 @@
     var due = Number(inv.amount_residual || inv.amount_total || 0);
     var m = document.createElement("div"); m.className = "modal on"; m.id = "paymodal";
     m.innerHTML = '<div class="sheet"><h3>Register Payment &middot; ' + esc(inv.number || "") + '</h3><div class="form">' +
-      '<div><label>Amount (' + esc(S.company.currency_code) + ')</label><input id="p-amt" type="number" step="0.01" value="' + due + '"></div>' +
-      '<div class="row2"><div><label>Date</label><input id="p-date" type="date" value="' + today() + '"></div><div><label>Journal</label><select id="p-jrn"><option value="BNK">Bank</option><option value="CSH">Cash</option></select></div></div>' +
-      '<div><label>Reference</label><input id="p-ref" placeholder="Receipt / transfer ref"></div>' +
+      '<div><label>Amount (' + esc(S.company.currency_code) + ')</label>' + fhint("__amt", "How much is being paid now. Defaults to the full amount still due.") + '<input id="p-amt" type="number" step="0.01" value="' + due + '"></div>' +
+      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date the money was received or paid.") + '<input id="p-date" type="date" value="' + today() + '"></div><div><label>Journal</label>' + fhint("Journal", "Which account the money moves through: your bank or cash on hand.") + '<select id="p-jrn"><option value="BNK">Bank</option><option value="CSH">Cash</option></select></div></div>' +
+      '<div><label>Reference</label>' + fhint("Reference", "Optional: the transfer/receipt number for your records.") + '<input id="p-ref" placeholder="Receipt / transfer ref"></div>' +
       '</div><div class="foot"><button class="btn" id="p-cancel">Cancel</button><button class="btn pri" id="p-save" style="background:var(--app);border-color:var(--app)">Register</button></div></div>';
     document.body.appendChild(m);
     m.querySelector(".form").style.cssText = "padding:16px 18px;display:grid;gap:12px";
@@ -1540,8 +1578,8 @@
     var m = document.createElement("div"); m.className = "modal on"; m.id = "stockmodal";
     var opts = storable.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
-      '<div><label>Product</label><select id="k-prod">' + opts + '</select></div>' +
-      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label><input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
+      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' +
+      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : "How many units are leaving stock.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
       (kind === "adjust" ? '<div style="font-size:12px;color:var(--ink3)">Records a move for the difference versus current on-hand.</div>' : "") +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
@@ -1554,10 +1592,45 @@
       if (kind === "receive") { src = inv.supplier; dest = inv.stock; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else if (kind === "deliver") { src = inv.stock; dest = inv.customer; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = (await onHandMap())[pid] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = inv.stock; q = diff; } else { src = inv.stock; dest = inv.adjust; q = -diff; } }
-      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() });
+      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      m.remove(); toast("Stock updated"); renderOnHand();
+      var product = prods.filter(function (p) { return p.id === pid; })[0] || {};
+      var vkind = kind === "receive" ? "receive" : kind === "deliver" ? "deliver" : (dest === inv.stock ? "adjust_up" : "adjust_down");
+      await postStockValue(vkind, product, q, r.data && r.data.id);
+      m.remove(); toast("Stock updated & posted to the ledger"); renderOnHand();
     };
+  }
+  var INVACC = null;
+  async function invAccounts() {
+    if (INVACC && INVACC.company === S.company.id) return INVACC;
+    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["3100", "4700", "6000", "6500"])).data || [];
+    var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    INVACC = { company: S.company.id, inv: by["3100"], susp: by["4700"], cogs: by["6000"], adj: by["6500"], journal: jr ? jr.id : null };
+    return INVACC;
+  }
+  // Perpetual-inventory GL posting for a stock move (value = qty x product cost).
+  //  receive: Dr 3100 Inventory / Cr 4700 Interim ; deliver: Dr 6000 COGS / Cr 3100
+  //  adjust up: Dr 3100 / Cr 6500 ; adjust down: Dr 6500 / Cr 3100
+  async function postStockValue(kind, product, qty, moveId) {
+    var cost = Number(product.cost_price || 0), value = qty * cost;
+    if (value <= 0) return;
+    var a = await invAccounts();
+    if (!a.journal || !a.inv) return;
+    var dr, cr, sQ = qty, sV = value;
+    if (kind === "receive") { dr = a.inv; cr = a.susp; }
+    else if (kind === "deliver") { dr = a.cogs; cr = a.inv; sQ = -qty; sV = -value; }
+    else if (kind === "adjust_up") { dr = a.inv; cr = a.adj; }
+    else { dr = a.adj; cr = a.inv; sQ = -qty; sV = -value; }
+    if (!dr || !cr) return;
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: a.journal, date: today(), ref: "", narration: "Stock: " + (product.name || ""), currency_code: S.company.currency_code, state: "draft", source_type: "stock", source_id: moveId ? String(moveId) : "" }).select("id").single();
+    if (e.error) { toast("Stock saved; GL entry failed: " + e.error.message); return; }
+    var eid = e.data.id;
+    var lr = await sb.from("journal_lines").insert([{ entry_id: eid, company_id: S.company.id, account_id: dr, label: product.name || "", debit: value, credit: 0 }, { entry_id: eid, company_id: S.company.id, account_id: cr, label: product.name || "", debit: 0, credit: value }]);
+    if (lr.error) { toast("Stock saved; GL lines failed: " + lr.error.message); return; }
+    var pr = await sb.rpc("post_entry", { p_entry: eid });
+    if (pr.error) { toast("Stock saved; GL post failed: " + pr.error.message); return; }
+    await sb.from("stock_valuation_layers").insert({ company_id: S.company.id, product_id: product.id, move_id: moveId || null, quantity: sQ, unit_cost: cost, value: sV, journal_entry_id: eid });
   }
   function cfgStockMoves() {
     return {
@@ -1597,7 +1670,7 @@
   function openWarehouseModal() {
     var m = document.createElement("div"); m.className = "modal on"; m.id = "whmodal";
     m.innerHTML = '<div class="sheet"><h3>New warehouse</h3><div class="form">' +
-      '<div class="row2"><div><label>Name</label><input id="w-name" placeholder="Main Warehouse"></div><div><label>Code</label><input id="w-code" placeholder="WH"></div></div>' +
+      '<div class="row2"><div><label>Name</label>' + fhint("Name", "A name for this storage location, e.g. Main Warehouse or Beirut Depot.") + '<input id="w-name" placeholder="Main Warehouse"></div><div><label>Code</label>' + fhint("Code", "A short code for the warehouse, e.g. WH or BEY.") + '<input id="w-code" placeholder="WH"></div></div>' +
       '</div><div class="foot"><button class="btn" id="w-cancel">Cancel</button><button class="btn pri" id="w-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("w-cancel").onclick = function () { m.remove(); };
