@@ -15,7 +15,7 @@
   var MENU = [
     { grp: "Overview", items: [["dashboard", "Dashboard"]] },
     { grp: "Accounting", items: [["accounts", "Chart of Accounts"], ["trial", "Trial Balance"], ["pl", "Profit & Loss"], ["bs", "Balance Sheet"]] },
-    { grp: "Sales", items: [["clients", "Customers"], ["invoices", "Invoices"]] },
+    { grp: "Sales", items: [["clients", "Customers"], ["invoices", "Invoices"], ["payments", "Payments"]] },
     { grp: "Company", items: [["companies", "Companies"]] }
   ];
   var TYPE_GROUPS = [
@@ -125,6 +125,7 @@
     if (S.view === "bs") return viewBS(c);
     if (S.view === "clients") return viewClients(c);
     if (S.view === "invoices") return viewInvoices(c);
+    if (S.view === "payments") return viewPayments(c);
     if (S.view === "companies") return viewCompanies(c);
     // stubs for modules whose screens are next
     c.innerHTML = cp(navLabel(S.view), S.company.name) +
@@ -139,18 +140,19 @@
     c.innerHTML = cp("Dashboard", S.company.name + "  ·  " + S.company.currency_code) + '<div class="wrap" id="db">Loading...</div>';
     var tb = await sb.rpc("trial_balance", { p_company: S.company.id });
     var rows = tb.data || [];
-    var assets = 0, income = 0, expense = 0;
+    var income = 0, expense = 0, cash = 0, recv = 0;
     rows.forEach(function (r) {
       var g = (r.type_code || "").split("_")[0];
       if (g === "income") income += Number(r.credit) - Number(r.debit);
       if (g === "expense") expense += Number(r.debit) - Number(r.credit);
-      if (g === "asset") assets += Number(r.balance);
+      if (r.type_code === "asset_cash") cash += Number(r.balance);
+      if (r.type_code === "asset_receivable") recv += Number(r.balance);
     });
     document.getElementById("db").innerHTML =
       '<div class="kpis">' +
-      kpi("Total assets", S.company.currency_code + " " + money(assets)) +
+      kpi("Cash & bank", S.company.currency_code + " " + money(cash)) +
+      kpi("Receivable", S.company.currency_code + " " + money(recv)) +
       kpi("Income (YTD)", S.company.currency_code + " " + money(income)) +
-      kpi("Expenses (YTD)", S.company.currency_code + " " + money(expense)) +
       kpi("Result", S.company.currency_code + " " + money(income - expense)) +
       "</div>" +
       '<div class="card"><h3>' + esc(S.company.name) + " · setup</h3>" +
@@ -307,21 +309,58 @@
       "<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>City</th></tr></thead><tbody>" + (rows || "<tr><td colspan='4' class='muted' style='padding:16px'>No customers yet.</td></tr>") + "</tbody></table></div>";
   }
   // ========================= INVOICES =========================
+  var _invoices = [];
   async function viewInvoices(c) {
     c.innerHTML = cp("Invoices", S.company.name) + '<div class="wrap" id="iv">Loading...</div>';
     var res = await sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").order("invoice_date", { ascending: false });
-    var data = res.data || [];
-    var st = { not_paid: "warn", partial: "warn", paid: "good", draft: "" };
+    var data = res.data || []; _invoices = data;
     var rows = data.map(function (i) {
       var badge = i.state === "draft" ? "Draft" : (i.payment_state === "paid" ? "Paid" : i.payment_state === "partial" ? "Partial" : "Unpaid");
-      return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td><span class='badge'>" + badge + "</span></td></tr>";
+      var due = Number(i.amount_residual || 0);
+      var pay = (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
+      return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td class='num'>" + money(due) + "</td><td><span class='badge'>" + badge + "</span></td><td>" + pay + "</td></tr>";
     }).join("");
     var totBilled = data.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
     var totDue = data.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
     document.getElementById("iv").innerHTML =
-      '<div class="kpis"><div class="kpi"><div class="l">Total billed</div><div class="n">' + S.company.currency_code + " " + money(totBilled) + '</div></div><div class="kpi"><div class="l">Outstanding</div><div class="n">' + S.company.currency_code + " " + money(totDue) + "</div></div></div>" +
+      '<div class="kpis"><div class="kpi"><div class="l">Total billed</div><div class="n">' + S.company.currency_code + " " + money(totBilled) + '</div></div><div class="kpi"><div class="l">Collected</div><div class="n">' + S.company.currency_code + " " + money(totBilled - totDue) + '</div></div><div class="kpi"><div class="l">Outstanding</div><div class="n">' + S.company.currency_code + " " + money(totDue) + "</div></div></div>" +
       '<div class="card"><h3>' + data.length + ' customer invoices</h3>' +
-      "<table><thead><tr><th>Number</th><th>Customer</th><th>Date</th><th class='num'>Total</th><th>Status</th></tr></thead><tbody>" + (rows || "<tr><td colspan='5' class='muted' style='padding:16px'>No invoices yet.</td></tr>") + "</tbody></table></div>";
+      "<table><thead><tr><th>Number</th><th>Customer</th><th>Date</th><th class='num'>Total</th><th class='num'>Due</th><th>Status</th><th></th></tr></thead><tbody>" + (rows || "<tr><td colspan='7' class='muted' style='padding:16px'>No invoices yet.</td></tr>") + "</tbody></table></div>";
+    Array.prototype.forEach.call(document.querySelectorAll(".pay-btn"), function (b) {
+      b.addEventListener("click", function () { openPaymentModal(_invoices.filter(function (x) { return x.id === b.dataset.id; })[0]); });
+    });
+  }
+  function openPaymentModal(inv) {
+    if (!inv) return;
+    var due = Number(inv.amount_residual || inv.amount_total || 0);
+    var m = document.getElementById("modal");
+    m.innerHTML = '<div class="sheet"><h3>Register payment &middot; ' + esc(inv.number || "") + '</h3><div class="form">' +
+      "<div><label>Amount (" + esc(S.company.currency_code) + ")</label><input id='p-amt' type='number' step='0.01' value='" + due + "'></div>" +
+      "<div class='row2'><div><label>Date</label><input id='p-date' type='date' value='" + new Date().toISOString().slice(0, 10) + "'></div><div><label>Method</label><select id='p-jrn'><option value='BNK'>Bank</option><option value='CSH'>Cash</option></select></div></div>" +
+      "<div><label>Reference</label><input id='p-ref' placeholder='Receipt / transfer ref'></div>" +
+      "</div><div class='foot'><button class='btn' id='p-cancel'>Cancel</button><button class='btn pri' id='p-save'>Register</button></div></div>";
+    m.classList.add("on");
+    document.getElementById("p-cancel").onclick = function () { m.classList.remove("on"); };
+    document.getElementById("p-save").onclick = async function () {
+      var amt = parseFloat(document.getElementById("p-amt").value);
+      if (!(amt > 0)) { toast("Enter an amount"); return; }
+      var r = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: document.getElementById("p-date").value, p_journal_code: document.getElementById("p-jrn").value, p_method: "bank", p_ref: document.getElementById("p-ref").value });
+      if (r.error) { toast("Could not register: " + r.error.message); return; }
+      m.classList.remove("on"); toast("Payment registered"); viewInvoices(document.getElementById("content"));
+    };
+  }
+  // ========================= PAYMENTS =========================
+  async function viewPayments(c) {
+    c.innerHTML = cp("Payments", S.company.name) + '<div class="wrap" id="pm">Loading...</div>';
+    var res = await sb.from("payments").select("*, partners(name)").eq("company_id", S.company.id).order("date", { ascending: false });
+    var data = res.data || [];
+    var rows = data.map(function (p) {
+      return "<tr><td class='muted'>" + esc(p.date || "") + "</td><td>" + esc(p.partners ? p.partners.name : "") + "</td><td class='muted'>" + esc(p.reference || p.memo || "") + "</td><td><span class='badge'>" + (p.payment_type === "inbound" ? "Received" : "Paid") + "</span></td><td class='num'>" + money(p.amount) + "</td></tr>";
+    }).join("");
+    var tot = data.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+    document.getElementById("pm").innerHTML =
+      '<div class="kpis"><div class="kpi"><div class="l">Payments recorded</div><div class="n">' + data.length + '</div></div><div class="kpi"><div class="l">Total</div><div class="n">' + S.company.currency_code + " " + money(tot) + "</div></div></div>" +
+      '<div class="card"><h3>Payments</h3><table><thead><tr><th>Date</th><th>Partner</th><th>Reference</th><th>Type</th><th class="num">Amount</th></tr></thead><tbody>' + (rows || "<tr><td colspan='5' class='muted' style='padding:16px'>No payments yet.</td></tr>") + "</tbody></table></div>";
   }
 
   // ---- start ----
