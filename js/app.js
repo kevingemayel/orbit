@@ -1345,19 +1345,50 @@
   }
 
   // ============================ REPORTS ============================
+  var REP_PERIOD = "year";
+  function periodRange(p) {
+    var now = new Date(), y = now.getFullYear(), m = now.getMonth();
+    function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
+    function lastDay(yy, mm) { return new Date(yy, mm, 0).getDate(); }
+    var names = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    if (p === "year") return { from: ymd(y, 1, 1), to: ymd(y, 12, 31), label: "FY " + y };
+    if (p === "lastyear") return { from: ymd(y - 1, 1, 1), to: ymd(y - 1, 12, 31), label: "FY " + (y - 1) };
+    if (p === "quarter") { var qs = Math.floor(m / 3) * 3; return { from: ymd(y, qs + 1, 1), to: ymd(y, qs + 3, lastDay(y, qs + 3)), label: "Q" + (Math.floor(m / 3) + 1) + " " + y }; }
+    if (p === "month") return { from: ymd(y, m + 1, 1), to: ymd(y, m + 1, lastDay(y, m + 1)), label: names[m] + " " + y };
+    return { from: null, to: null, label: "all time" };
+  }
+  // Recreates the trial_balance rpc row shape ({code,name,type_code,debit,credit,balance})
+  // from posted journal_lines, but honouring a date window so reports can be period-scoped.
+  async function computeRows(fromD, toD) {
+    var lines = (await sb.from("journal_lines").select("debit,credit, accounts!inner(code,name,type_code), journal_entries!inner(date,state)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted")).data || [];
+    var acc = {};
+    lines.forEach(function (l) {
+      var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return;
+      if (fromD && d < fromD) return; if (toD && d > toD) return;
+      var a = l.accounts || {}, k = a.code || "zz";
+      var r = acc[k] || (acc[k] = { code: a.code, name: a.name, type_code: a.type_code, debit: 0, credit: 0, balance: 0 });
+      r.debit += Number(l.debit) || 0; r.credit += Number(l.credit) || 0;
+    });
+    return Object.keys(acc).map(function (k) { var r = acc[k]; r.balance = r.debit - r.credit; return r; }).sort(function (a, b) { return (a.code || "") < (b.code || "") ? -1 : 1; });
+  }
   async function renderReport(kind) {
     var titles = { pl: "Profit and Loss", bs: "Balance Sheet", tb: "Trial Balance" };
-    var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div>' +
+    var pr = periodRange(REP_PERIOD);
+    var periods = [["year", "This year"], ["quarter", "This quarter"], ["month", "This month"], ["lastyear", "Last year"], ["all", "All time"]];
+    var psel = '<select id="rp-period" class="o-filtbtn" style="margin-right:8px">' + periods.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === REP_PERIOD ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + psel + '<button class="o-filtbtn" id="rp-print">Print</button></div>' +
       '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
-    var rows = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    document.getElementById("rp-period").onchange = function () { REP_PERIOD = this.value; renderReport(kind); };
+    var asOf = pr.to || today();
+    var rows = await computeRows(kind === "pl" ? pr.from : null, pr.to);
     var cc = S.company.currency_code, rep = document.getElementById("rep");
     if (kind === "tb") {
       var td = 0, tc = 0;
       var body = rows.map(function (r) { td += Number(r.debit); tc += Number(r.credit); return '<tr><td class="cd">' + esc(r.code) + '</td><td>' + esc(r.name) + '</td><td class="num">' + (Number(r.debit) ? money(r.debit) : "") + '</td><td class="num">' + (Number(r.credit) ? money(r.credit) : "") + '</td></tr>'; }).join("");
-      rep.innerHTML = '<h1>Trial Balance</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>' +
+      rep.innerHTML = '<h1>Trial Balance</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + asOf + '</div>' +
         '<table class="o-rt"><thead><tr><td class="cd">Code</td><td>Account</td><td class="num">Debit</td><td class="num">Credit</td></tr></thead><tbody>' + body +
         '<tr class="tot"><td></td><td>Total</td><td class="num">' + money(td) + '</td><td class="num">' + money(tc) + '</td></tr></tbody></table>';
     } else if (kind === "pl") {
@@ -1366,7 +1397,7 @@
       var incT = 0, expT = 0;
       var incR = inc.map(function (r) { var v = Number(r.credit) - Number(r.debit); incT += v; return repLine(r.code, r.name, v); }).join("");
       var expR = exp.map(function (r) { var v = Number(r.debit) - Number(r.credit); expT += v; return repLine(r.code, r.name, v); }).join("");
-      rep.innerHTML = '<h1>Profit and Loss</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + '</div>' +
+      rep.innerHTML = '<h1>Profit and Loss</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; ' + esc(pr.label) + (pr.from ? ' (' + pr.from + ' to ' + pr.to + ')' : '') + '</div>' +
         '<table class="o-rt"><tbody><tr class="sec"><td colspan="3">Income</td></tr>' + (incR || repEmpty()) + '<tr class="tot"><td></td><td>Total Income</td><td class="num">' + money(incT) + '</td></tr>' +
         '<tr class="sec"><td colspan="3">Expenses</td></tr>' + (expR || repEmpty()) + '<tr class="tot"><td></td><td>Total Expenses</td><td class="num">' + money(expT) + '</td></tr>' +
         '<tr class="tot"><td></td><td>Net Profit</td><td class="num">' + money(incT - expT) + '</td></tr></tbody></table>';
@@ -1374,7 +1405,7 @@
       function grp(prefix, flip) { var g = rows.filter(function (r) { return (r.type_code || "").indexOf(prefix) === 0; }); var t = 0; var h = g.map(function (r) { var v = flip ? Number(r.credit) - Number(r.debit) : Number(r.balance); t += v; return repLine(r.code, r.name, v); }).join(""); return { h: h, t: t }; }
       var a = grp("asset", false), l = grp("liability", true), e = grp("equity", true);
       var result = 0; rows.forEach(function (r) { var tc = r.type_code || ""; if (tc.indexOf("income") === 0) result += Number(r.credit) - Number(r.debit); if (tc.indexOf("expense") === 0) result -= Number(r.debit) - Number(r.credit); });
-      rep.innerHTML = '<h1>Balance Sheet</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>' +
+      rep.innerHTML = '<h1>Balance Sheet</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + asOf + '</div>' +
         '<table class="o-rt"><tbody><tr class="sec"><td colspan="3">Assets</td></tr>' + (a.h || repEmpty()) + '<tr class="tot"><td></td><td>Total Assets</td><td class="num">' + money(a.t) + '</td></tr>' +
         '<tr class="sec"><td colspan="3">Liabilities</td></tr>' + (l.h || repEmpty()) + '<tr class="tot"><td></td><td>Total Liabilities</td><td class="num">' + money(l.t) + '</td></tr>' +
         '<tr class="sec"><td colspan="3">Equity</td></tr>' + (e.h || repEmpty()) + repLine("", "Current Year Earnings", result) + '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(e.t + result) + '</td></tr></tbody></table>';
