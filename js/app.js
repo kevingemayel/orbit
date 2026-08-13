@@ -28,21 +28,23 @@
         { label: "Vendors", items: [["Bills", "inv.in"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Chart of Accounts", "accounts"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"]] },
-        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"]] }
+        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"]] }
       ]
     },
     sales: {
       name: "Sales", icon: "$", color: "#0891b2", color2: "#0e7490", home: "inv.out",
       menus: [
         { label: "Orders", items: [["Invoices", "inv.out"]] },
-        { label: "Customers", action: "cust" }
+        { label: "Customers", action: "cust" },
+        { label: "Products", action: "products" }
       ]
     },
     purchase: {
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "inv.in",
       menus: [
         { label: "Orders", items: [["Bills", "inv.in"]] },
-        { label: "Vendors", action: "vend" }
+        { label: "Vendors", action: "vend" },
+        { label: "Products", action: "products" }
       ]
     },
     settings: {
@@ -59,7 +61,7 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
-    companies: "settings", taxes: "settings"
+    companies: "settings", taxes: "settings", products: "sales"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -232,6 +234,7 @@
       case "moves": return renderList(cfgMoves());
       case "companies": return renderList(cfgCompanies());
       case "taxes": return renderList(cfgTaxes());
+      case "products": return renderList(cfgProducts());
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -482,6 +485,27 @@
       groupBy: [{ label: "Scope", get: function (t) { return t.scope || "None"; } }]
     };
   }
+  var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
+  function cfgProducts() {
+    return {
+      title: "Products", pageSize: 80,
+      fetch: function () { return sb.from("products").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.name || "") + " " + (p.default_code || ""); },
+      columns: [
+        { label: "Reference", get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Type", get: function (p) { return '<span class="muted">' + esc(PTYPE[p.type] || p.type) + '</span>'; } },
+        { label: "Sales Price", num: true, get: function (p) { return money(p.list_price); } },
+        { label: "Cost", num: true, get: function (p) { return money(p.cost_price); } },
+        { label: "Status", get: function (p) { return p.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
+      groupBy: [{ label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
+      kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
+      onOpen: function (p) { renderProductForm(p.id); },
+      onNew: function () { renderProductForm("new"); }
+    };
+  }
   function TYPE_LABEL(g) { return ({ asset: "Assets", liability: "Liabilities", equity: "Equity", income: "Income", expense: "Expenses", off: "Off-Balance" })[g] || g; }
 
   // ============================ INVOICE / BILL FORM ============================
@@ -504,6 +528,7 @@
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [])
       .filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
+    var products = ((await sb.from("products").select("id,name,default_code,list_price,cost_price,income_account_id,expense_account_id,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var glLines = [];
     if (inv && inv.state === "posted" && inv.journal_entry_id) glLines = (await sb.from("journal_lines").select("*, accounts(code,name)").eq("entry_id", inv.journal_entry_id)).data || [];
 
@@ -514,6 +539,7 @@
     var btns = "";
     if (editable) btns += '<button class="pri" id="f-confirm">Confirm</button><button id="f-save">Save</button><button id="f-discard">Discard</button>';
     else if (inv.state === "posted" && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
+    if (inv) btns += '<button id="f-print">Print</button>';
     var curState = inv ? inv.state : "draft";
     var stages = '<div class="o-stages"><span class="st ' + (curState === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (curState === "posted" ? "on" : "") + '">Posted</span></div>';
 
@@ -555,7 +581,7 @@
       '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div></div>';
 
     // ---- notebook rendering ----
-    var linesState = lines.map(function (l) { return { name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price }; });
+    var linesState = lines.map(function (l) { return { name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
     function renderTab(t) {
       var pg = document.getElementById("nbpg");
       document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.classList.toggle("on", x.dataset.t === t); });
@@ -580,12 +606,14 @@
       }
       var accOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
-      pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th style="width:150px">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:60px;text-align:right">Qty</th><th style="width:100px;text-align:right">Unit Price</th><th style="width:120px">Tax</th><th style="width:90px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
+      var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:150px">Product</th>' : '') + '<th>Description</th><th style="width:140px">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
         '<button class="o-addln" id="addln">+ Add a line</button>' + totalsHTML();
       var lb = document.getElementById("lnbody");
       function addRow(l) {
         var tr = document.createElement("tr");
         tr.innerHTML =
+          (products.length ? '<td><select class="l-prod">' + prodOpts + '</select></td>' : '') +
           '<td><input class="l-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td>' +
           '<td><select class="l-acct">' + accOpts + '</select></td>' +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td>' +
@@ -595,6 +623,16 @@
         lb.appendChild(tr);
         if (l && l.account_id) tr.querySelector(".l-acct").value = l.account_id;
         if (l && l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
+        if (l && l.product_id && tr.querySelector(".l-prod")) tr.querySelector(".l-prod").value = l.product_id;
+        var psel = tr.querySelector(".l-prod");
+        if (psel) psel.addEventListener("change", function () {
+          var pr = products.filter(function (x) { return x.id === psel.value; })[0]; if (!pr) return;
+          tr.querySelector(".l-name").value = pr.name;
+          tr.querySelector(".l-price").value = isSale ? pr.list_price : pr.cost_price;
+          var acc = isSale ? pr.income_account_id : pr.expense_account_id; if (acc) tr.querySelector(".l-acct").value = acc;
+          var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx;
+          recalc();
+        });
         tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
         tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); });
         recalc();
@@ -607,7 +645,8 @@
       var lb = document.getElementById("lnbody"); if (!lb) return linesState;
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0;
-        return { name: tr.querySelector(".l-name").value.trim() || (isSale ? "Service" : "Cost"), account_id: tr.querySelector(".l-acct").value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p };
+        var ps = tr.querySelector(".l-prod");
+        return { name: tr.querySelector(".l-name").value.trim() || (isSale ? "Service" : "Cost"), account_id: tr.querySelector(".l-acct").value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, product_id: ps ? (ps.value || null) : null };
       });
     }
     function recalc() {
@@ -659,7 +698,7 @@
         if (up.error) { toast("Could not save: " + up.error.message); return null; }
         await sb.from("invoice_lines").delete().eq("invoice_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from("invoice_lines").insert(rows);
       if (lr.error) { toast("Lines failed: " + lr.error.message); return null; }
       if (alsoPost) { var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + pr.error.message); return invId; } }
@@ -672,8 +711,42 @@
     } else if (inv.state === "posted" && Number(inv.amount_residual) > 0.005) {
       document.getElementById("f-pay").onclick = function () { openPaymentModal(inv, function () { renderInvoiceForm(id, moveType); }); };
     }
+    if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
   }
   function fld(label, valueHtml) { return '<div class="o-fld"><label>' + esc(label) + '</label><div class="v">' + valueHtml + '</div></div>'; }
+
+  // ============================ PRINT / PDF ============================
+  function printInvoice(inv, lines, isSale, taxes) {
+    var co = S.company, cc = inv.currency_code || co.currency_code;
+    var isRefund = (inv.move_type || "").indexOf("refund") >= 0;
+    var docTitle = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Vendor Bill");
+    var partner = inv.partners ? inv.partners.name : "";
+    var sub = 0, tax = 0;
+    var body = lines.map(function (l) {
+      var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
+      var ls = Number(l.quantity) * Number(l.unit_price); sub += ls; tax += ls * amt / 100;
+      return '<tr><td>' + esc(l.name) + '</td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+    }).join("");
+    var tot = sub + tax, due = Number(inv.amount_residual != null ? inv.amount_residual : tot);
+    var html =
+      '<div class="pinv">' +
+      '<div class="phead"><div class="pfrom"><div class="pname">' + esc(co.name) + '</div><div class="pmuted">' + esc(co.legal_name || "") + (co.country ? "<br>" + esc(co.country) : "") + '</div></div>' +
+      '<div class="pdoc"><div class="pdt">' + docTitle + '</div><div class="pnum">' + esc(inv.number || "Draft") + '</div></div></div>' +
+      '<div class="pmeta"><div><div class="pl">Bill to</div><div class="pv">' + esc(partner) + '</div></div>' +
+      '<div><div class="pl">' + (isSale ? "Invoice Date" : "Bill Date") + '</div><div class="pv">' + esc(inv.invoice_date || "") + '</div>' +
+      '<div class="pl" style="margin-top:8px">Due Date</div><div class="pv">' + esc(inv.due_date || "-") + '</div></div></div>' +
+      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div>' +
+      '<div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div>' +
+      '<div class="pr ptt"><span>Total</span><span>' + cc + " " + money(tot) + '</span></div>' +
+      '<div class="pr"><span>Amount Due</span><span>' + cc + " " + money(due) + '</span></div></div>' +
+      '<div class="pfoot">' + esc(co.name) + ' &middot; Generated by Orbit</div></div>';
+    var wrap = document.createElement("div"); wrap.className = "o-print"; wrap.innerHTML = html;
+    document.body.appendChild(wrap);
+    document.body.classList.add("printing");
+    window.print();
+    setTimeout(function () { document.body.classList.remove("printing"); wrap.remove(); }, 400);
+  }
   async function nextNumber(moveType) {
     var prefix = moveType === "out_invoice" ? "INV" : "BILL";
     var r = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("move_type", moveType);
@@ -747,6 +820,55 @@
       else r = await sb.from("accounts").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       toast("Saved"); go("accounts");
+    };
+  }
+
+  // ============================ PRODUCT FORM ============================
+  async function renderProductForm(id) {
+    var parent = { action: "products", title: "Products" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var p = id === "new" ? { type: "service", is_active: true } : (await sb.from("products").select("*").eq("id", id).maybeSingle()).data || {};
+    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var inc = accs.filter(function (a) { return (a.type_code || "").indexOf("income") === 0; });
+    var exp = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
+    var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [];
+    var saleTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "sale"; });
+    var purTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "purchase"; });
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
+    var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Reference", '<input id="pr-code" value="' + esc(p.default_code || "") + '">') +
+      fld("Type", typeSel) +
+      fld("Sales Price", '<input id="pr-price" type="number" step="0.01" value="' + (p.list_price || 0) + '">') +
+      fld("Cost", '<input id="pr-cost" type="number" step="0.01" value="' + (p.cost_price || 0) + '">') +
+      fld("Status", '<select id="pr-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Archived</option></select>') +
+      '</div><div>' +
+      fld("Income Account", sel("pr-inc", inc, p.income_account_id, "Default")) +
+      fld("Expense Account", sel("pr-exp", exp, p.expense_account_id, "Default")) +
+      fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
+      fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
+      '</div></div></div>';
+    document.getElementById("pr-discard").onclick = function () { go("products"); };
+    document.getElementById("pr-save").onclick = async function () {
+      var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
+      var row = {
+        name: name, default_code: gv("pr-code"), type: document.getElementById("pr-type").value,
+        list_price: parseFloat(gv("pr-price")) || 0, cost_price: parseFloat(gv("pr-cost")) || 0,
+        income_account_id: document.getElementById("pr-inc").value || null, expense_account_id: document.getElementById("pr-exp").value || null,
+        sale_tax_id: document.getElementById("pr-stax").value || null, purchase_tax_id: document.getElementById("pr-ptax").value || null,
+        is_active: document.getElementById("pr-active").value === "1"
+      };
+      var r;
+      if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); }
+      else r = await sb.from("products").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("products");
     };
   }
 

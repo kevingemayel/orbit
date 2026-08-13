@@ -215,3 +215,30 @@ button{font-family:inherit}
   .o-groups{grid-template-columns:1fr}
   .o-form,.o-report{border-radius:0}
 }
+
+/* print / pdf invoice */
+.o-print{display:none}
+.pinv{max-width:720px;margin:0 auto;color:#111;background:#fff;padding:30px;font-size:13px;font-family:var(--ui)}
+.pinv .phead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:14px}
+.pinv .pname{font-size:20px;font-weight:800}
+.pinv .pmuted{color:#555;font-size:12px;margin-top:4px}
+.pinv .pdoc{text-align:right}
+.pinv .pdt{font-size:22px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#333}
+.pinv .pnum{color:#555;margin-top:4px}
+.pinv .pmeta{display:flex;justify-content:space-between;margin:18px 0}
+.pinv .pl{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#888;font-weight:700}
+.pinv .pv{font-size:13.5px;font-weight:600}
+.pinv .ptab{width:100%;border-collapse:collapse;margin-top:8px}
+.pinv .ptab th{text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:1px solid #999;padding:8px}
+.pinv .ptab td{padding:8px;border-bottom:1px solid #e2e2e2}
+.pinv .ptab .r{text-align:right}
+.pinv .psum{margin-left:auto;width:280px;margin-top:14px}
+.pinv .psum .pr{display:flex;justify-content:space-between;padding:5px 0}
+.pinv .psum .ptt{font-weight:800;font-size:16px;border-top:2px solid #111;margin-top:4px;padding-top:8px}
+.pinv .pfoot{margin-top:30px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center}
+@page{margin:14mm}
+@media print{
+  body.printing > #root{display:none !important}
+  body.printing .o-print{display:block !important}
+  body.printing .toast{display:none !important}
+}
