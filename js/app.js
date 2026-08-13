@@ -793,30 +793,62 @@
     }
     if (inv && inv.state === "posted" && !isRefund) document.getElementById("f-refund").onclick = function () { createCreditNote(inv, linesState, isSale); };
     if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
-    if (inv && isSale) document.getElementById("f-email").onclick = function () { openSendModal(inv); };
+    if (inv && isSale) document.getElementById("f-email").onclick = function () { openSendModal(inv, linesState); };
   }
-  function openSendModal(inv) {
+  function openSendModal(inv, lines) {
     var isRefund = (inv.move_type || "").indexOf("refund") >= 0;
+    var isSale = (inv.move_type || "").indexOf("out_") === 0;
+    var docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
     var to = inv.partners && inv.partners.email ? inv.partners.email : "";
+    var defSubject = docName + " " + (inv.number || "") + " from " + S.company.name;
     var m = document.createElement("div"); m.className = "modal on"; m.id = "sendmodal";
-    m.innerHTML = '<div class="sheet"><h3>Email ' + esc(inv.number || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-      '<div><label>To</label><input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
-      '<div class="muted" style="font-size:12px">A clean ' + (isRefund ? "credit note" : "invoice") + ' will be emailed from your Space Work address. The customer receives a proper document, not this app.</div>' +
-      '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri" id="s-send" style="background:var(--app);border-color:var(--app)">Send</button></div></div>';
+    m.innerHTML = '<div class="sheet wide"><h3>Email ' + esc(inv.number || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px;max-height:76vh;overflow:auto">' +
+      '<div class="row2"><div><label>To</label><input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
+      '<div><label>Subject</label><input id="s-subj" value="' + esc(defSubject) + '"></div></div>' +
+      '<div><label>Message to the customer (optional)</label><textarea id="s-note" rows="3" placeholder="e.g. Hi, please find your invoice attached below. Payment is due within 30 days. Thank you!"></textarea></div>' +
+      '<div><label>Preview &mdash; this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>' +
+      '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri" id="s-send" style="background:var(--app);border-color:var(--app)">Send email</button></div></div>';
     document.body.appendChild(m);
+    function renderPreview() { document.getElementById("s-preview").srcdoc = emailPreviewHtml(inv, lines || [], document.getElementById("s-note").value); }
+    document.getElementById("s-note").addEventListener("input", renderPreview);
+    renderPreview();
     document.getElementById("s-cancel").onclick = function () { m.remove(); };
     document.getElementById("s-send").onclick = async function () {
       var to2 = document.getElementById("s-to").value.trim();
+      var subj = document.getElementById("s-subj").value.trim();
+      var note = document.getElementById("s-note").value;
       var btn = document.getElementById("s-send"); btn.disabled = true; btn.textContent = "Sending...";
       var sess = (await sb.auth.getSession()).data.session;
-      if (!sess) { toast("Sign in again"); btn.disabled = false; btn.textContent = "Send"; return; }
+      if (!sess) { toast("Sign in again"); btn.disabled = false; btn.textContent = "Send email"; return; }
       try {
-        var res = await fetch("/api/send-invoice", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ invoice_id: inv.id, to: to2 }) });
+        var res = await fetch("/api/send-invoice", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ invoice_id: inv.id, to: to2, subject: subj, note: note }) });
         var j = await res.json().catch(function () { return { error: "Server error (HTTP " + res.status + ")" }; });
-        if (j.error || !j.ok) { toast(j.error || "Send failed"); btn.disabled = false; btn.textContent = "Send"; return; }
+        if (j.error || !j.ok) { toast(j.error || "Send failed"); btn.disabled = false; btn.textContent = "Send email"; return; }
         m.remove(); toast("Sent to " + j.to);
-      } catch (e) { toast("Send failed: " + (e && e.message)); btn.disabled = false; btn.textContent = "Send"; }
+      } catch (e) { toast("Send failed: " + (e && e.message)); btn.disabled = false; btn.textContent = "Send email"; }
     };
+  }
+  function emailPreviewHtml(inv, lines, note) {
+    var co = S.company, cc = inv.currency_code || co.currency_code || "USD";
+    var isRefund = (inv.move_type || "").indexOf("refund") >= 0, isSale = (inv.move_type || "").indexOf("out_") === 0;
+    var docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
+    var sub = 0;
+    var rows = (lines || []).map(function (l) { var ls = Number(l.quantity) * Number(l.unit_price); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
+    var total = Number(inv.amount_total != null ? inv.amount_total : sub), due = Number(inv.amount_residual != null ? inv.amount_residual : total);
+    var partner = inv.partners ? inv.partners.name : "";
+    var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:6px;font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
+    return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#152030">' +
+      '<div style="max-width:640px;margin:0 auto">' +
+      '<div style="display:flex;justify-content:space-between;border-bottom:2px solid #152030;padding-bottom:14px">' +
+      '<div><div style="font-size:20px;font-weight:800">' + esc(co.name || "Space Work") + '</div><div style="color:#666;font-size:12px">' + esc(co.legal_name || "") + (co.country ? "<br>" + esc(co.country) : "") + '</div></div>' +
+      '<div style="text-align:right"><div style="font-size:22px;font-weight:800;text-transform:uppercase;color:#333">' + esc(docName) + '</div><div style="color:#666">' + esc(inv.number || "") + '</div></div></div>' + noteBlock +
+      '<div style="display:flex;justify-content:space-between;margin:18px 0;font-size:13px">' +
+      '<div><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700">Bill to</div><div style="font-weight:600">' + esc(partner) + '</div></div>' +
+      '<div style="text-align:right"><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700">Date</div><div>' + esc(inv.invoice_date || "") + '</div><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-top:6px">Due</div><div>' + esc(inv.due_date || "-") + '</div></div></div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Description</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Qty</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Unit Price</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+      '<div style="margin-left:auto;width:260px;margin-top:14px;font-size:13px"><div style="display:flex;justify-content:space-between;padding:4px 0"><span>Total</span><span style="font-weight:800">' + cc + ' ' + money(total) + '</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid #ddd"><span>Amount Due</span><span>' + cc + ' ' + money(due) + '</span></div></div>' +
+      '<div style="margin-top:28px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center">' + esc(co.name || "Space Work") + ' &middot; sent via Orbit</div>' +
+      '</div></body></html>';
   }
   function fld(label, valueHtml) { return '<div class="o-fld"><label>' + esc(label) + '</label><div class="v">' + valueHtml + '</div></div>'; }
   async function createCreditNote(inv, lines, isSale) {

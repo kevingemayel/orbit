@@ -60,6 +60,8 @@ export async function onRequestPost(context) {
     const docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
     const co = inv.companies || {};
     const from = (env.INVOICE_FROM || "invoices@spacework.ai").trim();
+    const note = typeof body.note === "string" ? body.note.slice(0, 2000) : "";
+    const subject = (body.subject ? String(body.subject).replace(/[\r\n]+/g, " ").trim().slice(0, 200) : "") || (docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"));
 
     if (body.dry_run) return json({ ok: true, dry: true, version: VERSION, recipient, from, lineCount: (Array.isArray(lines) ? lines.length : 0), keyPresent: !!env.RESEND_API_KEY, number: inv.number });
 
@@ -69,7 +71,7 @@ export async function onRequestPost(context) {
       send = await tfetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: "Bearer " + String(env.RESEND_API_KEY).trim(), "Content-Type": "application/json" },
-        body: JSON.stringify({ from, to: [recipient], subject: docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"), html: buildHtml(inv, Array.isArray(lines) ? lines : [], docName, co) })
+        body: JSON.stringify({ from, to: [recipient], subject, html: buildHtml(inv, Array.isArray(lines) ? lines : [], docName, co, note) })
       }, 12000);
     } catch (e) {
       return json({ error: "Could not reach the email service (" + String(e && e.name || e) + "). Check the from address is on a verified domain.", stage }, 200);
@@ -84,8 +86,9 @@ export async function onRequestPost(context) {
 
 function esc(s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
 function money(n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function buildHtml(inv, lines, docName, co) {
+function buildHtml(inv, lines, docName, co, note) {
   const cc = inv.currency_code || co.currency_code || "USD";
+  const noteBlock = (note && String(note).trim()) ? `<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:6px;font-size:13.5px;white-space:pre-wrap;color:#333">${esc(note)}</div>` : "";
   let sub = 0;
   const rows = (lines || []).map(l => {
     const ls = Number(l.quantity) * Number(l.unit_price); sub += ls;
@@ -99,6 +102,7 @@ function buildHtml(inv, lines, docName, co) {
       <div><div style="font-size:20px;font-weight:800">${esc(co.name || "Space Work")}</div><div style="color:#666;font-size:12px">${esc(co.legal_name || "")}${co.country ? "<br>" + esc(co.country) : ""}</div></div>
       <div style="text-align:right"><div style="font-size:22px;font-weight:800;text-transform:uppercase;color:#333">${esc(docName)}</div><div style="color:#666">${esc(inv.number || "")}</div></div>
     </div>
+    ${noteBlock}
     <div style="display:flex;justify-content:space-between;margin:18px 0;font-size:13px">
       <div><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700">Bill to</div><div style="font-weight:600">${esc(partner)}</div></div>
       <div style="text-align:right"><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700">Date</div><div>${esc(inv.invoice_date || "")}</div><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-top:6px">Due</div><div>${esc(inv.due_date || "-")}</div></div>
