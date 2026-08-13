@@ -26,7 +26,7 @@
         { label: "Dashboard", action: "dashboard" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
-        { label: "Accounting", items: [["Journal Entries", "moves"], ["Chart of Accounts", "accounts"]] },
+        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"], ["Consolidation", "rep.cons"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
@@ -63,7 +63,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting"
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -246,6 +246,7 @@
       case "rep.tb": return renderReport("tb");
       case "rep.cons": return renderConsolidation();
       case "rates": return renderList(cfgRates());
+      case "bank": return renderList(cfgBankStatements());
       default: return renderDashboard();
     }
   }
@@ -1242,6 +1243,111 @@
       (l.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Liabilities</td><td class="num">' + money(l.t) + '</td></tr>' +
       (eq.html || repEmpty()) + repLine("", "Current Year Earnings", result) + '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + result) + '</td></tr></tbody></table>';
     var cr = document.getElementById("cons-rates"); if (cr) cr.onclick = function () { go("rates"); };
+  }
+
+  // ============================ BANK STATEMENTS + RECONCILIATION ============================
+  function cfgBankStatements() {
+    return {
+      title: "Bank Statements", pageSize: 80,
+      fetch: function () { return sb.from("bank_statements").select("*, journals(name)").eq("company_id", S.company.id).order("statement_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.name || "") + " " + (s.journals ? s.journals.name : ""); },
+      columns: [
+        { label: "Name", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } },
+        { label: "Journal", get: function (s) { return esc(s.journals ? s.journals.name : ""); } },
+        { label: "Date", get: function (s) { return '<span class="muted">' + esc(s.statement_date || "") + '</span>'; } },
+        { label: "Start Balance", num: true, get: function (s) { return money(s.balance_start); } },
+        { label: "End Balance", num: true, get: function (s) { return money(s.balance_end); } }
+      ],
+      groupBy: [{ label: "Journal", get: function (s) { return s.journals ? s.journals.name : "None"; } }],
+      onOpen: function (s) { renderBankStatementForm(s.id); },
+      onNew: function () { renderBankStatementForm("new"); }
+    };
+  }
+  async function renderBankStatementForm(id) {
+    var parent = { action: "bank", title: "Bank Statements" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var stmt = null, lines = [];
+    if (id !== "new") {
+      stmt = (await sb.from("bank_statements").select("*, journals(code,name)").eq("id", id).maybeSingle()).data;
+      lines = (await sb.from("bank_statement_lines").select("*, accounts(code,name), partners(name)").eq("statement_id", id).order("line_date")).data || [];
+    }
+    var journals = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
+    var bankJ = journals.filter(function (j) { return j.code === "BNK" || j.code === "CSH" || /bank|cash/i.test(j.name); }); if (!bankJ.length) bankJ = journals;
+    var accounts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var isNew = id === "new";
+    document.querySelector(".o-bc span:last-child").textContent = stmt ? stmt.name : "New";
+    var jrnCode = stmt && stmt.journals ? stmt.journals.code : "BNK";
+    var accOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
+
+    var btns = isNew ? '<button class="pri" id="b-save">Save</button><button id="b-discard">Discard</button>' : '<button id="b-back">Back</button>';
+    var jOpts = bankJ.map(function (j) { return '<option value="' + j.id + '" data-code="' + esc(j.code) + '"' + ((stmt && stmt.journal_id === j.id) ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("");
+    var groups = '<div class="o-groups"><div>' +
+      fld("Name", isNew ? '<input id="b-name" placeholder="e.g. Bank - August 2026">' : '<span class="v">' + esc(stmt.name) + '</span>') +
+      fld("Journal", isNew ? '<select id="b-jrn">' + jOpts + '</select>' : '<span class="v">' + esc(stmt.journals ? stmt.journals.name : "") + '</span>') +
+      '</div><div>' +
+      fld("Statement Date", isNew ? '<input id="b-date" type="date" value="' + today() + '">' : '<span class="v">' + esc(stmt.statement_date || "") + '</span>') +
+      fld("End Balance", isNew ? '<input id="b-end" type="number" step="0.01" value="0">' : '<span class="v">' + S.company.currency_code + " " + money(stmt.balance_end) + '</span>') +
+      '</div></div>';
+
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title">' + esc(stmt ? stmt.name : "New Bank Statement") + '</div>' + groups +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Statement Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
+    var pg = document.getElementById("nbpg");
+
+    if (isNew) {
+      pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:120px">Date</th><th>Label</th><th style="width:120px;text-align:right">Amount (+in / -out)</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>';
+      var lb = document.getElementById("lnbody");
+      function addRow() {
+        var tr = document.createElement("tr");
+        tr.innerHTML = '<td><input class="l-date" type="date" value="' + today() + '"></td><td><input class="l-label" placeholder="e.g. Customer receipt / Bank fee"></td><td><input class="l-amt num" type="number" step="0.01" value="0"></td><td><button class="del">&times;</button></td>';
+        lb.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); };
+      }
+      document.getElementById("addln").onclick = addRow; addRow();
+      document.getElementById("b-discard").onclick = function () { go("bank"); };
+      document.getElementById("b-save").onclick = async function () {
+        var name = (document.getElementById("b-name").value || "").trim(); if (!name) { toast("Name the statement"); return; }
+        var jsel = document.getElementById("b-jrn");
+        var hdr = { company_id: S.company.id, name: name, journal_id: jsel.value || null, statement_date: document.getElementById("b-date").value, balance_end: parseFloat(document.getElementById("b-end").value) || 0 };
+        var ins = await sb.from("bank_statements").insert(hdr).select("id").single();
+        if (ins.error) { toast("Could not save: " + ins.error.message); return; }
+        var sid = ins.data.id;
+        var rows = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { return { statement_id: sid, company_id: S.company.id, line_date: tr.querySelector(".l-date").value, label: tr.querySelector(".l-label").value.trim(), amount: parseFloat(tr.querySelector(".l-amt").value) || 0 }; }).filter(function (r) { return r.amount || r.label; });
+        if (rows.length) { var lr = await sb.from("bank_statement_lines").insert(rows); if (lr.error) { toast("Lines failed: " + lr.error.message); return; } }
+        toast("Statement saved"); renderBankStatementForm(sid);
+      };
+    } else {
+      document.getElementById("b-back").onclick = function () { go("bank"); };
+      var recN = lines.filter(function (l) { return l.is_reconciled; }).length;
+      var body = lines.map(function (l) {
+        var recCell = l.is_reconciled
+          ? '<span class="badge paid">Reconciled</span> <span class="muted">' + esc(l.accounts ? l.accounts.code : "") + '</span>'
+          : '<select class="rec-acct" data-id="' + l.id + '"><option value="">Counterpart account...</option>' + accOpts + '</select> <button class="btn sm rec-btn" data-id="' + l.id + '">Reconcile</button>';
+        return '<tr><td class="muted">' + esc(l.line_date || "") + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + (Number(l.amount) < 0 ? '<span style="color:var(--bad)">' : '<span style="color:var(--good)">') + money(l.amount) + '</span></td><td>' + recCell + '</td></tr>';
+      }).join("");
+      pg.innerHTML = '<div class="muted" style="margin-bottom:8px;font-size:12.5px">' + recN + ' of ' + lines.length + ' lines reconciled</div>' +
+        '<table class="o-lines"><thead><tr><th style="width:110px">Date</th><th>Label</th><th style="width:110px;text-align:right">Amount</th><th style="width:320px">Reconcile with</th></tr></thead><tbody>' + (body || '<tr><td colspan="4" class="muted" style="padding:14px">No lines.</td></tr>') + '</tbody></table>' +
+        '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">Add a line</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="al-date" type="date" value="' + today() + '" style="padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><input id="al-label" placeholder="Label" style="flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><input id="al-amt" type="number" step="0.01" placeholder="Amount" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><button class="btn" id="al-add">Add line</button></div></div>';
+      Array.prototype.forEach.call(document.querySelectorAll(".rec-btn"), function (b) {
+        b.onclick = async function () {
+          var sel = document.querySelector('.rec-acct[data-id="' + b.dataset.id + '"]');
+          if (!sel.value) { toast("Pick a counterpart account"); return; }
+          b.disabled = true; b.textContent = "Posting...";
+          var r = await sb.rpc("reconcile_bank_line", { p_line: b.dataset.id, p_account: sel.value, p_journal_code: jrnCode });
+          if (r.error) { toast("Could not reconcile: " + r.error.message); b.disabled = false; b.textContent = "Reconcile"; return; }
+          toast("Reconciled to the ledger"); renderBankStatementForm(id);
+        };
+      });
+      document.getElementById("al-add").onclick = async function () {
+        var amt = parseFloat(document.getElementById("al-amt").value) || 0, label = document.getElementById("al-label").value.trim();
+        if (!amt && !label) { toast("Enter a line"); return; }
+        var r = await sb.from("bank_statement_lines").insert({ statement_id: id, company_id: S.company.id, line_date: document.getElementById("al-date").value, label: label, amount: amt });
+        if (r.error) { toast("Could not add: " + r.error.message); return; }
+        toast("Line added"); renderBankStatementForm(id);
+      };
+    }
   }
 
   // ---- start ----
