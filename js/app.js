@@ -924,7 +924,7 @@
     desc = desc || FIELD_DESC[label] || "";
     return '<div class="o-fld"><div class="lbl"><label>' + esc(label) + '</label>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
   }
-  function fhint(label, fallback) { var d = FIELD_DESC[label] || fallback || ""; return d ? '<div class="fd">' + esc(d) + '</div>' : ""; }
+  function fhint(label, override) { var d = override || FIELD_DESC[label] || ""; return d ? '<div class="fd">' + esc(d) + '</div>' : ""; }
   async function createCreditNote(inv, lines, isSale) {
     var moveType = isSale ? "out_refund" : "in_refund";
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
