@@ -344,6 +344,7 @@
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
       (cfg.kanbanCard ? '<button data-v="kanban" title="Kanban">&#9638;</button>' : '') + '</div>' +
+      '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
       '</div>' +
       '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
       '</div>';
@@ -356,7 +357,23 @@
     });
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
+    document.getElementById("o-export").onclick = exportListCsv;
     cfg.fetch().then(function (rows) { L.all = rows || []; paintBody(); });
+  }
+  function htmlToText(h) { var d = document.createElement("div"); d.innerHTML = (h == null ? "" : String(h)); return (d.textContent || "").replace(/\s+/g, " ").trim(); }
+  function csvCell(s) { s = (s == null ? "" : String(s)); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  function exportListCsv() {
+    var cfg = L.cfg, rows = applyRows(), cols = cfg.columns;
+    var out = [cols.map(function (c) { return csvCell(c.label); }).join(",")];
+    rows.forEach(function (r) { out.push(cols.map(function (c) { return csvCell(htmlToText(c.get(r))); }).join(",")); });
+    var csv = "﻿" + out.join("\r\n");
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = (cfg.title || "export").replace(/[^\w]+/g, "_").toLowerCase() + "_" + today() + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast(rows.length + " row" + (rows.length === 1 ? "" : "s") + " exported to CSV");
   }
   function openListDropdown(btn, kind) {
     closeDropdowns();
