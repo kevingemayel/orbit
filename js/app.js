@@ -48,7 +48,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"], ["Consolidation", "rep.cons"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Consolidation", "rep.cons"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
     },
@@ -109,6 +109,7 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
+    "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -293,6 +294,10 @@
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
+      case "rep.gl": return renderGeneralLedger();
+      case "rep.partner": return renderPartnerLedger();
+      case "rep.aged.recv": return renderAged("recv");
+      case "rep.aged.pay": return renderAged("pay");
       case "rep.cons": return renderConsolidation();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
@@ -1373,6 +1378,92 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
+  function repChrome(title, wide) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
+  function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>'; }
+
+  async function renderGeneralLedger() {
+    document.getElementById("o-main").innerHTML = repChrome("General Ledger", true);
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code, rep = document.getElementById("rep");
+    var lines = (await sb.from("journal_lines")
+      .select("debit,credit,label, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state), partners(name)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted")).data || [];
+    if (!lines.length) { rep.innerHTML = repHead("General Ledger", cc) + '<div class="o-empty">No posted journal entries yet.</div>'; return; }
+    var byAcc = {};
+    lines.forEach(function (l) { var a = l.accounts || {}; var k = (a.code || "zz") + "|" + (a.name || ""); (byAcc[k] || (byAcc[k] = [])).push(l); });
+    var keys = Object.keys(byAcc).sort();
+    var html = "", gtd = 0, gtc = 0;
+    keys.forEach(function (k) {
+      var rowsA = byAcc[k].slice().sort(function (x, y) { return (x.journal_entries.date < y.journal_entries.date) ? -1 : 1; });
+      var parts = k.split("|"), bal = 0, atd = 0, atc = 0;
+      html += '<tr class="sec"><td colspan="7">' + esc(parts[0]) + ' ' + esc(parts[1]) + '</td></tr>';
+      rowsA.forEach(function (l) {
+        var d = Number(l.debit) || 0, c = Number(l.credit) || 0; bal += d - c; atd += d; atc += c; var e = l.journal_entries || {};
+        html += '<tr><td>' + esc(e.date || "") + '</td><td>' + esc(e.entry_number || e.ref || "") + '</td><td>' + esc((l.partners && l.partners.name) || "") + '</td><td>' + esc(l.label || "") + '</td>' +
+          '<td class="num">' + (d ? money(d) : "") + '</td><td class="num">' + (c ? money(c) : "") + '</td><td class="num">' + money(bal) + '</td></tr>';
+      });
+      gtd += atd; gtc += atc;
+      html += '<tr class="tot"><td colspan="4">Total ' + esc(parts[0]) + '</td><td class="num">' + money(atd) + '</td><td class="num">' + money(atc) + '</td><td class="num">' + money(atd - atc) + '</td></tr>';
+    });
+    rep.innerHTML = repHead("General Ledger", cc) +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Date</td><td>Entry</td><td>Partner</td><td>Label</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Balance</td></tr></thead><tbody>' +
+      html + '<tr class="tot"><td colspan="4">Grand Total</td><td class="num">' + money(gtd) + '</td><td class="num">' + money(gtc) + '</td><td class="num">' + money(gtd - gtc) + '</td></tr></tbody></table></div>';
+  }
+
+  async function renderPartnerLedger() {
+    document.getElementById("o-main").innerHTML = repChrome("Partner Ledger", true);
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code, rep = document.getElementById("rep");
+    var lines = (await sb.from("journal_lines")
+      .select("debit,credit,label,partner_id, accounts!inner(code,name,type_code), journal_entries!inner(date,entry_number,ref,state), partners(name)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted").not("partner_id", "is", null)).data || [];
+    lines = lines.filter(function (l) { var t = (l.accounts && l.accounts.type_code) || ""; return t === "asset_receivable" || t === "liability_payable"; });
+    if (!lines.length) { rep.innerHTML = repHead("Partner Ledger", cc) + '<div class="o-empty">No receivable or payable entries with a partner yet.</div>'; return; }
+    var byP = {};
+    lines.forEach(function (l) { var pid = l.partner_id; var name = (l.partners && l.partners.name) || "(no partner)"; (byP[pid] || (byP[pid] = { name: name, rows: [] })).rows.push(l); });
+    var keys = Object.keys(byP).sort(function (a, b) { return byP[a].name < byP[b].name ? -1 : 1; });
+    var html = "", gtd = 0, gtc = 0;
+    keys.forEach(function (k) {
+      var p = byP[k]; var rowsP = p.rows.slice().sort(function (x, y) { return x.journal_entries.date < y.journal_entries.date ? -1 : 1; });
+      var bal = 0, ptd = 0, ptc = 0;
+      html += '<tr class="sec"><td colspan="6">' + esc(p.name) + '</td></tr>';
+      rowsP.forEach(function (l) { var d = Number(l.debit) || 0, c = Number(l.credit) || 0; bal += d - c; ptd += d; ptc += c; var e = l.journal_entries || {}; html += '<tr><td>' + esc(e.date || "") + '</td><td>' + esc(e.entry_number || e.ref || "") + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + (d ? money(d) : "") + '</td><td class="num">' + (c ? money(c) : "") + '</td><td class="num">' + money(bal) + '</td></tr>'; });
+      gtd += ptd; gtc += ptc;
+      html += '<tr class="tot"><td colspan="3">Total ' + esc(p.name) + '</td><td class="num">' + money(ptd) + '</td><td class="num">' + money(ptc) + '</td><td class="num">' + money(ptd - ptc) + '</td></tr>';
+    });
+    rep.innerHTML = repHead("Partner Ledger", cc) + '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Date</td><td>Entry</td><td>Label</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Balance</td></tr></thead><tbody>' + html + '<tr class="tot"><td colspan="3">Grand Total</td><td class="num">' + money(gtd) + '</td><td class="num">' + money(gtc) + '</td><td class="num">' + money(gtd - gtc) + '</td></tr></tbody></table></div>';
+  }
+
+  async function renderAged(which) {
+    var isRecv = which === "recv", title = isRecv ? "Aged Receivable" : "Aged Payable";
+    document.getElementById("o-main").innerHTML = repChrome(title, true);
+    wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code, rep = document.getElementById("rep");
+    var types = isRecv ? ["out_invoice", "out_refund"] : ["in_invoice", "in_refund"];
+    var invs = (await sb.from("invoices").select("partner_id,invoice_date,due_date,amount_residual,move_type, partners(name)").eq("company_id", S.company.id).in("move_type", types).eq("state", "posted")).data || [];
+    var todayS = today(), byP = {};
+    invs.forEach(function (v) {
+      var due = Number(v.amount_residual || 0); if (Math.abs(due) <= 0.005) return;
+      var sign = (v.move_type === "out_refund" || v.move_type === "in_refund") ? -1 : 1, amt = due * sign;
+      var pid = v.partner_id || "none", name = (v.partners && v.partners.name) || "(no partner)";
+      var p = byP[pid] || (byP[pid] = { name: name, b: [0, 0, 0, 0, 0], total: 0 });
+      var dd = v.due_date || v.invoice_date, idx;
+      if (!dd || dd >= todayS) idx = 0;
+      else { var days = Math.floor((new Date(todayS) - new Date(dd)) / 864e5); idx = days <= 30 ? 1 : days <= 60 ? 2 : days <= 90 ? 3 : 4; }
+      p.b[idx] += amt; p.total += amt;
+    });
+    var partners = Object.keys(byP).map(function (k) { return byP[k]; }).filter(function (p) { return Math.abs(p.total) > 0.005; }).sort(function (a, b) { return b.total - a.total; });
+    var cols = ["Not due", "1-30", "31-60", "61-90", "90+"], tot = [0, 0, 0, 0, 0], gtot = 0;
+    var body = partners.map(function (p) {
+      var tds = p.b.map(function (x, i) { tot[i] += x; return '<td class="num">' + (Math.abs(x) > 0.005 ? money(x) : "") + '</td>'; }).join("");
+      gtot += p.total;
+      return '<tr><td>' + esc(p.name) + '</td>' + tds + '<td class="num"><b>' + money(p.total) + '</b></td></tr>';
+    }).join("");
+    var totRow = '<tr class="tot"><td>Total</td>' + tot.map(function (x) { return '<td class="num">' + money(x) + '</td>'; }).join("") + '<td class="num">' + money(gtot) + '</td></tr>';
+    rep.innerHTML = repHead(title, cc) + (partners.length
+      ? '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Partner</td>' + cols.map(function (c) { return '<td class="num">' + c + '</td>'; }).join("") + '<td class="num">Total</td></tr></thead><tbody>' + body + totRow + '</tbody></table></div>'
+      : '<div class="o-empty">Nothing outstanding.</div>');
+  }
 
   // ============================ CONSOLIDATION ============================
   async function renderConsolidation() {

@@ -216,6 +216,9 @@ button{font-family:inherit}
 
 /* ===== report ===== */
 .o-report{max-width:860px;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);padding:22px 26px}
+.o-report.wide{max-width:1120px}
+.o-rt-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.o-rt-wrap .o-rt{min-width:720px}
 .o-report h1{font-size:20px;letter-spacing:-.01em}
 .o-report .sub{color:var(--ink3);font-size:12.5px;margin:3px 0 16px}
 .o-rt{width:100%;border-collapse:collapse}
