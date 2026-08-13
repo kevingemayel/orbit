@@ -1894,7 +1894,7 @@
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       toast("Saved"); go("proj.list");
     };
-    if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id); };
+    if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id, function () { renderProjectForm(p.id); }); };
   }
   function cfgTasks() {
     return {
@@ -1964,7 +1964,7 @@
       onNew: function () { openTimesheetModal(); }
     };
   }
-  async function openTimesheetModal(projectId) {
+  async function openTimesheetModal(projectId, onDone) {
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     if (!projects.length) { toast("Create a project first"); return; }
     var tasks = (await sb.from("project_tasks").select("id,name,project_id").eq("company_id", S.company.id).order("name")).data || [];
@@ -1986,7 +1986,7 @@
       var row = { company_id: S.company.id, project_id: document.getElementById("ts-proj").value, task_id: document.getElementById("ts-task").value || null, work_date: document.getElementById("ts-date").value, hours: hours, name: document.getElementById("ts-desc").value.trim() };
       var r = await sb.from("timesheets").insert(row);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      m.remove(); toast("Time logged"); renderView();
+      m.remove(); toast("Time logged"); if (onDone) onDone(); else renderView();
     };
   }
 
