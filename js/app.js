@@ -1395,10 +1395,10 @@
   async function renderReport(kind) {
     var titles = { pl: "Profit and Loss", bs: "Balance Sheet", tb: "Trial Balance" };
     var pr = periodRange(REP_PERIOD);
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-print">Print</button></div>' +
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
       '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
     wireBc();
-    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(function () { renderReport(kind); });
     var asOf = pr.to || today();
     var rows = await computeRows(kind === "pl" ? pr.from : null, pr.to);
@@ -1431,8 +1431,26 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
-  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + '<button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
+  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
   function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>'; }
+  // Generic report export: scrape the rendered .o-rt table in #rep into CSV.
+  function exportRepCsv() {
+    var rep = document.getElementById("rep"); if (!rep) return;
+    var table = rep.querySelector("table.o-rt");
+    if (!table) { toast("Nothing to export yet"); return; }
+    var title = (rep.querySelector("h1") ? rep.querySelector("h1").textContent : "report");
+    var out = [];
+    table.querySelectorAll("tr").forEach(function (tr) {
+      var row = []; tr.querySelectorAll("th,td").forEach(function (td) { row.push(csvCell(htmlToText(td.innerHTML))); });
+      if (row.length) out.push(row.join(","));
+    });
+    var csv = "﻿" + out.join("\r\n");
+    var blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = title.replace(/[^\w]+/g, "_").toLowerCase() + "_" + today() + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast("Report exported to CSV");
+  }
 
   async function renderGeneralLedger() {
     document.getElementById("o-main").innerHTML = repChrome("General Ledger", true, true);
@@ -1558,9 +1576,9 @@
     var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
       partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>';
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Partner Statement") + '<div class="gap"></div>' + sel +
-      '<button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Select a partner above to view their statement of account.</div></div></div></div>';
+      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Select a partner above to view their statement of account.</div></div></div></div>';
     wireBc();
-    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var selEl = document.getElementById("stmt-sel");
     selEl.onchange = function () { renderStatement(selEl.value); };
     if (!pid) return;
@@ -1601,7 +1619,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Consolidation") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Consolidating ' + S.companies.length + ' entities...</div></div></div></div>';
     wireBc();
-    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var rates = (await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
     var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
     var cons = {}, entities = [], missing = {};
