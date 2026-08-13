@@ -27,8 +27,8 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"]] },
-        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"]] }
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"], ["Consolidation", "rep.cons"]] },
+        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
     },
     sales: {
@@ -52,6 +52,7 @@
       menus: [
         { label: "Companies", action: "companies" },
         { label: "Taxes", action: "taxes" },
+        { label: "Exchange Rates", action: "rates" },
         { label: "Chart of Accounts", action: "accounts" }
       ]
     }
@@ -62,7 +63,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting"
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -243,6 +244,8 @@
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
+      case "rep.cons": return renderConsolidation();
+      case "rates": return renderList(cfgRates());
       default: return renderDashboard();
     }
   }
@@ -489,6 +492,42 @@
         { label: "Scope", get: function (t) { return '<span class="muted">' + esc(t.scope || "") + '</span>'; } }
       ],
       groupBy: [{ label: "Scope", get: function (t) { return t.scope || "None"; } }]
+    };
+  }
+  function cfgRates() {
+    var ref = (S.org && S.org.ref_currency) || "USD";
+    return {
+      title: "Exchange Rates", pageSize: 100,
+      fetch: function () { return sb.from("currency_rates").select("*").eq("org_id", S.org.id).order("rate_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.code || "") + " " + (r.rate_type || ""); },
+      columns: [
+        { label: "Currency", get: function (r) { return '<b>' + esc(r.code) + '</b>'; } },
+        { label: "Date", get: function (r) { return '<span class="muted">' + esc(r.rate_date || "") + '</span>'; } },
+        { label: "Type", get: function (r) { return '<span class="muted">' + esc(r.rate_type || "") + '</span>'; } },
+        { label: "Rate (1 " + "= ? " + esc(ref) + ")", num: true, get: function (r) { return Number(r.rate).toLocaleString("en-US", { maximumFractionDigits: 6 }); } }
+      ],
+      groupBy: [{ label: "Currency", get: function (r) { return r.code; } }, { label: "Type", get: function (r) { return r.rate_type; } }],
+      onNew: function () { openRateModal(); }
+    };
+  }
+  function openRateModal() {
+    var ref = (S.org && S.org.ref_currency) || "USD";
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "ratemodal";
+    m.innerHTML = '<div class="sheet"><h3>New exchange rate</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Currency code</label><input id="r-code" placeholder="e.g. EUR" style="text-transform:uppercase"></div>' +
+      '<div class="row2"><div><label>Date</label><input id="r-date" type="date" value="' + today() + '"></div><div><label>Type</label><select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
+      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label><input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09"></div>' +
+      '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button><button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("r-cancel").onclick = function () { m.remove(); };
+    document.getElementById("r-save").onclick = async function () {
+      var code = (document.getElementById("r-code").value || "").trim().toUpperCase();
+      var rate = parseFloat(document.getElementById("r-rate").value);
+      if (!code || !(rate > 0)) { toast("Enter a currency and a positive rate"); return; }
+      var row = { org_id: S.org.id, code: code, rate_date: document.getElementById("r-date").value, rate: rate, rate_type: document.getElementById("r-type").value };
+      var r = await sb.from("currency_rates").insert(row);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Rate saved"); renderView();
     };
   }
   var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
@@ -1147,6 +1186,63 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
+
+  // ============================ CONSOLIDATION ============================
+  async function renderConsolidation() {
+    var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Consolidation") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Consolidating ' + S.companies.length + ' entities...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var rates = (await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
+    var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
+    var cons = {}, entities = [], missing = {};
+    for (var i = 0; i < S.companies.length; i++) {
+      var co = S.companies[i];
+      var factor = co.currency_code === ref ? 1 : rateMap[co.currency_code];
+      var known = factor !== undefined;
+      if (!known) { missing[co.currency_code] = 1; factor = 1; }
+      var tb = (await sb.rpc("trial_balance", { p_company: co.id })).data || [];
+      var eInc = 0, eExp = 0, eAssets = 0;
+      /* eslint-disable no-loop-func */
+      (function (factor) {
+        tb.forEach(function (r) {
+          var g = (r.type_code || "").split("_")[0];
+          var c = cons[r.code] || (cons[r.code] = { code: r.code, name: r.name, type_code: r.type_code, debit: 0, credit: 0, balance: 0 });
+          c.debit += Number(r.debit) * factor; c.credit += Number(r.credit) * factor; c.balance += Number(r.balance) * factor;
+          if (g === "income") eInc += (Number(r.credit) - Number(r.debit)) * factor;
+          if (g === "expense") eExp += (Number(r.debit) - Number(r.credit)) * factor;
+          if (g === "asset") eAssets += Number(r.balance) * factor;
+        });
+      })(factor);
+      entities.push({ name: co.name, cur: co.currency_code, factor: factor, known: known, assets: eAssets, result: eInc - eExp });
+    }
+    var rows = Object.keys(cons).map(function (k) { return cons[k]; }).sort(function (a, b) { return (a.code || "") < (b.code || "") ? -1 : 1; });
+    var missKeys = Object.keys(missing);
+    var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
+    var entRows = entities.map(function (e) {
+      return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td><td class="num">' + (e.cur === ref ? "1.000000" : (e.known ? Number(e.factor).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn)">n/a</span>')) + '</td><td class="num">' + money(e.assets) + '</td><td class="num">' + money(e.result) + '</td></tr>';
+    }).join("");
+    function grp(prefix, flip) { var t = 0, html = ""; rows.forEach(function (r) { if ((r.type_code || "").indexOf(prefix) !== 0) return; var v = flip ? Number(r.credit) - Number(r.debit) : Number(r.balance); t += v; html += repLine(r.code, r.name, v); }); return { t: t, html: html }; }
+    var inc = grp("income", true);
+    var expT = 0, expHtml = ""; rows.forEach(function (r) { if ((r.type_code || "").indexOf("expense") !== 0) return; var v = Number(r.debit) - Number(r.credit); expT += v; expHtml += repLine(r.code, r.name, v); });
+    var a = grp("asset", false), l = grp("liability", true), eq = grp("equity", true);
+    var result = inc.t - expT;
+    document.getElementById("rep").innerHTML =
+      '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + S.companies.length + ' entities &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
+      '<table class="o-rt"><tbody><tr class="sec"><td colspan="5">Entities</td></tr>' +
+      '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
+      entRows + '</tbody></table>' +
+      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Consolidated Profit &amp; Loss</td></tr>' +
+      (inc.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Income</td><td class="num">' + money(inc.t) + '</td></tr>' +
+      (expHtml || repEmpty()) + '<tr class="tot"><td></td><td>Total Expenses</td><td class="num">' + money(expT) + '</td></tr>' +
+      '<tr class="tot"><td></td><td>Consolidated Net Profit</td><td class="num">' + money(result) + '</td></tr></tbody></table>' +
+      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Consolidated Balance Sheet</td></tr>' +
+      (a.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Assets</td><td class="num">' + money(a.t) + '</td></tr>' +
+      (l.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Liabilities</td><td class="num">' + money(l.t) + '</td></tr>' +
+      (eq.html || repEmpty()) + repLine("", "Current Year Earnings", result) + '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + result) + '</td></tr></tbody></table>';
+    var cr = document.getElementById("cons-rates"); if (cr) cr.onclick = function () { go("rates"); };
+  }
 
   // ---- start ----
   sb.auth.onAuthStateChange(function (_e, session) { if (!session) renderLogin("in"); });
