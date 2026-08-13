@@ -24,8 +24,8 @@
       name: "Accounting", icon: "€", color: "#7c3aed", color2: "#5b21b6", home: "dashboard",
       menus: [
         { label: "Dashboard", action: "dashboard" },
-        { label: "Customers", items: [["Invoices", "inv.out"], ["Payments", "pay.in"], ["Customers", "cust"]] },
-        { label: "Vendors", items: [["Bills", "inv.in"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
+        { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
+        { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Chart of Accounts", "accounts"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["Trial Balance", "rep.tb"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"]] }
@@ -61,7 +61,8 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
-    companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase"
+    companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "inv.outr": "accounting", "inv.inr": "accounting"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -226,6 +227,8 @@
       case "dashboard": return renderDashboard();
       case "inv.out": return renderList(cfgInvoices("out_invoice"));
       case "inv.in": return renderList(cfgInvoices("in_invoice"));
+      case "inv.outr": return renderList(cfgInvoices("out_refund"));
+      case "inv.inr": return renderList(cfgInvoices("in_refund"));
       case "pay.in": return renderList(cfgPayments("inbound"));
       case "pay.out": return renderList(cfgPayments("outbound"));
       case "cust": return renderList(cfgPartners("customer"));
@@ -359,9 +362,10 @@
     return '<span class="badge ' + cls + '">' + lbl + '</span>';
   }
   function cfgInvoices(moveType) {
-    var isSale = moveType === "out_invoice";
+    var isSale = moveType.indexOf("out_") === 0, isRefund = moveType.indexOf("refund") >= 0;
+    var ttl = isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Invoices" : "Vendor Bills");
     return {
-      title: isSale ? "Invoices" : "Vendor Bills", pageSize: 80,
+      title: ttl, pageSize: 80,
       fetch: function () { return sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", moveType).order("invoice_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (i) { return (i.number || "") + " " + (i.partners ? i.partners.name : ""); },
       columns: [
@@ -544,8 +548,8 @@
 
   // ============================ INVOICE / BILL FORM ============================
   async function renderInvoiceForm(id, moveType) {
-    var isSale = moveType === "out_invoice";
-    var parent = { action: isSale ? "inv.out" : "inv.in", title: isSale ? "Invoices" : "Vendor Bills" };
+    var isSale = moveType.indexOf("out_") === 0, isRefund = moveType.indexOf("refund") >= 0;
+    var parent = { action: isRefund ? (isSale ? "inv.outr" : "inv.inr") : (isSale ? "inv.out" : "inv.in"), title: isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Invoices" : "Vendor Bills") };
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
@@ -572,7 +576,8 @@
     // status bar buttons
     var btns = "";
     if (editable) btns += '<button class="pri" id="f-confirm">Confirm</button><button id="f-save">Save</button><button id="f-discard">Discard</button>';
-    else if (inv.state === "posted" && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
+    else if (inv.state === "posted" && !isRefund && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
+    if (inv && inv.state === "posted" && !isRefund) btns += '<button id="f-refund">' + (isSale ? "Add Credit Note" : "Add Refund") + '</button>';
     if (inv) btns += '<button id="f-print">Print</button>';
     var curState = inv ? inv.state : "draft";
     var stages = '<div class="o-stages"><span class="st ' + (curState === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (curState === "posted" ? "on" : "") + '">Posted</span></div>';
@@ -599,7 +604,7 @@
       '</div><div>' +
       fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>') +
       fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>') +
-      fld("Journal", '<input readonly value="' + (isSale ? "Customer Invoices" : "Vendor Bills") + '">') +
+      fld("Journal", '<input readonly value="' + (isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Customer Invoices" : "Vendor Bills")) + '">') +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div></div>';
 
@@ -608,7 +613,7 @@
     if (inv && inv.state === "posted") tabs.push('<div class="tb" data-t="gl">Journal Items</div>');
     tabs.push('<div class="tb" data-t="other">Other Info</div>');
 
-    var title = inv ? (inv.number || "Draft " + (isSale ? "Invoice" : "Bill")) : "New";
+    var title = inv ? (inv.number || "Draft " + (isRefund ? "Credit Note" : (isSale ? "Invoice" : "Bill"))) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet">' + smart + ribbon + '<div class="o-title">' + esc(title) + '</div>' + groups +
@@ -745,9 +750,23 @@
     } else if (inv.state === "posted" && Number(inv.amount_residual) > 0.005) {
       document.getElementById("f-pay").onclick = function () { openPaymentModal(inv, function () { renderInvoiceForm(id, moveType); }); };
     }
+    if (inv && inv.state === "posted" && !isRefund) document.getElementById("f-refund").onclick = function () { createCreditNote(inv, linesState, isSale); };
     if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
   }
   function fld(label, valueHtml) { return '<div class="o-fld"><label>' + esc(label) + '</label><div class="v">' + valueHtml + '</div></div>'; }
+  async function createCreditNote(inv, lines, isSale) {
+    var moveType = isSale ? "out_refund" : "in_refund";
+    var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: inv.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: today(), currency_code: inv.currency_code || S.company.currency_code, state: "draft", ref: "Credit note for " + (inv.number || ""), amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+    var ins = await sb.from("invoices").insert(hdr).select("id").single();
+    if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+    var invId = ins.data.id;
+    var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+    var lr = await sb.from("invoice_lines").insert(rows);
+    if (lr.error) { toast("Lines failed: " + lr.error.message); return; }
+    toast("Credit note created (draft)");
+    renderInvoiceForm(invId, moveType);
+  }
 
   // ============================ PRINT / PDF ============================
   function printInvoice(inv, lines, isSale, taxes) {
@@ -782,7 +801,7 @@
     setTimeout(function () { document.body.classList.remove("printing"); wrap.remove(); }, 400);
   }
   async function nextNumber(moveType) {
-    var prefix = moveType === "out_invoice" ? "INV" : "BILL";
+    var prefix = { out_invoice: "INV", out_refund: "RINV", in_invoice: "BILL", in_refund: "RBILL" }[moveType] || "INV";
     var r = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("move_type", moveType);
     return prefix + "/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
   }
