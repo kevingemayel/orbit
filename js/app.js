@@ -48,7 +48,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["VAT / Tax Report", "rep.tax"], ["Consolidation", "rep.cons"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
     },
@@ -109,7 +109,7 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
-    "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting",
+    "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -299,6 +299,7 @@
       case "rep.aged.recv": return renderAged("recv");
       case "rep.aged.pay": return renderAged("pay");
       case "rep.tax": return renderTaxReport();
+      case "rep.stmt": return renderStatement(null);
       case "rep.cons": return renderConsolidation();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
@@ -1496,6 +1497,49 @@
       '<tr class="tot"><td>' + (net >= 0 ? 'VAT payable' : 'VAT credit (refundable)') + '</td><td class="num"></td><td class="num">' + money(Math.abs(net)) + '</td></tr>' +
       '</tbody></table>' +
       '<div class="sub" style="margin-top:14px">Output VAT is tax you collected on sales; input VAT is tax you paid on purchases. Payable = output minus input. Credit notes are netted out. Posted documents only.</div>';
+  }
+
+  async function renderStatement(pid) {
+    var cc = S.company.currency_code;
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
+      partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Partner Statement") + '<div class="gap"></div>' + sel +
+      '<button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Select a partner above to view their statement of account.</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var selEl = document.getElementById("stmt-sel");
+    selEl.onchange = function () { renderStatement(selEl.value); };
+    if (!pid) return;
+    var rep = document.getElementById("rep");
+    var partner = partners.filter(function (p) { return p.id === pid; })[0] || { name: "" };
+    var invs = (await sb.from("invoices").select("number,move_type,invoice_date,due_date,amount_total").eq("company_id", S.company.id).eq("partner_id", pid).eq("state", "posted")).data || [];
+    var pays = (await sb.from("payments").select("date,amount,amount_company,payment_type,reference,memo").eq("company_id", S.company.id).eq("partner_id", pid).in("state", ["posted", "reconciled"])).data || [];
+    var ev = [];
+    invs.forEach(function (v) {
+      var t = v.move_type, docs = { out_invoice: "Invoice", out_refund: "Credit Note", in_invoice: "Vendor Bill", in_refund: "Vendor Refund" };
+      var delta = (t === "out_invoice" || t === "in_refund" ? 1 : -1) * Number(v.amount_total || 0);
+      ev.push({ date: v.invoice_date || "", doc: docs[t] || t, ref: v.number || "", due: v.due_date || "", delta: delta });
+    });
+    pays.forEach(function (p) {
+      var amt = Number(p.amount_company || p.amount || 0);
+      var delta = (p.payment_type === "inbound" ? -1 : 1) * amt;
+      ev.push({ date: p.date || "", doc: p.payment_type === "inbound" ? "Payment received" : "Payment made", ref: p.reference || p.memo || "", due: "", delta: delta });
+    });
+    ev.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    if (!ev.length) { rep.innerHTML = repHead("Statement - " + partner.name, cc) + '<div class="o-empty">No posted documents for this partner yet.</div>'; return; }
+    var bal = 0;
+    var body = ev.map(function (e) {
+      bal += e.delta;
+      var charge = e.delta > 0 ? money(e.delta) : "";
+      var credit = e.delta < 0 ? money(-e.delta) : "";
+      return '<tr><td>' + esc(e.date) + '</td><td>' + esc(e.doc) + '</td><td>' + esc(e.ref) + '</td><td>' + esc(e.due) + '</td><td class="num">' + charge + '</td><td class="num">' + credit + '</td><td class="num">' + money(bal) + '</td></tr>';
+    }).join("");
+    var owed = bal, dir = owed > 0.005 ? partner.name + " owes you" : owed < -0.005 ? "You owe " + partner.name : "Settled";
+    rep.innerHTML = repHead("Statement of Account - " + partner.name, cc) +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Date</td><td>Document</td><td>Reference</td><td>Due</td><td class="num">Charges</td><td class="num">Payments</td><td class="num">Balance</td></tr></thead><tbody>' +
+      body + '<tr class="tot"><td colspan="6">' + esc(dir) + '</td><td class="num">' + money(Math.abs(owed)) + '</td></tr></tbody></table></div>' +
+      '<div class="sub" style="margin-top:14px">Charges increase the balance owed to you; payments and credit notes reduce it. A positive closing balance is what the partner still owes. Posted documents only.</div>';
   }
 
   // ============================ CONSOLIDATION ============================
