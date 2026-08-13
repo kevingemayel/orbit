@@ -1313,7 +1313,7 @@
       if (r.type_code === "liability_payable") pay += Number(r.credit) - Number(r.debit);
     });
     var cc = S.company.currency_code;
-    var invs = (await sb.from("invoices").select("invoice_date,due_date,amount_total,amount_residual, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
+    var invs = (await sb.from("invoices").select("id,number,invoice_date,due_date,amount_total,amount_residual, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
     var mnow = new Date(), months = [];
     for (var mi = 5; mi >= 0; mi--) { months.push(new Date(mnow.getFullYear(), mnow.getMonth() - mi, 1).toISOString().slice(0, 7)); }
     var revByM = {}; months.forEach(function (m) { revByM[m] = 0; });
@@ -1329,6 +1329,15 @@
       chartCard("Receivables aging", svgBars(ageData, cc)) +
       chartCard("Top customers", topData.length ? svgBars(topData, cc) : '<div class="muted" style="padding:10px">No invoices yet.</div>') +
       '</div>';
+    var overdue = invs.filter(function (v) { var dd = v.due_date || v.invoice_date; return Number(v.amount_residual || 0) > 0.005 && dd && dd < todayS; }).sort(function (a, b) { return (a.due_date || "") < (b.due_date || "") ? -1 : 1; });
+    var overdueTotal = overdue.reduce(function (s, v) { return s + Number(v.amount_residual || 0); }, 0);
+    var overdueRows = overdue.slice(0, 8).map(function (v) {
+      var dd = v.due_date || v.invoice_date, days = Math.floor((new Date(todayS) - new Date(dd)) / 864e5);
+      return '<tr data-inv="' + v.id + '" style="cursor:pointer"><td>' + esc(v.partners ? v.partners.name : "(none)") + '</td><td>' + esc(v.number || "") + '</td><td>' + esc(dd) + '</td><td class="num" style="color:var(--warn,#c0392b);font-weight:600">' + days + 'd</td><td class="num">' + cc + ' ' + money(v.amount_residual) + '</td></tr>';
+    }).join("");
+    var overdueHtml = overdue.length
+      ? '<div class="o-chart" style="margin-top:14px"><h3>Overdue invoices &middot; ' + cc + ' ' + money(overdueTotal) + ' across ' + overdue.length + ' invoice' + (overdue.length === 1 ? "" : "s") + '</h3><div class="o-chart-bd" style="padding:0"><table class="o-list"><thead><tr><th>Customer</th><th>Number</th><th>Due</th><th class="num">Overdue</th><th class="num">Amount</th></tr></thead><tbody>' + overdueRows + '</tbody></table></div></div>'
+      : '';
     document.getElementById("db").className = "";
     document.getElementById("db").innerHTML =
       '<div class="kpis">' +
@@ -1338,10 +1347,11 @@
       jcard("Customer Invoices", cc + " " + money(recv), "Outstanding receivable", "inv.out", "New Invoice", function () { renderInvoiceForm("new", "out_invoice"); }) +
       jcard("Vendor Bills", cc + " " + money(pay), "Outstanding payable", "inv.in", "New Bill", function () { renderInvoiceForm("new", "in_invoice"); }) +
       jcard("Bank", cc + " " + money(cash), "Cash & bank balance", "pay.in", "Register Payment", null) +
-      '</div>' + chartsHtml;
+      '</div>' + chartsHtml + overdueHtml;
     document.querySelectorAll("[data-jgo]").forEach(function (e) { e.onclick = function () { go(e.dataset.jgo); }; });
     var ni = document.getElementById("jc-new-inv"); if (ni) ni.onclick = function () { renderInvoiceForm("new", "out_invoice"); };
     var nb = document.getElementById("jc-new-bill"); if (nb) nb.onclick = function () { renderInvoiceForm("new", "in_invoice"); };
+    document.querySelectorAll("[data-inv]").forEach(function (el) { el.onclick = function () { renderInvoiceForm(el.dataset.inv, "out_invoice"); }; });
   }
   function kpi(l, n) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + n + '</div></div>'; }
   function chartCard(title, inner) { return '<div class="o-chart"><h3>' + esc(title) + '</h3><div class="o-chart-bd">' + inner + '</div></div>'; }
