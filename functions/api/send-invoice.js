@@ -1,9 +1,9 @@
 // Cloudflare Pages Function  ->  POST /api/send-invoice
 // Emails an invoice/credit note as HTML via Resend.
-// Security: requires a valid Supabase session (Bearer token). The invoice is
-// fetched with that same token so RLS guarantees the caller may only email
-// invoices they can read. The email body is built server-side (clients cannot
-// inject arbitrary content), and the sender domain is fixed.
+// Security: requires a valid Supabase session (Bearer token); the invoice is
+// fetched with that same token so RLS limits the caller to invoices they can
+// read; the email body is built server-side. Every step is time-boxed and
+// wrapped so the function always returns JSON (never hangs into a 502).
 const SUPA = "https://hlkwzbkgkwywomuvilwe.supabase.co";
 const ANON = "sb_publishable_lp-wGR9RM2Ws-BvA-Z5XpQ_F_YZk1SW";
 
@@ -11,6 +11,13 @@ export async function onRequestPost(context) {
   const { request, env } = context;
   const H = { "Content-Type": "application/json" };
   const json = (o, s) => new Response(JSON.stringify(o), { status: s || 200, headers: H });
+  let stage = "start";
+  async function tfetch(url, opts, ms) {
+    const c = new AbortController();
+    const t = setTimeout(() => c.abort(), ms || 8000);
+    try { return await fetch(url, Object.assign({}, opts, { signal: c.signal })); }
+    finally { clearTimeout(t); }
+  }
   try {
     const token = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "").trim();
     if (!token) return json({ error: "Not signed in." }, 401);
@@ -18,47 +25,52 @@ export async function onRequestPost(context) {
     const anon = env.SUPABASE_ANON_KEY || ANON;
     const authHdr = { apikey: anon, Authorization: "Bearer " + token };
 
-    // 1. validate the session
-    const who = await fetch(supaUrl + "/auth/v1/user", { headers: authHdr });
+    stage = "auth";
+    const who = await tfetch(supaUrl + "/auth/v1/user", { headers: authHdr }, 8000);
     if (!who.ok) return json({ error: "Session expired, sign in again." }, 401);
 
+    stage = "parse";
     const body = await request.json().catch(() => ({}));
     const invId = body.invoice_id;
     if (!invId) return json({ error: "Missing invoice id." }, 400);
-    if (!env.RESEND_API_KEY) return json({ error: "Email is not configured yet: set RESEND_API_KEY on the site." }, 500);
+    if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 500);
 
-    // 2. fetch invoice + lines under the caller's RLS
-    const iRes = await fetch(supaUrl + "/rest/v1/invoices?id=eq." + invId + "&select=*,partners(name,email),companies(name,legal_name,country,currency_code)", { headers: authHdr });
-    const inv = (await iRes.json())[0];
+    stage = "fetch-invoice";
+    const iRes = await tfetch(supaUrl + "/rest/v1/invoices?id=eq." + invId + "&select=*,partners(name,email),companies(name,legal_name,country,currency_code)", { headers: authHdr }, 8000);
+    const iBody = await iRes.json().catch(() => null);
+    if (!Array.isArray(iBody)) return json({ error: "Could not load the invoice.", stage, detail: iBody }, 502);
+    const inv = iBody[0];
     if (!inv) return json({ error: "Invoice not found." }, 404);
-    const lRes = await fetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invId + "&select=name,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr });
-    const lines = await lRes.json();
+
+    stage = "fetch-lines";
+    const lRes = await tfetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invId + "&select=name,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr }, 8000);
+    const lines = await lRes.json().catch(() => []);
 
     const recipient = (body.to || (inv.partners && inv.partners.email) || "").trim();
-    if (!recipient || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) return json({ error: "No valid recipient email. Add one on the customer, or type one." }, 400);
+    if (!recipient || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(recipient)) return json({ error: "No valid recipient email. Add one on the customer, or type one in the box." }, 400);
 
     const isRefund = (inv.move_type || "").indexOf("refund") >= 0;
     const isSale = (inv.move_type || "").indexOf("out_") === 0;
     const docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
     const co = inv.companies || {};
-    const from = env.INVOICE_FROM || ((co.name || "Space Work") + " <invoices@spacework.ai>");
+    const from = (env.INVOICE_FROM || "invoices@spacework.ai").trim();
 
-    // 3. send via Resend
-    const send = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: "Bearer " + env.RESEND_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: from,
-        to: [recipient],
-        subject: docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"),
-        html: buildHtml(inv, lines, docName, co)
-      })
-    });
-    const sj = await send.json().catch(() => ({}));
-    if (!send.ok) return json({ error: (sj && sj.message) || "Resend rejected the email.", detail: sj }, 502);
-    return json({ ok: true, id: sj.id, to: recipient });
+    stage = "resend";
+    let send, sj;
+    try {
+      send = await tfetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + String(env.RESEND_API_KEY).trim(), "Content-Type": "application/json" },
+        body: JSON.stringify({ from, to: [recipient], subject: docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"), html: buildHtml(inv, Array.isArray(lines) ? lines : [], docName, co) })
+      }, 12000);
+    } catch (e) {
+      return json({ error: "Could not reach the email service (" + String(e && e.name || e) + "). Check the from address is on a verified domain.", stage }, 502);
+    }
+    sj = await send.json().catch(() => ({}));
+    if (!send.ok) return json({ error: (sj && (sj.message || (sj.error && sj.error.message))) || ("Email service rejected the message (HTTP " + send.status + ")."), detail: sj, from }, 502);
+    return json({ ok: true, id: sj.id, to: recipient, from });
   } catch (e) {
-    return json({ error: String(e && e.message || e) }, 500);
+    return json({ error: String(e && e.message || e), stage }, 500);
   }
 }
 
@@ -66,7 +78,7 @@ function esc(s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replac
 function money(n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function buildHtml(inv, lines, docName, co) {
   const cc = inv.currency_code || co.currency_code || "USD";
-  let sub = 0, tax = 0;
+  let sub = 0;
   const rows = (lines || []).map(l => {
     const ls = Number(l.quantity) * Number(l.unit_price); sub += ls;
     return `<tr><td style="padding:8px;border-bottom:1px solid #eee">${esc(l.name)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${Number(l.quantity)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(l.unit_price)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(ls)}</td></tr>`;
