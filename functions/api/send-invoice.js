@@ -6,6 +6,12 @@
 // wrapped so the function always returns JSON (never hangs into a 502).
 const SUPA = "https://hlkwzbkgkwywomuvilwe.supabase.co";
 const ANON = "sb_publishable_lp-wGR9RM2Ws-BvA-Z5XpQ_F_YZk1SW";
+const VERSION = "send-v3";
+
+export async function onRequestGet(context) {
+  const { env } = context;
+  return new Response(JSON.stringify({ ok: true, version: VERSION, hasResendKey: !!env.RESEND_API_KEY, hasFrom: !!env.INVOICE_FROM }), { headers: { "Content-Type": "application/json" } });
+}
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -54,6 +60,8 @@ export async function onRequestPost(context) {
     const docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
     const co = inv.companies || {};
     const from = (env.INVOICE_FROM || "invoices@spacework.ai").trim();
+
+    if (body.dry_run) return json({ ok: true, dry: true, version: VERSION, recipient, from, lineCount: (Array.isArray(lines) ? lines.length : 0), keyPresent: !!env.RESEND_API_KEY, number: inv.number });
 
     stage = "resend";
     let send, sj;
