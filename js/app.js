@@ -16,7 +16,7 @@
     { grp: "Overview", items: [["dashboard", "Dashboard"]] },
     { grp: "Accounting", items: [["accounts", "Chart of Accounts"], ["trial", "Trial Balance"], ["pl", "Profit & Loss"], ["bs", "Balance Sheet"]] },
     { grp: "Sales", items: [["clients", "Customers"], ["invoices", "Invoices"], ["payments", "Payments"]] },
-    { grp: "Purchasing", items: [["bills", "Vendor Bills"]] },
+    { grp: "Purchasing", items: [["vendors", "Vendors"], ["bills", "Vendor Bills"]] },
     { grp: "Company", items: [["companies", "Companies"]] }
   ];
   var TYPE_GROUPS = [
@@ -125,6 +125,7 @@
     if (S.view === "pl") return viewPL(c);
     if (S.view === "bs") return viewBS(c);
     if (S.view === "clients") return viewClients(c);
+    if (S.view === "vendors") return viewVendors(c);
     if (S.view === "invoices") return viewInvoices(c);
     if (S.view === "payments") return viewPayments(c);
     if (S.view === "bills") return viewBills(c);
@@ -302,7 +303,8 @@
 
   // ========================= CUSTOMERS =========================
   async function viewClients(c) {
-    c.innerHTML = cp("Customers", (S.org ? S.org.name : "")) + '<div class="wrap" id="cl">Loading...</div>';
+    c.innerHTML = cp("Customers", (S.org ? S.org.name : ""), '<button class="btn pri" id="addP">New customer</button>') + '<div class="wrap" id="cl">Loading...</div>';
+    document.getElementById("addP").onclick = function () { openPartnerModal("customer"); };
     var res = await sb.from("partners").select("*").eq("is_customer", true).order("name");
     var rows = (res.data || []).map(function (p) {
       return "<tr><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(p.email || "") + "</td><td class='muted'>" + esc(p.phone || "") + "</td><td class='muted'>" + esc(p.city || "") + "</td></tr>";
@@ -310,16 +312,56 @@
     document.getElementById("cl").innerHTML = '<div class="card"><h3>' + (res.data || []).length + ' customers</h3>' +
       "<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>City</th></tr></thead><tbody>" + (rows || "<tr><td colspan='4' class='muted' style='padding:16px'>No customers yet.</td></tr>") + "</tbody></table></div>";
   }
+  // ========================= VENDORS =========================
+  async function viewVendors(c) {
+    c.innerHTML = cp("Vendors", (S.org ? S.org.name : ""), '<button class="btn pri" id="addP">New vendor</button>') + '<div class="wrap" id="vd">Loading...</div>';
+    document.getElementById("addP").onclick = function () { openPartnerModal("vendor"); };
+    var res = await sb.from("partners").select("*").eq("is_vendor", true).order("name");
+    var rows = (res.data || []).map(function (p) {
+      return "<tr><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(p.email || "") + "</td><td class='muted'>" + esc(p.phone || "") + "</td><td class='muted'>" + esc(p.city || "") + "</td></tr>";
+    }).join("");
+    document.getElementById("vd").innerHTML = '<div class="card"><h3>' + (res.data || []).length + ' vendors</h3>' +
+      "<table><thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>City</th></tr></thead><tbody>" + (rows || "<tr><td colspan='4' class='muted' style='padding:16px'>No vendors yet.</td></tr>") + "</tbody></table></div>";
+  }
+  function openPartnerModal(kind, onDone) {
+    var isCust = kind === "customer";
+    var m = document.getElementById("modal");
+    m.innerHTML = '<div class="sheet"><h3>New ' + (isCust ? "customer" : "vendor") + '</h3><div class="form">' +
+      "<div><label>Name</label><input id='pt-name' placeholder='Company or person'></div>" +
+      "<div class='row2'><div><label>Email</label><input id='pt-email' type='email' placeholder='name@company.com'></div><div><label>Phone</label><input id='pt-phone' placeholder='+961 ...'></div></div>" +
+      "<div class='row2'><div><label>City</label><input id='pt-city' placeholder='Beirut'></div><div><label>Tax / VAT no.</label><input id='pt-vat' placeholder='optional'></div></div>" +
+      "</div><div class='foot'><button class='btn' id='pt-cancel'>Cancel</button><button class='btn pri' id='pt-save'>Save</button></div></div>";
+    m.classList.add("on");
+    document.getElementById("pt-cancel").onclick = function () { m.classList.remove("on"); };
+    document.getElementById("pt-save").onclick = async function () {
+      var name = document.getElementById("pt-name").value.trim();
+      if (!name) { toast("Name is required"); return; }
+      var row = {
+        org_id: S.company.org_id, name: name, is_company: true,
+        is_customer: isCust, is_vendor: !isCust,
+        email: document.getElementById("pt-email").value.trim() || null,
+        phone: document.getElementById("pt-phone").value.trim() || null,
+        city: document.getElementById("pt-city").value.trim() || null,
+        vat: document.getElementById("pt-vat").value.trim() || null
+      };
+      var r = await sb.from("partners").insert(row).select("id,name").single();
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.classList.remove("on"); toast((isCust ? "Customer" : "Vendor") + " added");
+      if (onDone) { onDone(r.data); } else { renderView(); }
+    };
+  }
   // ========================= INVOICES =========================
   var _invoices = [];
   async function viewInvoices(c) {
-    c.innerHTML = cp("Invoices", S.company.name) + '<div class="wrap" id="iv">Loading...</div>';
+    c.innerHTML = cp("Invoices", S.company.name, '<button class="btn pri" id="newDoc">New invoice</button>') + '<div class="wrap" id="iv">Loading...</div>';
+    document.getElementById("newDoc").onclick = function () { openDocModal("out_invoice"); };
     var res = await sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").order("invoice_date", { ascending: false });
     var data = res.data || []; _invoices = data;
     var rows = data.map(function (i) {
       var badge = i.state === "draft" ? "Draft" : (i.payment_state === "paid" ? "Paid" : i.payment_state === "partial" ? "Partial" : "Unpaid");
       var due = Number(i.amount_residual || 0);
-      var pay = (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
+      var pay = i.state === "draft" ? "<button class='btn sm post-btn' data-id='" + i.id + "'>Post</button>"
+        : (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
       return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td class='num'>" + money(due) + "</td><td><span class='badge'>" + badge + "</span></td><td>" + pay + "</td></tr>";
     }).join("");
     var totBilled = data.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
@@ -328,8 +370,21 @@
       '<div class="kpis"><div class="kpi"><div class="l">Total billed</div><div class="n">' + S.company.currency_code + " " + money(totBilled) + '</div></div><div class="kpi"><div class="l">Collected</div><div class="n">' + S.company.currency_code + " " + money(totBilled - totDue) + '</div></div><div class="kpi"><div class="l">Outstanding</div><div class="n">' + S.company.currency_code + " " + money(totDue) + "</div></div></div>" +
       '<div class="card"><h3>' + data.length + ' customer invoices</h3>' +
       "<table><thead><tr><th>Number</th><th>Customer</th><th>Date</th><th class='num'>Total</th><th class='num'>Due</th><th>Status</th><th></th></tr></thead><tbody>" + (rows || "<tr><td colspan='7' class='muted' style='padding:16px'>No invoices yet.</td></tr>") + "</tbody></table></div>";
+    wirePayButtons(); wirePostButtons();
+  }
+  function wirePayButtons() {
     Array.prototype.forEach.call(document.querySelectorAll(".pay-btn"), function (b) {
       b.addEventListener("click", function () { openPaymentModal(_invoices.filter(function (x) { return x.id === b.dataset.id; })[0]); });
+    });
+  }
+  function wirePostButtons() {
+    Array.prototype.forEach.call(document.querySelectorAll(".post-btn"), function (b) {
+      b.addEventListener("click", async function () {
+        b.disabled = true; b.textContent = "Posting...";
+        var r = await sb.rpc("post_invoice", { p_invoice: b.dataset.id });
+        if (r.error) { toast("Could not post: " + r.error.message); b.disabled = false; b.textContent = "Post"; return; }
+        toast("Posted to the ledger"); renderView();
+      });
     });
   }
   function openPaymentModal(inv) {
@@ -367,13 +422,15 @@
 
   // ========================= VENDOR BILLS =========================
   async function viewBills(c) {
-    c.innerHTML = cp("Vendor Bills", S.company.name) + '<div class="wrap" id="vb">Loading...</div>';
+    c.innerHTML = cp("Vendor Bills", S.company.name, '<button class="btn pri" id="newDoc">New bill</button>') + '<div class="wrap" id="vb">Loading...</div>';
+    document.getElementById("newDoc").onclick = function () { openDocModal("in_invoice"); };
     var res = await sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", "in_invoice").order("invoice_date", { ascending: false });
     var data = res.data || []; _invoices = data;
     var rows = data.map(function (i) {
       var badge = i.state === "draft" ? "Draft" : (i.payment_state === "paid" ? "Paid" : i.payment_state === "partial" ? "Partial" : "Unpaid");
       var due = Number(i.amount_residual || 0);
-      var pay = (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
+      var pay = i.state === "draft" ? "<button class='btn sm post-btn' data-id='" + i.id + "'>Post</button>"
+        : (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
       return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td class='num'>" + money(due) + "</td><td><span class='badge'>" + badge + "</span></td><td>" + pay + "</td></tr>";
     }).join("");
     var tot = data.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
@@ -382,9 +439,134 @@
       '<div class="kpis"><div class="kpi"><div class="l">Total bills</div><div class="n">' + S.company.currency_code + " " + money(tot) + '</div></div><div class="kpi"><div class="l">Payable due</div><div class="n">' + S.company.currency_code + " " + money(due) + "</div></div></div>" +
       '<div class="card"><h3>' + data.length + ' vendor bills</h3>' +
       "<table><thead><tr><th>Number</th><th>Vendor</th><th>Date</th><th class='num'>Total</th><th class='num'>Due</th><th>Status</th><th></th></tr></thead><tbody>" + (rows || "<tr><td colspan='7' class='muted' style='padding:16px'>No vendor bills yet.</td></tr>") + "</tbody></table></div>";
-    Array.prototype.forEach.call(document.querySelectorAll(".pay-btn"), function (b) {
-      b.addEventListener("click", function () { openPaymentModal(_invoices.filter(function (x) { return x.id === b.dataset.id; })[0]); });
-    });
+    wirePayButtons(); wirePostButtons();
+  }
+
+  // ========================= DOCUMENT EDITOR (invoice / bill) =========================
+  async function openDocModal(kind) {
+    var isSale = kind === "out_invoice";
+    var flag = isSale ? "is_customer" : "is_vendor";
+    var m = document.getElementById("modal");
+    m.innerHTML = '<div class="sheet wide"><h3>' + (isSale ? "New invoice" : "New vendor bill") + '</h3><div class="form" id="doc-form"><div class="muted">Loading...</div></div></div>';
+    m.classList.add("on");
+    // load partners, taxes, accounts in parallel
+    var pRes = await sb.from("partners").select("id,name").eq(flag, true).order("name");
+    var tRes = await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false });
+    var aGroup = isSale ? "income" : "expense";
+    var aRes = await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code");
+    var partners = pRes.data || [];
+    var accounts = (aRes.data || []).filter(function (a) { return (a.type_code || "").indexOf(aGroup) === 0; });
+    var taxes = (tRes.data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
+    if (!taxes.length) taxes = tRes.data || [];
+
+    if (!partners.length) {
+      document.getElementById("doc-form").innerHTML =
+        '<div class="muted" style="padding:8px 0">You have no ' + (isSale ? "customers" : "vendors") + ' yet. Add one first.</div>' +
+        '<div style="display:flex;gap:10px"><button class="btn" id="doc-cancel">Cancel</button><button class="btn pri" id="doc-addp">Add a ' + (isSale ? "customer" : "vendor") + '</button></div>';
+      document.getElementById("doc-cancel").onclick = function () { m.classList.remove("on"); };
+      document.getElementById("doc-addp").onclick = function () { openPartnerModal(isSale ? "customer" : "vendor", function () { openDocModal(kind); }); };
+      return;
+    }
+
+    var partnerOpts = partners.map(function (p) { return "<option value='" + p.id + "'>" + esc(p.name) + "</option>"; }).join("");
+    var accountOpts = accounts.map(function (a) { return "<option value='" + a.id + "'>" + esc(a.code + " " + a.name) + "</option>"; }).join("");
+    var taxOpts = "<option value=''>No tax</option>" + taxes.map(function (t) { return "<option value='" + t.id + "' data-amt='" + Number(t.amount) + "'>" + esc(t.name) + " (" + Number(t.amount) + "%)</option>"; }).join("");
+    var today = new Date().toISOString().slice(0, 10);
+    var due = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+
+    document.getElementById("doc-form").innerHTML =
+      "<div class='row2'><div><label>" + (isSale ? "Customer" : "Vendor") + "</label><select id='d-partner'>" + partnerOpts + "</select></div>" +
+      "<div><label>" + (isSale ? "Invoice number" : "Bill reference") + "</label><input id='d-number' placeholder='auto'></div></div>" +
+      "<div class='row2'><div><label>Date</label><input id='d-date' type='date' value='" + today + "'></div><div><label>Due date</label><input id='d-due' type='date' value='" + due + "'></div></div>" +
+      "<div><label>Lines</label><div class='litems'><table><thead><tr><th>Description</th><th style='width:120px'>" + (isSale ? "Revenue acct" : "Expense acct") + "</th><th style='width:60px'>Qty</th><th style='width:90px'>Unit price</th><th style='width:110px'>Tax</th><th style='width:90px' class='num'>Subtotal</th><th style='width:26px'></th></tr></thead><tbody id='d-lines'></tbody></table></div>" +
+      "<button class='btn sm addln' id='d-addln'>+ Add line</button></div>" +
+      "<div class='doctot' id='d-tot'></div>";
+
+    var linesBody = document.getElementById("d-lines");
+    function addLine() {
+      var tr = document.createElement("tr");
+      tr.innerHTML =
+        "<td><input class='l-name' placeholder='Description'></td>" +
+        "<td><select class='l-acct'>" + accountOpts + "</select></td>" +
+        "<td><input class='l-qty num' type='number' step='0.01' value='1'></td>" +
+        "<td><input class='l-price num' type='number' step='0.01' value='0'></td>" +
+        "<td><select class='l-tax'>" + taxOpts + "</select></td>" +
+        "<td class='num l-sub'>0.00</td>" +
+        "<td><button class='del' title='Remove'>&times;</button></td>";
+      linesBody.appendChild(tr);
+      tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
+      Array.prototype.forEach.call(tr.querySelectorAll("input,select"), function (el) { el.addEventListener("input", recalc); });
+      recalc();
+    }
+    function recalc() {
+      var sub = 0, tax = 0;
+      Array.prototype.forEach.call(linesBody.querySelectorAll("tr"), function (tr) {
+        var q = parseFloat(tr.querySelector(".l-qty").value) || 0;
+        var p = parseFloat(tr.querySelector(".l-price").value) || 0;
+        var ln = q * p;
+        var tsel = tr.querySelector(".l-tax");
+        var amt = tsel.value ? Number(tsel.options[tsel.selectedIndex].getAttribute("data-amt")) : 0;
+        sub += ln; tax += ln * amt / 100;
+        tr.querySelector(".l-sub").textContent = money(ln);
+      });
+      document.getElementById("d-tot").innerHTML =
+        "<div><span class='k'>Subtotal</span>" + S.company.currency_code + " " + money(sub) + "</div>" +
+        "<div><span class='k'>Tax</span>" + S.company.currency_code + " " + money(tax) + "</div>" +
+        "<div class='tt'><span class='k'>Total</span>" + S.company.currency_code + " " + money(sub + tax) + "</div>";
+    }
+    document.getElementById("d-addln").onclick = addLine;
+    addLine();
+
+    // footer actions
+    var foot = document.createElement("div"); foot.className = "foot";
+    foot.innerHTML = "<button class='btn' id='d-cancel'>Cancel</button><button class='btn' id='d-draft'>Save draft</button><button class='btn pri' id='d-post'>Save &amp; post</button>";
+    m.querySelector(".sheet").appendChild(foot);
+    document.getElementById("d-cancel").onclick = function () { m.classList.remove("on"); };
+    document.getElementById("d-draft").onclick = function () { saveDoc(false); };
+    document.getElementById("d-post").onclick = function () { saveDoc(true); };
+
+    async function saveDoc(post) {
+      var partnerId = document.getElementById("d-partner").value;
+      var lineEls = Array.prototype.slice.call(linesBody.querySelectorAll("tr"));
+      var lines = lineEls.map(function (tr) {
+        var q = parseFloat(tr.querySelector(".l-qty").value) || 0;
+        var p = parseFloat(tr.querySelector(".l-price").value) || 0;
+        var tsel = tr.querySelector(".l-tax");
+        return {
+          name: tr.querySelector(".l-name").value.trim() || (isSale ? "Service" : "Cost"),
+          account_id: tr.querySelector(".l-acct").value || null,
+          tax_id: tsel.value || null,
+          quantity: q, unit_price: p, price_subtotal: q * p
+        };
+      }).filter(function (l) { return l.price_subtotal || l.name; });
+      if (!lines.length) { toast("Add at least one line"); return; }
+      var btn = document.getElementById(post ? "d-post" : "d-draft"); btn.disabled = true; btn.textContent = post ? "Posting..." : "Saving...";
+      var number = document.getElementById("d-number").value.trim() || (await nextNumber(kind));
+      var untax = lines.reduce(function (s, l) { return s + l.price_subtotal; }, 0);
+      var ins = await sb.from("invoices").insert({
+        company_id: S.company.id, move_type: kind, partner_id: partnerId, number: number,
+        invoice_date: document.getElementById("d-date").value, due_date: document.getElementById("d-due").value,
+        currency_code: S.company.currency_code, state: "draft",
+        amount_untaxed: untax, amount_total: untax, amount_residual: untax
+      }).select("id").single();
+      if (ins.error) { toast("Could not save: " + ins.error.message); btn.disabled = false; btn.textContent = post ? "Save & post" : "Save draft"; return; }
+      var invId = ins.data.id;
+      var lrows = lines.map(function (l, idx) { return { company_id: S.company.id, invoice_id: invId, sequence: (idx + 1) * 10, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.price_subtotal }; });
+      var lr = await sb.from("invoice_lines").insert(lrows);
+      if (lr.error) { toast("Saved header, but lines failed: " + lr.error.message); btn.disabled = false; return; }
+      if (post) {
+        var pr = await sb.rpc("post_invoice", { p_invoice: invId });
+        if (pr.error) { toast("Saved as draft, but posting failed: " + pr.error.message); m.classList.remove("on"); renderView(); return; }
+      }
+      m.classList.remove("on"); toast(post ? "Posted to the ledger" : "Draft saved"); renderView();
+    }
+  }
+  async function nextNumber(kind) {
+    var prefix = kind === "out_invoice" ? "INV" : "BILL";
+    var yr = new Date().getFullYear();
+    var r = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("move_type", kind);
+    var n = (r.count || 0) + 1;
+    return prefix + "/" + yr + "/" + ("0000" + n).slice(-4);
   }
 
   // ---- start ----

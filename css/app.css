@@ -89,4 +89,21 @@ input.cell:focus{outline:none;border-color:var(--accent);background:var(--panel2
 .sheet .foot{padding:13px 18px;border-top:1px solid var(--line);display:flex;justify-content:flex-end;gap:10px}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:9px;font-size:13px;box-shadow:var(--sh);z-index:40;opacity:0;transition:opacity .2s}
 .toast.on{opacity:1}
-@media(max-width:820px){.main{grid-template-columns:1fr}.side{display:none}}
+/* document (invoice / bill) editor */
+.sheet.wide{width:780px}
+.sheet.wide .form{max-height:72vh;overflow:auto}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.row3{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:12px}
+.litems{border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.litems table{width:100%;border-collapse:collapse}
+.litems th{font-size:11px;color:var(--ink2);text-align:left;padding:7px 8px;background:var(--panel2);font-weight:600}
+.litems td{padding:5px 6px;border-top:1px solid var(--line);vertical-align:middle}
+.litems input,.litems select{width:100%;padding:6px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font:inherit;font-size:12.5px}
+.litems input.num{text-align:right}
+.litems .del{color:var(--bad);cursor:pointer;border:none;background:none;font-size:16px;line-height:1;padding:0 4px}
+.addln{align-self:flex-start;margin-top:2px}
+.doctot{display:flex;flex-direction:column;gap:4px;align-items:flex-end;font-size:13px;padding-top:6px;font-variant-numeric:tabular-nums}
+.doctot .k{color:var(--ink2);margin-right:16px}
+.doctot .tt{font-weight:700;font-size:15px}
+.pill{cursor:pointer}
+@media(max-width:820px){.main{grid-template-columns:1fr}.side{display:none}.sheet.wide{width:100%}}
