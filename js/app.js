@@ -16,6 +16,7 @@
     { grp: "Overview", items: [["dashboard", "Dashboard"]] },
     { grp: "Accounting", items: [["accounts", "Chart of Accounts"], ["trial", "Trial Balance"], ["pl", "Profit & Loss"], ["bs", "Balance Sheet"]] },
     { grp: "Sales", items: [["clients", "Customers"], ["invoices", "Invoices"], ["payments", "Payments"]] },
+    { grp: "Purchasing", items: [["bills", "Vendor Bills"]] },
     { grp: "Company", items: [["companies", "Companies"]] }
   ];
   var TYPE_GROUPS = [
@@ -126,6 +127,7 @@
     if (S.view === "clients") return viewClients(c);
     if (S.view === "invoices") return viewInvoices(c);
     if (S.view === "payments") return viewPayments(c);
+    if (S.view === "bills") return viewBills(c);
     if (S.view === "companies") return viewCompanies(c);
     // stubs for modules whose screens are next
     c.innerHTML = cp(navLabel(S.view), S.company.name) +
@@ -361,6 +363,28 @@
     document.getElementById("pm").innerHTML =
       '<div class="kpis"><div class="kpi"><div class="l">Payments recorded</div><div class="n">' + data.length + '</div></div><div class="kpi"><div class="l">Total</div><div class="n">' + S.company.currency_code + " " + money(tot) + "</div></div></div>" +
       '<div class="card"><h3>Payments</h3><table><thead><tr><th>Date</th><th>Partner</th><th>Reference</th><th>Type</th><th class="num">Amount</th></tr></thead><tbody>' + (rows || "<tr><td colspan='5' class='muted' style='padding:16px'>No payments yet.</td></tr>") + "</tbody></table></div>";
+  }
+
+  // ========================= VENDOR BILLS =========================
+  async function viewBills(c) {
+    c.innerHTML = cp("Vendor Bills", S.company.name) + '<div class="wrap" id="vb">Loading...</div>';
+    var res = await sb.from("invoices").select("*, partners(name)").eq("company_id", S.company.id).eq("move_type", "in_invoice").order("invoice_date", { ascending: false });
+    var data = res.data || []; _invoices = data;
+    var rows = data.map(function (i) {
+      var badge = i.state === "draft" ? "Draft" : (i.payment_state === "paid" ? "Paid" : i.payment_state === "partial" ? "Partial" : "Unpaid");
+      var due = Number(i.amount_residual || 0);
+      var pay = (i.state === "posted" && due > 0.005) ? "<button class='btn sm pay-btn' data-id='" + i.id + "'>Register payment</button>" : "<span class='muted'>-</span>";
+      return "<tr><td class='num' style='text-align:left'>" + esc(i.number || "(draft)") + "</td><td>" + esc(i.partners ? i.partners.name : "") + "</td><td class='muted'>" + esc(i.invoice_date || "") + "</td><td class='num'>" + money(i.amount_total) + "</td><td class='num'>" + money(due) + "</td><td><span class='badge'>" + badge + "</span></td><td>" + pay + "</td></tr>";
+    }).join("");
+    var tot = data.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+    var due = data.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    document.getElementById("vb").innerHTML =
+      '<div class="kpis"><div class="kpi"><div class="l">Total bills</div><div class="n">' + S.company.currency_code + " " + money(tot) + '</div></div><div class="kpi"><div class="l">Payable due</div><div class="n">' + S.company.currency_code + " " + money(due) + "</div></div></div>" +
+      '<div class="card"><h3>' + data.length + ' vendor bills</h3>' +
+      "<table><thead><tr><th>Number</th><th>Vendor</th><th>Date</th><th class='num'>Total</th><th class='num'>Due</th><th>Status</th><th></th></tr></thead><tbody>" + (rows || "<tr><td colspan='7' class='muted' style='padding:16px'>No vendor bills yet.</td></tr>") + "</tbody></table></div>";
+    Array.prototype.forEach.call(document.querySelectorAll(".pay-btn"), function (b) {
+      b.addEventListener("click", function () { openPaymentModal(_invoices.filter(function (x) { return x.id === b.dataset.id; })[0]); });
+    });
   }
 
   // ---- start ----
