@@ -1164,7 +1164,7 @@
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
-    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button></div>' : "";
+    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + smart +
@@ -1178,7 +1178,10 @@
       fld("City", '<input id="p-city" value="' + esc(p.city || "") + '">') +
       fld("Country", '<input id="p-country" value="' + esc(p.country || "") + '">') +
       '</div></div></div>';
-    if (id !== "new") document.getElementById("sm-inv").onclick = function () { go(isCust ? "inv.out" : "inv.in"); };
+    if (id !== "new") {
+      document.getElementById("sm-inv").onclick = function () { go(isCust ? "inv.out" : "inv.in"); };
+      document.getElementById("sm-stmt").onclick = function () { renderStatement(id); };
+    }
     document.getElementById("p-discard").onclick = function () { go(isCust ? "cust" : "vend"); };
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
