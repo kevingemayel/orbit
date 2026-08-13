@@ -1581,7 +1581,15 @@
       return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
     }).join("");
     var totVal = list.reduce(function (s, p) { return s + qOf(p.id) * Number(p.cost_price || 0); }, 0);
-    body.innerHTML = '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
+    var rules = (await sb.from("reordering_rules").select("product_id,min_qty,location_id").eq("company_id", S.company.id)).data || [];
+    var minMap = {}; rules.forEach(function (r) { if (!r.location_id) minMap[r.product_id] = Number(r.min_qty || 0); });
+    var totalAll = 0, lowCount = 0;
+    list.forEach(function (p) { var tot = by[p.id] ? Object.keys(by[p.id]).reduce(function (s, l) { return s + by[p.id][l]; }, 0) : 0; totalAll += tot * Number(p.cost_price || 0); var mn = minMap[p.id] || 0; if (mn > 0 && tot < mn) lowCount++; });
+    var lots = (await sb.from("stock_lots").select("id,expiry_date").eq("company_id", S.company.id)).data || [];
+    var lotoh = await lotOnHand(), soon = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
+    var expCount = lots.filter(function (l) { return l.expiry_date && l.expiry_date <= soon && (lotoh[l.id] || 0) > 0; }).length;
+    var kpis = '<div class="kpis" style="padding:14px 14px 2px">' + kpi("Total stock value", S.company.currency_code + " " + money(totalAll)) + kpi("Low-stock items", "" + lowCount) + kpi("Expiring / expired lots", "" + expCount) + '</div>';
+    body.innerHTML = kpis + '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
       "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
   }
   function wireInvBtns(prods) {
