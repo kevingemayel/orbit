@@ -11,8 +11,8 @@
   var root = document.getElementById("root");
   var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
-  var FIXED_APP_THEMES = ["corporate", "blue", "pink"];
-  function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "system", size: u.size || "normal" }; } catch (e) { } return { theme: "system", font: "system", size: "normal" }; }
+  var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
+  function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
   function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
   function fontStack(f) { return ({ system: '"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif', inter: '"Inter",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
   function applyTheme() {
@@ -105,9 +105,9 @@
     mode = mode || "in";
     root.innerHTML =
       '<div class="login"><div class="card">' +
-      '<div class="logo">O</div>' +
+      '<div class="brandrow"><div class="logo">O</div><div class="wm">Space Work<span>Orbit</span></div></div>' +
       '<h1>' + (mode === "in" ? "Sign in to Orbit" : "Create your account") + "</h1>" +
-      '<p class="sub">Spacework ERP</p>' +
+      '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
       '<label>Password</label><input id="pw" type="password" autocomplete="current-password" placeholder="........">' +
       '<div class="err" id="err"></div>' +
@@ -1487,8 +1487,9 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Appearance") + '</div><div class="o-form-bg"><div class="appr" id="appr"></div></div></div>';
     wireBc();
     var THEMES = [
-      ["system", "System", ["#f3f5f8", "#1f5fbf", "#152030"]],
-      ["light", "Light", ["#ffffff", "#1f5fbf", "#152030"]],
+      ["spacework", "Space Work", ["#fbfaf8", "#0a66ff", "#14161a"]],
+      ["system", "System", ["#fbfaf8", "#0a66ff", "#14161a"]],
+      ["light", "Light", ["#ffffff", "#0a66ff", "#14161a"]],
       ["dark", "Dark", ["#141a23", "#5b9bf0", "#0c1016"]],
       ["corporate", "Corporate", ["#eef1f5", "#1f4e79", "#1f4e79"]],
       ["colorful", "Colorful", ["#f6f4ff", "#7c3aed", "#db2777"]],
