@@ -950,7 +950,9 @@
     "Product": "The item this movement applies to.",
     "Quantity": "Number of units.",
     "To": "The recipient's email address.",
-    "Subject": "The email subject line your customer will see."
+    "Subject": "The email subject line your customer will see.",
+    "Statement Date": "The closing date of this bank statement period.",
+    "End Balance": "The closing balance printed on the statement. Reconciliation aims to match this."
   };
   function fld(label, valueHtml, desc) {
     desc = desc || FIELD_DESC[label] || "";
