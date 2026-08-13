@@ -72,9 +72,9 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", action: "inv.moves" },
+        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Replenishment", "inv.reorder"]] },
         { label: "Products", action: "products" },
-        { label: "Configuration", items: [["Warehouses", "wh"]] }
+        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"]] }
       ]
     },
     settings: {
@@ -95,7 +95,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory"
+    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -283,6 +283,8 @@
       case "inv.onhand": return renderOnHand();
       case "inv.moves": return renderList(cfgStockMoves());
       case "wh": return renderList(cfgWarehouses());
+      case "inv.reorder": return renderReorder();
+      case "loc": return renderList(cfgLocations());
       default: return renderDashboard();
     }
   }
@@ -1517,88 +1519,106 @@
   var INV = null;
   async function ensureInventory() {
     if (INV && INV.company === S.company.id) return INV;
-    var whs = (await sb.from("warehouses").select("id").eq("company_id", S.company.id).limit(1)).data || [];
-    var whId;
-    if (!whs.length) { var w = await sb.from("warehouses").insert({ company_id: S.company.id, name: "Main Warehouse", code: "WH" }).select("id").single(); if (w.error) { toast("Inventory setup failed: " + w.error.message); return null; } whId = w.data.id; }
-    else whId = whs[0].id;
-    var locs = (await sb.from("stock_locations").select("id,name,usage").eq("company_id", S.company.id)).data || [];
-    async function ensureLoc(usage, name) {
-      var l = locs.filter(function (x) { return x.usage === usage; })[0];
-      if (l) return l.id;
-      var r = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: whId, name: name, usage: usage }).select("id").single();
-      return r.data ? r.data.id : null;
+    var whs = (await sb.from("warehouses").select("id,name,code").eq("company_id", S.company.id).order("name")).data || [];
+    if (!whs.length) { var w = await sb.from("warehouses").insert({ company_id: S.company.id, name: "Main Warehouse", code: "WH" }).select("id,name,code").single(); if (w.error) { toast("Inventory setup failed: " + w.error.message); return null; } whs = [w.data]; }
+    var locs = (await sb.from("stock_locations").select("id,name,usage,warehouse_id").eq("company_id", S.company.id)).data || [];
+    async function ensureLoc(usage, name, whId) {
+      var l = locs.filter(function (x) { return x.usage === usage && (whId ? x.warehouse_id === whId : true); })[0];
+      if (l) return l;
+      var r = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: whId || whs[0].id, name: name, usage: usage }).select("id,name,usage,warehouse_id").single();
+      if (r.data) locs.push(r.data);
+      return r.data || {};
     }
-    INV = { company: S.company.id, whId: whId, stock: await ensureLoc("internal", "Stock"), supplier: await ensureLoc("supplier", "Vendors"), customer: await ensureLoc("customer", "Customers"), adjust: await ensureLoc("inventory", "Inventory Adjustment") };
+    for (var i = 0; i < whs.length; i++) { if (!locs.filter(function (x) { return x.usage === "internal" && x.warehouse_id === whs[i].id; })[0]) await ensureLoc("internal", whs[i].name + " / Stock", whs[i].id); }
+    var supplier = await ensureLoc("supplier", "Vendors", null);
+    var customer = await ensureLoc("customer", "Customers", null);
+    var adjust = await ensureLoc("inventory", "Inventory Adjustment", null);
+    var internal = locs.filter(function (x) { return x.usage === "internal"; });
+    INV = { company: S.company.id, warehouses: whs, internal: internal, supplier: supplier.id, customer: customer.id, adjust: adjust.id, stock: internal[0] ? internal[0].id : null };
     return INV;
   }
   async function onHandMap() {
+    var by = await onHandByLoc(), oh = {};
+    Object.keys(by).forEach(function (pid) { oh[pid] = Object.keys(by[pid]).reduce(function (s, l) { return s + by[pid][l]; }, 0); });
+    return oh;
+  }
+  async function onHandByLoc() {
     var locs = (await sb.from("stock_locations").select("id,usage").eq("company_id", S.company.id)).data || [];
     var internal = {}; locs.forEach(function (l) { if (l.usage === "internal") internal[l.id] = 1; });
     var moves = (await sb.from("stock_moves").select("product_id,quantity,location_id,location_dest_id").eq("company_id", S.company.id).eq("state", "done")).data || [];
-    var oh = {};
-    moves.forEach(function (m) {
-      var q = Number(m.quantity) || 0;
-      if (internal[m.location_dest_id]) oh[m.product_id] = (oh[m.product_id] || 0) + q;
-      if (internal[m.location_id]) oh[m.product_id] = (oh[m.product_id] || 0) - q;
-    });
-    return oh;
+    var by = {};
+    function add(pid, loc, q) { by[pid] = by[pid] || {}; by[pid][loc] = (by[pid][loc] || 0) + q; }
+    moves.forEach(function (m) { var q = Number(m.quantity) || 0; if (internal[m.location_dest_id]) add(m.product_id, m.location_dest_id, q); if (internal[m.location_id]) add(m.product_id, m.location_id, -q); });
+    return by;
   }
+  var OH_LOC = "all";
   async function renderOnHand() {
     var main = document.getElementById("o-main");
+    var inv = await ensureInventory();
+    var locSel = "";
+    if (inv && inv.internal.length > 1) {
+      if (OH_LOC !== "all" && !inv.internal.filter(function (l) { return l.id === OH_LOC; })[0]) OH_LOC = "all";
+      locSel = '<select id="oh-loc" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px"><option value="all">All locations</option>' +
+        inv.internal.map(function (l) { return '<option value="' + l.id + '"' + (OH_LOC === l.id ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join("") + '</select>';
+    } else OH_LOC = "all";
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("On Hand") +
-      '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-adj">Adjust</button>' +
+      '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-xfer">Transfer</button><button class="btn" id="i-adj">Adjust</button>' +
+      '<div class="gap"></div>' + locSel +
       '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    await ensureInventory();
-    var oh = await onHandMap();
     var prods = (await sb.from("products").select("id,name,default_code,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
-    var body = document.getElementById("o-body");
     wireInvBtns(prods);
+    var ls = document.getElementById("oh-loc"); if (ls) ls.onchange = function () { OH_LOC = this.value; renderOnHand(); };
+    var body = document.getElementById("o-body");
     if (!prods.length) { body.innerHTML = '<div class="o-empty">No products yet. Add products (set type to <b>Storable</b>) in the Products screen, then Receive stock.</div>'; return; }
+    var by = await onHandByLoc();
+    function qOf(pid) { if (!by[pid]) return 0; if (OH_LOC === "all") return Object.keys(by[pid]).reduce(function (s, l) { return s + by[pid][l]; }, 0); return by[pid][OH_LOC] || 0; }
+    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     var list = storable.length ? storable : prods;
     var rows = list.map(function (p) {
-      var q = oh[p.id] || 0, val = q * Number(p.cost_price || 0);
+      var q = qOf(p.id), val = q * Number(p.cost_price || 0);
       return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
     }).join("");
-    var totVal = list.reduce(function (s, p) { return s + (oh[p.id] || 0) * Number(p.cost_price || 0); }, 0);
+    var totVal = list.reduce(function (s, p) { return s + qOf(p.id) * Number(p.cost_price || 0); }, 0);
     body.innerHTML = '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
-      "<tr style='font-weight:700'><td></td><td>Total stock value</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
+      "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
   }
   function wireInvBtns(prods) {
-    var r = document.getElementById("i-recv"), d = document.getElementById("i-deliv"), a = document.getElementById("i-adj");
-    if (r) r.onclick = function () { openStockModal("receive", prods); };
-    if (d) d.onclick = function () { openStockModal("deliver", prods); };
-    if (a) a.onclick = function () { openStockModal("adjust", prods); };
+    var b = { "i-recv": "receive", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
+    Object.keys(b).forEach(function (id) { var el = document.getElementById(id); if (el) el.onclick = function () { openStockModal(b[id], prods); }; });
   }
-  function openStockModal(kind, prods) {
-    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment" };
+  async function openStockModal(kind, prods) {
+    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer" };
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     if (!storable.length) storable = prods;
     if (!storable.length) { toast("Add a product first (Products screen)"); return; }
+    var inv = await ensureInventory(); if (!inv) return;
+    if (kind === "transfer" && inv.internal.length < 2) { toast("Add a second location first (Configuration > Locations)"); return; }
     var m = document.createElement("div"); m.className = "modal on"; m.id = "stockmodal";
     var opts = storable.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    var locOpts = inv.internal.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("");
+    var locField = "";
+    if (kind === "transfer") locField = '<div class="row2"><div><label>From location</label>' + fhint("__from", "The stock location the goods leave.") + '<select id="k-from">' + locOpts + '</select></div><div><label>To location</label>' + fhint("__to", "The stock location the goods arrive at.") + '<select id="k-to">' + locOpts + '</select></div></div>';
+    else if (inv.internal.length > 1) locField = '<div><label>Location</label>' + fhint("__loc", "Which warehouse / stock location this affects.") + '<select id="k-loc">' + locOpts + '</select></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
-      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' +
-      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : "How many units are leaving stock.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
-      (kind === "adjust" ? '<div style="font-size:12px;color:var(--ink3)">Records a move for the difference versus current on-hand.</div>' : "") +
-      '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : "Confirm") + '</button></div></div>';
+      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + locField +
+      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
     document.getElementById("k-save").onclick = async function () {
       var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
       if (isNaN(qty)) { toast("Enter a quantity"); return; }
-      var inv = await ensureInventory(); if (!inv) return;
-      var src, dest, q = qty;
-      if (kind === "receive") { src = inv.supplier; dest = inv.stock; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
-      else if (kind === "deliver") { src = inv.stock; dest = inv.customer; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
-      else { var cur = (await onHandMap())[pid] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = inv.stock; q = diff; } else { src = inv.stock; dest = inv.adjust; q = -diff; } }
+      var loc = document.getElementById("k-loc") ? document.getElementById("k-loc").value : inv.stock;
+      var src, dest, q = qty, vkind = null;
+      if (kind === "receive") { src = inv.supplier; dest = loc; vkind = "receive"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
+      else if (kind === "deliver") { src = loc; dest = inv.customer; vkind = "deliver"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
+      else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
+      else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
       var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      var product = prods.filter(function (p) { return p.id === pid; })[0] || {};
-      var vkind = kind === "receive" ? "receive" : kind === "deliver" ? "deliver" : (dest === inv.stock ? "adjust_up" : "adjust_down");
-      await postStockValue(vkind, product, q, r.data && r.data.id);
-      m.remove(); toast("Stock updated & posted to the ledger"); renderOnHand();
+      if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id); }
+      m.remove(); toast(kind === "transfer" ? "Transferred between locations" : "Stock updated & posted to the ledger"); renderOnHand();
     };
   }
   var INVACC = null;
@@ -1679,8 +1699,80 @@
       var name = document.getElementById("w-name").value.trim(); if (!name) { toast("Name required"); return; }
       var r = await sb.from("warehouses").insert({ company_id: S.company.id, name: name, code: document.getElementById("w-code").value.trim() });
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      m.remove(); toast("Warehouse added"); renderView();
+      INV = null; m.remove(); toast("Warehouse added"); renderView();
     };
+  }
+  function cfgLocations() {
+    return {
+      title: "Locations", pageSize: 100,
+      fetch: function () {
+        return Promise.all([
+          sb.from("stock_locations").select("*").eq("company_id", S.company.id).order("name"),
+          sb.from("warehouses").select("id,name").eq("company_id", S.company.id)
+        ]).then(function (res) { var wm = {}; (res[1].data || []).forEach(function (w) { wm[w.id] = w.name; }); return (res[0].data || []).map(function (l) { l._wh = wm[l.warehouse_id]; return l; }); });
+      },
+      searchText: function (l) { return (l.name || "") + " " + (l.usage || ""); },
+      columns: [
+        { label: "Name", get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
+        { label: "Warehouse", get: function (l) { return '<span class="muted">' + esc(l._wh || "") + '</span>'; } },
+        { label: "Usage", get: function (l) { return '<span class="badge">' + esc(l.usage) + '</span>'; } }
+      ],
+      groupBy: [{ label: "Usage", get: function (l) { return l.usage; } }, { label: "Warehouse", get: function (l) { return l._wh || "None"; } }],
+      onNew: function () { openLocationModal(); }
+    };
+  }
+  async function openLocationModal() {
+    var whs = (await sb.from("warehouses").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    if (!whs.length) { toast("Create a warehouse first (Configuration > Warehouses)"); return; }
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "locmodal";
+    var whOpts = whs.map(function (w) { return '<option value="' + w.id + '">' + esc(w.name) + '</option>'; }).join("");
+    m.innerHTML = '<div class="sheet"><h3>New stock location</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__lname", "A name for this internal storage spot, e.g. Aisle A, Cold Room, or Site Store.") + '<input id="l-name" placeholder="e.g. Aisle A"></div>' +
+      '<div><label>Warehouse</label>' + fhint("__lwh", "The warehouse this location sits in.") + '<select id="l-wh">' + whOpts + '</select></div>' +
+      '</div><div class="foot"><button class="btn" id="l-cancel">Cancel</button><button class="btn pri" id="l-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("l-cancel").onclick = function () { m.remove(); };
+    document.getElementById("l-save").onclick = async function () {
+      var name = document.getElementById("l-name").value.trim(); if (!name) { toast("Name required"); return; }
+      var r = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: document.getElementById("l-wh").value, name: name, usage: "internal" });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      INV = null; m.remove(); toast("Location added"); renderView();
+    };
+  }
+  async function renderReorder() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Replenishment") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    await ensureInventory();
+    var oh = await onHandMap();
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
+    var rules = (await sb.from("reordering_rules").select("*").eq("company_id", S.company.id)).data || [];
+    var ruleMap = {}; rules.forEach(function (r) { if (!r.location_id) ruleMap[r.product_id] = r; });
+    var body = document.getElementById("o-body");
+    if (!storable.length) { body.innerHTML = '<div class="o-empty">No storable products yet. Set a product\'s type to <b>Storable</b> to plan replenishment.</div>'; return; }
+    var inStyle = 'style="width:74px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);text-align:right;font:inherit;font-size:13px"';
+    var rows = storable.map(function (p) {
+      var r = ruleMap[p.id] || {}, min = Number(r.min_qty || 0), max = Number(r.max_qty || 0), q = oh[p.id] || 0;
+      var need = (min > 0 && q < min) ? Math.max(max, min) - q : 0;
+      var status = need > 0 ? '<span class="badge unpaid">Below min</span>' : (min > 0 ? '<span class="badge paid">OK</span>' : '<span class="muted">no rule</span>');
+      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='num'>" + q + "</td>" +
+        "<td><input class='rr-min' data-id='" + p.id + "' value='" + min + "' " + inStyle + "></td>" +
+        "<td><input class='rr-max' data-id='" + p.id + "' value='" + max + "' " + inStyle + "></td>" +
+        "<td class='num'>" + (need > 0 ? need : "") + "</td><td>" + status + "</td>" +
+        "<td>" + (need > 0 ? "<button class='btn sm rr-order' data-id='" + p.id + "' data-need='" + need + "'>Receive " + need + "</button>" : "") + "</td></tr>";
+    }).join("");
+    body.innerHTML = '<div style="padding:16px"><div class="card"><h3>Reordering rules &amp; low stock <span class="muted" style="font-weight:500;font-size:12px">set a Min and Max per product &middot; on-hand below Min flags a reorder up to Max</span></h3>' +
+      '<table><thead><tr><th>Reference</th><th>Product</th><th class="num">On Hand</th><th>Min</th><th>Max</th><th class="num">To Order</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    function saveRule(pid) {
+      var min = parseFloat(document.querySelector('.rr-min[data-id="' + pid + '"]').value) || 0;
+      var max = parseFloat(document.querySelector('.rr-max[data-id="' + pid + '"]').value) || 0;
+      var existing = ruleMap[pid];
+      if (existing) return sb.from("reordering_rules").update({ min_qty: min, max_qty: max }).eq("id", existing.id);
+      return sb.from("reordering_rules").insert({ company_id: S.company.id, product_id: pid, min_qty: min, max_qty: max });
+    }
+    body.querySelectorAll(".rr-min, .rr-max").forEach(function (inp) { inp.addEventListener("change", function () { saveRule(inp.dataset.id).then(function () { toast("Rule saved"); renderReorder(); }); }); });
+    body.querySelectorAll(".rr-order").forEach(function (b) { b.onclick = function () { openStockModal("receive", storable); setTimeout(function () { var ps = document.getElementById("k-prod"); if (ps) ps.value = b.dataset.id; var qi = document.getElementById("k-qty"); if (qi) qi.value = b.dataset.need; }, 200); }; });
   }
 
   // ---- start ----
