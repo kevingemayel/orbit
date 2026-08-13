@@ -812,8 +812,8 @@
       if (!sess) { toast("Sign in again"); btn.disabled = false; btn.textContent = "Send"; return; }
       try {
         var res = await fetch("/api/send-invoice", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ invoice_id: inv.id, to: to2 }) });
-        var j = await res.json().catch(function () { return {}; });
-        if (!res.ok) { toast(j.error || "Send failed"); btn.disabled = false; btn.textContent = "Send"; return; }
+        var j = await res.json().catch(function () { return { error: "Server error (HTTP " + res.status + ")" }; });
+        if (j.error || !j.ok) { toast(j.error || "Send failed"); btn.disabled = false; btn.textContent = "Send"; return; }
         m.remove(); toast("Sent to " + j.to);
       } catch (e) { toast("Send failed: " + (e && e.message)); btn.disabled = false; btn.textContent = "Send"; }
     };

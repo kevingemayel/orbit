@@ -50,12 +50,12 @@ export async function onRequestPost(context) {
     }
     const invId = body.invoice_id;
     if (!invId) return json({ error: "Missing invoice id." }, 400);
-    if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 500);
+    if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 200);
 
     stage = "fetch-invoice";
     const iRes = await tfetch(supaUrl + "/rest/v1/invoices?id=eq." + invId + "&select=*,partners(name,email),companies(name,legal_name,country,currency_code)", { headers: authHdr }, 8000);
     const iBody = await iRes.json().catch(() => null);
-    if (!Array.isArray(iBody)) return json({ error: "Could not load the invoice.", stage, detail: iBody }, 502);
+    if (!Array.isArray(iBody)) return json({ error: "Could not load the invoice.", stage, detail: iBody }, 200);
     const inv = iBody[0];
     if (!inv) return json({ error: "Invoice not found." }, 404);
 
@@ -83,13 +83,13 @@ export async function onRequestPost(context) {
         body: JSON.stringify({ from, to: [recipient], subject: docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"), html: buildHtml(inv, Array.isArray(lines) ? lines : [], docName, co) })
       }, 12000);
     } catch (e) {
-      return json({ error: "Could not reach the email service (" + String(e && e.name || e) + "). Check the from address is on a verified domain.", stage }, 502);
+      return json({ error: "Could not reach the email service (" + String(e && e.name || e) + "). Check the from address is on a verified domain.", stage }, 200);
     }
     sj = await send.json().catch(() => ({}));
-    if (!send.ok) return json({ error: (sj && (sj.message || (sj.error && sj.error.message))) || ("Email service rejected the message (HTTP " + send.status + ")."), detail: sj, from }, 502);
+    if (!send.ok) return json({ error: (sj && (sj.message || (sj.error && sj.error.message))) || ("Email service rejected the message (HTTP " + send.status + ")."), detail: sj, from }, 200);
     return json({ ok: true, id: sj.id, to: recipient, from });
   } catch (e) {
-    return json({ error: String(e && e.message || e), stage }, 500);
+    return json({ error: String(e && e.message || e), stage }, 200);
   }
 }
 
