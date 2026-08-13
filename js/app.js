@@ -77,6 +77,14 @@
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"]] }
       ]
     },
+    project: {
+      name: "Projects", icon: "◈", color: "#db2777", color2: "#be185d", home: "proj.list",
+      menus: [
+        { label: "Projects", action: "proj.list" },
+        { label: "Tasks", action: "task.list" },
+        { label: "Timesheets", action: "ts.list" }
+      ]
+    },
     settings: {
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
@@ -95,9 +103,10 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory"
+    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
+    "proj.list": "project", "task.list": "project", "ts.list": "project"
   };
-  var SOON = [["CRM", "◎", "#e11d48"], ["Project", "◈", "#db2777"],
+  var SOON = [["CRM", "◎", "#e11d48"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
   // ============================ AUTH ============================
@@ -286,6 +295,9 @@
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
       case "lots": return renderLots();
+      case "proj.list": return renderList(cfgProjects());
+      case "task.list": return renderList(cfgTasks());
+      case "ts.list": return renderList(cfgTimesheets());
       default: return renderDashboard();
     }
   }
@@ -1817,6 +1829,165 @@
       return "<tr><td><b>" + esc(l.name) + "</b></td><td>" + esc(l.products ? l.products.name : "") + "</td><td class='num'>" + q + "</td><td class='muted'>" + esc(exp || "-") + "</td><td>" + st + "</td></tr>";
     }).join("");
     body.innerHTML = '<table class="o-list"><thead><tr><th>Lot / Serial</th><th>Product</th><th class="num">On Hand</th><th>Expiry</th><th>Status</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+
+  // ============================ PROJECTS & TIMESHEETS ============================
+  var BILLING = { none: "Non-billable", fixed: "Fixed price", tm: "Time & material", milestone: "Milestones" };
+  function cfgProjects() {
+    return {
+      title: "Projects", pageSize: 80,
+      fetch: function () {
+        return Promise.all([
+          sb.from("projects").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
+          sb.from("timesheets").select("project_id,hours").eq("company_id", S.company.id)
+        ]).then(function (res) { var h = {}; (res[1].data || []).forEach(function (t) { h[t.project_id] = (h[t.project_id] || 0) + Number(t.hours || 0); }); return (res[0].data || []).map(function (p) { p._hours = h[p.id] || 0; return p; }); });
+      },
+      searchText: function (p) { return (p.name || "") + " " + (p.partners ? p.partners.name : ""); },
+      columns: [
+        { label: "Project", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Customer", get: function (p) { return esc(p.partners ? p.partners.name : ""); } },
+        { label: "Deadline", get: function (p) { return '<span class="muted">' + esc(p.date_deadline || "") + '</span>'; } },
+        { label: "Billing", get: function (p) { return '<span class="muted">' + esc(BILLING[p.billing_type] || p.billing_type) + '</span>'; } },
+        { label: "Hours", num: true, get: function (p) { return Number(p._hours).toFixed(2); } },
+        { label: "Status", get: function (p) { return p.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge unpaid">Closed</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Closed", test: function (p) { return !p.is_active; } }],
+      groupBy: [{ label: "Customer", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Billing", get: function (p) { return BILLING[p.billing_type] || p.billing_type; } }],
+      kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.partners ? p.partners.name : "") + '</div><div class="r"><span>' + esc(p.date_deadline || "") + '</span><b>' + Number(p._hours).toFixed(1) + ' h</b></div>'; },
+      onOpen: function (p) { renderProjectForm(p.id); },
+      onNew: function () { renderProjectForm("new"); }
+    };
+  }
+  async function renderProjectForm(id) {
+    var parent = { action: "proj.list", title: "Projects" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var p = id === "new" ? { is_active: true, billing_type: "none" } : (await sb.from("projects").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
+    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var tasks = id === "new" ? [] : (await sb.from("project_tasks").select("*").eq("project_id", id).order("created_at")).data || [];
+    var ts = id === "new" ? [] : (await sb.from("timesheets").select("hours,task_id").eq("project_id", id)).data || [];
+    var hoursByTask = {}, totalHours = 0; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); });
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    var smart = id !== "new" ? '<div class="o-smart"><button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours logged</span></button><button class="sb"><span class="v">' + tasks.length + '</span><span class="k">Tasks</span></button></div>' : "";
+    var custOpts = '<option value="">(none)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (p.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+    var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
+    var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + '</div><div></div></div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
+      fld("Billing", '<select id="pf-bill">' + billOpts + '</select>', "How the project is billed: non-billable, fixed price, time & material, or milestones.") +
+      '</div><div>' +
+      fld("Start date", '<input id="pf-start" type="date" value="' + (p.date_start || "") + '">', "When work on the project begins.") +
+      fld("Deadline", '<input id="pf-deadline" type="date" value="' + (p.date_deadline || "") + '">', "Target completion date.") +
+      fld("Status", '<select id="pf-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Closed</option></select>', "Active projects accept time entries; closed ones are archived.") +
+      '</div></div>' +
+      (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
+      '</div>';
+    document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
+    document.getElementById("pf-save").onclick = async function () {
+      var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1" };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("projects").insert(row); } else r = await sb.from("projects").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("proj.list");
+    };
+    if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id); };
+  }
+  function cfgTasks() {
+    return {
+      title: "Tasks", pageSize: 100,
+      fetch: function () {
+        return Promise.all([
+          sb.from("project_tasks").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
+          sb.from("timesheets").select("task_id,hours").eq("company_id", S.company.id)
+        ]).then(function (res) { var h = {}; (res[1].data || []).forEach(function (t) { h[t.task_id] = (h[t.task_id] || 0) + Number(t.hours || 0); }); return (res[0].data || []).map(function (t) { t._hours = h[t.id] || 0; return t; }); });
+      },
+      searchText: function (t) { return (t.name || "") + " " + (t.projects ? t.projects.name : ""); },
+      columns: [
+        { label: "Task", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } },
+        { label: "Project", get: function (t) { return esc(t.projects ? t.projects.name : ""); } },
+        { label: "Planned h", num: true, get: function (t) { return Number(t.planned_hours || 0); } },
+        { label: "Logged h", num: true, get: function (t) { return Number(t._hours).toFixed(2); } },
+        { label: "Deadline", get: function (t) { return '<span class="muted">' + esc(t.date_deadline || "") + '</span>'; } }
+      ],
+      groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }],
+      onOpen: function (t) { renderTaskForm(t.id); },
+      onNew: function () { renderTaskForm("new"); }
+    };
+  }
+  async function renderTaskForm(id) {
+    var parent = { action: "task.list", title: "Tasks" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? {} : (await sb.from("project_tasks").select("*").eq("id", id).maybeSingle()).data || {};
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "");
+    var projOpts = projects.map(function (pr) { return '<option value="' + pr.id + '"' + (t.project_id === pr.id ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tf-save">Save</button><button id="tf-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="tf-name" value="' + esc(t.name || "") + '" placeholder="Task name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", '<select id="tf-proj">' + projOpts + '</select>', "The project this task belongs to.") +
+      fld("Planned hours", '<input id="tf-planned" type="number" step="0.25" value="' + (t.planned_hours || 0) + '">', "Estimated hours to finish this task, for planning vs actual.") +
+      '</div><div>' +
+      fld("Deadline", '<input id="tf-deadline" type="date" value="' + (t.date_deadline || "") + '">', "When this task is due.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Description</div></div><div class="o-nb-pg"><textarea id="tf-desc" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="What needs to be done...">' + esc(t.description || "") + '</textarea></div></div>' +
+      '</div>';
+    document.getElementById("tf-discard").onclick = function () { go("task.list"); };
+    document.getElementById("tf-save").onclick = async function () {
+      var name = gv("tf-name"); if (!name) { toast("Name required"); return; }
+      if (!document.getElementById("tf-proj").value) { toast("Pick a project"); return; }
+      var row = { name: name, project_id: document.getElementById("tf-proj").value, planned_hours: parseFloat(gv("tf-planned")) || 0, date_deadline: gv("tf-deadline") || null, description: document.getElementById("tf-desc").value };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("project_tasks").insert(row); } else r = await sb.from("project_tasks").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("task.list");
+    };
+  }
+  function cfgTimesheets() {
+    return {
+      title: "Timesheets", pageSize: 100,
+      fetch: function () { return sb.from("timesheets").select("*, projects(name), project_tasks(name)").eq("company_id", S.company.id).order("work_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.name || "") + " " + (t.projects ? t.projects.name : ""); },
+      columns: [
+        { label: "Date", get: function (t) { return '<span class="muted">' + esc(t.work_date || "") + '</span>'; } },
+        { label: "Project", get: function (t) { return '<b>' + esc(t.projects ? t.projects.name : "") + '</b>'; } },
+        { label: "Task", get: function (t) { return esc(t.project_tasks ? t.project_tasks.name : ""); } },
+        { label: "Description", get: function (t) { return '<span class="muted">' + esc(t.name || "") + '</span>'; } },
+        { label: "Hours", num: true, get: function (t) { return Number(t.hours || 0).toFixed(2); } }
+      ],
+      groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }, { label: "Month", get: function (t) { return (t.work_date || "").slice(0, 7); } }],
+      onNew: function () { openTimesheetModal(); }
+    };
+  }
+  async function openTimesheetModal(projectId) {
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    if (!projects.length) { toast("Create a project first"); return; }
+    var tasks = (await sb.from("project_tasks").select("id,name,project_id").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "tsmodal";
+    var pj = projectId || projects[0].id;
+    var projOpts = projects.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pj ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    function taskOptsFor(pid) { return '<option value="">(none)</option>' + tasks.filter(function (t) { return t.project_id === pid; }).map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join(""); }
+    m.innerHTML = '<div class="sheet"><h3>Log time</h3><div class="form">' +
+      '<div class="row2"><div><label>Date</label>' + fhint("__tsdate", "The day the work was done.") + '<input id="ts-date" type="date" value="' + today() + '"></div><div><label>Hours</label>' + fhint("__tshours", "How many hours you spent.") + '<input id="ts-hours" type="number" step="0.25" value="1"></div></div>' +
+      '<div><label>Project</label>' + fhint("__tsproj", "The project this time is charged to.") + '<select id="ts-proj">' + projOpts + '</select></div>' +
+      '<div><label>Task (optional)</label>' + fhint("__tstask", "The specific task within the project, if any.") + '<select id="ts-task">' + taskOptsFor(pj) + '</select></div>' +
+      '<div><label>Description</label>' + fhint("__tsdesc", "A short note on what you worked on.") + '<input id="ts-desc" placeholder="e.g. Site survey, shop drawings..."></div>' +
+      '</div><div class="foot"><button class="btn" id="ts-cancel">Cancel</button><button class="btn pri" id="ts-save" style="background:var(--app);border-color:var(--app)">Log</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ts-proj").onchange = function () { document.getElementById("ts-task").innerHTML = taskOptsFor(this.value); };
+    document.getElementById("ts-cancel").onclick = function () { m.remove(); };
+    document.getElementById("ts-save").onclick = async function () {
+      var hours = parseFloat(document.getElementById("ts-hours").value); if (!(hours > 0)) { toast("Enter the hours worked"); return; }
+      var row = { company_id: S.company.id, project_id: document.getElementById("ts-proj").value, task_id: document.getElementById("ts-task").value || null, work_date: document.getElementById("ts-date").value, hours: hours, name: document.getElementById("ts-desc").value.trim() };
+      var r = await sb.from("timesheets").insert(row);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Time logged"); renderView();
+    };
   }
 
   // ---- start ----
