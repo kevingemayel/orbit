@@ -596,7 +596,7 @@
 
     var inv = null, lines = [];
     if (id !== "new") {
-      inv = (await sb.from("invoices").select("*, partners(name)").eq("id", id).maybeSingle()).data;
+      inv = (await sb.from("invoices").select("*, partners(name,email)").eq("id", id).maybeSingle()).data;
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
@@ -619,6 +619,7 @@
     else if (inv.state === "posted" && !isRefund && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
     if (inv && inv.state === "posted" && !isRefund) btns += '<button id="f-refund">' + (isSale ? "Add Credit Note" : "Add Refund") + '</button>';
     if (inv) btns += '<button id="f-print">Print</button>';
+    if (inv && isSale) btns += '<button id="f-email">Email</button>';
     var curState = inv ? inv.state : "draft";
     var stages = '<div class="o-stages"><span class="st ' + (curState === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (curState === "posted" ? "on" : "") + '">Posted</span></div>';
 
@@ -792,6 +793,30 @@
     }
     if (inv && inv.state === "posted" && !isRefund) document.getElementById("f-refund").onclick = function () { createCreditNote(inv, linesState, isSale); };
     if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
+    if (inv && isSale) document.getElementById("f-email").onclick = function () { openSendModal(inv); };
+  }
+  function openSendModal(inv) {
+    var isRefund = (inv.move_type || "").indexOf("refund") >= 0;
+    var to = inv.partners && inv.partners.email ? inv.partners.email : "";
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "sendmodal";
+    m.innerHTML = '<div class="sheet"><h3>Email ' + esc(inv.number || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>To</label><input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
+      '<div class="muted" style="font-size:12px">A clean ' + (isRefund ? "credit note" : "invoice") + ' will be emailed from your Space Work address. The customer receives a proper document, not this app.</div>' +
+      '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri" id="s-send" style="background:var(--app);border-color:var(--app)">Send</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("s-cancel").onclick = function () { m.remove(); };
+    document.getElementById("s-send").onclick = async function () {
+      var to2 = document.getElementById("s-to").value.trim();
+      var btn = document.getElementById("s-send"); btn.disabled = true; btn.textContent = "Sending...";
+      var sess = (await sb.auth.getSession()).data.session;
+      if (!sess) { toast("Sign in again"); btn.disabled = false; btn.textContent = "Send"; return; }
+      try {
+        var res = await fetch("/api/send-invoice", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ invoice_id: inv.id, to: to2 }) });
+        var j = await res.json().catch(function () { return {}; });
+        if (!res.ok) { toast(j.error || "Send failed"); btn.disabled = false; btn.textContent = "Send"; return; }
+        m.remove(); toast("Sent to " + j.to);
+      } catch (e) { toast("Send failed: " + (e && e.message)); btn.disabled = false; btn.textContent = "Send"; }
+    };
   }
   function fld(label, valueHtml) { return '<div class="o-fld"><label>' + esc(label) + '</label><div class="v">' + valueHtml + '</div></div>'; }
   async function createCreditNote(inv, lines, isSale) {
