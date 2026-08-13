@@ -4,12 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Orbit - Spacework ERP</title>
-  <link rel="stylesheet" href="css/app.css?v=3">
+  <!-- app.css loaded with a per-load cache-buster (index.html is served no-cache,
+       so this always pulls the latest CSS even behind the zone's 4h asset TTL) -->
+  <script>document.write('<link rel="stylesheet" href="css/app.css?t=' + Date.now() + '">');</script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <div id="root"><div class="boot">Loading Orbit...</div></div>
-  <script src="config.js?v=3"></script>
-  <script src="js/app.js?v=3"></script>
+  <script>
+    (function () {
+      var t = Date.now();
+      var c = document.createElement("script");
+      c.src = "config.js?t=" + t;
+      c.onload = function () {
+        var a = document.createElement("script");
+        a.src = "js/app.js?t=" + t;
+        document.body.appendChild(a);
+      };
+      document.body.appendChild(c);
+    })();
+  </script>
 </body>
 </html>
