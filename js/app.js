@@ -68,6 +68,14 @@
         { label: "Products", action: "products" }
       ]
     },
+    crm: {
+      name: "CRM", icon: "◎", color: "#e11d48", color2: "#be123c", home: "crm.pipe",
+      menus: [
+        { label: "Pipeline", action: "crm.pipe" },
+        { label: "Leads", action: "crm.leads" },
+        { label: "Configuration", items: [["Stages", "crm.stages"]] }
+      ]
+    },
     inventory: {
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
@@ -104,10 +112,10 @@
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
-    "proj.list": "project", "task.list": "project", "ts.list": "project"
+    "proj.list": "project", "task.list": "project", "ts.list": "project",
+    "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm"
   };
-  var SOON = [["CRM", "◎", "#e11d48"],
-    ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
+  var SOON = [["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
   // ============================ AUTH ============================
   function renderLogin(mode) {
@@ -298,6 +306,9 @@
       case "proj.list": return renderList(cfgProjects());
       case "task.list": return renderList(cfgTasks());
       case "ts.list": return renderList(cfgTimesheets());
+      case "crm.pipe": return renderPipeline();
+      case "crm.leads": return renderList(cfgLeads());
+      case "crm.stages": return renderList(cfgCrmStages());
       default: return renderDashboard();
     }
   }
@@ -2014,6 +2025,125 @@
       var r = await sb.from("timesheets").insert(row);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       m.remove(); toast("Time logged"); if (onDone) onDone(); else renderView();
+    };
+  }
+
+  // ============================ CRM ============================
+  async function ensureCrmStages() {
+    var st = (await sb.from("crm_stages").select("id,name,sequence,is_won").eq("company_id", S.company.id).order("sequence")).data || [];
+    if (!st.length) {
+      var defs = [["New", 10, false], ["Qualified", 20, false], ["Proposition", 30, false], ["Won", 40, true]];
+      for (var i = 0; i < defs.length; i++) { var r = await sb.from("crm_stages").insert({ company_id: S.company.id, name: defs[i][0], sequence: defs[i][1], is_won: defs[i][2] }).select("id,name,sequence,is_won").single(); if (r.data) st.push(r.data); }
+    }
+    return st;
+  }
+  async function renderPipeline() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pipeline") + '<button class="o-new" id="crm-new">New</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("crm-new").onclick = function () { renderLeadForm("new"); };
+    var stages = await ensureCrmStages();
+    var leads = (await sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).eq("is_active", true).order("created_at", { ascending: false })).data || [];
+    var byStage = {}; leads.forEach(function (l) { (byStage[l.stage_id] = byStage[l.stage_id] || []).push(l); });
+    var cols = stages.map(function (s) {
+      var ls = byStage[s.id] || [], amt = ls.reduce(function (a, l) { return a + Number(l.expected_revenue || 0); }, 0);
+      var cards = ls.map(function (l) { return '<div class="o-lead" data-id="' + l.id + '"><div class="t">' + esc(l.name) + '</div><div class="m">' + esc(l.partners ? l.partners.name : (l.contact_name || "")) + '</div><div class="rev">' + S.company.currency_code + ' ' + money(l.expected_revenue) + ' &middot; ' + Number(l.probability || 0) + '%</div></div>'; }).join("");
+      return '<div class="o-pcol"><div class="hd"><span>' + esc(s.name) + '</span><span class="amt">' + ls.length + ' &middot; ' + S.company.currency_code + ' ' + money(amt) + '</span></div><div class="cards">' + (cards || '<div class="muted" style="font-size:12px;padding:6px">Empty</div>') + '</div></div>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div class="o-pipe">' + cols + '</div>';
+    document.querySelectorAll(".o-lead[data-id]").forEach(function (el) { el.onclick = function () { renderLeadForm(el.dataset.id); }; });
+  }
+  function cfgLeads() {
+    return {
+      title: "Leads", pageSize: 80,
+      fetch: function () { return Promise.all([sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }), sb.from("crm_stages").select("id,name").eq("company_id", S.company.id)]).then(function (res) { var sm = {}; (res[1].data || []).forEach(function (s) { sm[s.id] = s.name; }); return (res[0].data || []).map(function (l) { l._stage = sm[l.stage_id]; return l; }); }); },
+      searchText: function (l) { return (l.name || "") + " " + (l.contact_name || "") + " " + (l.partners ? l.partners.name : ""); },
+      columns: [
+        { label: "Opportunity", get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
+        { label: "Customer", get: function (l) { return esc(l.partners ? l.partners.name : (l.contact_name || "")); } },
+        { label: "Stage", get: function (l) { return '<span class="badge">' + esc(l._stage || "") + '</span>'; } },
+        { label: "Expected", num: true, get: function (l) { return money(l.expected_revenue); } },
+        { label: "Prob.", num: true, get: function (l) { return Number(l.probability || 0) + "%"; } }
+      ],
+      groupBy: [{ label: "Stage", get: function (l) { return l._stage || "None"; } }],
+      onOpen: function (l) { renderLeadForm(l.id); },
+      onNew: function () { renderLeadForm("new"); }
+    };
+  }
+  async function renderLeadForm(id) {
+    var parent = { action: "crm.pipe", title: "Pipeline" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var l = id === "new" ? { probability: 10 } : (await sb.from("crm_leads").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
+    var stages = await ensureCrmStages();
+    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    if (id === "new" && !l.stage_id && stages[0]) l.stage_id = stages[0].id;
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
+    var stageBar = '<div class="o-stages">' + stages.map(function (s) { return '<span class="st ' + (l.stage_id === s.id ? "on" : "") + '" data-stage="' + s.id + '">' + esc(s.name) + '</span>'; }).join("") + '</div>';
+    var custOpts = '<option value="">(none yet)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (l.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+    var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>';
+    if (id !== "new" && !l.partner_id) btns += '<button id="ld-tocust">Create Customer</button>';
+    if (id !== "new") btns += '<button id="ld-quote">Create Quotation</button>';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stageBar + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="ld-name" value="' + esc(l.name || "") + '" placeholder="Opportunity name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Customer", '<select id="ld-cust">' + custOpts + '</select>', "Link to an existing customer, or fill the contact fields and convert later.") +
+      fld("Contact name", '<input id="ld-contact" value="' + esc(l.contact_name || "") + '">', "The person's name, if not yet a saved customer.") +
+      fld("Email", '<input id="ld-email" value="' + esc(l.email || "") + '">', "Contact email address.") +
+      fld("Phone", '<input id="ld-phone" value="' + esc(l.phone || "") + '">', "Contact phone number.") +
+      '</div><div>' +
+      fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
+      fld("Probability", '<input id="ld-prob" type="number" step="1" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent.") +
+      fld("Source", '<input id="ld-src" value="' + esc(l.source || "") + '">', "Where the lead came from, e.g. referral or website.") +
+      '</div></div></div>';
+    document.querySelectorAll(".o-stages .st[data-stage]").forEach(function (x) { x.onclick = async function () { l.stage_id = x.dataset.stage; document.querySelectorAll(".o-stages .st").forEach(function (y) { y.classList.toggle("on", y === x); }); if (id !== "new") { await sb.from("crm_leads").update({ stage_id: l.stage_id }).eq("id", id); toast("Stage updated"); } }; });
+    document.getElementById("ld-discard").onclick = function () { go("crm.pipe"); };
+    document.getElementById("ld-save").onclick = async function () {
+      var name = gv("ld-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, partner_id: document.getElementById("ld-cust").value || null, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: gv("ld-phone"), expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: parseFloat(gv("ld-prob")) || 0, source: gv("ld-src"), stage_id: l.stage_id };
+      var r; if (id === "new") { row.company_id = S.company.id; row.is_active = true; r = await sb.from("crm_leads").insert(row); } else r = await sb.from("crm_leads").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("crm.pipe");
+    };
+    var cb = document.getElementById("ld-tocust"); if (cb) cb.onclick = async function () {
+      var cname = gv("ld-contact") || gv("ld-name");
+      var pr = await sb.from("partners").insert({ org_id: S.company.org_id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: gv("ld-phone") || null }).select("id").single();
+      if (pr.error) { toast("Could not create: " + pr.error.message); return; }
+      await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
+      toast("Customer created & linked"); renderLeadForm(id);
+    };
+    var qb = document.getElementById("ld-quote"); if (qb) qb.onclick = async function () {
+      if (!l.partner_id) { toast("Link or create a customer first"); return; }
+      var num = await nextOrderNumber("sale");
+      var so = await sb.from("sale_orders").insert({ company_id: S.company.id, number: num, partner_id: l.partner_id, date_order: today(), state: "draft", currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "From opportunity: " + l.name }).select("id").single();
+      if (so.error) { toast("Could not create: " + so.error.message); return; }
+      toast("Quotation created (draft)"); renderOrderForm(so.data.id, "sale");
+    };
+  }
+  function cfgCrmStages() {
+    return {
+      title: "Pipeline Stages", pageSize: 50,
+      fetch: function () { return sb.from("crm_stages").select("*").eq("company_id", S.company.id).order("sequence").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return s.name || ""; },
+      columns: [{ label: "Stage", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Order", num: true, get: function (s) { return s.sequence; } }, { label: "Won stage", get: function (s) { return s.is_won ? '<span class="badge paid">Won</span>' : '<span class="muted">-</span>'; } }],
+      onNew: function () { openStageModal(); }
+    };
+  }
+  function openStageModal() {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "stgmodal";
+    m.innerHTML = '<div class="sheet"><h3>New pipeline stage</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__stgname", "The stage name, e.g. Qualified or Negotiation.") + '<input id="stg-name"></div>' +
+      '<div class="row2"><div><label>Order</label>' + fhint("__stgseq", "Position in the pipeline (lower shows first).") + '<input id="stg-seq" type="number" value="50"></div><div><label>Won stage</label>' + fhint("__stgwon", "Reaching this stage means the deal is won.") + '<select id="stg-won"><option value="0">No</option><option value="1">Yes</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="stg-cancel">Cancel</button><button class="btn pri" id="stg-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("stg-cancel").onclick = function () { m.remove(); };
+    document.getElementById("stg-save").onclick = async function () {
+      var name = document.getElementById("stg-name").value.trim(); if (!name) { toast("Name required"); return; }
+      var r = await sb.from("crm_stages").insert({ company_id: S.company.id, name: name, sequence: parseInt(document.getElementById("stg-seq").value) || 50, is_won: document.getElementById("stg-won").value === "1" });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Stage added"); renderView();
     };
   }
 
