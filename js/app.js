@@ -1866,15 +1866,15 @@
     var p = id === "new" ? { is_active: true, billing_type: "none" } : (await sb.from("projects").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
     var tasks = id === "new" ? [] : (await sb.from("project_tasks").select("*").eq("project_id", id).order("created_at")).data || [];
-    var ts = id === "new" ? [] : (await sb.from("timesheets").select("hours,task_id").eq("project_id", id)).data || [];
-    var hoursByTask = {}, totalHours = 0; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); });
+    var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced").eq("project_id", id)).data || [];
+    var hoursByTask = {}, totalHours = 0, unbilledHours = 0, unbilledIds = []; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); } });
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours logged</span></button><button class="sb"><span class="v">' + tasks.length + '</span><span class="k">Tasks</span></button></div>' : "";
     var custOpts = '<option value="">(none)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (p.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart + '<div class="o-title"><input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
@@ -1895,6 +1895,33 @@
       toast("Saved"); go("proj.list");
     };
     if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id, function () { renderProjectForm(p.id); }); };
+    if (unbilledHours > 0.001) document.getElementById("pf-bill").onclick = function () { openBillModal(p, unbilledHours, unbilledIds); };
+  }
+  async function openBillModal(project, hours, tsIds) {
+    if (!project.partner_id) { toast("Set a Customer on the project first, then Save."); return; }
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "billmodal";
+    m.innerHTML = '<div class="sheet"><h3>Bill time &middot; ' + esc(project.name) + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Unbilled hours</label>' + fhint("__bhrs", "Total logged time not yet invoiced on this project.") + '<input value="' + hours.toFixed(2) + '" readonly></div><div><label>Rate / hour (' + esc(S.company.currency_code) + ')</label>' + fhint("__brate", "Your billing rate. Hours x rate becomes the invoice amount.") + '<input id="b-rate" type="number" step="0.01" value="0"></div></div>' +
+      '<div><label>Invoice line description</label>' + fhint("__bdesc", "The text your customer sees on the invoice line.") + '<input id="b-desc" value="Professional services - ' + esc(project.name) + '"></div>' +
+      '<div class="muted" style="font-size:12.5px" id="b-total">Invoice total: ' + S.company.currency_code + ' 0.00</div>' +
+      '</div><div class="foot"><button class="btn" id="b-cancel">Cancel</button><button class="btn pri" id="b-save" style="background:var(--app);border-color:var(--app)">Create draft invoice</button></div></div>';
+    document.body.appendChild(m);
+    function upd() { var rate = parseFloat(document.getElementById("b-rate").value) || 0; document.getElementById("b-total").textContent = "Invoice total: " + S.company.currency_code + " " + money(hours * rate); }
+    document.getElementById("b-rate").addEventListener("input", upd);
+    document.getElementById("b-cancel").onclick = function () { m.remove(); };
+    document.getElementById("b-save").onclick = async function () {
+      var rate = parseFloat(document.getElementById("b-rate").value) || 0;
+      if (!(rate > 0)) { toast("Enter a rate per hour"); return; }
+      var untax = hours * rate;
+      var hdr = { company_id: S.company.id, move_type: "out_invoice", partner_id: project.partner_id, project_id: project.id, number: await nextNumber("out_invoice"), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+      var ins = await sb.from("invoices").insert(hdr).select("id").single();
+      if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+      var invId = ins.data.id;
+      var lr = await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: invId, sequence: 10, name: document.getElementById("b-desc").value.trim() || project.name, quantity: hours, unit_price: rate, price_subtotal: untax });
+      if (lr.error) { toast("Invoice line failed: " + lr.error.message); return; }
+      await sb.from("timesheets").update({ is_invoiced: true }).in("id", tsIds);
+      m.remove(); toast("Draft invoice created from " + hours.toFixed(1) + " h"); renderInvoiceForm(invId, "out_invoice");
+    };
   }
   function cfgTasks() {
     return {
