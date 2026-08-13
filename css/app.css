@@ -255,6 +255,10 @@ button{font-family:inherit}
 .o-jc .row b{color:var(--ink);font-variant-numeric:tabular-nums}
 .o-jc .lk{display:block;padding:10px 16px;border-top:1px solid var(--line);color:var(--accent);font-size:13px;font-weight:600;cursor:pointer}
 .o-jc .lk:hover{background:var(--panel2)}
+.o-charts{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px;margin-top:16px}
+.o-chart{background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);overflow:hidden}
+.o-chart h3{margin:0;padding:12px 16px;font-size:13px;font-weight:700;color:var(--ink);border-bottom:1px solid var(--line);background:var(--panel2)}
+.o-chart-bd{padding:14px 16px}
 
 /* toast */
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:9px;font-size:13px;box-shadow:var(--sh);z-index:60;opacity:0;transition:opacity .2s}

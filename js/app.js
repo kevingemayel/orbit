@@ -1284,6 +1284,22 @@
       if (r.type_code === "liability_payable") pay += Number(r.credit) - Number(r.debit);
     });
     var cc = S.company.currency_code;
+    var invs = (await sb.from("invoices").select("invoice_date,due_date,amount_total,amount_residual, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
+    var mnow = new Date(), months = [];
+    for (var mi = 5; mi >= 0; mi--) { months.push(new Date(mnow.getFullYear(), mnow.getMonth() - mi, 1).toISOString().slice(0, 7)); }
+    var revByM = {}; months.forEach(function (m) { revByM[m] = 0; });
+    invs.forEach(function (v) { var m = (v.invoice_date || "").slice(0, 7); if (revByM[m] !== undefined) revByM[m] += Number(v.amount_total || 0); });
+    var revData = months.map(function (m) { return { label: new Date(m + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" }), value: revByM[m] }; });
+    var todayS = today(), buckets = { "Not due": 0, "1-30 days": 0, "31-60 days": 0, "60+ days": 0 };
+    invs.forEach(function (v) { var due = Number(v.amount_residual || 0); if (due <= 0.005) return; var dd = v.due_date || v.invoice_date; if (!dd || dd >= todayS) { buckets["Not due"] += due; return; } var days = Math.floor((new Date(todayS) - new Date(dd)) / 864e5); if (days <= 30) buckets["1-30 days"] += due; else if (days <= 60) buckets["31-60 days"] += due; else buckets["60+ days"] += due; });
+    var ageData = Object.keys(buckets).map(function (k) { return { label: k, value: buckets[k] }; });
+    var byCust = {}; invs.forEach(function (v) { var n = v.partners ? v.partners.name : "(none)"; byCust[n] = (byCust[n] || 0) + Number(v.amount_total || 0); });
+    var topData = Object.keys(byCust).map(function (n) { return { label: n, value: byCust[n] }; }).sort(function (a, b) { return b.value - a.value; }).slice(0, 6);
+    var chartsHtml = '<div class="o-charts">' +
+      chartCard("Revenue - last 6 months", invs.length ? svgBars(revData, cc) : '<div class="muted" style="padding:10px">No posted invoices yet.</div>') +
+      chartCard("Receivables aging", svgBars(ageData, cc)) +
+      chartCard("Top customers", topData.length ? svgBars(topData, cc) : '<div class="muted" style="padding:10px">No invoices yet.</div>') +
+      '</div>';
     document.getElementById("db").className = "";
     document.getElementById("db").innerHTML =
       '<div class="kpis">' +
@@ -1293,12 +1309,25 @@
       jcard("Customer Invoices", cc + " " + money(recv), "Outstanding receivable", "inv.out", "New Invoice", function () { renderInvoiceForm("new", "out_invoice"); }) +
       jcard("Vendor Bills", cc + " " + money(pay), "Outstanding payable", "inv.in", "New Bill", function () { renderInvoiceForm("new", "in_invoice"); }) +
       jcard("Bank", cc + " " + money(cash), "Cash & bank balance", "pay.in", "Register Payment", null) +
-      '</div>';
+      '</div>' + chartsHtml;
     document.querySelectorAll("[data-jgo]").forEach(function (e) { e.onclick = function () { go(e.dataset.jgo); }; });
     var ni = document.getElementById("jc-new-inv"); if (ni) ni.onclick = function () { renderInvoiceForm("new", "out_invoice"); };
     var nb = document.getElementById("jc-new-bill"); if (nb) nb.onclick = function () { renderInvoiceForm("new", "in_invoice"); };
   }
   function kpi(l, n) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + n + '</div></div>'; }
+  function chartCard(title, inner) { return '<div class="o-chart"><h3>' + esc(title) + '</h3><div class="o-chart-bd">' + inner + '</div></div>'; }
+  function svgBars(items, cc) {
+    var vals = items.map(function (i) { return Math.abs(Number(i.value) || 0); });
+    var max = Math.max.apply(null, vals.concat([1]));
+    var w = 560, labelW = 122, rowH = 30, h = items.length * rowH + 6, barMax = w - labelW - 118;
+    var body = items.map(function (it, idx) {
+      var y = idx * rowH + 6, bw = Math.max(2, (Math.abs(Number(it.value) || 0) / max) * barMax);
+      return '<text x="0" y="' + (y + 16) + '" font-size="12.5" fill="var(--ink2)">' + esc(String(it.label).slice(0, 18)) + '</text>' +
+        '<rect x="' + labelW + '" y="' + (y + 4) + '" width="' + bw.toFixed(1) + '" height="17" rx="4" fill="var(--accent)"></rect>' +
+        '<text x="' + w + '" y="' + (y + 16) + '" font-size="12" text-anchor="end" fill="var(--ink)" font-weight="600">' + cc + ' ' + money(it.value) + '</text>';
+    }).join("");
+    return '<svg viewBox="0 0 ' + w + ' ' + h + '" width="100%" style="max-width:100%;display:block;height:auto">' + body + '</svg>';
+  }
   function jcard(name, big, sub, action, newLabel, newFn) {
     var nid = name === "Customer Invoices" ? "jc-new-inv" : name === "Vendor Bills" ? "jc-new-bill" : "";
     return '<div class="o-jc"><div class="hd"><span class="nm">' + esc(name) + '</span></div>' +
