@@ -32,17 +32,17 @@
       ]
     },
     sales: {
-      name: "Sales", icon: "$", color: "#0891b2", color2: "#0e7490", home: "inv.out",
+      name: "Sales", icon: "$", color: "#0891b2", color2: "#0e7490", home: "so.list",
       menus: [
-        { label: "Orders", items: [["Invoices", "inv.out"]] },
+        { label: "Orders", items: [["Quotations", "so.list"], ["Invoices", "inv.out"]] },
         { label: "Customers", action: "cust" },
         { label: "Products", action: "products" }
       ]
     },
     purchase: {
-      name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "inv.in",
+      name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
-        { label: "Orders", items: [["Bills", "inv.in"]] },
+        { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
       ]
@@ -61,7 +61,7 @@
     dashboard: "accounting", "inv.out": "accounting", "inv.in": "accounting", "pay.in": "accounting",
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
-    companies: "settings", taxes: "settings", products: "sales"
+    companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase"
   };
   var SOON = [["CRM", "◎", "#e11d48"], ["Inventory", "⬚", "#16a34a"], ["Project", "◈", "#db2777"],
     ["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
@@ -235,6 +235,8 @@
       case "companies": return renderList(cfgCompanies());
       case "taxes": return renderList(cfgTaxes());
       case "products": return renderList(cfgProducts());
+      case "so.list": return renderList(cfgOrders("sale"));
+      case "po.list": return renderList(cfgOrders("purchase"));
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -506,6 +508,38 @@
       onNew: function () { renderProductForm("new"); }
     };
   }
+  function soBadge(o, isSale) {
+    var s = o.state;
+    if (s === "draft") return '<span class="badge draft">Quotation</span>';
+    if (s === "sent") return '<span class="badge partial">Sent</span>';
+    if (s === "sale" || s === "purchase") return '<span class="badge paid">' + (isSale ? "Sales Order" : "Purchase Order") + '</span>';
+    if (s === "done") return '<span class="badge">Done</span>';
+    if (s === "cancel") return '<span class="badge unpaid">Cancelled</span>';
+    return '<span class="badge">' + esc(s) + '</span>';
+  }
+  function cfgOrders(kind) {
+    var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders";
+    return {
+      title: isSale ? "Quotations" : "Purchase Orders", pageSize: 80,
+      fetch: function () { return sb.from(tbl).select("*, partners(name)").eq("company_id", S.company.id).order("date_order", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (o) { return (o.number || "") + " " + (o.partners ? o.partners.name : ""); },
+      columns: [
+        { label: "Number", get: function (o) { return '<b>' + esc(o.number || "Draft") + '</b>'; } },
+        { label: isSale ? "Customer" : "Vendor", get: function (o) { return esc(o.partners ? o.partners.name : ""); } },
+        { label: "Order Date", get: function (o) { return '<span class="muted">' + esc(o.date_order || "") + '</span>'; } },
+        { label: "Total", num: true, get: function (o) { return money(o.amount_total); } },
+        { label: "Status", get: function (o) { return soBadge(o, isSale); } }
+      ],
+      filters: [
+        { label: "Quotations", test: function (o) { return o.state === "draft" || o.state === "sent"; } },
+        { label: isSale ? "Sales Orders" : "Purchase Orders", test: function (o) { return o.state === "sale" || o.state === "purchase"; } }
+      ],
+      groupBy: [{ label: isSale ? "Customer" : "Vendor", get: function (o) { return o.partners ? o.partners.name : "None"; } }, { label: "Status", get: function (o) { return o.state; } }],
+      kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + S.company.currency_code + " " + money(o.amount_total) + '</b></div>'; },
+      onOpen: function (o) { renderOrderForm(o.id, kind); },
+      onNew: function () { renderOrderForm("new", kind); }
+    };
+  }
   function TYPE_LABEL(g) { return ({ asset: "Assets", liability: "Liabilities", equity: "Equity", income: "Income", expense: "Expenses", off: "Off-Balance" })[g] || g; }
 
   // ============================ INVOICE / BILL FORM ============================
@@ -751,6 +785,131 @@
     var prefix = moveType === "out_invoice" ? "INV" : "BILL";
     var r = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("move_type", moveType);
     return prefix + "/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+  }
+
+  // ============================ SALES / PURCHASE ORDER FORM ============================
+  async function renderOrderForm(id, kind) {
+    var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
+    var listAction = isSale ? "so.list" : "po.list";
+    var parent = { action: listAction, title: isSale ? "Quotations" : "Purchase Orders" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var order = null, lines = [];
+    if (id !== "new") {
+      order = (await sb.from(tbl).select("*, partners(name)").eq("id", id).maybeSingle()).data;
+      lines = (await sb.from(ltbl).select("*").eq("order_id", id).order("id")).data || [];
+    }
+    var editable = !order || order.state === "draft" || order.state === "sent";
+    var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
+    var partners = (await sb.from("partners").select("id,name").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var products = ((await sb.from("products").select("id,name,default_code,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
+    if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
+    document.querySelector(".o-bc span:last-child").textContent = order ? (order.number || "Draft") : "New";
+
+    var btns = "";
+    if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
+    else if (confirmed) btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>';
+    var st = order ? order.state : "draft", atFirst = (st === "draft" || st === "sent");
+    var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "Draft") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
+
+    var partnerField = editable ? '<select id="o-partner">' + partners.map(function (p) { return '<option value="' + p.id + '"' + ((order && order.partner_id === p.id) ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(order && order.partners ? order.partners.name : "") + '</span>';
+    var groups = '<div class="o-groups"><div>' +
+      fld(isSale ? "Customer" : "Vendor", partnerField) +
+      fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
+      '</div><div>' +
+      fld("Order Date", editable ? '<input id="o-date" type="date" value="' + (order ? order.date_order || today() : today()) + '">' : '<span class="v">' + esc(order.date_order || "") + '</span>') +
+      fld("Reference / Note", editable ? '<input id="o-ref" value="' + esc(order ? order.note || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(order ? order.note || "" : "") + '</span>') +
+      '</div></div>';
+    var title = order ? (order.number || (isSale ? "Draft Quotation" : "Draft Purchase Order")) : "New";
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title">' + esc(title) + '</div>' + groups +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
+
+    var linesState = lines.map(function (l) { return { name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
+    function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
+    function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
+    function recalc() { var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0; lb.querySelectorAll("tr").forEach(function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ln = q * p; var ts = tr.querySelector(".l-tax"); var amt = ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0; sub += ln; tax += ln * amt / 100; tr.querySelector(".l-sub").textContent = money(ln); }); setTot(sub, tax); }
+    function currentLines() { var lb = document.getElementById("lnbody"); if (!lb) return linesState; return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ps = tr.querySelector(".l-prod"); return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, product_id: ps ? (ps.value || null) : null }; }); }
+    function renderLines() {
+      var pg = document.getElementById("nbpg");
+      if (!editable) {
+        var body = linesState.map(function (l) { var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>'; }).join("");
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+        setTot(sub0, tax0); return;
+      }
+      var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+      var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
+      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:170px">Product</th>' : "") + '<th>Description</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>' + totHTML();
+      var lb = document.getElementById("lnbody");
+      function addRow(l) {
+        var tr = document.createElement("tr");
+        tr.innerHTML = (products.length ? '<td><select class="l-prod">' + prodOpts + '</select></td>' : "") + '<td><input class="l-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td><td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="l-price num" type="number" step="0.01" value="' + (l ? l.unit_price : 0) + '"></td><td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td><td><button class="del">&times;</button></td>';
+        lb.appendChild(tr);
+        if (l && l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
+        if (l && l.product_id && tr.querySelector(".l-prod")) tr.querySelector(".l-prod").value = l.product_id;
+        var ps = tr.querySelector(".l-prod");
+        if (ps) ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".l-name").value = pr.name; tr.querySelector(".l-price").value = isSale ? pr.list_price : pr.cost_price; var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx; recalc(); });
+        tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
+        tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); });
+        recalc();
+      }
+      document.getElementById("addln").onclick = function () { addRow(null); };
+      if (linesState.length) linesState.forEach(addRow); else addRow(null);
+      recalc();
+    }
+    renderLines();
+
+    async function save(confirmIt) {
+      var partnerId = document.getElementById("o-partner").value;
+      if (!partnerId) { toast("Pick a " + (isSale ? "customer" : "vendor")); return null; }
+      var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name !== "Item"; });
+      if (!lns.length) { toast("Add at least one line"); return null; }
+      var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+      var tax = lns.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+      var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(), amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
+      var oid = id;
+      if (id === "new") {
+        hdr.company_id = S.company.id; hdr.currency_code = S.company.currency_code; hdr.state = confirmIt ? (isSale ? "sale" : "purchase") : "draft"; hdr.number = await nextOrderNumber(kind);
+        var ins = await sb.from(tbl).insert(hdr).select("id").single(); if (ins.error) { toast("Could not save: " + ins.error.message); return null; } oid = ins.data.id;
+      } else {
+        if (confirmIt) hdr.state = isSale ? "sale" : "purchase";
+        var up = await sb.from(tbl).update(hdr).eq("id", id); if (up.error) { toast("Could not save: " + up.error.message); return null; }
+        await sb.from(ltbl).delete().eq("order_id", id);
+      }
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
+      var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; }
+      return oid;
+    }
+    if (editable) {
+      document.getElementById("o-discard").onclick = function () { go(listAction); };
+      document.getElementById("o-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderOrderForm(nid, kind); } };
+      document.getElementById("o-confirm").onclick = async function () { var nid = await save(true); if (nid) { toast(isSale ? "Sales order confirmed" : "Purchase order confirmed"); renderOrderForm(nid, kind); } };
+    } else if (confirmed) {
+      document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
+    }
+  }
+  async function nextOrderNumber(kind) {
+    var prefix = kind === "sale" ? "SO" : "PO", tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
+    var r = await sb.from(tbl).select("id", { count: "exact", head: true }).eq("company_id", S.company.id);
+    return prefix + "/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+  }
+  async function createInvoiceFromOrder(order, lines, kind) {
+    var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
+    var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+    hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
+    var ins = await sb.from("invoices").insert(hdr).select("id").single();
+    if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+    var invId = ins.data.id;
+    var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+    var lr = await sb.from("invoice_lines").insert(rows);
+    if (lr.error) { toast("Invoice lines failed: " + lr.error.message); return; }
+    toast(isSale ? "Invoice created (draft)" : "Bill created (draft)");
+    renderInvoiceForm(invId, moveType);
   }
 
   // ============================ PARTNER FORM ============================
