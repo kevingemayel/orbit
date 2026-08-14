@@ -283,6 +283,8 @@
     else { /* keep shell, but ensure menu highlights current app */ }
     routeAction(action);
   }
+  // Re-render the current view (used by modals to refresh the list after a save).
+  function renderView() { if (S.action) routeAction(S.action); }
   function routeAction(action) {
     switch (action) {
       case "dashboard": return renderDashboard();
