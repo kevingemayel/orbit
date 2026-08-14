@@ -1105,10 +1105,13 @@
     document.body.appendChild(wrap); document.body.classList.add("printing"); window.print();
     setTimeout(function () { document.body.classList.remove("printing"); wrap.remove(); }, 400);
   }
+  // collision-safe sequence: highest existing numeric suffix + 1 (count-based numbering repeats a number after any deletion)
+  function maxSeq(rows, prefixYear) { var mx = 0; (rows || []).forEach(function (r) { var num = r.number || ""; if (prefixYear && num.indexOf(prefixYear) !== 0) return; var m = /(\d+)\s*$/.exec(num); if (m) { var n = parseInt(m[1], 10); if (n > mx) mx = n; } }); return mx; }
   async function nextNumber(moveType) {
     var prefix = { out_invoice: "INV", out_refund: "RINV", in_invoice: "BILL", in_refund: "RBILL" }[moveType] || "INV";
-    var r = await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("move_type", moveType);
-    return prefix + "/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("invoices").select("number").eq("company_id", S.company.id).eq("move_type", moveType).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
   }
 
   // ============================ SALES / PURCHASE ORDER FORM ============================
@@ -1256,8 +1259,9 @@
   }
   async function nextOrderNumber(kind) {
     var prefix = kind === "sale" ? "SO" : "PO", tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
-    var r = await sb.from(tbl).select("id", { count: "exact", head: true }).eq("company_id", S.company.id);
-    return prefix + "/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from(tbl).select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
   }
   async function createInvoiceFromOrder(order, lines, kind) {
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
@@ -4142,8 +4146,9 @@
     };
   }
   async function nextReqNumber() {
-    var r = await sb.from("material_requisitions").select("id", { count: "exact", head: true }).eq("company_id", S.company.id);
-    return "MR/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+    var py = "MR/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("material_requisitions").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
   }
 
   // ============================ SUBCONTRACT CERTIFICATES (payables IPC) ============================
