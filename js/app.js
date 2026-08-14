@@ -3759,16 +3759,11 @@
       var num = await nextNumber("out_invoice");
       var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || "") }).select("id").single();
       if (ins.error) { toast("Invoice failed: " + ins.error.message); return; }
-      var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["7000", "4110", "4190"])).data || [];
-      var accBy = {}; accs.forEach(function (a) { accBy[a.code] = a.id; });
-      var prevGross = prevCert ? Number(prevCert.gross_to_date || 0) : 0, prevRet = prevCert ? Number(prevCert.retention_amount || 0) : 0;
-      var grossThis = Number(cert.gross_to_date || 0) - prevGross;
-      var retThis = Number(cert.retention_amount || 0) - prevRet;
-      var advThis = grossThis - retThis - (Number(cert.current_certified) || 0);   // balancing plug = advance recovered this period
-      var lns = [{ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Work certified " + (cert.number || "") + " - " + (proj.name || ""), account_id: accBy["7000"] || null, quantity: 1, unit_price: grossThis, price_subtotal: grossThis }];
-      if (retThis > 0.005 && accBy["4110"]) lns.push({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 20, name: "Retention withheld", account_id: accBy["4110"], quantity: 1, unit_price: -retThis, price_subtotal: -retThis });
-      if (advThis > 0.005 && accBy["4190"]) lns.push({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 30, name: "Advance recovery", account_id: accBy["4190"], quantity: 1, unit_price: -advThis, price_subtotal: -advThis });
-      await sb.from("invoice_lines").insert(lns);
+      var incAcc = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("code", "7000").maybeSingle()).data;
+      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
+      // book the retention held by the client as a receivable (revenue recognised on gross work)
+      var prevRet = prevCert ? Number(prevCert.retention_amount || 0) : 0;
+      await postRetentionEntry("4110", "7000", Number(cert.retention_amount || 0) - prevRet, "Retention receivable " + (cert.number || "") + " - " + (proj.name || ""), ins.data.id);
       await sb.from("project_certificates").update({ state: "invoiced", invoice_id: ins.data.id }).eq("id", cert.id);
       toast("Draft invoice created"); renderInvoiceForm(ins.data.id, "out_invoice");
     };
@@ -3844,6 +3839,25 @@
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - vendor bills (posted, tagged to this project)</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Bill</td><td>Vendor</td><td>Date</td><td class="num">Amount</td></tr></thead><tbody>' + (billRows || '<tr><td colspan="4" class="muted">No project bills yet.</td></tr>') + '<tr class="tot"><td>Total bills</td><td></td><td></td><td class="num">' + money(billTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - materials issued to site</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Material</td><td>Date</td><td class="num">Qty</td><td class="num">Cost value</td></tr></thead><tbody>' + (issRows || '<tr><td colspan="4" class="muted">No materials issued yet.</td></tr>') + '<tr class="tot"><td>Total issued</td><td></td><td></td><td class="num">' + money(issTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Committed - open purchase orders</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>PO</td><td>Status</td><td class="num">Amount</td></tr></thead><tbody>' + (poRows || '<tr><td colspan="3" class="muted">No open POs.</td></tr>') + '<tr class="tot"><td>Total committed</td><td></td><td class="num">' + money(comTot) + '</td></tr></tbody></table></div>';
+  }
+
+  // Book retention as a real GL balance: a separate balanced entry (positive dr/cr, no negative lines
+  // so it passes the journal_lines non-negative check). Client: Dr 4110 / Cr 7000. Sub: Dr 6100 / Cr 4010.
+  async function postRetentionEntry(drCode, crCode, amount, narration, invId) {
+    if (!(Number(amount) > 0.005)) return;
+    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", [drCode, crCode])).data || [];
+    var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
+    if (!by[drCode] || !by[crCode]) return;
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    if (!jr) return;
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: today(), ref: "", narration: narration, currency_code: S.company.currency_code, state: "draft", source_type: "retention", source_id: invId ? String(invId) : "" }).select("id").single();
+    if (e.error) return;
+    var lr = await sb.from("journal_lines").insert([
+      { entry_id: e.data.id, company_id: S.company.id, account_id: by[drCode], label: narration, debit: Number(amount), credit: 0 },
+      { entry_id: e.data.id, company_id: S.company.id, account_id: by[crCode], label: narration, debit: 0, credit: Number(amount) }
+    ]);
+    if (lr.error) return;
+    await sb.rpc("post_entry", { p_entry: e.data.id });
   }
 
   // ---- Retention report (cash held on both sides) ----
@@ -4098,18 +4112,17 @@
       var full = (await sb.from("subcontracts").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
       if (!full.vendor_id) { toast("Set a Vendor on the subcontract first."); return; }
       var num = await nextNumber("in_invoice");
-      var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["6100", "6000", "4010"])).data || [];
+      var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["6100", "6000"])).data || [];
       var accBy = {}; accs.forEach(function (a) { accBy[a.code] = a.id; });
       var expAcc = accBy["6100"] || accBy["6000"] || null;
       var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "in_invoice", partner_id: full.vendor_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: full.project_id || null, ref: "Subcontract cert " + (cert.number || "") }).select("id").single();
       if (ins.error) { toast("Bill failed: " + ins.error.message); return; }
-      var prevGross = prevCerts[0] ? Number(prevCerts[0].gross_to_date || 0) : 0, prevRet = prevCerts[0] ? Number(prevCerts[0].retention_amount || 0) : 0;
-      var grossThis = Number(cert.gross_to_date || 0) - prevGross, retThis = Number(cert.retention_amount || 0) - prevRet;
-      var lns = [{ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Subcontract work " + (cert.number || "") + " - " + (full.name || ""), account_id: expAcc, quantity: 1, unit_price: grossThis, price_subtotal: grossThis }];
-      if (retThis > 0.005 && accBy["4010"]) lns.push({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 20, name: "Retention withheld", account_id: accBy["4010"], quantity: 1, unit_price: -retThis, price_subtotal: -retThis });
-      await sb.from("invoice_lines").insert(lns);
+      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Subcontract certificate " + (cert.number || "") + " - " + (full.name || ""), account_id: expAcc, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
+      // book the retention we hold from the subcontractor as a payable (cost recognised on gross work)
+      var prevRet = prevCerts[0] ? Number(prevCerts[0].retention_amount || 0) : 0;
+      await postRetentionEntry("6100", "4010", Number(cert.retention_amount || 0) - prevRet, "Retention payable " + (cert.number || "") + " - " + (full.name || ""), ins.data.id);
       await sb.from("subcontract_certificates").update({ state: "billed", bill_id: ins.data.id }).eq("id", cert.id);
-      toast("Draft vendor bill created - cost on gross, retention held to 4010"); renderInvoiceForm(ins.data.id, "in_invoice");
+      toast("Draft vendor bill created - retention booked to 4010"); renderInvoiceForm(ins.data.id, "in_invoice");
     };
   }
 
