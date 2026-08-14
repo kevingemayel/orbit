@@ -96,9 +96,10 @@
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
-        { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"]] },
-        { label: "Time Off", action: "hr.leaves" },
-        { label: "Attendances", action: "hr.att" },
+        { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"], ["Contracts", "hr.contracts"]] },
+        { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
+        { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
+        { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"]] },
         { label: "Expenses", action: "hr.exp" }
       ]
     },
@@ -124,7 +125,8 @@
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
-    "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr"
+    "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
+    "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr"
   };
   var SOON = [["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
@@ -334,6 +336,14 @@
       case "hr.leaves": return renderList(cfgLeaves());
       case "hr.att": return renderList(cfgAttendances());
       case "hr.exp": return renderList(cfgExpenses());
+      case "hr.contracts": return renderList(cfgContracts());
+      case "hr.roster": return renderList(cfgRoster());
+      case "hr.shifts": return renderList(cfgShifts());
+      case "hr.alloc": return renderList(cfgLeaveAllocations());
+      case "hr.runs": return renderList(cfgPayslipRuns());
+      case "hr.slips": return renderList(cfgPayslips());
+      case "hr.struct": return renderList(cfgSalaryStructures());
+      case "hr.heads": return renderList(cfgSalaryHeads());
       default: return renderDashboard();
     }
   }
@@ -2728,6 +2738,462 @@
       var r = await sb.from("hr_expenses").update({ state: "approved" }).eq("id", exp.id);
       if (r.error) { toast("Could not approve: " + r.error.message); return; }
       m.remove(); toast("Approved"); renderView();
+    };
+  }
+
+  // ============================ PAYROLL ENGINE ============================
+  var CALC_TYPES = [["fixed", "Fixed amount"], ["percent", "% of a base head"], ["per_day", "Per worked day"], ["per_hour", "Per worked hour"], ["overtime", "Overtime (hours x rate)"], ["undertime", "Undertime (hours x rate)"], ["formula", "Formula"]];
+  var HEAD_CATS = [["earning", "Earning"], ["deduction", "Deduction"], ["benefit", "Benefit"], ["total", "Total"]];
+  function calcLabel(c) { for (var i = 0; i < CALC_TYPES.length; i++) if (CALC_TYPES[i][0] === c) return CALC_TYPES[i][1]; return c; }
+  // Safe-ish formula eval: owner-configured expressions over payroll variables + Math.
+  function evalFormula(expr, vars) {
+    try { var keys = Object.keys(vars); return Number(new Function(keys.join(","), "with(Math){return (" + (expr || "0") + ");}").apply(null, keys.map(function (k) { return vars[k]; }))) || 0; }
+    catch (e) { return 0; }
+  }
+  // Walk salary heads in sequence, compute each, accumulate gross/net.
+  function computePayslip(contract, heads, w) {
+    var wage = Number(contract.wage) || 0, wdays = Number(contract.working_days) || 26, dhours = Number(contract.daily_hours) || 8, otMult = Number(contract.ot_multiplier) || 1.25;
+    var worked_days = (w.worked_days != null ? Number(w.worked_days) : wdays);
+    var day_rate = wdays ? wage / wdays : 0, hour_rate = dhours ? day_rate / dhours : 0;
+    var ot_hours = Number(w.ot_hours) || 0, ut_hours = Number(w.ut_hours) || 0, leave_days = Number(w.leave_days) || 0;
+    var worked_hours = (w.worked_hours != null ? Number(w.worked_hours) : worked_days * dhours);
+    var vars = { BASIC: wage, wage: wage, working_days: wdays, daily_hours: dhours, day_rate: day_rate, hour_rate: hour_rate, worked_days: worked_days, worked_hours: worked_hours, ot_hours: ot_hours, ut_hours: ut_hours, leave_days: leave_days, GROSS: 0, NET: 0 };
+    var earnings = 0, ded = 0, lines = [];
+    heads.slice().filter(function (h) { return h.is_active !== false; }).sort(function (a, b) { return (a.sequence || 0) - (b.sequence || 0); }).forEach(function (h) {
+      var cat = h.category || "earning", amt = 0;
+      if (cat === "total") { amt = /net/i.test(h.code) ? (earnings - ded) : earnings; }
+      else switch (h.calc_type) {
+        case "fixed": amt = Number(h.amount) || 0; break;
+        case "percent": amt = (Number(h.amount) || 0) / 100 * (Number(vars[h.base_code]) || 0); break;
+        case "per_day": amt = (h.code === "BASIC" ? day_rate : Number(h.amount) || 0) * worked_days; break;
+        case "per_hour": amt = (Number(h.amount) || 0) * worked_hours; break;
+        case "overtime": amt = ot_hours * hour_rate * ((Number(h.amount) || 0) || otMult); break;
+        case "undertime": amt = ut_hours * hour_rate; break;
+        case "formula": amt = evalFormula(h.formula, vars); break;
+        default: amt = Number(h.amount) || 0;
+      }
+      amt = Math.round(amt * 100) / 100; vars[h.code] = amt;
+      if (cat === "earning" || cat === "benefit") earnings += amt; else if (cat === "deduction") ded += amt;
+      vars.GROSS = earnings; vars.NET = earnings - ded;
+      lines.push({ code: h.code, name: h.name, category: cat, amount: amt, sequence: h.sequence || 0 });
+    });
+    return { lines: lines, gross: earnings, deductions: ded, net: earnings - ded };
+  }
+  async function payslipWorked(empId, from, to, contract) {
+    var atts = (await sb.from("hr_attendances").select("worked_hours,check_in").eq("company_id", S.company.id).eq("employee_id", empId).gte("check_in", from).lte("check_in", to + "T23:59:59")).data || [];
+    var wh = 0, days = {}; atts.forEach(function (a) { wh += Number(a.worked_hours) || 0; if (a.check_in) days[(a.check_in || "").slice(0, 10)] = 1; });
+    var dhours = Number(contract.daily_hours) || 8, wdays = Object.keys(days).length;
+    if (!atts.length) { wdays = Number(contract.working_days) || 26; wh = wdays * dhours; }
+    var expected = wdays * dhours;
+    var lv = (await sb.from("hr_leaves").select("days").eq("company_id", S.company.id).eq("employee_id", empId).eq("state", "approved").gte("date_from", from).lte("date_from", to)).data || [];
+    return { worked_days: wdays, worked_hours: Math.round(wh * 100) / 100, ot_hours: Math.round(Math.max(0, wh - expected) * 100) / 100, ut_hours: Math.round(Math.max(0, expected - wh) * 100) / 100, leave_days: lv.reduce(function (s, x) { return s + Number(x.days || 0); }, 0) };
+  }
+  async function postPayslip(slip) {
+    var accs = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var sal = accs.filter(function (a) { return /salar|payroll|personnel|wage|staff/i.test(a.name); })[0];
+    var exp = sal ? sal.id : (accs.filter(function (a) { return a.code === "6000"; })[0] || {}).id;
+    var ap = (accs.filter(function (a) { return a.code === "4000"; })[0] || {}).id;
+    if (!exp || !ap) { toast("Need a salary/expense account and a payable (4000) account"); return false; }
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    if (!jr) { toast("No MISC journal to post to"); return false; }
+    var gross = Number(slip.gross) || 0, ded = Number(slip.total_deductions) || 0, net = Number(slip.net) || 0;
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: slip.date_to || today(), ref: "Payslip", narration: "Payroll " + (slip.date_from || ""), currency_code: S.company.currency_code, state: "draft", source_type: "payslip", source_id: String(slip.id) }).select("id").single();
+    if (e.error) { toast("Entry failed: " + e.error.message); return false; }
+    var eid = e.data.id, jl = [{ entry_id: eid, company_id: S.company.id, account_id: exp, label: "Gross salary", debit: gross, credit: 0 }];
+    if (ded > 0.005) jl.push({ entry_id: eid, company_id: S.company.id, account_id: ap, label: "Payroll deductions", debit: 0, credit: ded });
+    jl.push({ entry_id: eid, company_id: S.company.id, account_id: ap, label: "Net salary payable", debit: 0, credit: net });
+    if ((await sb.from("journal_lines").insert(jl)).error) { toast("Lines failed"); return false; }
+    var pr = await sb.rpc("post_entry", { p_entry: eid });
+    if (pr.error) { toast("Post failed: " + pr.error.message); return false; }
+    await sb.from("hr_payslips").update({ state: "confirmed", journal_entry_id: eid }).eq("id", slip.id);
+    return true;
+  }
+
+  // ---- Contracts ----
+  function cfgContracts() {
+    return {
+      title: "Contracts", pageSize: 80,
+      fetch: function () { return sb.from("hr_contracts").select("*, hr_employees(name), hr_salary_structures(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.hr_employees ? c.hr_employees.name : "") + " " + (c.name || ""); },
+      columns: [
+        { label: "Employee", get: function (c) { return '<b>' + esc(c.hr_employees ? c.hr_employees.name : "") + '</b>'; } },
+        { label: "Structure", get: function (c) { return esc(c.hr_salary_structures ? c.hr_salary_structures.name : ""); } },
+        { label: "Wage", num: true, get: function (c) { return (c.currency_code || S.company.currency_code) + " " + money(c.wage); } },
+        { label: "Days/mo", num: true, get: function (c) { return Number(c.working_days || 0); } },
+        { label: "Status", get: function (c) { return c.state === "running" ? '<span class="badge paid">Running</span>' : c.state === "expired" ? '<span class="badge">Expired</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Running", test: function (c) { return c.state === "running"; } }, { label: "Draft", test: function (c) { return c.state !== "running" && c.state !== "expired"; } }],
+      groupBy: [{ label: "Structure", get: function (c) { return c.hr_salary_structures ? c.hr_salary_structures.name : "None"; } }],
+      onOpen: function (c) { renderContractForm(c.id); },
+      onNew: function () { renderContractForm("new"); }
+    };
+  }
+  async function renderContractForm(id) {
+    var parent = { action: "hr.contracts", title: "Contracts" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var c = id === "new" ? { state: "draft", working_days: 26, daily_hours: 8, ot_multiplier: 1.25, currency_code: S.company.currency_code } : (await sb.from("hr_contracts").select("*").eq("id", id).maybeSingle()).data || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var structs = (await sb.from("hr_salary_structures").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var slipCount = id === "new" ? 0 : ((await sb.from("hr_payslips").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("contract_id", id)).count || 0);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((emps.filter(function (e) { return e.id === c.employee_id; })[0] || {}).name || "Contract");
+    function opt(list, cur) { return '<option value="">None</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
+    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="ct-sm-slip"><span class="v">' + slipCount + '</span><span class="k">Payslips</span></button></div>' : "";
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ct-save">Save</button><button id="ct-discard">Discard</button></div>' +
+      '<div class="o-stages"><span class="st ' + (c.state === "draft" || !c.state ? "on" : "done") + '">Draft</span><span class="st ' + (c.state === "running" ? "on" : "") + '">Running</span></div></div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title">Employment contract</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Employee", '<select id="ct-emp">' + opt(emps, c.employee_id) + '</select>', "The employee this contract is for.") +
+      fld("Salary Structure", '<select id="ct-struct">' + opt(structs, c.structure_id) + '</select>', "The set of salary heads used to compute this employee's payslip.") +
+      fld("Monthly Wage", '<input id="ct-wage" type="number" step="0.01" value="' + (c.wage || 0) + '">', "The basic monthly salary. Per-day/hour rates derive from this.") +
+      fld("Status", '<select id="ct-state"><option value="draft"' + (c.state === "draft" || !c.state ? " selected" : "") + '>Draft</option><option value="running"' + (c.state === "running" ? " selected" : "") + '>Running</option><option value="expired"' + (c.state === "expired" ? " selected" : "") + '>Expired</option></select>', "Only running contracts are picked up by payroll runs.") +
+      '</div><div>' +
+      fld("Working Days / month", '<input id="ct-wdays" type="number" step="0.5" value="' + (c.working_days || 26) + '">', "Standard paid days per month, used to prorate basic and set the day rate.") +
+      fld("Daily Hours", '<input id="ct-dhours" type="number" step="0.5" value="' + (c.daily_hours || 8) + '">', "Standard hours per day, used for the hourly (overtime) rate.") +
+      fld("Overtime Multiplier", '<input id="ct-otm" type="number" step="0.05" value="' + (c.ot_multiplier || 1.25) + '">', "Overtime pay = OT hours x hourly rate x this multiplier (e.g. 1.25, 1.5, 2).") +
+      fld("Start Date", '<input id="ct-start" type="date" value="' + (c.date_start || "") + '">', "When the contract begins.") +
+      '</div></div></div>';
+    document.getElementById("ct-discard").onclick = function () { go("hr.contracts"); };
+    var _cs = document.getElementById("ct-sm-slip"); if (_cs) _cs.onclick = function () { go("hr.slips"); };
+    document.getElementById("ct-save").onclick = async function () {
+      if (!document.getElementById("ct-emp").value) { toast("Pick an employee"); return; }
+      var row = { employee_id: document.getElementById("ct-emp").value, structure_id: document.getElementById("ct-struct").value || null, wage: parseFloat(gv("ct-wage")) || 0, currency_code: S.company.currency_code, working_days: parseFloat(gv("ct-wdays")) || 26, daily_hours: parseFloat(gv("ct-dhours")) || 8, ot_multiplier: parseFloat(gv("ct-otm")) || 1.25, state: document.getElementById("ct-state").value, date_start: gv("ct-start") || null };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_contracts").insert(row); } else r = await sb.from("hr_contracts").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("hr.contracts");
+    };
+  }
+
+  // ---- Shifts + Roster ----
+  function cfgShifts() {
+    return {
+      title: "Shifts", pageSize: 80,
+      fetch: function () { return sb.from("hr_shifts").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return s.name || ""; },
+      columns: [
+        { label: "Shift", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } },
+        { label: "Start", get: function (s) { return esc(s.start_time || ""); } },
+        { label: "End", get: function (s) { return esc(s.end_time || ""); } },
+        { label: "Break (min)", num: true, get: function (s) { return Number(s.break_minutes || 0); } },
+        { label: "Hours", num: true, get: function (s) { return Number(s.hours || 0); } }
+      ],
+      onOpen: function (s) { openShiftModal(s); },
+      onNew: function () { openShiftModal(); }
+    };
+  }
+  function openShiftModal(shift) {
+    shift = shift || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (shift.id ? "Edit shift" : "New shift") + '</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__shn", "Shift name, e.g. Day shift or Night shift.") + '<input id="sh-name" value="' + esc(shift.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Start time</label>' + fhint("__shs", "Shift start, HH:MM.") + '<input id="sh-start" type="time" value="' + (shift.start_time || "08:00") + '"></div><div><label>End time</label>' + fhint("__she", "Shift end, HH:MM.") + '<input id="sh-end" type="time" value="' + (shift.end_time || "17:00") + '"></div></div>' +
+      '<div class="row2"><div><label>Break (minutes)</label>' + fhint("__shb", "Unpaid break within the shift.") + '<input id="sh-break" type="number" value="' + (shift.break_minutes != null ? shift.break_minutes : 60) + '"></div><div><label>Paid hours</label>' + fhint("__shh", "Paid working hours in this shift (drives expected hours for OT/UT).") + '<input id="sh-hours" type="number" step="0.25" value="' + (shift.hours != null ? shift.hours : 8) + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="sh-cancel">Cancel</button><button class="btn pri" id="sh-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sh-cancel").onclick = function () { m.remove(); };
+    document.getElementById("sh-save").onclick = async function () {
+      var name = gv("sh-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, start_time: gv("sh-start"), end_time: gv("sh-end"), break_minutes: parseInt(gv("sh-break")) || 0, hours: parseFloat(gv("sh-hours")) || 0 };
+      var r; if (shift.id) r = await sb.from("hr_shifts").update(row).eq("id", shift.id); else { row.company_id = S.company.id; r = await sb.from("hr_shifts").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgRoster() {
+    return {
+      title: "Roster", pageSize: 120,
+      fetch: function () { return sb.from("hr_roster").select("*, hr_employees(name), hr_shifts(name)").eq("company_id", S.company.id).order("work_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.hr_employees ? r.hr_employees.name : "") + " " + (r.hr_shifts ? r.hr_shifts.name : ""); },
+      columns: [
+        { label: "Date", get: function (r) { return '<span class="muted">' + esc(r.work_date || "") + '</span>'; } },
+        { label: "Employee", get: function (r) { return '<b>' + esc(r.hr_employees ? r.hr_employees.name : "") + '</b>'; } },
+        { label: "Shift", get: function (r) { return esc(r.hr_shifts ? r.hr_shifts.name : ""); } }
+      ],
+      groupBy: [{ label: "Employee", get: function (r) { return r.hr_employees ? r.hr_employees.name : "None"; } }, { label: "Date", get: function (r) { return r.work_date || "None"; } }],
+      onNew: function () { openRosterModal(); }
+    };
+  }
+  async function openRosterModal() {
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var shifts = (await sb.from("hr_shifts").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    if (!emps.length) { toast("Add an employee first"); return; }
+    if (!shifts.length) { toast("Create a shift first"); return; }
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Assign roster</h3><div class="form">' +
+      '<div><label>Employee</label>' + fhint("__rse", "Who to schedule.") + '<select id="rs-emp">' + emps.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Shift</label>' + fhint("__rsh", "The shift to assign on each day in the range.") + '<select id="rs-shift">' + shifts.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>From</label>' + fhint("__rsf", "First day to schedule.") + '<input id="rs-from" type="date" value="' + today() + '"></div><div><label>To</label>' + fhint("__rst", "Last day to schedule.") + '<input id="rs-to" type="date" value="' + today() + '"></div></div>' +
+      '<div><label>Skip weekends</label>' + fhint("__rsw", "Do not create roster rows for Saturday/Sunday.") + '<select id="rs-skip"><option value="1">Yes</option><option value="0">No</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="rs-cancel">Cancel</button><button class="btn pri" id="rs-save" style="background:var(--app);border-color:var(--app)">Assign</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("rs-cancel").onclick = function () { m.remove(); };
+    document.getElementById("rs-save").onclick = async function () {
+      var emp = document.getElementById("rs-emp").value, shift = document.getElementById("rs-shift").value, from = gv("rs-from"), to = gv("rs-to"), skip = document.getElementById("rs-skip").value === "1";
+      if (!from || !to || to < from) { toast("Pick a valid date range"); return; }
+      var rows = [], d = new Date(from + "T00:00:00"), end = new Date(to + "T00:00:00");
+      while (d <= end) { var dow = d.getDay(); if (!(skip && (dow === 0 || dow === 6))) rows.push({ company_id: S.company.id, employee_id: emp, work_date: d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2), shift_id: shift }); d.setDate(d.getDate() + 1); }
+      if (!rows.length) { toast("No days to assign"); return; }
+      var r = await sb.from("hr_roster").upsert(rows, { onConflict: "employee_id,work_date" });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast(rows.length + " day(s) rostered"); renderView();
+    };
+  }
+
+  // ---- Salary structures + heads ----
+  function cfgSalaryStructures() {
+    return {
+      title: "Salary Structures", pageSize: 80,
+      fetch: function () { return sb.from("hr_salary_structures").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return s.name || ""; },
+      columns: [{ label: "Structure", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Status", get: function (s) { return s.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>'; } }],
+      onOpen: function (s) { openStructureModal(s); },
+      onNew: function () { openStructureModal(); }
+    };
+  }
+  function openStructureModal(st) {
+    st = st || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (st.id ? "Edit structure" : "New salary structure") + '</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__stn", "Structure name, e.g. Site Labour, Staff, or Management.") + '<input id="st-name" value="' + esc(st.name || "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="st-cancel">Cancel</button><button class="btn pri" id="st-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("st-cancel").onclick = function () { m.remove(); };
+    document.getElementById("st-save").onclick = async function () {
+      var name = gv("st-name"); if (!name) { toast("Name required"); return; }
+      var r; if (st.id) r = await sb.from("hr_salary_structures").update({ name: name }).eq("id", st.id); else r = await sb.from("hr_salary_structures").insert({ company_id: S.company.id, name: name });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgSalaryHeads() {
+    return {
+      title: "Salary Heads", pageSize: 120,
+      fetch: function () { return sb.from("hr_salary_heads").select("*, hr_salary_structures(name)").eq("company_id", S.company.id).order("sequence").then(function (r) { return r.data || []; }); },
+      searchText: function (h) { return (h.code || "") + " " + (h.name || ""); },
+      columns: [
+        { label: "Seq", num: true, get: function (h) { return h.sequence; } },
+        { label: "Code", get: function (h) { return '<span class="badge">' + esc(h.code) + '</span>'; } },
+        { label: "Name", get: function (h) { return '<b>' + esc(h.name) + '</b>'; } },
+        { label: "Category", get: function (h) { return esc(h.category); } },
+        { label: "Computation", get: function (h) { return h.calc_type === "formula" ? esc("= " + h.formula) : h.calc_type === "percent" ? Number(h.amount) + "% of " + esc(h.base_code) : h.calc_type === "fixed" ? money(h.amount) : calcLabel(h.calc_type); } },
+        { label: "Structure", get: function (h) { return esc(h.hr_salary_structures ? h.hr_salary_structures.name : ""); } }
+      ],
+      filters: [{ label: "Earnings", test: function (h) { return h.category === "earning" || h.category === "benefit"; } }, { label: "Deductions", test: function (h) { return h.category === "deduction"; } }],
+      groupBy: [{ label: "Structure", get: function (h) { return h.hr_salary_structures ? h.hr_salary_structures.name : "None"; } }, { label: "Category", get: function (h) { return h.category || "None"; } }],
+      onOpen: function (h) { openHeadModal(h); },
+      onNew: function () { openHeadModal(); }
+    };
+  }
+  async function openHeadModal(head) {
+    head = head || {};
+    var structs = (await sb.from("hr_salary_structures").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:640px"><h3>' + (head.id ? "Edit salary head" : "New salary head") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Code</label>' + fhint("__hdc", "Short unique code used in formulas, e.g. BASIC, HRA, OT.") + '<input id="hd-code" value="' + esc(head.code || "") + '" style="text-transform:uppercase"></div><div><label>Name</label>' + fhint("__hdn", "Label shown on the payslip.") + '<input id="hd-name" value="' + esc(head.name || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Structure</label>' + fhint("__hds", "Which salary structure this head belongs to.") + '<select id="hd-struct">' + structs.map(function (x) { return '<option value="' + x.id + '"' + (head.structure_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div><div><label>Category</label>' + fhint("__hdcat", "Earnings add to gross; deductions subtract; totals show gross/net.") + '<select id="hd-cat">' + HEAD_CATS.map(function (o) { return '<option value="' + o[0] + '"' + (head.category === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Computation type</label>' + fhint("__hdct", "How this head is calculated.") + '<select id="hd-calc">' + CALC_TYPES.map(function (o) { return '<option value="' + o[0] + '"' + (head.calc_type === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Amount / rate / multiplier</label>' + fhint("__hda", "Fixed amount, percent (e.g. 25), or OT multiplier depending on the type.") + '<input id="hd-amt" type="number" step="0.0001" value="' + (head.amount || 0) + '"></div><div><label>Base head (for %)</label>' + fhint("__hdb", "The code a percentage applies to, e.g. BASIC or GROSS.") + '<input id="hd-base" value="' + esc(head.base_code || "BASIC") + '" style="text-transform:uppercase"></div></div>' +
+      '<div><label>Formula (for Formula type)</label>' + fhint("__hdf", "Expression using head codes + variables: BASIC, GROSS, day_rate, hour_rate, ot_hours, ut_hours, worked_days. E.g. GROSS * 0.05.") + '<input id="hd-formula" value="' + esc(head.formula || "") + '" placeholder="e.g. GROSS * 0.05"></div>' +
+      '<div class="row2"><div><label>Sequence</label>' + fhint("__hdseq", "Computation order (lower first). Earnings before deductions/totals.") + '<input id="hd-seq" type="number" value="' + (head.sequence || 10) + '"></div><div><label>Active</label>' + fhint("__hdact", "Inactive heads are skipped in payroll.") + '<select id="hd-active"><option value="1"' + (head.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (head.is_active === false ? " selected" : "") + '>No</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="hd-cancel">Cancel</button><button class="btn pri" id="hd-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("hd-cancel").onclick = function () { m.remove(); };
+    document.getElementById("hd-save").onclick = async function () {
+      var code = gv("hd-code").toUpperCase(), name = gv("hd-name");
+      if (!code || !name) { toast("Code and name required"); return; }
+      if (!document.getElementById("hd-struct").value) { toast("Pick a structure"); return; }
+      var row = { code: code, name: name, structure_id: document.getElementById("hd-struct").value, category: document.getElementById("hd-cat").value, calc_type: document.getElementById("hd-calc").value, amount: parseFloat(gv("hd-amt")) || 0, base_code: gv("hd-base").toUpperCase() || "BASIC", formula: gv("hd-formula"), sequence: parseInt(gv("hd-seq")) || 10, is_active: document.getElementById("hd-active").value === "1" };
+      var r; if (head.id) r = await sb.from("hr_salary_heads").update(row).eq("id", head.id); else { row.company_id = S.company.id; r = await sb.from("hr_salary_heads").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ---- Payslip runs + payslips ----
+  function cfgPayslipRuns() {
+    return {
+      title: "Payslip Runs", pageSize: 80,
+      fetch: function () { return sb.from("hr_payslip_runs").select("*").eq("company_id", S.company.id).order("date_from", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return r.name || ""; },
+      columns: [
+        { label: "Run", get: function (r) { return '<b>' + esc(r.name) + '</b>'; } },
+        { label: "From", get: function (r) { return '<span class="muted">' + esc(r.date_from || "") + '</span>'; } },
+        { label: "To", get: function (r) { return '<span class="muted">' + esc(r.date_to || "") + '</span>'; } },
+        { label: "Status", get: function (r) { return r.state === "done" ? '<span class="badge paid">Done</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      onOpen: function (r) { renderPayslipRunForm(r.id); },
+      onNew: function () { renderPayslipRunForm("new"); }
+    };
+  }
+  async function renderPayslipRunForm(id) {
+    var parent = { action: "hr.runs", title: "Payslip Runs" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var now = new Date(), y = now.getFullYear(), mo = now.getMonth();
+    function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
+    var run = id === "new" ? { name: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }), date_from: ymd(y, mo + 1, 1), date_to: ymd(y, mo + 1, new Date(y, mo + 1, 0).getDate()), state: "draft" } : (await sb.from("hr_payslip_runs").select("*").eq("id", id).maybeSingle()).data || {};
+    var slips = id === "new" ? [] : (await sb.from("hr_payslips").select("*, hr_employees(name)").eq("company_id", S.company.id).eq("run_id", id).order("created_at")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (run.name || "Run");
+    var slipRows = slips.map(function (s) { return '<tr data-slip="' + s.id + '" style="cursor:pointer"><td>' + esc(s.hr_employees ? s.hr_employees.name : "") + '</td><td class="num">' + Number(s.worked_days || 0) + '</td><td class="num">' + Number(s.ot_hours || 0) + '</td><td class="num">' + money(s.gross) + '</td><td class="num">' + money(s.total_deductions) + '</td><td class="num"><b>' + money(s.net) + '</b></td></tr>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-gen">Generate payslips</button>' : "") + '</div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="pr-name" value="' + esc(run.name || "") + '" placeholder="e.g. August 2026"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Period From", '<input id="pr-from" type="date" value="' + (run.date_from || "") + '">', "First day of the pay period.") +
+      '</div><div>' +
+      fld("Period To", '<input id="pr-to" type="date" value="' + (run.date_to || "") + '">', "Last day of the pay period.") +
+      '</div></div>' +
+      (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Payslips (' + slips.length + ')</div></div><div class="o-nb-pg"><table class="o-list"><thead><tr><th>Employee</th><th class="num">Days</th><th class="num">OT h</th><th class="num">Gross</th><th class="num">Deductions</th><th class="num">Net</th></tr></thead><tbody>' + (slipRows || '<tr><td colspan="6" class="muted" style="padding:10px">No payslips yet. Click <b>Generate payslips</b>.</td></tr>') + '</tbody></table></div></div>' : "") +
+      '</div>';
+    document.getElementById("pr-discard").onclick = function () { go("hr.runs"); };
+    document.querySelectorAll("[data-slip]").forEach(function (el) { el.onclick = function () { renderPayslipForm(el.dataset.slip); }; });
+    document.getElementById("pr-save").onclick = async function () {
+      var row = { name: gv("pr-name") || "Run", date_from: gv("pr-from") || null, date_to: gv("pr-to") || null };
+      var nid = id; if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslip_runs").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } nid = ins.data.id; } else { if ((await sb.from("hr_payslip_runs").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
+      toast("Saved"); renderPayslipRunForm(nid);
+    };
+    var gb = document.getElementById("pr-gen"); if (gb) gb.onclick = async function () {
+      var contracts = (await sb.from("hr_contracts").select("*").eq("company_id", S.company.id).eq("state", "running")).data || [];
+      if (!contracts.length) { toast("No running contracts. Set a contract to Running first."); return; }
+      var headsAll = (await sb.from("hr_salary_heads").select("*").eq("company_id", S.company.id)).data || [];
+      await sb.from("hr_payslips").delete().eq("company_id", S.company.id).eq("run_id", id);
+      var made = 0;
+      for (var i = 0; i < contracts.length; i++) {
+        var ct = contracts[i];
+        var w = await payslipWorked(ct.employee_id, run.date_from, run.date_to, ct);
+        var heads = headsAll.filter(function (h) { return h.structure_id === ct.structure_id; });
+        var res = computePayslip(ct, heads, w);
+        var ins = await sb.from("hr_payslips").insert({ company_id: S.company.id, run_id: id, employee_id: ct.employee_id, contract_id: ct.id, date_from: run.date_from, date_to: run.date_to, worked_days: w.worked_days, worked_hours: w.worked_hours, ot_hours: w.ot_hours, ut_hours: w.ut_hours, leave_days: w.leave_days, gross: res.gross, total_deductions: res.deductions, net: res.net, currency_code: ct.currency_code || S.company.currency_code, state: "draft" }).select("id").single();
+        if (!ins.error && ins.data) { made++; var pls = res.lines.map(function (l) { return { company_id: S.company.id, payslip_id: ins.data.id, code: l.code, name: l.name, category: l.category, amount: l.amount, sequence: l.sequence }; }); await sb.from("hr_payslip_lines").insert(pls); }
+      }
+      toast(made + " payslip(s) generated"); renderPayslipRunForm(id);
+    };
+  }
+  function cfgPayslips() {
+    return {
+      title: "Payslips", pageSize: 100,
+      fetch: function () { return sb.from("hr_payslips").select("*, hr_employees(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return s.hr_employees ? s.hr_employees.name : ""; },
+      columns: [
+        { label: "Employee", get: function (s) { return '<b>' + esc(s.hr_employees ? s.hr_employees.name : "") + '</b>'; } },
+        { label: "Period", get: function (s) { return '<span class="muted">' + esc((s.date_from || "") + " to " + (s.date_to || "")) + '</span>'; } },
+        { label: "Days", num: true, get: function (s) { return Number(s.worked_days || 0); } },
+        { label: "OT h", num: true, get: function (s) { return Number(s.ot_hours || 0); } },
+        { label: "Gross", num: true, get: function (s) { return money(s.gross); } },
+        { label: "Net", num: true, get: function (s) { return '<b>' + money(s.net) + '</b>'; } },
+        { label: "Status", get: function (s) { return s.state === "paid" ? '<span class="badge paid">Paid</span>' : s.state === "confirmed" ? '<span class="badge partial">Confirmed</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Draft", test: function (s) { return s.state === "draft" || !s.state; } }, { label: "Confirmed", test: function (s) { return s.state === "confirmed"; } }, { label: "Paid", test: function (s) { return s.state === "paid"; } }],
+      groupBy: [{ label: "Status", get: function (s) { return s.state || "draft"; } }],
+      onOpen: function (s) { renderPayslipForm(s.id); },
+      onNew: function () { renderPayslipForm("new"); }
+    };
+  }
+  async function renderPayslipForm(id) {
+    var parent = { action: "hr.slips", title: "Payslips" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var now = new Date(), y = now.getFullYear(), mo = now.getMonth();
+    function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
+    var slip = id === "new" ? { date_from: ymd(y, mo + 1, 1), date_to: ymd(y, mo + 1, new Date(y, mo + 1, 0).getDate()), state: "draft" } : (await sb.from("hr_payslips").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("hr_payslip_lines").select("*").eq("payslip_id", id).order("sequence")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((emps.filter(function (e) { return e.id === slip.employee_id; })[0] || {}).name || "Payslip");
+    var cc = slip.currency_code || S.company.currency_code, posted = slip.state === "confirmed" || slip.state === "paid";
+    function lineRows(ls) {
+      var earn = ls.filter(function (l) { return l.category === "earning" || l.category === "benefit"; });
+      var ded = ls.filter(function (l) { return l.category === "deduction"; });
+      function sec(title, arr) { return '<tr class="sec"><td colspan="2">' + title + '</td></tr>' + (arr.length ? arr.map(function (l) { return '<tr><td>' + esc(l.name) + ' <span class="muted">' + esc(l.code) + '</span></td><td class="num">' + money(l.amount) + '</td></tr>'; }).join("") : '<tr><td class="muted">-</td><td></td></tr>'); }
+      return '<table class="o-rt"><tbody>' + sec("Earnings", earn) + '<tr class="tot"><td>Gross</td><td class="num">' + money(slip.gross) + '</td></tr>' + sec("Deductions", ded) + '<tr class="tot"><td>Total deductions</td><td class="num">' + money(slip.total_deductions) + '</td></tr><tr class="tot"><td>Net pay</td><td class="num">' + cc + " " + money(slip.net) + '</td></tr></tbody></table>';
+    }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ps-save">Save</button><button id="ps-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="ps-compute">Compute</button><button id="ps-post">Confirm &amp; Post</button>' : "") + '</div>' +
+      '<div class="o-stages"><span class="st ' + (!posted ? "on" : "done") + '">Draft</span><span class="st ' + (slip.state === "confirmed" ? "on" : slip.state === "paid" ? "done" : "") + '">Confirmed</span><span class="st ' + (slip.state === "paid" ? "on" : "") + '">Paid</span></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Payslip</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Employee", (posted ? '<span class="v">' + esc((emps.filter(function (e) { return e.id === slip.employee_id; })[0] || {}).name || "") + '</span>' : '<select id="ps-emp"><option value="">Select...</option>' + emps.map(function (x) { return '<option value="' + x.id + '"' + (slip.employee_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>'), "The employee being paid. Their running contract sets the wage and structure.") +
+      fld("Period From", '<input id="ps-from" type="date" value="' + (slip.date_from || "") + '"' + (posted ? " disabled" : "") + '>', "Start of the pay period.") +
+      fld("Period To", '<input id="ps-to" type="date" value="' + (slip.date_to || "") + '"' + (posted ? " disabled" : "") + '>', "End of the pay period.") +
+      '</div><div>' +
+      fld("Worked Days", '<input id="ps-wd" type="number" step="0.5" value="' + (slip.worked_days || 0) + '"' + (posted ? " disabled" : "") + '>', "Paid days worked. Prorates the basic salary.") +
+      fld("Overtime Hours", '<input id="ps-ot" type="number" step="0.25" value="' + (slip.ot_hours || 0) + '"' + (posted ? " disabled" : "") + '>', "Hours beyond the rostered/expected hours.") +
+      fld("Undertime Hours", '<input id="ps-ut" type="number" step="0.25" value="' + (slip.ut_hours || 0) + '"' + (posted ? " disabled" : "") + '>', "Hours short of the expected hours (deducted).") +
+      fld("Leave Days", '<input id="ps-lv" type="number" step="0.5" value="' + (slip.leave_days || 0) + '"' + (posted ? " disabled" : "") + '>', "Approved leave days in the period.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Salary computation</div></div><div class="o-nb-pg" id="ps-lines">' + (lines.length ? lineRows(lines) : '<div class="muted" style="padding:10px">Fill the fields and click <b>Compute</b> to build the payslip from the employee\'s contract + salary heads.</div>') + '</div></div>' +
+      '</div>';
+    document.getElementById("ps-discard").onclick = function () { go("hr.slips"); };
+    async function gather() {
+      var empId = posted ? slip.employee_id : (document.getElementById("ps-emp") ? document.getElementById("ps-emp").value : slip.employee_id);
+      return { employee_id: empId, date_from: gv("ps-from"), date_to: gv("ps-to"), worked_days: parseFloat(gv("ps-wd")) || 0, ot_hours: parseFloat(gv("ps-ot")) || 0, ut_hours: parseFloat(gv("ps-ut")) || 0, leave_days: parseFloat(gv("ps-lv")) || 0 };
+    }
+    async function computeAndPersist(persist) {
+      var g = await gather(); if (!g.employee_id) { toast("Pick an employee"); return null; }
+      var ct = (await sb.from("hr_contracts").select("*").eq("company_id", S.company.id).eq("employee_id", g.employee_id).order("state", { ascending: false })).data || [];
+      var contract = ct.filter(function (x) { return x.state === "running"; })[0] || ct[0];
+      if (!contract) { toast("This employee has no contract. Create one under Contracts."); return null; }
+      var heads = (await sb.from("hr_salary_heads").select("*").eq("company_id", S.company.id).eq("structure_id", contract.structure_id)).data || [];
+      if (!heads.length) { toast("The contract's salary structure has no heads."); return null; }
+      var res = computePayslip(contract, heads, { worked_days: g.worked_days, ot_hours: g.ot_hours, ut_hours: g.ut_hours, leave_days: g.leave_days });
+      slip.gross = res.gross; slip.total_deductions = res.deductions; slip.net = res.net; slip.currency_code = contract.currency_code || S.company.currency_code;
+      document.getElementById("ps-lines").innerHTML = lineRows(res.lines);
+      if (persist) {
+        var row = { employee_id: g.employee_id, contract_id: contract.id, date_from: g.date_from || null, date_to: g.date_to || null, worked_days: g.worked_days, ot_hours: g.ot_hours, ut_hours: g.ut_hours, leave_days: g.leave_days, gross: res.gross, total_deductions: res.deductions, net: res.net, currency_code: slip.currency_code };
+        var sid = id;
+        if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslips").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+        else { if ((await sb.from("hr_payslips").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+        await sb.from("hr_payslip_lines").delete().eq("payslip_id", sid);
+        await sb.from("hr_payslip_lines").insert(res.lines.map(function (l) { return { company_id: S.company.id, payslip_id: sid, code: l.code, name: l.name, category: l.category, amount: l.amount, sequence: l.sequence }; }));
+        return sid;
+      }
+      return id;
+    }
+    document.getElementById("ps-save").onclick = async function () { var sid = await computeAndPersist(true); if (sid) { toast("Saved"); renderPayslipForm(sid); } };
+    var cbtn = document.getElementById("ps-compute"); if (cbtn) cbtn.onclick = function () { computeAndPersist(false); };
+    var pbtn = document.getElementById("ps-post"); if (pbtn) pbtn.onclick = async function () {
+      var sid = await computeAndPersist(true); if (!sid) return;
+      var fresh = (await sb.from("hr_payslips").select("*").eq("id", sid).maybeSingle()).data;
+      var ok = await postPayslip(fresh);
+      if (ok) { toast("Confirmed & posted to the ledger"); renderPayslipForm(sid); }
+    };
+  }
+
+  // ---- Leave allocations ----
+  function cfgLeaveAllocations() {
+    return {
+      title: "Time Off Allocations", pageSize: 80,
+      fetch: function () { return sb.from("hr_leave_allocations").select("*, hr_employees(name)").eq("company_id", S.company.id).order("year", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.hr_employees ? a.hr_employees.name : "") + " " + (a.leave_type || ""); },
+      columns: [
+        { label: "Employee", get: function (a) { return '<b>' + esc(a.hr_employees ? a.hr_employees.name : "") + '</b>'; } },
+        { label: "Type", get: function (a) { return LEAVE_T[a.leave_type] || a.leave_type || ""; } },
+        { label: "Year", num: true, get: function (a) { return a.year; } },
+        { label: "Days allocated", num: true, get: function (a) { return Number(a.days || 0); } }
+      ],
+      groupBy: [{ label: "Employee", get: function (a) { return a.hr_employees ? a.hr_employees.name : "None"; } }],
+      onOpen: function (a) { openAllocModal(a); },
+      onNew: function () { openAllocModal(); }
+    };
+  }
+  async function openAllocModal(al) {
+    al = al || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    if (!emps.length) { toast("Add an employee first"); return; }
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (al.id ? "Edit allocation" : "New allocation") + '</h3><div class="form">' +
+      '<div><label>Employee</label>' + fhint("__ale", "Who is granted the days.") + '<select id="al-emp">' + emps.map(function (x) { return '<option value="' + x.id + '"' + (al.employee_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Type</label>' + fhint("__alt", "Leave type this balance is for.") + '<select id="al-type"><option value="paid"' + (al.leave_type === "paid" ? " selected" : "") + '>Paid time off</option><option value="sick"' + (al.leave_type === "sick" ? " selected" : "") + '>Sick leave</option><option value="unpaid"' + (al.leave_type === "unpaid" ? " selected" : "") + '>Unpaid</option></select></div>' +
+      '<div><label>Year</label>' + fhint("__aly", "The calendar year.") + '<input id="al-year" type="number" value="' + (al.year || new Date().getFullYear()) + '"></div></div>' +
+      '<div><label>Days allocated</label>' + fhint("__ald", "Number of days granted for the year.") + '<input id="al-days" type="number" step="0.5" value="' + (al.days || 0) + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="al-cancel">Cancel</button><button class="btn pri" id="al-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("al-cancel").onclick = function () { m.remove(); };
+    document.getElementById("al-save").onclick = async function () {
+      var row = { employee_id: document.getElementById("al-emp").value, leave_type: document.getElementById("al-type").value, year: parseInt(gv("al-year")) || new Date().getFullYear(), days: parseFloat(gv("al-days")) || 0 };
+      var r; if (al.id) r = await sb.from("hr_leave_allocations").update(row).eq("id", al.id); else { row.company_id = S.company.id; r = await sb.from("hr_leave_allocations").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
     };
   }
 
