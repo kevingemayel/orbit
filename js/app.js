@@ -1586,7 +1586,7 @@
 
   async function renderStatement(pid) {
     var cc = S.company.currency_code;
-    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").order("name")).data || [];
     var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
       partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>';
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Partner Statement") + '<div class="gap"></div>' + sel +
