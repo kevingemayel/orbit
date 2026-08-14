@@ -93,6 +93,15 @@
         { label: "Timesheets", action: "ts.list" }
       ]
     },
+    hr: {
+      name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
+      menus: [
+        { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"]] },
+        { label: "Time Off", action: "hr.leaves" },
+        { label: "Attendances", action: "hr.att" },
+        { label: "Expenses", action: "hr.exp" }
+      ]
+    },
     settings: {
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
@@ -114,9 +123,10 @@
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project",
-    "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm"
+    "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
+    "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr"
   };
-  var SOON = [["Employees", "☺", "#dc2626"], ["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
+  var SOON = [["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
   // ============================ AUTH ============================
   function renderLogin(mode) {
@@ -316,6 +326,12 @@
       case "crm.pipe": return renderPipeline();
       case "crm.leads": return renderList(cfgLeads());
       case "crm.stages": return renderList(cfgCrmStages());
+      case "hr.emp": return renderList(cfgEmployees());
+      case "hr.dept": return renderList(cfgDepartments());
+      case "hr.jobs": return renderList(cfgJobs());
+      case "hr.leaves": return renderList(cfgLeaves());
+      case "hr.att": return renderList(cfgAttendances());
+      case "hr.exp": return renderList(cfgExpenses());
       default: return renderDashboard();
     }
   }
@@ -2450,6 +2466,266 @@
       var r = await sb.from("crm_stages").insert({ company_id: S.company.id, name: name, sequence: parseInt(document.getElementById("stg-seq").value) || 50, is_won: document.getElementById("stg-won").value === "1" });
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       m.remove(); toast("Stage added"); renderView();
+    };
+  }
+
+  // ============================ EMPLOYEES / HR ============================
+  function cfgEmployees() {
+    return {
+      title: "Employees", pageSize: 80,
+      fetch: function () {
+        return Promise.all([
+          sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name"),
+          sb.from("hr_employees").select("id,name").eq("company_id", S.company.id)
+        ]).then(function (res) { var mm = {}; (res[1].data || []).forEach(function (e) { mm[e.id] = e.name; }); return (res[0].data || []).map(function (e) { e._mgr = e.manager_id ? mm[e.manager_id] : ""; return e; }); });
+      },
+      searchText: function (e) { return (e.name || "") + " " + (e.work_email || "") + " " + (e.hr_jobs ? e.hr_jobs.name : ""); },
+      columns: [
+        { label: "Name", get: function (e) { return '<b>' + esc(e.name) + '</b>'; } },
+        { label: "Job Position", get: function (e) { return esc(e.hr_jobs ? e.hr_jobs.name : ""); } },
+        { label: "Department", get: function (e) { return esc(e.hr_departments ? e.hr_departments.name : ""); } },
+        { label: "Work Email", get: function (e) { return '<span class="muted">' + esc(e.work_email || "") + '</span>'; } },
+        { label: "Manager", get: function (e) { return esc(e._mgr || ""); } },
+        { label: "Status", get: function (e) { return e.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }],
+      groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
+      kanbanCard: function (e) { return '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
+      onOpen: function (e) { renderEmployeeForm(e.id); },
+      onNew: function () { renderEmployeeForm("new"); }
+    };
+  }
+  async function renderEmployeeForm(id) {
+    var parent = { action: "hr.emp", title: "Employees" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var e = id === "new" ? { is_active: true } : (await sb.from("hr_employees").select("*").eq("id", id).maybeSingle()).data || {};
+    var depts = (await sb.from("hr_departments").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var leaveCount = id === "new" ? 0 : ((await sb.from("hr_leaves").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("employee_id", id)).count || 0);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (e.name || "");
+    function opts(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
+    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button></div>' : "";
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="e-save">Save</button><button id="e-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="e-name" value="' + esc(e.name || "") + '" placeholder="Employee name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Work Email", '<input id="e-email" value="' + esc(e.work_email || "") + '" placeholder="name@company.com">', "The employee's work email address.") +
+      fld("Department", '<select id="e-dept">' + opts(depts, e.department_id, "None") + '</select>', "The department this employee belongs to.") +
+      fld("Job Position", '<select id="e-job">' + opts(jobs, e.job_id, "None") + '</select>', "The employee's job title / position.") +
+      '</div><div>' +
+      fld("Manager", '<select id="e-mgr">' + opts(emps.filter(function (x) { return x.id !== id; }), e.manager_id, "None") + '</select>', "Who this employee reports to.") +
+      fld("Status", '<select id="e-active"><option value="1"' + (e.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!e.is_active ? " selected" : "") + '>Archived</option></select>', "Active employees appear in selections; archived ones are hidden.") +
+      '</div></div></div>';
+    document.getElementById("e-discard").onclick = function () { go("hr.emp"); };
+    var _el = document.getElementById("e-sm-lv"); if (_el) _el.onclick = function () { go("hr.leaves"); };
+    document.getElementById("e-save").onclick = async function () {
+      var name = gv("e-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, work_email: gv("e-email"), department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null, manager_id: document.getElementById("e-mgr").value || null, is_active: document.getElementById("e-active").value === "1" };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_employees").insert(row); } else r = await sb.from("hr_employees").update(row).eq("id", id);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      toast("Saved"); go("hr.emp");
+    };
+  }
+  function cfgDepartments() {
+    return {
+      title: "Departments", pageSize: 80,
+      fetch: function () {
+        return sb.from("hr_departments").select("*").eq("company_id", S.company.id).order("name").then(function (r) {
+          var rows = r.data || [], nm = {}; rows.forEach(function (d) { nm[d.id] = d.name; });
+          return sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).then(function (er) { var em = {}; (er.data || []).forEach(function (x) { em[x.id] = x.name; }); rows.forEach(function (d) { d._parent = d.parent_id ? nm[d.parent_id] : ""; d._mgr = d.manager_id ? em[d.manager_id] : ""; }); return rows; });
+        });
+      },
+      searchText: function (d) { return d.name || ""; },
+      columns: [
+        { label: "Department", get: function (d) { return '<b>' + esc(d.name) + '</b>'; } },
+        { label: "Parent", get: function (d) { return esc(d._parent || ""); } },
+        { label: "Manager", get: function (d) { return esc(d._mgr || ""); } }
+      ],
+      onOpen: function (d) { openDeptModal(d); },
+      onNew: function () { openDeptModal(); }
+    };
+  }
+  async function openDeptModal(dept) {
+    dept = dept || {};
+    var depts = (await sb.from("hr_departments").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    function opts(list, cur) { return '<option value="">None</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (dept.id ? "Edit department" : "New department") + '</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__dname", "The department name, e.g. Engineering or Site Operations.") + '<input id="d-name" value="' + esc(dept.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Parent department</label>' + fhint("__dparent", "The department this one sits under, if any.") + '<select id="d-parent">' + opts(depts.filter(function (x) { return x.id !== dept.id; }), dept.parent_id) + '</select></div>' +
+      '<div><label>Manager</label>' + fhint("__dmgr", "The employee who manages this department.") + '<select id="d-mgr">' + opts(emps, dept.manager_id) + '</select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="d-cancel">Cancel</button><button class="btn pri" id="d-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("d-cancel").onclick = function () { m.remove(); };
+    document.getElementById("d-save").onclick = async function () {
+      var name = gv("d-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, parent_id: document.getElementById("d-parent").value || null, manager_id: document.getElementById("d-mgr").value || null };
+      var r; if (dept.id) r = await sb.from("hr_departments").update(row).eq("id", dept.id); else { row.company_id = S.company.id; r = await sb.from("hr_departments").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgJobs() {
+    return {
+      title: "Job Positions", pageSize: 80,
+      fetch: function () { return sb.from("hr_jobs").select("*, hr_departments(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (j) { return (j.name || "") + " " + (j.hr_departments ? j.hr_departments.name : ""); },
+      columns: [
+        { label: "Job Position", get: function (j) { return '<b>' + esc(j.name) + '</b>'; } },
+        { label: "Department", get: function (j) { return esc(j.hr_departments ? j.hr_departments.name : ""); } }
+      ],
+      groupBy: [{ label: "Department", get: function (j) { return j.hr_departments ? j.hr_departments.name : "None"; } }],
+      onOpen: function (j) { openJobModal(j); },
+      onNew: function () { openJobModal(); }
+    };
+  }
+  async function openJobModal(job) {
+    job = job || {};
+    var depts = (await sb.from("hr_departments").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (job.id ? "Edit job position" : "New job position") + '</h3><div class="form">' +
+      '<div><label>Job title</label>' + fhint("__jname", "The position title, e.g. Facade Engineer or Project Manager.") + '<input id="j-name" value="' + esc(job.name || "") + '"></div>' +
+      '<div><label>Department</label>' + fhint("__jdept", "The department this role belongs to.") + '<select id="j-dept"><option value="">None</option>' + depts.map(function (d) { return '<option value="' + d.id + '"' + (job.department_id === d.id ? " selected" : "") + '>' + esc(d.name) + '</option>'; }).join("") + '</select></div>' +
+      '</div><div class="foot"><button class="btn" id="j-cancel">Cancel</button><button class="btn pri" id="j-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("j-cancel").onclick = function () { m.remove(); };
+    document.getElementById("j-save").onclick = async function () {
+      var name = gv("j-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, department_id: document.getElementById("j-dept").value || null };
+      var r; if (job.id) r = await sb.from("hr_jobs").update(row).eq("id", job.id); else { row.company_id = S.company.id; r = await sb.from("hr_jobs").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  var LEAVE_T = { paid: "Paid time off", sick: "Sick leave", unpaid: "Unpaid" };
+  function cfgLeaves() {
+    return {
+      title: "Time Off", pageSize: 80,
+      fetch: function () { return sb.from("hr_leaves").select("*, hr_employees(name)").eq("company_id", S.company.id).order("date_from", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (l) { return (l.hr_employees ? l.hr_employees.name : "") + " " + (l.leave_type || ""); },
+      columns: [
+        { label: "Employee", get: function (l) { return '<b>' + esc(l.hr_employees ? l.hr_employees.name : "") + '</b>'; } },
+        { label: "Type", get: function (l) { return LEAVE_T[l.leave_type] || l.leave_type || ""; } },
+        { label: "From", get: function (l) { return '<span class="muted">' + esc(l.date_from || "") + '</span>'; } },
+        { label: "To", get: function (l) { return '<span class="muted">' + esc(l.date_to || "") + '</span>'; } },
+        { label: "Days", num: true, get: function (l) { return Number(l.days || 0); } },
+        { label: "Status", get: function (l) { return l.state === "approved" ? '<span class="badge paid">Approved</span>' : l.state === "refused" ? '<span class="badge">Refused</span>' : '<span class="badge draft">To approve</span>'; } }
+      ],
+      filters: [{ label: "To approve", test: function (l) { return l.state !== "approved" && l.state !== "refused"; } }, { label: "Approved", test: function (l) { return l.state === "approved"; } }],
+      groupBy: [{ label: "Employee", get: function (l) { return l.hr_employees ? l.hr_employees.name : "None"; } }, { label: "Type", get: function (l) { return LEAVE_T[l.leave_type] || l.leave_type || "None"; } }],
+      onOpen: function (l) { openLeaveModal(l); },
+      onNew: function () { openLeaveModal(); }
+    };
+  }
+  async function openLeaveModal(leave) {
+    leave = leave || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    if (!emps.length) { toast("Add an employee first"); return; }
+    var approved = leave.state === "approved";
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (leave.id ? "Time off request" : "New time off") + '</h3><div class="form">' +
+      '<div><label>Employee</label>' + fhint("__lvemp", "Who is taking time off.") + '<select id="lv-emp">' + emps.map(function (x) { return '<option value="' + x.id + '"' + (leave.employee_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Type</label>' + fhint("__lvtype", "The kind of leave.") + '<select id="lv-type"><option value="paid"' + (leave.leave_type === "paid" ? " selected" : "") + '>Paid time off</option><option value="sick"' + (leave.leave_type === "sick" ? " selected" : "") + '>Sick leave</option><option value="unpaid"' + (leave.leave_type === "unpaid" ? " selected" : "") + '>Unpaid</option></select></div>' +
+      '<div class="row2"><div><label>From</label>' + fhint("__lvfrom", "First day off.") + '<input id="lv-from" type="date" value="' + (leave.date_from || today()) + '"></div><div><label>To</label>' + fhint("__lvto", "Last day off.") + '<input id="lv-to" type="date" value="' + (leave.date_to || today()) + '"></div></div>' +
+      '<div><label>Days</label>' + fhint("__lvdays", "Number of days requested.") + '<input id="lv-days" type="number" step="0.5" value="' + (leave.days || 1) + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="lv-cancel">Cancel</button>' + (leave.id && !approved ? '<button class="btn" id="lv-approve">Approve</button>' : "") + '<button class="btn pri" id="lv-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("lv-cancel").onclick = function () { m.remove(); };
+    function collect() { return { employee_id: document.getElementById("lv-emp").value, leave_type: document.getElementById("lv-type").value, date_from: document.getElementById("lv-from").value, date_to: document.getElementById("lv-to").value, days: parseFloat(gv("lv-days")) || 0 }; }
+    document.getElementById("lv-save").onclick = async function () {
+      var row = collect();
+      var r; if (leave.id) r = await sb.from("hr_leaves").update(row).eq("id", leave.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("hr_leaves").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+    var ap = document.getElementById("lv-approve"); if (ap) ap.onclick = async function () {
+      var row = collect(); row.state = "approved";
+      var r = await sb.from("hr_leaves").update(row).eq("id", leave.id);
+      if (r.error) { toast("Could not approve: " + r.error.message); return; }
+      m.remove(); toast("Approved"); renderView();
+    };
+  }
+  function cfgAttendances() {
+    return {
+      title: "Attendances", pageSize: 100,
+      fetch: function () { return sb.from("hr_attendances").select("*, hr_employees(name)").eq("company_id", S.company.id).order("check_in", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return a.hr_employees ? a.hr_employees.name : ""; },
+      columns: [
+        { label: "Employee", get: function (a) { return '<b>' + esc(a.hr_employees ? a.hr_employees.name : "") + '</b>'; } },
+        { label: "Check In", get: function (a) { return '<span class="muted">' + esc((a.check_in || "").replace("T", " ").slice(0, 16)) + '</span>'; } },
+        { label: "Check Out", get: function (a) { return '<span class="muted">' + esc((a.check_out || "").replace("T", " ").slice(0, 16)) + '</span>'; } },
+        { label: "Worked Hours", num: true, get: function (a) { return Number(a.worked_hours || 0).toFixed(2); } }
+      ],
+      groupBy: [{ label: "Employee", get: function (a) { return a.hr_employees ? a.hr_employees.name : "None"; } }],
+      onNew: function () { openAttendanceModal(); }
+    };
+  }
+  async function openAttendanceModal() {
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    if (!emps.length) { toast("Add an employee first"); return; }
+    var nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Log attendance</h3><div class="form">' +
+      '<div><label>Employee</label>' + fhint("__atemp", "The employee who worked.") + '<select id="at-emp">' + emps.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Check in</label>' + fhint("__atin", "When the employee started.") + '<input id="at-in" type="datetime-local" value="' + nowLocal + '"></div><div><label>Check out</label>' + fhint("__atout", "When the employee finished.") + '<input id="at-out" type="datetime-local" value="' + nowLocal + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="at-cancel">Cancel</button><button class="btn pri" id="at-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("at-cancel").onclick = function () { m.remove(); };
+    document.getElementById("at-save").onclick = async function () {
+      var ci = document.getElementById("at-in").value, co = document.getElementById("at-out").value;
+      if (!ci) { toast("Check in required"); return; }
+      var wh = (ci && co) ? Math.max(0, (new Date(co) - new Date(ci)) / 3600000) : 0;
+      var r = await sb.from("hr_attendances").insert({ company_id: S.company.id, employee_id: document.getElementById("at-emp").value, check_in: new Date(ci).toISOString(), check_out: co ? new Date(co).toISOString() : null, worked_hours: Number(wh.toFixed(2)) });
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Attendance logged"); renderView();
+    };
+  }
+  function cfgExpenses() {
+    return {
+      title: "Expenses", pageSize: 80,
+      fetch: function () { return sb.from("hr_expenses").select("*, hr_employees(name)").eq("company_id", S.company.id).order("expense_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (x) { return (x.name || "") + " " + (x.hr_employees ? x.hr_employees.name : ""); },
+      columns: [
+        { label: "Description", get: function (x) { return '<b>' + esc(x.name) + '</b>'; } },
+        { label: "Employee", get: function (x) { return esc(x.hr_employees ? x.hr_employees.name : ""); } },
+        { label: "Date", get: function (x) { return '<span class="muted">' + esc(x.expense_date || "") + '</span>'; } },
+        { label: "Amount", num: true, get: function (x) { return (x.currency_code || S.company.currency_code) + " " + money(x.amount); } },
+        { label: "Status", get: function (x) { return x.state === "approved" ? '<span class="badge paid">Approved</span>' : x.state === "submitted" ? '<span class="badge partial">Submitted</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "To submit", test: function (x) { return !x.state || x.state === "draft"; } }, { label: "Approved", test: function (x) { return x.state === "approved"; } }],
+      groupBy: [{ label: "Employee", get: function (x) { return x.hr_employees ? x.hr_employees.name : "None"; } }, { label: "Month", get: function (x) { return (x.expense_date || "").slice(0, 7); } }],
+      onOpen: function (x) { openExpenseModal(x); },
+      onNew: function () { openExpenseModal(); }
+    };
+  }
+  async function openExpenseModal(exp) {
+    exp = exp || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    if (!emps.length) { toast("Add an employee first"); return; }
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (exp.id ? "Expense" : "New expense") + '</h3><div class="form">' +
+      '<div><label>Description</label>' + fhint("__exname", "What the expense was for, e.g. Site travel or Materials.") + '<input id="ex-name" value="' + esc(exp.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Employee</label>' + fhint("__exemp", "Who paid the expense.") + '<select id="ex-emp">' + emps.map(function (x) { return '<option value="' + x.id + '"' + (exp.employee_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Amount (' + esc(S.company.currency_code) + ')</label>' + fhint("__examt", "The total amount spent.") + '<input id="ex-amt" type="number" step="0.01" value="' + (exp.amount || 0) + '"></div></div>' +
+      '<div><label>Date</label>' + fhint("__exdate", "When the expense was incurred.") + '<input id="ex-date" type="date" value="' + (exp.expense_date || today()) + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="ex-cancel">Cancel</button>' + (exp.id && exp.state !== "approved" ? '<button class="btn" id="ex-approve">Approve</button>' : "") + '<button class="btn pri" id="ex-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ex-cancel").onclick = function () { m.remove(); };
+    function collect() { return { name: gv("ex-name"), employee_id: document.getElementById("ex-emp").value, amount: parseFloat(gv("ex-amt")) || 0, expense_date: document.getElementById("ex-date").value, currency_code: S.company.currency_code }; }
+    document.getElementById("ex-save").onclick = async function () {
+      if (!gv("ex-name")) { toast("Description required"); return; }
+      var row = collect();
+      var r; if (exp.id) r = await sb.from("hr_expenses").update(row).eq("id", exp.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("hr_expenses").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+    var ap = document.getElementById("ex-approve"); if (ap) ap.onclick = async function () {
+      var r = await sb.from("hr_expenses").update({ state: "approved" }).eq("id", exp.id);
+      if (r.error) { toast("Could not approve: " + r.error.message); return; }
+      m.remove(); toast("Approved"); renderView();
     };
   }
 
