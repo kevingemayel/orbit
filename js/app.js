@@ -14,7 +14,7 @@
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
   function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
   function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
-  function fontStack(f) { return ({ system: '"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif', inter: '"Inter",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
+  function fontStack(f) { return ({ system: '"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif', onest: '"Onest",system-ui,sans-serif', inter: '"Onest",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
   function applyTheme() {
     var de = document.documentElement;
     if (S.ui.theme && S.ui.theme !== "system") de.setAttribute("data-theme", S.ui.theme); else de.removeAttribute("data-theme");
@@ -22,10 +22,11 @@
     applyAppColor(); applyFontScale();
   }
   function applyAppColor() {
+    // Orbit brand: the navbar is always ink; app identity lives in the colorful
+    // app-switcher tiles, not the chrome. Blue (--accent) is reserved for actions/AI.
+    // Themed presets (corporate/blue/pink) still set their own --app via CSS.
     var s = document.documentElement.style;
-    if (FIXED_APP_THEMES.indexOf(S.ui.theme) >= 0) { s.removeProperty("--app"); s.removeProperty("--app2"); }
-    else if (S.app && APPS[S.app]) { s.setProperty("--app", APPS[S.app].color); s.setProperty("--app2", APPS[S.app].color2); }
-    else { s.removeProperty("--app"); s.removeProperty("--app2"); }
+    s.removeProperty("--app"); s.removeProperty("--app2");
   }
   function applyFontScale() {
     var z = ({ small: 0.92, normal: 1, large: 1.1 })[S.ui.size] || 1;
@@ -33,6 +34,8 @@
     var h = document.querySelector(".o-home"); if (h) h.style.zoom = z;
   }
 
+  // Orbit diamond mark (open frame + solid core + blue AI dot). stroke defaults to white for ink tiles.
+  function orbitMark(stroke) { stroke = stroke || "#fff"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var today = function () { return new Date().toISOString().slice(0, 10); };
@@ -139,7 +142,7 @@
     mode = mode || "in";
     root.innerHTML =
       '<div class="login"><div class="card">' +
-      '<div class="brandrow"><div class="logo">O</div><div class="wm">Space Work<span>Orbit</span></div></div>' +
+      '<div class="brandrow"><div class="logo">' + orbitMark() + '</div><div class="wm">Space Work<span>Orbit</span></div></div>' +
       '<h1>' + (mode === "in" ? "Sign in to Orbit" : "Create your account") + "</h1>" +
       '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
@@ -178,7 +181,7 @@
     renderHome();
   }
   function renderNoCompany() {
-    root.innerHTML = '<div class="login"><div class="card"><div class="logo">O</div><h1>Welcome to Orbit</h1>' +
+    root.innerHTML = '<div class="login"><div class="card"><div class="logo">' + orbitMark() + '</div><h1>Welcome to Orbit</h1>' +
       '<p class="sub">You are signed in as ' + esc(S.user.email) + ', but you are not attached to a company yet.</p>' +
       '<button class="btn" id="out" style="margin-top:12px">Sign out</button></div></div>';
     document.getElementById("out").onclick = signOut;
@@ -197,7 +200,7 @@
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
       '<div class="o-home">' +
-      '<div class="o-home-top"><div class="logo">O</div><b>Orbit</b><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
+      '<div class="o-home-top"><div class="logo">' + orbitMark() + '</div><b>Orbit</b><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
       '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
       '<div class="o-grid">' + tiles + soon + '</div></div>';
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
@@ -225,6 +228,7 @@
       '<button class="o-waffle" id="waffle" title="Apps">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="6" height="6" rx="1.4"/><rect x="9.5" y="2" width="6" height="6" rx="1.4"/><rect x="17" y="2" width="6" height="6" rx="1.4"/><rect x="2" y="9.5" width="6" height="6" rx="1.4"/><rect x="9.5" y="9.5" width="6" height="6" rx="1.4"/><rect x="17" y="9.5" width="6" height="6" rx="1.4"/><rect x="2" y="17" width="6" height="6" rx="1.4"/><rect x="9.5" y="17" width="6" height="6" rx="1.4"/><rect x="17" y="17" width="6" height="6" rx="1.4"/></svg>' +
       '</button>' +
+      '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(a.name) + '</span>' +
       '<nav class="o-menu" id="omenu">' + menu + '</nav>' +
       '<div class="o-systray">' + companySelectHTML("bar") + '<div class="o-ava" id="ava">' + initials + '</div></div>' +
@@ -1878,16 +1882,16 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Appearance") + '</div><div class="o-form-bg"><div class="appr" id="appr"></div></div></div>';
     wireBc();
     var THEMES = [
-      ["spacework", "Space Work", ["#fbfaf8", "#0a66ff", "#14161a"]],
-      ["system", "System", ["#fbfaf8", "#0a66ff", "#14161a"]],
-      ["light", "Light", ["#ffffff", "#0a66ff", "#14161a"]],
-      ["dark", "Dark", ["#141a23", "#5b9bf0", "#0c1016"]],
+      ["spacework", "Space Work", ["#fafaf8", "#2f6bff", "#16171c"]],
+      ["system", "System", ["#fafaf8", "#2f6bff", "#16171c"]],
+      ["light", "Light", ["#ffffff", "#2f6bff", "#16171c"]],
+      ["dark", "Dark", ["#16181f", "#6f9bff", "#0c0d12"]],
       ["corporate", "Corporate", ["#eef1f5", "#1f4e79", "#1f4e79"]],
       ["colorful", "Colorful", ["#f6f4ff", "#7c3aed", "#db2777"]],
       ["blue", "Blue", ["#eef4fc", "#2563eb", "#1d4ed8"]],
       ["pink", "Pink", ["#fdf2f7", "#db2777", "#be185d"]]
     ];
-    var FONTS = [["system", "System"], ["inter", "Inter"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]];
+    var FONTS = [["system", "System"], ["onest", "Onest"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]];
     var SIZES = [["small", "Small"], ["normal", "Normal"], ["large", "Large"]];
     function draw() {
       document.getElementById("appr").innerHTML =
