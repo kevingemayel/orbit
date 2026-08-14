@@ -3872,28 +3872,81 @@
     // subcontractor-side retention we hold = latest non-draft subcontract certificate per subcontract
     var scerts = (await sb.from("subcontract_certificates").select("subcontract_id,date_to,gross_to_date,retention_amount,state, subcontracts(name, partners(name))").eq("company_id", S.company.id).neq("state", "draft").order("date_to", { ascending: true })).data || [];
     var bySc = {}; scerts.forEach(function (c) { bySc[c.subcontract_id] = c; });
-    var recv = 0, pay = 0;
+    var releases = (await sb.from("retention_releases").select("side,project_id,subcontract_id,amount").eq("company_id", S.company.id)).data || [];
+    var relProj = {}, relSc = {};
+    releases.forEach(function (r) { if (r.side === "client" && r.project_id) relProj[r.project_id] = (relProj[r.project_id] || 0) + Number(r.amount || 0); if (r.side === "sub" && r.subcontract_id) relSc[r.subcontract_id] = (relSc[r.subcontract_id] || 0) + Number(r.amount || 0); });
+    var recvHeld = 0, recvRel = 0, recvOut = 0, payHeld = 0, payRel = 0, payOut = 0;
     var recvRows = Object.keys(byProj).map(function (pid) {
-      var c = byProj[pid], r = Number(c.retention_amount || 0); recv += r;
-      return '<tr><td>' + esc(c.projects ? c.projects.name : "") + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(r) + '</td></tr>';
+      var c = byProj[pid], held = Number(c.retention_amount || 0), rel = relProj[pid] || 0, out = held - rel;
+      recvHeld += held; recvRel += rel; recvOut += out;
+      var nm = c.projects ? c.projects.name : "";
+      var btn = out > 0.005 ? '<button class="btn sm rel-btn" data-side="client" data-id="' + pid + '" data-name="' + esc(nm) + '" data-out="' + out + '">Release</button>' : '';
+      return '<tr><td>' + esc(nm) + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(held) + '</td><td class="num">' + money(rel) + '</td><td class="num"><b>' + money(out) + '</b></td><td>' + btn + '</td></tr>';
     }).join("");
     var payRows = Object.keys(bySc).map(function (sid) {
-      var c = bySc[sid], r = Number(c.retention_amount || 0); pay += r;
-      var sc = c.subcontracts || {};
-      return '<tr><td>' + esc(sc.name || "") + '</td><td>' + esc(sc.partners ? sc.partners.name : "") + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(r) + '</td></tr>';
+      var c = bySc[sid], held = Number(c.retention_amount || 0), rel = relSc[sid] || 0, out = held - rel;
+      payHeld += held; payRel += rel; payOut += out;
+      var sc = c.subcontracts || {}, nm = sc.name || "";
+      var btn = out > 0.005 ? '<button class="btn sm rel-btn" data-side="sub" data-id="' + sid + '" data-name="' + esc(nm) + '" data-out="' + out + '">Release</button>' : '';
+      return '<tr><td>' + esc(nm) + '</td><td>' + esc(sc.partners ? sc.partners.name : "") + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(held) + '</td><td class="num">' + money(rel) + '</td><td class="num"><b>' + money(out) + '</b></td><td>' + btn + '</td></tr>';
     }).join("");
-    var net = recv - pay;
-    document.getElementById("rep").innerHTML = '<h1>Retention</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; outstanding retention held to date</div>' +
+    var net = recvOut - payOut;
+    document.getElementById("rep").innerHTML = '<h1>Retention</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; held vs released vs outstanding</div>' +
       '<h3 style="font-size:14px;margin:14px 0 6px">Retention held by clients &middot; receivable to us</h3>' +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Gross certified</td><td class="num">Retention held</td></tr></thead><tbody>' +
-      (recvRows || '<tr><td colspan="3" class="muted">No certified progress certificates yet.</td></tr>') +
-      '<tr class="tot"><td>Total receivable</td><td class="num"></td><td class="num">' + money(recv) + '</td></tr></tbody></table></div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Gross certified</td><td class="num">Held</td><td class="num">Released</td><td class="num">Outstanding</td><td></td></tr></thead><tbody>' +
+      (recvRows || '<tr><td colspan="6" class="muted">No certified progress certificates yet.</td></tr>') +
+      '<tr class="tot"><td>Total</td><td class="num"></td><td class="num">' + money(recvHeld) + '</td><td class="num">' + money(recvRel) + '</td><td class="num">' + money(recvOut) + '</td><td></td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Retention we hold from subcontractors &middot; payable by us</h3>' +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Subcontract</td><td>Subcontractor</td><td class="num">Gross certified</td><td class="num">Retention held</td></tr></thead><tbody>' +
-      (payRows || '<tr><td colspan="4" class="muted">No certified subcontract certificates yet.</td></tr>') +
-      '<tr class="tot"><td>Total payable</td><td></td><td class="num"></td><td class="num">' + money(pay) + '</td></tr></tbody></table></div>' +
-      '<div class="o-tot" style="margin-top:16px"><div class="r"><span class="k">Retention receivable (clients hold)</span><span>' + cc + ' ' + money(recv) + '</span></div><div class="r"><span class="k">Retention payable (we hold)</span><span>-' + cc + ' ' + money(pay) + '</span></div><div class="r tt"><span class="k">Net retention position</span><span>' + cc + ' ' + money(net) + '</span></div></div>' +
-      '<div class="sub" style="margin-top:10px">Retention is released per your contract terms (often at practical completion and end of the defects-liability period). This shows the cumulative amount held on the latest certificate of each project and subcontract.</div>';
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Subcontract</td><td>Subcontractor</td><td class="num">Gross certified</td><td class="num">Held</td><td class="num">Released</td><td class="num">Outstanding</td><td></td></tr></thead><tbody>' +
+      (payRows || '<tr><td colspan="7" class="muted">No certified subcontract certificates yet.</td></tr>') +
+      '<tr class="tot"><td>Total</td><td></td><td class="num"></td><td class="num">' + money(payHeld) + '</td><td class="num">' + money(payRel) + '</td><td class="num">' + money(payOut) + '</td><td></td></tr></tbody></table></div>' +
+      '<div class="o-tot" style="margin-top:16px"><div class="r"><span class="k">Retention receivable outstanding (clients hold)</span><span>' + cc + ' ' + money(recvOut) + '</span></div><div class="r"><span class="k">Retention payable outstanding (we hold)</span><span>-' + cc + ' ' + money(payOut) + '</span></div><div class="r tt"><span class="k">Net retention position</span><span>' + cc + ' ' + money(net) + '</span></div></div>' +
+      '<div class="sub" style="margin-top:10px">Release retention when it falls due (practical completion / end of the defects-liability period). Releasing a client line records cash received (Dr Bank / Cr Retention receivable); releasing a subcontractor line records cash paid (Dr Retention payable / Cr Bank).</div>';
+    document.querySelectorAll(".rel-btn").forEach(function (b) { b.onclick = function () { openReleaseModal(b.dataset.side, b.dataset.id, b.dataset.name, Number(b.dataset.out)); }; });
+  }
+  async function openReleaseModal(side, entityId, name, outstanding) {
+    var cc = S.company.currency_code;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Release retention &middot; ' + esc(name) + '</h3><div class="form">' +
+      '<div><label>Amount (' + esc(cc) + ')</label>' + fhint("__ramt", "How much retention to release now. Defaults to the full outstanding amount.") + '<input id="rel-amt" type="number" step="0.01" value="' + outstanding + '"></div>' +
+      '<div class="row2"><div><label>Date</label>' + fhint("__rdate", "When the retention is released / settled.") + '<input id="rel-date" type="date" value="' + today() + '"></div>' +
+      '<div><label>Through</label>' + fhint("__rjrn", side === "client" ? "Where the retention cash is received." : "Where the retention cash is paid from.") + '<select id="rel-jrn"><option value="5100">Bank</option><option value="5300">Cash</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="rel-cancel">Cancel</button><button class="btn pri" id="rel-save" style="background:var(--accent);border-color:var(--accent)">' + (side === "client" ? "Record receipt" : "Record payment") + '</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector(".form").style.cssText = "padding:16px 18px;display:grid;gap:12px";
+    document.getElementById("rel-cancel").onclick = function () { m.remove(); };
+    document.getElementById("rel-save").onclick = async function () {
+      var amt = parseFloat(document.getElementById("rel-amt").value);
+      if (!(amt > 0)) { toast("Enter an amount"); return; }
+      if (amt > outstanding + 0.005) { toast("More than the outstanding retention"); return; }
+      var ok = await postRetentionRelease(side, entityId, name, amt, document.getElementById("rel-date").value, document.getElementById("rel-jrn").value);
+      if (!ok) return;
+      m.remove(); toast("Retention released"); renderRetention();
+    };
+  }
+  async function postRetentionRelease(side, entityId, name, amount, date, bankCode) {
+    // client: Dr Bank / Cr 4110 (retention received). sub: Dr 4010 / Cr Bank (retention paid).
+    var drCode = side === "client" ? bankCode : "4010";
+    var crCode = side === "client" ? "4110" : bankCode;
+    var narr = (side === "client" ? "Retention released (received) - " : "Retention released (paid) - ") + name;
+    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", [drCode, crCode])).data || [];
+    var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
+    if (!by[drCode] || !by[crCode]) { toast("Missing account " + drCode + " / " + crCode); return false; }
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    if (!jr) { toast("No misc journal"); return false; }
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: date || today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "retention_release", source_id: "" }).select("id").single();
+    if (e.error) { toast(e.error.message); return false; }
+    var lr = await sb.from("journal_lines").insert([
+      { entry_id: e.data.id, company_id: S.company.id, account_id: by[drCode], label: narr, debit: Number(amount), credit: 0 },
+      { entry_id: e.data.id, company_id: S.company.id, account_id: by[crCode], label: narr, debit: 0, credit: Number(amount) }
+    ]);
+    if (lr.error) { toast(lr.error.message); return false; }
+    var pr = await sb.rpc("post_entry", { p_entry: e.data.id });
+    if (pr.error) { toast(pr.error.message); return false; }
+    var rec = { company_id: S.company.id, side: side, amount: Number(amount), release_date: date || today(), journal_entry_id: e.data.id };
+    if (side === "client") rec.project_id = entityId; else rec.subcontract_id = entityId;
+    await sb.from("retention_releases").insert(rec);
+    return true;
   }
 
   // ---- WIP schedule (cost-to-cost % complete; over / under billing) ----
