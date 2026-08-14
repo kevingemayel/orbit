@@ -70,7 +70,7 @@
     purchase: {
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
-        { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"]] },
+        { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
         { label: "Procurement", items: [["Material Requisitions", "pur.req"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
@@ -131,7 +131,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "pur.req": "purchase", "pur.sccert": "purchase",
+    "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project",
@@ -341,6 +341,7 @@
       case "lots": return renderLots();
       case "pur.req": return renderList(cfgRequisitions());
       case "pur.sccert": return renderList(cfgSubcontractCerts());
+      case "pur.match": return renderMatch();
       case "proj.list": return renderList(cfgProjects());
       case "task.list": return renderList(cfgTasks());
       case "ts.list": return renderList(cfgTimesheets());
@@ -1137,9 +1138,9 @@
 
     var btns = "";
     if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
-    else if (confirmed) btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>';
+    else if (confirmed) { if (!isSale) btns += '<button id="o-receive">Receive goods</button>'; btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>'; }
     var st = order ? order.state : "draft", atFirst = (st === "draft" || st === "sent");
-    var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "Draft") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
+    var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "RFQ") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
 
     var partnerField = editable ? '<select id="o-partner">' + partners.map(function (p) { return '<option value="' + p.id + '"' + ((order && order.partner_id === p.id) ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(order && order.partners ? order.partners.name : "") + '</span>';
     var groups = '<div class="o-groups"><div>' +
@@ -1150,14 +1151,14 @@
       fld("Order Date", editable ? '<input id="o-date" type="date" value="' + (order ? order.date_order || today() : today()) + '">' : '<span class="v">' + esc(order.date_order || "") + '</span>') +
       fld("Reference / Note", editable ? '<input id="o-ref" value="' + esc(order ? order.note || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(order ? order.note || "" : "") + '</span>') +
       '</div></div>';
-    var title = order ? (order.number || (isSale ? "Draft Quotation" : "Draft Purchase Order")) : "New";
+    var title = order ? (order.number || (isSale ? "Draft Quotation" : "Request for Quotation")) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' + groups +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { return { name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function recalc() { var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0; lb.querySelectorAll("tr").forEach(function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ln = q * p; var ts = tr.querySelector(".l-tax"); var amt = ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0; sub += ln; tax += ln * amt / 100; tr.querySelector(".l-sub").textContent = money(ln); }); setTot(sub, tax); }
@@ -1165,8 +1166,18 @@
     function renderLines() {
       var pg = document.getElementById("nbpg");
       if (!editable) {
-        var body = linesState.map(function (l) { var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>'; }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        var showMatch = !isSale;
+        var body = linesState.map(function (l) {
+          var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
+          var matchCells = "";
+          if (showMatch) {
+            var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0);
+            var badge = (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>'));
+            matchCells = '<td class="num">' + rec + '</td><td class="num">' + bil + '</td><td>' + badge + '</td>';
+          }
+          return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+        }).join("");
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
         var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
@@ -1219,7 +1230,25 @@
       document.getElementById("o-confirm").onclick = async function () { var nid = await save(true); if (nid) { toast(isSale ? "Sales order confirmed" : "Purchase order confirmed"); renderOrderForm(nid, kind); } };
     } else if (confirmed) {
       document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
+      var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { receivePOGoods(order, linesState); };
     }
+  }
+  // Goods receipt against a confirmed PO: mark lines received and pull storable products into stock.
+  async function receivePOGoods(order, lines) {
+    var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
+    var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
+    var inv = await ensureInventory();
+    var got = 0;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      if (l.id) await sb.from("purchase_order_lines").update({ qty_received: Number(l.quantity || 0) }).eq("id", l.id);
+      var pr = l.product_id ? prodBy[l.product_id] : null;
+      if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
+        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: Number(l.quantity || 0), location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+        if (!r.error) { await postStockValue("receive", pr, Number(l.quantity || 0), r.data && r.data.id); got++; }
+      }
+    }
+    toast(got ? ("Goods received - " + got + " stock item(s) added to inventory") : "Goods received"); renderOrderForm(order.id, "purchase");
   }
   async function nextOrderNumber(kind) {
     var prefix = kind === "sale" ? "SO" : "PO", tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
@@ -1229,7 +1258,7 @@
   async function createInvoiceFromOrder(order, lines, kind) {
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_total: untax, amount_residual: untax };
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + ins.error.message); return; }
@@ -1237,6 +1266,7 @@
     var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Invoice lines failed: " + lr.error.message); return; }
+    if (!isSale) { for (var i = 0; i < lines.length; i++) { if (lines[i].id) await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id); } }
     toast(isSale ? "Invoice created (draft)" : "Bill created (draft)");
     renderInvoiceForm(invId, moveType);
   }
@@ -3980,6 +4010,29 @@
       '<tr class="tot"><td>Total</td><td class="num">' + money(tcv) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num"></td><td class="num">' + money(tearn) + '</td><td class="num">' + money(tbill) + '</td><td class="num">' + money(tob) + '</td></tr>' +
       '</tbody></table></div>' +
       '<div class="sub" style="margin-top:12px">Earned revenue = contract x % complete. Over-billed (amber) = billed more than earned (a liability); under-billed (green) = earned more than billed (an asset). Add a cost budget per project so % complete can be computed.</div>';
+  }
+
+  // ---- 3-way match (PO ordered vs goods received vs billed) ----
+  async function renderMatch() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("3-Way Match") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code;
+    var pos = (await sb.from("purchase_orders").select("id,number,state, partners(name)").eq("company_id", S.company.id).in("state", ["purchase", "done"]).order("date_order", { ascending: false })).data || [];
+    if (!pos.length) { document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="o-empty">No confirmed purchase orders yet. Confirm a PO, receive goods, then bill it to see the match here.</div>'; return; }
+    var lines = (await sb.from("purchase_order_lines").select("order_id,name,quantity,qty_received,qty_billed,unit_price").in("order_id", pos.map(function (p) { return p.id; }))).data || [];
+    var byPo = {}; lines.forEach(function (l) { (byPo[l.order_id] = byPo[l.order_id] || []).push(l); });
+    function badge(ord, rec, bil) { return (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>')); }
+    var rows = pos.map(function (p) {
+      var ls = byPo[p.id] || [];
+      var head = '<tr class="sec"><td colspan="6">' + esc(p.number || "") + ' &middot; ' + esc(p.partners ? p.partners.name : "") + '</td></tr>';
+      var lrows = ls.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0); return '<tr><td>' + esc(l.name) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + bil + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + badge(ord, rec, bil) + '</td></tr>'; }).join("");
+      return head + (lrows || '<tr><td colspan="6" class="muted">No lines.</td></tr>');
+    }).join("");
+    var exceptions = lines.filter(function (l) { return Number(l.qty_billed || 0) > Number(l.qty_received || 0) + 0.001; }).length;
+    document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; ordered vs received vs billed &middot; ' + (exceptions ? '<span style="color:var(--bad)">' + exceptions + ' exception(s)</span>' : 'no exceptions') + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Item</td><td class="num">Ordered</td><td class="num">Received</td><td class="num">Billed</td><td class="num">Unit price</td><td>Status</td></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:12px">Matched = goods received and billed both cover the ordered quantity. "Billed &gt; received" flags a bill for goods not yet received - investigate before paying. Use Receive goods on a confirmed PO to record receipts.</div>';
   }
 
   // ============================ MATERIAL REQUISITIONS ============================
