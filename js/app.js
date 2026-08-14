@@ -90,7 +90,9 @@
       menus: [
         { label: "Projects", action: "proj.list" },
         { label: "Tasks", action: "task.list" },
-        { label: "Timesheets", action: "ts.list" }
+        { label: "Timesheets", action: "ts.list" },
+        { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"]] },
+        { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"]] }
       ]
     },
     hr: {
@@ -123,7 +125,7 @@
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
-    "proj.list": "project", "task.list": "project", "ts.list": "project",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
@@ -327,6 +329,10 @@
       case "proj.list": return renderList(cfgProjects());
       case "task.list": return renderList(cfgTasks());
       case "ts.list": return renderList(cfgTimesheets());
+      case "pc.list": return renderList(cfgCertificates());
+      case "var.list": return renderList(cfgVariations());
+      case "sc.list": return renderList(cfgSubcontracts());
+      case "proj.pnl": return renderProjectPnL();
       case "crm.pipe": return renderPipeline();
       case "crm.leads": return renderList(cfgLeads());
       case "crm.stages": return renderList(cfgCrmStages());
@@ -2236,7 +2242,14 @@
     var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced").eq("project_id", id)).data || [];
     var hoursByTask = {}, totalHours = 0, unbilledHours = 0, unbilledIds = []; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); } });
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
-    var smart = id !== "new" ? '<div class="o-smart"><button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours logged</span></button><button class="sb"><span class="v">' + tasks.length + '</span><span class="k">Tasks</span></button></div>' : "";
+    var cc = S.company.currency_code;
+    var boqTot = id === "new" ? 0 : ((await sb.from("project_boq").select("amount").eq("project_id", id)).data || []).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
+    var certTot = id === "new" ? 0 : ((await sb.from("project_certificates").select("current_certified,state").eq("project_id", id)).data || []).filter(function (x) { return x.state !== "draft"; }).reduce(function (s, x) { return s + Number(x.current_certified || 0); }, 0);
+    var smart = id !== "new" ? '<div class="o-smart">' +
+      '<button class="sb" id="pf-sm-boq"><span class="v">' + cc + " " + money(boqTot) + '</span><span class="k">Contract (BOQ)</span></button>' +
+      '<button class="sb" id="pf-sm-cert"><span class="v">' + cc + " " + money(certTot) + '</span><span class="k">Certified</span></button>' +
+      '<button class="sb" id="pf-sm-budget"><span class="v">&#9776;</span><span class="k">Cost budget</span></button>' +
+      '<button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours</span></button></div>' : "";
     var custOpts = '<option value="">(none)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (p.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
@@ -2251,16 +2264,28 @@
       fld("Deadline", '<input id="pf-deadline" type="date" value="' + (p.date_deadline || "") + '">', "Target completion date.") +
       fld("Status", '<select id="pf-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Closed</option></select>', "Active projects accept time entries; closed ones are archived.") +
       '</div></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project Code", '<input id="pf-code" value="' + esc(p.code || "") + '" placeholder="e.g. PRJ-001">', "Your internal reference for this contract.") +
+      fld("Contract Value", '<input id="pf-cval" type="number" step="0.01" value="' + (p.contract_value || 0) + '">', "The awarded contract sum (grows with approved variations).") +
+      '</div><div>' +
+      fld("Retention %", '<input id="pf-ret" type="number" step="0.1" value="' + (p.retention_pct || 0) + '">', "Percent held back on each progress certificate, e.g. 10.") +
+      fld("Advance Payment", '<input id="pf-adv" type="number" step="0.01" value="' + (p.advance_amount || 0) + '">', "Advance / mobilisation paid up front, recovered across certificates.") +
+      '</div></div>' +
       (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1" };
+      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: parseFloat(gv("pf-cval")) || 0, retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("projects").insert(row); } else r = await sb.from("projects").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       toast("Saved"); go("proj.list");
     };
+    if (id !== "new") {
+      var _sb1 = document.getElementById("pf-sm-boq"); if (_sb1) _sb1.onclick = function () { renderBOQ(p.id); };
+      var _sb2 = document.getElementById("pf-sm-cert"); if (_sb2) _sb2.onclick = function () { go("pc.list"); };
+      var _sb3 = document.getElementById("pf-sm-budget"); if (_sb3) _sb3.onclick = function () { renderBudget(p.id); };
+    }
     if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id, function () { renderProjectForm(p.id); }); };
     if (unbilledHours > 0.001) document.getElementById("pf-bill").onclick = function () { openBillModal(p, unbilledHours, unbilledIds); };
   }
@@ -3375,6 +3400,266 @@
       (rows.join("") || '<tr><td colspan="6" class="muted">No posted payslips yet.</td></tr>') +
       '<tr class="tot"><td colspan="2">Total (' + ref + ')</td><td class="num">' + money(totGross) + '</td><td class="num">' + money(totEmployer) + '</td><td class="num">' + money(totGross + totEmployer) + '</td><td class="num">' + money(totNet) + '</td></tr>' +
       '</tbody></table>';
+  }
+
+  // ============================ CONTRACTOR PROJECTS ============================
+  // ---- Schedule of Values (BOQ) ----
+  async function renderBOQ(projectId) {
+    var proj = (await sb.from("projects").select("name,contract_value").eq("id", projectId).maybeSingle()).data || {};
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule of Values", { action: "proj.list", title: "Projects" }) + '<div class="gap"></div><button class="o-new" id="boq-add">+ Add line</button><button class="o-filtbtn" id="boq-save">Save</button></div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-title">Schedule of Values &middot; ' + esc(proj.name || "") + '</div><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:90px">Code</th><th>Description</th><th style="width:64px">Unit</th><th style="width:80px;text-align:right">Qty</th><th style="width:100px;text-align:right">Rate</th><th style="width:110px;text-align:right">Amount</th><th style="width:24px"></th></tr></thead><tbody id="boq-body"></tbody></table></div><div class="o-tot" id="boq-tot" style="margin-top:10px"></div></div></div></div></div>';
+    wireBc();
+    var lines = (await sb.from("project_boq").select("*").eq("project_id", projectId).order("sequence")).data || [];
+    var body = document.getElementById("boq-body");
+    function recalc() { var tot = 0; body.querySelectorAll("tr").forEach(function (tr) { var q = parseFloat(tr.querySelector(".bq-qty").value) || 0, r = parseFloat(tr.querySelector(".bq-rate").value) || 0; var a = q * r; tot += a; tr.querySelector(".bq-amt").textContent = money(a); }); document.getElementById("boq-tot").innerHTML = '<div class="r tt"><span class="k">Total contract value</span><span>' + S.company.currency_code + " " + money(tot) + '</span></div>'; }
+    function addRow(l) { var tr = document.createElement("tr"); tr.innerHTML = '<td><input class="bq-code" value="' + esc(l ? l.code : "") + '"></td><td><input class="bq-desc" value="' + esc(l ? l.description : "") + '" placeholder="Description"></td><td><input class="bq-unit" value="' + esc(l ? l.unit : "") + '"></td><td><input class="bq-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="bq-rate num" type="number" step="0.01" value="' + (l ? l.rate : 0) + '"></td><td class="num bq-amt">0.00</td><td><button class="del">&times;</button></td>'; body.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); }; tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", recalc); }); }
+    document.getElementById("boq-add").onclick = function () { addRow(null); recalc(); };
+    document.getElementById("boq-save").onclick = async function () {
+      await sb.from("project_boq").delete().eq("project_id", projectId);
+      var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr, i) { var q = parseFloat(tr.querySelector(".bq-qty").value) || 0, r = parseFloat(tr.querySelector(".bq-rate").value) || 0; return { company_id: S.company.id, project_id: projectId, code: tr.querySelector(".bq-code").value.trim(), description: tr.querySelector(".bq-desc").value.trim() || "Item", unit: tr.querySelector(".bq-unit").value.trim(), quantity: q, rate: r, amount: q * r, sequence: (i + 1) * 10 }; });
+      if (rows.length) { var ins = await sb.from("project_boq").insert(rows); if (ins.error) { toast(ins.error.message); return; } }
+      await sb.from("projects").update({ contract_value: rows.reduce(function (s, x) { return s + x.amount; }, 0) }).eq("id", projectId);
+      toast("Schedule of values saved"); renderProjectForm(projectId);
+    };
+    if (lines.length) lines.forEach(addRow); else addRow(null);
+    recalc();
+  }
+
+  // ---- Cost budget ----
+  async function renderBudget(projectId) {
+    var proj = (await sb.from("projects").select("name,contract_value").eq("id", projectId).maybeSingle()).data || {};
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cost Budget", { action: "proj.list", title: "Projects" }) + '<div class="gap"></div><button class="o-new" id="bg-add">+ Add line</button><button class="o-filtbtn" id="bg-save">Save</button></div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-title">Cost Budget &middot; ' + esc(proj.name || "") + '</div><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:180px">Category</th><th>Description</th><th style="width:130px;text-align:right">Budgeted cost</th><th style="width:24px"></th></tr></thead><tbody id="bg-body"></tbody></table></div><div class="o-tot" id="bg-tot" style="margin-top:10px"></div></div></div></div></div>';
+    wireBc();
+    var lines = (await sb.from("project_budgets").select("*").eq("project_id", projectId).order("id")).data || [];
+    var body = document.getElementById("bg-body"), cv = Number(proj.contract_value) || 0;
+    function recalc() { var tot = 0; body.querySelectorAll("tr").forEach(function (tr) { tot += parseFloat(tr.querySelector(".bg-amt").value) || 0; }); document.getElementById("bg-tot").innerHTML = '<div class="r"><span class="k">Total budgeted cost</span><span>' + S.company.currency_code + " " + money(tot) + '</span></div><div class="r"><span class="k">Contract value</span><span>' + S.company.currency_code + " " + money(cv) + '</span></div><div class="r tt"><span class="k">Estimated margin</span><span>' + S.company.currency_code + " " + money(cv - tot) + " (" + (cv ? ((cv - tot) / cv * 100).toFixed(1) : "0") + '%)</span></div>'; }
+    function addRow(l) { var tr = document.createElement("tr"); tr.innerHTML = '<td><input class="bg-cat" value="' + esc(l ? l.category : "") + '" placeholder="e.g. Labour"></td><td><input class="bg-desc" value="' + esc(l ? l.description : "") + '"></td><td><input class="bg-amt num" type="number" step="0.01" value="' + (l ? l.amount : 0) + '"></td><td><button class="del">&times;</button></td>'; body.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); }; tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", recalc); }); }
+    document.getElementById("bg-add").onclick = function () { addRow(null); recalc(); };
+    document.getElementById("bg-save").onclick = async function () {
+      await sb.from("project_budgets").delete().eq("project_id", projectId);
+      var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) { return { company_id: S.company.id, project_id: projectId, category: tr.querySelector(".bg-cat").value.trim() || "Cost", description: tr.querySelector(".bg-desc").value.trim(), amount: parseFloat(tr.querySelector(".bg-amt").value) || 0 }; });
+      if (rows.length) { var ins = await sb.from("project_budgets").insert(rows); if (ins.error) { toast(ins.error.message); return; } }
+      toast("Budget saved"); renderProjectForm(projectId);
+    };
+    if (lines.length) lines.forEach(addRow); else addRow(null);
+    recalc();
+  }
+
+  // ---- Variations ----
+  function cfgVariations() {
+    return {
+      title: "Variations", pageSize: 80,
+      fetch: function () { return sb.from("project_variations").select("*, projects(name)").eq("company_id", S.company.id).order("vdate", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (v) { return (v.number || "") + " " + (v.description || "") + " " + (v.projects ? v.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (v) { return '<b>' + esc(v.number || "/") + '</b>'; } },
+        { label: "Project", get: function (v) { return esc(v.projects ? v.projects.name : ""); } },
+        { label: "Description", get: function (v) { return '<span class="muted">' + esc(v.description || "") + '</span>'; } },
+        { label: "Date", get: function (v) { return '<span class="muted">' + esc(v.vdate || "") + '</span>'; } },
+        { label: "Amount", num: true, get: function (v) { return money(v.amount); } },
+        { label: "Status", get: function (v) { return v.state === "approved" ? '<span class="badge paid">Approved</span>' : v.state === "rejected" ? '<span class="badge">Rejected</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Approved", test: function (v) { return v.state === "approved"; } }, { label: "Draft", test: function (v) { return v.state === "draft" || !v.state; } }],
+      groupBy: [{ label: "Project", get: function (v) { return v.projects ? v.projects.name : "None"; } }],
+      onOpen: function (v) { openVariationModal(v); }, onNew: function () { openVariationModal(); }
+    };
+  }
+  async function openVariationModal(v) {
+    v = v || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (v.id ? "Variation" : "New variation") + '</h3><div class="form">' +
+      '<div><label>Project</label>' + fhint("__vpr", "The project this change order belongs to.") + '<select id="v-proj">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (v.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Number</label>' + fhint("__vnum", "Variation / change order number.") + '<input id="v-num" value="' + esc(v.number || "") + '"></div><div><label>Date</label>' + fhint("__vdate", "When the variation was raised.") + '<input id="v-date" type="date" value="' + (v.vdate || today()) + '"></div></div>' +
+      '<div><label>Description</label>' + fhint("__vdesc", "What changed in scope.") + '<input id="v-desc" value="' + esc(v.description || "") + '"></div>' +
+      '<div><label>Amount</label>' + fhint("__vamt", "Added (or negative) contract value. Approving grows the contract value.") + '<input id="v-amt" type="number" step="0.01" value="' + (v.amount || 0) + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="v-cancel">Cancel</button>' + (v.id && v.state !== "approved" ? '<button class="btn" id="v-approve">Approve</button>' : "") + '<button class="btn pri" id="v-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("v-cancel").onclick = function () { m.remove(); };
+    function collect() { return { project_id: document.getElementById("v-proj").value, number: gv("v-num"), vdate: gv("v-date"), description: gv("v-desc") || "Variation", amount: parseFloat(gv("v-amt")) || 0 }; }
+    document.getElementById("v-save").onclick = async function () { if (!gv("v-desc")) { toast("Description required"); return; } var row = collect(); var r; if (v.id) r = await sb.from("project_variations").update(row).eq("id", v.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("project_variations").insert(row); } if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView(); };
+    var ap = document.getElementById("v-approve"); if (ap) ap.onclick = async function () { var row = collect(); row.state = "approved"; var r = await sb.from("project_variations").update(row).eq("id", v.id); if (r.error) { toast(r.error.message); return; } var pr = (await sb.from("projects").select("contract_value").eq("id", row.project_id).maybeSingle()).data; await sb.from("projects").update({ contract_value: (Number(pr.contract_value) || 0) + row.amount }).eq("id", row.project_id); m.remove(); toast("Approved - contract value updated"); renderView(); };
+  }
+
+  // ---- Subcontracts ----
+  function cfgSubcontracts() {
+    return {
+      title: "Subcontracts", pageSize: 80,
+      fetch: function () { return sb.from("subcontracts").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.number || "") + " " + (s.name || "") + " " + (s.partners ? s.partners.name : ""); },
+      columns: [
+        { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
+        { label: "Subcontract", get: function (s) { return esc(s.name); } },
+        { label: "Vendor", get: function (s) { return esc(s.partners ? s.partners.name : ""); } },
+        { label: "Project", get: function (s) { return esc(s.projects ? s.projects.name : ""); } },
+        { label: "Amount", num: true, get: function (s) { return (s.currency_code || S.company.currency_code) + " " + money(s.amount); } },
+        { label: "Retention", num: true, get: function (s) { return Number(s.retention_pct || 0) + "%"; } },
+        { label: "Status", get: function (s) { return s.state === "active" ? '<span class="badge paid">Active</span>' : s.state === "closed" ? '<span class="badge">Closed</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (s) { return s.state === "active"; } }],
+      groupBy: [{ label: "Project", get: function (s) { return s.projects ? s.projects.name : "None"; } }, { label: "Vendor", get: function (s) { return s.partners ? s.partners.name : "None"; } }],
+      onOpen: function (s) { openSubcontractModal(s); }, onNew: function () { openSubcontractModal(); }
+    };
+  }
+  async function openSubcontractModal(sc) {
+    sc = sc || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (sc.id ? "Subcontract" : "New subcontract") + '</h3><div class="form">' +
+      '<div><label>Subcontract name</label>' + fhint("__scn", "What is subcontracted, e.g. Aluminium fabrication.") + '<input id="sc-name" value="' + esc(sc.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Number</label>' + fhint("__scnum", "Your subcontract reference.") + '<input id="sc-num" value="' + esc(sc.number || "") + '"></div><div><label>Vendor</label>' + fhint("__scv", "The subcontractor.") + '<select id="sc-vend"><option value="">(none)</option>' + vendors.map(function (x) { return '<option value="' + x.id + '"' + (sc.vendor_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Project</label>' + fhint("__scp", "The project this subcontract is for.") + '<select id="sc-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (sc.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Amount</label>' + fhint("__sca", "The subcontract value.") + '<input id="sc-amt" type="number" step="0.01" value="' + (sc.amount || 0) + '"></div><div><label>Retention %</label>' + fhint("__scr", "Retention withheld from the subcontractor.") + '<input id="sc-ret" type="number" step="0.1" value="' + (sc.retention_pct || 0) + '"></div></div>' +
+      '<div><label>Status</label>' + fhint("__scst", "Draft, active, or closed.") + '<select id="sc-state"><option value="draft"' + (sc.state === "draft" || !sc.state ? " selected" : "") + '>Draft</option><option value="active"' + (sc.state === "active" ? " selected" : "") + '>Active</option><option value="closed"' + (sc.state === "closed" ? " selected" : "") + '>Closed</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="sc-cancel">Cancel</button><button class="btn pri" id="sc-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sc-cancel").onclick = function () { m.remove(); };
+    document.getElementById("sc-save").onclick = async function () { if (!gv("sc-name")) { toast("Name required"); return; } var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value }; var r; if (sc.id) r = await sb.from("subcontracts").update(row).eq("id", sc.id); else { row.company_id = S.company.id; r = await sb.from("subcontracts").insert(row); } if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView(); };
+  }
+
+  // ---- Progress certificates (IPC) ----
+  function cfgCertificates() {
+    return {
+      title: "Progress Certificates", pageSize: 80,
+      fetch: function () { return sb.from("project_certificates").select("*, projects(name)").eq("company_id", S.company.id).order("date_to", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.number || "") + " " + (c.projects ? c.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (c) { return '<b>' + esc(c.number || "/") + '</b>'; } },
+        { label: "Project", get: function (c) { return esc(c.projects ? c.projects.name : ""); } },
+        { label: "Date", get: function (c) { return '<span class="muted">' + esc(c.date_to || "") + '</span>'; } },
+        { label: "Gross to date", num: true, get: function (c) { return money(c.gross_to_date); } },
+        { label: "Retention", num: true, get: function (c) { return money(c.retention_amount); } },
+        { label: "This certificate", num: true, get: function (c) { return '<b>' + money(c.current_certified) + '</b>'; } },
+        { label: "Status", get: function (c) { return c.state === "invoiced" ? '<span class="badge paid">Invoiced</span>' : c.state === "certified" ? '<span class="badge partial">Certified</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Draft", test: function (c) { return c.state === "draft" || !c.state; } }, { label: "Certified", test: function (c) { return c.state === "certified"; } }, { label: "Invoiced", test: function (c) { return c.state === "invoiced"; } }],
+      groupBy: [{ label: "Project", get: function (c) { return c.projects ? c.projects.name : "None"; } }],
+      onOpen: function (c) { renderCertificateForm(c.id); }, onNew: function () { renderCertificateForm("new"); }
+    };
+  }
+  async function renderCertificateForm(id, presetProject) {
+    var parent = { action: "pc.list", title: "Progress Certificates" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name,contract_value,retention_pct,advance_amount,partner_id,currency_code").eq("company_id", S.company.id).order("name")).data || [];
+    var cert = id === "new" ? { state: "draft", date_to: today(), project_id: presetProject || (projs[0] ? projs[0].id : null) } : (await sb.from("project_certificates").select("*").eq("id", id).maybeSingle()).data || {};
+    var proj = projs.filter(function (p) { return p.id === cert.project_id; })[0] || {};
+    var cc = S.company.currency_code, posted = cert.state === "certified" || cert.state === "invoiced";
+    var boq = (await sb.from("project_boq").select("*").eq("project_id", cert.project_id).order("sequence")).data || [];
+    var certLines = id === "new" ? [] : (await sb.from("project_certificate_lines").select("*").eq("certificate_id", id).order("sequence")).data || [];
+    // previous certificate (most recent non-draft for this project, excluding self)
+    var prevCerts = (await sb.from("project_certificates").select("*").eq("company_id", S.company.id).eq("project_id", cert.project_id).neq("id", id === "new" ? "00000000-0000-0000-0000-000000000000" : id).in("state", ["certified", "invoiced"]).order("date_to", { ascending: false })).data || [];
+    var prevCert = prevCerts[0];
+    var prevLines = prevCert ? ((await sb.from("project_certificate_lines").select("boq_id,cum_amount,cum_pct").eq("certificate_id", prevCert.id)).data || []) : [];
+    var prevByBoq = {}; prevLines.forEach(function (l) { prevByBoq[l.boq_id] = l; });
+    var savedByBoq = {}; certLines.forEach(function (l) { savedByBoq[l.boq_id] = l; });
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (cert.number || "Certificate");
+    var projField = (id === "new") ? '<select id="pc-proj">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (cert.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(proj.name || "") + '</span>';
+    var lineRows = boq.map(function (b) {
+      var sv = savedByBoq[b.id], pv = prevByBoq[b.id];
+      var prevPct = pv ? Number(pv.cum_pct) : 0, curPct = sv ? Number(sv.cum_pct) : prevPct;
+      return '<tr data-boq="' + b.id + '" data-amt="' + b.amount + '" data-prev="' + (pv ? pv.cum_amount : 0) + '"><td>' + esc(b.code || "") + '</td><td>' + esc(b.description) + '</td><td class="num">' + money(b.amount) + '</td><td class="num muted">' + prevPct.toFixed(1) + '%</td><td><input class="pc-pct num" type="number" step="0.1" value="' + curPct + '"' + (posted ? " disabled" : "") + ' style="width:70px"></td><td class="num pc-cur">0.00</td></tr>';
+    }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pc-save">Save</button><button id="pc-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="pc-compute">Compute</button><button id="pc-certify">Certify</button>' : "") + (cert.state === "certified" ? '<button id="pc-invoice">Create client invoice</button>' : "") + '</div>' +
+      '<div class="o-stages"><span class="st ' + (!posted ? "on" : "done") + '">Draft</span><span class="st ' + (cert.state === "certified" ? "on" : cert.state === "invoiced" ? "done" : "") + '">Certified</span><span class="st ' + (cert.state === "invoiced" ? "on" : "") + '">Invoiced</span></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Interim Payment Certificate</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", projField, "The contract being certified.") +
+      fld("Certificate No.", '<input id="pc-num" value="' + esc(cert.number || "") + '"' + (posted ? " disabled" : "") + '>', "This certificate's number, e.g. IPC-03.") +
+      '</div><div>' +
+      fld("Date", '<input id="pc-date" type="date" value="' + (cert.date_to || today()) + '"' + (posted ? " disabled" : "") + '>', "Valuation date / period end.") +
+      fld("Materials on site", '<input id="pc-mat" type="number" step="0.01" value="' + (cert.materials_on_site || 0) + '"' + (posted ? " disabled" : "") + '>', "Value of materials delivered but not yet built in.") +
+      fld("Advance recovery", '<input id="pc-adv" type="number" step="0.01" value="' + (cert.advance_recovery || 0) + '"' + (posted ? " disabled" : "") + '>', "Advance payment recovered on this certificate.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Schedule of values</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Code</td><td>Description</td><td class="num">Contract</td><td class="num">Prev %</td><td class="num">Cum %</td><td class="num">This period</td></tr></thead><tbody>' + (lineRows || '<tr><td colspan="6" class="muted">No schedule of values. Add one on the project (Schedule of Values).</td></tr>') + '</tbody></table></div><div class="o-tot" id="pc-sum" style="margin-top:12px"></div></div></div>' +
+      '</div>';
+    document.getElementById("pc-discard").onclick = function () { go("pc.list"); };
+    if (id === "new") { var ps = document.getElementById("pc-proj"); if (ps) ps.onchange = function () { renderCertificateForm("new", ps.value); }; }
+    var retPct = Number(proj.retention_pct) || 0;
+    function computeSummary() {
+      var work = 0;
+      document.querySelectorAll("#o-main tr[data-boq]").forEach(function (tr) {
+        var amt = Number(tr.dataset.amt) || 0, prevAmt = Number(tr.dataset.prev) || 0;
+        var pct = parseFloat(tr.querySelector(".pc-pct").value) || 0;
+        var cum = amt * pct / 100; work += cum;
+        tr.querySelector(".pc-cur").textContent = money(cum - prevAmt);
+      });
+      var mat = parseFloat(gv("pc-mat")) || 0, adv = parseFloat(gv("pc-adv")) || 0;
+      var variations = 0; // approved variations already fold into contract; kept 0 here to avoid double count
+      var gross = work + mat + variations;
+      var retention = gross * retPct / 100;
+      var net = gross - retention - adv;
+      var prevNet = prevCert ? Number(prevCert.net_to_date) : 0;
+      var current = net - prevNet;
+      document.getElementById("pc-sum").innerHTML =
+        '<div class="r"><span class="k">Work done to date</span><span>' + cc + " " + money(work) + '</span></div>' +
+        '<div class="r"><span class="k">Materials on site</span><span>' + cc + " " + money(mat) + '</span></div>' +
+        '<div class="r"><span class="k">Gross value to date</span><span>' + cc + " " + money(gross) + '</span></div>' +
+        '<div class="r"><span class="k">Less retention (' + retPct + '%)</span><span>-' + cc + " " + money(retention) + '</span></div>' +
+        '<div class="r"><span class="k">Less advance recovery</span><span>-' + cc + " " + money(adv) + '</span></div>' +
+        '<div class="r"><span class="k">Net to date</span><span>' + cc + " " + money(net) + '</span></div>' +
+        '<div class="r"><span class="k">Less previously certified</span><span>-' + cc + " " + money(prevNet) + '</span></div>' +
+        '<div class="r tt"><span class="k">Amount due this certificate</span><span>' + cc + " " + money(current) + '</span></div>';
+      return { work: work, mat: mat, gross: gross, retention: retention, adv: adv, net: net, prevNet: prevNet, current: current };
+    }
+    document.querySelectorAll(".pc-pct").forEach(function (i) { i.addEventListener("input", computeSummary); });
+    var mi = document.getElementById("pc-mat"), ai = document.getElementById("pc-adv"); if (mi) mi.addEventListener("input", computeSummary); if (ai) ai.addEventListener("input", computeSummary);
+    computeSummary();
+    async function persist() {
+      var projId = id === "new" ? (document.getElementById("pc-proj") ? document.getElementById("pc-proj").value : cert.project_id) : cert.project_id;
+      var s = computeSummary();
+      var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("project_certificates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("project_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      await sb.from("project_certificate_lines").delete().eq("certificate_id", sid);
+      var lrows = [];
+      document.querySelectorAll("#o-main tr[data-boq]").forEach(function (tr, i) {
+        var amt = Number(tr.dataset.amt) || 0, prevAmt = Number(tr.dataset.prev) || 0, pct = parseFloat(tr.querySelector(".pc-pct").value) || 0, cum = amt * pct / 100;
+        lrows.push({ company_id: S.company.id, certificate_id: sid, boq_id: tr.dataset.boq, description: "", contract_amount: amt, prev_pct: 0, cum_pct: pct, cum_amount: cum, prev_amount: prevAmt, current_amount: cum - prevAmt, sequence: (i + 1) * 10 });
+      });
+      if (lrows.length) await sb.from("project_certificate_lines").insert(lrows);
+      return sid;
+    }
+    document.getElementById("pc-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderCertificateForm(sid); } };
+    var cbtn = document.getElementById("pc-compute"); if (cbtn) cbtn.onclick = computeSummary;
+    var cert2 = document.getElementById("pc-certify"); if (cert2) cert2.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("project_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderCertificateForm(sid); };
+    var inv = document.getElementById("pc-invoice"); if (inv) inv.onclick = async function () {
+      if (!proj.partner_id) { toast("Set a Customer on the project first."); return; }
+      var num = await nextNumber("out_invoice");
+      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || "") }).select("id").single();
+      if (ins.error) { toast("Invoice failed: " + ins.error.message); return; }
+      var incAcc = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("code", "7000").maybeSingle()).data;
+      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
+      await sb.from("project_certificates").update({ state: "invoiced", invoice_id: ins.data.id }).eq("id", cert.id);
+      toast("Draft invoice created"); renderInvoiceForm(ins.data.id, "out_invoice");
+    };
+  }
+
+  // ---- Project P&L ----
+  async function renderProjectPnL() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Project P&L") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code;
+    var projs = (await sb.from("projects").select("id,name,contract_value").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var certs = (await sb.from("project_certificates").select("project_id,current_certified,state").eq("company_id", S.company.id)).data || [];
+    var budgets = (await sb.from("project_budgets").select("project_id,amount").eq("company_id", S.company.id)).data || [];
+    var certBy = {}, budBy = {};
+    certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
+    budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); });
+    var tc = 0, tcert = 0, tbud = 0;
+    var rows = projs.map(function (p) {
+      var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, margin = cv - bud;
+      tc += cv; tcert += cert; tbud += bud;
+      return '<tr><td>' + esc(p.name) + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(margin) + '</td><td class="num">' + (cv ? (margin / cv * 100).toFixed(1) + "%" : "-") + '</td></tr>';
+    }).join("");
+    document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Contract</td><td class="num">Certified</td><td class="num">Budget cost</td><td class="num">Margin</td><td class="num">Margin %</td></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="6" class="muted">No active projects.</td></tr>') +
+      '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tc - tbud) + '</td><td class="num">' + (tc ? ((tc - tbud) / tc * 100).toFixed(1) + "%" : "-") + '</td></tr>' +
+      '</tbody></table></div>';
   }
 
   // ---- start ----
