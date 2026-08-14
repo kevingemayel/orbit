@@ -1315,7 +1315,7 @@
     var cc = S.company.currency_code;
     var invs = (await sb.from("invoices").select("id,number,invoice_date,due_date,amount_total,amount_residual, partners(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
     var mnow = new Date(), months = [];
-    for (var mi = 5; mi >= 0; mi--) { months.push(new Date(mnow.getFullYear(), mnow.getMonth() - mi, 1).toISOString().slice(0, 7)); }
+    for (var mi = 5; mi >= 0; mi--) { var _d = new Date(mnow.getFullYear(), mnow.getMonth() - mi, 1); months.push(_d.getFullYear() + "-" + ("0" + (_d.getMonth() + 1)).slice(-2)); }
     var revByM = {}; months.forEach(function (m) { revByM[m] = 0; });
     invs.forEach(function (v) { var m = (v.invoice_date || "").slice(0, 7); if (revByM[m] !== undefined) revByM[m] += Number(v.amount_total || 0); });
     var revData = months.map(function (m) { return { label: new Date(m + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" }), value: revByM[m] }; });
