@@ -34,8 +34,9 @@
     var h = document.querySelector(".o-home"); if (h) h.style.zoom = z;
   }
 
-  // Orbit diamond mark (open frame + solid core + blue AI dot). stroke defaults to white for ink tiles.
-  function orbitMark(stroke) { stroke = stroke || "#fff"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
+  // Orbit diamond mark (open frame + solid core + blue AI dot). Stroke inherits currentColor
+  // so it flips with the theme (ink on light, near-white on dark); the AI dot is always blue.
+  function orbitMark(stroke) { stroke = stroke || "currentColor"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var today = function () { return new Date().toISOString().slice(0, 10); };
@@ -192,10 +193,10 @@
     S.app = null; S.action = null;
     var tiles = Object.keys(APPS).map(function (k) {
       var a = APPS[k];
-      return '<div class="o-tile" data-app="' + k + '"><div class="ic" style="background:linear-gradient(135deg,' + a.color + ',' + a.color2 + ')">' + a.icon + '</div><div class="nm">' + esc(a.name) + '</div></div>';
+      return '<div class="o-tile" data-app="' + k + '"><div class="ic">' + a.icon + '<i class="dot"></i></div><div class="nm">' + esc(a.name) + '</div></div>';
     }).join("");
     var soon = SOON.map(function (s) {
-      return '<div class="o-tile soon"><div class="ic" style="background:linear-gradient(135deg,' + s[2] + ',' + s[2] + ')">' + s[1] + '</div><div class="nm">' + esc(s[0]) + '</div></div>';
+      return '<div class="o-tile soon"><div class="ic">' + s[1] + '</div><div class="nm">' + esc(s[0]) + '</div></div>';
     }).join("");
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
