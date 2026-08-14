@@ -146,7 +146,7 @@
     mode = mode || "in";
     root.innerHTML =
       '<div class="login"><div class="card">' +
-      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div></div>' +
+      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div><div class="byline">by Space Work</div></div>' +
       '<h1>' + (mode === "in" ? "Sign in to Orbit" : "Create your account") + "</h1>" +
       '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
