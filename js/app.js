@@ -110,6 +110,14 @@
         { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
       ]
     },
+    manufacturing: {
+      name: "Manufacturing", icon: "⚒", color: "#0d9488", color2: "#0f766e", home: "mfg.wo",
+      menus: [
+        { label: "Work Orders", action: "mfg.wo" },
+        { label: "Bills of Materials", action: "mfg.boms" },
+        { label: "Products", action: "products" }
+      ]
+    },
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
@@ -138,7 +146,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -147,7 +155,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
   };
-  var SOON = [["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
+  var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
     accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
@@ -159,6 +167,7 @@
     hr: '<svg viewBox="0 0 100 100"><circle cx="50" cy="34" r="13" fill="none" stroke="currentColor" stroke-width="8"/><path d="M24 80 C24 62 76 62 76 80" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="66" cy="22" r="7" fill="#2F6BFF"/></svg>',
     settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
     estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
+    manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -341,6 +350,8 @@
       case "so.list": return renderList(cfgOrders("sale"));
       case "po.list": return renderList(cfgOrders("purchase"));
       case "est.list": return renderList(cfgTenders());
+      case "mfg.wo": return renderList(cfgWorkOrders());
+      case "mfg.boms": return renderList(cfgBoms());
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -4397,6 +4408,151 @@
     if (lines.length) await sb.from("project_boq").insert(lines.map(function (l, i) { return { company_id: S.company.id, project_id: pid, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: Number(l.quantity || 0), rate: Number(l.sell_rate || 0), amount: Number(l.line_total || 0), sequence: (i + 1) * 10 }; }));
     await sb.from("tenders").update({ status: "won", project_id: pid }).eq("id", tenderId);
     toast("Tender won - project created with cost budget & schedule of values"); renderProjectForm(pid);
+  }
+
+  // ============================ MANUFACTURING / FABRICATION ============================
+  function cfgBoms() {
+    return {
+      title: "Bills of Materials", pageSize: 80,
+      fetch: function () { return sb.from("boms").select("*, products(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (b) { return (b.name || "") + " " + (b.products ? b.products.name : ""); },
+      columns: [
+        { label: "BOM", get: function (b) { return '<b>' + esc(b.name) + '</b>'; } },
+        { label: "Produces", get: function (b) { return esc(b.products ? b.products.name : "-"); } },
+        { label: "Output qty", num: true, get: function (b) { return Number(b.output_qty || 1); } }
+      ],
+      onOpen: function (b) { renderBomForm(b.id); }, onNew: function () { renderBomForm("new"); }
+    };
+  }
+  async function renderBomForm(id) {
+    var parent = { action: "mfg.boms", title: "Bills of Materials" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var bom = id === "new" ? { output_qty: 1 } : (await sb.from("boms").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("bom_lines").select("*").eq("bom_id", id).order("sequence")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (bom.name || "BOM");
+    function prodOpts(sel) { return '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="bm-save">Save</button><button id="bm-discard">Discard</button></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="bm-name" value="' + esc(bom.name || "") + '" placeholder="BOM name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Finished product", '<select id="bm-prod">' + prodOpts(bom.product_id) + '</select>', "The fabricated unit this BOM produces.") +
+      '</div><div>' +
+      fld("Output qty", '<input id="bm-outqty" type="number" step="0.01" value="' + (bom.output_qty || 1) + '">', "How many finished units one BOM run makes.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Components</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:220px">Component</th><th>Description</th><th style="width:90px;text-align:right">Qty</th><th style="width:90px">Unit</th><th style="width:22px"></th></tr></thead><tbody id="bmbody"></tbody></table><button class="o-addln" id="bm-addln">+ Add a component</button></div></div>' +
+      '</div>';
+    document.getElementById("bm-discard").onclick = function () { go("mfg.boms"); };
+    var lb = document.getElementById("bmbody");
+    function addRow(l) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><select class="bl-prod">' + prodOpts(l ? l.product_id : null) + '</select></td><td><input class="bl-name" value="' + esc(l ? l.name : "") + '" placeholder="optional"></td><td><input class="bl-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="bl-unit" value="' + esc(l ? l.unit : "") + '"></td><td><button class="del">&times;</button></td>';
+      lb.appendChild(tr);
+      var ps = tr.querySelector(".bl-prod");
+      ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (pr && !tr.querySelector(".bl-name").value) tr.querySelector(".bl-name").value = pr.name; if (pr && pr.uom && !tr.querySelector(".bl-unit").value) tr.querySelector(".bl-unit").value = pr.uom; });
+      tr.querySelector(".del").onclick = function () { tr.remove(); };
+    }
+    if (lines.length) lines.forEach(addRow); else addRow(null);
+    document.getElementById("bm-addln").onclick = function () { addRow(null); };
+    document.getElementById("bm-save").onclick = async function () {
+      var row = { name: gv("bm-name") || "BOM", product_id: document.getElementById("bm-prod").value || null, output_qty: parseFloat(gv("bm-outqty")) || 1 };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("boms").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      else { if ((await sb.from("boms").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("bom_lines").delete().eq("bom_id", id); }
+      var lns = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr, i) { var ps = tr.querySelector(".bl-prod"); return { company_id: S.company.id, bom_id: sid, product_id: ps.value || null, name: tr.querySelector(".bl-name").value.trim(), quantity: parseFloat(tr.querySelector(".bl-qty").value) || 0, unit: tr.querySelector(".bl-unit").value.trim(), sequence: (i + 1) * 10 }; }).filter(function (l) { return l.product_id || l.name; });
+      if (lns.length) { var lr = await sb.from("bom_lines").insert(lns); if (lr.error) { toast("Components failed: " + lr.error.message); return; } }
+      toast("Saved"); go("mfg.boms");
+    };
+  }
+  function cfgWorkOrders() {
+    return {
+      title: "Work Orders", pageSize: 80,
+      fetch: function () { return sb.from("work_orders").select("*, products(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (w) { return (w.number || "") + " " + (w.products ? w.products.name : "") + " " + (w.projects ? w.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (w) { return '<b>' + esc(w.number || "/") + '</b>'; } },
+        { label: "Product", get: function (w) { return esc(w.products ? w.products.name : ""); } },
+        { label: "Project", get: function (w) { return esc(w.projects ? w.projects.name : ""); } },
+        { label: "Qty", num: true, get: function (w) { return Number(w.quantity || 0); } },
+        { label: "Done", num: true, get: function (w) { return Number(w.quantity_done || 0); } },
+        { label: "Status", get: function (w) { return w.state === "done" ? '<span class="badge paid">Done</span>' : w.state === "in_progress" ? '<span class="badge partial">In progress</span>' : w.state === "cancel" ? '<span class="badge">Cancelled</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (w) { return w.state === "draft" || w.state === "in_progress"; } }, { label: "Done", test: function (w) { return w.state === "done"; } }],
+      groupBy: [{ label: "Status", get: function (w) { return w.state || "draft"; } }, { label: "Project", get: function (w) { return w.projects ? w.projects.name : "None"; } }],
+      onOpen: function (w) { renderWorkOrderForm(w.id); }, onNew: function () { renderWorkOrderForm("new"); }
+    };
+  }
+  async function nextWoNumber() {
+    var py = "WO/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("work_orders").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+  async function renderWorkOrderForm(id) {
+    var parent = { action: "mfg.wo", title: "Work Orders" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var wo = id === "new" ? { state: "draft", quantity: 1, date_planned: today() } : (await sb.from("work_orders").select("*").eq("id", id).maybeSingle()).data || {};
+    var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var boms = (await sb.from("boms").select("id,name,product_id,output_qty").eq("company_id", S.company.id).order("name")).data || [];
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var done = wo.state === "done", editable = !done;
+    var blines = wo.bom_id ? (await sb.from("bom_lines").select("*, products(name,cost_price)").eq("bom_id", wo.bom_id).order("sequence")).data || [] : [];
+    var selBom = boms.filter(function (b) { return b.id === wo.bom_id; })[0];
+    var factor = selBom && Number(selBom.output_qty) ? (Number(wo.quantity || 0) / Number(selBom.output_qty)) : Number(wo.quantity || 0);
+    var matCost = blines.reduce(function (s, l) { return s + Number(l.quantity || 0) * factor * Number(l.products ? l.products.cost_price : 0); }, 0);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (wo.number || "Work order");
+    var cc = S.company.currency_code;
+    var btns = (done ? "" : '<button class="pri" id="wo-save">Save</button><button id="wo-discard">Discard</button>');
+    if (id !== "new" && wo.state === "draft") btns += '<button id="wo-start">Start</button>';
+    if (id !== "new" && (wo.state === "draft" || wo.state === "in_progress")) btns += '<button class="pri" id="wo-complete">Complete &amp; consume</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (wo.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (wo.state === "in_progress" ? "on" : wo.state === "done" ? "done" : "") + '">In progress</span><span class="st ' + (wo.state === "done" ? "on" : "") + '">Done</span></div>';
+    function opts(list, sel, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (sel === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
+    var compRows = blines.map(function (l) { var q = Number(l.quantity || 0) * factor; return '<tr><td>' + esc(l.products ? l.products.name : (l.name || "")) + '</td><td class="num">' + (Math.round(q * 100) / 100) + '</td><td class="num">' + money(q * Number(l.products ? l.products.cost_price : 0)) + '</td></tr>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title">' + (wo.number ? esc(wo.number) : "New work order") + '</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Product to fabricate", editable ? '<select id="wo-prod">' + opts(products, wo.product_id, "(none)") + '</select>' : '<span class="v">' + esc((products.filter(function (p) { return p.id === wo.product_id; })[0] || {}).name || "-") + '</span>', "The finished facade unit being fabricated.") +
+      fld("Bill of materials", editable ? '<select id="wo-bom">' + opts(boms, wo.bom_id, "(none)") + '</select>' : '<span class="v">' + esc((selBom || {}).name || "-") + '</span>', "Components consumed to fabricate it. Save to preview.") +
+      fld("Project / site", editable ? '<select id="wo-proj">' + opts(projs, wo.project_id, "(none)") + '</select>' : '<span class="v">' + esc((projs.filter(function (p) { return p.id === wo.project_id; })[0] || {}).name || "-") + '</span>', "Fabrication material cost is booked to this project.") +
+      '</div><div>' +
+      fld("Quantity", editable ? '<input id="wo-qty" type="number" step="0.01" value="' + (wo.quantity || 1) + '">' : '<span class="v">' + Number(wo.quantity || 0) + '</span>', "How many units to fabricate.") +
+      fld("Planned date", editable ? '<input id="wo-date" type="date" value="' + (wo.date_planned || today()) + '">' : '<span class="v">' + esc(wo.date_planned || "") + '</span>') +
+      fld("Estimated material cost", '<span class="v">' + cc + " " + money(matCost) + '</span>', "Component cost for this quantity, from the BOM.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Components for this quantity</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Component</td><td class="num">Qty needed</td><td class="num">Cost</td></tr></thead><tbody>' + (compRows || '<tr><td colspan="3" class="muted">Pick a BOM and quantity, then Save to preview components.</td></tr>') + '<tr class="tot"><td>Total material cost</td><td class="num"></td><td class="num">' + money(matCost) + '</td></tr></tbody></table></div>' + (done ? '<div class="sub" style="margin-top:10px">Completed - ' + Number(wo.quantity_done || 0) + ' unit(s) fabricated; components consumed' + (wo.project_id ? " and costed to the project." : ".") + '</div>' : "") + '</div></div>' +
+      '</div>';
+    var dbtn = document.getElementById("wo-discard"); if (dbtn) dbtn.onclick = function () { go("mfg.wo"); };
+    async function woPersist() {
+      var row = { product_id: document.getElementById("wo-prod") ? (document.getElementById("wo-prod").value || null) : wo.product_id, bom_id: document.getElementById("wo-bom") ? (document.getElementById("wo-bom").value || null) : wo.bom_id, project_id: document.getElementById("wo-proj") ? (document.getElementById("wo-proj").value || null) : wo.project_id, quantity: parseFloat(gv("wo-qty")) || 0, date_planned: gv("wo-date") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextWoNumber(); var ins = await sb.from("work_orders").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("work_orders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    var svb = document.getElementById("wo-save"); if (svb) svb.onclick = async function () { var sid = await woPersist(); if (sid) { toast("Saved"); renderWorkOrderForm(sid); } };
+    var stb = document.getElementById("wo-start"); if (stb) stb.onclick = async function () { var sid = await woPersist(); if (!sid) return; await sb.from("work_orders").update({ state: "in_progress" }).eq("id", sid); toast("Started"); renderWorkOrderForm(sid); };
+    var cpb = document.getElementById("wo-complete"); if (cpb) cpb.onclick = async function () { var sid = await woPersist(); if (!sid) return; var full = (await sb.from("work_orders").select("*").eq("id", sid).maybeSingle()).data; await completeWorkOrder(full); };
+  }
+  async function completeWorkOrder(wo) {
+    if (wo.state === "done") { toast("Already completed"); return; }
+    if (!wo.bom_id) { toast("Set a BOM first so components can be consumed"); return; }
+    var bom = (await sb.from("boms").select("*").eq("id", wo.bom_id).maybeSingle()).data;
+    var blines = (await sb.from("bom_lines").select("*, products(name,cost_price)").eq("bom_id", wo.bom_id).order("sequence")).data || [];
+    var inv = await ensureInventory();
+    var factor = bom && Number(bom.output_qty) ? (Number(wo.quantity || 0) / Number(bom.output_qty)) : Number(wo.quantity || 0);
+    var consumed = 0;
+    for (var i = 0; i < blines.length; i++) {
+      var bl = blines[i], pr = bl.products || {};
+      var qty = Number(bl.quantity || 0) * factor;
+      if (!(qty > 0) || !bl.product_id) continue;
+      var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: bl.product_id, quantity: qty, location_id: inv.stock, location_dest_id: inv.customer, project_id: wo.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+      if (!mv.error) { await postStockValue("deliver", { id: bl.product_id, name: pr.name, cost_price: pr.cost_price }, qty, mv.data && mv.data.id, wo.project_id || null); consumed++; }
+    }
+    await sb.from("work_orders").update({ quantity_done: Number(wo.quantity || 0), state: "done" }).eq("id", wo.id);
+    toast(consumed ? ("Work order complete - " + consumed + " component(s) consumed" + (wo.project_id ? " to the project" : "")) : "Work order complete (no components)");
+    renderWorkOrderForm(wo.id);
   }
 
   // ---- start ----
