@@ -100,7 +100,7 @@
         { label: "Tasks", action: "task.list" },
         { label: "Timesheets", action: "ts.list" },
         { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"]] },
-        { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"]] }
+        { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
       ]
     },
     hr: {
@@ -134,7 +134,7 @@
     "pur.req": "purchase", "pur.sccert": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
-    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
@@ -348,6 +348,7 @@
       case "var.list": return renderList(cfgVariations());
       case "sc.list": return renderList(cfgSubcontracts());
       case "proj.pnl": return renderProjectPnL();
+      case "proj.retention": return renderRetention();
       case "crm.pipe": return renderPipeline();
       case "crm.leads": return renderList(cfgLeads());
       case "crm.stages": return renderList(cfgCrmStages());
@@ -3794,6 +3795,42 @@
       '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num">' + money(tvar) + '</td><td class="num">' + money(tmargin) + '</td></tr>' +
       '</tbody></table></div>' +
       '<div class="sub" style="margin-top:12px">Cost variance = Budget - Actual (red if over budget). Margin = Certified - Actual. Tag vendor bills to a project (Project field) and issue materials to a project so costs land here.</div>';
+  }
+
+  // ---- Retention report (cash held on both sides) ----
+  async function renderRetention() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Retention") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var cc = S.company.currency_code;
+    // client-side retention held from us = latest non-draft progress certificate per project (retention_amount is cumulative on gross-to-date)
+    var certs = (await sb.from("project_certificates").select("project_id,date_to,gross_to_date,retention_amount,state, projects(name)").eq("company_id", S.company.id).neq("state", "draft").order("date_to", { ascending: true })).data || [];
+    var byProj = {}; certs.forEach(function (c) { byProj[c.project_id] = c; });
+    // subcontractor-side retention we hold = latest non-draft subcontract certificate per subcontract
+    var scerts = (await sb.from("subcontract_certificates").select("subcontract_id,date_to,gross_to_date,retention_amount,state, subcontracts(name, partners(name))").eq("company_id", S.company.id).neq("state", "draft").order("date_to", { ascending: true })).data || [];
+    var bySc = {}; scerts.forEach(function (c) { bySc[c.subcontract_id] = c; });
+    var recv = 0, pay = 0;
+    var recvRows = Object.keys(byProj).map(function (pid) {
+      var c = byProj[pid], r = Number(c.retention_amount || 0); recv += r;
+      return '<tr><td>' + esc(c.projects ? c.projects.name : "") + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(r) + '</td></tr>';
+    }).join("");
+    var payRows = Object.keys(bySc).map(function (sid) {
+      var c = bySc[sid], r = Number(c.retention_amount || 0); pay += r;
+      var sc = c.subcontracts || {};
+      return '<tr><td>' + esc(sc.name || "") + '</td><td>' + esc(sc.partners ? sc.partners.name : "") + '</td><td class="num">' + money(c.gross_to_date) + '</td><td class="num">' + money(r) + '</td></tr>';
+    }).join("");
+    var net = recv - pay;
+    document.getElementById("rep").innerHTML = '<h1>Retention</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; outstanding retention held to date</div>' +
+      '<h3 style="font-size:14px;margin:14px 0 6px">Retention held by clients &middot; receivable to us</h3>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Gross certified</td><td class="num">Retention held</td></tr></thead><tbody>' +
+      (recvRows || '<tr><td colspan="3" class="muted">No certified progress certificates yet.</td></tr>') +
+      '<tr class="tot"><td>Total receivable</td><td class="num"></td><td class="num">' + money(recv) + '</td></tr></tbody></table></div>' +
+      '<h3 style="font-size:14px;margin:20px 0 6px">Retention we hold from subcontractors &middot; payable by us</h3>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Subcontract</td><td>Subcontractor</td><td class="num">Gross certified</td><td class="num">Retention held</td></tr></thead><tbody>' +
+      (payRows || '<tr><td colspan="4" class="muted">No certified subcontract certificates yet.</td></tr>') +
+      '<tr class="tot"><td>Total payable</td><td></td><td class="num"></td><td class="num">' + money(pay) + '</td></tr></tbody></table></div>' +
+      '<div class="o-tot" style="margin-top:16px"><div class="r"><span class="k">Retention receivable (clients hold)</span><span>' + cc + ' ' + money(recv) + '</span></div><div class="r"><span class="k">Retention payable (we hold)</span><span>-' + cc + ' ' + money(pay) + '</span></div><div class="r tt"><span class="k">Net retention position</span><span>' + cc + ' ' + money(net) + '</span></div></div>' +
+      '<div class="sub" style="margin-top:10px">Retention is released per your contract terms (often at practical completion and end of the defects-liability period). This shows the cumulative amount held on the latest certificate of each project and subcontract.</div>';
   }
 
   // ============================ MATERIAL REQUISITIONS ============================
