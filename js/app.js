@@ -43,6 +43,8 @@
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var today = function () { return new Date().toISOString().slice(0, 10); };
+  var fmtD = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
+  var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
   function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
   var SEARCH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
 
@@ -52,10 +54,11 @@
       name: "Accounting", icon: "€", color: "#7c3aed", color2: "#5b21b6", home: "dashboard",
       menus: [
         { label: "Dashboard", action: "dashboard" },
+        { label: "Cockpit", action: "cockpit" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
       ]
     },
@@ -125,6 +128,15 @@
         { label: "Projects", action: "proj.list" }
       ]
     },
+    documents: {
+      name: "Documents", icon: "▤", color: "#0369a1", color2: "#075985", home: "doc.subs",
+      menus: [
+        { label: "Submittals", action: "doc.subs" },
+        { label: "RFIs", action: "doc.rfis" },
+        { label: "Transmittals", action: "doc.trans" },
+        { label: "Projects", action: "proj.list" }
+      ]
+    },
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
@@ -153,9 +165,9 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "installation",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "installation", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
@@ -176,6 +188,7 @@
     estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
     manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
+    documents: '<svg viewBox="0 0 100 100"><path d="M28 14 H62 L78 30 V86 H28 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M62 14 V30 H78" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M40 48 H64 M40 60 H60" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="66" cy="72" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -361,6 +374,9 @@
       case "mfg.wo": return renderList(cfgWorkOrders());
       case "mfg.boms": return renderList(cfgBoms());
       case "inst.jobs": return renderList(cfgInstallJobs());
+      case "doc.subs": return renderList(cfgSubmittals());
+      case "doc.rfis": return renderList(cfgRfis());
+      case "doc.trans": return renderList(cfgTransmittals());
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -371,6 +387,9 @@
       case "rep.tax": return renderTaxReport();
       case "rep.stmt": return renderStatement(null);
       case "rep.cons": return renderConsolidation();
+      case "rep.cashfwd": return renderCashForecast();
+      case "rep.collections": return renderCollections();
+      case "cockpit": return renderCockpit();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
@@ -1346,6 +1365,7 @@
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '">') +
       fld("City", '<input id="p-city" value="' + esc(p.city || "") + '">') +
       fld("Country", '<input id="p-country" value="' + esc(p.country || "") + '">') +
+      fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
       '</div></div></div>';
     if (id !== "new") {
       document.getElementById("sm-inv").onclick = function () { go(isCust ? "inv.out" : "inv.in"); };
@@ -1355,7 +1375,7 @@
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
       if (!name) { toast("Name is required"); return; }
-      var row = { name: name, email: gv("p-email"), phone: gv("p-phone"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country") };
+      var row = { name: name, email: gv("p-email"), phone: gv("p-phone"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       var r;
       if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; row.is_customer = isCust; row.is_vendor = !isCust; r = await sb.from("partners").insert(row); }
       else r = await sb.from("partners").update(row).eq("id", id);
@@ -1816,7 +1836,7 @@
     document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var rates = (await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
     var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
-    var cons = {}, entities = [], missing = {};
+    var cons = {}, entities = [], missing = {}, factorByCo = {};
     for (var i = 0; i < S.companies.length; i++) {
       var co = S.companies[i];
       var factor = co.currency_code === ref ? 1 : rateMap[co.currency_code];
@@ -1836,8 +1856,24 @@
         });
       })(factor);
       entities.push({ name: co.name, cur: co.currency_code, factor: factor, known: known, assets: eAssets, result: eInc - eExp });
+      factorByCo[co.id] = factor;
     }
     var rows = Object.keys(cons).map(function (k) { return cons[k]; }).sort(function (a, b) { return (a.code || "") < (b.code || "") ? -1 : 1; });
+    // Intercompany eliminations: partners tagged as a group company -> their sales/costs + AR/AP net out
+    var icPartners = (await sb.from("partners").select("id,name,intercompany_company_id").not("intercompany_company_id", "is", null)).data || [];
+    var icRev = 0, icCost = 0, icAR = 0, icAP = 0, icCount = 0;
+    if (icPartners.length) {
+      var icIds = icPartners.map(function (p) { return p.id; });
+      var coIds = S.companies.map(function (c) { return c.id; });
+      var icInv = (await sb.from("invoices").select("company_id,move_type,amount_untaxed,amount_residual,partner_id").in("company_id", coIds).eq("state", "posted").in("partner_id", icIds)).data || [];
+      icInv.forEach(function (v) {
+        var f = factorByCo[v.company_id] || 1, u = Number(v.amount_untaxed || 0) * f, r = Number(v.amount_residual || 0) * f; icCount++;
+        if (v.move_type === "out_invoice") { icRev += u; icAR += r; }
+        else if (v.move_type === "in_invoice") { icCost += u; icAP += r; }
+        else if (v.move_type === "out_refund") { icRev -= u; icAR -= r; }
+        else if (v.move_type === "in_refund") { icCost -= u; icAP -= r; }
+      });
+    }
     var missKeys = Object.keys(missing);
     var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
     var entRows = entities.map(function (e) {
@@ -1848,20 +1884,437 @@
     var expT = 0, expHtml = ""; rows.forEach(function (r) { if ((r.type_code || "").indexOf("expense") !== 0) return; var v = Number(r.debit) - Number(r.credit); expT += v; expHtml += repLine(r.code, r.name, v); });
     var a = grp("asset", false), l = grp("liability", true), eq = grp("equity", true);
     var result = inc.t - expT;
+    // group figures after intercompany eliminations
+    var gInc = inc.t - icRev, gExp = expT - icCost, gResult = gInc - gExp;
+    var gAssets = a.t - icAR, gLiab = l.t - icAP;
+    var cta = gAssets - (gLiab + eq.t + gResult); // translation plug so the group balance sheet balances
     document.getElementById("rep").innerHTML =
       '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + S.companies.length + ' entities &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
       '<table class="o-rt"><tbody><tr class="sec"><td colspan="5">Entities</td></tr>' +
       '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
       entRows + '</tbody></table>' +
-      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Consolidated Profit &amp; Loss</td></tr>' +
+      (icCount ? '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="2">Intercompany eliminations &middot; ' + icPartners.length + ' related ' + (icPartners.length > 1 ? "parties" : "party") + '</td></tr>' +
+        '<tr><td>Intercompany revenue / cost eliminated</td><td class="num">' + money(icRev) + ' / ' + money(icCost) + '</td></tr>' +
+        '<tr><td>Intercompany receivables / payables eliminated</td><td class="num">' + money(icAR) + ' / ' + money(icAP) + '</td></tr></tbody></table>' : '') +
+      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Group Profit &amp; Loss' + (icCount ? ' (after eliminations)' : '') + '</td></tr>' +
       (inc.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Income</td><td class="num">' + money(inc.t) + '</td></tr>' +
+      (icRev ? repLine("", "less: intercompany revenue", -icRev) + '<tr class="tot"><td></td><td>Group Income</td><td class="num">' + money(gInc) + '</td></tr>' : '') +
       (expHtml || repEmpty()) + '<tr class="tot"><td></td><td>Total Expenses</td><td class="num">' + money(expT) + '</td></tr>' +
-      '<tr class="tot"><td></td><td>Consolidated Net Profit</td><td class="num">' + money(result) + '</td></tr></tbody></table>' +
-      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Consolidated Balance Sheet</td></tr>' +
+      (icCost ? repLine("", "less: intercompany costs", -icCost) + '<tr class="tot"><td></td><td>Group Expenses</td><td class="num">' + money(gExp) + '</td></tr>' : '') +
+      '<tr class="tot"><td></td><td>Group Net Profit' + (icCount ? ' (after eliminations)' : '') + '</td><td class="num">' + money(gResult) + '</td></tr></tbody></table>' +
+      '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Group Balance Sheet</td></tr>' +
       (a.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Assets</td><td class="num">' + money(a.t) + '</td></tr>' +
+      (icAR ? repLine("", "less: intercompany receivables", -icAR) + '<tr class="tot"><td></td><td>Group Assets</td><td class="num">' + money(gAssets) + '</td></tr>' : '') +
       (l.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Liabilities</td><td class="num">' + money(l.t) + '</td></tr>' +
-      (eq.html || repEmpty()) + repLine("", "Current Year Earnings", result) + '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + result) + '</td></tr></tbody></table>';
+      (icAP ? repLine("", "less: intercompany payables", -icAP) + '<tr class="tot"><td></td><td>Group Liabilities</td><td class="num">' + money(gLiab) + '</td></tr>' : '') +
+      (eq.html || repEmpty()) + repLine("", "Current Year Earnings", gResult) + repLine("", "Currency translation adjustment", cta) +
+      '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + gResult + cta) + '</td></tr>' +
+      '<tr class="tot"><td></td><td>Total Liabilities + Equity</td><td class="num">' + money(gLiab + eq.t + gResult + cta) + '</td></tr></tbody></table>' +
+      '<div class="sub" style="margin-top:12px">Each entity is translated to ' + esc(ref) + ' at the entered rate. Balances with parties tagged as a group company (intercompany) are eliminated so internal trade is not double-counted. The <b>currency translation adjustment</b> is the FX effect of translating multi-currency entities and keeps the group balance sheet balancing. Realised FX gain/loss on a foreign-currency invoice is recognised in the entity on settlement; each entity trades in its own currency, so the group FX effect shows here as the translation adjustment.</div>';
     var cr = document.getElementById("cons-rates"); if (cr) cr.onclick = function () { go("rates"); };
+  }
+
+  // ============================ CASH FLOW FORECAST ============================
+  async function renderCashForecast() {
+    var cc = S.company.currency_code;
+    document.getElementById("o-main").innerHTML = repChrome("Cash Flow Forecast", true);
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    // opening cash = bank + cash GL balances (codes 51xx bank, 53xx cash)
+    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var opening = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) opening += Number(r.balance || 0); });
+    var WK = 13;
+    var start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday of this week
+    var buckets = []; for (var w = 0; w < WK; w++) { var d = new Date(start); d.setDate(start.getDate() + w * 7); buckets.push({ start: d, inflow: 0, outflow: 0 }); }
+    function idxFor(dateStr) { var d = parseD(dateStr); if (!d) return 0; var diff = Math.floor((d - start) / 6048e5); if (diff < 0) return 0; if (diff >= WK) return -1; return diff; }
+    function addIn(dateStr, amt) { var i = idxFor(dateStr); if (i < 0) return; buckets[i].inflow += amt; }
+    function addOut(dateStr, amt) { var i = idxFor(dateStr); if (i < 0) return; buckets[i].outflow += amt; }
+    // AR / AP open documents by due date
+    var docs = (await sb.from("invoices").select("move_type,due_date,amount_residual").eq("company_id", S.company.id).eq("state", "posted").gt("amount_residual", 0.005)).data || [];
+    docs.forEach(function (d) {
+      var amt = Number(d.amount_residual || 0);
+      if (d.move_type === "out_invoice") addIn(d.due_date, amt);
+      else if (d.move_type === "out_refund") addOut(d.due_date, amt);
+      else if (d.move_type === "in_invoice") addOut(d.due_date, amt);
+      else if (d.move_type === "in_refund") addIn(d.due_date, amt);
+    });
+    // committed POs (unbilled) by planned date
+    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,date_planned,state,company_id)").eq("purchase_orders.company_id", S.company.id).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    var poByOrder = {};
+    poLines.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; if (!poByOrder[po.id]) poByOrder[po.id] = { date: po.date_planned, amt: 0 }; poByOrder[po.id].amt += v; });
+    Object.keys(poByOrder).forEach(function (k) { if (poByOrder[k].amt > 0.005) addOut(poByOrder[k].date, poByOrder[k].amt); });
+    // payroll estimate: running contracts monthly gross at each month-end within horizon
+    var contracts = (await sb.from("hr_contracts").select("wage,state").eq("company_id", S.company.id).eq("state", "running")).data || [];
+    var monthlyPayroll = contracts.reduce(function (s, c) { return s + Number(c.wage || 0); }, 0);
+    if (monthlyPayroll > 0) buckets.forEach(function (b) { var bs = b.start, be = new Date(bs); be.setDate(bs.getDate() + 6); var me = new Date(bs.getFullYear(), bs.getMonth() + 1, 0); if (me >= bs && me <= be) addOut(fmtD(me), monthlyPayroll); });
+    // client retention expected release (projects with a retention_due_date)
+    var projs = (await sb.from("projects").select("id,name,retention_due_date").eq("company_id", S.company.id).not("retention_due_date", "is", null)).data || [];
+    if (projs.length) {
+      var pIds = projs.map(function (p) { return p.id; });
+      var certs = (await sb.from("project_certificates").select("project_id,retention_amount,state,date_to").in("project_id", pIds).neq("state", "draft").order("date_to")).data || [];
+      var latestRet = {}; certs.forEach(function (c) { latestRet[c.project_id] = Number(c.retention_amount || 0); });
+      var rels = (await sb.from("retention_releases").select("project_id,amount").in("project_id", pIds)).data || [];
+      var relBy = {}; rels.forEach(function (r) { if (r.project_id) relBy[r.project_id] = (relBy[r.project_id] || 0) + Number(r.amount || 0); });
+      projs.forEach(function (p) { var out = (latestRet[p.id] || 0) - (relBy[p.id] || 0); if (out > 0.005) addIn(p.retention_due_date, out); });
+    }
+    var run = opening, low = opening, rows = "";
+    buckets.forEach(function (b, i) {
+      var net = b.inflow - b.outflow; run += net; if (run < low) low = run;
+      var cls = run < 0 ? ' style="color:var(--bad);font-weight:700"' : '';
+      rows += '<tr><td class="muted">Wk ' + (i + 1) + ' &middot; ' + fmtD(b.start) + '</td><td class="num" style="color:var(--good)">' + money(b.inflow) + '</td><td class="num" style="color:var(--bad)">' + money(b.outflow) + '</td><td class="num"' + (net < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(net) + '</td><td class="num"' + cls + '>' + money(run) + '</td></tr>';
+    });
+    var kpi = function (l, v, col) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n"' + (col ? ' style="color:' + col + '"' : '') + '>' + cc + ' ' + money(v) + '</div></div>'; };
+    document.getElementById("rep").innerHTML = repHead("Cash Flow Forecast (13 weeks)", cc) +
+      '<div class="kpis" style="margin:14px 0 4px">' + kpi("Opening cash", opening) + kpi("Lowest projected", low, low < 0 ? 'var(--bad)' : '') + kpi("Projected in 13 weeks", run, run < 0 ? 'var(--bad)' : '') + '</div>' +
+      (low < 0 ? '<div class="ob-banner">! Cash is projected to go negative within 13 weeks (low ' + cc + ' ' + money(low) + '). Chase receivables or defer commitments.</div>' : '') +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Week</td><td class="num">Inflows</td><td class="num">Outflows</td><td class="num">Net</td><td class="num">Running cash</td></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:8px">Opening cash = bank + cash GL balances. Inflows = customer invoices due + expected retention releases (on a project\'s Retention due date). Outflows = vendor bills due, unbilled committed POs (by planned date), and estimated monthly payroll (running contracts). Overdue items sit in week 1. Anything due beyond 13 weeks is excluded.</div>';
+  }
+
+  // ============================ COLLECTIONS (overdue AR follow-up) ============================
+  async function renderCollections() {
+    var cc = S.company.currency_code;
+    document.getElementById("o-main").innerHTML = repChrome("Collections", true);
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    var today0 = new Date(); today0.setHours(0, 0, 0, 0);
+    function daysLate(due) { var d = parseD(due); return d ? Math.floor((today0 - d) / 864e5) : 0; }
+    var docs = (await sb.from("invoices").select("id,number,move_type,due_date,amount_residual,partner_id,partners(name,phone,email)").eq("company_id", S.company.id).eq("state", "posted").eq("move_type", "out_invoice").gt("amount_residual", 0.005)).data || [];
+    var over = docs.filter(function (d) { return daysLate(d.due_date) > 0; });
+    var fu = (await sb.from("ar_followups").select("*").eq("company_id", S.company.id).order("followup_date", { ascending: false })).data || [];
+    var lastByInv = {}, lastByPartner = {}; fu.forEach(function (f) { if (f.invoice_id && !lastByInv[f.invoice_id]) lastByInv[f.invoice_id] = f; if (f.partner_id && !lastByPartner[f.partner_id]) lastByPartner[f.partner_id] = f; });
+    var byP = {}; over.forEach(function (d) { var k = d.partner_id || "none"; (byP[k] = byP[k] || { name: d.partners ? d.partners.name : "(no customer)", phone: d.partners ? d.partners.phone : "", rows: [], total: 0 }).rows.push(d); byP[k].total += Number(d.amount_residual || 0); });
+    var totalOver = over.reduce(function (s, d) { return s + Number(d.amount_residual || 0); }, 0);
+    var bk = { "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
+    over.forEach(function (d) { var dl = daysLate(d.due_date); bk[dl <= 30 ? "1-30" : dl <= 60 ? "31-60" : dl <= 90 ? "61-90" : "90+"] += Number(d.amount_residual || 0); });
+    var sections = Object.keys(byP).sort(function (a, b) { return byP[b].total - byP[a].total; }).map(function (k) {
+      var p = byP[k], lp = lastByPartner[k];
+      var invRows = p.rows.sort(function (a, b) { return daysLate(b.due_date) - daysLate(a.due_date); }).map(function (d) {
+        var dl = daysLate(d.due_date), lf = lastByInv[d.id];
+        var stat = lf ? '<span class="muted">' + esc(lf.status) + (lf.promised_date ? ' &middot; promised ' + esc(lf.promised_date) : '') + '</span>' : '<span class="muted">-</span>';
+        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
+      }).join("");
+      return '<tr class="sec"><td colspan="6"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
+    }).join("");
+    var kpi = function (l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; };
+    document.getElementById("rep").innerHTML = repHead("Collections - overdue receivables", cc) +
+      '<div class="kpis" style="margin:14px 0 4px">' + kpi("Total overdue", totalOver) + kpi("1-30 days", bk["1-30"]) + kpi("31-60", bk["31-60"]) + kpi("61-90", bk["61-90"]) + kpi("90+ days", bk["90+"]) + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Invoice</td><td>Due</td><td class="num">Days late</td><td class="num">Amount due</td><td>Last follow-up</td><td></td></tr></thead><tbody>' + (sections || '<tr><td colspan="6" class="muted">No overdue receivables. Nicely done.</td></tr>') + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:8px">Overdue = posted customer invoices past their due date with a balance. Use Log follow-up to record a call/email, a promise-to-pay date, and the next chase date.</div>';
+    document.querySelectorAll(".fu-btn").forEach(function (b) { b.onclick = function () { openFollowupModal(b.dataset.inv, b.dataset.p); }; });
+  }
+  async function openFollowupModal(invoiceId, partnerId) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Log follow-up</h3><div class="form">' +
+      '<div class="row2"><div><label>Date</label>' + fhint("__fud", "When you contacted them.") + '<input id="fu-date" type="date" value="' + today() + '"></div>' +
+      '<div><label>Channel</label>' + fhint("__fuc", "How you reached out.") + '<select id="fu-ch"><option value="call">Call</option><option value="email">Email</option><option value="meeting">Meeting</option><option value="letter">Letter</option></select></div></div>' +
+      '<div><label>Note</label>' + fhint("__fun", "What was said.") + '<input id="fu-note" placeholder="e.g. Spoke to accounts, awaiting director sign-off"></div>' +
+      '<div class="row2"><div><label>Promised date</label>' + fhint("__fup", "If they promised to pay by a date.") + '<input id="fu-pd" type="date"></div>' +
+      '<div><label>Promised amount</label>' + fhint("__fua", "Amount promised, optional.") + '<input id="fu-pa" type="number" step="0.01" value="0"></div></div>' +
+      '<div class="row2"><div><label>Next action date</label>' + fhint("__fna", "When to chase again.") + '<input id="fu-na" type="date"></div>' +
+      '<div><label>Status</label>' + fhint("__fus", "Where this stands.") + '<select id="fu-st"><option value="open">Open</option><option value="promised">Promised to pay</option><option value="escalated">Escalated</option><option value="paid">Paid</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="fu-cancel">Cancel</button><button class="btn pri" id="fu-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("fu-cancel").onclick = function () { m.remove(); };
+    document.getElementById("fu-save").onclick = async function () {
+      var row = { company_id: S.company.id, invoice_id: invoiceId || null, partner_id: partnerId || null, followup_date: document.getElementById("fu-date").value, channel: document.getElementById("fu-ch").value, note: document.getElementById("fu-note").value.trim(), promised_date: document.getElementById("fu-pd").value || null, promised_amount: parseFloat(document.getElementById("fu-pa").value) || 0, next_action_date: document.getElementById("fu-na").value || null, status: document.getElementById("fu-st").value };
+      var r = await sb.from("ar_followups").insert(row); if (r.error) { toast(r.error.message); return; }
+      m.remove(); toast("Follow-up logged"); renderCollections();
+    };
+  }
+
+  // ============================ DOCUMENT CONTROL (submittals / RFIs / transmittals) ============================
+  var SUBMITTAL_TYPES = [["shop_drawing", "Shop drawing"], ["material_approval", "Material approval"], ["sample", "Sample"], ["method_statement", "Method statement"], ["other", "Other"]];
+  function subTypeLabel(t) { var m = SUBMITTAL_TYPES.filter(function (x) { return x[0] === t; })[0]; return m ? m[1] : t; }
+  function docBadge(text, color) { return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;background:' + color + ';color:#fff;white-space:nowrap">' + esc(text) + '</span>'; }
+  function subStatusBadge(s) { var m = { draft: ["Draft", "var(--slate)"], submitted: ["Submitted", "var(--warn)"], approved: ["Approved", "var(--good)"], approved_comments: ["Approved w/ comments", "var(--good)"], rejected: ["Rejected", "var(--bad)"], superseded: ["Superseded", "var(--slate)"] }[s] || [s, "var(--slate)"]; return docBadge(m[0], m[1]); }
+  function rfiStatusBadge(s) { var m = { open: ["Open", "var(--warn)"], answered: ["Answered", "var(--good)"], closed: ["Closed", "var(--slate)"] }[s] || [s, "var(--slate)"]; return docBadge(m[0], m[1]); }
+  function nextRev(r) { r = String(r || "A"); if (/^[A-Za-z]$/.test(r)) return String.fromCharCode(r.toUpperCase().charCodeAt(0) + 1); var n = parseInt(r, 10); return isNaN(n) ? r + "'" : (n + 1) + ""; }
+  async function nextDocNumber(table, prefix) {
+    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from(table).select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+  function isOverdue(dateStr) { var d = parseD(dateStr); var t0 = new Date(); t0.setHours(0, 0, 0, 0); return d && d < t0; }
+
+  function cfgSubmittals() {
+    return {
+      title: "Submittals", pageSize: 80,
+      fetch: function () { return sb.from("submittals").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.number || "") + " " + (s.title || "") + " " + (s.consultant || "") + " " + (s.projects ? s.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
+        { label: "Title", get: function (s) { return esc(s.title); } },
+        { label: "Type", get: function (s) { return subTypeLabel(s.doc_type); } },
+        { label: "Rev", get: function (s) { return esc(s.revision || ""); } },
+        { label: "Project", get: function (s) { return esc(s.projects ? s.projects.name : ""); } },
+        { label: "Consultant", get: function (s) { return esc(s.consultant || ""); } },
+        { label: "Status", get: function (s) { return subStatusBadge(s.status) + (isOverdue(s.due_date) && ["approved", "approved_comments", "superseded"].indexOf(s.status) < 0 ? ' <span class="ob-flag">overdue</span>' : ''); } }
+      ],
+      filters: [
+        { label: "Open", test: function (s) { return ["approved", "superseded", "rejected"].indexOf(s.status) < 0; } },
+        { label: "Approved", test: function (s) { return s.status === "approved" || s.status === "approved_comments"; } },
+        { label: "Rejected", test: function (s) { return s.status === "rejected"; } },
+        { label: "Overdue", test: function (s) { return isOverdue(s.due_date) && ["approved", "approved_comments", "superseded"].indexOf(s.status) < 0; } }
+      ],
+      groupBy: [{ label: "Project", get: function (s) { return s.projects ? s.projects.name : "None"; } }, { label: "Type", get: function (s) { return subTypeLabel(s.doc_type); } }, { label: "Status", get: function (s) { return s.status; } }],
+      onOpen: function (s) { renderSubmittalForm(s.id); }, onNew: function () { renderSubmittalForm("new"); }
+    };
+  }
+  async function renderSubmittalForm(id) {
+    var parent = { action: "doc.subs", title: "Submittals" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var s = id === "new" ? { status: "draft", revision: "A", doc_type: "shop_drawing" } : (await sb.from("submittals").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || s.title || "Submittal");
+    var st = s.status || "draft", terminal = st === "superseded", dis = terminal ? " disabled" : "";
+    var btns = terminal ? "" : '<button class="pri" id="sm-save">Save</button><button id="sm-discard">Discard</button>';
+    if (id !== "new") {
+      if (st === "draft") btns += '<button id="sm-submit">Submit to consultant</button>';
+      if (st === "submitted") btns += '<button id="sm-approve">Approve</button><button id="sm-approvec">Approve w/ comments</button><button id="sm-reject">Reject</button>';
+      if (["approved", "approved_comments", "rejected"].indexOf(st) >= 0) btns += '<button id="sm-rev">New revision</button>';
+    }
+    var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "submitted" ? "on" : (["approved", "approved_comments", "rejected", "superseded"].indexOf(st) >= 0 ? "done" : "")) + '">Submitted</span><span class="st ' + (["approved", "approved_comments"].indexOf(st) >= 0 ? "on" : "") + '">' + (st === "rejected" ? "Rejected" : "Approved") + '</span></div>';
+    var typeOpts = SUBMITTAL_TYPES.map(function (x) { return '<option value="' + x[0] + '"' + (s.doc_type === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="sm-title" value="' + esc(s.title || "") + '" placeholder="Submittal title"' + dis + '></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", '<select id="sm-proj"' + dis + '>' + projOpts + '</select>', "Which project this document belongs to.") +
+      fld("Type", '<select id="sm-type"' + dis + '>' + typeOpts + '</select>', "Shop drawing, material approval, sample, etc.") +
+      fld("Revision", '<input id="sm-rev-in" value="' + esc(s.revision || "A") + '"' + dis + '>', "Revision letter/number of this document.") +
+      fld("Reference", '<input id="sm-ref" value="' + esc(s.ref || "") + '"' + dis + '>', "Your drawing/document reference number.") +
+      '</div><div>' +
+      fld("Consultant", '<input id="sm-cons" value="' + esc(s.consultant || "") + '"' + dis + ' placeholder="Reviewing consultant">', "Who reviews and approves it.") +
+      fld("Due date", '<input id="sm-due" type="date" value="' + (s.due_date || "") + '"' + dis + '>', "When you need the response by.") +
+      fld("Submitted", '<span class="v">' + esc(s.submitted_date || "-") + '</span>') +
+      fld("Response", '<span class="v">' + esc(s.response_date || "-") + '</span>') +
+      '</div></div>' +
+      fld("Notes", '<textarea id="sm-notes" rows="2"' + dis + '>' + esc(s.notes || "") + '</textarea>') +
+      '</div>';
+    var db = document.getElementById("sm-discard"); if (db) db.onclick = function () { go("doc.subs"); };
+    async function persist(extra) {
+      var row = Object.assign({ title: gv("sm-title") || "Submittal", project_id: (document.getElementById("sm-proj") || {}).value || null, doc_type: (document.getElementById("sm-type") || {}).value || "shop_drawing", revision: gv("sm-rev-in") || "A", ref: gv("sm-ref"), consultant: gv("sm-cons"), due_date: gv("sm-due") || null, notes: (document.getElementById("sm-notes") || {}).value || "" }, extra || {});
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("submittals", "SUB"); var ins = await sb.from("submittals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("submittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    function wire(bid, extra, msg) { var b = document.getElementById(bid); if (b) b.onclick = async function () { var sid = await persist(extra); if (sid) { toast(msg); renderSubmittalForm(sid); } }; }
+    var sv = document.getElementById("sm-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSubmittalForm(sid); } };
+    wire("sm-submit", { status: "submitted", submitted_date: today() }, "Submitted");
+    wire("sm-approve", { status: "approved", response_date: today() }, "Approved");
+    wire("sm-approvec", { status: "approved_comments", response_date: today() }, "Approved with comments");
+    wire("sm-reject", { status: "rejected", response_date: today() }, "Rejected");
+    var rv = document.getElementById("sm-rev"); if (rv) rv.onclick = async function () {
+      await persist({ status: "superseded" });
+      var copy = { company_id: S.company.id, project_id: (document.getElementById("sm-proj") || {}).value || null, title: gv("sm-title") || "Submittal", doc_type: (document.getElementById("sm-type") || {}).value, revision: nextRev(gv("sm-rev-in")), ref: gv("sm-ref"), consultant: gv("sm-cons"), status: "draft", number: await nextDocNumber("submittals", "SUB") };
+      var ins = await sb.from("submittals").insert(copy).select("id").single(); if (ins.error) { toast(ins.error.message); return; }
+      toast("New revision " + copy.revision + " created"); renderSubmittalForm(ins.data.id);
+    };
+  }
+
+  function cfgRfis() {
+    return {
+      title: "RFIs", pageSize: 80,
+      fetch: function () { return sb.from("rfis").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.number || "") + " " + (r.subject || "") + " " + (r.discipline || "") + " " + (r.projects ? r.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (r) { return '<b>' + esc(r.number || "/") + '</b>'; } },
+        { label: "Subject", get: function (r) { return esc(r.subject); } },
+        { label: "Project", get: function (r) { return esc(r.projects ? r.projects.name : ""); } },
+        { label: "Discipline", get: function (r) { return esc(r.discipline || ""); } },
+        { label: "Needed by", get: function (r) { return '<span class="muted">' + esc(r.needed_by || "") + '</span>'; } },
+        { label: "Status", get: function (r) { return rfiStatusBadge(r.status) + (r.status === "open" && isOverdue(r.needed_by) ? ' <span class="ob-flag">overdue</span>' : ''); } }
+      ],
+      filters: [
+        { label: "Open", test: function (r) { return r.status === "open"; } },
+        { label: "Answered", test: function (r) { return r.status === "answered"; } },
+        { label: "Closed", test: function (r) { return r.status === "closed"; } },
+        { label: "Overdue", test: function (r) { return r.status === "open" && isOverdue(r.needed_by); } }
+      ],
+      groupBy: [{ label: "Project", get: function (r) { return r.projects ? r.projects.name : "None"; } }, { label: "Status", get: function (r) { return r.status; } }, { label: "Discipline", get: function (r) { return r.discipline || "None"; } }],
+      onOpen: function (r) { renderRfiForm(r.id); }, onNew: function () { renderRfiForm("new"); }
+    };
+  }
+  async function renderRfiForm(id) {
+    var parent = { action: "doc.rfis", title: "RFIs" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var r = id === "new" ? { status: "open", raised_date: today() } : (await sb.from("rfis").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.number || r.subject || "RFI");
+    var st = r.status || "open";
+    var btns = '<button class="pri" id="rf-save">Save</button><button id="rf-discard">Discard</button>';
+    if (id !== "new" && st === "open") btns += '<button id="rf-answer">Mark answered</button>';
+    if (id !== "new" && st === "answered") btns += '<button id="rf-close">Close</button><button id="rf-reopen">Reopen</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (st === "open" ? "on" : "done") + '">Open</span><span class="st ' + (st === "answered" ? "on" : (st === "closed" ? "done" : "")) + '">Answered</span><span class="st ' + (st === "closed" ? "on" : "") + '">Closed</span></div>';
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (r.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="rf-subj" value="' + esc(r.subject || "") + '" placeholder="RFI subject"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", '<select id="rf-proj">' + projOpts + '</select>', "Which project this query is about.") +
+      fld("Discipline", '<input id="rf-disc" value="' + esc(r.discipline || "") + '" placeholder="e.g. Structural, Facade">', "Trade or discipline the query concerns.") +
+      '</div><div>' +
+      fld("Raised date", '<input id="rf-raised" type="date" value="' + (r.raised_date || today()) + '">', "When the query was raised.") +
+      fld("Needed by", '<input id="rf-needed" type="date" value="' + (r.needed_by || "") + '">', "Date an answer is required to avoid delay.") +
+      '</div></div>' +
+      fld("Question", '<textarea id="rf-q" rows="3" placeholder="What needs clarifying?">' + esc(r.question || "") + '</textarea>') +
+      fld("Answer", '<textarea id="rf-a" rows="3" placeholder="Consultant response">' + esc(r.answer || "") + '</textarea>') +
+      (r.answered_date ? '<div class="sub">Answered ' + esc(r.answered_date) + '</div>' : '') +
+      '</div>';
+    document.getElementById("rf-discard").onclick = function () { go("doc.rfis"); };
+    async function persist(extra) {
+      var row = Object.assign({ subject: gv("rf-subj") || "RFI", project_id: (document.getElementById("rf-proj") || {}).value || null, discipline: gv("rf-disc"), raised_date: gv("rf-raised") || null, needed_by: gv("rf-needed") || null, question: (document.getElementById("rf-q") || {}).value || "", answer: (document.getElementById("rf-a") || {}).value || "" }, extra || {});
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.status = "open"; row.number = await nextDocNumber("rfis", "RFI"); var ins = await sb.from("rfis").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("rfis").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    document.getElementById("rf-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderRfiForm(sid); } };
+    var an = document.getElementById("rf-answer"); if (an) an.onclick = async function () { if (!((document.getElementById("rf-a") || {}).value || "").trim()) { toast("Enter the answer first"); return; } var sid = await persist({ status: "answered", answered_date: today() }); if (sid) { toast("Marked answered"); renderRfiForm(sid); } };
+    var cl = document.getElementById("rf-close"); if (cl) cl.onclick = async function () { var sid = await persist({ status: "closed" }); if (sid) { toast("Closed"); renderRfiForm(sid); } };
+    var ro = document.getElementById("rf-reopen"); if (ro) ro.onclick = async function () { var sid = await persist({ status: "open" }); if (sid) { toast("Reopened"); renderRfiForm(sid); } };
+  }
+
+  function cfgTransmittals() {
+    return {
+      title: "Transmittals", pageSize: 80,
+      fetch: function () { return sb.from("transmittals").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.number || "") + " " + (t.to_party || "") + " " + (t.purpose || "") + " " + (t.projects ? t.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (t) { return '<b>' + esc(t.number || "/") + '</b>'; } },
+        { label: "To", get: function (t) { return esc(t.to_party || ""); } },
+        { label: "Project", get: function (t) { return esc(t.projects ? t.projects.name : ""); } },
+        { label: "Purpose", get: function (t) { return esc(t.purpose || ""); } },
+        { label: "Date", get: function (t) { return '<span class="muted">' + esc(t.transmittal_date || "") + '</span>'; } }
+      ],
+      groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }],
+      onOpen: function (t) { renderTransmittalForm(t.id); }, onNew: function () { renderTransmittalForm("new"); }
+    };
+  }
+  async function renderTransmittalForm(id) {
+    var parent = { action: "doc.trans", title: "Transmittals" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? { transmittal_date: today() } : (await sb.from("transmittals").select("*, projects(name)").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var items = id === "new" ? [] : (await sb.from("transmittal_items").select("*").eq("transmittal_id", id).order("sequence")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || "Transmittal");
+    function rowHtml(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Document"></td><td><input class="ti-ref" value="' + esc(it.doc_ref || "") + '" placeholder="Ref"></td><td><input class="ti-rev" value="' + esc(it.revision || "") + '" placeholder="Rev" style="width:60px"></td><td><input class="ti-cop" type="number" value="' + (it.copies || 1) + '" style="width:70px"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var btns = '<button class="pri" id="tr-save">Save</button><button id="tr-discard">Discard</button>' + (id !== "new" ? '<button id="tr-print">Print</button>' : '');
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="tr-to" value="' + esc(t.to_party || "") + '" placeholder="Recipient (consultant / client)"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", '<select id="tr-proj">' + projOpts + '</select>', "Which project these documents relate to.") +
+      fld("Purpose", '<input id="tr-purpose" value="' + esc(t.purpose || "") + '" placeholder="e.g. For approval, For construction">', "Why you are sending them.") +
+      '</div><div>' +
+      fld("Date", '<input id="tr-date" type="date" value="' + (t.transmittal_date || today()) + '">', "Date of transmittal.") +
+      fld("Notes", '<input id="tr-notes" value="' + esc(t.notes || "") + '">', "Any covering note.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Documents transmitted</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Document</th><th>Ref</th><th>Rev</th><th>Copies</th><th></th></tr></thead><tbody id="tr-lines">' + (items.length ? items.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="tr-add" class="o-addln">+ Add document</button></div></div>' +
+      '</div>';
+    document.getElementById("tr-discard").onclick = function () { go("doc.trans"); };
+    function wireDel() { document.querySelectorAll("#tr-lines .ti-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("tr-add").onclick = function () { var tb = document.getElementById("tr-lines"); tb.insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
+    function readItems() { return [].map.call(document.querySelectorAll("#tr-lines tr"), function (tr, i) { return { description: (tr.querySelector(".ti-desc") || {}).value || "", doc_ref: (tr.querySelector(".ti-ref") || {}).value || "", revision: (tr.querySelector(".ti-rev") || {}).value || "", copies: parseInt((tr.querySelector(".ti-cop") || {}).value, 10) || 1, sequence: (i + 1) * 10 }; }).filter(function (it) { return it.description.trim(); }); }
+    async function persist() {
+      var row = { to_party: gv("tr-to"), project_id: (document.getElementById("tr-proj") || {}).value || null, purpose: gv("tr-purpose"), transmittal_date: gv("tr-date") || null, notes: gv("tr-notes") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.number = await nextDocNumber("transmittals", "TR"); var ins = await sb.from("transmittals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("transmittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      await sb.from("transmittal_items").delete().eq("transmittal_id", sid);
+      var its = readItems().map(function (it) { it.company_id = S.company.id; it.transmittal_id = sid; return it; });
+      if (its.length) { var ir = await sb.from("transmittal_items").insert(its); if (ir.error) { toast(ir.error.message); return null; } }
+      return sid;
+    }
+    document.getElementById("tr-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderTransmittalForm(sid); } };
+    var pr = document.getElementById("tr-print"); if (pr) pr.onclick = function () { printTransmittal(t, readItems(), (t.projects ? t.projects.name : "")); };
+  }
+  function printTransmittal(t, items, projName) {
+    var co = S.company;
+    var body = items.map(function (it, i) { return '<tr><td>' + (i + 1) + '</td><td>' + esc(it.description) + '</td><td>' + esc(it.doc_ref || "") + '</td><td>' + esc(it.revision || "") + '</td><td class="r">' + (it.copies || 1) + '</td></tr>'; }).join("");
+    var html = '<div class="pinv">' +
+      '<div class="phead"><div class="pfrom"><div class="pname">' + esc(co.name) + '</div><div class="pmuted">' + esc(co.legal_name || "") + (co.country ? "<br>" + esc(co.country) : "") + '</div></div>' +
+      '<div class="pdoc"><div class="pdt">Transmittal</div><div class="pnum">' + esc(t.number || "Draft") + '</div></div></div>' +
+      '<div class="pmeta"><div><div class="pl">To</div><div class="pv">' + esc(t.to_party || "") + '</div>' + (projName ? '<div class="pl" style="margin-top:8px">Project</div><div class="pv">' + esc(projName) + '</div>' : '') + '</div>' +
+      '<div><div class="pl">Date</div><div class="pv">' + esc(t.transmittal_date || "") + '</div><div class="pl" style="margin-top:8px">Purpose</div><div class="pv">' + esc(t.purpose || "") + '</div></div></div>' +
+      '<table class="ptab"><thead><tr><th>#</th><th>Document</th><th>Ref</th><th>Rev</th><th class="r">Copies</th></tr></thead><tbody>' + (body || '<tr><td colspan="5">No documents listed</td></tr>') + '</tbody></table>' +
+      (t.notes ? '<div class="pmuted" style="margin-top:12px">' + esc(t.notes) + '</div>' : '') +
+      '<div class="pfoot">' + esc(co.name) + ' &middot; Generated by Orbit</div></div>';
+    var wrap = document.createElement("div"); wrap.className = "o-print"; wrap.innerHTML = html;
+    document.body.appendChild(wrap); document.body.classList.add("printing"); window.print();
+    setTimeout(function () { document.body.classList.remove("printing"); wrap.remove(); }, 400);
+  }
+
+  // ============================ EXECUTIVE COCKPIT (group-wide) ============================
+  async function renderCockpit() {
+    var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cockpit") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading group cockpit...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var coIds = S.companies.map(function (c) { return c.id; });
+    var rates = (await sb.from("currency_rates").select("code,rate,rate_date").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
+    var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
+    var factorByCo = {}, missing = {}; S.companies.forEach(function (c) { var f = c.currency_code === ref ? 1 : rateMap[c.currency_code]; if (f === undefined) { missing[c.currency_code] = 1; f = 1; } factorByCo[c.id] = f; });
+    var fx = function (coId, v) { return Number(v || 0) * (factorByCo[coId] || 1); };
+    var projs = (await sb.from("projects").select("id,name,contract_value,company_id").in("company_id", coIds).eq("is_active", true)).data || [];
+    var certs = (await sb.from("project_certificates").select("project_id,current_certified,state,company_id").in("company_id", coIds)).data || [];
+    var buds = (await sb.from("project_budgets").select("project_id,amount,company_id").in("company_id", coIds)).data || [];
+    var billLines = (await sb.from("invoice_lines").select("price_subtotal, invoices!inner(project_id,move_type,state,company_id)").in("invoices.company_id", coIds).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
+    var issues = (await sb.from("stock_moves").select("quantity,project_id,company_id,products(cost_price)").in("company_id", coIds).not("project_id", "is", null)).data || [];
+    var labour = (await sb.from("install_jobs").select("project_id,labour_cost,company_id").in("company_id", coIds).not("project_id", "is", null)).data || [];
+    var overdue = (await sb.from("invoices").select("amount_residual,due_date,company_id").in("company_id", coIds).eq("state", "posted").eq("move_type", "out_invoice").gt("amount_residual", 0.005)).data || [];
+    var tenders = (await sb.from("tenders").select("status,company_id").in("company_id", coIds)).data || [];
+    var contracts = (await sb.from("hr_contracts").select("wage,company_id").in("company_id", coIds).eq("state", "running")).data || [];
+    var projById = {}; projs.forEach(function (p) { projById[p.id] = { p: p, cert: 0, bud: 0, act: 0 }; });
+    certs.forEach(function (c) { if (c.state !== "draft" && projById[c.project_id]) projById[c.project_id].cert += fx(c.company_id, c.current_certified); });
+    buds.forEach(function (b) { if (projById[b.project_id]) projById[b.project_id].bud += fx(b.company_id, b.amount); });
+    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (pid && projById[pid]) projById[pid].act += fx(l.invoices.company_id, l.price_subtotal); });
+    issues.forEach(function (m) { if (projById[m.project_id]) projById[m.project_id].act += fx(m.company_id, Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)); });
+    labour.forEach(function (l) { if (projById[l.project_id]) projById[l.project_id].act += fx(l.company_id, l.labour_cost); });
+    var backlog = 0, overBudget = [], marginRisk = [], byCo = {};
+    S.companies.forEach(function (c) { byCo[c.id] = { name: c.name, cur: c.currency_code, active: 0, over: 0, risk: 0, cash: 0, backlog: 0 }; });
+    Object.keys(projById).forEach(function (k) {
+      var o = projById[k], contract = fx(o.p.company_id, o.p.contract_value), bl = Math.max(0, contract - o.cert); backlog += bl;
+      var co = byCo[o.p.company_id]; co.active++; co.backlog += bl;
+      if (o.bud > 0 && o.act > o.bud + 0.005) { overBudget.push(o.p.name); co.over++; }
+      if (o.cert > 0 && (o.cert - o.act) < 0) { marginRisk.push(o.p.name); co.risk++; }
+    });
+    var t0 = new Date(); t0.setHours(0, 0, 0, 0);
+    var overdueTot = 0; overdue.forEach(function (d) { var pd = parseD(d.due_date); if (pd && pd < t0) overdueTot += fx(d.company_id, d.amount_residual); });
+    var payroll = 0; contracts.forEach(function (c) { payroll += fx(c.company_id, c.wage); });
+    var tOpen = 0, tWon = 0, tLost = 0; tenders.forEach(function (t) { if (t.status === "draft" || t.status === "submitted") tOpen++; else if (t.status === "won") tWon++; else if (t.status === "lost") tLost++; });
+    var winRate = (tWon + tLost) > 0 ? Math.round(tWon / (tWon + tLost) * 100) : 0;
+    var cashTot = 0;
+    for (var i = 0; i < S.companies.length; i++) { var c = S.companies[i]; var tb = (await sb.rpc("trial_balance", { p_company: c.id })).data || []; var csh = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) csh += Number(r.balance || 0); }); byCo[c.id].cash = fx(c.id, csh); cashTot += byCo[c.id].cash; }
+    var card = function (l, v, sub, go2, col) { return '<div class="cp-card"' + (go2 ? ' data-go="' + go2 + '" style="cursor:pointer"' : '') + '><div class="l">' + l + '</div><div class="n"' + (col ? ' style="color:' + col + '"' : '') + '>' + v + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
+    var mny = function (v) { return ref + ' ' + money(v); };
+    var missKeys = Object.keys(missing);
+    var coRows = S.companies.map(function (c) { var b = byCo[c.id]; return '<tr><td>' + esc(b.name) + '</td><td class="muted">' + esc(b.cur) + '</td><td class="num">' + money(b.backlog) + '</td><td class="num">' + money(b.cash) + '</td><td class="num">' + b.active + '</td><td class="num"' + (b.over ? ' style="color:var(--bad)"' : '') + '>' + b.over + '</td><td class="num"' + (b.risk ? ' style="color:var(--warn)"' : '') + '>' + b.risk + '</td></tr>'; }).join("");
+    document.getElementById("rep").innerHTML =
+      '<h1>Executive Cockpit</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; group-wide &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' +
+      (missKeys.length ? '<div class="ob-banner warn">No exchange rate for <b>' + esc(missKeys.join(", ")) + '</b> - those entities counted 1:1. Add a rate in Exchange Rates for accurate group figures.</div>' : '') +
+      '<div class="cp-grid">' +
+        card("Signed backlog", mny(backlog), "contract value not yet certified", "proj.pnl") +
+        card("Cash position", mny(cashTot), "bank + cash, all entities", null, cashTot < 0 ? 'var(--bad)' : '') +
+        card("Overdue receivables", mny(overdueTot), "past due, chase these", "rep.collections", overdueTot > 0 ? 'var(--bad)' : 'var(--good)') +
+        card("Monthly payroll", mny(payroll), "running contracts", "hr.runs") +
+        card("Open tenders", tOpen, "in the pipeline", "est.list") +
+        card("Tender win rate", winRate + '%', tWon + " won / " + tLost + " lost", "est.list") +
+      '</div>' +
+      (overBudget.length || marginRisk.length ? '<div class="ob-banner" style="margin-top:14px">' + (overBudget.length ? '! Over budget: <b>' + overBudget.map(esc).join(", ") + '</b>' : '') + (overBudget.length && marginRisk.length ? ' &nbsp;|&nbsp; ' : '') + (marginRisk.length ? 'Margin at risk: <b>' + marginRisk.map(esc).join(", ") + '</b>' : '') + '</div>' : '<div class="ob-banner" style="background:var(--good-s);border-color:var(--good);color:var(--good);margin-top:14px">All active projects within budget.</div>') +
+      '<h3 style="font-size:14px;margin:20px 0 6px">By entity</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Backlog</td><td class="num">Cash</td><td class="num">Active</td><td class="num">Over budget</td><td class="num">Margin risk</td></tr></thead><tbody>' + coRows + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:8px">Backlog = signed contract value minus certified to date. Over budget = actual cost above the cost budget. Margin at risk = certified revenue below actual cost. Figures translated to ' + esc(ref) + ' at your exchange rates.</div>';
+    document.querySelectorAll(".cp-card[data-go]").forEach(function (el) { el.onclick = function () { go(el.dataset.go); }; });
   }
 
   // ============================ BANK STATEMENTS + RECONCILIATION ============================
