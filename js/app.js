@@ -1238,16 +1238,20 @@
     var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
     var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
     var inv = await ensureInventory();
-    var got = 0;
+    var got = 0, receivedAny = false;
     for (var i = 0; i < lines.length; i++) {
       var l = lines[i];
-      if (l.id) await sb.from("purchase_order_lines").update({ qty_received: Number(l.quantity || 0) }).eq("id", l.id);
+      var ord = Number(l.quantity || 0), already = Number(l.qty_received || 0);
+      if (already >= ord - 0.001) continue;                 // already received - don't double-receive
+      var toRecv = ord - already; receivedAny = true;
+      if (l.id) await sb.from("purchase_order_lines").update({ qty_received: ord }).eq("id", l.id);
       var pr = l.product_id ? prodBy[l.product_id] : null;
       if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
-        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: Number(l.quantity || 0), location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
-        if (!r.error) { await postStockValue("receive", pr, Number(l.quantity || 0), r.data && r.data.id); got++; }
+        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: toRecv, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+        if (!r.error) { await postStockValue("receive", pr, toRecv, r.data && r.data.id); got++; }
       }
     }
+    if (!receivedAny) { toast("Already fully received"); return; }
     toast(got ? ("Goods received - " + got + " stock item(s) added to inventory") : "Goods received"); renderOrderForm(order.id, "purchase");
   }
   async function nextOrderNumber(kind) {
@@ -3794,6 +3798,8 @@
       // book the retention held by the client as a receivable (revenue recognised on gross work)
       var prevRet = prevCert ? Number(prevCert.retention_amount || 0) : 0;
       await postRetentionEntry("4110", "7000", Number(cert.retention_amount || 0) - prevRet, "Retention receivable " + (cert.number || "") + " - " + (proj.name || ""), ins.data.id);
+      // advance recovered this period: clear the customer-advance liability and recognise that revenue (Dr 4190 / Cr 7000)
+      await postRetentionEntry("4190", "7000", Number(cert.advance_recovery || 0), "Advance recovery " + (cert.number || "") + " - " + (proj.name || ""), ins.data.id, "advance");
       await sb.from("project_certificates").update({ state: "invoiced", invoice_id: ins.data.id }).eq("id", cert.id);
       toast("Draft invoice created"); renderInvoiceForm(ins.data.id, "out_invoice");
     };
@@ -3811,14 +3817,14 @@
     // ACTUAL cost = posted project-tagged vendor bills (line subtotals) + materials issued to the project (qty x cost)
     var billLines = (await sb.from("invoice_lines").select("price_subtotal, invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
     var issues = (await sb.from("stock_moves").select("quantity,project_id,products(cost_price)").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
-    // COMMITTED = open purchase orders (draft/sent/purchase) tagged to the project
-    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal, purchase_orders!inner(project_id,state,company_id)").eq("purchase_orders.company_id", S.company.id).not("purchase_orders.project_id", "is", null).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    // COMMITTED = open purchase orders (draft/sent/purchase) tagged to the project, NET of what's already billed
+    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(project_id,state,company_id)").eq("purchase_orders.company_id", S.company.id).not("purchase_orders.project_id", "is", null).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
     var certBy = {}, budBy = {}, actBy = {}, comBy = {};
     certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
     budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); });
     billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (pid) actBy[pid] = (actBy[pid] || 0) + Number(l.price_subtotal || 0); });
     issues.forEach(function (m) { actBy[m.project_id] = (actBy[m.project_id] || 0) + Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); });
-    poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (pid) comBy[pid] = (comBy[pid] || 0) + Number(l.price_subtotal || 0); });
+    poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (!pid) return; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; comBy[pid] = (comBy[pid] || 0) + Number(l.price_subtotal || 0) * frac; });
     var tc = 0, tcert = 0, tbud = 0, tact = 0, tcom = 0;
     var rows = projs.map(function (p) {
       var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, act = actBy[p.id] || 0, com = comBy[p.id] || 0;
@@ -3849,20 +3855,23 @@
     var budgets = (await sb.from("project_budgets").select("category,description,amount").eq("project_id", projectId).order("id")).data || [];
     var bills = (await sb.from("invoices").select("number,invoice_date,amount_untaxed, partners(name)").eq("company_id", S.company.id).eq("move_type", "in_invoice").eq("state", "posted").eq("project_id", projectId).order("invoice_date")).data || [];
     var issues = (await sb.from("stock_moves").select("quantity,date, products(name,cost_price)").eq("company_id", S.company.id).eq("project_id", projectId).order("date")).data || [];
-    var pos = (await sb.from("purchase_orders").select("number,amount_untaxed,state").eq("company_id", S.company.id).eq("project_id", projectId).in("state", ["draft", "sent", "purchase"]).order("date_order")).data || [];
+    var poLinesD = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,number,state,project_id,company_id)").eq("purchase_orders.company_id", S.company.id).eq("purchase_orders.project_id", projectId).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    var poNet = {};
+    poLinesD.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; if (!poNet[po.id]) poNet[po.id] = { number: po.number, state: po.state, amt: 0 }; poNet[po.id].amt += Number(l.price_subtotal || 0) * frac; });
+    var pos = Object.keys(poNet).map(function (k) { return poNet[k]; }).filter(function (p) { return p.amt > 0.005; });
     var cv = Number(proj.contract_value) || 0;
     var certified = certs.filter(function (c) { return c.state !== "draft"; }).reduce(function (s, c) { return s + Number(c.current_certified || 0); }, 0);
     var budTot = budgets.reduce(function (s, b) { return s + Number(b.amount || 0); }, 0);
     var billTot = bills.reduce(function (s, b) { return s + Number(b.amount_untaxed || 0); }, 0);
     var issTot = issues.reduce(function (s, m) { return s + Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); }, 0);
     var actTot = billTot + issTot;
-    var comTot = pos.reduce(function (s, p) { return s + Number(p.amount_untaxed || 0); }, 0);
+    var comTot = pos.reduce(function (s, p) { return s + Number(p.amt || 0); }, 0);
     var margin = certified - actTot;
     function kpi2(l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; }
     var billRows = bills.map(function (b) { return '<tr><td>' + esc(b.number || "") + '</td><td>' + esc(b.partners ? b.partners.name : "") + '</td><td class="muted">' + esc(b.invoice_date || "") + '</td><td class="num">' + money(b.amount_untaxed) + '</td></tr>'; }).join("");
     var issRows = issues.map(function (m) { return '<tr><td>' + esc(m.products ? m.products.name : "") + '</td><td class="muted">' + esc((m.date || "").slice(0, 10)) + '</td><td class="num">' + Number(m.quantity) + '</td><td class="num">' + money(Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)) + '</td></tr>'; }).join("");
     var budRows = budgets.map(function (b) { return '<tr><td>' + esc(b.category || "") + '</td><td>' + esc(b.description || "") + '</td><td class="num">' + money(b.amount) + '</td></tr>'; }).join("");
-    var poRows = pos.map(function (p) { return '<tr><td>' + esc(p.number || "") + '</td><td class="muted">' + esc(p.state) + '</td><td class="num">' + money(p.amount_untaxed) + '</td></tr>'; }).join("");
+    var poRows = pos.map(function (p) { return '<tr><td>' + esc(p.number || "") + '</td><td class="muted">' + esc(p.state) + '</td><td class="num">' + money(p.amt) + '</td></tr>'; }).join("");
     document.getElementById("rep").innerHTML = '<h1>' + esc(proj.name || "Project") + ' &middot; cost detail</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + '</div>' +
       '<div class="kpis" style="margin:14px 0 4px">' + kpi2("Contract", cv) + kpi2("Certified", certified) + kpi2("Budget cost", budTot) + kpi2("Actual cost", actTot) + kpi2("Committed", comTot) + kpi2("Margin (cert - actual)", margin) + '</div>' +
       '<h3 style="font-size:14px;margin:18px 0 6px">Cost budget</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td>Description</td><td class="num">Budget</td></tr></thead><tbody>' + (budRows || '<tr><td colspan="3" class="muted">No budget lines.</td></tr>') + '<tr class="tot"><td>Total budget</td><td></td><td class="num">' + money(budTot) + '</td></tr></tbody></table></div>' +
@@ -3873,14 +3882,14 @@
 
   // Book retention as a real GL balance: a separate balanced entry (positive dr/cr, no negative lines
   // so it passes the journal_lines non-negative check). Client: Dr 4110 / Cr 7000. Sub: Dr 6100 / Cr 4010.
-  async function postRetentionEntry(drCode, crCode, amount, narration, invId) {
+  async function postRetentionEntry(drCode, crCode, amount, narration, invId, sourceType) {
     if (!(Number(amount) > 0.005)) return;
     var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", [drCode, crCode])).data || [];
     var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
     if (!by[drCode] || !by[crCode]) return;
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     if (!jr) return;
-    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: today(), ref: "", narration: narration, currency_code: S.company.currency_code, state: "draft", source_type: "retention", source_id: invId ? String(invId) : "" }).select("id").single();
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: today(), ref: "", narration: narration, currency_code: S.company.currency_code, state: "draft", source_type: sourceType || "retention", source_id: invId ? String(invId) : "" }).select("id").single();
     if (e.error) return;
     var lr = await sb.from("journal_lines").insert([
       { entry_id: e.data.id, company_id: S.company.id, account_id: by[drCode], label: narration, debit: Number(amount), credit: 0 },
