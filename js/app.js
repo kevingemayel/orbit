@@ -118,6 +118,13 @@
         { label: "Products", action: "products" }
       ]
     },
+    installation: {
+      name: "Installation", icon: "⛑", color: "#ea580c", color2: "#c2410c", home: "inst.jobs",
+      menus: [
+        { label: "Install Jobs", action: "inst.jobs" },
+        { label: "Projects", action: "proj.list" }
+      ]
+    },
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
@@ -146,7 +153,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "installation",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -168,6 +175,7 @@
     settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
     estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
     manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -352,6 +360,7 @@
       case "est.list": return renderList(cfgTenders());
       case "mfg.wo": return renderList(cfgWorkOrders());
       case "mfg.boms": return renderList(cfgBoms());
+      case "inst.jobs": return renderList(cfgInstallJobs());
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -3845,6 +3854,24 @@
   }
 
   // ---- Project P&L ----
+  // Cost categories: normalise a budget category label and map a GL account code to a category,
+  // so we can compare budget vs actual per category and alert when a category goes over.
+  var COST_CATS = ["Material", "Labour", "Subcontract", "Overhead"];
+  function normCat(c) {
+    c = String(c || "").toLowerCase();
+    if (c.indexOf("labour") >= 0 || c.indexOf("labor") >= 0) return "Labour";
+    if (c.indexOf("subcon") >= 0 || c.indexOf("sub-con") >= 0 || c.indexOf("sub con") >= 0) return "Subcontract";
+    if (c.indexOf("material") >= 0 || c.indexOf("supply") >= 0 || c.indexOf("procure") >= 0) return "Material";
+    return "Overhead";
+  }
+  function catForAccount(code) {
+    code = String(code || "");
+    if (code === "6100") return "Subcontract";
+    if (code === "6400" || code === "4200") return "Labour";
+    if (code === "6000" || code.charAt(0) === "3") return "Material";
+    return "Overhead";
+  }
+
   async function renderProjectPnL() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Project P&L") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
     wireBc();
@@ -3852,33 +3879,40 @@
     var cc = S.company.currency_code;
     var projs = (await sb.from("projects").select("id,name,contract_value").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var certs = (await sb.from("project_certificates").select("project_id,current_certified,state").eq("company_id", S.company.id)).data || [];
-    var budgets = (await sb.from("project_budgets").select("project_id,amount").eq("company_id", S.company.id)).data || [];
-    // ACTUAL cost = posted project-tagged vendor bills (line subtotals) + materials issued to the project (qty x cost)
-    var billLines = (await sb.from("invoice_lines").select("price_subtotal, invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
+    var budgets = (await sb.from("project_budgets").select("project_id,category,amount").eq("company_id", S.company.id)).data || [];
+    // ACTUAL cost = posted project-tagged vendor bill lines (by GL account) + materials issued + site labour
+    var billLines = (await sb.from("invoice_lines").select("price_subtotal, accounts(code), invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
     var issues = (await sb.from("stock_moves").select("quantity,project_id,products(cost_price)").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
+    var labour = (await sb.from("install_jobs").select("project_id,labour_cost").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
     // COMMITTED = open purchase orders (draft/sent/purchase) tagged to the project, NET of what's already billed
     var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(project_id,state,company_id)").eq("purchase_orders.company_id", S.company.id).not("purchase_orders.project_id", "is", null).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
-    var certBy = {}, budBy = {}, actBy = {}, comBy = {};
+    var certBy = {}, budBy = {}, actBy = {}, comBy = {}, catAct = {}, catBud = {};
+    function bump(o, pid, cat, v) { if (!o[pid]) o[pid] = {}; o[pid][cat] = (o[pid][cat] || 0) + v; }
     certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
-    budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); });
-    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (pid) actBy[pid] = (actBy[pid] || 0) + Number(l.price_subtotal || 0); });
-    issues.forEach(function (m) { actBy[m.project_id] = (actBy[m.project_id] || 0) + Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); });
+    budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); bump(catBud, b.project_id, normCat(b.category), Number(b.amount || 0)); });
+    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (!pid) return; var v = Number(l.price_subtotal || 0); actBy[pid] = (actBy[pid] || 0) + v; bump(catAct, pid, catForAccount(l.accounts && l.accounts.code), v); });
+    issues.forEach(function (m) { var v = Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); actBy[m.project_id] = (actBy[m.project_id] || 0) + v; bump(catAct, m.project_id, "Material", v); });
+    labour.forEach(function (l) { var v = Number(l.labour_cost || 0); if (!v || !l.project_id) return; actBy[l.project_id] = (actBy[l.project_id] || 0) + v; bump(catAct, l.project_id, "Labour", v); });
     poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (!pid) return; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; comBy[pid] = (comBy[pid] || 0) + Number(l.price_subtotal || 0) * frac; });
-    var tc = 0, tcert = 0, tbud = 0, tact = 0, tcom = 0;
+    function overCats(pid) { var out = []; COST_CATS.forEach(function (c) { var a = (catAct[pid] || {})[c] || 0, bd = (catBud[pid] || {})[c] || 0; if (a > 0 && a > bd + 0.005) out.push({ cat: c, act: a, bud: bd }); }); return out; }
+    var tc = 0, tcert = 0, tbud = 0, tact = 0, tcom = 0, alerts = [];
     var rows = projs.map(function (p) {
       var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, act = actBy[p.id] || 0, com = comBy[p.id] || 0;
-      var variance = bud - act, margin = cert - act;
+      var variance = bud - act, margin = cert - act, over = overCats(p.id);
+      if (over.length) alerts.push({ name: p.name, over: over });
       tc += cv; tcert += cert; tbud += bud; tact += act; tcom += com;
       var vc = variance < 0 ? ' style="color:var(--bad)"' : '';
-      return '<tr class="pnl-row" data-proj="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num"' + vc + '>' + money(variance) + '</td><td class="num">' + money(margin) + '</td></tr>';
+      var flag = over.length ? ' <span class="ob-flag" title="Over budget: ' + over.map(function (o) { return esc(o.cat); }).join(", ") + '">! over</span>' : '';
+      return '<tr class="pnl-row" data-proj="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + flag + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num"' + vc + '>' + money(variance) + '</td><td class="num">' + money(margin) + '</td></tr>';
     }).join("");
     var tvar = tbud - tact, tmargin = tcert - tact;
-    document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects &middot; click a project for its cost detail</div>' +
+    var banner = alerts.length ? '<div class="ob-banner">! ' + alerts.length + ' project' + (alerts.length > 1 ? "s" : "") + ' over budget in a category &middot; ' + alerts.map(function (a) { return '<b>' + esc(a.name) + '</b> (' + a.over.map(function (o) { return esc(o.cat) + " +" + cc + " " + money(o.act - o.bud); }).join(", ") + ')'; }).join(" &nbsp;|&nbsp; ") + '</div>' : '';
+    document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects &middot; click a project for its cost detail</div>' + banner +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Contract</td><td class="num">Certified</td><td class="num">Budget cost</td><td class="num">Actual cost</td><td class="num">Committed</td><td class="num">Cost variance</td><td class="num">Margin</td></tr></thead><tbody>' +
       (rows || '<tr><td colspan="8" class="muted">No active projects.</td></tr>') +
       '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num">' + money(tcom) + '</td><td class="num">' + money(tvar) + '</td><td class="num">' + money(tmargin) + '</td></tr>' +
       '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual.</div>';
+      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued + site labour. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual. <b>! over</b> flags a project whose actual cost has passed the budget in a category; click it for the by-category breakdown.</div>';
     document.querySelectorAll(".pnl-row").forEach(function (tr) { tr.onclick = function () { renderProjectCosts(tr.dataset.proj); }; });
   }
 
@@ -3894,6 +3928,8 @@
     var budgets = (await sb.from("project_budgets").select("category,description,amount").eq("project_id", projectId).order("id")).data || [];
     var bills = (await sb.from("invoices").select("number,invoice_date,amount_untaxed, partners(name)").eq("company_id", S.company.id).eq("move_type", "in_invoice").eq("state", "posted").eq("project_id", projectId).order("invoice_date")).data || [];
     var issues = (await sb.from("stock_moves").select("quantity,date, products(name,cost_price)").eq("company_id", S.company.id).eq("project_id", projectId).order("date")).data || [];
+    var billLinesD = (await sb.from("invoice_lines").select("price_subtotal, accounts(code), invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").eq("invoices.project_id", projectId)).data || [];
+    var labourD = (await sb.from("install_jobs").select("number,description,foreman,labour_hours,labour_cost").eq("company_id", S.company.id).eq("project_id", projectId).order("created_at")).data || [];
     var poLinesD = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,number,state,project_id,company_id)").eq("purchase_orders.company_id", S.company.id).eq("purchase_orders.project_id", projectId).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
     var poNet = {};
     poLinesD.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; if (!poNet[po.id]) poNet[po.id] = { number: po.number, state: po.state, amt: 0 }; poNet[po.id].amt += Number(l.price_subtotal || 0) * frac; });
@@ -3903,19 +3939,43 @@
     var budTot = budgets.reduce(function (s, b) { return s + Number(b.amount || 0); }, 0);
     var billTot = bills.reduce(function (s, b) { return s + Number(b.amount_untaxed || 0); }, 0);
     var issTot = issues.reduce(function (s, m) { return s + Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); }, 0);
-    var actTot = billTot + issTot;
+    var labTot = labourD.reduce(function (s, l) { return s + Number(l.labour_cost || 0); }, 0);
+    var actTot = billTot + issTot + labTot;
     var comTot = pos.reduce(function (s, p) { return s + Number(p.amt || 0); }, 0);
     var margin = certified - actTot;
+    // Budget vs actual by category, so an over-budget category jumps out
+    var cAct = {}, cBud = {};
+    function bumpc(o, cat, v) { o[cat] = (o[cat] || 0) + v; }
+    billLinesD.forEach(function (l) { bumpc(cAct, catForAccount(l.accounts && l.accounts.code), Number(l.price_subtotal || 0)); });
+    issues.forEach(function (m) { bumpc(cAct, "Material", Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)); });
+    if (labTot) bumpc(cAct, "Labour", labTot);
+    budgets.forEach(function (b) { bumpc(cBud, normCat(b.category), Number(b.amount || 0)); });
+    var catRows = COST_CATS.map(function (c) {
+      var bud = cBud[c] || 0, act = cAct[c] || 0, v = bud - act;
+      if (bud === 0 && act === 0) return "";
+      var st, cls = "";
+      if (bud === 0 && act > 0.005) { st = '<span class="ob-flag">! no budget</span>'; cls = ' style="background:rgba(244,87,61,.06)"'; }
+      else if (act > bud + 0.005) { st = '<span class="ob-flag">! over by ' + cc + ' ' + money(act - bud) + '</span>'; cls = ' style="background:rgba(244,87,61,.06)"'; }
+      else if (bud > 0 && act >= bud * 0.9) { st = '<span class="ob-flag" style="background:#c98a00">near limit</span>'; }
+      else { st = '<span style="color:var(--good);font-weight:600">ok</span>'; }
+      return '<tr' + cls + '><td>' + c + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num"' + (v < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(v) + '</td><td class="num">' + (bud > 0 ? Math.round(act / bud * 100) + '%' : '-') + '</td><td>' + st + '</td></tr>';
+    }).filter(Boolean).join("");
     function kpi2(l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; }
     var billRows = bills.map(function (b) { return '<tr><td>' + esc(b.number || "") + '</td><td>' + esc(b.partners ? b.partners.name : "") + '</td><td class="muted">' + esc(b.invoice_date || "") + '</td><td class="num">' + money(b.amount_untaxed) + '</td></tr>'; }).join("");
     var issRows = issues.map(function (m) { return '<tr><td>' + esc(m.products ? m.products.name : "") + '</td><td class="muted">' + esc((m.date || "").slice(0, 10)) + '</td><td class="num">' + Number(m.quantity) + '</td><td class="num">' + money(Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)) + '</td></tr>'; }).join("");
     var budRows = budgets.map(function (b) { return '<tr><td>' + esc(b.category || "") + '</td><td>' + esc(b.description || "") + '</td><td class="num">' + money(b.amount) + '</td></tr>'; }).join("");
+    var labRows = labourD.map(function (l) { return '<tr><td>' + esc(l.number || "") + '</td><td>' + esc(l.description || "") + '</td><td class="muted">' + esc(l.foreman || "") + '</td><td class="num">' + Number(l.labour_hours || 0) + '</td><td class="num">' + money(l.labour_cost) + '</td></tr>'; }).join("");
     var poRows = pos.map(function (p) { return '<tr><td>' + esc(p.number || "") + '</td><td class="muted">' + esc(p.state) + '</td><td class="num">' + money(p.amt) + '</td></tr>'; }).join("");
+    var anyOver = COST_CATS.some(function (c) { return (cAct[c] || 0) > (cBud[c] || 0) + 0.005 && (cAct[c] || 0) > 0; });
     document.getElementById("rep").innerHTML = '<h1>' + esc(proj.name || "Project") + ' &middot; cost detail</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + '</div>' +
       '<div class="kpis" style="margin:14px 0 4px">' + kpi2("Contract", cv) + kpi2("Certified", certified) + kpi2("Budget cost", budTot) + kpi2("Actual cost", actTot) + kpi2("Committed", comTot) + kpi2("Margin (cert - actual)", margin) + '</div>' +
+      (anyOver ? '<div class="ob-banner" style="margin:10px 0">! This project is over budget in one or more categories - see the cost control table below.</div>' : '') +
+      '<h3 style="font-size:14px;margin:18px 0 6px">Cost control by category</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td class="num">Budget</td><td class="num">Actual</td><td class="num">Variance</td><td class="num">Used</td><td>Status</td></tr></thead><tbody>' + (catRows || '<tr><td colspan="6" class="muted">No budget or costs yet.</td></tr>') + '<tr class="tot"><td>Total</td><td class="num">' + money(budTot) + '</td><td class="num">' + money(actTot) + '</td><td class="num"' + (budTot - actTot < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(budTot - actTot) + '</td><td class="num">' + (budTot > 0 ? Math.round(actTot / budTot * 100) + '%' : '-') + '</td><td></td></tr></tbody></table></div>' +
+      '<div class="sub" style="margin-top:6px">Actual by category = vendor bills (by GL account: 6000/3xxx Material, 6100 Subcontract, 6400 Labour) + materials issued (Material) + installation labour (Labour). A red row means that category has spent past its budget.</div>' +
       '<h3 style="font-size:14px;margin:18px 0 6px">Cost budget</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td>Description</td><td class="num">Budget</td></tr></thead><tbody>' + (budRows || '<tr><td colspan="3" class="muted">No budget lines.</td></tr>') + '<tr class="tot"><td>Total budget</td><td></td><td class="num">' + money(budTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - vendor bills (posted, tagged to this project)</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Bill</td><td>Vendor</td><td>Date</td><td class="num">Amount</td></tr></thead><tbody>' + (billRows || '<tr><td colspan="4" class="muted">No project bills yet.</td></tr>') + '<tr class="tot"><td>Total bills</td><td></td><td></td><td class="num">' + money(billTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - materials issued to site</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Material</td><td>Date</td><td class="num">Qty</td><td class="num">Cost value</td></tr></thead><tbody>' + (issRows || '<tr><td colspan="4" class="muted">No materials issued yet.</td></tr>') + '<tr class="tot"><td>Total issued</td><td></td><td></td><td class="num">' + money(issTot) + '</td></tr></tbody></table></div>' +
+      (labourD.length ? '<h3 style="font-size:14px;margin:20px 0 6px">Actual - site labour (installation)</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Job</td><td>Description</td><td>Foreman</td><td class="num">Hours</td><td class="num">Cost</td></tr></thead><tbody>' + labRows + '<tr class="tot"><td>Total labour</td><td></td><td></td><td></td><td class="num">' + money(labTot) + '</td></tr></tbody></table></div>' : '') +
       '<h3 style="font-size:14px;margin:20px 0 6px">Committed - open purchase orders</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>PO</td><td>Status</td><td class="num">Amount</td></tr></thead><tbody>' + (poRows || '<tr><td colspan="3" class="muted">No open POs.</td></tr>') + '<tr class="tot"><td>Total committed</td><td></td><td class="num">' + money(comTot) + '</td></tr></tbody></table></div>';
   }
 
@@ -3936,6 +3996,7 @@
     ]);
     if (lr.error) return;
     await sb.rpc("post_entry", { p_entry: e.data.id });
+    return e.data.id;
   }
 
   // ---- Retention report (cash held on both sides) ----
@@ -4553,6 +4614,102 @@
     await sb.from("work_orders").update({ quantity_done: Number(wo.quantity || 0), state: "done" }).eq("id", wo.id);
     toast(consumed ? ("Work order complete - " + consumed + " component(s) consumed" + (wo.project_id ? " to the project" : "")) : "Work order complete (no components)");
     renderWorkOrderForm(wo.id);
+  }
+
+  // ============================ INSTALLATION (site crews) ============================
+  function cfgInstallJobs() {
+    return {
+      title: "Install Jobs", pageSize: 80,
+      fetch: function () { return sb.from("install_jobs").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (j) { return (j.number || "") + " " + (j.description || "") + " " + (j.foreman || "") + " " + (j.projects ? j.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (j) { return '<b>' + esc(j.number || "/") + '</b>'; } },
+        { label: "Job", get: function (j) { return esc(j.description); } },
+        { label: "Project / site", get: function (j) { return esc(j.projects ? j.projects.name : ""); } },
+        { label: "Foreman", get: function (j) { return esc(j.foreman || ""); } },
+        { label: "Progress", get: function (j) { var p = Number(j.planned_qty || 0), d = Number(j.installed_qty || 0); return d + " / " + p + (p ? " (" + Math.round(d / p * 100) + "%)" : ""); } },
+        { label: "Labour cost", num: true, get: function (j) { return money(j.labour_cost); } },
+        { label: "Status", get: function (j) { return j.status === "done" ? '<span class="badge paid">Done</span>' : j.status === "in_progress" ? '<span class="badge partial">In progress</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (j) { return j.status !== "done"; } }, { label: "Done", test: function (j) { return j.status === "done"; } }],
+      groupBy: [{ label: "Project", get: function (j) { return j.projects ? j.projects.name : "None"; } }, { label: "Foreman", get: function (j) { return j.foreman || "None"; } }],
+      onOpen: function (j) { renderInstallJobForm(j.id); }, onNew: function () { renderInstallJobForm("new"); }
+    };
+  }
+  async function nextInstNumber() {
+    var py = "INS/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("install_jobs").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+  async function renderInstallJobForm(id) {
+    var parent = { action: "inst.jobs", title: "Install Jobs" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var j = id === "new" ? { status: "draft", start_date: today() } : (await sb.from("install_jobs").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var logs = id === "new" ? [] : (await sb.from("install_logs").select("*").eq("job_id", id).order("log_date", { ascending: false })).data || [];
+    var done = j.status === "done", cc = S.company.currency_code;
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (j.number || j.description || "Job");
+    var planned = Number(j.planned_qty || 0), installed = Number(j.installed_qty || 0), pct = planned ? Math.round(installed / planned * 100) : 0;
+    var btns = (done ? "" : '<button class="pri" id="ij-save">Save</button><button id="ij-discard">Discard</button>');
+    if (id !== "new" && j.status === "draft") btns += '<button id="ij-start">Start</button>';
+    if (id !== "new" && !done) btns += '<button id="ij-log">Log installation</button><button id="ij-done">Mark done</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (j.status === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (j.status === "in_progress" ? "on" : j.status === "done" ? "done" : "") + '">In progress</span><span class="st ' + (j.status === "done" ? "on" : "") + '">Done</span></div>';
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (j.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var smart = '<div class="o-smart"><button class="sb" style="cursor:default"><span class="v">' + installed + " / " + planned + '</span><span class="k">Installed / planned</span></button><button class="sb" style="cursor:default"><span class="v">' + pct + '%</span><span class="k">Progress</span></button><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(j.labour_cost) + '</span><span class="k">Labour cost</span></button></div>';
+    var logRows = logs.map(function (l) { return '<tr><td class="muted">' + esc(l.log_date || "") + '</td><td class="num">' + Number(l.installed_qty || 0) + '</td><td class="num">' + Number(l.hours || 0) + '</td><td>' + esc(l.note || "") + '</td></tr>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="ij-desc" value="' + esc(j.description || "") + '" placeholder="Installation job"' + (done ? " disabled" : "") + '></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project / site", done ? '<span class="v">' + esc((projs.filter(function (p) { return p.id === j.project_id; })[0] || {}).name || "-") + '</span>' : '<select id="ij-proj">' + projOpts + '</select>', "Labour logged here books to this project as Labour cost.") +
+      fld("Area / elevation", '<input id="ij-area" value="' + esc(j.area || "") + '"' + (done ? " disabled" : "") + ' placeholder="e.g. North elevation L3-L8">', "Which part of the building.") +
+      fld("Foreman", '<input id="ij-foreman" value="' + esc(j.foreman || "") + '"' + (done ? " disabled" : "") + '>', "Crew lead on this job.") +
+      fld("Crew size", '<input id="ij-crew" type="number" step="1" value="' + (j.crew_size || 0) + '"' + (done ? " disabled" : "") + '>', "Number of installers.") +
+      '</div><div>' +
+      fld("Planned qty", '<input id="ij-planned" type="number" step="0.01" value="' + (j.planned_qty || 0) + '"' + (done ? " disabled" : "") + '>', "Units to install on this job.") +
+      fld("Unit", '<input id="ij-unit" value="' + esc(j.unit || "") + '"' + (done ? " disabled" : "") + ' placeholder="e.g. panel, m2">') +
+      fld("Labour rate / hr", '<input id="ij-rate" type="number" step="0.01" value="' + (j.labour_rate || 0) + '"' + (done ? " disabled" : "") + '>', "Cost per labour hour for costing installation to the project.") +
+      fld("Due date", '<input id="ij-due" type="date" value="' + (j.due_date || "") + '"' + (done ? " disabled" : "") + '>') +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Daily logs</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Date</th><th style="text-align:right">Installed</th><th style="text-align:right">Hours</th><th>Note</th></tr></thead><tbody>' + (logRows || '<tr><td colspan="4" class="muted">No logs yet. Use "Log installation" to record daily progress + hours.</td></tr>') + '</tbody></table></div></div>' +
+      '</div>';
+    var db = document.getElementById("ij-discard"); if (db) db.onclick = function () { go("inst.jobs"); };
+    async function persist() {
+      var row = { description: gv("ij-desc") || "Installation", project_id: (document.getElementById("ij-proj") ? document.getElementById("ij-proj").value : j.project_id) || null, area: gv("ij-area"), foreman: gv("ij-foreman"), crew_size: parseInt(gv("ij-crew"), 10) || 0, planned_qty: parseFloat(gv("ij-planned")) || 0, unit: gv("ij-unit"), labour_rate: parseFloat(gv("ij-rate")) || 0, due_date: gv("ij-due") || null };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextInstNumber(); var ins = await sb.from("install_jobs").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("install_jobs").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    var sv = document.getElementById("ij-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderInstallJobForm(sid); } };
+    var st = document.getElementById("ij-start"); if (st) st.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("install_jobs").update({ status: "in_progress" }).eq("id", sid); toast("Started"); renderInstallJobForm(sid); };
+    var dn = document.getElementById("ij-done"); if (dn) dn.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("install_jobs").update({ status: "done" }).eq("id", sid); toast("Marked done"); renderInstallJobForm(sid); };
+    var lg = document.getElementById("ij-log"); if (lg) lg.onclick = async function () { var sid = await persist(); if (!sid) return; openInstallLogModal(sid); };
+  }
+  async function openInstallLogModal(jobId) {
+    var j = (await sb.from("install_jobs").select("*").eq("id", jobId).maybeSingle()).data || {};
+    var cc = S.company.currency_code;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Log installation &middot; ' + esc(j.description || "") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Date</label>' + fhint("__ild", "The day this work was done.") + '<input id="il-date" type="date" value="' + today() + '"></div>' +
+      '<div><label>Installed qty</label>' + fhint("__ilq", "Units installed this day.") + '<input id="il-qty" type="number" step="0.01" value="0"></div></div>' +
+      '<div class="row2"><div><label>Labour hours</label>' + fhint("__ilh", "Total crew hours this day; costed at the rate to the project.") + '<input id="il-hours" type="number" step="0.01" value="0"></div>' +
+      '<div><label>Rate/hr (' + esc(cc) + ')</label>' + fhint("__ilr", "Defaults from the job; adjust if needed.") + '<input id="il-rate" type="number" step="0.01" value="' + (j.labour_rate || 0) + '"></div></div>' +
+      '<div><label>Note</label>' + fhint("__iln", "Optional.") + '<input id="il-note" placeholder="optional"></div>' +
+      '</div><div class="foot"><button class="btn" id="il-cancel">Cancel</button><button class="btn pri" id="il-save" style="background:var(--accent);border-color:var(--accent)">Log &amp; cost</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("il-cancel").onclick = function () { m.remove(); };
+    document.getElementById("il-save").onclick = async function () {
+      var qty = parseFloat(document.getElementById("il-qty").value) || 0, hours = parseFloat(document.getElementById("il-hours").value) || 0, rate = parseFloat(document.getElementById("il-rate").value) || 0;
+      if (qty <= 0 && hours <= 0) { toast("Enter installed qty or hours"); return; }
+      var cost = hours * rate, eid = null;
+      if (cost > 0.005 && j.project_id) eid = await postRetentionEntry("6400", "4200", cost, "Install labour " + (j.number || "") + " - " + (j.description || ""), jobId, "install_labour");
+      var ins = await sb.from("install_logs").insert({ company_id: S.company.id, job_id: jobId, log_date: document.getElementById("il-date").value, installed_qty: qty, hours: hours, note: document.getElementById("il-note").value.trim(), journal_entry_id: eid || null }).select("id").single();
+      if (ins.error) { toast(ins.error.message); return; }
+      await sb.from("install_jobs").update({ installed_qty: Number(j.installed_qty || 0) + qty, labour_hours: Number(j.labour_hours || 0) + hours, labour_cost: Number(j.labour_cost || 0) + cost, status: j.status === "draft" ? "in_progress" : j.status }).eq("id", jobId);
+      m.remove(); toast(cost > 0 ? ("Logged - " + cc + " " + money(cost) + " labour costed to the project") : "Logged"); renderInstallJobForm(jobId);
+    };
   }
 
   // ---- start ----
