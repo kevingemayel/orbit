@@ -140,6 +140,20 @@
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
   };
   var SOON = [["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
+  // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
+  var APP_ICONS = {
+    accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
+    sales: '<svg viewBox="0 0 100 100"><path d="M8 34 H26 L42 48 M92 34 H74 L58 48 M8 62 H24 M92 62 H76 M40 60 L47 67 M52 55 L59 62" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><path d="M42 48 L50 41 L66 55 L58 62 Z" fill="currentColor" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="50" cy="22" r="7" fill="#2F6BFF"/></svg>',
+    purchase: '<svg viewBox="0 0 100 100"><path d="M24 38 H76 L70 80 H30 Z M38 38 C38 24 62 24 62 38" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    crm: '<svg viewBox="0 0 100 100"><circle cx="39" cy="52" r="21" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="63" cy="52" r="21" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="51" cy="23" r="7" fill="#2F6BFF"/></svg>',
+    inventory: '<svg viewBox="0 0 100 100"><rect x="22" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="55" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="22" y="55" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="60" y="60" width="15" height="15" fill="currentColor" transform="rotate(45 67.5 67.5)"/><circle cx="84" cy="51" r="7" fill="#2F6BFF"/></svg>',
+    project: '<svg viewBox="0 0 100 100"><path d="M 71 40 L 81 50 L 50 81 L 19 50 L 50 19 L 59 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><rect x="43.5" y="43.5" width="13" height="13" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="67" cy="32" r="7" fill="#2F6BFF"/></svg>',
+    hr: '<svg viewBox="0 0 100 100"><circle cx="50" cy="34" r="13" fill="none" stroke="currentColor" stroke-width="8"/><path d="M24 80 C24 62 76 62 76 80" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="66" cy="22" r="7" fill="#2F6BFF"/></svg>',
+    settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
+    "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
+  };
 
   // ============================ AUTH ============================
   function renderLogin(mode) {
@@ -196,10 +210,10 @@
     S.app = null; S.action = null;
     var tiles = Object.keys(APPS).map(function (k) {
       var a = APPS[k];
-      return '<div class="o-tile" data-app="' + k + '"><div class="ic">' + a.icon + '<i class="dot"></i></div><div class="nm">' + esc(a.name) + '</div></div>';
+      return '<div class="o-tile" data-app="' + k + '"><div class="ic">' + (APP_ICONS[k] || a.icon) + '</div><div class="nm">' + esc(a.name) + '</div></div>';
     }).join("");
     var soon = SOON.map(function (s) {
-      return '<div class="o-tile soon"><div class="ic">' + s[1] + '</div><div class="nm">' + esc(s[0]) + '</div></div>';
+      return '<div class="o-tile soon"><div class="ic">' + (APP_ICONS[s[0]] || s[1]) + '</div><div class="nm">' + esc(s[0]) + '</div></div>';
     }).join("");
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =

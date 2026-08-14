@@ -121,10 +121,12 @@ button{font-family:inherit}
 .o-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px 4px;max-width:920px;margin:34px auto;padding:0 20px}
 .o-tile{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:12px;cursor:pointer;text-align:center}
 .o-tile:hover{background:var(--panel)}
-.o-tile .ic{position:relative;width:56px;height:56px;border-radius:15px;display:grid;place-items:center;background:#16171c;color:#fff;font-size:26px;font-weight:800;box-shadow:var(--sh);border:1px solid rgba(255,255,255,.08)}
-.o-tile .ic .dot{position:absolute;right:9px;bottom:9px;width:9px;height:9px;border-radius:50%;background:#2f6bff;box-shadow:0 0 0 2px #16171c}
+.o-tile .ic{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;background:#16171c;color:#fff;box-shadow:var(--sh);border:1px solid rgba(255,255,255,.08)}
+.o-tile .ic svg{width:34px;height:34px;display:block}
 .o-tile .nm{font-size:13px;font-weight:600;color:var(--ink)}
-.o-tile.soon{opacity:.5;cursor:default}
+.o-tile.soon{cursor:default}
+.o-tile.soon .ic{background:#9a9ba2;border-color:rgba(255,255,255,.14);box-shadow:none}
+.o-tile.soon .nm{color:var(--ink3)}
 .o-tile.soon:hover{background:none}
 .o-tile.soon .nm::after{content:" · soon";color:var(--ink3);font-weight:500}
 
