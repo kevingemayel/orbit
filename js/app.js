@@ -3871,6 +3871,15 @@
     if (code === "6000" || code.charAt(0) === "3") return "Material";
     return "Overhead";
   }
+  // product_id -> cost category via its expense account (default Material = procurement),
+  // so committed purchase orders can be split by category for early over-budget warnings.
+  async function productCatMap() {
+    var prods = (await sb.from("products").select("id,expense_account_id").eq("company_id", S.company.id)).data || [];
+    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id)).data || [];
+    var codeById = {}; accs.forEach(function (a) { codeById[a.id] = a.code; });
+    var m = {}; prods.forEach(function (p) { m[p.id] = p.expense_account_id ? catForAccount(codeById[p.expense_account_id]) : "Material"; });
+    return m;
+  }
 
   async function renderProjectPnL() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Project P&L") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
@@ -3885,34 +3894,40 @@
     var issues = (await sb.from("stock_moves").select("quantity,project_id,products(cost_price)").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
     var labour = (await sb.from("install_jobs").select("project_id,labour_cost").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
     // COMMITTED = open purchase orders (draft/sent/purchase) tagged to the project, NET of what's already billed
-    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(project_id,state,company_id)").eq("purchase_orders.company_id", S.company.id).not("purchase_orders.project_id", "is", null).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
-    var certBy = {}, budBy = {}, actBy = {}, comBy = {}, catAct = {}, catBud = {};
+    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed,product_id, purchase_orders!inner(project_id,state,company_id)").eq("purchase_orders.company_id", S.company.id).not("purchase_orders.project_id", "is", null).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    var pm = await productCatMap();
+    var certBy = {}, budBy = {}, actBy = {}, comBy = {}, catAct = {}, catBud = {}, catCom = {};
     function bump(o, pid, cat, v) { if (!o[pid]) o[pid] = {}; o[pid][cat] = (o[pid][cat] || 0) + v; }
     certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
     budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); bump(catBud, b.project_id, normCat(b.category), Number(b.amount || 0)); });
     billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (!pid) return; var v = Number(l.price_subtotal || 0); actBy[pid] = (actBy[pid] || 0) + v; bump(catAct, pid, catForAccount(l.accounts && l.accounts.code), v); });
     issues.forEach(function (m) { var v = Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); actBy[m.project_id] = (actBy[m.project_id] || 0) + v; bump(catAct, m.project_id, "Material", v); });
     labour.forEach(function (l) { var v = Number(l.labour_cost || 0); if (!v || !l.project_id) return; actBy[l.project_id] = (actBy[l.project_id] || 0) + v; bump(catAct, l.project_id, "Labour", v); });
-    poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (!pid) return; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; comBy[pid] = (comBy[pid] || 0) + Number(l.price_subtotal || 0) * frac; });
+    poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (!pid) return; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; comBy[pid] = (comBy[pid] || 0) + v; bump(catCom, pid, (l.product_id && pm[l.product_id]) || "Material", v); });
+    // red = actual already over budget in a category; amber = actual under but actual+committed will exceed it
     function overCats(pid) { var out = []; COST_CATS.forEach(function (c) { var a = (catAct[pid] || {})[c] || 0, bd = (catBud[pid] || {})[c] || 0; if (a > 0 && a > bd + 0.005) out.push({ cat: c, act: a, bud: bd }); }); return out; }
-    var tc = 0, tcert = 0, tbud = 0, tact = 0, tcom = 0, alerts = [];
+    function foreCats(pid) { var out = []; COST_CATS.forEach(function (c) { var a = (catAct[pid] || {})[c] || 0, cm = (catCom[pid] || {})[c] || 0, bd = (catBud[pid] || {})[c] || 0; if (bd > 0 && a <= bd + 0.005 && a + cm > bd + 0.005) out.push({ cat: c, gap: a + cm - bd }); }); return out; }
+    var tc = 0, tcert = 0, tbud = 0, tact = 0, tcom = 0, alerts = [], foreAlerts = [];
     var rows = projs.map(function (p) {
       var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, act = actBy[p.id] || 0, com = comBy[p.id] || 0;
-      var variance = bud - act, margin = cert - act, over = overCats(p.id);
+      var variance = bud - act, margin = cert - act, over = overCats(p.id), fore = foreCats(p.id);
       if (over.length) alerts.push({ name: p.name, over: over });
+      if (fore.length) foreAlerts.push({ name: p.name, fore: fore });
       tc += cv; tcert += cert; tbud += bud; tact += act; tcom += com;
       var vc = variance < 0 ? ' style="color:var(--bad)"' : '';
-      var flag = over.length ? ' <span class="ob-flag" title="Over budget: ' + over.map(function (o) { return esc(o.cat); }).join(", ") + '">! over</span>' : '';
+      var flag = over.length ? ' <span class="ob-flag" title="Over budget: ' + over.map(function (o) { return esc(o.cat); }).join(", ") + '">! over</span>'
+        : (fore.length ? ' <span class="ob-flag" style="background:var(--warn)" title="Committed cost will exceed budget: ' + fore.map(function (o) { return esc(o.cat); }).join(", ") + '">forecast</span>' : '');
       return '<tr class="pnl-row" data-proj="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + flag + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num"' + vc + '>' + money(variance) + '</td><td class="num">' + money(margin) + '</td></tr>';
     }).join("");
     var tvar = tbud - tact, tmargin = tcert - tact;
-    var banner = alerts.length ? '<div class="ob-banner">! ' + alerts.length + ' project' + (alerts.length > 1 ? "s" : "") + ' over budget in a category &middot; ' + alerts.map(function (a) { return '<b>' + esc(a.name) + '</b> (' + a.over.map(function (o) { return esc(o.cat) + " +" + cc + " " + money(o.act - o.bud); }).join(", ") + ')'; }).join(" &nbsp;|&nbsp; ") + '</div>' : '';
+    var banner = (alerts.length ? '<div class="ob-banner">! ' + alerts.length + ' project' + (alerts.length > 1 ? "s" : "") + ' over budget in a category &middot; ' + alerts.map(function (a) { return '<b>' + esc(a.name) + '</b> (' + a.over.map(function (o) { return esc(o.cat) + " +" + cc + " " + money(o.act - o.bud); }).join(", ") + ')'; }).join(" &nbsp;|&nbsp; ") + '</div>' : '')
+      + (foreAlerts.length ? '<div class="ob-banner warn">Forecast: ' + foreAlerts.length + ' project' + (foreAlerts.length > 1 ? "s" : "") + ' where committed cost will exceed a category budget &middot; ' + foreAlerts.map(function (a) { return '<b>' + esc(a.name) + '</b> (' + a.fore.map(function (o) { return esc(o.cat) + " +" + cc + " " + money(o.gap); }).join(", ") + ')'; }).join(" &nbsp;|&nbsp; ") + '</div>' : '');
     document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects &middot; click a project for its cost detail</div>' + banner +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Contract</td><td class="num">Certified</td><td class="num">Budget cost</td><td class="num">Actual cost</td><td class="num">Committed</td><td class="num">Cost variance</td><td class="num">Margin</td></tr></thead><tbody>' +
       (rows || '<tr><td colspan="8" class="muted">No active projects.</td></tr>') +
       '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num">' + money(tcom) + '</td><td class="num">' + money(tvar) + '</td><td class="num">' + money(tmargin) + '</td></tr>' +
       '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued + site labour. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual. <b>! over</b> flags a project whose actual cost has passed the budget in a category; click it for the by-category breakdown.</div>';
+      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued + site labour. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual. <b>! over</b> = actual cost has already passed a category budget; <b style="color:var(--warn)">forecast</b> = committed cost will take a category over. Click a project for the by-category breakdown.</div>';
     document.querySelectorAll(".pnl-row").forEach(function (tr) { tr.onclick = function () { renderProjectCosts(tr.dataset.proj); }; });
   }
 
@@ -3930,9 +3945,10 @@
     var issues = (await sb.from("stock_moves").select("quantity,date, products(name,cost_price)").eq("company_id", S.company.id).eq("project_id", projectId).order("date")).data || [];
     var billLinesD = (await sb.from("invoice_lines").select("price_subtotal, accounts(code), invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").eq("invoices.project_id", projectId)).data || [];
     var labourD = (await sb.from("install_jobs").select("number,description,foreman,labour_hours,labour_cost").eq("company_id", S.company.id).eq("project_id", projectId).order("created_at")).data || [];
-    var poLinesD = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,number,state,project_id,company_id)").eq("purchase_orders.company_id", S.company.id).eq("purchase_orders.project_id", projectId).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
-    var poNet = {};
-    poLinesD.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1; if (!poNet[po.id]) poNet[po.id] = { number: po.number, state: po.state, amt: 0 }; poNet[po.id].amt += Number(l.price_subtotal || 0) * frac; });
+    var poLinesD = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed,product_id, purchase_orders!inner(id,number,state,project_id,company_id)").eq("purchase_orders.company_id", S.company.id).eq("purchase_orders.project_id", projectId).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    var pmD = await productCatMap();
+    var poNet = {}, cCom = {};
+    poLinesD.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; if (!poNet[po.id]) poNet[po.id] = { number: po.number, state: po.state, amt: 0 }; poNet[po.id].amt += v; cCom[(l.product_id && pmD[l.product_id]) || "Material"] = (cCom[(l.product_id && pmD[l.product_id]) || "Material"] || 0) + v; });
     var pos = Object.keys(poNet).map(function (k) { return poNet[k]; }).filter(function (p) { return p.amt > 0.005; });
     var cv = Number(proj.contract_value) || 0;
     var certified = certs.filter(function (c) { return c.state !== "draft"; }).reduce(function (s, c) { return s + Number(c.current_certified || 0); }, 0);
@@ -3950,15 +3966,18 @@
     issues.forEach(function (m) { bumpc(cAct, "Material", Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)); });
     if (labTot) bumpc(cAct, "Labour", labTot);
     budgets.forEach(function (b) { bumpc(cBud, normCat(b.category), Number(b.amount || 0)); });
+    var comTotCat = 0;
     var catRows = COST_CATS.map(function (c) {
-      var bud = cBud[c] || 0, act = cAct[c] || 0, v = bud - act;
-      if (bud === 0 && act === 0) return "";
+      var bud = cBud[c] || 0, act = cAct[c] || 0, com = cCom[c] || 0, fore = act + com;
+      comTotCat += com;
+      if (bud === 0 && act === 0 && com === 0) return "";
       var st, cls = "";
-      if (bud === 0 && act > 0.005) { st = '<span class="ob-flag">! no budget</span>'; cls = ' style="background:rgba(244,87,61,.06)"'; }
-      else if (act > bud + 0.005) { st = '<span class="ob-flag">! over by ' + cc + ' ' + money(act - bud) + '</span>'; cls = ' style="background:rgba(244,87,61,.06)"'; }
-      else if (bud > 0 && act >= bud * 0.9) { st = '<span class="ob-flag" style="background:#c98a00">near limit</span>'; }
+      if (bud === 0 && act > 0.005) { st = '<span class="ob-flag">! no budget</span>'; cls = ' style="background:var(--bad-s)"'; }
+      else if (act > bud + 0.005) { st = '<span class="ob-flag">! over by ' + cc + ' ' + money(act - bud) + '</span>'; cls = ' style="background:var(--bad-s)"'; }
+      else if (bud > 0 && fore > bud + 0.005) { st = '<span class="ob-flag" style="background:var(--warn)">forecast over by ' + cc + ' ' + money(fore - bud) + '</span>'; cls = ' style="background:var(--warn-s)"'; }
+      else if (bud > 0 && act >= bud * 0.9) { st = '<span class="ob-flag" style="background:var(--warn)">near limit</span>'; }
       else { st = '<span style="color:var(--good);font-weight:600">ok</span>'; }
-      return '<tr' + cls + '><td>' + c + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num"' + (v < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(v) + '</td><td class="num">' + (bud > 0 ? Math.round(act / bud * 100) + '%' : '-') + '</td><td>' + st + '</td></tr>';
+      return '<tr' + cls + '><td>' + c + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num">' + money(fore) + '</td><td class="num">' + (bud > 0 ? Math.round(fore / bud * 100) + '%' : '-') + '</td><td>' + st + '</td></tr>';
     }).filter(Boolean).join("");
     function kpi2(l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; }
     var billRows = bills.map(function (b) { return '<tr><td>' + esc(b.number || "") + '</td><td>' + esc(b.partners ? b.partners.name : "") + '</td><td class="muted">' + esc(b.invoice_date || "") + '</td><td class="num">' + money(b.amount_untaxed) + '</td></tr>'; }).join("");
@@ -3967,11 +3986,12 @@
     var labRows = labourD.map(function (l) { return '<tr><td>' + esc(l.number || "") + '</td><td>' + esc(l.description || "") + '</td><td class="muted">' + esc(l.foreman || "") + '</td><td class="num">' + Number(l.labour_hours || 0) + '</td><td class="num">' + money(l.labour_cost) + '</td></tr>'; }).join("");
     var poRows = pos.map(function (p) { return '<tr><td>' + esc(p.number || "") + '</td><td class="muted">' + esc(p.state) + '</td><td class="num">' + money(p.amt) + '</td></tr>'; }).join("");
     var anyOver = COST_CATS.some(function (c) { return (cAct[c] || 0) > (cBud[c] || 0) + 0.005 && (cAct[c] || 0) > 0; });
+    var anyFore = !anyOver && COST_CATS.some(function (c) { var bd = cBud[c] || 0; return bd > 0 && (cAct[c] || 0) <= bd + 0.005 && (cAct[c] || 0) + (cCom[c] || 0) > bd + 0.005; });
     document.getElementById("rep").innerHTML = '<h1>' + esc(proj.name || "Project") + ' &middot; cost detail</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + '</div>' +
       '<div class="kpis" style="margin:14px 0 4px">' + kpi2("Contract", cv) + kpi2("Certified", certified) + kpi2("Budget cost", budTot) + kpi2("Actual cost", actTot) + kpi2("Committed", comTot) + kpi2("Margin (cert - actual)", margin) + '</div>' +
-      (anyOver ? '<div class="ob-banner" style="margin:10px 0">! This project is over budget in one or more categories - see the cost control table below.</div>' : '') +
-      '<h3 style="font-size:14px;margin:18px 0 6px">Cost control by category</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td class="num">Budget</td><td class="num">Actual</td><td class="num">Variance</td><td class="num">Used</td><td>Status</td></tr></thead><tbody>' + (catRows || '<tr><td colspan="6" class="muted">No budget or costs yet.</td></tr>') + '<tr class="tot"><td>Total</td><td class="num">' + money(budTot) + '</td><td class="num">' + money(actTot) + '</td><td class="num"' + (budTot - actTot < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(budTot - actTot) + '</td><td class="num">' + (budTot > 0 ? Math.round(actTot / budTot * 100) + '%' : '-') + '</td><td></td></tr></tbody></table></div>' +
-      '<div class="sub" style="margin-top:6px">Actual by category = vendor bills (by GL account: 6000/3xxx Material, 6100 Subcontract, 6400 Labour) + materials issued (Material) + installation labour (Labour). A red row means that category has spent past its budget.</div>' +
+      (anyOver ? '<div class="ob-banner" style="margin:10px 0">! This project is over budget in one or more categories - see the cost control table below.</div>' : (anyFore ? '<div class="ob-banner warn" style="margin:10px 0">Forecast: committed cost will push one or more categories over budget - see the cost control table below.</div>' : '')) +
+      '<h3 style="font-size:14px;margin:18px 0 6px">Cost control by category</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td class="num">Budget</td><td class="num">Actual</td><td class="num">Committed</td><td class="num">Forecast</td><td class="num">Used</td><td>Status</td></tr></thead><tbody>' + (catRows || '<tr><td colspan="7" class="muted">No budget or costs yet.</td></tr>') + '<tr class="tot"><td>Total</td><td class="num">' + money(budTot) + '</td><td class="num">' + money(actTot) + '</td><td class="num">' + money(comTotCat) + '</td><td class="num">' + money(actTot + comTotCat) + '</td><td class="num">' + (budTot > 0 ? Math.round((actTot + comTotCat) / budTot * 100) + '%' : '-') + '</td><td></td></tr></tbody></table></div>' +
+      '<div class="sub" style="margin-top:6px">Actual = vendor bills (by GL account: 6000/3xxx Material, 6100 Subcontract, 6400 Labour) + materials issued (Material) + installation labour (Labour). Committed = open POs not yet billed, split by category. Forecast = Actual + Committed. Red = a category has already spent past its budget; amber = committed cost will take it over.</div>' +
       '<h3 style="font-size:14px;margin:18px 0 6px">Cost budget</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Category</td><td>Description</td><td class="num">Budget</td></tr></thead><tbody>' + (budRows || '<tr><td colspan="3" class="muted">No budget lines.</td></tr>') + '<tr class="tot"><td>Total budget</td><td></td><td class="num">' + money(budTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - vendor bills (posted, tagged to this project)</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Bill</td><td>Vendor</td><td>Date</td><td class="num">Amount</td></tr></thead><tbody>' + (billRows || '<tr><td colspan="4" class="muted">No project bills yet.</td></tr>') + '<tr class="tot"><td>Total bills</td><td></td><td></td><td class="num">' + money(billTot) + '</td></tr></tbody></table></div>' +
       '<h3 style="font-size:14px;margin:20px 0 6px">Actual - materials issued to site</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Material</td><td>Date</td><td class="num">Qty</td><td class="num">Cost value</td></tr></thead><tbody>' + (issRows || '<tr><td colspan="4" class="muted">No materials issued yet.</td></tr>') + '<tr class="tot"><td>Total issued</td><td></td><td></td><td class="num">' + money(issTot) + '</td></tr></tbody></table></div>' +
