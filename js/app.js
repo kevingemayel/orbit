@@ -745,6 +745,7 @@
       .filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
     var products = ((await sb.from("products").select("id,name,default_code,list_price,cost_price,income_account_id,expense_account_id,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var projects = ((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var glLines = [];
     if (inv && inv.state === "posted" && inv.journal_entry_id) glLines = (await sb.from("journal_lines").select("*, accounts(code,name)").eq("entry_id", inv.journal_entry_id)).data || [];
 
@@ -783,6 +784,7 @@
       '</div><div>' +
       fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>') +
       fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>') +
+      fld("Project", editable ? '<select id="f-proj"><option value="">(none)</option>' + projects.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((projects.filter(function (pr) { return inv && pr.id === inv.project_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a project/site so its cost and revenue roll up in the Project P&L.") +
       fld("Journal", '<input readonly value="' + (isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Customer Invoices" : "Vendor Bills")) + '">') +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div></div>';
@@ -902,6 +904,7 @@
       var hdr = {
         partner_id: partnerId, invoice_date: document.getElementById("f-date").value,
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
+        project_id: document.getElementById("f-proj") ? (document.getElementById("f-proj").value || null) : null,
         amount_untaxed: untax, amount_total: untax, amount_residual: untax
       };
       var invId = id;
@@ -3768,20 +3771,29 @@
     var projs = (await sb.from("projects").select("id,name,contract_value").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var certs = (await sb.from("project_certificates").select("project_id,current_certified,state").eq("company_id", S.company.id)).data || [];
     var budgets = (await sb.from("project_budgets").select("project_id,amount").eq("company_id", S.company.id)).data || [];
-    var certBy = {}, budBy = {};
+    // ACTUAL cost = posted project-tagged vendor bills (line subtotals) + materials issued to the project (qty x cost)
+    var billLines = (await sb.from("invoice_lines").select("price_subtotal, invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
+    var issues = (await sb.from("stock_moves").select("quantity,project_id,products(cost_price)").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
+    var certBy = {}, budBy = {}, actBy = {};
     certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
     budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); });
-    var tc = 0, tcert = 0, tbud = 0;
+    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (pid) actBy[pid] = (actBy[pid] || 0) + Number(l.price_subtotal || 0); });
+    issues.forEach(function (m) { actBy[m.project_id] = (actBy[m.project_id] || 0) + Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); });
+    var tc = 0, tcert = 0, tbud = 0, tact = 0;
     var rows = projs.map(function (p) {
-      var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, margin = cv - bud;
-      tc += cv; tcert += cert; tbud += bud;
-      return '<tr><td>' + esc(p.name) + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(margin) + '</td><td class="num">' + (cv ? (margin / cv * 100).toFixed(1) + "%" : "-") + '</td></tr>';
+      var cv = Number(p.contract_value) || 0, cert = certBy[p.id] || 0, bud = budBy[p.id] || 0, act = actBy[p.id] || 0;
+      var variance = bud - act, margin = cert - act;
+      tc += cv; tcert += cert; tbud += bud; tact += act;
+      var vc = variance < 0 ? ' style="color:var(--bad)"' : '';
+      return '<tr><td>' + esc(p.name) + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num"' + vc + '>' + money(variance) + '</td><td class="num">' + money(margin) + '</td></tr>';
     }).join("");
-    document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects</div>' +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Contract</td><td class="num">Certified</td><td class="num">Budget cost</td><td class="num">Margin</td><td class="num">Margin %</td></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="6" class="muted">No active projects.</td></tr>') +
-      '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tc - tbud) + '</td><td class="num">' + (tc ? ((tc - tbud) / tc * 100).toFixed(1) + "%" : "-") + '</td></tr>' +
-      '</tbody></table></div>';
+    var tvar = tbud - tact, tmargin = tcert - tact;
+    document.getElementById("rep").innerHTML = '<h1>Project P&amp;L</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; active projects &middot; actual = posted project bills + materials issued</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Project</td><td class="num">Contract</td><td class="num">Certified</td><td class="num">Budget cost</td><td class="num">Actual cost</td><td class="num">Cost variance</td><td class="num">Margin</td></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="7" class="muted">No active projects.</td></tr>') +
+      '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num">' + money(tvar) + '</td><td class="num">' + money(tmargin) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:12px">Cost variance = Budget - Actual (red if over budget). Margin = Certified - Actual. Tag vendor bills to a project (Project field) and issue materials to a project so costs land here.</div>';
   }
 
   // ============================ MATERIAL REQUISITIONS ============================
