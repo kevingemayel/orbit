@@ -1556,14 +1556,15 @@
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(renderTaxReport);
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
-    var rows = (await sb.from("invoice_lines").select("price_subtotal,price_total, invoices!inner(move_type,state,invoice_date), taxes(name)")
+    var rows = (await sb.from("invoice_lines").select("price_subtotal, invoices!inner(move_type,state,invoice_date), taxes(name,amount)")
       .eq("company_id", S.company.id).eq("invoices.state", "posted")).data || [];
     rows = rows.filter(function (r) { var d = r.invoices ? r.invoices.invoice_date : null; if (!d) return false; if (pr.from && d < pr.from) return false; if (pr.to && d > pr.to) return false; return true; });
     var sales = {}, purch = {};
     rows.forEach(function (r) {
       var mt = (r.invoices && r.invoices.move_type) || "out_invoice";
       var isSale = mt.indexOf("out") === 0, sign = mt.indexOf("refund") >= 0 ? -1 : 1;
-      var base = Number(r.price_subtotal || 0) * sign, tax = (Number(r.price_total || 0) - Number(r.price_subtotal || 0)) * sign;
+      var rate = (r.taxes && Number(r.taxes.amount)) || 0;
+      var base = Number(r.price_subtotal || 0) * sign, tax = base * rate / 100;
       var nm = (r.taxes && r.taxes.name) || "No tax / exempt";
       var bag = isSale ? sales : purch, e = bag[nm] || (bag[nm] = { base: 0, tax: 0 });
       e.base += base; e.tax += tax;
