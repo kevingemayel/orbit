@@ -64,6 +64,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"]] },
+        { label: "Procurement", items: [["Material Requisitions", "pur.req"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
       ]
@@ -80,9 +81,9 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Replenishment", "inv.reorder"]] },
-        { label: "Products", items: [["Products", "products"], ["Lots / Serials", "lots"]] },
-        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"]] }
+        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Replenishment", "inv.reorder"]] },
+        { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
+        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"]] }
       ]
     },
     project: {
@@ -123,8 +124,9 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "pur.req": "purchase", "pur.sccert": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
+    "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
@@ -322,10 +324,15 @@
       case "appearance": return renderAppearance();
       case "inv.onhand": return renderOnHand();
       case "inv.moves": return renderList(cfgStockMoves());
+      case "inv.issues": return renderList(cfgMaterialIssues());
+      case "inv.cats": return renderList(cfgProductCategories());
+      case "inv.uoms": return renderList(cfgUoms());
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
       case "lots": return renderLots();
+      case "pur.req": return renderList(cfgRequisitions());
+      case "pur.sccert": return renderList(cfgSubcontractCerts());
       case "proj.list": return renderList(cfgProjects());
       case "task.list": return renderList(cfgTasks());
       case "ts.list": return renderList(cfgTimesheets());
@@ -1308,6 +1315,8 @@
     var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [];
     var saleTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "sale"; });
     var purTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "purchase"; });
+    var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var prSmart = "";
     if (id !== "new" && p.type === "storable") { var _oh = await onHandMap(); prSmart = '<div class="o-smart"><button class="sb" id="pr-sm-oh"><span class="v">' + Number(_oh[id] || 0) + '</span><span class="k">On Hand</span></button></div>'; }
@@ -1318,7 +1327,9 @@
       '<div class="o-sheet">' + prSmart + '<div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Reference", '<input id="pr-code" value="' + esc(p.default_code || "") + '">') +
+      fld("Category", '<select id="pr-cat"><option value="">(none)</option>' + cats.map(function (c) { return '<option value="' + c.id + '"' + (p.category_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "Group this material, e.g. Aluminium, Glass, Hardware, Sealants, Steel.") +
       fld("Type", typeSel) +
+      fld("Unit of Measure", '<select id="pr-uom"><option value="">(none)</option>' + uoms.map(function (u) { return '<option value="' + esc(u.name) + '"' + (p.uom === u.name ? " selected" : "") + '>' + esc(u.name) + '</option>'; }).join("") + '</select>', "How it is measured & stocked, e.g. m2, kg, tube, box.") +
       fld("Sales Price", '<input id="pr-price" type="number" step="0.01" value="' + (p.list_price || 0) + '">') +
       fld("Cost", '<input id="pr-cost" type="number" step="0.01" value="' + (p.cost_price || 0) + '">') +
       fld("Status", '<select id="pr-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Archived</option></select>') +
@@ -1334,6 +1345,7 @@
       var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
       var row = {
         name: name, default_code: gv("pr-code"), type: document.getElementById("pr-type").value,
+        category_id: document.getElementById("pr-cat").value || null, uom: gv("pr-uom") || null,
         list_price: parseFloat(gv("pr-price")) || 0, cost_price: parseFloat(gv("pr-cost")) || 0,
         income_account_id: document.getElementById("pr-inc").value || null, expense_account_id: document.getElementById("pr-exp").value || null,
         sale_tax_id: document.getElementById("pr-stax").value || null, purchase_tax_id: document.getElementById("pr-ptax").value || null,
@@ -1939,7 +1951,7 @@
         inv.internal.map(function (l) { return '<option value="' + l.id + '"' + (OH_LOC === l.id ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join("") + '</select>';
     } else OH_LOC = "all";
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("On Hand") +
-      '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-xfer">Transfer</button><button class="btn" id="i-adj">Adjust</button>' +
+      '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-issue">Issue to Project</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-xfer">Transfer</button><button class="btn" id="i-adj">Adjust</button>' +
       '<div class="gap"></div>' + locSel +
       '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
@@ -1969,28 +1981,34 @@
       "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
   }
   function wireInvBtns(prods) {
-    var b = { "i-recv": "receive", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
+    var b = { "i-recv": "receive", "i-issue": "issue", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
     Object.keys(b).forEach(function (id) { var el = document.getElementById(id); if (el) el.onclick = function () { openStockModal(b[id], prods); }; });
   }
   async function openStockModal(kind, prods) {
-    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer" };
+    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer", issue: "Issue material to a project" };
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     if (!storable.length) storable = prods;
     if (!storable.length) { toast("Add a product first (Products screen)"); return; }
     var inv = await ensureInventory(); if (!inv) return;
     if (kind === "transfer" && inv.internal.length < 2) { toast("Add a second location first (Configuration > Locations)"); return; }
+    var issueProjs = [];
+    if (kind === "issue") {
+      issueProjs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+      if (!issueProjs.length) { toast("Create a project first (Projects app)"); return; }
+    }
     var m = document.createElement("div"); m.className = "modal on"; m.id = "stockmodal";
     var opts = storable.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
     var locOpts = inv.internal.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("");
+    var projField = kind === "issue" ? '<div><label>Project / site</label>' + fhint("__kproj", "The project the material is consumed on. The cost is booked against it.") + '<select id="k-proj">' + issueProjs.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("") + '</select></div>' : "";
     var locField = "";
     if (kind === "transfer") locField = '<div class="row2"><div><label>From location</label>' + fhint("__from", "The stock location the goods leave.") + '<select id="k-from">' + locOpts + '</select></div><div><label>To location</label>' + fhint("__to", "The stock location the goods arrive at.") + '<select id="k-to">' + locOpts + '</select></div></div>';
-    else if (inv.internal.length > 1) locField = '<div><label>Location</label>' + fhint("__loc", "Which warehouse / stock location this affects.") + '<select id="k-loc">' + locOpts + '</select></div>';
+    else if (inv.internal.length > 1) locField = '<div><label>' + (kind === "issue" ? "From location" : "Location") + '</label>' + fhint("__loc", kind === "issue" ? "The stock location the material leaves." : "Which warehouse / stock location this affects.") + '<select id="k-loc">' + locOpts + '</select></div>';
     var lotField = "";
     if (kind === "receive") lotField = '<div class="row2"><div><label>Lot / Serial (optional)</label>' + fhint("__lot", "A batch or serial number for traceability. Leave blank if not tracked.") + '<input id="k-lot" placeholder="e.g. LOT-2026-014"></div><div><label>Expiry (optional)</label>' + fhint("__exp", "Best-before / expiry date for this lot, if any.") + '<input id="k-exp" type="date"></div></div>';
     else if (kind === "deliver") lotField = '<div><label>Lot / Serial (optional)</label>' + fhint("__lot", "The batch/serial being shipped, for traceability.") + '<input id="k-lot" placeholder="lot shipped"></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
-      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + locField +
-      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' + lotField +
+      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + projField + locField +
+      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : kind === "issue" ? "How many units are issued to the project." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' + lotField +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
@@ -1998,17 +2016,19 @@
       var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
       if (isNaN(qty)) { toast("Enter a quantity"); return; }
       var loc = document.getElementById("k-loc") ? document.getElementById("k-loc").value : inv.stock;
+      var projId = (kind === "issue" && document.getElementById("k-proj")) ? document.getElementById("k-proj").value : null;
       var src, dest, q = qty, vkind = null;
       if (kind === "receive") { src = inv.supplier; dest = loc; vkind = "receive"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else if (kind === "deliver") { src = loc; dest = inv.customer; vkind = "deliver"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
+      else if (kind === "issue") { src = loc; dest = inv.customer; vkind = "deliver"; if (!(q > 0)) { toast("Quantity must be positive"); return; } if (!projId) { toast("Pick a project"); return; } }
       else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
-      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
+      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id); }
+      if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
       var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
       if (lotName && r.data && r.data.id) { var lotId = await findOrCreateLot(pid, lotName, document.getElementById("k-exp") ? document.getElementById("k-exp").value : null); if (lotId) await sb.from("stock_move_lines").insert({ company_id: S.company.id, move_id: r.data.id, lot_id: lotId, quantity: q }); }
-      m.remove(); toast(kind === "transfer" ? "Transferred between locations" : "Stock updated & posted to the ledger"); renderOnHand();
+      m.remove(); toast(kind === "transfer" ? "Transferred between locations" : kind === "issue" ? "Material issued to project & posted" : "Stock updated & posted to the ledger"); renderOnHand();
     };
   }
   var INVACC = null;
@@ -2023,7 +2043,7 @@
   // Perpetual-inventory GL posting for a stock move (value = qty x product cost).
   //  receive: Dr 3100 Inventory / Cr 4700 Interim ; deliver: Dr 6000 COGS / Cr 3100
   //  adjust up: Dr 3100 / Cr 6500 ; adjust down: Dr 6500 / Cr 3100
-  async function postStockValue(kind, product, qty, moveId) {
+  async function postStockValue(kind, product, qty, moveId, projId) {
     var cost = Number(product.cost_price || 0), value = qty * cost;
     if (value <= 0) return;
     var a = await invAccounts();
@@ -2034,7 +2054,8 @@
     else if (kind === "adjust_up") { dr = a.inv; cr = a.adj; }
     else { dr = a.adj; cr = a.inv; sQ = -qty; sV = -value; }
     if (!dr || !cr) return;
-    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: a.journal, date: today(), ref: "", narration: "Stock: " + (product.name || ""), currency_code: S.company.currency_code, state: "draft", source_type: "stock", source_id: moveId ? String(moveId) : "" }).select("id").single();
+    var narr = (projId ? "Material issued: " : "Stock: ") + (product.name || "");
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: a.journal, date: today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: projId ? "material_issue" : "stock", source_id: moveId ? String(moveId) : "" }).select("id").single();
     if (e.error) { toast("Stock saved; GL entry failed: " + e.error.message); return; }
     var eid = e.data.id;
     var lr = await sb.from("journal_lines").insert([{ entry_id: eid, company_id: S.company.id, account_id: dr, label: product.name || "", debit: value, credit: 0 }, { entry_id: eid, company_id: S.company.id, account_id: cr, label: product.name || "", debit: 0, credit: value }]);
@@ -2073,6 +2094,99 @@
         { label: "Product", get: function (m) { return m.products ? m.products.name : "None"; } },
         { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }
       ]
+    };
+  }
+  // ---- Material issues to projects (site consumption) ----
+  function cfgMaterialIssues() {
+    return {
+      title: "Material Issues", pageSize: 80, newLabel: "Issue to Project",
+      fetch: function () {
+        return sb.from("stock_moves").select("*, products(name,cost_price), projects(name)").eq("company_id", S.company.id).not("project_id", "is", null).order("date", { ascending: false }).then(function (r) { return r.data || []; });
+      },
+      searchText: function (m) { return (m.products ? m.products.name : "") + " " + (m.projects ? m.projects.name : ""); },
+      columns: [
+        { label: "Date", get: function (m) { return '<span class="muted">' + esc((m.date || "").slice(0, 10)) + '</span>'; } },
+        { label: "Material", get: function (m) { return '<b>' + esc(m.products ? m.products.name : "") + '</b>'; } },
+        { label: "Project / site", get: function (m) { return esc(m.projects ? m.projects.name : ""); } },
+        { label: "Quantity", num: true, get: function (m) { return Number(m.quantity); } },
+        { label: "Cost value", num: true, get: function (m) { return money(Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0)); } }
+      ],
+      groupBy: [{ label: "Project", get: function (m) { return m.projects ? m.projects.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }],
+      onNew: function () { renderOnHand(); setTimeout(function () { var b = document.getElementById("i-issue"); if (b) b.click(); }, 250); }
+    };
+  }
+  // ---- Product categories ----
+  function cfgProductCategories() {
+    return {
+      title: "Product Categories", pageSize: 80,
+      fetch: function () {
+        return sb.from("product_categories").select("*").eq("company_id", S.company.id).order("name").then(function (r) {
+          var rows = r.data || [], nm = {}; rows.forEach(function (c) { nm[c.id] = c.name; });
+          return sb.from("products").select("category_id").eq("company_id", S.company.id).then(function (pr) {
+            var cnt = {}; (pr.data || []).forEach(function (p) { if (p.category_id) cnt[p.category_id] = (cnt[p.category_id] || 0) + 1; });
+            rows.forEach(function (c) { c._parent = c.parent_id ? nm[c.parent_id] : ""; c._count = cnt[c.id] || 0; }); return rows;
+          });
+        });
+      },
+      searchText: function (c) { return c.name || ""; },
+      columns: [
+        { label: "Category", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
+        { label: "Parent", get: function (c) { return esc(c._parent || ""); } },
+        { label: "Products", num: true, get: function (c) { return c._count; } }
+      ],
+      onOpen: function (c) { openCategoryModal(c); }, onNew: function () { openCategoryModal(); }
+    };
+  }
+  async function openCategoryModal(cat) {
+    cat = cat || {};
+    var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (cat.id ? "Edit category" : "New category") + '</h3><div class="form">' +
+      '<div><label>Name</label>' + fhint("__cn", "The material group, e.g. Aluminium, Glass, Hardware, Sealants, Steel.") + '<input id="c-name" value="' + esc(cat.name || "") + '"></div>' +
+      '<div><label>Parent category</label>' + fhint("__cp", "Nest this under a broader group, if any.") + '<select id="c-parent"><option value="">None</option>' + cats.filter(function (x) { return x.id !== cat.id; }).map(function (x) { return '<option value="' + x.id + '"' + (cat.parent_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '</div><div class="foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn pri" id="c-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("c-cancel").onclick = function () { m.remove(); };
+    document.getElementById("c-save").onclick = async function () {
+      var name = gv("c-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, parent_id: document.getElementById("c-parent").value || null };
+      var r; if (cat.id) r = await sb.from("product_categories").update(row).eq("id", cat.id); else { row.company_id = S.company.id; r = await sb.from("product_categories").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  // ---- Units of measure ----
+  var UOM_CATS = ["unit", "length", "area", "volume", "weight"];
+  function cfgUoms() {
+    return {
+      title: "Units of Measure", pageSize: 120,
+      fetch: function () { return sb.from("uoms").select("*").eq("company_id", S.company.id).order("category").order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (u) { return (u.name || "") + " " + (u.category || ""); },
+      columns: [
+        { label: "Unit", get: function (u) { return '<b>' + esc(u.name) + '</b>'; } },
+        { label: "Type", get: function (u) { return esc(u.category || "unit"); } },
+        { label: "Status", get: function (u) { return u.is_active === false ? '<span class="badge">Archived</span>' : '<span class="badge paid">Active</span>'; } }
+      ],
+      groupBy: [{ label: "Type", get: function (u) { return u.category || "unit"; } }],
+      onOpen: function (u) { openUomModal(u); }, onNew: function () { openUomModal(); }
+    };
+  }
+  async function openUomModal(u) {
+    u = u || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (u.id ? "Edit unit" : "New unit") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Name</label>' + fhint("__un", "Short symbol, e.g. m2, kg, tube, box, sheet.") + '<input id="u-name" value="' + esc(u.name || "") + '"></div>' +
+      '<div><label>Type</label>' + fhint("__uc", "What it measures. Groups similar units together.") + '<select id="u-cat">' + UOM_CATS.map(function (c) { return '<option value="' + c + '"' + ((u.category || "unit") === c ? " selected" : "") + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Status</label>' + fhint("__us", "Archived units stay on history but are hidden from new pickers.") + '<select id="u-active"><option value="1"' + (u.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (u.is_active === false ? " selected" : "") + '>Archived</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("u-cancel").onclick = function () { m.remove(); };
+    document.getElementById("u-save").onclick = async function () {
+      var name = gv("u-name"); if (!name) { toast("Name required"); return; }
+      var row = { name: name, category: document.getElementById("u-cat").value, is_active: document.getElementById("u-active").value === "1" };
+      var r; if (u.id) r = await sb.from("uoms").update(row).eq("id", u.id); else { row.company_id = S.company.id; r = await sb.from("uoms").insert(row); }
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgWarehouses() {
@@ -3660,6 +3774,199 @@
       (rows || '<tr><td colspan="6" class="muted">No active projects.</td></tr>') +
       '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tc - tbud) + '</td><td class="num">' + (tc ? ((tc - tbud) / tc * 100).toFixed(1) + "%" : "-") + '</td></tr>' +
       '</tbody></table></div>';
+  }
+
+  // ============================ MATERIAL REQUISITIONS ============================
+  function cfgRequisitions() {
+    return {
+      title: "Material Requisitions", pageSize: 80,
+      fetch: function () {
+        return sb.from("material_requisitions").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (rows) {
+          rows = rows.data || []; if (!rows.length) return rows;
+          return sb.from("material_requisition_lines").select("requisition_id").in("requisition_id", rows.map(function (r) { return r.id; })).then(function (lr) {
+            var cnt = {}; (lr.data || []).forEach(function (l) { cnt[l.requisition_id] = (cnt[l.requisition_id] || 0) + 1; }); rows.forEach(function (r) { r._lines = cnt[r.id] || 0; }); return rows;
+          });
+        });
+      },
+      searchText: function (r) { return (r.number || "") + " " + (r.requested_by || "") + " " + (r.projects ? r.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (r) { return '<b>' + esc(r.number || "/") + '</b>'; } },
+        { label: "Project / site", get: function (r) { return esc(r.projects ? r.projects.name : ""); } },
+        { label: "Requested by", get: function (r) { return esc(r.requested_by || ""); } },
+        { label: "Date", get: function (r) { return '<span class="muted">' + esc(r.req_date || "") + '</span>'; } },
+        { label: "Items", num: true, get: function (r) { return r._lines; } },
+        { label: "Status", get: function (r) { return r.state === "ordered" ? '<span class="badge paid">Ordered</span>' : r.state === "approved" ? '<span class="badge partial">Approved</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Draft", test: function (r) { return r.state === "draft" || !r.state; } }, { label: "Approved", test: function (r) { return r.state === "approved"; } }, { label: "Ordered", test: function (r) { return r.state === "ordered"; } }],
+      groupBy: [{ label: "Project", get: function (r) { return r.projects ? r.projects.name : "None"; } }, { label: "Status", get: function (r) { return r.state || "draft"; } }],
+      onOpen: function (r) { renderRequisitionForm(r.id); }, onNew: function () { renderRequisitionForm("new"); }
+    };
+  }
+  async function renderRequisitionForm(id) {
+    var parent = { action: "pur.req", title: "Material Requisitions" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var req = id === "new" ? { state: "draft", req_date: today() } : (await sb.from("material_requisitions").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("material_requisition_lines").select("*").eq("requisition_id", id).order("sequence")).data || [];
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var ordered = req.state === "ordered";
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Requisition");
+    var uomOpts = '<option value="">-</option>' + uoms.map(function (u) { return '<option value="' + esc(u.name) + '">' + esc(u.name) + '</option>'; }).join("");
+    var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + (ordered ? "" : '<button class="pri" id="mr-save">Save</button>') + '<button id="mr-discard">Discard</button>' + (id !== "new" && !ordered ? '<button id="mr-po">Create Purchase Order</button>' : "") + '</div>' +
+      '<div class="o-stages"><span class="st ' + (!ordered ? "on" : "done") + '">Draft</span><span class="st ' + (req.state === "approved" ? "on" : ordered ? "done" : "") + '">Approved</span><span class="st ' + (ordered ? "on" : "") + '">Ordered</span></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Material Requisition</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Number", '<input id="mr-num" value="' + esc(req.number || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="auto">', "Your requisition reference. Left blank, we number it for you.") +
+      fld("Project / site", '<select id="mr-proj"' + (ordered ? " disabled" : "") + '><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (req.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>', "Which site needs the material.") +
+      '</div><div>' +
+      fld("Requested by", '<input id="mr-by" value="' + esc(req.requested_by || "") + '"' + (ordered ? " disabled" : "") + '>', "Who raised the request, e.g. the site engineer.") +
+      fld("Date", '<input id="mr-date" type="date" value="' + (req.req_date || today()) + '"' + (ordered ? " disabled" : "") + '>', "When the material is needed.") +
+      '</div></div>' +
+      fld("Note", '<input id="mr-note" value="' + esc(req.note || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="optional">', "Any instructions for procurement.") +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Requested items</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:200px">Product</th><th>Description</th><th style="width:80px;text-align:right">Qty</th><th style="width:110px">Unit</th>' + (ordered ? "" : '<th style="width:24px"></th>') + '</tr></thead><tbody id="mrbody"></tbody></table>' + (ordered ? "" : '<button class="o-addln" id="mr-addln">+ Add a line</button>') + '</div></div>' +
+      '</div>';
+    document.getElementById("mr-discard").onclick = function () { go("pur.req"); };
+    var lb = document.getElementById("mrbody");
+    function addRow(l) {
+      var tr = document.createElement("tr");
+      if (ordered) { tr.innerHTML = '<td>' + esc(l ? (products.filter(function (p) { return p.id === l.product_id; })[0] || {}).name || "" : "") + '</td><td>' + esc(l ? l.name : "") + '</td><td class="num">' + Number(l ? l.quantity : 0) + '</td><td>' + esc(l ? l.uom : "") + '</td>'; lb.appendChild(tr); return; }
+      tr.innerHTML = '<td><select class="mr-prod">' + prodOpts + '</select></td><td><input class="mr-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td><td><input class="mr-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><select class="mr-uom">' + uomOpts + '</select></td><td><button class="del">&times;</button></td>';
+      lb.appendChild(tr);
+      if (l && l.product_id) tr.querySelector(".mr-prod").value = l.product_id;
+      if (l && l.uom) tr.querySelector(".mr-uom").value = l.uom;
+      var ps = tr.querySelector(".mr-prod");
+      ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".mr-name").value = pr.name; if (pr.uom) tr.querySelector(".mr-uom").value = pr.uom; });
+      tr.querySelector(".del").onclick = function () { tr.remove(); };
+    }
+    if (lines.length) lines.forEach(addRow); else if (!ordered) addRow(null);
+    var addb = document.getElementById("mr-addln"); if (addb) addb.onclick = function () { addRow(null); };
+    function currentLines() {
+      return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
+        var ps = tr.querySelector(".mr-prod"); if (!ps) return null;
+        return { product_id: ps.value || null, name: (tr.querySelector(".mr-name").value || "").trim(), quantity: parseFloat(tr.querySelector(".mr-qty").value) || 0, uom: tr.querySelector(".mr-uom").value || "" };
+      }).filter(function (l) { return l && (l.product_id || l.name); });
+    }
+    async function persist() {
+      var lns = currentLines();
+      var num = gv("mr-num") || (req.number || (await nextReqNumber()));
+      var row = { number: num, project_id: document.getElementById("mr-proj").value || null, requested_by: gv("mr-by"), req_date: gv("mr-date"), note: gv("mr-note") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("material_requisitions").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("material_requisitions").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("material_requisition_lines").delete().eq("requisition_id", id); }
+      if (lns.length) { var lr = await sb.from("material_requisition_lines").insert(lns.map(function (l, i) { return { company_id: S.company.id, requisition_id: sid, product_id: l.product_id, name: l.name, quantity: l.quantity, uom: l.uom, sequence: (i + 1) * 10 }; })); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; } }
+      return sid;
+    }
+    var sv = document.getElementById("mr-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderRequisitionForm(sid); } };
+    var pob = document.getElementById("mr-po"); if (pob) pob.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var lns = currentLines(); if (!lns.length) { toast("Add at least one item first"); return; }
+      var poNum = await nextOrderNumber("purchase");
+      var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: poNum, date_order: today(), state: "draft", currency_code: S.company.currency_code, note: "From requisition " + (gv("mr-num") || "") }).select("id").single();
+      if (ins.error) { toast("Could not create PO: " + ins.error.message); return; }
+      var prMap = {}; products.forEach(function (p) { prMap[p.id] = p; });
+      await sb.from("purchase_order_lines").insert(lns.map(function (l, i) { var pr = l.product_id ? prMap[l.product_id] : null, price = pr ? Number(pr.cost_price || 0) : 0; return { company_id: S.company.id, order_id: ins.data.id, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name + (l.uom ? " (" + l.uom + ")" : ""), quantity: l.quantity, unit_price: price, price_subtotal: l.quantity * price }; }));
+      await sb.from("material_requisitions").update({ state: "ordered" }).eq("id", sid);
+      toast("Draft purchase order created - pick the vendor and confirm"); renderOrderForm(ins.data.id, "purchase");
+    };
+  }
+  async function nextReqNumber() {
+    var r = await sb.from("material_requisitions").select("id", { count: "exact", head: true }).eq("company_id", S.company.id);
+    return "MR/" + new Date().getFullYear() + "/" + ("0000" + ((r.count || 0) + 1)).slice(-4);
+  }
+
+  // ============================ SUBCONTRACT CERTIFICATES (payables IPC) ============================
+  function cfgSubcontractCerts() {
+    return {
+      title: "Subcontract Certificates", pageSize: 80,
+      fetch: function () { return sb.from("subcontract_certificates").select("*, subcontracts(name, number, partners(name), projects(name))").eq("company_id", S.company.id).order("date_to", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.number || "") + " " + (c.subcontracts ? c.subcontracts.name : "") + " " + (c.subcontracts && c.subcontracts.partners ? c.subcontracts.partners.name : ""); },
+      columns: [
+        { label: "Number", get: function (c) { return '<b>' + esc(c.number || "/") + '</b>'; } },
+        { label: "Subcontract", get: function (c) { return esc(c.subcontracts ? c.subcontracts.name : ""); } },
+        { label: "Subcontractor", get: function (c) { return esc(c.subcontracts && c.subcontracts.partners ? c.subcontracts.partners.name : ""); } },
+        { label: "Date", get: function (c) { return '<span class="muted">' + esc(c.date_to || "") + '</span>'; } },
+        { label: "Gross to date", num: true, get: function (c) { return money(c.gross_to_date); } },
+        { label: "Retention", num: true, get: function (c) { return money(c.retention_amount); } },
+        { label: "This certificate", num: true, get: function (c) { return '<b>' + money(c.current_certified) + '</b>'; } },
+        { label: "Status", get: function (c) { return c.state === "billed" ? '<span class="badge paid">Billed</span>' : c.state === "certified" ? '<span class="badge partial">Certified</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Draft", test: function (c) { return c.state === "draft" || !c.state; } }, { label: "Certified", test: function (c) { return c.state === "certified"; } }, { label: "Billed", test: function (c) { return c.state === "billed"; } }],
+      groupBy: [{ label: "Subcontractor", get: function (c) { return c.subcontracts && c.subcontracts.partners ? c.subcontracts.partners.name : "None"; } }, { label: "Project", get: function (c) { return c.subcontracts && c.subcontracts.projects ? c.subcontracts.projects.name : "None"; } }],
+      onOpen: function (c) { renderSubcontractCertForm(c.id); }, onNew: function () { renderSubcontractCertForm("new"); }
+    };
+  }
+  async function renderSubcontractCertForm(id, presetSc) {
+    var parent = { action: "pur.sccert", title: "Subcontract Certificates" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var scs = (await sb.from("subcontracts").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    if (!scs.length) { document.querySelector(".o-form").innerHTML = '<div class="o-sheet"><div class="o-empty">No subcontracts yet. Create one first (Projects &rsaquo; Subcontracts), then certify progress here.</div></div>'; return; }
+    var cert = id === "new" ? { state: "draft", date_to: today(), subcontract_id: presetSc || scs[0].id } : (await sb.from("subcontract_certificates").select("*").eq("id", id).maybeSingle()).data || {};
+    var sc = scs.filter(function (x) { return x.id === cert.subcontract_id; })[0] || scs[0];
+    var cc = S.company.currency_code, posted = cert.state === "certified" || cert.state === "billed";
+    var retPct = Number(sc.retention_pct) || 0, scAmt = Number(sc.amount) || 0;
+    var prevCerts = (await sb.from("subcontract_certificates").select("*").eq("company_id", S.company.id).eq("subcontract_id", cert.subcontract_id).neq("id", id === "new" ? "00000000-0000-0000-0000-000000000000" : id).in("state", ["certified", "billed"]).order("date_to", { ascending: false })).data || [];
+    var prevNet = prevCerts[0] ? Number(prevCerts[0].net_to_date) : 0;
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (cert.number || "Certificate");
+    var scField = (id === "new") ? '<select id="sx-sc">' + scs.map(function (x) { return '<option value="' + x.id + '"' + (cert.subcontract_id === x.id ? " selected" : "") + '>' + esc((x.number ? x.number + " - " : "") + x.name + (x.partners ? " (" + x.partners.name + ")" : "")) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((sc.number ? sc.number + " - " : "") + sc.name) + '</span>';
+    var initPct = scAmt ? (Number(cert.gross_to_date || 0) / scAmt * 100) : Number(cert.percent_complete || 0);
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sx-save">Save</button><button id="sx-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="sx-certify">Certify</button>' : "") + (cert.state === "certified" ? '<button id="sx-bill">Create vendor bill</button>' : "") + '</div>' +
+      '<div class="o-stages"><span class="st ' + (!posted ? "on" : "done") + '">Draft</span><span class="st ' + (cert.state === "certified" ? "on" : cert.state === "billed" ? "done" : "") + '">Certified</span><span class="st ' + (cert.state === "billed" ? "on" : "") + '">Billed</span></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Subcontract Payment Certificate</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Subcontract", scField, "The subcontract whose progress you are certifying.") +
+      fld("Subcontractor", '<span class="v">' + esc(sc.partners ? sc.partners.name : "") + '</span>', "The subcontractor who will be paid.") +
+      fld("Certificate No.", '<input id="sx-num" value="' + esc(cert.number || "") + '"' + (posted ? " disabled" : "") + ' placeholder="e.g. SC-IPC-02">', "This certificate's number.") +
+      '</div><div>' +
+      fld("Subcontract value", '<span class="v">' + cc + " " + money(scAmt) + '</span>', "The agreed subcontract amount.") +
+      fld("Date", '<input id="sx-date" type="date" value="' + (cert.date_to || today()) + '"' + (posted ? " disabled" : "") + '>', "Valuation date / period end.") +
+      fld("Percent complete", '<input id="sx-pct" type="number" step="0.1" value="' + (Math.round(initPct * 100) / 100) + '"' + (posted ? " disabled" : "") + '>', "Cumulative work done, as a % of the subcontract value.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Valuation</div></div><div class="o-nb-pg"><div class="o-tot" id="sx-sum"></div></div></div>' +
+      '</div>';
+    document.getElementById("sx-discard").onclick = function () { go("pur.sccert"); };
+    if (id === "new") { var scSel = document.getElementById("sx-sc"); if (scSel) scSel.onchange = function () { renderSubcontractCertForm("new", scSel.value); }; }
+    function compute() {
+      var pct = parseFloat(gv("sx-pct")) || 0, gross = scAmt * pct / 100;
+      var retention = gross * retPct / 100, net = gross - retention, current = net - prevNet;
+      document.getElementById("sx-sum").innerHTML =
+        '<div class="r"><span class="k">Gross work to date (' + pct + '%)</span><span>' + cc + " " + money(gross) + '</span></div>' +
+        '<div class="r"><span class="k">Less retention (' + retPct + '%)</span><span>-' + cc + " " + money(retention) + '</span></div>' +
+        '<div class="r"><span class="k">Net to date</span><span>' + cc + " " + money(net) + '</span></div>' +
+        '<div class="r"><span class="k">Less previously certified</span><span>-' + cc + " " + money(prevNet) + '</span></div>' +
+        '<div class="r tt"><span class="k">Payable this certificate</span><span>' + cc + " " + money(current) + '</span></div>';
+      return { pct: pct, gross: gross, retention: retention, net: net, current: current };
+    }
+    var pi = document.getElementById("sx-pct"); if (pi) pi.addEventListener("input", compute);
+    compute();
+    async function persist() {
+      var scId = id === "new" ? (document.getElementById("sx-sc") ? document.getElementById("sx-sc").value : cert.subcontract_id) : cert.subcontract_id;
+      var s = compute();
+      var row = { subcontract_id: scId, number: gv("sx-num"), date_to: gv("sx-date"), percent_complete: s.pct, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, net_to_date: s.net, previous_certified: prevNet, current_certified: s.current };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("subcontract_certificates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("subcontract_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    document.getElementById("sx-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSubcontractCertForm(sid); } };
+    var cb = document.getElementById("sx-certify"); if (cb) cb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("subcontract_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderSubcontractCertForm(sid); };
+    var bb = document.getElementById("sx-bill"); if (bb) bb.onclick = async function () {
+      var full = (await sb.from("subcontracts").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
+      if (!full.vendor_id) { toast("Set a Vendor on the subcontract first."); return; }
+      var num = await nextNumber("in_invoice");
+      var expAcc = (await sb.from("accounts").select("id,code,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+      var acc = expAcc.filter(function (a) { return a.code === "6000"; })[0] || expAcc.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; })[0];
+      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "in_invoice", partner_id: full.vendor_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: full.project_id || null, ref: "Subcontract cert " + (cert.number || "") }).select("id").single();
+      if (ins.error) { toast("Bill failed: " + ins.error.message); return; }
+      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Subcontract certificate " + (cert.number || "") + " - " + (full.name || ""), account_id: acc ? acc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
+      await sb.from("subcontract_certificates").update({ state: "billed", bill_id: ins.data.id }).eq("id", cert.id);
+      toast("Draft vendor bill created"); renderInvoiceForm(ins.data.id, "in_invoice");
+    };
   }
 
   // ---- start ----
