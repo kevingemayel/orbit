@@ -40,7 +40,7 @@ begin
       for l in select il.*, coalesce(il.account_id,(select id from public.accounts where company_id=cid and code='7000')) as acc
                from public.invoice_lines il where il.invoice_id=p_invoice loop
         insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,analytic_distribution)
-          values (eid,cid,l.acc,l.name,0,l.price_subtotal,coalesce(l.analytic_distribution,'{}'::jsonb));
+          values (eid,cid,l.acc,l.name,0,l.price_subtotal,(case when l.analytic_account_id is not null then jsonb_build_object(l.analytic_account_id::text, 100) else '{}'::jsonb end));
       end loop;
       if tax<>0 then insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit) values (eid,cid,vatc,'VAT collected',0,tax); end if;
     else
@@ -49,7 +49,7 @@ begin
       for l in select il.*, coalesce(il.account_id,(select id from public.accounts where company_id=cid and code='7000')) as acc
                from public.invoice_lines il where il.invoice_id=p_invoice loop
         insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,analytic_distribution)
-          values (eid,cid,l.acc,l.name,l.price_subtotal,0,coalesce(l.analytic_distribution,'{}'::jsonb));
+          values (eid,cid,l.acc,l.name,l.price_subtotal,0,(case when l.analytic_account_id is not null then jsonb_build_object(l.analytic_account_id::text, 100) else '{}'::jsonb end));
       end loop;
       if tax<>0 then insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit) values (eid,cid,vatc,'VAT collected (reversed)',tax,0); end if;
     end if;
@@ -59,7 +59,7 @@ begin
       for l in select il.*, coalesce(il.account_id,(select id from public.accounts where company_id=cid and code='6000')) as acc
                from public.invoice_lines il where il.invoice_id=p_invoice loop
         insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,analytic_distribution)
-          values (eid,cid,l.acc,l.name,l.price_subtotal,0,coalesce(l.analytic_distribution,'{}'::jsonb));
+          values (eid,cid,l.acc,l.name,l.price_subtotal,0,(case when l.analytic_account_id is not null then jsonb_build_object(l.analytic_account_id::text, 100) else '{}'::jsonb end));
       end loop;
       if tax<>0 then insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit) values (eid,cid,vatd,'VAT deductible',tax,0); end if;
       insert into public.journal_lines(entry_id,company_id,account_id,partner_id,label,debit,credit,date_maturity)
@@ -68,7 +68,7 @@ begin
       for l in select il.*, coalesce(il.account_id,(select id from public.accounts where company_id=cid and code='6000')) as acc
                from public.invoice_lines il where il.invoice_id=p_invoice loop
         insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,analytic_distribution)
-          values (eid,cid,l.acc,l.name,0,l.price_subtotal,coalesce(l.analytic_distribution,'{}'::jsonb));
+          values (eid,cid,l.acc,l.name,0,l.price_subtotal,(case when l.analytic_account_id is not null then jsonb_build_object(l.analytic_account_id::text, 100) else '{}'::jsonb end));
       end loop;
       if tax<>0 then insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit) values (eid,cid,vatd,'VAT deductible (reversed)',0,tax); end if;
       insert into public.journal_lines(entry_id,company_id,account_id,partner_id,label,debit,credit,date_maturity)
