@@ -84,6 +84,13 @@
         { label: "Configuration", items: [["Stages", "crm.stages"]] }
       ]
     },
+    estimation: {
+      name: "Estimation", icon: "▣", color: "#0d9488", color2: "#0f766e", home: "est.list",
+      menus: [
+        { label: "Tenders", action: "est.list" },
+        { label: "Customers", action: "cust" }
+      ]
+    },
     inventory: {
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
@@ -131,6 +138,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "est.list": "estimation",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -150,6 +158,7 @@
     project: '<svg viewBox="0 0 100 100"><path d="M 71 40 L 81 50 L 50 81 L 19 50 L 50 19 L 59 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><rect x="43.5" y="43.5" width="13" height="13" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="67" cy="32" r="7" fill="#2F6BFF"/></svg>',
     hr: '<svg viewBox="0 0 100 100"><circle cx="50" cy="34" r="13" fill="none" stroke="currentColor" stroke-width="8"/><path d="M24 80 C24 62 76 62 76 80" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="66" cy="22" r="7" fill="#2F6BFF"/></svg>',
     settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
+    estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -331,6 +340,7 @@
       case "products": return renderList(cfgProducts());
       case "so.list": return renderList(cfgOrders("sale"));
       case "po.list": return renderList(cfgOrders("purchase"));
+      case "est.list": return renderList(cfgTenders());
       case "rep.pl": return renderReport("pl");
       case "rep.bs": return renderReport("bs");
       case "rep.tb": return renderReport("tb");
@@ -4258,6 +4268,135 @@
       await sb.from("subcontract_certificates").update({ state: "billed", bill_id: ins.data.id }).eq("id", cert.id);
       toast("Draft vendor bill created - retention booked to 4010"); renderInvoiceForm(ins.data.id, "in_invoice");
     };
+  }
+
+  // ============================ ESTIMATION / TENDERING ============================
+  function cfgTenders() {
+    return {
+      title: "Tenders", pageSize: 80,
+      fetch: function () { return sb.from("tenders").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.number || "") + " " + (t.name || "") + " " + (t.partners ? t.partners.name : ""); },
+      columns: [
+        { label: "Number", get: function (t) { return '<b>' + esc(t.number || "/") + '</b>'; } },
+        { label: "Tender", get: function (t) { return esc(t.name); } },
+        { label: "Client", get: function (t) { return esc(t.partners ? t.partners.name : ""); } },
+        { label: "Date", get: function (t) { return '<span class="muted">' + esc(t.tender_date || "") + '</span>'; } },
+        { label: "Cost", num: true, get: function (t) { return money(t.total_cost); } },
+        { label: "Value", num: true, get: function (t) { return '<b>' + money(t.total_sell) + '</b>'; } },
+        { label: "Margin", num: true, get: function (t) { var c = Number(t.total_cost || 0), s = Number(t.total_sell || 0); return s ? ((s - c) / s * 100).toFixed(1) + "%" : "-"; } },
+        { label: "Status", get: function (t) { return t.status === "won" ? '<span class="badge paid">Won</span>' : t.status === "lost" ? '<span class="badge unpaid">Lost</span>' : t.status === "submitted" ? '<span class="badge partial">Submitted</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (t) { return t.status === "draft" || t.status === "submitted"; } }, { label: "Won", test: function (t) { return t.status === "won"; } }, { label: "Lost", test: function (t) { return t.status === "lost"; } }],
+      groupBy: [{ label: "Status", get: function (t) { return t.status || "draft"; } }, { label: "Client", get: function (t) { return t.partners ? t.partners.name : "None"; } }],
+      onOpen: function (t) { renderTenderForm(t.id); }, onNew: function () { renderTenderForm("new"); }
+    };
+  }
+  async function nextTenderNumber() {
+    var py = "TND/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("tenders").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+  async function renderTenderForm(id) {
+    var parent = { action: "est.list", title: "Tenders" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? { status: "draft", tender_date: today(), margin_pct: 15 } : (await sb.from("tenders").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("tender_lines").select("*").eq("tender_id", id).order("sequence")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var locked = t.status === "won";
+    var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || t.name || "Tender");
+    function num(v) { return parseFloat(v) || 0; }
+    var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button>';
+    if (id !== "new" && t.status === "draft") btns += '<button id="tn-submit">Mark Submitted</button>';
+    if (id !== "new" && (t.status === "draft" || t.status === "submitted")) btns += '<button id="tn-won">Mark Won</button><button id="tn-lost">Mark Lost</button>';
+    if (t.status === "won" && t.project_id) btns += '<button id="tn-goproj">Open project</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (t.status === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (t.status === "submitted" ? "on" : (t.status === "won" || t.status === "lost" ? "done" : "")) + '">Submitted</span><span class="st ' + (t.status === "won" ? "on" : "") + '">' + (t.status === "lost" ? "Lost" : "Won") + '</span></div>';
+    var partnerOpts = '<option value="">(none)</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (t.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="tn-name" value="' + esc(t.name || "") + '" placeholder="Tender name"' + (locked ? " disabled" : "") + '></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Number", '<input id="tn-num" value="' + esc(t.number || "") + '"' + (locked ? " disabled" : "") + ' placeholder="auto">', "Your tender reference. Left blank, we number it.") +
+      fld("Client", '<select id="tn-client"' + (locked ? " disabled" : "") + '>' + partnerOpts + '</select>', "The client inviting the tender.") +
+      fld("Default margin %", '<input id="tn-margin" type="number" step="0.1" value="' + defMargin + '"' + (locked ? " disabled" : "") + '>', "Applied to new lines; override per line.") +
+      '</div><div>' +
+      fld("Tender date", '<input id="tn-date" type="date" value="' + (t.tender_date || today()) + '"' + (locked ? " disabled" : "") + '>', "When you price / submit the bid.") +
+      fld("Valid until", '<input id="tn-valid" type="date" value="' + (t.valid_until || "") + '"' + (locked ? " disabled" : "") + '>', "Bid validity date.") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Priced BOQ &middot; cost buildup</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-lines" style="min-width:920px"><thead><tr><th style="width:56px">Code</th><th>Description</th><th style="width:54px">Unit</th><th style="width:60px;text-align:right">Qty</th><th style="width:72px;text-align:right">Material</th><th style="width:72px;text-align:right">Labour</th><th style="width:72px;text-align:right">Subcont</th><th style="width:66px;text-align:right">Other</th><th style="width:62px;text-align:right">Margin%</th><th style="width:78px;text-align:right">Rate</th><th style="width:86px;text-align:right">Total</th>' + (locked ? "" : '<th style="width:20px"></th>') + '</tr></thead><tbody id="tlbody"></tbody></table></div>' + (locked ? "" : '<button class="o-addln" id="tn-addln">+ Add a line</button>') + '<div class="o-tot" id="tn-tot" style="margin-top:12px"></div></div></div>' +
+      '</div>';
+    document.getElementById("tn-discard").onclick = function () { go("est.list"); };
+    var lb = document.getElementById("tlbody");
+    function recalc() {
+      var tc = 0, ts = 0;
+      lb.querySelectorAll("tr").forEach(function (tr) {
+        var qi = tr.querySelector(".tl-qty"); if (!qi) return;
+        var q = num(qi.value), uc = num(tr.querySelector(".tl-mat").value) + num(tr.querySelector(".tl-lab").value) + num(tr.querySelector(".tl-sub").value) + num(tr.querySelector(".tl-oth").value);
+        var mg = num(tr.querySelector(".tl-margin").value), rate = uc * (1 + mg / 100), total = rate * q;
+        tr.querySelector(".tl-rate").textContent = money(rate); tr.querySelector(".tl-total").textContent = money(total);
+        tc += uc * q; ts += total;
+      });
+      var el = document.getElementById("tn-tot"); if (el) el.innerHTML = '<div class="r"><span class="k">Total cost</span><span>' + S.company.currency_code + " " + money(tc) + '</span></div><div class="r"><span class="k">Total value (sell)</span><span>' + S.company.currency_code + " " + money(ts) + '</span></div><div class="r tt"><span class="k">Margin</span><span>' + S.company.currency_code + " " + money(ts - tc) + " (" + (ts ? ((ts - tc) / ts * 100).toFixed(1) : "0") + '%)</span></div>';
+      return { cost: tc, sell: ts };
+    }
+    function addRow(l) {
+      var tr = document.createElement("tr");
+      if (locked) {
+        tr.innerHTML = '<td>' + esc(l.code || "") + '</td><td>' + esc(l.description || "") + '</td><td>' + esc(l.unit || "") + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td class="num">' + money(l.material_cost) + '</td><td class="num">' + money(l.labour_cost) + '</td><td class="num">' + money(l.subcontract_cost) + '</td><td class="num">' + money(l.other_cost) + '</td><td class="num">' + Number(l.margin_pct || 0) + '%</td><td class="num">' + money(l.sell_rate) + '</td><td class="num">' + money(l.line_total) + '</td>';
+        lb.appendChild(tr); return;
+      }
+      tr.innerHTML = '<td><input class="tl-code" value="' + esc(l ? l.code : "") + '"></td><td><input class="tl-desc" value="' + esc(l ? l.description : "") + '" placeholder="Description"></td><td><input class="tl-unit" value="' + esc(l ? l.unit : "") + '"></td><td><input class="tl-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="tl-mat num" type="number" step="0.01" value="' + (l ? l.material_cost : 0) + '"></td><td><input class="tl-lab num" type="number" step="0.01" value="' + (l ? l.labour_cost : 0) + '"></td><td><input class="tl-sub num" type="number" step="0.01" value="' + (l ? l.subcontract_cost : 0) + '"></td><td><input class="tl-oth num" type="number" step="0.01" value="' + (l ? l.other_cost : 0) + '"></td><td><input class="tl-margin num" type="number" step="0.1" value="' + (l ? l.margin_pct : defMargin) + '"></td><td class="num tl-rate">0.00</td><td class="num tl-total">0.00</td><td><button class="del">&times;</button></td>';
+      lb.appendChild(tr);
+      tr.querySelectorAll("input").forEach(function (el) { el.addEventListener("input", recalc); });
+      tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
+    }
+    if (lines.length) lines.forEach(addRow); else if (!locked) addRow(null);
+    var addb = document.getElementById("tn-addln"); if (addb) addb.onclick = function () { addRow(null); recalc(); };
+    recalc();
+    function currentLines() {
+      return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
+        var qi = tr.querySelector(".tl-qty"); if (!qi) return null;
+        var q = num(qi.value), mat = num(tr.querySelector(".tl-mat").value), lab = num(tr.querySelector(".tl-lab").value), sub = num(tr.querySelector(".tl-sub").value), oth = num(tr.querySelector(".tl-oth").value), mg = num(tr.querySelector(".tl-margin").value);
+        var uc = mat + lab + sub + oth, rate = uc * (1 + mg / 100);
+        return { code: tr.querySelector(".tl-code").value.trim(), description: tr.querySelector(".tl-desc").value.trim() || "Item", unit: tr.querySelector(".tl-unit").value.trim(), quantity: q, material_cost: mat, labour_cost: lab, subcontract_cost: sub, other_cost: oth, margin_pct: mg, sell_rate: rate, line_total: rate * q };
+      }).filter(Boolean);
+    }
+    async function persist() {
+      var tot = recalc();
+      var n = gv("tn-num") || (t.number || (await nextTenderNumber()));
+      var row = { number: n, name: gv("tn-name") || "Tender", partner_id: document.getElementById("tn-client").value || null, tender_date: gv("tn-date"), valid_until: gv("tn-valid") || null, margin_pct: num(gv("tn-margin")), total_cost: tot.cost, total_sell: tot.sell };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; var ins = await sb.from("tenders").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("tenders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("tender_lines").delete().eq("tender_id", id); }
+      var lns = currentLines();
+      if (lns.length) { var lr = await sb.from("tender_lines").insert(lns.map(function (l, i) { return Object.assign({ company_id: S.company.id, tender_id: sid, sequence: (i + 1) * 10 }, l); })); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; } }
+      return sid;
+    }
+    var sv = document.getElementById("tn-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderTenderForm(sid); } };
+    var subb = document.getElementById("tn-submit"); if (subb) subb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("tenders").update({ status: "submitted", submitted_date: today() }).eq("id", sid); toast("Marked submitted"); renderTenderForm(sid); };
+    var lostb = document.getElementById("tn-lost"); if (lostb) lostb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("tenders").update({ status: "lost" }).eq("id", sid); toast("Marked lost"); renderTenderForm(sid); };
+    var wonb = document.getElementById("tn-won"); if (wonb) wonb.onclick = async function () { var sid = await persist(); if (!sid) return; await convertTenderToProject(sid); };
+    var gpb = document.getElementById("tn-goproj"); if (gpb) gpb.onclick = function () { renderProjectForm(t.project_id); };
+  }
+  async function convertTenderToProject(tenderId) {
+    var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
+    if (!t) { toast("Tender not found"); return; }
+    var lines = (await sb.from("tender_lines").select("*").eq("tender_id", tenderId).order("sequence")).data || [];
+    var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), is_active: true }).select("id").single();
+    if (proj.error) { toast("Could not create project: " + proj.error.message); return; }
+    var pid = proj.data.id;
+    var mat = 0, lab = 0, sub = 0, oth = 0;
+    lines.forEach(function (l) { var q = Number(l.quantity || 0); mat += Number(l.material_cost || 0) * q; lab += Number(l.labour_cost || 0) * q; sub += Number(l.subcontract_cost || 0) * q; oth += Number(l.other_cost || 0) * q; });
+    var buds = [];
+    if (mat > 0) buds.push({ category: "Material", amount: mat });
+    if (lab > 0) buds.push({ category: "Labour", amount: lab });
+    if (sub > 0) buds.push({ category: "Subcontract", amount: sub });
+    if (oth > 0) buds.push({ category: "Overhead / other", amount: oth });
+    if (buds.length) await sb.from("project_budgets").insert(buds.map(function (b) { return { company_id: S.company.id, project_id: pid, category: b.category, description: "From tender " + (t.number || ""), amount: b.amount }; }));
+    if (lines.length) await sb.from("project_boq").insert(lines.map(function (l, i) { return { company_id: S.company.id, project_id: pid, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: Number(l.quantity || 0), rate: Number(l.sell_rate || 0), amount: Number(l.line_total || 0), sequence: (i + 1) * 10 }; }));
+    await sb.from("tenders").update({ status: "won", project_id: pid }).eq("id", tenderId);
+    toast("Tender won - project created with cost budget & schedule of values"); renderProjectForm(pid);
   }
 
   // ---- start ----
