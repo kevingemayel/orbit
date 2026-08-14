@@ -2789,19 +2789,23 @@
     return { worked_days: wdays, worked_hours: Math.round(wh * 100) / 100, ot_hours: Math.round(Math.max(0, wh - expected) * 100) / 100, ut_hours: Math.round(Math.max(0, expected - wh) * 100) / 100, leave_days: lv.reduce(function (s, x) { return s + Number(x.days || 0); }, 0) };
   }
   async function postPayslip(slip) {
-    var accs = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true)).data || [];
-    var sal = accs.filter(function (a) { return /salar|payroll|personnel|wage|staff/i.test(a.name); })[0];
-    var exp = sal ? sal.id : (accs.filter(function (a) { return a.code === "6000"; })[0] || {}).id;
-    var ap = (accs.filter(function (a) { return a.code === "4000"; })[0] || {}).id;
-    if (!exp || !ap) { toast("Need a salary/expense account and a payable (4000) account"); return false; }
+    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var expAccs = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
+    var payAccs = accs.filter(function (a) { return (a.type_code || "").indexOf("liability") === 0; });
+    // Gross salary is a P&L EXPENSE (prefer a salary/personnel expense account).
+    var exp = (expAccs.filter(function (a) { return /salar|payroll|personnel|wage|staff/i.test(a.name); })[0] || expAccs.filter(function (a) { return a.code === "6000"; })[0] || expAccs[0] || {}).id;
+    // Net pay is a liability (salaries payable if it exists, else generic payable).
+    var netAcc = (payAccs.filter(function (a) { return /salar|payroll|personnel/i.test(a.name); })[0] || payAccs.filter(function (a) { return a.code === "4000"; })[0] || payAccs[0] || {}).id;
+    var dedAcc = (payAccs.filter(function (a) { return a.code === "4000"; })[0] || payAccs[0] || {}).id;
+    if (!exp || !netAcc) { toast("Need a salary/expense account and a payable account in the chart"); return false; }
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     if (!jr) { toast("No MISC journal to post to"); return false; }
     var gross = Number(slip.gross) || 0, ded = Number(slip.total_deductions) || 0, net = Number(slip.net) || 0;
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: slip.date_to || today(), ref: "Payslip", narration: "Payroll " + (slip.date_from || ""), currency_code: S.company.currency_code, state: "draft", source_type: "payslip", source_id: String(slip.id) }).select("id").single();
     if (e.error) { toast("Entry failed: " + e.error.message); return false; }
     var eid = e.data.id, jl = [{ entry_id: eid, company_id: S.company.id, account_id: exp, label: "Gross salary", debit: gross, credit: 0 }];
-    if (ded > 0.005) jl.push({ entry_id: eid, company_id: S.company.id, account_id: ap, label: "Payroll deductions", debit: 0, credit: ded });
-    jl.push({ entry_id: eid, company_id: S.company.id, account_id: ap, label: "Net salary payable", debit: 0, credit: net });
+    if (ded > 0.005) jl.push({ entry_id: eid, company_id: S.company.id, account_id: dedAcc, label: "Payroll deductions", debit: 0, credit: ded });
+    jl.push({ entry_id: eid, company_id: S.company.id, account_id: netAcc, label: "Net salary payable", debit: 0, credit: net });
     if ((await sb.from("journal_lines").insert(jl)).error) { toast("Lines failed"); return false; }
     var pr = await sb.rpc("post_entry", { p_entry: eid });
     if (pr.error) { toast("Post failed: " + pr.error.message); return false; }
