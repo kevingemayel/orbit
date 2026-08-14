@@ -219,6 +219,9 @@ button{font-family:inherit}
 .o-report.wide{max-width:1120px}
 .o-rt-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .o-rt-wrap .o-rt{min-width:720px}
+.o-roster th{text-align:center;padding:7px 6px;font-size:12px}
+.o-roster td{text-align:center;vertical-align:middle}
+.o-roster select{width:100%;min-width:64px;padding:5px 4px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit}
 .o-report h1{font-size:20px;letter-spacing:-.01em}
 .o-report .sub{color:var(--ink3);font-size:12.5px;margin:3px 0 16px}
 .o-rt{width:100%;border-collapse:collapse}

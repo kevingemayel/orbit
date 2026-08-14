@@ -99,7 +99,7 @@
         { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"], ["Contracts", "hr.contracts"]] },
         { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
         { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
-        { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"]] },
+        { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
         { label: "Expenses", action: "hr.exp" }
       ]
     },
@@ -126,7 +126,7 @@
     "proj.list": "project", "task.list": "project", "ts.list": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
-    "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr"
+    "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
   };
   var SOON = [["Manufacturing", "⚒", "#0d9488"], ["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
 
@@ -337,7 +337,9 @@
       case "hr.att": return renderList(cfgAttendances());
       case "hr.exp": return renderList(cfgExpenses());
       case "hr.contracts": return renderList(cfgContracts());
-      case "hr.roster": return renderList(cfgRoster());
+      case "hr.roster": return renderRoster();
+      case "hr.eos": return renderEOS();
+      case "hr.payconsol": return renderPayrollConsolidation();
       case "hr.shifts": return renderList(cfgShifts());
       case "hr.alloc": return renderList(cfgLeaveAllocations());
       case "hr.runs": return renderList(cfgPayslipRuns());
@@ -2637,6 +2639,13 @@
     };
   }
   var LEAVE_T = { paid: "Paid time off", sick: "Sick leave", unpaid: "Unpaid" };
+  async function leaveBalance(empId, type, year) {
+    var al = (await sb.from("hr_leave_allocations").select("days").eq("company_id", S.company.id).eq("employee_id", empId).eq("leave_type", type).eq("year", year)).data || [];
+    var allocated = al.reduce(function (s, x) { return s + Number(x.days || 0); }, 0);
+    var lv = (await sb.from("hr_leaves").select("days,date_from").eq("company_id", S.company.id).eq("employee_id", empId).eq("leave_type", type).eq("state", "approved")).data || [];
+    var taken = lv.filter(function (x) { return (x.date_from || "").slice(0, 4) === String(year); }).reduce(function (s, x) { return s + Number(x.days || 0); }, 0);
+    return { allocated: allocated, taken: taken, remaining: allocated - taken };
+  }
   function cfgLeaves() {
     return {
       title: "Time Off", pageSize: 80,
@@ -2667,9 +2676,22 @@
       '<div><label>Type</label>' + fhint("__lvtype", "The kind of leave.") + '<select id="lv-type"><option value="paid"' + (leave.leave_type === "paid" ? " selected" : "") + '>Paid time off</option><option value="sick"' + (leave.leave_type === "sick" ? " selected" : "") + '>Sick leave</option><option value="unpaid"' + (leave.leave_type === "unpaid" ? " selected" : "") + '>Unpaid</option></select></div>' +
       '<div class="row2"><div><label>From</label>' + fhint("__lvfrom", "First day off.") + '<input id="lv-from" type="date" value="' + (leave.date_from || today()) + '"></div><div><label>To</label>' + fhint("__lvto", "Last day off.") + '<input id="lv-to" type="date" value="' + (leave.date_to || today()) + '"></div></div>' +
       '<div><label>Days</label>' + fhint("__lvdays", "Number of days requested.") + '<input id="lv-days" type="number" step="0.5" value="' + (leave.days || 1) + '"></div>' +
+      '<div id="lv-bal" class="muted" style="font-size:12.5px;padding:2px 0">Checking balance...</div>' +
       '</div><div class="foot"><button class="btn" id="lv-cancel">Cancel</button>' + (leave.id && !approved ? '<button class="btn" id="lv-approve">Approve</button>' : "") + '<button class="btn pri" id="lv-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("lv-cancel").onclick = function () { m.remove(); };
+    var LV_REM = Infinity;
+    async function refreshBal() {
+      var el = document.getElementById("lv-bal"); if (!el) return;
+      var type = document.getElementById("lv-type").value, emp = document.getElementById("lv-emp").value;
+      var yr = parseInt((document.getElementById("lv-from").value || today()).slice(0, 4)) || new Date().getFullYear();
+      if (type === "unpaid") { LV_REM = Infinity; el.style.color = ""; el.textContent = "Unpaid leave - no allocation limit."; return; }
+      var b = await leaveBalance(emp, type, yr); LV_REM = b.remaining;
+      el.style.color = b.remaining < 0 ? "var(--warn,#c0392b)" : "";
+      el.textContent = "Balance " + yr + ": allocated " + b.allocated + ", taken " + b.taken + ", remaining " + b.remaining + " day(s)." + (b.allocated === 0 ? " (No allocation set - add one under Time Off > Allocations.)" : "");
+    }
+    ["lv-emp", "lv-type", "lv-from", "lv-days"].forEach(function (id) { var e = document.getElementById(id); if (e) e.addEventListener("change", refreshBal); });
+    refreshBal();
     function collect() { return { employee_id: document.getElementById("lv-emp").value, leave_type: document.getElementById("lv-type").value, date_from: document.getElementById("lv-from").value, date_to: document.getElementById("lv-to").value, days: parseFloat(gv("lv-days")) || 0 }; }
     document.getElementById("lv-save").onclick = async function () {
       var row = collect();
@@ -2678,7 +2700,9 @@
       m.remove(); toast("Saved"); renderView();
     };
     var ap = document.getElementById("lv-approve"); if (ap) ap.onclick = async function () {
-      var row = collect(); row.state = "approved";
+      var row = collect();
+      if (row.leave_type !== "unpaid" && row.days > LV_REM + 0.001) { toast("Exceeds balance: only " + (isFinite(LV_REM) ? LV_REM : 0) + " day(s) remaining. Add an allocation first."); return; }
+      row.state = "approved";
       var r = await sb.from("hr_leaves").update(row).eq("id", leave.id);
       if (r.error) { toast("Could not approve: " + r.error.message); return; }
       m.remove(); toast("Approved"); renderView();
@@ -3248,6 +3272,109 @@
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       m.remove(); toast("Saved"); renderView();
     };
+  }
+
+  // ---- Roster calendar grid ----
+  var ROSTER_WEEK = null;
+  function ymdLocal(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  async function renderRoster() {
+    if (!ROSTER_WEEK) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); ROSTER_WEEK = ymdLocal(n); }
+    var start = new Date(ROSTER_WEEK + "T00:00:00"), days = [];
+    for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(start.getDate() + i); days.push(ymdLocal(d)); }
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roster") + '<div class="gap"></div><span class="o-pager">Week of ' + ROSTER_WEEK + '</span><button class="o-filtbtn" id="rst-prev">&#8249; Prev</button><button class="o-filtbtn" id="rst-today">This week</button><button class="o-filtbtn" id="rst-next">Next &#8250;</button></div><div class="o-form-bg" style="padding:14px"><div id="rst" class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("rst-prev").onclick = function () { var s = new Date(ROSTER_WEEK + "T00:00:00"); s.setDate(s.getDate() - 7); ROSTER_WEEK = ymdLocal(s); renderRoster(); };
+    document.getElementById("rst-next").onclick = function () { var s = new Date(ROSTER_WEEK + "T00:00:00"); s.setDate(s.getDate() + 7); ROSTER_WEEK = ymdLocal(s); renderRoster(); };
+    document.getElementById("rst-today").onclick = function () { ROSTER_WEEK = null; renderRoster(); };
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var shifts = (await sb.from("hr_shifts").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var roster = (await sb.from("hr_roster").select("employee_id,work_date,shift_id").eq("company_id", S.company.id).gte("work_date", days[0]).lte("work_date", days[6])).data || [];
+    var rmap = {}; roster.forEach(function (r) { rmap[r.employee_id + "|" + r.work_date] = r.shift_id; });
+    var dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    var head = '<tr><th style="text-align:left">Employee</th>' + days.map(function (d, i) { return '<th>' + dow[i] + '<br><span class="muted">' + d.slice(5) + '</span></th>'; }).join("") + '</tr>';
+    var body = emps.map(function (e) {
+      return '<tr><td style="text-align:left"><b>' + esc(e.name) + '</b></td>' + days.map(function (d) {
+        var cur = rmap[e.id + "|" + d] || "";
+        return '<td><select class="rst-cell" data-emp="' + e.id + '" data-date="' + d + '"><option value=""' + (!cur ? " selected" : "") + '>Off</option>' + shifts.map(function (s) { return '<option value="' + s.id + '"' + (cur === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></td>';
+      }).join("") + '</tr>';
+    }).join("");
+    var rst = document.getElementById("rst"); rst.className = "";
+    rst.innerHTML = !emps.length ? '<div class="o-empty">Add employees first.</div>' : !shifts.length ? '<div class="o-empty">Create a shift first (Attendances &gt; Shifts).</div>' : '<div class="o-rt-wrap"><table class="o-rt o-roster">' + head + body + '</table></div>';
+    document.querySelectorAll(".rst-cell").forEach(function (sel) {
+      sel.onchange = async function () {
+        var emp = sel.dataset.emp, date = sel.dataset.date, sh = sel.value, r;
+        if (sh) r = await sb.from("hr_roster").upsert({ company_id: S.company.id, employee_id: emp, work_date: date, shift_id: sh }, { onConflict: "employee_id,work_date" });
+        else r = await sb.from("hr_roster").delete().eq("company_id", S.company.id).eq("employee_id", emp).eq("work_date", date);
+        if (r && r.error) toast("Could not save: " + r.error.message); else toast("Roster updated");
+      };
+    });
+  }
+
+  // ---- End-of-service settlement ----
+  async function renderEOS() {
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var sel = '<select id="eos-emp" class="o-filtbtn" style="min-width:200px"><option value="">Select employee...</option>' + emps.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("End of Service") + '<div class="gap"></div>' + sel + '<input id="eos-date" type="date" class="o-filtbtn" value="' + today() + '"><button class="o-filtbtn" id="eos-calc">Calculate</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="eos" style="max-width:660px"><div class="o-empty">Pick an employee and their last working day, then Calculate the end-of-service gratuity.</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("eos-calc").onclick = compute;
+    document.getElementById("eos-emp").onchange = function () { if (this.value) compute(); };
+    async function compute() {
+      var empId = document.getElementById("eos-emp").value; if (!empId) { toast("Pick an employee"); return; }
+      var end = document.getElementById("eos-date").value || today();
+      var ct = (await sb.from("hr_contracts").select("*").eq("company_id", S.company.id).eq("employee_id", empId).order("state", { ascending: false })).data || [];
+      var contract = ct.filter(function (x) { return x.state === "running"; })[0] || ct[0];
+      var rep = document.getElementById("eos");
+      if (!contract || !contract.date_start) { rep.innerHTML = '<div class="o-empty">This employee has no contract with a start date. Set a contract start date under Contracts.</div>'; return; }
+      var cc = contract.currency_code || S.company.currency_code;
+      var start = new Date(contract.date_start + "T00:00:00"), fin = new Date(end + "T00:00:00");
+      var years = Math.max(0, (fin - start) / (365.25 * 864e5)), basic = Number(contract.wage) || 0, dayRate = basic / 30;
+      var first5 = Math.min(years, 5), after = Math.max(0, years - 5), days21 = first5 * 21, days30 = after * 30;
+      var g1 = dayRate * days21, g2 = dayRate * days30, total = g1 + g2;
+      var empName = (emps.filter(function (e) { return e.id === empId; })[0] || {}).name || "";
+      rep.innerHTML = '<h1>End-of-Service Settlement</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + esc(empName) + ' &middot; ' + cc + '</div>' +
+        '<table class="o-rt"><tbody>' +
+        '<tr><td>Contract start</td><td class="num">' + esc(contract.date_start) + '</td></tr>' +
+        '<tr><td>Last working day</td><td class="num">' + esc(end) + '</td></tr>' +
+        '<tr><td>Years of service</td><td class="num">' + years.toFixed(2) + '</td></tr>' +
+        '<tr><td>Last basic salary</td><td class="num">' + cc + " " + money(basic) + '</td></tr>' +
+        '<tr><td>Daily rate (basic / 30)</td><td class="num">' + cc + " " + money(dayRate) + '</td></tr>' +
+        '<tr class="sec"><td colspan="2">Gratuity (21 days/yr first 5 years, 30 days/yr after)</td></tr>' +
+        '<tr><td>First 5 years: ' + first5.toFixed(2) + ' yr &times; 21 days = ' + days21.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g1) + '</td></tr>' +
+        '<tr><td>Beyond 5 years: ' + after.toFixed(2) + ' yr &times; 30 days = ' + days30.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g2) + '</td></tr>' +
+        '<tr class="tot"><td>Total end-of-service gratuity</td><td class="num">' + cc + " " + money(total) + '</td></tr>' +
+        '</tbody></table>' +
+        '<div class="sub" style="margin-top:14px">Standard Gulf-style gratuity: 21 days of basic per year for the first 5 years, 30 days per year thereafter. This is the total accrued benefit due; net any monthly EOS provision already booked via payslips.</div>';
+    }
+  }
+
+  // ---- Payroll consolidation across entities ----
+  async function renderPayrollConsolidation() {
+    var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Payroll Consolidation") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Consolidating payroll across ' + S.companies.length + ' entities...</div></div></div></div>';
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var rates = (await sb.from("currency_rates").select("code,rate,rate_date").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
+    var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
+    var rows = [], totGross = 0, totEmployer = 0, totNet = 0, missing = {};
+    for (var i = 0; i < S.companies.length; i++) {
+      var co = S.companies[i];
+      var slips = (await sb.from("hr_payslips").select("gross,net").eq("company_id", co.id).in("state", ["confirmed", "paid"])).data || [];
+      var lines = (await sb.from("hr_payslip_lines").select("amount,category, hr_payslips!inner(state)").eq("company_id", co.id).eq("category", "employer_cost")).data || [];
+      var employer = lines.filter(function (l) { return l.hr_payslips && (l.hr_payslips.state === "confirmed" || l.hr_payslips.state === "paid"); }).reduce(function (s, l) { return s + Number(l.amount || 0); }, 0);
+      var gross = slips.reduce(function (s, x) { return s + Number(x.gross || 0); }, 0), net = slips.reduce(function (s, x) { return s + Number(x.net || 0); }, 0);
+      var factor = co.currency_code === ref ? 1 : rateMap[co.currency_code], known = factor !== undefined;
+      if (!known) { missing[co.currency_code] = 1; factor = 1; }
+      var gRef = gross * factor, eRef = employer * factor, nRef = net * factor;
+      totGross += gRef; totEmployer += eRef; totNet += nRef;
+      rows.push('<tr><td>' + esc(co.name) + '</td><td class="muted">' + esc(co.currency_code) + '</td><td class="num">' + money(gRef) + '</td><td class="num">' + money(eRef) + '</td><td class="num">' + money(gRef + eRef) + '</td><td class="num">' + money(nRef) + '</td></tr>');
+    }
+    var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
+    document.getElementById("rep").innerHTML = '<h1>Payroll Consolidation</h1><div class="sub">' + esc((S.org && S.org.name) || S.company.name) + ' &middot; ' + ref + ' &middot; posted payslips</div>' + banner +
+      '<table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Gross</td><td class="num">Employer cost</td><td class="num">Total cost</td><td class="num">Net</td></tr></thead><tbody>' +
+      (rows.join("") || '<tr><td colspan="6" class="muted">No posted payslips yet.</td></tr>') +
+      '<tr class="tot"><td colspan="2">Total (' + ref + ')</td><td class="num">' + money(totGross) + '</td><td class="num">' + money(totEmployer) + '</td><td class="num">' + money(totGross + totEmployer) + '</td><td class="num">' + money(totNet) + '</td></tr>' +
+      '</tbody></table>';
   }
 
   // ---- start ----
