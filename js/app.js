@@ -3541,7 +3541,7 @@
     var parent = { action: "pc.list", title: "Progress Certificates" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
-    var projs = (await sb.from("projects").select("id,name,contract_value,retention_pct,advance_amount,partner_id,currency_code").eq("company_id", S.company.id).order("name")).data || [];
+    var projs = (await sb.from("projects").select("id,name,contract_value,retention_pct,advance_amount,partner_id").eq("company_id", S.company.id).order("name")).data || [];
     var cert = id === "new" ? { state: "draft", date_to: today(), project_id: presetProject || (projs[0] ? projs[0].id : null) } : (await sb.from("project_certificates").select("*").eq("id", id).maybeSingle()).data || {};
     var proj = projs.filter(function (p) { return p.id === cert.project_id; })[0] || {};
     var cc = S.company.currency_code, posted = cert.state === "certified" || cert.state === "invoiced";
