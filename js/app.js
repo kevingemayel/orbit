@@ -551,6 +551,7 @@
         { label: "Reference", get: function (m) { return '<span class="muted">' + esc(m.narration || m.ref || "") + '</span>'; } },
         { label: "Status", get: function (m) { return m.state === "posted" ? '<span class="badge paid">Posted</span>' : '<span class="badge draft">Draft</span>'; } }
       ],
+      filters: [{ label: "Posted", test: function (m) { return m.state === "posted"; } }, { label: "Draft", test: function (m) { return m.state !== "posted"; } }],
       groupBy: [{ label: "Journal", get: function (m) { return m.journals ? m.journals.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }]
     };
   }
@@ -1049,6 +1050,9 @@
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
     document.querySelector(".o-bc span:last-child").textContent = order ? (order.number || "Draft") : "New";
+    var invCount = 0, firstInvId = null;
+    if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
+    var smart = (order && invCount) ? '<div class="o-smart"><button class="sb" id="o-sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isSale ? "Invoices" : "Bills") + '</span></button></div>' : "";
 
     var btns = "";
     if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
@@ -1067,8 +1071,9 @@
     var title = order ? (order.number || (isSale ? "Draft Quotation" : "Draft Purchase Order")) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
-      '<div class="o-sheet"><div class="o-title">' + esc(title) + '</div>' + groups +
+      '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' + groups +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
+    if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
     var linesState = lines.map(function (l) { return { name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
@@ -1204,10 +1209,12 @@
     wireBc();
     var a = id === "new" ? { is_active: true } : (await sb.from("accounts").select("*").eq("id", id).maybeSingle()).data || {};
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.code + " " + a.name);
+    var jiCount = id === "new" ? 0 : ((await sb.from("journal_lines").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("account_id", id)).count || 0);
+    var aSmart = id !== "new" ? '<div class="o-smart"><button class="sb" id="a-sm-gl"><span class="v">' + jiCount + '</span><span class="k">Journal Items</span></button></div>' : "";
     var typeOpts = S.types.map(function (t) { return '<option value="' + t.code + '"' + (a.type_code === t.code ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="a-save">Save</button><button id="a-discard">Discard</button></div><div></div></div>' +
-      '<div class="o-sheet"><div class="o-title"><input id="a-name" value="' + esc(a.name || "") + '" placeholder="Account name"></div>' +
+      '<div class="o-sheet">' + aSmart + '<div class="o-title"><input id="a-name" value="' + esc(a.name || "") + '" placeholder="Account name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Code", '<input id="a-code" value="' + esc(a.code || "") + '" placeholder="e.g. 7020">') +
       fld("Type", '<select id="a-type">' + typeOpts + '</select>') +
@@ -1215,6 +1222,7 @@
       fld("Status", '<select id="a-active"><option value="1"' + (a.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!a.is_active ? " selected" : "") + '>Archived</option></select>') +
       '</div></div></div>';
     document.getElementById("a-discard").onclick = function () { go("accounts"); };
+    if (id !== "new") { var _ag = document.getElementById("a-sm-gl"); if (_ag) _ag.onclick = function () { go("rep.gl"); }; }
     document.getElementById("a-save").onclick = async function () {
       var code = gv("a-code"), name = gv("a-name");
       if (!code || !name) { toast("Code and name are required"); return; }
@@ -1241,11 +1249,13 @@
     var saleTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "sale"; });
     var purTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "purchase"; });
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    var prSmart = "";
+    if (id !== "new" && p.type === "storable") { var _oh = await onHandMap(); prSmart = '<div class="o-smart"><button class="sb" id="pr-sm-oh"><span class="v">' + Number(_oh[id] || 0) + '</span><span class="k">On Hand</span></button></div>'; }
     function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
     var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button></div><div></div></div>' +
-      '<div class="o-sheet"><div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
+      '<div class="o-sheet">' + prSmart + '<div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Reference", '<input id="pr-code" value="' + esc(p.default_code || "") + '">') +
       fld("Type", typeSel) +
@@ -1259,6 +1269,7 @@
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
       '</div></div></div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
+    var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
       var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
       var row = {
@@ -1992,7 +2003,16 @@
         { label: "To", get: function (m) { return '<span class="muted">' + esc(m._dest ? m._dest.name : "") + '</span>'; } },
         { label: "Quantity", num: true, get: function (m) { return Number(m.quantity); } }
       ],
-      groupBy: [{ label: "Product", get: function (m) { return m.products ? m.products.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }]
+      filters: [
+        { label: "Receipts", test: function (m) { return m._dest && m._dest.usage === "internal" && (!m._src || m._src.usage !== "internal"); } },
+        { label: "Deliveries", test: function (m) { return m._src && m._src.usage === "internal" && (!m._dest || m._dest.usage !== "internal"); } },
+        { label: "Internal", test: function (m) { return m._src && m._src.usage === "internal" && m._dest && m._dest.usage === "internal"; } }
+      ],
+      groupBy: [
+        { label: "Type", get: function (m) { var s = m._src ? m._src.usage : "", d = m._dest ? m._dest.usage : ""; if (d === "internal" && s !== "internal") return "Receipt"; if (s === "internal" && d !== "internal") return "Delivery"; if (s === "internal" && d === "internal") return "Internal transfer"; return "Other"; } },
+        { label: "Product", get: function (m) { return m.products ? m.products.name : "None"; } },
+        { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }
+      ]
     };
   }
   function cfgWarehouses() {
@@ -2233,7 +2253,9 @@
         { label: "Logged h", num: true, get: function (t) { return Number(t._hours).toFixed(2); } },
         { label: "Deadline", get: function (t) { return '<span class="muted">' + esc(t.date_deadline || "") + '</span>'; } }
       ],
+      filters: [{ label: "Overdue", test: function (t) { return t.date_deadline && t.date_deadline < today(); } }, { label: "No deadline", test: function (t) { return !t.date_deadline; } }],
       groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }],
+      kanbanCard: function (t) { return '<div class="t">' + esc(t.name) + '</div><div class="muted">' + esc(t.projects ? t.projects.name : "") + '</div><div class="r"><span>' + esc(t.date_deadline || "") + '</span><b>' + Number(t._hours).toFixed(1) + ' / ' + Number(t.planned_hours || 0) + ' h</b></div>'; },
       onOpen: function (t) { renderTaskForm(t.id); },
       onNew: function () { renderTaskForm("new"); }
     };
@@ -2280,6 +2302,7 @@
         { label: "Description", get: function (t) { return '<span class="muted">' + esc(t.name || "") + '</span>'; } },
         { label: "Hours", num: true, get: function (t) { return Number(t.hours || 0).toFixed(2); } }
       ],
+      filters: [{ label: "To invoice", test: function (t) { return !t.is_invoiced; } }, { label: "Invoiced", test: function (t) { return !!t.is_invoiced; } }],
       groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }, { label: "Month", get: function (t) { return (t.work_date || "").slice(0, 7); } }],
       onNew: function () { openTimesheetModal(); }
     };
@@ -2347,6 +2370,7 @@
         { label: "Expected", num: true, get: function (l) { return money(l.expected_revenue); } },
         { label: "Prob.", num: true, get: function (l) { return Number(l.probability || 0) + "%"; } }
       ],
+      filters: [{ label: "Open", test: function (l) { return l.is_active !== false; } }, { label: "Lost", test: function (l) { return l.is_active === false; } }],
       groupBy: [{ label: "Stage", get: function (l) { return l._stage || "None"; } }],
       onOpen: function (l) { renderLeadForm(l.id); },
       onNew: function () { renderLeadForm("new"); }
