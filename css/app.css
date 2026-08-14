@@ -67,6 +67,8 @@ button{font-family:inherit}
 .login .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);width:380px;max-width:100%;padding:28px}
 .login .logo{width:46px;height:46px;display:grid;place-items:center;margin-bottom:12px;color:var(--ink)}
 .login .logo svg{width:44px;height:44px;display:block}
+.login .lockup{color:var(--ink);margin-bottom:4px}
+.login .lockup svg{height:44px;width:auto;display:block}
 .login .brandrow{display:flex;align-items:center;gap:12px;margin-bottom:18px}
 .login .brandrow .logo{margin-bottom:0}
 .login .wm{font-family:var(--brand);font-weight:700;font-size:18px;line-height:1.15;color:var(--ink)}
@@ -111,6 +113,8 @@ button{font-family:inherit}
 .o-home-top{display:flex;align-items:center;height:46px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px;gap:10px}
 .o-home-top .logo{width:26px;height:26px;display:grid;place-items:center;color:var(--ink)}
 .o-home-top .logo svg{width:26px;height:26px;display:block}
+.o-home-top .lockup{color:var(--ink);display:flex;align-items:center}
+.o-home-top .lockup svg{height:26px;width:auto;display:block}
 .o-home-top b{font-size:15px}
 .o-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px 4px;max-width:920px;margin:34px auto;padding:0 20px}
 .o-tile{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:12px;cursor:pointer;text-align:center}

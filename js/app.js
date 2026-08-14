@@ -37,6 +37,9 @@
   // Orbit diamond mark (open frame + solid core + blue AI dot). Stroke inherits currentColor
   // so it flips with the theme (ink on light, near-white on dark); the AI dot is always blue.
   function orbitMark(stroke) { stroke = stroke || "currentColor"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
+  // Orbit lockup: the mark is the "O" (no dot); the blue dot moves out to become the tittle of the i in "orbit".
+  // Mark stroke + wordmark inherit currentColor (theme-aware); the AI dot stays blue.
+  function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var today = function () { return new Date().toISOString().slice(0, 10); };
@@ -143,7 +146,7 @@
     mode = mode || "in";
     root.innerHTML =
       '<div class="login"><div class="card">' +
-      '<div class="brandrow"><div class="logo">' + orbitMark() + '</div><div class="wm">Space Work<span>Orbit</span></div></div>' +
+      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div></div>' +
       '<h1>' + (mode === "in" ? "Sign in to Orbit" : "Create your account") + "</h1>" +
       '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
@@ -201,7 +204,7 @@
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
       '<div class="o-home">' +
-      '<div class="o-home-top"><div class="logo">' + orbitMark() + '</div><b>Orbit</b><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
+      '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
       '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
       '<div class="o-grid">' + tiles + soon + '</div></div>';
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
