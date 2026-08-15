@@ -199,6 +199,7 @@
         { label: "Users & Roles", action: "settings.users" },
         { label: "Approvals", action: "approvals.inbox" },
         { label: "Approval Rules", action: "approvals.rules" },
+        { label: "Portal Access", action: "portal.admin" },
         { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
@@ -230,7 +231,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights"
@@ -624,6 +625,53 @@
     };
   }
 
+  // ============================ PORTAL ACCESS (admin) ============================
+  var PORTAL_ROLE = { client: "Client", subcontractor: "Subcontractor", supplier: "Supplier" };
+  function cfgPortalAccess() {
+    return {
+      title: "Portal Access", pageSize: 80,
+      fetch: function () { return sb.from("portal_access").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.email || "") + " " + (r.partners ? r.partners.name : ""); },
+      columns: [
+        { label: "Contact", get: function (r) { return '<b>' + esc(r.partners ? r.partners.name : "") + '</b>'; } },
+        { label: "Sign-in email", get: function (r) { return esc(r.email); } },
+        { label: "Sees", get: function (r) { return esc(PORTAL_ROLE[r.role] || r.role); } },
+        { label: "Active", get: function (r) { return r.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge draft">Off</span>'; } }
+      ],
+      emptyHint: "Invite a client, subcontractor or supplier to see their own projects, certificates and invoices in the read-only portal.",
+      onOpen: function (r) { openPortalInviteModal(r); }, onNew: function () { openPortalInviteModal(null); }
+    };
+  }
+  async function openPortalInviteModal(r) {
+    r = r || {};
+    var partners = (await sb.from("partners").select("id,name,email").order("name")).data || [];
+    var pOpts = '<option value="">Pick a contact</option>' + partners.map(function (p) { return '<option value="' + p.id + '" data-email="' + esc(p.email || "") + '"' + (r.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var roleOpts = Object.keys(PORTAL_ROLE).map(function (k) { return '<option value="' + k + '">' + PORTAL_ROLE[k] + '</option>'; }).join("");
+    var portalUrl = window.location.origin + "/portal.html";
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (r.id ? "Edit portal access" : "Invite to portal") + '</h3><div class="form">' +
+      '<div><label>Contact</label><select id="pi-partner">' + pOpts + '</select></div>' +
+      '<div><label>Sign-in email</label><input id="pi-email" value="' + esc(r.email || "") + '" placeholder="who@company.com"></div>' +
+      '<div class="row2"><div><label>They can see</label><select id="pi-role">' + roleOpts + '</select></div><div><label>Status</label><select id="pi-active"><option value="1">Active</option><option value="0">Off</option></select></div></div>' +
+      '<div class="sub">They sign in at <b>' + esc(portalUrl) + '</b> with this email (a one-time link is emailed, no password). They only ever see their own projects, certificates and invoices, read-only.</div>' +
+      '</div><div class="foot"><button class="btn" id="pi-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="pi-del" style="color:var(--bad)">Remove</button>' : "") + '<button class="btn pri" id="pi-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pi-role").value = r.role || "client";
+    document.getElementById("pi-active").value = r.is_active === false ? "0" : "1";
+    var psel = document.getElementById("pi-partner");
+    psel.onchange = function () { var opt = psel.options[psel.selectedIndex]; var em = opt ? opt.getAttribute("data-email") : ""; if (em && !gv("pi-email")) document.getElementById("pi-email").value = em; };
+    document.getElementById("pi-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("pi-del"); if (del) del.onclick = async function () { await sb.from("portal_access").delete().eq("id", r.id); m.remove(); toast("Removed"); go("portal.admin"); };
+    document.getElementById("pi-save").onclick = async function () {
+      var partnerId = psel.value, email = (gv("pi-email") || "").trim();
+      if (!partnerId) { toast("Pick a contact"); return; }
+      if (!email || email.indexOf("@") < 0) { toast("Enter a valid email"); return; }
+      var row = { partner_id: partnerId, email: email, role: document.getElementById("pi-role").value, is_active: document.getElementById("pi-active").value === "1" };
+      var res; if (r.id) res = await sb.from("portal_access").update(row).eq("id", r.id); else { row.company_id = S.company.id; res = await sb.from("portal_access").insert(row); }
+      if (res.error) { toast(res.error.message); return; } m.remove(); toast("Portal access saved"); go("portal.admin");
+    };
+  }
+
   // ============================ ROUTER ============================
   function go(action) {
     S.action = action;
@@ -700,6 +748,7 @@
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
+      case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());

@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space Work Portal</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2316171c'/%3E%3Cpath d='M75.5 38.3L87.2 50L50 87.2L12.8 50L50 12.8L61.3 24.1' fill='none' stroke='%23ffffff' stroke-width='11' stroke-linejoin='miter'/%3E%3Crect x='43' y='43' width='14' height='14' fill='%23ffffff' transform='rotate(45 50 50)'/%3E%3Ccircle cx='68.4' cy='31.2' r='7' fill='%232f6bff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root{--bg:#f4f2ee;--panel:#fff;--panel2:#f6f4f0;--ink:#16171c;--ink2:#55565c;--ink3:#8a909b;--line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--bad:#f4573d;--bad-s:#fdeae6;--sh:0 1px 2px rgba(22,23,28,.05),0 14px 40px -20px rgba(22,23,28,.18)}
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Onest,system-ui,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased}
+    .wrap{max-width:960px;margin:0 auto;padding:0 20px}
+    a{color:var(--accent)}
+    /* header */
+    header{background:var(--ink);color:#fff}
+    .hdr{display:flex;align-items:center;gap:14px;padding:16px 0}
+    .mark{width:30px;height:30px;flex:none}
+    .brand{font-weight:800;font-size:16px;letter-spacing:-.01em}
+    .brand small{display:block;font-weight:500;font-size:11px;color:#b9bcc4;letter-spacing:.02em}
+    .hdr-r{margin-left:auto;display:flex;align-items:center;gap:14px}
+    .who{text-align:right;font-size:12.5px;line-height:1.3}
+    .who b{font-size:13.5px}
+    .who span{color:#b9bcc4}
+    .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:9px 15px;font:inherit;font-size:14px;font-weight:600;cursor:pointer}
+    .btn:hover{border-color:var(--ink3)}
+    .btn.pri{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn.pri:hover{background:var(--accent2)}
+    .btn.ghost{background:transparent;border-color:#3a3b42;color:#fff}
+    .btn.ghost:hover{border-color:#6a6c75}
+    /* sign in */
+    .signin{max-width:400px;margin:9vh auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);padding:34px 30px;text-align:center}
+    .signin .mark2{width:52px;height:52px;margin:0 auto 16px;display:block}
+    .signin h1{font-size:21px;margin:0 0 6px}
+    .signin p{color:var(--ink2);font-size:14px;margin:0 0 22px;line-height:1.5}
+    .signin label{display:block;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);margin-bottom:6px}
+    .signin input{width:100%;border:1px solid var(--line);border-radius:10px;padding:12px 13px;font:inherit;font-size:15px;background:var(--panel2);color:var(--ink);margin-bottom:14px}
+    .signin input:focus{outline:none;border-color:var(--accent)}
+    .signin .btn{width:100%;padding:12px;font-size:15px}
+    .msg{font-size:13.5px;margin-top:16px;padding:11px 13px;border-radius:10px;line-height:1.45}
+    .msg.ok{background:var(--good-s);color:#0a7a52}
+    .msg.err{background:var(--bad-s);color:#b3311f}
+    .foot{margin-top:22px;font-size:11.5px;color:var(--ink3)}
+    /* dashboard */
+    main{padding:26px 0 60px}
+    .pagehead{margin:0 0 4px;font-size:23px;font-weight:800;letter-spacing:-.01em}
+    .pagesub{color:var(--ink2);font-size:14px;margin-bottom:24px}
+    .sec{margin-bottom:30px}
+    .sec-h{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 12px}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh);padding:16px 18px}
+    .card .t{font-weight:700;font-size:15px;margin-bottom:10px}
+    .kv{display:flex;justify-content:space-between;font-size:13.5px;padding:4px 0;color:var(--ink2)}
+    .kv b{color:var(--ink);font-variant-numeric:tabular-nums}
+    .prog{height:7px;background:var(--panel2);border-radius:999px;overflow:hidden;margin-top:10px}
+    .prog i{display:block;height:100%;background:var(--good);border-radius:999px}
+    .tbl-wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:13px;box-shadow:var(--sh)}
+    table{width:100%;border-collapse:collapse;min-width:520px}
+    th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);font-weight:700;padding:12px 16px;border-bottom:1px solid var(--line)}
+    td{padding:12px 16px;font-size:13.5px;border-bottom:1px solid var(--line);color:var(--ink)}
+    tr:last-child td{border-bottom:none}
+    td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+    .pill{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-block}
+    .pill.paid{background:var(--good-s);color:#0a7a52}
+    .pill.open{background:#eef1ff;color:var(--accent)}
+    .pill.over{background:var(--bad-s);color:#b3311f}
+    .empty{color:var(--ink3);font-size:14px;padding:20px;text-align:center}
+    .center{display:flex;align-items:center;justify-content:center;min-height:70vh;color:var(--ink3)}
+    @media(max-width:560px){.who{display:none}}
+  </style>
+</head>
+<body>
+  <div id="app"><div class="center">Loading...</div></div>
+  <script src="config.js"></script>
+  <script>
+    (function () {
+      var CFG = window.APP_CONFIG || {};
+      var sb = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY);
+      var app = document.getElementById("app");
+      var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+      var CUR = "";
+      function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+      function money(v){ v=Number(v||0); return v.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}); }
+      function cur(v){ return (CUR?CUR+" ":"")+money(v); }
+      function fdate(s){ if(!s) return ""; var d=new Date(s); if(isNaN(d)) return esc(s); return d.getDate()+" "+MONTHS[d.getMonth()]+" "+d.getFullYear(); }
+      function today(){ return new Date().toISOString().slice(0,10); }
+      var MARK = '<svg class="mark" viewBox="0 0 100 100"><rect width="100" height="100" rx="22" fill="#16171c"/><path d="M75.5 38.3L87.2 50L50 87.2L12.8 50L50 12.8L61.3 24.1" fill="none" stroke="#fff" stroke-width="11" stroke-linejoin="miter"/><rect x="43" y="43" width="14" height="14" fill="#fff" transform="rotate(45 50 50)"/><circle cx="68.4" cy="31.2" r="7" fill="#2f6bff"/></svg>';
+
+      function renderSignIn(prefill, message, cls){
+        app.innerHTML =
+          '<div class="signin">' + MARK.replace('class="mark"','class="mark2"') +
+          '<h1>Space Work Portal</h1>' +
+          '<p>Sign in to view your projects, certificates and invoices. We will email you a secure sign-in link, no password needed.</p>' +
+          '<label>Your email</label><input id="email" type="email" autocomplete="email" placeholder="you@company.com" value="' + esc(prefill||"") + '">' +
+          '<button class="btn pri" id="send">Email me a sign-in link</button>' +
+          (message ? '<div class="msg ' + (cls||"ok") + '">' + esc(message) + '</div>' : '') +
+          '<div class="foot">Access is by invitation. If your email is not recognised, contact your Space Work project manager.</div>' +
+          '</div>';
+        document.getElementById("send").onclick = async function(){
+          var email = (document.getElementById("email").value||"").trim();
+          if(!email || email.indexOf("@")<0){ renderSignIn(email,"Please enter a valid email address.","err"); return; }
+          this.disabled = true; this.textContent = "Sending...";
+          var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin + "/portal.html" } });
+          if(r.error){ renderSignIn(email, r.error.message, "err"); return; }
+          renderSignIn(email, "Check your inbox for " + email + " and click the sign-in link. You can close this tab.", "ok");
+          document.getElementById("send").style.display = "none";
+        };
+      }
+
+      function invoicePill(inv){
+        if((inv.state==="paid") || Number(inv.residual)<=0.001) return '<span class="pill paid">Paid</span>';
+        if(inv.due_date && inv.due_date < today()) return '<span class="pill over">Overdue</span>';
+        return '<span class="pill open">Open</span>';
+      }
+
+      async function renderPortal(ctx){
+        app.innerHTML = '<div class="center">Loading your information...</div>';
+        CUR = ctx.currency || "";
+        var res = await Promise.all([ sb.rpc("portal_projects"), sb.rpc("portal_invoices"), sb.rpc("portal_orders") ]);
+        var projects = res[0].data || [], invoices = res[1].data || [], orders = res[2].data || [];
+        var roleLabel = ctx.role==="subcontractor" ? "Subcontractor" : ctx.role==="supplier" ? "Supplier" : "Client";
+
+        var html = '<header><div class="wrap hdr">' + MARK +
+          '<div class="brand">Space Work<small>' + esc(ctx.company||"") + ' portal</small></div>' +
+          '<div class="hdr-r"><div class="who"><b>' + esc(ctx.partner||"") + '</b><br><span>' + roleLabel + '</span></div>' +
+          '<button class="btn ghost" id="signout">Sign out</button></div></div></header>' +
+          '<main><div class="wrap">' +
+          '<div class="pagehead">Welcome, ' + esc(ctx.partner||"") + '</div>' +
+          '<div class="pagesub">Everything Space Work is sharing with you, in one place. This information is read-only and always up to date.</div>';
+
+        if(projects.length){
+          html += '<div class="sec"><div class="sec-h">Your projects</div><div class="cards">' + projects.map(function(p){
+            var pct = p.contract_value>0 ? Math.min(100, Math.round(Number(p.certified)/Number(p.contract_value)*100)) : 0;
+            return '<div class="card"><div class="t">' + esc(p.name) + '</div>' +
+              '<div class="kv"><span>Contract value</span><b>' + cur(p.contract_value) + '</b></div>' +
+              '<div class="kv"><span>Certified to date</span><b>' + cur(p.certified) + '</b></div>' +
+              (p.deadline ? '<div class="kv"><span>Target completion</span><b>' + fdate(p.deadline) + '</b></div>' : '') +
+              '<div class="prog"><i style="width:' + pct + '%"></i></div>' +
+              '<div class="kv" style="margin-top:6px"><span>' + pct + '% certified</span><span>' + (p.active?'Active':'Closed') + '</span></div></div>';
+          }).join("") + '</div></div>';
+        }
+
+        if(invoices.length){
+          html += '<div class="sec"><div class="sec-h">Invoices &amp; certificates</div><div class="tbl-wrap"><table><thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>' +
+            invoices.map(function(i){ return '<tr><td><b>' + esc(i.number||"") + '</b></td><td>' + fdate(i.invoice_date) + '</td><td>' + fdate(i.due_date) + '</td><td class="num">' + cur(i.total) + '</td><td class="num">' + cur(i.residual) + '</td><td>' + invoicePill(i) + '</td></tr>'; }).join("") +
+            '</tbody></table></div></div>';
+        }
+
+        if(orders.length){
+          html += '<div class="sec"><div class="sec-h">Purchase orders</div><div class="tbl-wrap"><table><thead><tr><th>Number</th><th>Date</th><th class="num">Total</th><th>Status</th></tr></thead><tbody>' +
+            orders.map(function(o){ return '<tr><td><b>' + esc(o.number||"") + '</b></td><td>' + fdate(o.date_order) + '</td><td class="num">' + cur(o.total) + '</td><td>' + esc(o.state||"") + '</td></tr>'; }).join("") +
+            '</tbody></table></div></div>';
+        }
+
+        if(!projects.length && !invoices.length && !orders.length){
+          html += '<div class="sec"><div class="tbl-wrap"><div class="empty">Nothing has been shared with you yet. Your Space Work project manager will add documents here as work progresses.</div></div></div>';
+        }
+
+        html += '</div></main>';
+        app.innerHTML = html;
+        document.getElementById("signout").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal.html"; };
+      }
+
+      async function boot(){
+        var sess = (await sb.auth.getSession()).data.session;
+        if(!sess){ renderSignIn("", null, null); return; }
+        var ctxRes = await sb.rpc("portal_context");
+        var ctx = ctxRes.data;
+        if(ctxRes.error){ app.innerHTML = '<div class="center">Could not load the portal. Please try again later.</div>'; return; }
+        if(!ctx){
+          app.innerHTML = '<div class="signin"><h1>No portal access</h1><p>This account (' + esc(sess.user.email) + ') is not linked to a Space Work portal. Please contact your project manager to be invited.</p><button class="btn" id="so">Sign out</button></div>';
+          document.getElementById("so").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal.html"; };
+          return;
+        }
+        renderPortal(ctx);
+      }
+
+      sb.auth.onAuthStateChange(function(evt){ if(evt==="SIGNED_IN") boot(); });
+      boot();
+    })();
+  </script>
+</body>
+</html>
