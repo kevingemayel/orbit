@@ -205,6 +205,12 @@
         { label: "Exchange Rates", action: "rates" },
         { label: "Chart of Accounts", action: "accounts" }
       ]
+    },
+    insights: {
+      name: "Insights", icon: "▬", color: "#0891b2", color2: "#0e7490", home: "dash.home",
+      menus: [
+        { label: "Dashboard", action: "dash.home" }
+      ]
     }
   };
   // which app owns an action (for breadcrumb when navigated directly)
@@ -226,7 +232,8 @@
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
-    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project"
+    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
+    "dash.home": "insights"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -249,6 +256,7 @@
     sign: '<svg viewBox="0 0 100 100"><path d="M18 70 C34 70 38 36 52 36 C62 36 58 60 70 60 C76 60 78 54 80 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M16 84 H84" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="82" cy="28" r="7" fill="#2F6BFF"/></svg>',
     recruitment: '<svg viewBox="0 0 100 100"><circle cx="46" cy="38" r="16" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 84 C18 60 74 60 74 84" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="78" cy="34" r="8" fill="#2F6BFF"/></svg>',
     knowledge: '<svg viewBox="0 0 100 100"><path d="M50 30 C41 22 26 22 16 26 V76 C26 72 41 72 50 80 C59 72 74 72 84 76 V26 C74 22 59 22 50 30 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><path d="M50 30 V80" stroke="currentColor" stroke-width="6"/><circle cx="50" cy="24" r="6" fill="#2F6BFF"/></svg>',
+    insights: '<svg viewBox="0 0 100 100"><path d="M18 82 H86" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><rect x="26" y="52" width="13" height="26" fill="none" stroke="currentColor" stroke-width="6"/><rect x="47" y="38" width="13" height="40" fill="none" stroke="currentColor" stroke-width="6"/><rect x="68" y="24" width="13" height="54" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="74" cy="16" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -534,6 +542,88 @@
     };
   }
 
+  // ============================ INSIGHTS: dashboard / report builder ============================
+  var RPT_SOURCES = {
+    inv_out: { label: "Customer invoices", table: "invoices", select: "*, partners(name)", base: function (q) { return q.eq("move_type", "out_invoice"); },
+      measures: { count: { label: "Number of invoices" }, total: { label: "Total invoiced", field: "amount_total", money: true }, due: { label: "Amount outstanding", field: "amount_residual", money: true } },
+      dims: { "": { label: "(single total)" }, status: { label: "Status", get: function (r) { return r.state === "posted" ? "Posted" : (r.state || "Draft"); } }, month: { label: "Month", get: function (r) { return (r.invoice_date || "").slice(0, 7) || "?"; }, time: true }, customer: { label: "Customer", get: function (r) { return r.partners ? r.partners.name : "None"; } } } },
+    po: { label: "Purchase orders", table: "purchase_orders", select: "*, partners(name)", base: function (q) { return q; },
+      measures: { count: { label: "Number of orders" }, total: { label: "Total committed", field: "amount_total", money: true } },
+      dims: { "": { label: "(single total)" }, status: { label: "Status", get: function (r) { return r.state || "draft"; } }, vendor: { label: "Vendor", get: function (r) { return r.partners ? r.partners.name : "None"; } }, month: { label: "Month", get: function (r) { return (r.date_order || "").slice(0, 7) || "?"; }, time: true } } },
+    projects: { label: "Projects", table: "projects", select: "*, partners(name)", base: function (q) { return q; },
+      measures: { count: { label: "Number of projects" }, contract: { label: "Contract value", field: "contract_value", money: true } },
+      dims: { "": { label: "(single total)" }, status: { label: "Status", get: function (r) { return r.is_active ? "Active" : "Closed"; } }, billing: { label: "Billing type", get: function (r) { return BILLING[r.billing_type] || r.billing_type || "None"; } }, customer: { label: "Customer", get: function (r) { return r.partners ? r.partners.name : "None"; } } } },
+    tasks: { label: "Execution tasks", table: "project_tasks", select: "*", base: function (q) { return q.eq("is_agile", true); },
+      measures: { count: { label: "Number of tasks" }, points: { label: "Effort points", field: "points" } },
+      dims: { "": { label: "(single total)" }, stage: { label: "Stage", get: function (r) { return agStageLabel(r.board_stage || "backlog"); } }, priority: { label: "Priority", get: function (r) { return (TASK_PRIO[r.priority] || TASK_PRIO.medium).label; } } } }
+  };
+  var RPT_CHART = { kpi: "Single number", bar: "Bar chart", line: "Line (over time)", table: "Table" };
+  async function computeReport(rep) {
+    var src = RPT_SOURCES[rep.source]; if (!src) return null;
+    var meas = src.measures[rep.measure] || src.measures.count;
+    var dimKey = rep.group_by || "", dim = src.dims[dimKey];
+    var rows = (await src.base(sb.from(src.table).select(src.select).eq("company_id", S.company.id))).data || [];
+    if (!dimKey || !dim || !dim.get) {
+      var total = meas.field ? rows.reduce(function (s, r) { return s + Number(r[meas.field] || 0); }, 0) : rows.length;
+      return { single: true, total: total, meas: meas, n: rows.length };
+    }
+    var map = {};
+    rows.forEach(function (r) { var k = dim.get(r) || "None"; if (!(k in map)) map[k] = 0; map[k] += meas.field ? Number(r[meas.field] || 0) : 1; });
+    var entries = Object.keys(map).map(function (k) { return { label: k, value: map[k] }; });
+    if (dim.time) entries.sort(function (a, b) { return a.label < b.label ? -1 : 1; }); else entries.sort(function (a, b) { return b.value - a.value; });
+    return { single: false, entries: entries, meas: meas, dim: dim, total: entries.reduce(function (s, e) { return s + e.value; }, 0) };
+  }
+  function rptFmt(v, meas) { return meas.money ? (S.company.currency_code + " " + money(v)) : (Math.round(v * 100) / 100).toLocaleString(); }
+  function widgetBody(rep, data) {
+    if (!data) return '<div class="muted">No data</div>';
+    if (data.single || rep.chart === "kpi") { return '<div class="rw-kpi">' + rptFmt(data.total, data.meas) + '</div><div class="rw-kpi-sub">' + esc(data.meas.label) + '</div>'; }
+    var entries = data.entries || []; if (!entries.length) return '<div class="muted" style="padding:10px 0">No data yet</div>';
+    var max = Math.max.apply(null, entries.map(function (e) { return e.value; }).concat([1]));
+    if (rep.chart === "table") { return '<table class="rw-tbl"><tbody>' + entries.map(function (e) { return '<tr><td>' + esc(e.label) + '</td><td class="num">' + rptFmt(e.value, data.meas) + '</td></tr>'; }).join("") + '</tbody></table>'; }
+    if (rep.chart === "line") {
+      var w = 280, h = 90, pad = 6, n = entries.length;
+      var pts = entries.map(function (e, i) { var x = pad + (n <= 1 ? 0 : (i / (n - 1)) * (w - 2 * pad)); var y = h - pad - (e.value / max) * (h - 2 * pad); return (Math.round(x * 10) / 10) + "," + (Math.round(y * 10) / 10); });
+      var area = "M" + pad + "," + (h - pad) + " L" + pts.join(" L") + " L" + (w - pad) + "," + (h - pad) + " Z";
+      return '<div class="o-rt-wrap"><svg class="rw-line" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><path d="' + area + '" fill="var(--accent-soft)"/><polyline points="' + pts.join(" ") + '" fill="none" stroke="var(--accent)" stroke-width="2"/></svg></div><div class="rw-line-x">' + entries.map(function (e) { return '<span>' + esc(e.label.slice(5) || e.label) + '</span>'; }).join("") + '</div>';
+    }
+    return '<div class="rw-bars">' + entries.slice(0, 8).map(function (e) { var pc = Math.round(e.value / max * 100); return '<div class="rw-bar-row"><span class="rw-bar-l" title="' + esc(e.label) + '">' + esc(e.label) + '</span><span class="rw-bar-track"><span class="rw-bar-fill" style="width:' + pc + '%"></span></span><span class="rw-bar-v">' + rptFmt(e.value, data.meas) + '</span></div>'; }).join("") + '</div>';
+  }
+  async function renderDashboard() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '<div class="gap"></div><button class="o-filtbtn pri" id="rw-new">+ New report</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("rw-new").onclick = function () { openReportModal(null); };
+    var reports = (await sb.from("reports").select("*").eq("company_id", S.company.id).order("sort_order").order("created_at")).data || [];
+    var body = document.getElementById("o-body");
+    if (!reports.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Build your dashboard</div><div class="o-empty2-h">Create report tiles from your live data (invoices, orders, projects, tasks) as KPIs, bar or line charts. They refresh every time you open this page.</div><button class="o-new" id="rw-new2" style="margin-top:14px">+ New report</button></div>'; document.getElementById("rw-new2").onclick = function () { openReportModal(null); }; return; }
+    body.innerHTML = '<div class="rw-grid">' + reports.map(function (r) { return '<div class="rw-card"><div class="rw-head"><div class="rw-title">' + esc(r.name) + '</div><button class="rw-edit" data-id="' + r.id + '">Edit</button></div><div class="rw-body" id="rwb-' + r.id + '"><div class="muted">Loading...</div></div></div>'; }).join("") + '</div>';
+    reports.forEach(function (rep) { computeReport(rep).then(function (data) { var el = document.getElementById("rwb-" + rep.id); if (el) el.innerHTML = widgetBody(rep, data); }).catch(function () { var el = document.getElementById("rwb-" + rep.id); if (el) el.innerHTML = '<div class="muted">Could not load</div>'; }); });
+    document.querySelectorAll(".rw-edit").forEach(function (b) { b.onclick = function () { openReportModal(reports.filter(function (r) { return r.id === b.dataset.id; })[0]); }; });
+  }
+  function openReportModal(rep) {
+    rep = rep || { source: "inv_out", measure: "count", group_by: "status", chart: "bar" };
+    function measOpts(k, sel) { var s = RPT_SOURCES[k]; return Object.keys(s.measures).map(function (mk) { return '<option value="' + mk + '"' + (mk === sel ? " selected" : "") + '>' + s.measures[mk].label + '</option>'; }).join(""); }
+    function dimOpts(k, sel) { var s = RPT_SOURCES[k]; return Object.keys(s.dims).map(function (dk) { return '<option value="' + dk + '"' + (dk === sel ? " selected" : "") + '>' + s.dims[dk].label + '</option>'; }).join(""); }
+    var srcOpts = Object.keys(RPT_SOURCES).map(function (k) { return '<option value="' + k + '"' + (k === rep.source ? " selected" : "") + '>' + RPT_SOURCES[k].label + '</option>'; }).join("");
+    var chartOpts = Object.keys(RPT_CHART).map(function (k) { return '<option value="' + k + '"' + (k === rep.chart ? " selected" : "") + '>' + RPT_CHART[k] + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (rep.id ? "Edit report" : "New report") + '</h3><div class="form">' +
+      '<div><label>Title</label><input id="rp-name" value="' + esc(rep.name || "") + '" placeholder="e.g. Invoiced by month"></div>' +
+      '<div class="row2"><div><label>Data source</label><select id="rp-src">' + srcOpts + '</select></div><div><label>Measure</label><select id="rp-meas">' + measOpts(rep.source, rep.measure) + '</select></div></div>' +
+      '<div class="row2"><div><label>Group by</label><select id="rp-dim">' + dimOpts(rep.source, rep.group_by) + '</select></div><div><label>Chart</label><select id="rp-chart">' + chartOpts + '</select></div></div>' +
+      '<div class="sub">The numbers are calculated live from your data each time the dashboard loads.</div>' +
+      '</div><div class="foot"><button class="btn" id="rp-cancel">Cancel</button>' + (rep.id ? '<button class="btn" id="rp-del" style="color:var(--bad)">Delete</button>' : "") + '<button class="btn pri" id="rp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    var srcSel = document.getElementById("rp-src");
+    srcSel.onchange = function () { document.getElementById("rp-meas").innerHTML = measOpts(srcSel.value, "count"); document.getElementById("rp-dim").innerHTML = dimOpts(srcSel.value, ""); };
+    document.getElementById("rp-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("rp-del"); if (del) del.onclick = async function () { await sb.from("reports").delete().eq("id", rep.id); m.remove(); renderDashboard(); };
+    document.getElementById("rp-save").onclick = async function () {
+      var row = { name: gv("rp-name") || "Report", source: srcSel.value, measure: document.getElementById("rp-meas").value, group_by: document.getElementById("rp-dim").value, chart: document.getElementById("rp-chart").value };
+      var r; if (rep.id) r = await sb.from("reports").update(row).eq("id", rep.id); else { row.company_id = S.company.id; r = await sb.from("reports").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); renderDashboard();
+    };
+  }
+
   // ============================ ROUTER ============================
   function go(action) {
     S.action = action;
@@ -609,6 +699,7 @@
       case "settings.users": return renderUsers();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
+      case "dash.home": return renderDashboard();
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());

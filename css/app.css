@@ -420,6 +420,26 @@ button{font-family:inherit}
 .o-lead .m{font-size:12px;color:var(--ink2);margin-top:2px}
 .o-lead .rev{font-weight:700;font-size:12.5px;margin-top:5px;color:var(--ink)}
 
+/* ===== Insights dashboard ===== */
+.rw-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;padding:14px 16px}
+.rw-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--sh);min-height:150px}
+.rw-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.rw-title{font-weight:700;font-size:14px;color:var(--ink)}
+.rw-edit{border:none;background:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer}
+.rw-kpi{font-size:34px;font-weight:800;color:var(--ink);letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.rw-kpi-sub{font-size:12.5px;color:var(--ink3);margin-top:4px}
+.rw-bars{display:flex;flex-direction:column;gap:8px}
+.rw-bar-row{display:flex;align-items:center;gap:9px;font-size:12.5px}
+.rw-bar-l{width:88px;flex:none;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rw-bar-track{flex:1;height:9px;background:var(--panel2);border-radius:999px;overflow:hidden}
+.rw-bar-fill{display:block;height:100%;background:var(--accent);border-radius:999px}
+.rw-bar-v{flex:none;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums}
+.rw-tbl{width:100%;border-collapse:collapse}
+.rw-tbl td{padding:5px 0;font-size:13px;border-bottom:1px solid var(--line);color:var(--ink)}
+.rw-tbl td.num{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.rw-line{width:100%;height:90px;display:block}
+.rw-line-x{display:flex;justify-content:space-between;font-size:10.5px;color:var(--ink3);margin-top:4px}
+
 /* ===== Approvals inbox ===== */
 .ap-sec-h{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);margin:0 0 10px}
 .ap-card{display:flex;justify-content:space-between;align-items:center;gap:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--sh);margin-bottom:10px}
