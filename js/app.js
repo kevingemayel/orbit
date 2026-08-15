@@ -146,6 +146,28 @@
         { label: "Configuration", items: [["Tags", "contact.tags"]] }
       ]
     },
+    calendar: {
+      name: "Calendar", icon: "◷", color: "#0891b2", color2: "#0e7490", home: "cal.month",
+      menus: [
+        { label: "Calendar", action: "cal.month" },
+        { label: "Agenda", action: "cal.agenda" }
+      ]
+    },
+    sign: {
+      name: "Sign", icon: "✒", color: "#7c3aed", color2: "#6d28d9", home: "sign.list",
+      menus: [{ label: "Signature Requests", action: "sign.list" }]
+    },
+    recruitment: {
+      name: "Recruitment", icon: "☺", color: "#db2777", color2: "#be185d", home: "rec.applicants",
+      menus: [
+        { label: "Applicants", action: "rec.applicants" },
+        { label: "Job Positions", action: "hr.jobs" }
+      ]
+    },
+    knowledge: {
+      name: "Knowledge", icon: "▤", color: "#ca8a04", color2: "#a16207", home: "kb.articles",
+      menus: [{ label: "Articles", action: "kb.articles" }]
+    },
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
@@ -188,7 +210,8 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings"
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings",
+    "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -206,6 +229,10 @@
     installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
     documents: '<svg viewBox="0 0 100 100"><path d="M28 14 H62 L78 30 V86 H28 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M62 14 V30 H78" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M40 48 H64 M40 60 H60" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="66" cy="72" r="7" fill="#2F6BFF"/></svg>',
     contacts: '<svg viewBox="0 0 100 100"><rect x="22" y="18" width="56" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="50" cy="44" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M34 70 C34 58 66 58 66 70" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="72" cy="26" r="6" fill="#2F6BFF"/></svg>',
+    calendar: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82" stroke="currentColor" stroke-width="7"/><path d="M34 15 V30 M66 15 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="63" cy="61" r="7" fill="#2F6BFF"/></svg>',
+    sign: '<svg viewBox="0 0 100 100"><path d="M18 70 C34 70 38 36 52 36 C62 36 58 60 70 60 C76 60 78 54 80 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M16 84 H84" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="82" cy="28" r="7" fill="#2F6BFF"/></svg>',
+    recruitment: '<svg viewBox="0 0 100 100"><circle cx="46" cy="38" r="16" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 84 C18 60 74 60 74 84" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="78" cy="34" r="8" fill="#2F6BFF"/></svg>',
+    knowledge: '<svg viewBox="0 0 100 100"><path d="M50 30 C41 22 26 22 16 26 V76 C26 72 41 72 50 80 C59 72 74 72 84 76 V26 C74 22 59 22 50 30 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><path d="M50 30 V80" stroke="currentColor" stroke-width="6"/><circle cx="50" cy="24" r="6" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -426,6 +453,11 @@
       case "hr.shifttmpl": return renderList(cfgShiftTemplates());
       case "contacts": return renderList(cfgContacts());
       case "contact.tags": return renderList(cfgContactTags());
+      case "cal.month": return renderCalendar();
+      case "cal.agenda": return renderAgenda();
+      case "sign.list": return renderList(cfgSignRequests());
+      case "rec.applicants": return renderList(cfgApplicants());
+      case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -2578,6 +2610,295 @@
       if (!row.location_id) { toast("Pick a location"); return; }
       var r; if (p.id) r = await sb.from("putaway_rules").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("putaway_rules").insert(row); }
       if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ CALENDAR & ACTIVITIES ============================
+  var CAT_COLOR = { meeting: "#2f6bff", site_visit: "#0d9488", milestone: "#7c3aed", reminder: "#c58217", deadline: "#c58217", other: "#55565c", submittal: "#0369a1", rfi: "#ea580c", cert: "#f4573d", invoice: "#0ea66f", planning: "#4f46e5", install: "#ea580c" };
+  async function collectCalendarItems(fromStr, toStr) {
+    var cid = S.company.id, out = [];
+    function push(date, title, cat, action) { if (!date) return; var d = String(date).slice(0, 10); if (d < fromStr || d > toStr) return; out.push({ date: d, title: title, cat: cat, action: action }); }
+    var ev = (await sb.from("calendar_events").select("*").eq("company_id", cid).gte("event_date", fromStr).lte("event_date", toStr)).data || [];
+    ev.forEach(function (e) { out.push({ date: e.event_date, title: e.title, cat: e.category || "other", event: e }); });
+    var subs = (await sb.from("submittals").select("number,title,due_date,status").eq("company_id", cid).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
+    subs.forEach(function (s) { if (["approved", "approved_comments", "superseded"].indexOf(s.status) < 0) push(s.due_date, "Submittal due: " + (s.title || s.number), "submittal", "doc.subs"); });
+    var rfis = (await sb.from("rfis").select("number,subject,needed_by,status").eq("company_id", cid).not("needed_by", "is", null).gte("needed_by", fromStr).lte("needed_by", toStr)).data || [];
+    rfis.forEach(function (r) { if (r.status === "open") push(r.needed_by, "RFI due: " + (r.subject || r.number), "rfi", "doc.rfis"); });
+    var certs = (await sb.from("certifications").select("name,expiry_date, hr_employees(name)").eq("company_id", cid).not("expiry_date", "is", null).gte("expiry_date", fromStr).lte("expiry_date", toStr)).data || [];
+    certs.forEach(function (c) { push(c.expiry_date, "Cert expires: " + (c.name || "") + (c.hr_employees ? " (" + c.hr_employees.name + ")" : ""), "cert", "hr.certs"); });
+    var invs = (await sb.from("invoices").select("number,due_date,move_type,state,amount_residual").eq("company_id", cid).eq("state", "posted").eq("move_type", "out_invoice").gt("amount_residual", 0.005).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
+    invs.forEach(function (i) { push(i.due_date, "Invoice due: " + i.number, "invoice", "rep.collections"); });
+    var shifts = (await sb.from("planning_shifts").select("shift_date,role, hr_employees(name)").eq("company_id", cid).gte("shift_date", fromStr).lte("shift_date", toStr)).data || [];
+    shifts.forEach(function (s) { push(s.shift_date, "Shift: " + (s.hr_employees ? s.hr_employees.name : "Open") + (s.role ? " (" + s.role + ")" : ""), "planning", "hr.planning"); });
+    var jobs = (await sb.from("install_jobs").select("number,description,due_date,status").eq("company_id", cid).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
+    jobs.forEach(function (j) { if (j.status !== "done") push(j.due_date, "Install due: " + (j.description || j.number), "install", "inst.jobs"); });
+    return out;
+  }
+  var CALV = null;
+  async function renderCalendar(y, mo) {
+    var now = new Date();
+    if (y == null) { y = CALV ? CALV.y : now.getFullYear(); mo = CALV ? CALV.m : now.getMonth(); }
+    CALV = { y: y, m: mo };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '<div class="gap"></div><button class="o-filtbtn" id="cal-prev">&#8249;</button><button class="o-filtbtn" id="cal-today">Today</button><button class="o-filtbtn" id="cal-next">&#8250;</button><button class="o-filtbtn" id="cal-agenda">Agenda</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("cal-prev").onclick = function () { var nm = mo - 1, ny = y; if (nm < 0) { nm = 11; ny--; } renderCalendar(ny, nm); };
+    document.getElementById("cal-next").onclick = function () { var nm = mo + 1, ny = y; if (nm > 11) { nm = 0; ny++; } renderCalendar(ny, nm); };
+    document.getElementById("cal-today").onclick = function () { renderCalendar(now.getFullYear(), now.getMonth()); };
+    document.getElementById("cal-agenda").onclick = function () { renderAgenda(); };
+    var first = new Date(y, mo, 1), startDow = (first.getDay() + 6) % 7; // Monday=0
+    var gridStart = new Date(y, mo, 1 - startDow);
+    var last = new Date(y, mo + 1, 0);
+    var items = await collectCalendarItems(fmtD(gridStart), fmtD(new Date(y, mo + 1, 6 - ((last.getDay() + 6) % 7) + 1)));
+    var byDay = {}; items.forEach(function (it) { (byDay[it.date] = byDay[it.date] || []).push(it); });
+    var todayStr = fmtD(now), monthName = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][mo];
+    var head = '<tr>' + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(function (d) { return '<th>' + d + '</th>'; }).join("") + '</tr>';
+    var cells = "";
+    for (var w = 0; w < 6; w++) {
+      cells += '<tr>';
+      for (var dd = 0; dd < 7; dd++) {
+        var cur = new Date(gridStart); cur.setDate(gridStart.getDate() + w * 7 + dd);
+        var ds = fmtD(cur), inMonth = cur.getMonth() === mo, dayItems = byDay[ds] || [];
+        var chips = dayItems.slice(0, 4).map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="cal-chip" data-date="' + ds + '"' + (it.event ? ' data-ev="' + it.event.id + '"' : (it.action ? ' data-go="' + it.action + '"' : '')) + ' style="background:' + col + '22;color:' + col + ';border-left:3px solid ' + col + '" title="' + esc(it.title) + '">' + esc(it.title) + '</div>'; }).join("");
+        if (dayItems.length > 4) chips += '<div class="cal-more">+' + (dayItems.length - 4) + ' more</div>';
+        cells += '<td class="cal-cell' + (inMonth ? "" : " off") + (ds === todayStr ? " today" : "") + '" data-date="' + ds + '"><div class="cal-dnum">' + cur.getDate() + '</div>' + chips + '</td>';
+      }
+      cells += '</tr>';
+    }
+    document.getElementById("o-body").innerHTML = '<div style="padding:14px 16px"><h2 style="margin:0 0 10px;font-size:18px">' + monthName + ' ' + y + '</h2><div class="o-rt-wrap"><table class="cal-grid"><thead>' + head + '</thead><tbody>' + cells + '</tbody></table></div><div class="sub" style="margin-top:8px">Click a day to add an event. Coloured items are pulled automatically from submittals, RFIs, certifications, invoices due, planning and installation.</div></div>';
+    document.querySelectorAll(".cal-chip").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); if (c.dataset.ev) { openEventModal(null, c.dataset.ev); } else if (c.dataset.go) { go(c.dataset.go); } }; });
+    document.querySelectorAll(".cal-cell").forEach(function (c) { c.onclick = function () { openEventModal(c.dataset.date); }; });
+  }
+  async function renderAgenda() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Agenda") + '<div class="gap"></div><button class="o-filtbtn" id="ag-cal">Month view</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("ag-cal").onclick = function () { renderCalendar(); };
+    var now = new Date(); now.setHours(0, 0, 0, 0);
+    var from = fmtD(now), to = fmtD(new Date(now.getFullYear(), now.getMonth() + 3, now.getDate()));
+    var items = (await collectCalendarItems(from, to)).sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+    var byDay = {}; items.forEach(function (it) { (byDay[it.date] = byDay[it.date] || []).push(it); });
+    var days = Object.keys(byDay).sort();
+    var html = days.map(function (d) {
+      var rows = byDay[d].map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="ag-item" ' + (it.event ? 'data-ev="' + it.event.id + '"' : (it.action ? 'data-go="' + it.action + '"' : '')) + ' style="cursor:pointer"><span class="ag-dot" style="background:' + col + '"></span>' + esc(it.title) + '<span class="ag-cat">' + esc(it.cat.replace("_", " ")) + '</span></div>'; }).join("");
+      var dt = parseD(d), lbl = dt.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
+      return '<div class="ag-day"><div class="ag-date">' + lbl + (d === fmtD(now) ? ' &middot; today' : '') + '</div>' + rows + '</div>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div style="padding:14px 16px;max-width:760px"><h2 style="margin:0 0 10px;font-size:18px">Next 3 months</h2>' + (html || '<div class="o-empty">Nothing scheduled. Add events in the Calendar.</div>') + '</div>';
+    document.querySelectorAll(".ag-item").forEach(function (c) { c.onclick = function () { if (c.dataset.ev) openEventModal(null, c.dataset.ev); else if (c.dataset.go) go(c.dataset.go); }; });
+  }
+  async function openEventModal(dateStr, eventId) {
+    var e = eventId ? (await sb.from("calendar_events").select("*").eq("id", eventId).maybeSingle()).data || {} : { event_date: dateStr || today(), category: "meeting", all_day: true };
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (eventId ? "Edit" : "New") + ' event</h3><div class="form">' +
+      '<div><label>Title</label><input id="ev-title" value="' + esc(e.title || "") + '"></div>' +
+      '<div class="row2"><div><label>Date</label><input id="ev-date" type="date" value="' + (e.event_date || today()) + '"></div><div><label>Type</label><select id="ev-cat"><option value="meeting">Meeting</option><option value="site_visit">Site visit</option><option value="milestone">Milestone</option><option value="reminder">Reminder</option><option value="deadline">Deadline</option><option value="other">Other</option></select></div></div>' +
+      '<div class="row2"><div><label>Start time</label><input id="ev-start" value="' + esc(e.start_time || "") + '" placeholder="e.g. 09:00"></div><div><label>End time</label><input id="ev-end" value="' + esc(e.end_time || "") + '" placeholder="e.g. 10:00"></div></div>' +
+      '<div class="row2"><div><label>Project</label><select id="ev-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (e.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Location</label><input id="ev-loc" value="' + esc(e.location || "") + '"></div></div>' +
+      '<div><label>Notes</label><input id="ev-notes" value="' + esc(e.notes || "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="ev-cancel">Cancel</button>' + (eventId ? '<button class="btn" id="ev-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ev-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ev-cat").value = e.category || "meeting";
+    document.getElementById("ev-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("ev-del"); if (del) del.onclick = async function () { await sb.from("calendar_events").delete().eq("id", eventId); m.remove(); toast("Deleted"); renderCalendar(); };
+    document.getElementById("ev-save").onclick = async function () {
+      var row = { title: gv("ev-title") || "Event", event_date: gv("ev-date") || today(), category: document.getElementById("ev-cat").value, start_time: gv("ev-start"), end_time: gv("ev-end"), project_id: document.getElementById("ev-proj").value || null, location: gv("ev-loc"), notes: gv("ev-notes") };
+      var r; if (eventId) r = await sb.from("calendar_events").update(row).eq("id", eventId); else { row.company_id = S.company.id; r = await sb.from("calendar_events").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderCalendar();
+    };
+  }
+
+  // ============================ SIGN / APPROVALS ============================
+  var SIGN_TYPES = [["ipc", "Payment certificate (IPC)"], ["subcontract", "Subcontract"], ["purchase_order", "Purchase order"], ["contract", "Contract"], ["document", "Document"], ["other", "Other"]];
+  function signTypeLabel(t) { var m = SIGN_TYPES.filter(function (x) { return x[0] === t; })[0]; return m ? m[1] : t; }
+  function cfgSignRequests() {
+    return {
+      title: "Signature Requests", pageSize: 80,
+      fetch: function () { return sb.from("sign_requests").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.number || "") + " " + (s.title || "") + " " + (s.ref || ""); },
+      columns: [
+        { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
+        { label: "Title", get: function (s) { return esc(s.title); } },
+        { label: "Type", get: function (s) { return signTypeLabel(s.doc_type); } },
+        { label: "Project", get: function (s) { return esc(s.projects ? s.projects.name : ""); } },
+        { label: "Status", get: function (s) { return s.status === "signed" ? '<span class="badge paid">Signed</span>' : s.status === "pending" ? '<span class="badge partial">Awaiting</span>' : s.status === "declined" ? '<span class="badge unpaid">Declined</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Awaiting", test: function (s) { return s.status === "pending"; } }, { label: "Signed", test: function (s) { return s.status === "signed"; } }, { label: "Draft", test: function (s) { return s.status === "draft"; } }],
+      groupBy: [{ label: "Type", get: function (s) { return signTypeLabel(s.doc_type); } }, { label: "Status", get: function (s) { return s.status; } }],
+      onOpen: function (s) { renderSignForm(s.id); }, onNew: function () { renderSignForm("new"); }
+    };
+  }
+  async function renderSignForm(id) {
+    var parent = { action: "sign.list", title: "Signature Requests" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var s = id === "new" ? { status: "draft", doc_type: "document" } : (await sb.from("sign_requests").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var sigs = id === "new" ? [] : (await sb.from("sign_signatures").select("*").eq("request_id", id).order("sequence")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || s.title || "Request");
+    var st = s.status || "draft", done = st === "signed" || st === "declined";
+    var typeOpts = SIGN_TYPES.map(function (x) { return '<option value="' + x[0] + '"' + (s.doc_type === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var allSigned = sigs.length && sigs.every(function (g) { return g.signed_at; });
+    var btns = done ? "" : '<button class="pri" id="sg-save">Save</button><button id="sg-discard">Discard</button>';
+    if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
+    if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
+    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="sg-title" value="' + esc(s.title || "") + '" placeholder="What is being signed"' + (done ? " disabled" : "") + '></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Type", '<select id="sg-type"' + (st !== "draft" ? " disabled" : "") + '>' + typeOpts + '</select>') +
+      fld("Reference", '<input id="sg-ref" value="' + esc(s.ref || "") + '"' + (st !== "draft" ? " disabled" : "") + ' placeholder="e.g. IPC-01, PO number">') +
+      '</div><div>' +
+      fld("Project", '<select id="sg-proj"' + (st !== "draft" ? " disabled" : "") + '>' + projOpts + '</select>') +
+      fld("Notes", '<input id="sg-notes" value="' + esc(s.notes || "") + '"' + (done ? " disabled" : "") + '>') +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Signers</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Name</th><th>Role</th><th>Signature</th><th></th></tr></thead><tbody id="sg-lines">' + (sigs.length ? sigs.map(sigRow).join("") : (st === "draft" ? sigRow() : '')) + '</tbody></table>' + (st === "draft" ? '<button id="sg-add" class="o-addln">+ Add signer</button>' : '') + '</div></div>' +
+      '</div>';
+    var db = document.getElementById("sg-discard"); if (db) db.onclick = function () { go("sign.list"); };
+    function wireDel() { document.querySelectorAll("#sg-lines .sg-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
+    wireDel();
+    var addb = document.getElementById("sg-add"); if (addb) addb.onclick = function () { document.getElementById("sg-lines").insertAdjacentHTML("beforeend", sigRow()); wireDel(); };
+    document.querySelectorAll(".sg-sign").forEach(function (b) { b.onclick = function () { openSignatureModal(b.dataset.id, id); }; });
+    async function persist() {
+      var row = { title: gv("sg-title") || "Signature request", doc_type: document.getElementById("sg-type").value, ref: gv("sg-ref"), project_id: document.getElementById("sg-proj").value || null, notes: gv("sg-notes") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("sign_requests", "SIGN"); var ins = await sb.from("sign_requests").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("sign_requests").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      if (st === "draft") {
+        await sb.from("sign_signatures").delete().eq("request_id", sid);
+        var rows = [].map.call(document.querySelectorAll("#sg-lines tr"), function (tr, i) { return { company_id: S.company.id, request_id: sid, signer_name: (tr.querySelector(".sg-name") || {}).value || "", signer_role: (tr.querySelector(".sg-role") || {}).value || "", sequence: (i + 1) * 10 }; }).filter(function (g) { return g.signer_name; });
+        if (rows.length) await sb.from("sign_signatures").insert(rows);
+      }
+      return sid;
+    }
+    var sv = document.getElementById("sg-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSignForm(sid); } };
+    var snd = document.getElementById("sg-send"); if (snd) snd.onclick = async function () { var sid = await persist(); if (!sid) return; if (!document.querySelectorAll("#sg-lines tr").length) { toast("Add at least one signer"); return; } await sb.from("sign_requests").update({ status: "pending" }).eq("id", sid); toast("Sent for signature"); renderSignForm(sid); };
+    var cmp = document.getElementById("sg-complete"); if (cmp) cmp.onclick = async function () { await sb.from("sign_requests").update({ status: "signed" }).eq("id", id); toast("Marked fully signed"); renderSignForm(id); };
+  }
+  function openSignatureModal(sigId, requestId) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Sign</h3><div class="form">' +
+      '<div><label>Your name</label><input id="sig-name" placeholder="Type your full name"></div>' +
+      '<div><label>Draw your signature</label><canvas id="sig-canvas" width="440" height="140" style="border:1px dashed var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;max-width:440px"></canvas><div style="margin-top:4px"><button class="btn" id="sig-clear" style="font-size:12px;padding:4px 10px">Clear</button></div></div>' +
+      '<div class="sub">By signing you confirm you approve this document. Your name, signature and a timestamp are recorded.</div>' +
+      '</div><div class="foot"><button class="btn" id="sig-cancel">Cancel</button><button class="btn pri" id="sig-save" style="background:var(--accent);border-color:var(--accent)">Confirm signature</button></div></div>';
+    document.body.appendChild(m);
+    var cv = document.getElementById("sig-canvas"), ctx = cv.getContext("2d"), drawing = false, drew = false;
+    ctx.strokeStyle = "#16171c"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    function pos(e) { var r = cv.getBoundingClientRect(), t = e.touches ? e.touches[0] : e; return { x: (t.clientX - r.left) * (cv.width / r.width), y: (t.clientY - r.top) * (cv.height / r.height) }; }
+    function start(e) { drawing = true; drew = true; var p = pos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); e.preventDefault(); }
+    function move(e) { if (!drawing) return; var p = pos(e); ctx.lineTo(p.x, p.y); ctx.stroke(); e.preventDefault(); }
+    function end() { drawing = false; }
+    cv.addEventListener("mousedown", start); cv.addEventListener("mousemove", move); window.addEventListener("mouseup", end);
+    cv.addEventListener("touchstart", start); cv.addEventListener("touchmove", move); cv.addEventListener("touchend", end);
+    document.getElementById("sig-clear").onclick = function () { ctx.clearRect(0, 0, cv.width, cv.height); drew = false; };
+    document.getElementById("sig-cancel").onclick = function () { m.remove(); };
+    document.getElementById("sig-save").onclick = async function () {
+      var name = document.getElementById("sig-name").value.trim();
+      if (!name) { toast("Type your name"); return; }
+      var data = drew ? cv.toDataURL("image/png") : name;
+      var r = await sb.from("sign_signatures").update({ signer_name: name, signature_data: data, signed_at: new Date().toISOString() }).eq("id", sigId);
+      if (r.error) { toast(r.error.message); return; }
+      m.remove(); toast("Signed"); renderSignForm(requestId);
+    };
+  }
+
+  // ============================ RECRUITMENT ============================
+  var APP_STAGES = [["new", "New"], ["screening", "Screening"], ["interview", "Interview"], ["offer", "Offer"], ["hired", "Hired"], ["rejected", "Rejected"]];
+  function appStageLabel(s) { var m = APP_STAGES.filter(function (x) { return x[0] === s; })[0]; return m ? m[1] : s; }
+  function cfgApplicants() {
+    return {
+      title: "Applicants", pageSize: 100,
+      fetch: function () { return sb.from("applicants").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.name || "") + " " + (a.email || "") + " " + (a.source || ""); },
+      columns: [
+        { label: "Name", get: function (a) { return '<b>' + esc(a.name) + '</b>'; } },
+        { label: "Email", get: function (a) { return '<span class="muted">' + esc(a.email || "") + '</span>'; } },
+        { label: "Stage", get: function (a) { return '<span class="badge ' + (a.stage === "hired" ? "paid" : a.stage === "rejected" ? "unpaid" : "partial") + '">' + appStageLabel(a.stage) + '</span>'; } },
+        { label: "Rating", get: function (a) { var n = Number(a.rating || 0); return n ? "★".repeat(Math.min(5, n)) : '<span class="muted">-</span>'; } },
+        { label: "Applied", get: function (a) { return '<span class="muted">' + esc(a.applied_date || "") + '</span>'; } }
+      ],
+      filters: APP_STAGES.map(function (s) { return { label: s[1], test: function (a) { return a.stage === s[0]; } }; }),
+      groupBy: [{ label: "Stage", get: function (a) { return appStageLabel(a.stage); } }, { label: "Source", get: function (a) { return a.source || "None"; } }],
+      kanbanCard: function (a) { return '<div class="t">' + esc(a.name) + '</div><div class="muted">' + esc(a.email || "") + '</div><div class="r"><span>' + esc(a.source || "") + '</span><span>' + (Number(a.rating || 0) ? "★".repeat(a.rating) : "") + '</span></div>'; },
+      onOpen: function (a) { renderApplicantForm(a.id); }, onNew: function () { renderApplicantForm("new"); }
+    };
+  }
+  async function renderApplicantForm(id) {
+    var parent = { action: "rec.applicants", title: "Applicants" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var a = id === "new" ? { stage: "new", applied_date: today(), rating: 0 } : (await sb.from("applicants").select("*").eq("id", id).maybeSingle()).data || {};
+    var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.name || "Applicant");
+    var jobOpts = '<option value="">(none)</option>' + jobs.map(function (j) { return '<option value="' + j.id + '"' + (a.job_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("");
+    var stageBtns = APP_STAGES.filter(function (x) { return x[0] !== a.stage; }).map(function (x) { return '<button id="ap-stage-' + x[0] + '">' + (x[0] === "hired" ? "Hire" : x[0] === "rejected" ? "Reject" : "Move to " + x[1]) + '</button>'; }).join("");
+    var stages = '<div class="o-stages">' + APP_STAGES.filter(function (x) { return x[0] !== "rejected"; }).map(function (x) { var idx = APP_STAGES.map(function (z) { return z[0]; }).indexOf(a.stage), cur = APP_STAGES.map(function (z) { return z[0]; }).indexOf(x[0]); return '<span class="st ' + (a.stage === x[0] ? "on" : (cur < idx ? "done" : "")) + '">' + x[1] + '</span>'; }).join("") + '</div>';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button></div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="ap-name" value="' + esc(a.name || "") + '" placeholder="Applicant name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Email", '<input id="ap-email" value="' + esc(a.email || "") + '">') +
+      fld("Phone", '<input id="ap-phone" value="' + esc(a.phone || "") + '">') +
+      fld("Job position", '<select id="ap-job">' + jobOpts + '</select>') +
+      fld("Stage", '<select id="ap-stage">' + APP_STAGES.map(function (x) { return '<option value="' + x[0] + '"' + (a.stage === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("") + '</select>') +
+      '</div><div>' +
+      fld("Source", '<input id="ap-source" value="' + esc(a.source || "") + '" placeholder="e.g. LinkedIn, referral">') +
+      fld("Rating (1-5)", '<input id="ap-rating" type="number" min="0" max="5" value="' + (a.rating || 0) + '">') +
+      fld("Applied date", '<input id="ap-applied" type="date" value="' + (a.applied_date || today()) + '">') +
+      fld("CV link", '<input id="ap-cv" value="' + esc(a.cv_link || "") + '" placeholder="URL to CV">') +
+      '</div></div>' +
+      fld("Notes", '<textarea id="ap-notes" rows="3">' + esc(a.notes || "") + '</textarea>') +
+      '</div>';
+    document.getElementById("ap-discard").onclick = function () { go("rec.applicants"); };
+    async function persist(extra) {
+      var row = Object.assign({ name: gv("ap-name") || "Applicant", email: gv("ap-email"), phone: gv("ap-phone"), job_id: document.getElementById("ap-job").value || null, stage: document.getElementById("ap-stage").value, source: gv("ap-source"), rating: parseInt(gv("ap-rating"), 10) || 0, applied_date: gv("ap-applied") || null, cv_link: gv("ap-cv"), notes: (document.getElementById("ap-notes") || {}).value || "" }, extra || {});
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("applicants").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("applicants").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    document.getElementById("ap-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderApplicantForm(sid); } };
+  }
+
+  // ============================ KNOWLEDGE ============================
+  function cfgArticles() {
+    return {
+      title: "Articles", pageSize: 80,
+      fetch: function () { return sb.from("articles").select("*").eq("company_id", S.company.id).order("updated_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.title || "") + " " + (a.category || "") + " " + (a.body || ""); },
+      columns: [
+        { label: "Title", get: function (a) { return '<b>' + esc(a.title) + '</b>'; } },
+        { label: "Category", get: function (a) { return esc(a.category || ""); } },
+        { label: "Updated", get: function (a) { return '<span class="muted">' + esc((a.updated_at || "").slice(0, 10)) + '</span>'; } },
+        { label: "Status", get: function (a) { return a.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Published", test: function (a) { return a.is_published; } }, { label: "Draft", test: function (a) { return !a.is_published; } }],
+      groupBy: [{ label: "Category", get: function (a) { return a.category || "Uncategorised"; } }],
+      onOpen: function (a) { renderArticleForm(a.id); }, onNew: function () { renderArticleForm("new"); }
+    };
+  }
+  async function renderArticleForm(id) {
+    var parent = { action: "kb.articles", title: "Articles" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var a = id === "new" ? { is_published: true } : (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data || {};
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.title || "Article");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button><button id="kb-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="kb-title" value="' + esc(a.title || "") + '" placeholder="Article title"></div>' +
+      '<div class="o-groups"><div>' + fld("Category", '<input id="kb-cat" value="' + esc(a.category || "") + '" placeholder="e.g. Method statements, HR, Safety">', "Group articles by topic.") + '</div><div>' + fld("Status", '<select id="kb-pub"><option value="1"' + (a.is_published !== false ? " selected" : "") + '>Published</option><option value="0"' + (a.is_published === false ? " selected" : "") + '>Draft</option></select>') + '</div></div>' +
+      fld("Body", '<textarea id="kb-body" rows="16" style="font-family:inherit;line-height:1.6">' + esc(a.body || "") + '</textarea>', "Write the procedure / notes. Plain text.") +
+      '</div>';
+    document.getElementById("kb-discard").onclick = function () { go("kb.articles"); };
+    document.getElementById("kb-save").onclick = async function () {
+      var row = { title: gv("kb-title") || "Untitled", category: gv("kb-cat"), body: (document.getElementById("kb-body") || {}).value || "", is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      else { if ((await sb.from("articles").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
+      toast("Saved"); renderArticleForm(sid);
     };
   }
 
