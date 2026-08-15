@@ -67,7 +67,8 @@
       menus: [
         { label: "Orders", items: [["Quotations", "so.list"], ["Invoices", "inv.out"]] },
         { label: "Customers", action: "cust" },
-        { label: "Products", action: "products" }
+        { label: "Products", action: "products" },
+        { label: "Configuration", items: [["Pricelists", "sale.pricelists"], ["Quotation Templates", "sale.qtempl"]] }
       ]
     },
     purchase: {
@@ -98,9 +99,9 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Replenishment", "inv.reorder"]] },
+        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"]] },
         { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
-        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"]] }
+        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
     },
     project: {
@@ -137,10 +138,19 @@
         { label: "Projects", action: "proj.list" }
       ]
     },
+    contacts: {
+      name: "Contacts", icon: "☎", color: "#0ea5e9", color2: "#0284c7", home: "contacts",
+      menus: [
+        { label: "Contacts", action: "contacts" },
+        { label: "Configuration", items: [["Tags", "contact.tags"]] }
+      ]
+    },
     hr: {
       name: "Employees", icon: "☺", color: "#4f46e5", color2: "#4338ca", home: "hr.emp",
       menus: [
         { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"], ["Contracts", "hr.contracts"]] },
+        { label: "Talent", items: [["Skills", "hr.skills"], ["Employee Skills", "hr.empskills"], ["Certifications", "hr.certs"], ["Onboarding", "hr.onboard"], ["Appraisals", "hr.appraisals"]] },
+        { label: "Planning", items: [["Planning", "hr.planning"], ["Shift Templates", "hr.shifttmpl"]] },
         { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
         { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
         { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
@@ -151,6 +161,7 @@
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
         { label: "Companies", action: "companies" },
+        { label: "Users & Roles", action: "settings.users" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
         { label: "Exchange Rates", action: "rates" },
@@ -169,10 +180,13 @@
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
+    "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
-    "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr"
+    "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
+    "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -189,6 +203,7 @@
     manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
     documents: '<svg viewBox="0 0 100 100"><path d="M28 14 H62 L78 30 V86 H28 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M62 14 V30 H78" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M40 48 H64 M40 60 H60" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="66" cy="72" r="7" fill="#2F6BFF"/></svg>',
+    contacts: '<svg viewBox="0 0 100 100"><rect x="22" y="18" width="56" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="50" cy="44" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M34 70 C34 58 66 58 66 70" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="72" cy="26" r="6" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
@@ -393,6 +408,23 @@
       case "assets.list": return renderList(cfgAssets());
       case "budget.list": return renderList(cfgBudgets());
       case "fu.levels": return renderList(cfgFollowupLevels());
+      case "sale.pricelists": return renderList(cfgPricelists());
+      case "sale.qtempl": return renderList(cfgQuoteTemplates());
+      case "inv.scrap": return openScrapFlow();
+      case "inv.storage": return renderList(cfgStorageCategories());
+      case "inv.putaway": return renderList(cfgPutawayRules());
+      case "inv.delivery": return renderList(cfgDeliveryMethods());
+      case "inv.packages": return renderList(cfgPackageTypes());
+      case "hr.skills": return renderList(cfgSkills());
+      case "hr.empskills": return renderList(cfgEmployeeSkills());
+      case "hr.certs": return renderList(cfgCertifications());
+      case "hr.onboard": return renderList(cfgOnboarding());
+      case "hr.appraisals": return renderList(cfgAppraisals());
+      case "hr.planning": return renderList(cfgPlanning());
+      case "hr.shifttmpl": return renderList(cfgShiftTemplates());
+      case "contacts": return renderList(cfgContacts());
+      case "contact.tags": return renderList(cfgContactTags());
+      case "settings.users": return renderUsers();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
@@ -1348,19 +1380,23 @@
 
   // ============================ PARTNER FORM ============================
   async function renderPartnerForm(id, kind) {
-    var isCust = kind === "customer";
-    var parent = { action: isCust ? "cust" : "vend", title: isCust ? "Customers" : "Vendors" };
+    var isCust = kind === "customer", isContact = kind === "contact";
+    var parent = isContact ? { action: "contacts", title: "Contacts" } : { action: isCust ? "cust" : "vend", title: isCust ? "Customers" : "Vendors" };
+    var backAction = isContact ? "contacts" : (isCust ? "cust" : "vend");
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
+    var pricelists = (await sb.from("pricelists").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
+    function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + smart +
-      '<div class="o-title"><input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isCust ? "Customer" : "Vendor") + ' name"></div>' +
+      '<div class="o-title"><input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
       fld("Phone", '<input id="p-phone" value="' + esc(p.phone || "") + '">') +
@@ -1369,22 +1405,35 @@
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '">') +
       fld("City", '<input id="p-city" value="' + esc(p.city || "") + '">') +
       fld("Country", '<input id="p-country" value="' + esc(p.country || "") + '">') +
+      '</div></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Industry", '<input id="p-industry" value="' + esc(p.industry || "") + '" placeholder="e.g. Construction, Developer">', "Sector, for segmenting contacts.") +
+      fld("Tags", '<input id="p-tags" value="' + esc(p.tags || "") + '" placeholder="comma-separated">', "Free tags, comma-separated.") +
+      '</div><div>' +
+      fld("Pricelist", '<select id="p-pl"><option value="">(default prices)</option>' + pricelists.map(function (x) { return '<option value="' + x.id + '"' + (p.pricelist_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>', "Pricelist applied to this customer's sales-order lines.") +
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
-      '</div></div></div>';
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
+      '</div>';
     if (id !== "new") {
       document.getElementById("sm-inv").onclick = function () { go(isCust ? "inv.out" : "inv.in"); };
       document.getElementById("sm-stmt").onclick = function () { renderStatement(id); };
     }
-    document.getElementById("p-discard").onclick = function () { go(isCust ? "cust" : "vend"); };
+    function wireBankDel() { document.querySelectorAll("#pb-lines .pb-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
+    wireBankDel();
+    document.getElementById("pb-add").onclick = function () { document.getElementById("pb-lines").insertAdjacentHTML("beforeend", bankRow()); wireBankDel(); };
+    document.getElementById("p-discard").onclick = function () { go(backAction); };
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
       if (!name) { toast("Name is required"); return; }
-      var row = { name: name, email: gv("p-email"), phone: gv("p-phone"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
-      var r;
-      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; row.is_customer = isCust; row.is_vendor = !isCust; r = await sb.from("partners").insert(row); }
-      else r = await sb.from("partners").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
-      toast("Saved"); go(isCust ? "cust" : "vend");
+      var row = { name: name, email: gv("p-email"), phone: gv("p-phone"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var r, sid = id;
+      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + ins.error.message); return; } sid = ins.data.id; }
+      else { r = await sb.from("partners").update(row).eq("id", id); if (r.error) { toast("Could not save: " + r.error.message); return; } }
+      await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
+      var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
+      if (bks.length) await sb.from("partner_bank_accounts").insert(bks);
+      toast("Saved"); go(backAction);
     };
   }
   function gv(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
@@ -2029,6 +2078,548 @@
       var row = { company_id: S.company.id, invoice_id: invoiceId || null, partner_id: partnerId || null, followup_date: document.getElementById("fu-date").value, channel: document.getElementById("fu-ch").value, note: document.getElementById("fu-note").value.trim(), promised_date: document.getElementById("fu-pd").value || null, promised_amount: parseFloat(document.getElementById("fu-pa").value) || 0, next_action_date: document.getElementById("fu-na").value || null, status: document.getElementById("fu-st").value };
       var r = await sb.from("ar_followups").insert(row); if (r.error) { toast(r.error.message); return; }
       m.remove(); toast("Follow-up logged"); renderCollections();
+    };
+  }
+
+  // ============================ PLANNING (shifts + templates) ============================
+  function cfgShiftTemplates() {
+    return {
+      title: "Shift Templates", pageSize: 60,
+      fetch: function () { return sb.from("shift_templates").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.name || "") + " " + (s.role || ""); },
+      columns: [{ label: "Name", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Role", get: function (s) { return esc(s.role || ""); } }, { label: "Time", get: function (s) { return esc((s.start_time || "") + " - " + (s.end_time || "")); } }, { label: "Hours", num: true, get: function (s) { return Number(s.hours || 0); } }],
+      onOpen: function (s) { openShiftTemplateModal(s); }, onNew: function () { openShiftTemplateModal(null); }
+    };
+  }
+  function openShiftTemplateModal(s) {
+    s = s || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' shift template</h3><div class="form">' +
+      '<div class="row2"><div><label>Name</label><input id="st2-name" value="' + esc(s.name || "") + '"></div><div><label>Role</label><input id="st2-role" value="' + esc(s.role || "") + '" placeholder="e.g. Installer, Foreman"></div></div>' +
+      '<div class="row2"><div><label>Start</label><input id="st2-start" value="' + esc(s.start_time || "08:00") + '"></div><div><label>End</label><input id="st2-end" value="' + esc(s.end_time || "17:00") + '"></div></div>' +
+      '<div><label>Hours</label><input id="st2-hours" type="number" step="0.25" value="' + (s.hours || 8) + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="st2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="st2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="st2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("st2-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("st2-del"); if (del) del.onclick = async function () { await sb.from("shift_templates").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("st2-save").onclick = async function () {
+      var row = { name: gv("st2-name") || "Shift", role: gv("st2-role"), start_time: gv("st2-start"), end_time: gv("st2-end"), hours: parseFloat(gv("st2-hours")) || 8 };
+      var r; if (s.id) r = await sb.from("shift_templates").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("shift_templates").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgPlanning() {
+    return {
+      title: "Planning", pageSize: 120,
+      fetch: function () { return sb.from("planning_shifts").select("*, hr_employees(name), projects(name)").eq("company_id", S.company.id).order("shift_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.role || "") + " " + (s.hr_employees ? s.hr_employees.name : "") + " " + (s.projects ? s.projects.name : ""); },
+      columns: [
+        { label: "Date", get: function (s) { return '<b>' + esc(s.shift_date || "") + '</b>'; } },
+        { label: "Assignee", get: function (s) { return s.hr_employees ? esc(s.hr_employees.name) : '<span class="ob-flag" style="background:var(--warn)">OPEN</span>'; } },
+        { label: "Role", get: function (s) { return esc(s.role || ""); } },
+        { label: "Project", get: function (s) { return esc(s.projects ? s.projects.name : ""); } },
+        { label: "Time", get: function (s) { return esc((s.start_time || "") + " - " + (s.end_time || "")); } },
+        { label: "Hours", num: true, get: function (s) { return Number(s.hours || 0); } },
+        { label: "Published", get: function (s) { return s.published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Open shifts", test: function (s) { return !s.employee_id; } }, { label: "Published", test: function (s) { return s.published; } }, { label: "Draft", test: function (s) { return !s.published; } }],
+      groupBy: [{ label: "Assignee", get: function (s) { return s.hr_employees ? s.hr_employees.name : "Open shift"; } }, { label: "Role", get: function (s) { return s.role || "None"; } }, { label: "Project", get: function (s) { return s.projects ? s.projects.name : "None"; } }],
+      onOpen: function (s) { openPlanningShiftModal(s); }, onNew: function () { openPlanningShiftModal(null); }
+    };
+  }
+  async function openPlanningShiftModal(s) {
+    s = s || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var tmpls = (await sb.from("shift_templates").select("*").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' shift</h3><div class="form">' +
+      (tmpls.length ? '<div><label>From template</label>' + fhint("__pt", "Load role + times from a shift template.") + '<select id="ps-tmpl"><option value="">(none)</option>' + tmpls.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join("") + '</select></div>' : "") +
+      '<div class="row2"><div><label>Assignee</label>' + fhint("__pa", "Leave as Open shift to publish an unassigned slot.") + '<select id="ps-emp"><option value="">Open shift</option>' + empOptions(emps, s.employee_id) + '</select></div><div><label>Role</label><input id="ps-role" value="' + esc(s.role || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Project</label><select id="ps-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Date</label><input id="ps-date" type="date" value="' + (s.shift_date || today()) + '"></div></div>' +
+      '<div class="row2"><div><label>Start</label><input id="ps-start" value="' + esc(s.start_time || "08:00") + '"></div><div><label>End</label><input id="ps-end" value="' + esc(s.end_time || "17:00") + '"></div></div>' +
+      '<div class="row2"><div><label>Hours</label><input id="ps-hours" type="number" step="0.25" value="' + (s.hours || 8) + '"></div><div><label>Status</label><select id="ps-pub"><option value="0">Draft</option><option value="1">Published</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="ps-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="ps-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ps-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ps-pub").value = s.published ? "1" : "0";
+    var tsel = document.getElementById("ps-tmpl"); if (tsel) tsel.onchange = function () { var t = tmpls.filter(function (x) { return x.id === tsel.value; })[0]; if (t) { document.getElementById("ps-role").value = t.role || ""; document.getElementById("ps-start").value = t.start_time || ""; document.getElementById("ps-end").value = t.end_time || ""; document.getElementById("ps-hours").value = t.hours || 8; } };
+    document.getElementById("ps-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("ps-del"); if (del) del.onclick = async function () { await sb.from("planning_shifts").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("ps-save").onclick = async function () {
+      var row = { employee_id: document.getElementById("ps-emp").value || null, role: gv("ps-role"), project_id: document.getElementById("ps-proj").value || null, shift_date: gv("ps-date") || null, start_time: gv("ps-start"), end_time: gv("ps-end"), hours: parseFloat(gv("ps-hours")) || 0, published: document.getElementById("ps-pub").value === "1" };
+      var r; if (s.id) r = await sb.from("planning_shifts").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("planning_shifts").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ CONTACTS (unified directory + tags) ============================
+  function cfgContacts() {
+    return {
+      title: "Contacts", pageSize: 80,
+      fetch: function () { return sb.from("partners").select("*").order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.industry || ""); },
+      columns: [
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Type", get: function (p) { var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
+        { label: "Industry", get: function (p) { return esc(p.industry || ""); } },
+        { label: "Email", get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
+        { label: "City", get: function (p) { return esc(p.city || ""); } }
+      ],
+      filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }],
+      groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
+      onOpen: function (p) { renderPartnerForm(p.id, "contact"); }, onNew: function () { renderPartnerForm("new", "contact"); }
+    };
+  }
+  function cfgContactTags() {
+    return {
+      title: "Contact Tags", pageSize: 60,
+      fetch: function () { return sb.from("contact_tags").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return t.name || ""; },
+      columns: [{ label: "Tag", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } }, { label: "Colour", get: function (t) { return t.color ? '<span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:' + esc(t.color) + ';vertical-align:middle"></span> ' + esc(t.color) : ''; } }],
+      onOpen: function (t) { openContactTagModal(t); }, onNew: function () { openContactTagModal(null); }
+    };
+  }
+  function openContactTagModal(t) {
+    t = t || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Edit" : "New") + ' tag</h3><div class="form">' +
+      '<div class="row2"><div><label>Name</label><input id="ct-name" value="' + esc(t.name || "") + '"></div><div><label>Colour</label><input id="ct-color" type="color" value="' + (t.color || "#2f6bff") + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="ct-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="ct-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ct-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ct-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("ct-del"); if (del) del.onclick = async function () { await sb.from("contact_tags").delete().eq("id", t.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("ct-save").onclick = async function () {
+      var row = { name: gv("ct-name") || "Tag", color: document.getElementById("ct-color").value };
+      var r; if (t.id) r = await sb.from("contact_tags").update(row).eq("id", t.id); else { row.company_id = S.company.id; r = await sb.from("contact_tags").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ SETTINGS: USERS & ROLES ============================
+  async function renderUsers() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Users & Roles") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var members = (await sb.from("org_members").select("*").eq("org_id", S.company.org_id)).data || [];
+    var body = document.getElementById("o-body");
+    var ROLES = ["owner", "admin", "accountant"];
+    var rows = members.map(function (mem) {
+      var mine = mem.user_id === (S.user && S.user.id);
+      var sel = '<select class="um-role" data-id="' + mem.id + '"' + (mine ? " disabled" : "") + '>' + ROLES.map(function (r) { return '<option value="' + r + '"' + (mem.role === r ? " selected" : "") + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>'; }).join("") + '</select>';
+      return '<tr><td><b>' + esc((mem.user_id || "").slice(0, 8)) + '...</b>' + (mine ? ' <span class="badge paid">you</span>' : '') + '</td><td>' + sel + '</td></tr>';
+    }).join("");
+    body.innerHTML = '<div style="padding:16px"><div class="card"><h3>Team members <span class="muted" style="font-weight:500;font-size:12px">roles control what each person can do &middot; owner + admin have full access, accountant is finance-only</span></h3>' +
+      '<table><thead><tr><th>User</th><th style="width:200px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
+      '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then you set their role here. You cannot change your own role.</div></div></div>';
+    body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(r.error.message); } else toast("Role updated"); }; });
+  }
+
+  // ============================ EMPLOYEES: SKILLS / CERTIFICATIONS / ONBOARDING / APPRAISALS ============================
+  function empOptions(emps, sel) { return emps.map(function (e) { return '<option value="' + e.id + '"' + (e.id === sel ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join(""); }
+  function cfgSkills() {
+    return {
+      title: "Skills", pageSize: 80,
+      fetch: function () { return sb.from("skills").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.name || "") + " " + (s.category || ""); },
+      columns: [{ label: "Skill", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Category", get: function (s) { return esc(s.category || ""); } }],
+      groupBy: [{ label: "Category", get: function (s) { return s.category || "None"; } }],
+      onOpen: function (s) { openSkillModal(s); }, onNew: function () { openSkillModal(null); }
+    };
+  }
+  function openSkillModal(s) {
+    s = s || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' skill</h3><div class="form">' +
+      '<div><label>Skill name</label><input id="sk-name" value="' + esc(s.name || "") + '"></div>' +
+      '<div><label>Category</label><input id="sk-cat" value="' + esc(s.category || "") + '" placeholder="e.g. Technical, Trade, Safety"></div>' +
+      '</div><div class="foot"><button class="btn" id="sk-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sk-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sk-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("sk-del"); if (del) del.onclick = async function () { await sb.from("skills").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("sk-save").onclick = async function () {
+      var row = { name: gv("sk-name") || "Skill", category: gv("sk-cat") };
+      var r; if (s.id) r = await sb.from("skills").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("skills").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgEmployeeSkills() {
+    return {
+      title: "Employee Skills", pageSize: 100,
+      fetch: function () { return sb.from("employee_skills").select("*, hr_employees(name), skills(name,category)").eq("company_id", S.company.id).order("id", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (e) { return (e.hr_employees ? e.hr_employees.name : "") + " " + (e.skills ? e.skills.name : ""); },
+      columns: [
+        { label: "Employee", get: function (e) { return '<b>' + esc(e.hr_employees ? e.hr_employees.name : "") + '</b>'; } },
+        { label: "Skill", get: function (e) { return esc(e.skills ? e.skills.name : ""); } },
+        { label: "Level", get: function (e) { return '<span class="badge partial">' + esc(e.level || "") + '</span>'; } }
+      ],
+      groupBy: [{ label: "Employee", get: function (e) { return e.hr_employees ? e.hr_employees.name : "None"; } }, { label: "Skill", get: function (e) { return e.skills ? e.skills.name : "None"; } }],
+      onOpen: function (e) { openEmployeeSkillModal(e); }, onNew: function () { openEmployeeSkillModal(null); }
+    };
+  }
+  async function openEmployeeSkillModal(es) {
+    es = es || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var skills = (await sb.from("skills").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (es.id ? "Edit" : "Add") + ' employee skill</h3><div class="form">' +
+      '<div><label>Employee</label><select id="es-emp">' + empOptions(emps, es.employee_id) + '</select></div>' +
+      '<div><label>Skill</label><select id="es-skill">' + skills.map(function (x) { return '<option value="' + x.id + '"' + (es.skill_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Level</label><select id="es-level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option><option value="expert">Expert</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="es-cancel">Cancel</button>' + (es.id ? '<button class="btn" id="es-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="es-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("es-level").value = es.level || "intermediate";
+    document.getElementById("es-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("es-del"); if (del) del.onclick = async function () { await sb.from("employee_skills").delete().eq("id", es.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("es-save").onclick = async function () {
+      if (!skills.length) { toast("Add skills first (Talent > Skills)"); return; }
+      var row = { employee_id: document.getElementById("es-emp").value, skill_id: document.getElementById("es-skill").value, level: document.getElementById("es-level").value };
+      var r; if (es.id) r = await sb.from("employee_skills").update(row).eq("id", es.id); else { row.company_id = S.company.id; r = await sb.from("employee_skills").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgCertifications() {
+    return {
+      title: "Certifications", pageSize: 100,
+      fetch: function () { return sb.from("certifications").select("*, hr_employees(name)").eq("company_id", S.company.id).order("expiry_date").then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.name || "") + " " + (c.authority || "") + " " + (c.hr_employees ? c.hr_employees.name : ""); },
+      columns: [
+        { label: "Employee", get: function (c) { return '<b>' + esc(c.hr_employees ? c.hr_employees.name : "") + '</b>'; } },
+        { label: "Certificate", get: function (c) { return esc(c.name); } },
+        { label: "Authority", get: function (c) { return esc(c.authority || ""); } },
+        { label: "Expiry", get: function (c) { var ex = c.expiry_date; var soon = ex && parseD(ex) && (parseD(ex) - new Date()) / 864e5 < 60; return ex ? '<span class="muted">' + esc(ex) + '</span>' + (isOverdue(ex) ? ' <span class="ob-flag">expired</span>' : (soon ? ' <span class="ob-flag" style="background:var(--warn)">soon</span>' : '')) : '<span class="muted">-</span>'; } }
+      ],
+      filters: [{ label: "Expiring/expired", test: function (c) { return c.expiry_date && (isOverdue(c.expiry_date) || (parseD(c.expiry_date) - new Date()) / 864e5 < 60); } }],
+      groupBy: [{ label: "Employee", get: function (c) { return c.hr_employees ? c.hr_employees.name : "None"; } }],
+      onOpen: function (c) { openCertificationModal(c); }, onNew: function () { openCertificationModal(null); }
+    };
+  }
+  async function openCertificationModal(c) {
+    c = c || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (c.id ? "Edit" : "New") + ' certification</h3><div class="form">' +
+      '<div><label>Employee</label><select id="ce-emp">' + empOptions(emps, c.employee_id) + '</select></div>' +
+      '<div class="row2"><div><label>Certificate</label><input id="ce-name" value="' + esc(c.name || "") + '"></div><div><label>Authority</label><input id="ce-auth" value="' + esc(c.authority || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Issued</label><input id="ce-iss" type="date" value="' + (c.issued_date || "") + '"></div><div><label>Expiry</label><input id="ce-exp" type="date" value="' + (c.expiry_date || "") + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="ce-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="ce-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ce-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ce-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("ce-del"); if (del) del.onclick = async function () { await sb.from("certifications").delete().eq("id", c.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("ce-save").onclick = async function () {
+      var row = { employee_id: document.getElementById("ce-emp").value, name: gv("ce-name") || "Certificate", authority: gv("ce-auth"), issued_date: gv("ce-iss") || null, expiry_date: gv("ce-exp") || null };
+      var r; if (c.id) r = await sb.from("certifications").update(row).eq("id", c.id); else { row.company_id = S.company.id; r = await sb.from("certifications").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgOnboarding() {
+    return {
+      title: "Onboarding", pageSize: 120,
+      fetch: function () { return sb.from("hr_onboarding").select("*, hr_employees(name)").eq("company_id", S.company.id).order("sequence").then(function (r) { return r.data || []; }); },
+      searchText: function (o) { return (o.task || "") + " " + (o.hr_employees ? o.hr_employees.name : ""); },
+      columns: [
+        { label: "Employee", get: function (o) { return '<b>' + esc(o.hr_employees ? o.hr_employees.name : "") + '</b>'; } },
+        { label: "Kind", get: function (o) { return o.kind === "offboarding" ? '<span class="badge draft">Offboarding</span>' : '<span class="badge partial">Onboarding</span>'; } },
+        { label: "Task", get: function (o) { return esc(o.task); } },
+        { label: "Due", get: function (o) { return '<span class="muted">' + esc(o.due_date || "") + '</span>'; } },
+        { label: "Done", get: function (o) { return o.done ? '<span class="badge paid">Done</span>' : (isOverdue(o.due_date) ? '<span class="ob-flag">overdue</span>' : '<span class="muted">open</span>'); } }
+      ],
+      filters: [{ label: "Open", test: function (o) { return !o.done; } }, { label: "Onboarding", test: function (o) { return o.kind === "onboarding"; } }, { label: "Offboarding", test: function (o) { return o.kind === "offboarding"; } }],
+      groupBy: [{ label: "Employee", get: function (o) { return o.hr_employees ? o.hr_employees.name : "None"; } }, { label: "Kind", get: function (o) { return o.kind; } }],
+      onOpen: function (o) { openOnboardingModal(o); }, onNew: function () { openOnboardingModal(null); }
+    };
+  }
+  async function openOnboardingModal(o) {
+    o = o || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (o.id ? "Edit" : "New") + ' checklist item</h3><div class="form">' +
+      '<div><label>Employee</label><select id="ob-emp">' + empOptions(emps, o.employee_id) + '</select></div>' +
+      '<div class="row2"><div><label>Kind</label><select id="ob-kind"><option value="onboarding">Onboarding</option><option value="offboarding">Offboarding</option></select></div><div><label>Due date</label><input id="ob-due" type="date" value="' + (o.due_date || "") + '"></div></div>' +
+      '<div><label>Task</label><input id="ob-task" value="' + esc(o.task || "") + '" placeholder="e.g. Issue PPE, Sign contract, Return laptop"></div>' +
+      '<div><label>Status</label><select id="ob-done"><option value="0">Open</option><option value="1">Done</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="ob-cancel">Cancel</button>' + (o.id ? '<button class="btn" id="ob-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ob-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ob-kind").value = o.kind || "onboarding";
+    document.getElementById("ob-done").value = o.done ? "1" : "0";
+    document.getElementById("ob-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("ob-del"); if (del) del.onclick = async function () { await sb.from("hr_onboarding").delete().eq("id", o.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("ob-save").onclick = async function () {
+      var row = { employee_id: document.getElementById("ob-emp").value, kind: document.getElementById("ob-kind").value, task: gv("ob-task") || "Task", due_date: gv("ob-due") || null, done: document.getElementById("ob-done").value === "1" };
+      var r; if (o.id) r = await sb.from("hr_onboarding").update(row).eq("id", o.id); else { row.company_id = S.company.id; r = await sb.from("hr_onboarding").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgAppraisals() {
+    return {
+      title: "Appraisals", pageSize: 80,
+      fetch: function () { return sb.from("appraisals").select("*, hr_employees(name)").eq("company_id", S.company.id).order("appraisal_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.period || "") + " " + (a.hr_employees ? a.hr_employees.name : ""); },
+      columns: [
+        { label: "Employee", get: function (a) { return '<b>' + esc(a.hr_employees ? a.hr_employees.name : "") + '</b>'; } },
+        { label: "Date", get: function (a) { return '<span class="muted">' + esc(a.appraisal_date || "") + '</span>'; } },
+        { label: "Period", get: function (a) { return esc(a.period || ""); } },
+        { label: "Rating", get: function (a) { var n = Number(a.rating || 0); return n ? "★".repeat(Math.min(5, n)) + '<span class="muted">' + "☆".repeat(Math.max(0, 5 - n)) + '</span>' : '<span class="muted">-</span>'; } },
+        { label: "Status", get: function (a) { return a.state === "done" ? '<span class="badge paid">Done</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Draft", test: function (a) { return a.state !== "done"; } }, { label: "Done", test: function (a) { return a.state === "done"; } }],
+      groupBy: [{ label: "Employee", get: function (a) { return a.hr_employees ? a.hr_employees.name : "None"; } }],
+      onOpen: function (a) { renderAppraisalForm(a.id); }, onNew: function () { renderAppraisalForm("new"); }
+    };
+  }
+  async function renderAppraisalForm(id) {
+    var parent = { action: "hr.appraisals", title: "Appraisals" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var a = id === "new" ? { state: "draft", appraisal_date: today(), rating: 3 } : (await sb.from("appraisals").select("*, hr_employees(name)").eq("id", id).maybeSingle()).data || {};
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((a.hr_employees ? a.hr_employees.name : "") + " " + (a.period || ""));
+    var done = a.state === "done", dis = done ? " disabled" : "";
+    var btns = done ? '<button id="ap-reopen">Reopen</button>' : '<button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button>' + (id !== "new" ? '<button id="ap-done">Mark done</button>' : '');
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div class="o-stages"><span class="st ' + (done ? "done" : "on") + '">Draft</span><span class="st ' + (done ? "on" : "") + '">Done</span></div></div>' +
+      '<div class="o-sheet"><div class="o-groups"><div>' +
+      fld("Employee", done ? '<span class="v">' + esc(a.hr_employees ? a.hr_employees.name : "") + '</span>' : '<select id="ap-emp">' + empOptions(emps, a.employee_id) + '</select>') +
+      fld("Date", '<input id="ap-date" type="date" value="' + (a.appraisal_date || today()) + '"' + dis + '>') +
+      fld("Period", '<input id="ap-period" value="' + esc(a.period || "") + '"' + dis + ' placeholder="e.g. 2026 H1">') +
+      fld("Rating (1-5)", '<input id="ap-rating" type="number" min="1" max="5" value="' + (a.rating || 3) + '"' + dis + '>') +
+      '</div><div>' +
+      fld("Manager", '<input id="ap-mgr" value="' + esc(a.manager || "") + '"' + dis + '>') +
+      '</div></div>' +
+      fld("Strengths", '<textarea id="ap-str" rows="3"' + dis + '>' + esc(a.strengths || "") + '</textarea>') +
+      fld("Areas to improve", '<textarea id="ap-imp" rows="3"' + dis + '>' + esc(a.improvements || "") + '</textarea>') +
+      '</div>';
+    var db = document.getElementById("ap-discard"); if (db) db.onclick = function () { go("hr.appraisals"); };
+    async function persist(extra) {
+      var row = Object.assign({ employee_id: (document.getElementById("ap-emp") || {}).value || a.employee_id, appraisal_date: gv("ap-date") || null, period: gv("ap-period"), rating: parseInt(gv("ap-rating"), 10) || 0, manager: gv("ap-mgr"), strengths: (document.getElementById("ap-str") || {}).value || "", improvements: (document.getElementById("ap-imp") || {}).value || "" }, extra || {});
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("appraisals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("appraisals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    var sv = document.getElementById("ap-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderAppraisalForm(sid); } };
+    var dn = document.getElementById("ap-done"); if (dn) dn.onclick = async function () { var sid = await persist({ state: "done" }); if (sid) { toast("Marked done"); renderAppraisalForm(sid); } };
+    var ro = document.getElementById("ap-reopen"); if (ro) ro.onclick = async function () { await sb.from("appraisals").update({ state: "draft" }).eq("id", id); toast("Reopened"); renderAppraisalForm(id); };
+  }
+
+  // ============================ INVENTORY CONFIG (delivery / packages / storage / putaway) ============================
+  async function openScrapFlow() {
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    openStockModal("scrap", prods);
+  }
+  function cfgDeliveryMethods() {
+    return {
+      title: "Delivery Methods", pageSize: 60,
+      fetch: function () { return sb.from("delivery_methods").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (d) { return (d.name || "") + " " + (d.carrier || ""); },
+      columns: [{ label: "Name", get: function (d) { return '<b>' + esc(d.name) + '</b>'; } }, { label: "Carrier", get: function (d) { return esc(d.carrier || ""); } }, { label: "Price", num: true, get: function (d) { return money(d.price); } }, { label: "Active", get: function (d) { return d.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge draft">Off</span>'; } }],
+      onOpen: function (d) { openDeliveryMethodModal(d); }, onNew: function () { openDeliveryMethodModal(null); }
+    };
+  }
+  function openDeliveryMethodModal(d) {
+    d = d || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (d.id ? "Edit" : "New") + ' delivery method</h3><div class="form">' +
+      '<div><label>Name</label><input id="dm-name" value="' + esc(d.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Carrier</label><input id="dm-carrier" value="' + esc(d.carrier || "") + '"></div><div><label>Price</label><input id="dm-price" type="number" step="0.01" value="' + (d.price || 0) + '"></div></div>' +
+      '<div><label>Notes</label><input id="dm-notes" value="' + esc(d.notes || "") + '"></div>' +
+      '<div><label>Status</label><select id="dm-active"><option value="1"' + (d.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (d.is_active === false ? " selected" : "") + '>Off</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="dm-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="dm-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="dm-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("dm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("dm-del"); if (del) del.onclick = async function () { await sb.from("delivery_methods").delete().eq("id", d.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("dm-save").onclick = async function () {
+      var row = { name: gv("dm-name") || "Delivery", carrier: gv("dm-carrier"), price: parseFloat(gv("dm-price")) || 0, notes: gv("dm-notes"), is_active: document.getElementById("dm-active").value === "1" };
+      var r; if (d.id) r = await sb.from("delivery_methods").update(row).eq("id", d.id); else { row.company_id = S.company.id; r = await sb.from("delivery_methods").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgPackageTypes() {
+    return {
+      title: "Package Types", pageSize: 60,
+      fetch: function () { return sb.from("package_types").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return p.name || ""; },
+      columns: [{ label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } }, { label: "L x W x H", get: function (p) { return Number(p.length || 0) + " x " + Number(p.width || 0) + " x " + Number(p.height || 0); } }, { label: "Max weight", num: true, get: function (p) { return money(p.max_weight); } }],
+      onOpen: function (p) { openPackageTypeModal(p); }, onNew: function () { openPackageTypeModal(null); }
+    };
+  }
+  function openPackageTypeModal(p) {
+    p = p || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (p.id ? "Edit" : "New") + ' package type</h3><div class="form">' +
+      '<div><label>Name</label><input id="pk-name" value="' + esc(p.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Length</label><input id="pk-l" type="number" step="0.01" value="' + (p.length || 0) + '"></div><div><label>Width</label><input id="pk-w" type="number" step="0.01" value="' + (p.width || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Height</label><input id="pk-h" type="number" step="0.01" value="' + (p.height || 0) + '"></div><div><label>Max weight</label><input id="pk-mw" type="number" step="0.01" value="' + (p.max_weight || 0) + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="pk-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pk-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pk-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("pk-del"); if (del) del.onclick = async function () { await sb.from("package_types").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("pk-save").onclick = async function () {
+      var row = { name: gv("pk-name") || "Package", length: parseFloat(gv("pk-l")) || 0, width: parseFloat(gv("pk-w")) || 0, height: parseFloat(gv("pk-h")) || 0, max_weight: parseFloat(gv("pk-mw")) || 0 };
+      var r; if (p.id) r = await sb.from("package_types").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("package_types").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgStorageCategories() {
+    return {
+      title: "Storage Categories", pageSize: 60,
+      fetch: function () { return sb.from("storage_categories").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return s.name || ""; },
+      columns: [{ label: "Name", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Max weight", num: true, get: function (s) { return money(s.max_weight); } }, { label: "Capacity", num: true, get: function (s) { return money(s.capacity); } }],
+      onOpen: function (s) { openStorageCategoryModal(s); }, onNew: function () { openStorageCategoryModal(null); }
+    };
+  }
+  function openStorageCategoryModal(s) {
+    s = s || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' storage category</h3><div class="form">' +
+      '<div><label>Name</label><input id="sc2-name" value="' + esc(s.name || "") + '"></div>' +
+      '<div class="row2"><div><label>Max weight</label><input id="sc2-mw" type="number" step="0.01" value="' + (s.max_weight || 0) + '"></div><div><label>Capacity</label><input id="sc2-cap" type="number" step="0.01" value="' + (s.capacity || 0) + '"></div></div>' +
+      '<div><label>Notes</label><input id="sc2-notes" value="' + esc(s.notes || "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="sc2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sc2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sc2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sc2-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("sc2-del"); if (del) del.onclick = async function () { await sb.from("storage_categories").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("sc2-save").onclick = async function () {
+      var row = { name: gv("sc2-name") || "Category", max_weight: parseFloat(gv("sc2-mw")) || 0, capacity: parseFloat(gv("sc2-cap")) || 0, notes: gv("sc2-notes") };
+      var r; if (s.id) r = await sb.from("storage_categories").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("storage_categories").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgPutawayRules() {
+    return {
+      title: "Putaway Rules", pageSize: 60,
+      fetch: function () { return sb.from("putaway_rules").select("*, products(name), product_categories(name), stock_locations(name)").eq("company_id", S.company.id).order("sequence").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.products ? p.products.name : "") + " " + (p.product_categories ? p.product_categories.name : ""); },
+      columns: [
+        { label: "When", get: function (p) { return p.products ? esc(p.products.name) : (p.product_categories ? 'Category: ' + esc(p.product_categories.name) : '(any)'); } },
+        { label: "Store at", get: function (p) { return esc(p.stock_locations ? p.stock_locations.name : ""); } }
+      ],
+      onOpen: function (p) { openPutawayRuleModal(p); }, onNew: function () { openPutawayRuleModal(null); }
+    };
+  }
+  async function openPutawayRuleModal(p) {
+    p = p || {};
+    var products = (await sb.from("products").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var locs = (await sb.from("stock_locations").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (p.id ? "Edit" : "New") + ' putaway rule</h3><div class="form">' +
+      '<div><label>Product</label>' + fhint("__pw1", "Apply to this product (or leave blank and pick a category).") + '<select id="pw-prod"><option value="">(any)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (p.product_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Or product category</label><select id="pw-cat"><option value="">(any)</option>' + cats.map(function (x) { return '<option value="' + x.id + '"' + (p.category_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Store at location</label><select id="pw-loc"><option value="">(pick)</option>' + locs.map(function (x) { return '<option value="' + x.id + '"' + (p.location_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
+      '</div><div class="foot"><button class="btn" id="pw-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pw-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pw-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pw-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("pw-del"); if (del) del.onclick = async function () { await sb.from("putaway_rules").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("pw-save").onclick = async function () {
+      var row = { product_id: document.getElementById("pw-prod").value || null, category_id: document.getElementById("pw-cat").value || null, location_id: document.getElementById("pw-loc").value || null };
+      if (!row.location_id) { toast("Pick a location"); return; }
+      var r; if (p.id) r = await sb.from("putaway_rules").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("putaway_rules").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ SALES: PRICELISTS ============================
+  function cfgPricelists() {
+    return {
+      title: "Pricelists", pageSize: 80,
+      fetch: function () { return sb.from("pricelists").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.name || "") + " " + (p.currency_code || ""); },
+      columns: [
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Currency", get: function (p) { return esc(p.currency_code || S.company.currency_code); } },
+        { label: "Active", get: function (p) { return p.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge draft">Archived</span>'; } }
+      ],
+      onOpen: function (p) { renderPricelistForm(p.id); }, onNew: function () { renderPricelistForm("new"); }
+    };
+  }
+  async function renderPricelistForm(id) {
+    var parent = { action: "sale.pricelists", title: "Pricelists" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var p = id === "new" ? { is_active: true, currency_code: S.company.currency_code } : (await sb.from("pricelists").select("*").eq("id", id).maybeSingle()).data || {};
+    var items = id === "new" ? [] : (await sb.from("pricelist_items").select("*").eq("pricelist_id", id).order("sequence")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "Pricelist");
+    function prodOpts(sel) { return '<option value="">(any product)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="pi-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="pi-min" type="number" step="0.01" value="' + (l.min_qty || 1) + '" style="width:70px;text-align:right"></td><td><input class="pi-fixed" type="number" step="0.01" value="' + (l.fixed_price != null ? l.fixed_price : "") + '" placeholder="fixed" style="width:90px;text-align:right"></td><td><input class="pi-off" type="number" step="0.01" value="' + (l.percent_off || 0) + '" style="width:70px;text-align:right"></td><td><button class="pi-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pl-save">Save</button><button id="pl-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="pl-name" value="' + esc(p.name || "") + '" placeholder="Pricelist name"></div>' +
+      '<div class="o-groups"><div>' + fld("Currency", '<input id="pl-cur" value="' + esc(p.currency_code || S.company.currency_code) + '">', "Currency this pricelist prices in.") + '</div><div>' + fld("Active", '<select id="pl-active"><option value="1"' + (p.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (p.is_active === false ? " selected" : "") + '>Archived</option></select>') + '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Price rules</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th style="text-align:right">Min qty</th><th style="text-align:right">Fixed price</th><th style="text-align:right">% off</th><th></th></tr></thead><tbody id="pl-lines">' + (items.length ? items.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="pl-add" class="o-addln">+ Add rule</button></div></div>' +
+      '<div class="sub" style="margin:8px 0">A rule sets either a fixed price or a % discount off the product list price. Assign a pricelist to a customer on their contact card; it then prices their sales order lines.</div>' +
+      '</div>';
+    document.getElementById("pl-discard").onclick = function () { go("sale.pricelists"); };
+    function wireDel() { document.querySelectorAll("#pl-lines .pi-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("pl-add").onclick = function () { document.getElementById("pl-lines").insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
+    document.getElementById("pl-save").onclick = async function () {
+      var row = { name: gv("pl-name") || "Pricelist", currency_code: gv("pl-cur") || S.company.currency_code, is_active: document.getElementById("pl-active").value === "1" };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("pricelists").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      else { if ((await sb.from("pricelists").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
+      await sb.from("pricelist_items").delete().eq("pricelist_id", sid);
+      var its = [].map.call(document.querySelectorAll("#pl-lines tr"), function (tr, i) { var fx = tr.querySelector(".pi-fixed").value; return { company_id: S.company.id, pricelist_id: sid, product_id: tr.querySelector(".pi-prod").value || null, min_qty: parseFloat(tr.querySelector(".pi-min").value) || 1, fixed_price: fx === "" ? null : parseFloat(fx), percent_off: parseFloat(tr.querySelector(".pi-off").value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.product_id || l.fixed_price != null || l.percent_off; });
+      if (its.length) { var ir = await sb.from("pricelist_items").insert(its); if (ir.error) { toast(ir.error.message); return; } }
+      toast("Saved"); renderPricelistForm(sid);
+    };
+  }
+
+  // ============================ SALES: QUOTATION TEMPLATES ============================
+  function cfgQuoteTemplates() {
+    return {
+      title: "Quotation Templates", pageSize: 80,
+      fetch: function () { return sb.from("quote_templates").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.name || ""); },
+      columns: [{ label: "Name", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } }, { label: "Note", get: function (t) { return '<span class="muted">' + esc((t.note || "").slice(0, 70)) + '</span>'; } }],
+      onOpen: function (t) { renderQuoteTemplateForm(t.id); }, onNew: function () { renderQuoteTemplateForm("new"); }
+    };
+  }
+  async function renderQuoteTemplateForm(id) {
+    var parent = { action: "sale.qtempl", title: "Quotation Templates" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? {} : (await sb.from("quote_templates").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("quote_template_lines").select("*").eq("template_id", id).order("sequence")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "Template");
+    function prodOpts(sel) { return '<option value="">(free text)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="qt-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="qt-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="qt-qty" type="number" step="0.01" value="' + (l.quantity || 1) + '" style="width:64px;text-align:right"></td><td><input class="qt-price" type="number" step="0.01" value="' + (l.unit_price || 0) + '" style="width:90px;text-align:right"></td><td><button class="qt-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    var btns = '<button class="pri" id="qt-save">Save</button><button id="qt-discard">Discard</button>' + (id !== "new" ? '<button id="qt-quote">Create quotation</button>' : '');
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="qt-tname" value="' + esc(t.name || "") + '" placeholder="Template name"></div>' +
+      fld("Note", '<input id="qt-note" value="' + esc(t.note || "") + '" placeholder="Optional note shown on the quote">') +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Template lines</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit price</th><th></th></tr></thead><tbody id="qt-lines">' + (lines.length ? lines.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="qt-add" class="o-addln">+ Add line</button></div></div>' +
+      '</div>';
+    document.getElementById("qt-discard").onclick = function () { go("sale.qtempl"); };
+    document.querySelectorAll("#qt-lines .qt-prod").forEach(function (s) { s.onchange = function () { var pr = products.filter(function (x) { return x.id === s.value; })[0]; if (pr) { var tr = s.closest("tr"); if (!tr.querySelector(".qt-name").value) tr.querySelector(".qt-name").value = pr.name; if (!Number(tr.querySelector(".qt-price").value)) tr.querySelector(".qt-price").value = pr.list_price || 0; } }; });
+    function wireDel() { document.querySelectorAll("#qt-lines .qt-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("qt-add").onclick = function () { document.getElementById("qt-lines").insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
+    function readLines() { return [].map.call(document.querySelectorAll("#qt-lines tr"), function (tr, i) { return { product_id: tr.querySelector(".qt-prod").value || null, name: tr.querySelector(".qt-name").value || "", quantity: parseFloat(tr.querySelector(".qt-qty").value) || 1, unit_price: parseFloat(tr.querySelector(".qt-price").value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.name || l.product_id; }); }
+    async function persist() {
+      var row = { name: gv("qt-tname") || "Template", note: gv("qt-note") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("quote_templates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("quote_templates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      await sb.from("quote_template_lines").delete().eq("template_id", sid);
+      var ls = readLines().map(function (l) { l.company_id = S.company.id; l.template_id = sid; return l; });
+      if (ls.length) { var ir = await sb.from("quote_template_lines").insert(ls); if (ir.error) { toast(ir.error.message); return null; } }
+      return sid;
+    }
+    document.getElementById("qt-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderQuoteTemplateForm(sid); } };
+    var q = document.getElementById("qt-quote"); if (q) q.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var tl = readLines();
+      var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "From template: " + (gv("qt-tname") || "") };
+      var so = await sb.from("sale_orders").insert(hdr).select("id").single();
+      if (so.error) { toast(so.error.message); return; }
+      var sub = 0, ln = tl.map(function (l, i) { sub += l.quantity * l.unit_price; return { company_id: S.company.id, order_id: so.data.id, product_id: l.product_id, name: l.name || "Item", quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price, sequence: (i + 1) * 10 }; });
+      if (ln.length) await sb.from("sale_order_lines").insert(ln);
+      await sb.from("sale_orders").update({ amount_untaxed: sub, amount_total: sub }).eq("id", so.data.id);
+      toast("Quotation created"); renderOrderForm(so.data.id, "sale");
     };
   }
 
@@ -2753,7 +3344,7 @@
     Object.keys(b).forEach(function (id) { var el = document.getElementById(id); if (el) el.onclick = function () { openStockModal(b[id], prods); }; });
   }
   async function openStockModal(kind, prods) {
-    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer", issue: "Issue material to a project" };
+    var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer", issue: "Issue material to a project", scrap: "Scrap / write-off" };
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     if (!storable.length) storable = prods;
     if (!storable.length) { toast("Add a product first (Products screen)"); return; }
@@ -2790,13 +3381,14 @@
       else if (kind === "deliver") { src = loc; dest = inv.customer; vkind = "deliver"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else if (kind === "issue") { src = loc; dest = inv.customer; vkind = "deliver"; if (!(q > 0)) { toast("Quantity must be positive"); return; } if (!projId) { toast("Pick a project"); return; } }
       else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
+      else if (kind === "scrap") { src = loc; dest = inv.adjust; vkind = "adjust_down"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
       var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
       var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
       if (lotName && r.data && r.data.id) { var lotId = await findOrCreateLot(pid, lotName, document.getElementById("k-exp") ? document.getElementById("k-exp").value : null); if (lotId) await sb.from("stock_move_lines").insert({ company_id: S.company.id, move_id: r.data.id, lot_id: lotId, quantity: q }); }
-      m.remove(); toast(kind === "transfer" ? "Transferred between locations" : kind === "issue" ? "Material issued to project & posted" : "Stock updated & posted to the ledger"); renderOnHand();
+      m.remove(); toast(kind === "transfer" ? "Transferred between locations" : kind === "issue" ? "Material issued to project & posted" : kind === "scrap" ? "Scrapped & written off to expense" : "Stock updated & posted to the ledger"); renderOnHand();
     };
   }
   var INVACC = null;
@@ -3043,8 +3635,19 @@
         "<td class='num'>" + (need > 0 ? need : "") + "</td><td>" + status + "</td>" +
         "<td>" + (need > 0 ? "<button class='btn sm rr-order' data-id='" + p.id + "' data-need='" + need + "'>Receive " + need + "</button>" : "") + "</td></tr>";
     }).join("");
-    body.innerHTML = '<div style="padding:16px"><div class="card"><h3>Reordering rules &amp; low stock <span class="muted" style="font-weight:500;font-size:12px">set a Min and Max per product &middot; on-hand below Min flags a reorder up to Max</span></h3>' +
+    var needs = storable.map(function (p) { var r = ruleMap[p.id] || {}, min = Number(r.min_qty || 0), max = Number(r.max_qty || 0), q = oh[p.id] || 0; var need = (min > 0 && q < min) ? Math.max(max, min) - q : 0; return { p: p, need: need }; }).filter(function (x) { return x.need > 0; });
+    body.innerHTML = '<div style="padding:16px"><div class="card"><h3 style="display:flex;align-items:center;gap:10px">Reordering rules &amp; low stock <span class="muted" style="font-weight:500;font-size:12px">set a Min and Max per product &middot; on-hand below Min flags a reorder up to Max</span>' + (needs.length ? '<button class="btn sm pri" id="rr-sched" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">Run scheduler (' + needs.length + ')</button>' : '') + '</h3>' +
       '<table><thead><tr><th>Reference</th><th>Product</th><th class="num">On Hand</th><th>Min</th><th>Max</th><th class="num">To Order</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    var schedBtn = document.getElementById("rr-sched");
+    if (schedBtn) schedBtn.onclick = async function () {
+      var num = await nextOrderNumber("purchase");
+      var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: num, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "Auto-generated from replenishment" }).select("id").single();
+      if (po.error) { toast(po.error.message); return; }
+      var sub = 0, plines = needs.map(function (x, i) { var price = Number(x.p.cost_price || 0); sub += x.need * price; return { company_id: S.company.id, order_id: po.data.id, product_id: x.p.id, name: x.p.name, quantity: x.need, unit_price: price, price_subtotal: x.need * price, qty_received: 0, qty_billed: 0, sequence: (i + 1) * 10 }; });
+      var lr = await sb.from("purchase_order_lines").insert(plines); if (lr.error) { toast(lr.error.message); return; }
+      await sb.from("purchase_orders").update({ amount_untaxed: sub, amount_total: sub }).eq("id", po.data.id);
+      toast("Draft PO " + num + " created with " + needs.length + " items"); renderOrderForm(po.data.id, "purchase");
+    };
     function saveRule(pid) {
       var min = parseFloat(document.querySelector('.rr-min[data-id="' + pid + '"]').value) || 0;
       var max = parseFloat(document.querySelector('.rr-max[data-id="' + pid + '"]').value) || 0;
