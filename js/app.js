@@ -57,9 +57,9 @@
         { label: "Cockpit", action: "cockpit" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
-        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
-        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"]] }
+        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
+        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"], ["Follow-up Levels", "fu.levels"]] }
       ]
     },
     sales: {
@@ -167,7 +167,7 @@
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "installation", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
@@ -390,6 +390,9 @@
       case "rep.cashfwd": return renderCashForecast();
       case "rep.collections": return renderCollections();
       case "cockpit": return renderCockpit();
+      case "assets.list": return renderList(cfgAssets());
+      case "budget.list": return renderList(cfgBudgets());
+      case "fu.levels": return renderList(cfgFollowupLevels());
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
@@ -1985,6 +1988,8 @@
     var over = docs.filter(function (d) { return daysLate(d.due_date) > 0; });
     var fu = (await sb.from("ar_followups").select("*").eq("company_id", S.company.id).order("followup_date", { ascending: false })).data || [];
     var lastByInv = {}, lastByPartner = {}; fu.forEach(function (f) { if (f.invoice_id && !lastByInv[f.invoice_id]) lastByInv[f.invoice_id] = f; if (f.partner_id && !lastByPartner[f.partner_id]) lastByPartner[f.partner_id] = f; });
+    var levels = (await sb.from("followup_levels").select("*").eq("company_id", S.company.id).order("days", { ascending: false })).data || [];
+    function levelFor(dl) { for (var i = 0; i < levels.length; i++) { if (dl >= Number(levels[i].days || 0)) return levels[i]; } return null; }
     var byP = {}; over.forEach(function (d) { var k = d.partner_id || "none"; (byP[k] = byP[k] || { name: d.partners ? d.partners.name : "(no customer)", phone: d.partners ? d.partners.phone : "", rows: [], total: 0 }).rows.push(d); byP[k].total += Number(d.amount_residual || 0); });
     var totalOver = over.reduce(function (s, d) { return s + Number(d.amount_residual || 0); }, 0);
     var bk = { "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
@@ -1992,17 +1997,18 @@
     var sections = Object.keys(byP).sort(function (a, b) { return byP[b].total - byP[a].total; }).map(function (k) {
       var p = byP[k], lp = lastByPartner[k];
       var invRows = p.rows.sort(function (a, b) { return daysLate(b.due_date) - daysLate(a.due_date); }).map(function (d) {
-        var dl = daysLate(d.due_date), lf = lastByInv[d.id];
+        var dl = daysLate(d.due_date), lf = lastByInv[d.id], lv = levelFor(dl);
         var stat = lf ? '<span class="muted">' + esc(lf.status) + (lf.promised_date ? ' &middot; promised ' + esc(lf.promised_date) : '') + '</span>' : '<span class="muted">-</span>';
-        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
+        var sugg = lv ? '<span class="ob-flag" style="background:' + (lv.action === "legal" ? "var(--bad)" : lv.action === "letter" ? "var(--warn)" : "var(--accent)") + '" title="' + esc(lv.message || "") + '">' + esc(lv.name) + '</span>' : '<span class="muted">-</span>';
+        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
       }).join("");
-      return '<tr class="sec"><td colspan="6"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
+      return '<tr class="sec"><td colspan="7"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
     }).join("");
     var kpi = function (l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; };
     document.getElementById("rep").innerHTML = repHead("Collections - overdue receivables", cc) +
       '<div class="kpis" style="margin:14px 0 4px">' + kpi("Total overdue", totalOver) + kpi("1-30 days", bk["1-30"]) + kpi("31-60", bk["31-60"]) + kpi("61-90", bk["61-90"]) + kpi("90+ days", bk["90+"]) + '</div>' +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Invoice</td><td>Due</td><td class="num">Days late</td><td class="num">Amount due</td><td>Last follow-up</td><td></td></tr></thead><tbody>' + (sections || '<tr><td colspan="6" class="muted">No overdue receivables. Nicely done.</td></tr>') + '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:8px">Overdue = posted customer invoices past their due date with a balance. Use Log follow-up to record a call/email, a promise-to-pay date, and the next chase date.</div>';
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Invoice</td><td>Due</td><td class="num">Days late</td><td class="num">Amount due</td><td>Suggested</td><td>Last follow-up</td><td></td></tr></thead><tbody>' + (sections || '<tr><td colspan="7" class="muted">No overdue receivables. Nicely done.</td></tr>') + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:8px">Overdue = posted customer invoices past their due date with a balance. <b>Suggested</b> comes from your follow-up levels (Accounting &rsaquo; Configuration &rsaquo; Follow-up Levels). Use Log follow-up to record a call/email, a promise-to-pay date, and the next chase date.</div>';
     document.querySelectorAll(".fu-btn").forEach(function (b) { b.onclick = function () { openFollowupModal(b.dataset.inv, b.dataset.p); }; });
   }
   async function openFollowupModal(invoiceId, partnerId) {
@@ -2022,6 +2028,217 @@
       var row = { company_id: S.company.id, invoice_id: invoiceId || null, partner_id: partnerId || null, followup_date: document.getElementById("fu-date").value, channel: document.getElementById("fu-ch").value, note: document.getElementById("fu-note").value.trim(), promised_date: document.getElementById("fu-pd").value || null, promised_amount: parseFloat(document.getElementById("fu-pa").value) || 0, next_action_date: document.getElementById("fu-na").value || null, status: document.getElementById("fu-st").value };
       var r = await sb.from("ar_followups").insert(row); if (r.error) { toast(r.error.message); return; }
       m.remove(); toast("Follow-up logged"); renderCollections();
+    };
+  }
+
+  // ============================ FIXED ASSETS & DEPRECIATION ============================
+  function cfgAssets() {
+    return {
+      title: "Assets", pageSize: 80,
+      fetch: function () { return sb.from("assets").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.number || "") + " " + (a.name || "") + " " + (a.category || ""); },
+      columns: [
+        { label: "Number", get: function (a) { return '<b>' + esc(a.number || "/") + '</b>'; } },
+        { label: "Asset", get: function (a) { return esc(a.name); } },
+        { label: "Category", get: function (a) { return esc(a.category || ""); } },
+        { label: "Value", num: true, get: function (a) { return money(a.acquisition_value); } },
+        { label: "Life", get: function (a) { return (a.life_months || 0) + " mo"; } },
+        { label: "Status", get: function (a) { return a.state === "running" ? '<span class="badge partial">Running</span>' : a.state === "closed" ? '<span class="badge paid">Closed</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Running", test: function (a) { return a.state === "running"; } }, { label: "Draft", test: function (a) { return a.state === "draft"; } }, { label: "Closed", test: function (a) { return a.state === "closed"; } }],
+      groupBy: [{ label: "Category", get: function (a) { return a.category || "None"; } }, { label: "Status", get: function (a) { return a.state; } }],
+      onOpen: function (a) { renderAssetForm(a.id); }, onNew: function () { renderAssetForm("new"); }
+    };
+  }
+  function assetSchedule(asset) {
+    var val = Number(asset.acquisition_value || 0), sal = Number(asset.salvage_value || 0), life = parseInt(asset.life_months, 10) || 1;
+    var depreciable = Math.max(0, val - sal), per = depreciable / life;
+    var start = parseD(asset.start_date || asset.acquisition_date) || new Date();
+    var out = [], cum = 0;
+    for (var i = 0; i < life; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth() + i, Math.min(start.getDate(), 28));
+      var amt = (i === life - 1) ? (depreciable - cum) : per;
+      cum += amt;
+      out.push({ seq: i + 1, line_date: fmtD(d), depreciation: Math.round(amt * 100) / 100, cumulative: Math.round(cum * 100) / 100, book_value: Math.round((val - cum) * 100) / 100 });
+    }
+    return out;
+  }
+  async function renderAssetForm(id) {
+    var parent = { action: "assets.list", title: "Assets" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var a = id === "new" ? { state: "draft", method: "linear", life_months: 60, asset_account: "2100", depr_account: "2800", expense_account: "6800", acquisition_date: today() } : (await sb.from("assets").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("asset_lines").select("*").eq("asset_id", id).order("seq")).data || [];
+    var cc = S.company.currency_code, running = a.state === "running", closed = a.state === "closed", dis = (running || closed) ? " disabled" : "";
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.number || a.name || "Asset");
+    var postedTot = lines.filter(function (l) { return l.posted; }).reduce(function (s, l) { return s + Number(l.depreciation || 0); }, 0);
+    var bookNow = Number(a.acquisition_value || 0) - postedTot;
+    var dueCount = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); }).length;
+    var btns = closed ? "" : '<button class="pri" id="as-save">Save</button><button id="as-discard">Discard</button>';
+    if (id !== "new" && a.state === "draft") btns += '<button id="as-confirm">Confirm &amp; schedule</button>';
+    if (id !== "new" && running) btns += '<button id="as-post">Post depreciation' + (dueCount ? " (" + dueCount + " due)" : "") + '</button><button id="as-close">Close</button>';
+    var stages = '<div class="o-stages"><span class="st ' + (a.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (running ? "on" : (closed ? "done" : "")) + '">Running</span><span class="st ' + (closed ? "on" : "") + '">Closed</span></div>';
+    var smart = '<div class="o-smart"><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(a.acquisition_value) + '</span><span class="k">Cost</span></button><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(postedTot) + '</span><span class="k">Depreciated</span></button><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(bookNow) + '</span><span class="k">Book value</span></button></div>';
+    var sched = lines.length ? lines : assetSchedule(a);
+    var schedRows = sched.map(function (l) { return '<tr' + (l.posted ? ' style="opacity:.6"' : '') + '><td class="muted">' + esc(l.line_date) + '</td><td class="num">' + money(l.depreciation) + '</td><td class="num">' + money(l.cumulative) + '</td><td class="num">' + money(l.book_value) + '</td><td>' + (l.posted ? '<span class="badge paid">Posted</span>' : (parseD(l.line_date) <= new Date() ? '<span class="badge partial">Due</span>' : '<span class="muted">Scheduled</span>')) + '</td></tr>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="as-name" value="' + esc(a.name || "") + '" placeholder="Asset name"' + dis + '></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Category", '<input id="as-cat" value="' + esc(a.category || "") + '"' + dis + ' placeholder="e.g. Plant, Vehicles, IT">', "Grouping for reporting.") +
+      fld("Acquisition value", '<input id="as-val" type="number" step="0.01" value="' + (a.acquisition_value || 0) + '"' + dis + '>', "Purchase cost of the asset.") +
+      fld("Salvage value", '<input id="as-sal" type="number" step="0.01" value="' + (a.salvage_value || 0) + '"' + dis + '>', "Residual value at end of life; not depreciated.") +
+      fld("Useful life (months)", '<input id="as-life" type="number" step="1" value="' + (a.life_months || 60) + '"' + dis + '>', "Months to depreciate over.") +
+      '</div><div>' +
+      fld("Acquisition date", '<input id="as-acq" type="date" value="' + (a.acquisition_date || today()) + '"' + dis + '>', "When it was bought.") +
+      fld("Depreciation start", '<input id="as-start" type="date" value="' + (a.start_date || a.acquisition_date || today()) + '"' + dis + '>', "First depreciation date.") +
+      fld("Expense account", '<input id="as-exp" value="' + esc(a.expense_account || "6800") + '"' + dis + '>', "Depreciation expense account (P&L).") +
+      fld("Accum. depreciation", '<input id="as-depr" value="' + esc(a.depr_account || "2800") + '"' + dis + '>', "Accumulated depreciation account (contra-asset).") +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Depreciation schedule</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Date</th><th style="text-align:right">Depreciation</th><th style="text-align:right">Cumulative</th><th style="text-align:right">Book value</th><th>Status</th></tr></thead><tbody>' + (schedRows || '<tr><td colspan="5" class="muted">Fill in value + life; Confirm to lock the schedule.</td></tr>') + '</tbody></table></div></div>' +
+      '</div>';
+    var db = document.getElementById("as-discard"); if (db) db.onclick = function () { go("assets.list"); };
+    async function persist() {
+      var row = { name: gv("as-name") || "Asset", category: gv("as-cat"), acquisition_value: parseFloat(gv("as-val")) || 0, salvage_value: parseFloat(gv("as-sal")) || 0, life_months: parseInt(gv("as-life"), 10) || 60, acquisition_date: gv("as-acq") || null, start_date: gv("as-start") || null, expense_account: gv("as-exp") || "6800", depr_account: gv("as-depr") || "2800" };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextDocNumber("assets", "FA"); var ins = await sb.from("assets").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("assets").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    var sv = document.getElementById("as-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderAssetForm(sid); } };
+    var cf = document.getElementById("as-confirm"); if (cf) cf.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var fresh = (await sb.from("assets").select("*").eq("id", sid).maybeSingle()).data;
+      var sc = assetSchedule(fresh).map(function (l) { l.company_id = S.company.id; l.asset_id = sid; return l; });
+      await sb.from("asset_lines").delete().eq("asset_id", sid);
+      if (sc.length) { var ir = await sb.from("asset_lines").insert(sc); if (ir.error) { toast(ir.error.message); return; } }
+      await sb.from("assets").update({ state: "running" }).eq("id", sid);
+      toast("Scheduled over " + sc.length + " months"); renderAssetForm(sid);
+    };
+    var pp = document.getElementById("as-post"); if (pp) pp.onclick = async function () {
+      var duel = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); });
+      if (!duel.length) { toast("Nothing due to post"); return; }
+      var n = 0;
+      for (var i = 0; i < duel.length; i++) {
+        var l = duel[i];
+        var eid = await postRetentionEntry(a.expense_account || "6800", a.depr_account || "2800", Number(l.depreciation || 0), "Depreciation " + (a.number || "") + " - " + (a.name || ""), a.id, "depreciation");
+        await sb.from("asset_lines").update({ posted: true, journal_entry_id: eid || null }).eq("id", l.id); n++;
+      }
+      toast("Posted " + n + " depreciation " + (n === 1 ? "entry" : "entries")); renderAssetForm(id);
+    };
+    var cl = document.getElementById("as-close"); if (cl) cl.onclick = async function () { await sb.from("assets").update({ state: "closed" }).eq("id", id); toast("Closed"); renderAssetForm(id); };
+  }
+
+  // ============================ BUDGETS ============================
+  function cfgBudgets() {
+    return {
+      title: "Budgets", pageSize: 80,
+      fetch: function () { return sb.from("budgets").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (b) { return (b.name || ""); },
+      columns: [
+        { label: "Name", get: function (b) { return '<b>' + esc(b.name) + '</b>'; } },
+        { label: "From", get: function (b) { return '<span class="muted">' + esc(b.date_start || "") + '</span>'; } },
+        { label: "To", get: function (b) { return '<span class="muted">' + esc(b.date_end || "") + '</span>'; } }
+      ],
+      onOpen: function (b) { renderBudgetForm(b.id); }, onNew: function () { renderBudgetForm("new"); }
+    };
+  }
+  async function renderBudgetForm(id) {
+    var parent = { action: "budget.list", title: "Budgets" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var yr = new Date().getFullYear();
+    var b = id === "new" ? { date_start: yr + "-01-01", date_end: yr + "-12-31" } : (await sb.from("budgets").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [] : (await sb.from("budget_lines").select("*").eq("budget_id", id).order("sequence")).data || [];
+    var accts = (await sb.from("accounts").select("code,name").eq("company_id", S.company.id).order("code")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (b.name || "Budget");
+    function acctOpts(sel) { return accts.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join(""); }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt" type="number" step="0.01" value="' + (l.planned || 0) + '" style="text-align:right"></td><td><button class="bl-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    var btns = '<button class="pri" id="bg-save">Save</button><button id="bg-discard">Discard</button>' + (id !== "new" ? '<button id="bg-report">Budget vs actual</button>' : '');
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="bg-name" value="' + esc(b.name || "") + '" placeholder="Budget name (e.g. 2026 Operating)"></div>' +
+      '<div class="o-groups"><div>' + fld("From", '<input id="bg-start" type="date" value="' + (b.date_start || "") + '">', "Budget period start.") + '</div><div>' + fld("To", '<input id="bg-end" type="date" value="' + (b.date_end || "") + '">', "Budget period end.") + '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Budget lines</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Account</th><th>Note</th><th style="text-align:right">Planned</th><th></th></tr></thead><tbody id="bg-lines">' + (lines.length ? lines.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="bg-add" class="o-addln">+ Add line</button></div></div>' +
+      '</div>';
+    document.getElementById("bg-discard").onclick = function () { go("budget.list"); };
+    function wireDel() { document.querySelectorAll("#bg-lines .bl-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("bg-add").onclick = function () { document.getElementById("bg-lines").insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
+    function readLines() { return [].map.call(document.querySelectorAll("#bg-lines tr"), function (tr, i) { return { account_code: (tr.querySelector(".bl-acc") || {}).value || "", label: (tr.querySelector(".bl-lbl") || {}).value || "", planned: parseFloat((tr.querySelector(".bl-amt") || {}).value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.account_code; }); }
+    async function persist() {
+      var row = { name: gv("bg-name") || "Budget", date_start: gv("bg-start") || null, date_end: gv("bg-end") || null };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("budgets").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("budgets").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      await sb.from("budget_lines").delete().eq("budget_id", sid);
+      var ls = readLines().map(function (l) { l.company_id = S.company.id; l.budget_id = sid; return l; });
+      if (ls.length) { var ir = await sb.from("budget_lines").insert(ls); if (ir.error) { toast(ir.error.message); return null; } }
+      return sid;
+    }
+    document.getElementById("bg-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderBudgetForm(sid); } };
+    var rp = document.getElementById("bg-report"); if (rp) rp.onclick = async function () { var sid = await persist(); if (sid) renderBudgetReport(sid); };
+  }
+  async function renderBudgetReport(budgetId) {
+    document.getElementById("o-main").innerHTML = repChrome("Budget vs Actual", true);
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); }; var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    var cc = S.company.currency_code;
+    var b = (await sb.from("budgets").select("*").eq("id", budgetId).maybeSingle()).data || {};
+    var lines = (await sb.from("budget_lines").select("*").eq("budget_id", budgetId).order("sequence")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = b.name || "Budget";
+    var jl = (await sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end)).data || [];
+    var actByCode = {}, typeByCode = {};
+    jl.forEach(function (l) { var c = l.accounts && l.accounts.code; if (!c) return; typeByCode[c] = l.accounts.type_code; actByCode[c] = (actByCode[c] || 0) + (Number(l.debit || 0) - Number(l.credit || 0)); });
+    var rows = "", tp = 0, ta = 0;
+    lines.forEach(function (l) {
+      var code = l.account_code, tc = typeByCode[code] || "", isIncome = tc.indexOf("income") === 0;
+      var raw = actByCode[code] || 0, actual = isIncome ? -raw : raw;
+      var planned = Number(l.planned || 0), variance = planned - actual;
+      tp += planned; ta += actual;
+      var over = actual > planned + 0.005;
+      rows += '<tr' + (over ? ' style="background:var(--bad-s)"' : '') + '><td>' + esc(code) + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + money(planned) + '</td><td class="num">' + money(actual) + '</td><td class="num"' + (variance < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(variance) + '</td><td class="num">' + (planned ? Math.round(actual / planned * 100) + "%" : "-") + '</td><td>' + (over ? '<span class="ob-flag">over</span>' : (planned && actual >= planned * 0.9 ? '<span class="ob-flag" style="background:var(--warn)">near</span>' : '<span style="color:var(--good);font-weight:600">ok</span>')) + '</td></tr>';
+    });
+    document.getElementById("rep").innerHTML = '<h1>' + esc(b.name || "Budget") + ' &middot; budget vs actual</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; ' + esc(b.date_start || "") + ' to ' + esc(b.date_end || "") + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Account</td><td>Note</td><td class="num">Planned</td><td class="num">Actual</td><td class="num">Variance</td><td class="num">Used</td><td>Status</td></tr></thead><tbody>' + (rows || '<tr><td colspan="7" class="muted">No budget lines.</td></tr>') + '<tr class="tot"><td>Total</td><td></td><td class="num">' + money(tp) + '</td><td class="num">' + money(ta) + '</td><td class="num">' + money(tp - ta) + '</td><td class="num">' + (tp ? Math.round(ta / tp * 100) + "%" : "-") + '</td><td></td></tr></tbody></table></div>' +
+      '<div class="sub" style="margin-top:8px">Actual = posted journal lines on each account within the period (income shown positive as earned). A red row means it has passed the plan.</div>';
+  }
+
+  // ============================ FOLLOW-UP (DUNNING) LEVELS ============================
+  function cfgFollowupLevels() {
+    return {
+      title: "Follow-up Levels", pageSize: 60,
+      fetch: function () { return sb.from("followup_levels").select("*").eq("company_id", S.company.id).order("days").then(function (r) { return r.data || []; }); },
+      searchText: function (l) { return (l.name || "") + " " + (l.action || ""); },
+      columns: [
+        { label: "Level", get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
+        { label: "Days overdue", num: true, get: function (l) { return String(l.days || 0); } },
+        { label: "Action", get: function (l) { return esc(l.action || ""); } },
+        { label: "Message", get: function (l) { return '<span class="muted">' + esc((l.message || "").slice(0, 70)) + '</span>'; } }
+      ],
+      onOpen: function (l) { openFollowupLevelModal(l); }, onNew: function () { openFollowupLevelModal(null); }
+    };
+  }
+  function openFollowupLevelModal(lvl) {
+    lvl = lvl || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (lvl.id ? "Edit" : "New") + ' follow-up level</h3><div class="form">' +
+      '<div class="row2"><div><label>Level name</label>' + fhint("__fln", "e.g. Reminder, Warning, Final notice.") + '<input id="fl-name" value="' + esc(lvl.name || "") + '"></div>' +
+      '<div><label>Days overdue</label>' + fhint("__fld2", "Applies once an invoice is this many days past due.") + '<input id="fl-days" type="number" value="' + (lvl.days || 15) + '"></div></div>' +
+      '<div><label>Action</label>' + fhint("__fla", "What to do at this level.") + '<select id="fl-action"><option value="email">Email reminder</option><option value="call">Phone call</option><option value="letter">Formal letter</option><option value="legal">Escalate / legal</option></select></div>' +
+      '<div><label>Message</label>' + fhint("__flm", "Suggested wording for the reminder.") + '<textarea id="fl-msg" rows="2">' + esc(lvl.message || "") + '</textarea></div>' +
+      '</div><div class="foot"><button class="btn" id="fl-cancel">Cancel</button>' + (lvl.id ? '<button class="btn" id="fl-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="fl-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("fl-action").value = lvl.action || "email";
+    document.getElementById("fl-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("fl-del"); if (del) del.onclick = async function () { await sb.from("followup_levels").delete().eq("id", lvl.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("fl-save").onclick = async function () {
+      var row = { name: gv("fl-name") || "Level", days: parseInt(gv("fl-days"), 10) || 0, action: document.getElementById("fl-action").value, message: (document.getElementById("fl-msg") || {}).value || "" };
+      var r;
+      if (lvl.id) r = await sb.from("followup_levels").update(row).eq("id", lvl.id);
+      else { row.company_id = S.company.id; r = await sb.from("followup_levels").insert(row); }
+      if (r.error) { toast(r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
     };
   }
 
