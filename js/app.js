@@ -588,7 +588,7 @@
     }
     return '<div class="rw-bars">' + entries.slice(0, 8).map(function (e) { var pc = Math.round(e.value / max * 100); return '<div class="rw-bar-row"><span class="rw-bar-l" title="' + esc(e.label) + '">' + esc(e.label) + '</span><span class="rw-bar-track"><span class="rw-bar-fill" style="width:' + pc + '%"></span></span><span class="rw-bar-v">' + rptFmt(e.value, data.meas) + '</span></div>'; }).join("") + '</div>';
   }
-  async function renderDashboard() {
+  async function renderInsights() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '<div class="gap"></div><button class="o-filtbtn pri" id="rw-new">+ New report</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
     document.getElementById("rw-new").onclick = function () { openReportModal(null); };
@@ -616,11 +616,11 @@
     var srcSel = document.getElementById("rp-src");
     srcSel.onchange = function () { document.getElementById("rp-meas").innerHTML = measOpts(srcSel.value, "count"); document.getElementById("rp-dim").innerHTML = dimOpts(srcSel.value, ""); };
     document.getElementById("rp-cancel").onclick = function () { m.remove(); };
-    var del = document.getElementById("rp-del"); if (del) del.onclick = async function () { await sb.from("reports").delete().eq("id", rep.id); m.remove(); renderDashboard(); };
+    var del = document.getElementById("rp-del"); if (del) del.onclick = async function () { await sb.from("reports").delete().eq("id", rep.id); m.remove(); renderInsights(); };
     document.getElementById("rp-save").onclick = async function () {
       var row = { name: gv("rp-name") || "Report", source: srcSel.value, measure: document.getElementById("rp-meas").value, group_by: document.getElementById("rp-dim").value, chart: document.getElementById("rp-chart").value };
       var r; if (rep.id) r = await sb.from("reports").update(row).eq("id", rep.id); else { row.company_id = S.company.id; r = await sb.from("reports").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); renderDashboard();
+      if (r.error) { toast(r.error.message); return; } m.remove(); renderInsights();
     };
   }
 
@@ -699,7 +699,7 @@
       case "settings.users": return renderUsers();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
-      case "dash.home": return renderDashboard();
+      case "dash.home": return renderInsights();
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
