@@ -527,7 +527,7 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (r.id ? "Edit rule" : "New approval rule") + '</h3><div class="form">' +
       '<div><label>Rule name</label><input id="ar-name" value="' + esc(r.name || "") + '" placeholder="e.g. Large purchase orders"></div>' +
-      '<div class="row2"><div><label>Applies to</label><select id="ar-type">' + typeOpts + '</select></div><div><label>Needs approval at or above (' + esc(S.company.currency_code) + ')</label><input id="ar-min" type="number" step="0.01" value="' + (r.min_amount || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Applies to</label><select id="ar-type">' + typeOpts + '</select></div><div><label>Needs approval at or above (' + esc(S.company.currency_code) + ')</label><input id="ar-min" type="number" step="0.01" value="' + (r.id ? (r.min_amount || 0) : 1000) + '"></div></div>' +
       '<div class="row2"><div><label>Approver</label><select id="ar-appr">' + apprOpts + '</select></div><div><label>Status</label><select id="ar-active"><option value="1">Active</option><option value="0">Off</option></select></div></div>' +
       '<div class="sub">While a matching document is above the threshold it cannot be confirmed or posted until it is approved here.</div>' +
       '</div><div class="foot"><button class="btn" id="ar-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="ar-del" style="color:var(--bad)">Delete</button>' : "") + '<button class="btn pri" id="ar-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
