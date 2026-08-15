@@ -533,6 +533,7 @@
     var total = rows.length;
     // pager
     var pager = document.getElementById("o-pager");
+    if (!body || !pager) return; // navigated away before an async list fetch resolved
     if (L.group != null || L.view === "kanban") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
     else {
       var from = total ? L.page * L.size + 1 : 0, to = Math.min((L.page + 1) * L.size, total);
