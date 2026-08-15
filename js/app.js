@@ -110,6 +110,8 @@
       menus: [
         { label: "Projects", action: "proj.list" },
         { label: "Tasks", action: "task.list" },
+        { label: "Execution", action: "proj.board" },
+        { label: "My Work", action: "proj.mywork" },
         { label: "Programme", action: "proj.schedule" },
         { label: "Timesheets", action: "ts.list" },
         { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"], ["WIP Schedule", "proj.wip"]] },
@@ -222,7 +224,7 @@
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
-    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project"
+    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -497,6 +499,8 @@
       case "proj.retention": return renderRetention();
       case "proj.wip": return renderWIP();
       case "proj.schedule": return renderSchedule();
+      case "proj.board": return renderBoard();
+      case "proj.mywork": return renderMyWork();
       case "site.snags": return renderList(cfgSnags());
       case "site.insp": return renderList(cfgInspections());
       case "site.plant": return renderList(cfgPlant());
@@ -3200,6 +3204,349 @@
     };
   }
 
+  // ============================ EXECUTION (internal agile board) ============================
+  // The team's working board (Asana / ActiveCollab style). Distinct from the
+  // client-facing Delivery view (contract / BOQ / programme). Runs on project_tasks
+  // enriched with agile fields + sprints / comments / checklists / watchers / activity.
+  var BOARD_STAGES = [
+    { key: "backlog", label: "Backlog" },
+    { key: "todo", label: "To do" },
+    { key: "in_progress", label: "In progress" },
+    { key: "review", label: "Review" },
+    { key: "done", label: "Done" }
+  ];
+  var TASK_PRIO = { low: { label: "Low", cls: "pr-low" }, medium: { label: "Medium", cls: "pr-med" }, high: { label: "High", cls: "pr-high" }, urgent: { label: "Urgent", cls: "pr-urg" } };
+  var AGS = { proj: "", view: "board", sprint: "", member: "" };
+  var _agActor = null;
+  var AG_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  function agInitials(name) { name = (name || "").trim(); if (!name) return "?"; var p = name.split(/\s+/); return (p[0].charAt(0) + (p.length > 1 ? p[p.length - 1].charAt(0) : "")).toUpperCase(); }
+  function agAvatar(emp, sm) { if (!emp) return '<span class="ag-ava none' + (sm ? " sm" : "") + '" title="Unassigned">?</span>'; return '<span class="ag-ava' + (sm ? " sm" : "") + '" title="' + esc(emp.name) + '">' + esc(agInitials(emp.name)) + '</span>'; }
+  function agPrio(p) { var d = TASK_PRIO[p] || TASK_PRIO.medium; return '<span class="ag-prio ' + d.cls + '">' + d.label + '</span>'; }
+  function agStageLabel(k) { for (var i = 0; i < BOARD_STAGES.length; i++) if (BOARD_STAGES[i].key === k) return BOARD_STAGES[i].label; return k || "Backlog"; }
+  function agDate(s) { if (!s) return ""; var d = parseD(s); return d.getDate() + " " + AG_MONTHS[d.getMonth()]; }
+  function agWhen(iso) { if (!iso) return ""; var d = new Date(iso); var hh = ("0" + d.getHours()).slice(-2), mm = ("0" + d.getMinutes()).slice(-2); return d.getDate() + " " + AG_MONTHS[d.getMonth()] + " " + hh + ":" + mm; }
+  function agBody(s) { return esc(s || "").replace(/@([A-Za-z][A-Za-z'\-]*)/g, '<span class="ag-mention">@$1</span>').replace(/\n/g, "<br>"); }
+  function agResolveMentions(text, emps) { var ids = []; (emps || []).forEach(function (e) { var fn = (e.name || "").split(/\s+/)[0]; if (fn && new RegExp("@" + fn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i").test(text)) ids.push(e.id); }); return ids; }
+  async function agActor() { if (_agActor) return _agActor; try { var u = (await sb.auth.getUser()).data.user; _agActor = (u && (u.email || u.id)) || "Team"; } catch (e) { _agActor = "Team"; } return _agActor; }
+  async function logTaskActivity(taskId, projectId, verb, detail) { try { await sb.from("task_activity").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId || null, actor_name: await agActor(), verb: verb, detail: detail || "" }); } catch (e) {} }
+
+  async function renderBoard(projectId) {
+    if (projectId !== undefined) AGS.proj = projectId;
+    var vt = [["board", "Board"], ["sprints", "Sprints"], ["list", "List"]].map(function (v) { return '<button class="o-filtbtn ag-vt' + (AGS.view === v[0] ? " on" : "") + '" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join("");
+    document.getElementById("o-main").innerHTML =
+      '<div class="o-view"><div class="o-cp">' + bcHTML("Execution") + '<div class="gap"></div>' +
+      '<select id="ab-proj" class="o-filtbtn"></select>' + vt +
+      '<select id="ab-member" class="o-filtbtn" title="Filter by assignee"></select>' +
+      '<button class="o-filtbtn" id="ab-new">+ Task</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var psel = document.getElementById("ab-proj");
+    psel.innerHTML = '<option value="">Pick a project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (AGS.proj === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    psel.onchange = function () { AGS.proj = psel.value; AGS.sprint = ""; renderBoard(); };
+    document.querySelectorAll(".ag-vt").forEach(function (b) { b.onclick = function () { AGS.view = b.dataset.v; renderBoard(); }; });
+    document.getElementById("ab-new").onclick = function () { if (!AGS.proj) { toast("Pick a project first"); return; } openTaskPanel("new", AGS.proj); };
+    var body = document.getElementById("o-body");
+    var msel = document.getElementById("ab-member");
+    if (!AGS.proj) { msel.style.display = "none"; body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Pick a project</div><div class="o-empty2-h">The Execution board is your team\'s internal workspace: assign work, move it across stages, comment, and run sprints. It is separate from the client-facing Delivery view (contract, BOQ, programme).</div></div>'; return; }
+
+    var res = await Promise.all([
+      sb.from("project_tasks").select("*").eq("project_id", AGS.proj).order("sort_order").order("created_at"),
+      sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name"),
+      sb.from("sprints").select("*").eq("project_id", AGS.proj).order("sort_order"),
+      sb.from("task_checklists").select("task_id,is_done").eq("company_id", S.company.id),
+      sb.from("task_comments").select("task_id").eq("company_id", S.company.id)
+    ]);
+    var tasks = res[0].data || [], emps = res[1].data || [], sprints = res[2].data || [];
+    var empById = {}; emps.forEach(function (e) { empById[e.id] = e; });
+    var clByTask = {}; (res[3].data || []).forEach(function (c) { var o = clByTask[c.task_id] || (clByTask[c.task_id] = { d: 0, t: 0 }); o.t++; if (c.is_done) o.d++; });
+    var cmByTask = {}; (res[4].data || []).forEach(function (c) { cmByTask[c.task_id] = (cmByTask[c.task_id] || 0) + 1; });
+    var subByParent = {}; tasks.forEach(function (t) { if (t.parent_task_id) subByParent[t.parent_task_id] = (subByParent[t.parent_task_id] || 0) + 1; });
+    var ctx = { empById: empById, emps: emps, clByTask: clByTask, cmByTask: cmByTask, subByParent: subByParent, sprints: sprints };
+
+    msel.style.display = "";
+    msel.innerHTML = '<option value="">All members</option><option value="__none">Unassigned</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (AGS.member === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("");
+    msel.onchange = function () { AGS.member = msel.value; renderBoard(); };
+
+    if (AGS.view === "sprints") { renderSprintsView(body, tasks, sprints, ctx); return; }
+
+    var shown = tasks.filter(function (t) { return !t.parent_task_id; });
+    if (AGS.member === "__none") shown = shown.filter(function (t) { return !t.assignee_id; });
+    else if (AGS.member) shown = shown.filter(function (t) { return t.assignee_id === AGS.member; });
+    if (AGS.sprint === "__backlog") shown = shown.filter(function (t) { return !t.sprint_id; });
+    else if (AGS.sprint) shown = shown.filter(function (t) { return t.sprint_id === AGS.sprint; });
+
+    if (AGS.view === "list") { renderBoardList(body, shown, ctx); return; }
+    renderBoardKanban(body, shown, ctx);
+  }
+
+  function agSprintBar(sprints) {
+    if (!sprints.length) return "";
+    var chips = '<button class="ag-schip' + (AGS.sprint === "" ? " on" : "") + '" data-s="">All</button><button class="ag-schip' + (AGS.sprint === "__backlog" ? " on" : "") + '" data-s="__backlog">Backlog</button>' +
+      sprints.map(function (s) { return '<button class="ag-schip' + (AGS.sprint === s.id ? " on" : "") + '" data-s="' + s.id + '">' + esc(s.name) + (s.status === "active" ? ' <span class="ag-sdot"></span>' : "") + '</button>'; }).join("");
+    return '<div class="ag-sbar"><span class="ag-sbar-l">Sprint:</span>' + chips + '</div>';
+  }
+  function boardCardHtml(t, ctx) {
+    var emp = t.assignee_id ? ctx.empById[t.assignee_id] : null;
+    var cl = ctx.clByTask[t.id], sub = ctx.subByParent[t.id] || 0, cm = ctx.cmByTask[t.id] || 0;
+    var due = t.date_deadline, over = due && due < today() && t.board_stage !== "done";
+    var labels = (t.labels || []).slice(0, 3).map(function (l) { return '<span class="ag-label">' + esc(l) + '</span>'; }).join("");
+    var meta = [];
+    if (cl && cl.t) meta.push('<span class="ag-m" title="Checklist">&#10003; ' + cl.d + '/' + cl.t + '</span>');
+    if (sub) meta.push('<span class="ag-m" title="Subtasks">&#9776; ' + sub + '</span>');
+    if (cm) meta.push('<span class="ag-m" title="Comments">&#9993; ' + cm + '</span>');
+    if (t.blocked_by) meta.push('<span class="ag-m block" title="Blocked by another task">&#9888;</span>');
+    return '<div class="ag-card" draggable="true" data-id="' + t.id + '" data-stage="' + (t.board_stage || "backlog") + '" data-pts="' + (Number(t.points) || 0) + '">' +
+      (labels ? '<div class="ag-labels">' + labels + '</div>' : '') +
+      '<div class="ag-card-t">' + esc(t.name) + '</div>' +
+      '<div class="ag-card-f"><div class="ag-card-l">' + agPrio(t.priority) + (Number(t.points) ? '<span class="ag-pts" title="Effort points">' + Number(t.points) + '</span>' : '') + (due ? '<span class="ag-due' + (over ? " over" : "") + '">' + agDate(due) + '</span>' : '') + '</div>' + agAvatar(emp) + '</div>' +
+      (meta.length ? '<div class="ag-card-m">' + meta.join("") + '</div>' : '') + '</div>';
+  }
+  function renderBoardKanban(body, shown, ctx) {
+    var cols = BOARD_STAGES.map(function (st) {
+      var ct = shown.filter(function (t) { return (t.board_stage || "backlog") === st.key; });
+      var pts = ct.reduce(function (s, t) { return s + Number(t.points || 0); }, 0);
+      return '<div class="ag-col" data-stage="' + st.key + '"><div class="ag-col-h"><span class="ag-col-t">' + st.label + '</span><span class="ag-col-n">' + ct.length + (pts ? ' &middot; ' + pts + ' pts' : '') + '</span></div>' +
+        '<div class="ag-col-b" data-stage="' + st.key + '">' + ct.map(function (t) { return boardCardHtml(t, ctx); }).join("") + '</div>' +
+        '<div class="ag-quick"><input class="ag-quick-in" data-stage="' + st.key + '" placeholder="+ Add task"></div></div>';
+    }).join("");
+    body.innerHTML = agSprintBar(ctx.sprints) + '<div class="ag-board">' + cols + '</div>';
+    document.querySelectorAll(".ag-schip").forEach(function (b) { b.onclick = function () { AGS.sprint = b.dataset.s; renderBoard(); }; });
+    document.querySelectorAll(".ag-card").forEach(function (c) { c.addEventListener("click", function () { openTaskPanel(c.dataset.id, AGS.proj); }); });
+    wireBoardDnD();
+    wireQuickAdd();
+  }
+  function agRecount() {
+    document.querySelectorAll(".ag-col").forEach(function (col) {
+      var cards = col.querySelectorAll(".ag-card"), pts = 0;
+      cards.forEach(function (c) { pts += Number(c.dataset.pts || 0); });
+      var el = col.querySelector(".ag-col-n"); if (el) el.innerHTML = cards.length + (pts ? ' &middot; ' + pts + ' pts' : '');
+    });
+  }
+  function wireBoardDnD() {
+    var dragId = null;
+    document.querySelectorAll(".ag-card").forEach(function (c) {
+      c.addEventListener("dragstart", function (e) { dragId = c.dataset.id; c.classList.add("dragging"); e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", c.dataset.id); } catch (x) {} });
+      c.addEventListener("dragend", function () { c.classList.remove("dragging"); document.querySelectorAll(".ag-col-b").forEach(function (b) { b.classList.remove("ag-over"); }); });
+    });
+    document.querySelectorAll(".ag-col-b").forEach(function (col) {
+      col.addEventListener("dragover", function (e) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; col.classList.add("ag-over"); });
+      col.addEventListener("dragleave", function () { col.classList.remove("ag-over"); });
+      col.addEventListener("drop", async function (e) {
+        e.preventDefault(); col.classList.remove("ag-over");
+        var id = dragId || (e.dataTransfer && e.dataTransfer.getData("text/plain")); if (!id) return;
+        var card = document.querySelector('.ag-card[data-id="' + id + '"]'); if (!card) return;
+        var newStage = col.dataset.stage; if (card.dataset.stage === newStage && card.parentNode === col) return;
+        col.appendChild(card); card.dataset.stage = newStage; agRecount();
+        var upd = { board_stage: newStage, is_agile: true, completed_at: newStage === "done" ? new Date().toISOString() : null };
+        var r = await sb.from("project_tasks").update(upd).eq("id", id);
+        if (r.error) { toast("Move failed: " + r.error.message); renderBoard(); return; }
+        logTaskActivity(id, AGS.proj, "moved", "to " + agStageLabel(newStage));
+      });
+    });
+  }
+  function wireQuickAdd() {
+    document.querySelectorAll(".ag-quick-in").forEach(function (inp) {
+      inp.addEventListener("keydown", async function (e) {
+        if (e.key !== "Enter") return;
+        var name = inp.value.trim(); if (!name) return;
+        inp.value = ""; inp.disabled = true;
+        var row = { company_id: S.company.id, project_id: AGS.proj, name: name, board_stage: inp.dataset.stage, is_agile: true, priority: "medium", sort_order: Math.round(Date.now() / 1000) % 1000000 };
+        if (AGS.sprint && AGS.sprint !== "__backlog") row.sprint_id = AGS.sprint;
+        if (AGS.member && AGS.member !== "__none") row.assignee_id = AGS.member;
+        var r = await sb.from("project_tasks").insert(row).select("id").single();
+        inp.disabled = false;
+        if (r.error) { toast(r.error.message); return; }
+        logTaskActivity(r.data.id, AGS.proj, "created", name);
+        renderBoard();
+      });
+    });
+  }
+  function renderBoardList(body, shown, ctx) {
+    if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No tasks here</div><div class="o-empty2-h">Add tasks on the Board, or with the + Task button.</div></div>'; return; }
+    var sprintName = {}; ctx.sprints.forEach(function (s) { sprintName[s.id] = s.name; });
+    var rows = shown.map(function (t) {
+      var emp = t.assignee_id ? ctx.empById[t.assignee_id] : null, due = t.date_deadline, over = due && due < today() && t.board_stage !== "done";
+      return '<tr class="ag-lrow" data-id="' + t.id + '"><td><b>' + esc(t.name) + '</b></td><td>' + (emp ? esc(emp.name) : '<span class="muted">Unassigned</span>') + '</td><td>' + agPrio(t.priority) + '</td><td class="num">' + (Number(t.points) || 0) + '</td><td>' + esc(agStageLabel(t.board_stage || "backlog")) + '</td><td>' + esc(sprintName[t.sprint_id] || "") + '</td><td class="' + (over ? "ag-over" : "muted") + '">' + esc(due || "") + '</td></tr>';
+    }).join("");
+    body.innerHTML = '<div style="padding:12px 16px"><div class="o-rt-wrap"><table class="o-lines ag-list"><thead><tr><th>Task</th><th>Assignee</th><th>Priority</th><th style="text-align:right">Pts</th><th>Stage</th><th>Sprint</th><th>Due</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+    document.querySelectorAll(".ag-lrow").forEach(function (r) { r.onclick = function () { openTaskPanel(r.dataset.id, AGS.proj); }; });
+  }
+  function renderSprintsView(body, tasks, sprints, ctx) {
+    var cards = sprints.map(function (s) {
+      var st = tasks.filter(function (t) { return t.sprint_id === s.id && !t.parent_task_id; });
+      var total = st.reduce(function (a, t) { return a + Number(t.points || 0); }, 0);
+      var done = st.filter(function (t) { return t.board_stage === "done"; }).reduce(function (a, t) { return a + Number(t.points || 0); }, 0);
+      var pct = total ? Math.round(done / total * 100) : 0;
+      var daysLeft = s.end_date ? Math.ceil((parseD(s.end_date) - parseD(today())) / 864e5) : null;
+      var badge = s.status === "active" ? '<span class="badge paid">Active</span>' : s.status === "done" ? '<span class="badge draft">Done</span>' : '<span class="badge unpaid">Planned</span>';
+      return '<div class="ag-sprint"><div class="ag-sprint-h"><div><b>' + esc(s.name) + '</b> ' + badge + '</div><button class="o-filtbtn ag-sp-edit" data-id="' + s.id + '">Edit</button></div>' +
+        (s.goal ? '<div class="muted" style="margin:2px 0 8px">' + esc(s.goal) + '</div>' : '') +
+        (s.start_date || s.end_date ? '<div class="sub" style="margin-bottom:8px">' + esc(s.start_date || "?") + ' to ' + esc(s.end_date || "?") + '</div>' : '') +
+        '<div class="ag-burn"><div class="ag-burn-f" style="width:' + pct + '%"></div></div>' +
+        '<div class="ag-sprint-meta"><span>' + st.length + ' tasks</span><span>' + done + ' / ' + total + ' pts</span><span>' + pct + '% done</span>' + (daysLeft != null ? '<span>' + (daysLeft >= 0 ? daysLeft + ' days left' : (-daysLeft) + ' days over') + '</span>' : '') + '</div>' +
+        '<div class="ag-sprint-actions"><button class="o-filtbtn ag-sp-open" data-id="' + s.id + '">Open board</button>' + (s.status !== "active" ? '<button class="o-filtbtn ag-sp-start" data-id="' + s.id + '">Start sprint</button>' : '<button class="o-filtbtn ag-sp-done" data-id="' + s.id + '">Complete</button>') + '</div></div>';
+    }).join("");
+    var backlogN = tasks.filter(function (t) { return !t.sprint_id && !t.parent_task_id; }).length;
+    body.innerHTML = '<div style="padding:14px 16px"><div class="ag-sprint-top"><button class="o-new" id="ag-new-sp">+ New sprint</button><span class="muted">Backlog: ' + backlogN + ' unscheduled tasks</span></div>' +
+      (sprints.length ? '<div class="ag-sprints">' + cards + '</div>' : '<div class="o-empty2"><div class="o-empty2-t">No sprints yet</div><div class="o-empty2-h">Sprints are optional timeboxes (say two weeks). Create one, drag tasks into it on the board, then Start it to track burndown.</div><button class="o-new" id="ag-new-sp2" style="margin-top:14px">+ New sprint</button></div>') + '</div>';
+    var nb = document.getElementById("ag-new-sp"); if (nb) nb.onclick = function () { openSprintModal(null, AGS.proj); };
+    var nb2 = document.getElementById("ag-new-sp2"); if (nb2) nb2.onclick = function () { openSprintModal(null, AGS.proj); };
+    document.querySelectorAll(".ag-sp-edit").forEach(function (b) { b.onclick = function () { openSprintModal(sprints.filter(function (s) { return s.id === b.dataset.id; })[0], AGS.proj); }; });
+    document.querySelectorAll(".ag-sp-open").forEach(function (b) { b.onclick = function () { AGS.sprint = b.dataset.id; AGS.view = "board"; renderBoard(); }; });
+    document.querySelectorAll(".ag-sp-start").forEach(function (b) { b.onclick = async function () { await sb.from("sprints").update({ status: "active" }).eq("id", b.dataset.id); toast("Sprint started"); renderBoard(); }; });
+    document.querySelectorAll(".ag-sp-done").forEach(function (b) { b.onclick = async function () { await sb.from("sprints").update({ status: "done" }).eq("id", b.dataset.id); toast("Sprint completed"); renderBoard(); }; });
+  }
+  async function openSprintModal(s, projectId) {
+    s = s || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit sprint" : "New sprint") + '</h3><div class="form">' +
+      '<div><label>Name</label><input id="sp-name" value="' + esc(s.name || "") + '" placeholder="e.g. Sprint 5 - Level 12 facade"></div>' +
+      '<div><label>Goal</label><input id="sp-goal" value="' + esc(s.goal || "") + '" placeholder="What this sprint aims to deliver"></div>' +
+      '<div class="row2"><div><label>Start</label><input id="sp-start" type="date" value="' + (s.start_date || "") + '"></div><div><label>End</label><input id="sp-end" type="date" value="' + (s.end_date || "") + '"></div></div>' +
+      '<div><label>Status</label><select id="sp-status"><option value="planned">Planned</option><option value="active">Active</option><option value="done">Done</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="sp-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sp-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sp-status").value = s.status || "planned";
+    document.getElementById("sp-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("sp-del"); if (del) del.onclick = async function () { await sb.from("sprints").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderBoard(); };
+    document.getElementById("sp-save").onclick = async function () {
+      var row = { name: gv("sp-name") || "Sprint", goal: gv("sp-goal"), start_date: gv("sp-start") || null, end_date: gv("sp-end") || null, status: document.getElementById("sp-status").value };
+      var r; if (s.id) r = await sb.from("sprints").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.project_id = projectId; r = await sb.from("sprints").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); renderBoard();
+    };
+  }
+
+  async function openTaskPanel(taskId, projectId, onClose) {
+    var isNew = taskId === "new";
+    var t = isNew ? { priority: "medium", board_stage: "backlog", points: 0 } : ((await sb.from("project_tasks").select("*").eq("id", taskId).maybeSingle()).data || {});
+    projectId = projectId || t.project_id;
+    var pre = await Promise.all([
+      sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name"),
+      sb.from("sprints").select("id,name,status").eq("project_id", projectId).order("sort_order"),
+      sb.from("project_tasks").select("id,name").eq("project_id", projectId).eq("is_agile", true),
+      isNew ? Promise.resolve({ data: [] }) : sb.from("task_checklists").select("*").eq("task_id", taskId).order("sort_order"),
+      isNew ? Promise.resolve({ data: [] }) : sb.from("project_tasks").select("id,name,board_stage,assignee_id").eq("parent_task_id", taskId).order("created_at"),
+      isNew ? Promise.resolve({ data: [] }) : sb.from("task_comments").select("*").eq("task_id", taskId).order("created_at"),
+      isNew ? Promise.resolve({ data: [] }) : sb.from("task_watchers").select("employee_id").eq("task_id", taskId),
+      isNew ? Promise.resolve({ data: [] }) : sb.from("task_activity").select("*").eq("task_id", taskId).order("created_at", { ascending: false }).limit(40)
+    ]);
+    var emps = pre[0].data || [], sprints = pre[1].data || [], siblings = (pre[2].data || []).filter(function (x) { return x.id !== taskId; });
+    var checklist = pre[3].data || [], subtasks = pre[4].data || [], comments = pre[5].data || [], watchers = pre[6].data || [], activity = pre[7].data || [];
+    var empById = {}; emps.forEach(function (e) { empById[e.id] = e; });
+
+    var bg = document.createElement("div"); bg.className = "ag-panel-bg";
+    function close() { bg.remove(); document.removeEventListener("keydown", onKey); if (onClose) onClose(); else renderBoard(); }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    bg.addEventListener("mousedown", function (e) { if (e.target === bg) close(); });
+
+    var empOpts = function (sel) { return '<option value="">Unassigned</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (e.id === sel ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join(""); };
+    var stageOpts = BOARD_STAGES.map(function (st) { return '<option value="' + st.key + '"' + ((t.board_stage || "backlog") === st.key ? " selected" : "") + '>' + st.label + '</option>'; }).join("");
+    var prioOpts = Object.keys(TASK_PRIO).map(function (k) { return '<option value="' + k + '"' + ((t.priority || "medium") === k ? " selected" : "") + '>' + TASK_PRIO[k].label + '</option>'; }).join("");
+    var sprintOpts = '<option value="">Backlog (no sprint)</option>' + sprints.map(function (s) { return '<option value="' + s.id + '"' + (t.sprint_id === s.id ? " selected" : "") + '>' + esc(s.name) + (s.status === "active" ? " (active)" : "") + '</option>'; }).join("");
+    var blockOpts = '<option value="">Not blocked</option>' + siblings.map(function (s) { return '<option value="' + s.id + '"' + (t.blocked_by === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
+
+    bg.innerHTML = '<div class="ag-panel"><div class="ag-panel-top"><span class="ag-panel-eyebrow">Execution task</span><div class="ag-panel-topbtns">' +
+      (isNew ? "" : '<button class="o-filtbtn ag-tp-del">Delete</button>') + '<button class="o-filtbtn pri ag-tp-save">Save</button><button class="ag-panel-x ag-tp-close">&times;</button></div></div>' +
+      '<div class="ag-panel-title"><input id="tp-name" value="' + esc(t.name || "") + '" placeholder="Task name"></div>' +
+      '<div class="ag-panel-body"><div class="ag-panel-main">' +
+      '<div class="ag-fieldlabel">Description</div><textarea id="tp-desc" class="ag-desc" placeholder="What needs to be done, acceptance criteria, links...">' + esc(t.description || "") + '</textarea>' +
+      '<div id="tp-collab"></div></div>' +
+      '<div class="ag-panel-side">' +
+      '<div class="ag-sf"><label>Status</label><select id="tp-stage">' + stageOpts + '</select></div>' +
+      '<div class="ag-sf"><label>Assignee</label><select id="tp-assignee">' + empOpts(t.assignee_id) + '</select></div>' +
+      '<div class="ag-sf-2"><div class="ag-sf"><label>Priority</label><select id="tp-prio">' + prioOpts + '</select></div><div class="ag-sf"><label>Points</label><input id="tp-points" type="number" step="0.5" min="0" value="' + (Number(t.points) || 0) + '"></div></div>' +
+      '<div class="ag-sf"><label>Sprint</label><select id="tp-sprint">' + sprintOpts + '</select></div>' +
+      '<div class="ag-sf-2"><div class="ag-sf"><label>Start</label><input id="tp-start" type="date" value="' + (t.date_start || "") + '"></div><div class="ag-sf"><label>Due</label><input id="tp-due" type="date" value="' + (t.date_deadline || "") + '"></div></div>' +
+      '<div class="ag-sf"><label>Blocked by</label><select id="tp-block">' + blockOpts + '</select></div>' +
+      '<div class="ag-sf"><label>Labels (comma separated)</label><input id="tp-labels" value="' + esc((t.labels || []).join(", ")) + '" placeholder="e.g. fabrication, urgent"></div>' +
+      '</div></div></div>';
+    document.body.appendChild(bg);
+
+    function paintCollab() {
+      var host = document.getElementById("tp-collab");
+      if (isNew) { host.innerHTML = '<div class="ag-sec ag-hint">Save this task first to add a checklist, subtasks, comments and watchers.</div>'; return; }
+      var doneN = checklist.filter(function (c) { return c.is_done; }).length;
+      var clHtml = '<div class="ag-sec"><div class="ag-sec-h">Checklist' + (checklist.length ? ' <span class="muted">' + doneN + '/' + checklist.length + '</span>' : '') + '</div>' +
+        (checklist.length ? '<div class="ag-cl-bar"><div class="ag-cl-fill" style="width:' + (checklist.length ? Math.round(doneN / checklist.length * 100) : 0) + '%"></div></div>' : '') +
+        checklist.map(function (c) { return '<div class="ag-check"><label><input type="checkbox" class="tp-cl-tog" data-id="' + c.id + '"' + (c.is_done ? " checked" : "") + '><span' + (c.is_done ? ' class="done"' : '') + '>' + esc(c.title) + '</span></label><button class="ag-x tp-cl-del" data-id="' + c.id + '">&times;</button></div>'; }).join("") +
+        '<div class="ag-add-row"><input id="tp-cl-new" class="ag-add-in" placeholder="+ Add checklist item"></div></div>';
+      var subHtml = '<div class="ag-sec"><div class="ag-sec-h">Subtasks' + (subtasks.length ? ' <span class="muted">' + subtasks.length + '</span>' : '') + '</div>' +
+        subtasks.map(function (s) { var e = s.assignee_id ? empById[s.assignee_id] : null; return '<div class="ag-sub tp-sub-open" data-id="' + s.id + '"><span class="ag-sub-dot' + (s.board_stage === "done" ? " done" : "") + '"></span><span class="ag-sub-t">' + esc(s.name) + '</span>' + (e ? agAvatar(e, true) : '') + '</div>'; }).join("") +
+        '<div class="ag-add-row"><input id="tp-sub-new" class="ag-add-in" placeholder="+ Add subtask"></div></div>';
+      var wTags = watchers.map(function (w) { var e = empById[w.employee_id]; return e ? '<span class="ag-wtag">' + esc(e.name) + '<button class="ag-x tp-w-del" data-id="' + w.employee_id + '">&times;</button></span>' : ""; }).join("");
+      var wAdd = '<select id="tp-w-add" class="ag-add-in"><option value="">+ Add watcher</option>' + emps.filter(function (e) { return !watchers.some(function (w) { return w.employee_id === e.id; }); }).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>';
+      var wHtml = '<div class="ag-sec"><div class="ag-sec-h">Watchers</div><div class="ag-wtags">' + (wTags || '<span class="muted" style="font-size:12.5px">No one is following this task yet.</span>') + '</div>' + wAdd + '</div>';
+      var mchips = emps.slice(0, 10).map(function (e) { return '<button class="ag-mchip" data-name="' + esc(e.name) + '">@' + esc(e.name.split(/\s+/)[0]) + '</button>'; }).join("");
+      var cHtml = '<div class="ag-sec"><div class="ag-sec-h">Comments</div>' +
+        (comments.length ? comments.map(function (c) { return '<div class="ag-comment"><div class="ag-comment-h"><b>' + esc(c.author_name || "Team") + '</b> <span class="muted">' + agWhen(c.created_at) + '</span></div><div class="ag-comment-b">' + agBody(c.body) + '</div></div>'; }).join("") : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">No comments yet.</div>') +
+        '<div class="ag-comment-new"><textarea id="tp-comment" placeholder="Write a comment. Use @ to mention a teammate."></textarea>' + (mchips ? '<div class="ag-mchips">' + mchips + '</div>' : '') + '<button class="o-filtbtn pri" id="tp-comment-post">Comment</button></div></div>';
+      var aHtml = activity.length ? '<div class="ag-sec"><div class="ag-sec-h">Activity</div>' + activity.map(function (a) { return '<div class="ag-act"><span class="ag-act-dot"></span><span>' + esc(a.actor_name || "Team") + ' <b>' + esc(a.verb) + '</b> ' + esc(a.detail || "") + ' <span class="muted">&middot; ' + agWhen(a.created_at) + '</span></span></div>'; }).join("") + '</div>' : "";
+      host.innerHTML = clHtml + subHtml + wHtml + cHtml + aHtml;
+      wireCollab();
+    }
+    function wireCollab() {
+      if (isNew) return;
+      document.querySelectorAll(".tp-cl-tog").forEach(function (x) { x.onclick = async function () { var it = checklist.filter(function (c) { return c.id === x.dataset.id; })[0]; it.is_done = x.checked; await sb.from("task_checklists").update({ is_done: x.checked }).eq("id", x.dataset.id); paintCollab(); }; });
+      document.querySelectorAll(".tp-cl-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_checklists").delete().eq("id", x.dataset.id); checklist = checklist.filter(function (c) { return c.id !== x.dataset.id; }); paintCollab(); }; });
+      var cln = document.getElementById("tp-cl-new"); if (cln) cln.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = cln.value.trim(); if (!v) return; cln.value = ""; var ins = await sb.from("task_checklists").insert({ company_id: S.company.id, task_id: taskId, title: v, sort_order: (checklist.length + 1) * 10 }).select("*").single(); if (ins.error) { toast(ins.error.message); return; } checklist.push(ins.data); paintCollab(); document.getElementById("tp-cl-new").focus(); };
+      var subn = document.getElementById("tp-sub-new"); if (subn) subn.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = subn.value.trim(); if (!v) return; subn.value = ""; var ins = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: projectId, name: v, parent_task_id: taskId, is_agile: true, board_stage: "backlog", priority: "medium" }).select("id,name,board_stage,assignee_id").single(); if (ins.error) { toast(ins.error.message); return; } subtasks.push(ins.data); logTaskActivity(taskId, projectId, "added subtask", v); paintCollab(); document.getElementById("tp-sub-new").focus(); };
+      document.querySelectorAll(".tp-sub-open").forEach(function (r) { r.onclick = function () { close(); setTimeout(function () { openTaskPanel(r.dataset.id, projectId); }, 60); }; });
+      document.querySelectorAll(".tp-w-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_watchers").delete().eq("task_id", taskId).eq("employee_id", x.dataset.id); watchers = watchers.filter(function (w) { return w.employee_id !== x.dataset.id; }); paintCollab(); }; });
+      var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(ins.error.message); return; } watchers.push({ employee_id: eid }); paintCollab(); };
+      document.querySelectorAll(".ag-mchip").forEach(function (b) { b.onclick = function () { var ta = document.getElementById("tp-comment"); ta.value = (ta.value + (ta.value && !/\s$/.test(ta.value) ? " " : "") + "@" + b.dataset.name.split(/\s+/)[0] + " ").replace(/^\s+/, ""); ta.focus(); }; });
+      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: await agActor(), mentions: agResolveMentions(v, emps) }).select("*").single(); cp.disabled = false; if (ins.error) { toast(ins.error.message); return; } comments.push(ins.data); paintCollab(); };
+    }
+    paintCollab();
+
+    document.querySelector(".ag-tp-close").onclick = close;
+    var delb = document.querySelector(".ag-tp-del"); if (delb) delb.onclick = async function () { if (!confirm("Delete this task and its checklist, subtasks and comments?")) return; await sb.from("project_tasks").delete().eq("id", taskId); toast("Task deleted"); close(); };
+    document.querySelector(".ag-tp-save").onclick = async function () {
+      var name = gv("tp-name"); if (!name) { toast("Task name required"); return; }
+      var newStage = document.getElementById("tp-stage").value, newAssignee = document.getElementById("tp-assignee").value || null, newPrio = document.getElementById("tp-prio").value;
+      var row = { name: name, description: document.getElementById("tp-desc").value, board_stage: newStage, assignee_id: newAssignee, priority: newPrio, points: parseFloat(gv("tp-points")) || 0, sprint_id: document.getElementById("tp-sprint").value || null, date_start: gv("tp-start") || null, date_deadline: gv("tp-due") || null, blocked_by: document.getElementById("tp-block").value || null, labels: gv("tp-labels").split(",").map(function (s) { return s.trim(); }).filter(Boolean), is_agile: true, completed_at: newStage === "done" ? (t.completed_at || new Date().toISOString()) : null };
+      if (isNew) {
+        row.company_id = S.company.id; row.project_id = projectId;
+        var ins = await sb.from("project_tasks").insert(row).select("id").single();
+        if (ins.error) { toast(ins.error.message); return; }
+        logTaskActivity(ins.data.id, projectId, "created", name);
+        toast("Task created"); bg.remove(); document.removeEventListener("keydown", onKey); openTaskPanel(ins.data.id, projectId, onClose); return;
+      }
+      var r = await sb.from("project_tasks").update(row).eq("id", taskId);
+      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if ((newAssignee || null) !== (t.assignee_id || null)) logTaskActivity(taskId, projectId, "assigned", newAssignee ? ("to " + (empById[newAssignee] ? empById[newAssignee].name : "someone")) : "unassigned");
+      if (newStage !== (t.board_stage || "backlog")) logTaskActivity(taskId, projectId, "moved", "to " + agStageLabel(newStage));
+      if (newPrio !== (t.priority || "medium")) logTaskActivity(taskId, projectId, "set priority", TASK_PRIO[newPrio].label);
+      toast("Saved"); close();
+    };
+  }
+
+  async function renderMyWork(empId) {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Work") + '<div class="gap"></div><select id="mw-emp" class="o-filtbtn"></select></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var sel = document.getElementById("mw-emp");
+    if (empId === undefined) empId = AGS.member || (emps[0] && emps[0].id) || "";
+    sel.innerHTML = '<option value="">Pick a team member</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (empId === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("");
+    sel.onchange = function () { renderMyWork(sel.value); };
+    var body = document.getElementById("o-body");
+    if (!empId) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Pick a team member</div><div class="o-empty2-h">See every task assigned to a person across all projects, grouped by stage.</div></div>'; return; }
+    var tasks = (await sb.from("project_tasks").select("*, projects(name)").eq("assignee_id", empId).eq("is_agile", true).order("date_deadline", { ascending: true, nullsFirst: false })).data || [];
+    if (!tasks.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Nothing assigned</div><div class="o-empty2-h">This person has no execution tasks yet. Assign them work from any project board.</div></div>'; return; }
+    var open = tasks.filter(function (t) { return t.board_stage !== "done"; }), doneN = tasks.length - open.length;
+    var groups = [["todo", "To do"], ["in_progress", "In progress"], ["review", "Review"], ["backlog", "Backlog"]].map(function (g) {
+      var gt = open.filter(function (t) { return (t.board_stage || "backlog") === g[0]; });
+      if (!gt.length) return "";
+      return '<div class="ag-mw-g"><div class="ag-mw-gh">' + g[1] + ' <span class="muted">' + gt.length + '</span></div>' + gt.map(function (t) {
+        var over = t.date_deadline && t.date_deadline < today();
+        return '<div class="ag-mw-row" data-id="' + t.id + '" data-proj="' + t.project_id + '"><div class="ag-mw-t"><b>' + esc(t.name) + '</b><span class="muted"> &middot; ' + esc(t.projects ? t.projects.name : "") + '</span></div><div class="ag-mw-r">' + agPrio(t.priority) + (t.date_deadline ? '<span class="ag-due' + (over ? " over" : "") + '">' + agDate(t.date_deadline) + '</span>' : '') + '</div></div>';
+      }).join("") + '</div>';
+    }).join("");
+    body.innerHTML = '<div style="padding:14px 16px"><div class="ag-mw-sum">' + open.length + ' open &middot; ' + doneN + ' done</div>' + (groups || '<div class="muted">All assigned work is done.</div>') + '</div>';
+    document.querySelectorAll(".ag-mw-row").forEach(function (r) { r.onclick = function () { AGS.proj = r.dataset.proj; openTaskPanel(r.dataset.id, r.dataset.proj, function () { renderMyWork(empId); }); }; });
+  }
+
   // ============================ SALES: PRICELISTS ============================
   function cfgPricelists() {
     return {
@@ -4420,7 +4767,7 @@
     var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-exec">Execution board</button>' : '') + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart + '<div class="o-title"><input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
@@ -4452,6 +4799,7 @@
       var _sb2 = document.getElementById("pf-sm-cert"); if (_sb2) _sb2.onclick = function () { go("pc.list"); };
       var _sb3 = document.getElementById("pf-sm-budget"); if (_sb3) _sb3.onclick = function () { renderBudget(p.id); };
     }
+    if (id !== "new") document.getElementById("pf-exec").onclick = function () { AGS.proj = p.id; AGS.view = "board"; go("proj.board"); };
     if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id, function () { renderProjectForm(p.id); }); };
     if (unbilledHours > 0.001) document.getElementById("pf-bill").onclick = function () { openBillModal(p, unbilledHours, unbilledIds); };
   }
