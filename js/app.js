@@ -843,7 +843,7 @@
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
-    var partners = (await sb.from("partners").select("id,name").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var accounts = ((await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [])
       .filter(function (a) { return (a.type_code || "").indexOf(isSale ? "income" : "expense") === 0; });
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [])
@@ -859,7 +859,7 @@
 
     // status bar buttons
     var btns = "";
-    if (editable) btns += '<button class="pri" id="f-confirm">Confirm</button><button id="f-save">Save</button><button id="f-discard">Discard</button>';
+    if (editable) btns += '<button class="pri" id="f-confirm" title="Post to the accounts. This finalises it - a posted document cannot be edited.">Confirm &amp; post</button><button id="f-save" title="Keep working on it as an editable draft.">Save draft</button><button id="f-discard">Discard</button>';
     else if (inv.state === "posted" && !isRefund && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
     if (inv && inv.state === "posted" && !isRefund) btns += '<button id="f-refund">' + (isSale ? "Add Credit Note" : "Add Refund") + '</button>';
     if (inv) btns += '<button id="f-print">Print</button>';
@@ -887,11 +887,10 @@
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Reference", editable ? '<input id="f-ref" value="' + esc(inv ? inv.ref || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(inv ? inv.ref || "" : "") + '</span>') +
       '</div><div>' +
-      fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>') +
-      fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>') +
+      fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>', "Date the " + (isSale ? "invoice" : "bill") + " is issued.") +
+      (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
+      fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>', "When payment is expected. Set automatically from the payment terms; you can override it.") +
       fld("Project", editable ? '<select id="f-proj"><option value="">(none)</option>' + projects.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((projects.filter(function (pr) { return inv && pr.id === inv.project_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a project/site so its cost and revenue roll up in the Project P&L.") +
-      fld("Journal", '<input readonly value="' + (isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Customer Invoices" : "Vendor Bills")) + '">') +
-      fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div></div>';
 
     // notebook
@@ -932,15 +931,15 @@
       var accOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
-      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:150px">Product</th>' : '') + '<th>Description</th><th style="width:140px">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
-        '<button class="o-addln" id="addln">+ Add a line</button>' + totalsHTML();
+      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:150px">Product</th>' : '') + '<th>Description</th><th class="acct-col" style="width:140px;display:none">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
+        '<button class="o-addln" id="addln">+ Add a line</button><button id="acct-toggle" type="button" style="margin-left:10px;background:none;border:none;color:var(--slate);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline">Show accounting detail</button>' + totalsHTML();
       var lb = document.getElementById("lnbody");
       function addRow(l) {
         var tr = document.createElement("tr");
         tr.innerHTML =
           (products.length ? '<td><select class="l-prod">' + prodOpts + '</select></td>' : '') +
           '<td><input class="l-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td>' +
-          '<td><select class="l-acct">' + accOpts + '</select></td>' +
+          '<td class="acct-col" style="display:none"><select class="l-acct">' + accOpts + '</select></td>' +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td>' +
           '<td><input class="l-price num" type="number" step="0.01" value="' + (l ? l.unit_price : 0) + '"></td>' +
           '<td><select class="l-tax">' + taxOpts + '</select></td>' +
@@ -963,6 +962,8 @@
         recalc();
       }
       document.getElementById("addln").onclick = function () { addRow(null); };
+      var atog = document.getElementById("acct-toggle");
+      if (atog) atog.onclick = function () { var show = pg.querySelector(".acct-col") && pg.querySelector(".acct-col").style.display === "none"; pg.querySelectorAll(".acct-col").forEach(function (c) { c.style.display = show ? "" : "none"; }); atog.textContent = show ? "Hide accounting detail" : "Show accounting detail"; };
       if (linesState.length) linesState.forEach(addRow); else addRow(null);
       recalc();
     }
@@ -1032,8 +1033,28 @@
       return invId;
     }
     if (editable) {
+      // Payment terms -> auto due date
+      function applyTerms() {
+        var t = document.getElementById("f-terms"), d = document.getElementById("f-date"), due = document.getElementById("f-due");
+        if (!t || !d || !due) return;
+        var base = parseD(d.value) || new Date(), nd;
+        if (t.value === "eom") nd = new Date(base.getFullYear(), base.getMonth() + 2, 0);
+        else { nd = new Date(base); nd.setDate(nd.getDate() + (parseInt(t.value, 10) || 0)); }
+        due.value = fmtD(nd);
+      }
+      var fterms = document.getElementById("f-terms"); if (fterms) fterms.onchange = applyTerms;
+      var fdate = document.getElementById("f-date"); if (fdate) fdate.onchange = applyTerms;
+      var fpart = document.getElementById("f-partner");
+      if (fpart) fpart.onchange = function () {
+        var p = partners.filter(function (x) { return x.id === fpart.value; })[0];
+        if (p && p.payment_days != null && document.getElementById("f-terms")) {
+          var opt = [].filter.call(document.getElementById("f-terms").options, function (o) { return o.value === String(p.payment_days); })[0];
+          if (opt) { document.getElementById("f-terms").value = String(p.payment_days); applyTerms(); }
+        }
+      };
+      if (id === "new" && !inv) applyTerms(); // seed due date from default terms on a fresh invoice
       document.getElementById("f-discard").onclick = function () { go(isSale ? "inv.out" : "inv.in"); };
-      document.getElementById("f-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderInvoiceForm(nid, moveType); } };
+      document.getElementById("f-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved as draft"); renderInvoiceForm(nid, moveType); } };
       document.getElementById("f-confirm").onclick = async function () { var nid = await save(true); if (nid) { toast("Posted to the ledger"); renderInvoiceForm(nid, moveType); } };
     } else if (inv.state === "posted" && Number(inv.amount_residual) > 0.005) {
       document.getElementById("f-pay").onclick = function () { openPaymentModal(inv, function () { renderInvoiceForm(id, moveType); }); };
@@ -1417,8 +1438,10 @@
       '<div class="o-sheet">' + smart +
       '<div class="o-title"><input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name"></div>' +
       '<div class="o-groups"><div>' +
+      fld("Contact person", '<input id="p-contact" value="' + esc(p.contact_person || "") + '" placeholder="Who you deal with">', "The person you actually talk to at this company.") +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
       fld("Phone", '<input id="p-phone" value="' + esc(p.phone || "") + '">') +
+      fld("Mobile", '<input id="p-mobile" value="' + esc(p.mobile || "") + '">') +
       fld("Tax / VAT no.", '<input id="p-vat" value="' + esc(p.vat || "") + '">') +
       '</div><div>' +
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '">') +
@@ -1426,6 +1449,8 @@
       fld("Country", '<input id="p-country" value="' + esc(p.country || "") + '">') +
       '</div></div>' +
       '<div class="o-groups"><div>' +
+      fld("Payment terms (days)", '<select id="p-payterms"><option value="">(none)</option><option value="0">Due on receipt</option><option value="15">15 days</option><option value="30">30 days</option><option value="45">45 days</option><option value="60">60 days</option><option value="90">90 days</option></select>', "Default number of days to pay. Pre-fills the due date on their invoices.") +
+      fld("Credit limit", '<input id="p-credit" type="number" step="0.01" value="' + (p.credit_limit != null ? p.credit_limit : "") + '" placeholder="0 = no limit">', "A soft ceiling on how much they can owe. Leave blank for no limit.") +
       fld("Industry", '<input id="p-industry" value="' + esc(p.industry || "") + '" placeholder="e.g. Construction, Developer">', "Sector, for segmenting contacts.") +
       fld("Tags", '<input id="p-tags" value="' + esc(p.tags || "") + '" placeholder="comma-separated">', "Free tags, comma-separated.") +
       '</div><div>' +
@@ -1440,12 +1465,15 @@
     }
     function wireBankDel() { document.querySelectorAll("#pb-lines .pb-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
     wireBankDel();
+    var ptEl = document.getElementById("p-payterms"); if (ptEl) ptEl.value = p.payment_days != null ? String(p.payment_days) : "";
     document.getElementById("pb-add").onclick = function () { document.getElementById("pb-lines").insertAdjacentHTML("beforeend", bankRow()); wireBankDel(); };
     document.getElementById("p-discard").onclick = function () { go(backAction); };
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
       if (!name) { toast("Name is required"); return; }
-      var row = { name: name, email: gv("p-email"), phone: gv("p-phone"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
+      var creditVal = gv("p-credit");
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       var r, sid = id;
       if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + ins.error.message); return; } sid = ins.data.id; }
       else { r = await sb.from("partners").update(row).eq("id", id); if (r.error) { toast("Could not save: " + r.error.message); return; } }
