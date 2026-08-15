@@ -103,7 +103,7 @@
           var email = (document.getElementById("email").value||"").trim();
           if(!email || email.indexOf("@")<0){ renderSignIn(email,"Please enter a valid email address.","err"); return; }
           this.disabled = true; this.textContent = "Sending...";
-          var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin + "/portal.html" } });
+          var r = await sb.auth.signInWithOtp({ email: email, options: { emailRedirectTo: window.location.origin + "/portal" } });
           if(r.error){ renderSignIn(email, r.error.message, "err"); return; }
           renderSignIn(email, "Check your inbox for " + email + " and click the sign-in link. You can close this tab.", "ok");
           document.getElementById("send").style.display = "none";
@@ -161,7 +161,7 @@
 
         html += '</div></main>';
         app.innerHTML = html;
-        document.getElementById("signout").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal.html"; };
+        document.getElementById("signout").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal"; };
       }
 
       async function boot(){
@@ -172,7 +172,7 @@
         if(ctxRes.error){ app.innerHTML = '<div class="center">Could not load the portal. Please try again later.</div>'; return; }
         if(!ctx){
           app.innerHTML = '<div class="signin"><h1>No portal access</h1><p>This account (' + esc(sess.user.email) + ') is not linked to a Space Work portal. Please contact your project manager to be invited.</p><button class="btn" id="so">Sign out</button></div>';
-          document.getElementById("so").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal.html"; };
+          document.getElementById("so").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal"; };
           return;
         }
         renderPortal(ctx);
