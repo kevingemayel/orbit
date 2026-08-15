@@ -346,12 +346,16 @@
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(a.name) + '</span>' +
       '<nav class="o-menu" id="omenu">' + menu + '</nav>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + '<div class="o-ava" id="ava">' + initials + '</div></div>' +
+      '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<div class="o-ava" id="ava">' + initials + '</div></div>' +
       '</div>' +
       '<div id="o-main" style="overflow:hidden"></div>' +
       '</div>';
     document.getElementById("waffle").onclick = renderHome;
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
+    var _bell = document.getElementById("bell"); if (_bell) _bell.onclick = function (e) { openNotifPanel(e.currentTarget); };
+    refreshBell();
+    if (window._bellIv) clearInterval(window._bellIv);
+    window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
     wireCompanySelect("bar");
     document.querySelectorAll(".o-menu .mi").forEach(function (mi) {
       mi.onclick = function (e) { onMenuClick(mi, a.menus[+mi.dataset.mi]); };
@@ -399,6 +403,50 @@
     if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest(".o-filtbtn")) return;
     closeDropdowns();
   });
+
+  // ============================ NOTIFICATIONS ============================
+  function bellHTML() {
+    return '<button class="o-bell" id="bell" title="Notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="o-bell-dot" id="bell-dot" style="display:none"></span></button>';
+  }
+  async function refreshBell() {
+    var dot = document.getElementById("bell-dot"); if (!dot) return;
+    try {
+      var r = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("is_read", false);
+      var n = r.count || 0;
+      if (n > 0) { dot.style.display = "flex"; dot.textContent = n > 9 ? "9+" : String(n); } else dot.style.display = "none";
+    } catch (e) {}
+  }
+  async function notify(opts) {
+    try {
+      await sb.from("notifications").insert({
+        company_id: opts.company_id || S.company.id, kind: opts.kind || "system",
+        title: opts.title || "", body: opts.body || "", link_action: opts.link_action || null,
+        link_id: opts.link_id || null, employee_id: opts.employee_id || null, user_id: opts.user_id || null,
+        actor_name: opts.actor_name || (S.user && S.user.email) || ""
+      });
+    } catch (e) {}
+  }
+  async function openNotifPanel(anchor) {
+    closeDropdowns();
+    var r = anchor.getBoundingClientRect();
+    var dd = document.createElement("div"); dd.className = "o-dd o-notif"; dd.dataset.dd = "1";
+    dd.style.right = (window.innerWidth - r.right) + "px"; dd.style.left = "auto";
+    dd.innerHTML = '<div class="o-notif-h">Notifications<button class="o-notif-all" id="nt-all">Mark all read</button></div><div class="o-notif-list" id="nt-list"><div class="o-notif-empty">Loading...</div></div>';
+    document.body.appendChild(dd);
+    var rows = (await sb.from("notifications").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(40)).data || [];
+    var list = document.getElementById("nt-list");
+    if (!rows.length) { list.innerHTML = '<div class="o-notif-empty">You are all caught up.</div>'; }
+    else list.innerHTML = rows.map(function (n) {
+      return '<button class="o-notif-i' + (n.is_read ? "" : " unread") + '" data-id="' + n.id + '" data-act="' + esc(n.link_action || "") + '" data-lid="' + (n.link_id || "") + '"><div class="o-notif-t">' + esc(n.title) + '</div>' + (n.body ? '<div class="o-notif-b">' + esc(n.body) + '</div>' : "") + '<div class="o-notif-w">' + esc(n.actor_name || "") + (n.actor_name ? " &middot; " : "") + agWhen(n.created_at) + '</div></button>';
+    }).join("");
+    document.getElementById("nt-all").onclick = async function () { await sb.from("notifications").update({ is_read: true }).eq("company_id", S.company.id).eq("is_read", false); closeDropdowns(); refreshBell(); };
+    list.querySelectorAll(".o-notif-i").forEach(function (b) { b.onclick = async function () { await sb.from("notifications").update({ is_read: true }).eq("id", b.dataset.id); closeDropdowns(); refreshBell(); notifOpen(b.dataset.act, b.dataset.lid); }; });
+  }
+  async function notifOpen(act, lid) {
+    if (!act) return;
+    if (act === "task" && lid) { var t = (await sb.from("project_tasks").select("project_id").eq("id", lid).maybeSingle()).data; if (t) { AGS.proj = t.project_id; go("proj.board"); setTimeout(function () { openTaskPanel(lid, t.project_id); }, 350); } return; }
+    go(act);
+  }
 
   // ============================ ROUTER ============================
   function go(action) {
@@ -3496,7 +3544,7 @@
       document.querySelectorAll(".tp-w-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_watchers").delete().eq("task_id", taskId).eq("employee_id", x.dataset.id); watchers = watchers.filter(function (w) { return w.employee_id !== x.dataset.id; }); paintCollab(); }; });
       var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(ins.error.message); return; } watchers.push({ employee_id: eid }); paintCollab(); };
       document.querySelectorAll(".ag-mchip").forEach(function (b) { b.onclick = function () { var ta = document.getElementById("tp-comment"); ta.value = (ta.value + (ta.value && !/\s$/.test(ta.value) ? " " : "") + "@" + b.dataset.name.split(/\s+/)[0] + " ").replace(/^\s+/, ""); ta.focus(); }; });
-      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: await agActor(), mentions: agResolveMentions(v, emps) }).select("*").single(); cp.disabled = false; if (ins.error) { toast(ins.error.message); return; } comments.push(ins.data); paintCollab(); };
+      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var mids = agResolveMentions(v, emps); var who = await agActor(); var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: who, mentions: mids }).select("*").single(); cp.disabled = false; if (ins.error) { toast(ins.error.message); return; } comments.push(ins.data); mids.forEach(function (mid) { notify({ kind: "mention", employee_id: mid, title: who + " mentioned you", body: v.slice(0, 120), link_action: "task", link_id: taskId }); }); paintCollab(); };
     }
     paintCollab();
 
@@ -3511,11 +3559,12 @@
         var ins = await sb.from("project_tasks").insert(row).select("id").single();
         if (ins.error) { toast(ins.error.message); return; }
         logTaskActivity(ins.data.id, projectId, "created", name);
+        if (newAssignee) notify({ kind: "assignment", employee_id: newAssignee, title: "You were assigned a task", body: name, link_action: "task", link_id: ins.data.id });
         toast("Task created"); bg.remove(); document.removeEventListener("keydown", onKey); openTaskPanel(ins.data.id, projectId, onClose); return;
       }
       var r = await sb.from("project_tasks").update(row).eq("id", taskId);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
-      if ((newAssignee || null) !== (t.assignee_id || null)) logTaskActivity(taskId, projectId, "assigned", newAssignee ? ("to " + (empById[newAssignee] ? empById[newAssignee].name : "someone")) : "unassigned");
+      if ((newAssignee || null) !== (t.assignee_id || null)) { logTaskActivity(taskId, projectId, "assigned", newAssignee ? ("to " + (empById[newAssignee] ? empById[newAssignee].name : "someone")) : "unassigned"); if (newAssignee) notify({ kind: "assignment", employee_id: newAssignee, title: "You were assigned a task", body: name, link_action: "task", link_id: taskId }); }
       if (newStage !== (t.board_stage || "backlog")) logTaskActivity(taskId, projectId, "moved", "to " + agStageLabel(newStage));
       if (newPrio !== (t.priority || "medium")) logTaskActivity(taskId, projectId, "set priority", TASK_PRIO[newPrio].label);
       toast("Saved"); close();
