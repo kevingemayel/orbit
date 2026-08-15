@@ -16,6 +16,15 @@
 alter table public.project_tasks add column if not exists assignee_id     uuid references public.hr_employees(id) on delete set null;
 alter table public.project_tasks add column if not exists board_stage     text default 'backlog';   -- backlog | todo | in_progress | review | done
 alter table public.project_tasks add column if not exists priority        text default 'medium';    -- low | medium | high | urgent
+-- base project_tasks may already carry an Odoo-style integer `priority`; coerce to text
+do $pri$ begin
+  if (select data_type from information_schema.columns where table_name='project_tasks' and column_name='priority') <> 'text' then
+    alter table public.project_tasks alter column priority drop default;
+    alter table public.project_tasks alter column priority type text using priority::text;
+    alter table public.project_tasks alter column priority set default 'medium';
+    update public.project_tasks set priority='medium' where priority is null or priority !~ '^(low|medium|high|urgent)$';
+  end if;
+end $pri$;
 alter table public.project_tasks add column if not exists points          numeric(10,2) default 0;  -- effort estimate (story points / days)
 alter table public.project_tasks add column if not exists sprint_id       uuid;                     -- FK added after sprints exists
 alter table public.project_tasks add column if not exists parent_task_id  uuid references public.project_tasks(id) on delete set null;
