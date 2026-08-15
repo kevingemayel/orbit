@@ -611,7 +611,19 @@
       pgp.onclick = function () { if (L.page > 0) { L.page--; paintBody(); } };
       pgn.onclick = function () { if (to < total) { L.page++; paintBody(); } };
     }
-    if (!total) { body.innerHTML = '<div class="o-empty">Nothing here yet.' + (cfg.onNew ? ' Click <b>New</b> to create the first one.' : '') + '</div>'; return; }
+    if (!total) {
+      var noneAtAll = !(L.all && L.all.length);
+      var titleWord = (cfg.title || "records").toLowerCase();
+      if (noneAtAll) {
+        body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No ' + esc(titleWord) + ' yet</div>' +
+          '<div class="o-empty2-h">' + esc(cfg.emptyHint || ("Create your first " + titleWord.replace(/s$/, "") + " to get started.")) + '</div>' +
+          (cfg.onNew ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') + '</div>';
+        var eb = document.getElementById("o-empty-new"); if (eb) eb.onclick = cfg.onNew;
+      } else {
+        body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No matches</div><div class="o-empty2-h">Nothing matches your current search or filters. Clear them to see everything.</div></div>';
+      }
+      return;
+    }
     if (L.view === "kanban" && cfg.kanbanCard) { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + cfg.kanbanCard(r) + '</div>'; }).join("") + '</div>'; }
     else if (L.group != null) {
       var g = cfg.groupBy[L.group], groups = {};
@@ -875,7 +887,24 @@
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
-    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var creditCache = {};
+    async function creditWarnHtml() {
+      if (!isSale) return "";
+      var pid = document.getElementById("f-partner") ? document.getElementById("f-partner").value : (inv && inv.partner_id);
+      var partner = partners.filter(function (x) { return x.id === pid; })[0];
+      if (!partner || !(Number(partner.credit_limit) > 0)) return "";
+      if (creditCache[pid] === undefined) {
+        var open = (await sb.from("invoices").select("amount_residual,id").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0.005)).data || [];
+        creditCache[pid] = open.reduce(function (s, o) { return o.id === (inv && inv.id) ? s : s + Number(o.amount_residual || 0); }, 0);
+      }
+      var lb = document.getElementById("lnbody"), thisTot = 0;
+      if (lb) lb.querySelectorAll("tr").forEach(function (tr) { thisTot += (parseFloat(tr.querySelector(".l-qty").value) || 0) * (parseFloat(tr.querySelector(".l-price").value) || 0); });
+      var exposure = creditCache[pid] + thisTot, lim = Number(partner.credit_limit);
+      if (exposure <= lim + 0.005) return "";
+      return '<div class="ob-banner" style="margin:0 0 12px">! Over credit limit &middot; ' + esc(partner.name) + ' would owe ' + S.company.currency_code + ' ' + money(exposure) + ' against a limit of ' + S.company.currency_code + ' ' + money(lim) + ' (' + S.company.currency_code + ' ' + money(exposure - lim) + ' over). You can still post it.</div>';
+    }
+    async function refreshCreditWarn() { var el = document.getElementById("f-credit-warn"); if (el) el.innerHTML = await creditWarnHtml(); }
     var accounts = ((await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [])
       .filter(function (a) { return (a.type_code || "").indexOf(isSale ? "income" : "expense") === 0; });
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [])
@@ -933,6 +962,7 @@
     var title = inv ? (inv.number || "Draft " + (isRefund ? "Credit Note" : (isSale ? "Invoice" : "Bill"))) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
+      '<div id="f-credit-warn" style="padding:12px 20px 0"></div>' +
       '<div class="o-sheet">' + smart + ribbon + '<div class="o-title">' + esc(title) + '</div>' + groups +
       '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div></div>';
 
@@ -1016,6 +1046,7 @@
         sub += ln; tax += ln * amt / 100; tr.querySelector(".l-sub").textContent = money(ln);
       });
       setTotals(sub, tax);
+      refreshCreditWarn();
     }
     function totalsHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTotals(sub, tax) {
@@ -1083,6 +1114,7 @@
           var opt = [].filter.call(document.getElementById("f-terms").options, function (o) { return o.value === String(p.payment_days); })[0];
           if (opt) { document.getElementById("f-terms").value = String(p.payment_days); applyTerms(); }
         }
+        refreshCreditWarn();
       };
       if (id === "new" && !inv) applyTerms(); // seed due date from default terms on a fresh invoice
       document.getElementById("f-discard").onclick = function () { go(isSale ? "inv.out" : "inv.in"); };
