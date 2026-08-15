@@ -45,6 +45,7 @@
   var today = function () { return new Date().toISOString().slice(0, 10); };
   var fmtD = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
   var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
+  var isLocked = function (dateStr) { var ld = S.company && S.company.lock_date; return !!(ld && dateStr && String(dateStr).slice(0, 10) <= ld); };
   function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
   var SEARCH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
 
@@ -162,6 +163,7 @@
       menus: [
         { label: "Companies", action: "companies" },
         { label: "Users & Roles", action: "settings.users" },
+        { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
         { label: "Exchange Rates", action: "rates" },
@@ -186,7 +188,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings"
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -425,6 +427,7 @@
       case "contacts": return renderList(cfgContacts());
       case "contact.tags": return renderList(cfgContactTags());
       case "settings.users": return renderUsers();
+      case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
@@ -1003,6 +1006,7 @@
       var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name; });
       if (!lns.length) { toast("Add at least one line"); return null; }
       var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+      if (isLocked(document.getElementById("f-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return null; }
       var hdr = {
         partner_id: partnerId, invoice_date: document.getElementById("f-date").value,
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
@@ -1228,8 +1232,23 @@
     }
     var editable = !order || order.state === "draft" || order.state === "sent";
     var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
-    var partners = (await sb.from("partners").select("id,name").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,pricelist_id").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var plItemsCache = {};
+    async function pricelistPriceFor(productId) {
+      if (!isSale) return null;
+      var ps = document.getElementById("o-partner"); var pid = ps ? ps.value : (order && order.partner_id);
+      var partner = partners.filter(function (x) { return x.id === pid; })[0];
+      if (!partner || !partner.pricelist_id) return null;
+      if (!plItemsCache[partner.pricelist_id]) plItemsCache[partner.pricelist_id] = (await sb.from("pricelist_items").select("*").eq("pricelist_id", partner.pricelist_id)).data || [];
+      var items = plItemsCache[partner.pricelist_id];
+      var prod = products.filter(function (x) { return x.id === productId; })[0]; var list = prod ? Number(prod.list_price || 0) : 0;
+      var item = items.filter(function (it) { return it.product_id === productId; }).sort(function (a, b) { return Number(b.min_qty) - Number(a.min_qty); })[0] || items.filter(function (it) { return !it.product_id; })[0];
+      if (!item) return null;
+      if (item.fixed_price != null) return Number(item.fixed_price);
+      if (item.percent_off) return list * (1 - Number(item.percent_off) / 100);
+      return null;
+    }
     var orderProjects = ((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
@@ -1294,7 +1313,7 @@
         if (l && l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
         if (l && l.product_id && tr.querySelector(".l-prod")) tr.querySelector(".l-prod").value = l.product_id;
         var ps = tr.querySelector(".l-prod");
-        if (ps) ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".l-name").value = pr.name; tr.querySelector(".l-price").value = isSale ? pr.list_price : pr.cost_price; var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx; recalc(); });
+        if (ps) ps.addEventListener("change", async function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".l-name").value = pr.name; var price = isSale ? pr.list_price : pr.cost_price; if (isSale) { var plp = await pricelistPriceFor(pr.id); if (plp != null) price = plp; } tr.querySelector(".l-price").value = price; var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx; recalc(); });
         tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
         tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); });
         recalc();
@@ -2212,6 +2231,21 @@
       '<table><thead><tr><th>User</th><th style="width:200px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
       '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then you set their role here. You cannot change your own role.</div></div></div>';
     body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(r.error.message); } else toast("Role updated"); }; });
+  }
+
+  function openLockDateModal() {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Period lock &middot; ' + esc(S.company.name) + '</h3><div class="form">' +
+      '<div><label>Lock entries dated on or before</label>' + fhint("__lk", "New invoices dated on or before this date are blocked, so a closed period can\'t be changed. Leave blank to unlock.") + '<input id="lk-date" type="date" value="' + (S.company.lock_date || "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="lk-cancel">Cancel</button><button class="btn pri" id="lk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("lk-cancel").onclick = function () { m.remove(); };
+    document.getElementById("lk-save").onclick = async function () {
+      var d = document.getElementById("lk-date").value || null;
+      var r = await sb.from("companies").update({ lock_date: d }).eq("id", S.company.id);
+      if (r.error) { toast(r.error.message); return; }
+      S.company.lock_date = d; m.remove(); toast(d ? ("Locked on/before " + d) : "Unlocked");
+    };
   }
 
   // ============================ EMPLOYEES: SKILLS / CERTIFICATIONS / ONBOARDING / APPRAISALS ============================
