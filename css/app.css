@@ -260,6 +260,19 @@ button{font-family:inherit}
 .o-empty2{text-align:center;padding:56px 20px;color:var(--slate)}
 .o-empty2-t{font-size:18px;font-weight:700;color:var(--ink)}
 .o-empty2-h{font-size:14px;margin:6px auto 0;max-width:42ch;line-height:1.5}
+.gantt{border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel)}
+.gantt-head{display:flex;border-bottom:1px solid var(--line);background:var(--panel2)}
+.gantt-row{display:flex;border-bottom:1px solid var(--line);min-height:34px;cursor:pointer}
+.gantt-row:last-child{border-bottom:none}
+.gantt-row:hover{background:var(--panel2)}
+.gantt-label{width:230px;flex:none;padding:8px 12px;font-size:13px;border-right:1px solid var(--line);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gantt-track{position:relative;flex:1;min-height:34px}
+.gantt-month{position:absolute;top:0;bottom:0;border-left:1px solid var(--line);opacity:.6}
+.gantt-month span{position:absolute;top:7px;left:4px;font-size:10px;color:var(--slate);white-space:nowrap;font-weight:600}
+.gantt-bar{position:absolute;top:8px;height:18px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:5px;overflow:hidden;min-width:4px}
+.gantt-fill{height:100%;background:var(--accent);opacity:.85}
+.gantt-ms{position:absolute;top:9px;width:14px;height:14px;background:#7c3aed;transform:translateX(-7px) rotate(45deg);border-radius:2px}
+.gantt-today{position:absolute;top:0;bottom:0;width:2px;background:var(--bad);opacity:.7}
 .o-roster th{text-align:center;padding:7px 6px;font-size:12px}
 .o-roster td{text-align:center;vertical-align:middle}
 .o-roster select{width:100%;min-width:64px;padding:5px 4px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit}

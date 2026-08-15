@@ -110,6 +110,7 @@
       menus: [
         { label: "Projects", action: "proj.list" },
         { label: "Tasks", action: "task.list" },
+        { label: "Programme", action: "proj.schedule" },
         { label: "Timesheets", action: "ts.list" },
         { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"], ["WIP Schedule", "proj.wip"]] },
         { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
@@ -137,6 +138,15 @@
         { label: "RFIs", action: "doc.rfis" },
         { label: "Transmittals", action: "doc.trans" },
         { label: "Projects", action: "proj.list" }
+      ]
+    },
+    site: {
+      name: "Site Ops", icon: "✓", color: "#ca8a04", color2: "#a16207", home: "site.snags",
+      menus: [
+        { label: "Snagging", action: "site.snags" },
+        { label: "Inspections", action: "site.insp" },
+        { label: "Plant & Equipment", action: "site.plant" },
+        { label: "Site Diary", action: "site.diary" }
       ]
     },
     contacts: {
@@ -211,7 +221,8 @@
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings",
-    "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge"
+    "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
+    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project"
   };
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -229,6 +240,7 @@
     installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
     documents: '<svg viewBox="0 0 100 100"><path d="M28 14 H62 L78 30 V86 H28 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M62 14 V30 H78" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M40 48 H64 M40 60 H60" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="66" cy="72" r="7" fill="#2F6BFF"/></svg>',
     contacts: '<svg viewBox="0 0 100 100"><rect x="22" y="18" width="56" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="50" cy="44" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M34 70 C34 58 66 58 66 70" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="72" cy="26" r="6" fill="#2F6BFF"/></svg>',
+    site: '<svg viewBox="0 0 100 100"><rect x="26" y="20" width="48" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><rect x="40" y="13" width="20" height="13" rx="4" fill="none" stroke="currentColor" stroke-width="6"/><path d="M37 52 l8 8 17 -19" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="65" cy="73" r="6" fill="#2F6BFF"/></svg>',
     calendar: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82" stroke="currentColor" stroke-width="7"/><path d="M34 15 V30 M66 15 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="63" cy="61" r="7" fill="#2F6BFF"/></svg>',
     sign: '<svg viewBox="0 0 100 100"><path d="M18 70 C34 70 38 36 52 36 C62 36 58 60 70 60 C76 60 78 54 80 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M16 84 H84" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="82" cy="28" r="7" fill="#2F6BFF"/></svg>',
     recruitment: '<svg viewBox="0 0 100 100"><circle cx="46" cy="38" r="16" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 84 C18 60 74 60 74 84" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="78" cy="34" r="8" fill="#2F6BFF"/></svg>',
@@ -484,6 +496,11 @@
       case "proj.pnl": return renderProjectPnL();
       case "proj.retention": return renderRetention();
       case "proj.wip": return renderWIP();
+      case "proj.schedule": return renderSchedule();
+      case "site.snags": return renderList(cfgSnags());
+      case "site.insp": return renderList(cfgInspections());
+      case "site.plant": return renderList(cfgPlant());
+      case "site.diary": return renderList(cfgSiteDiary());
       case "crm.pipe": return renderPipeline();
       case "crm.leads": return renderList(cfgLeads());
       case "crm.stages": return renderList(cfgCrmStages());
@@ -2931,6 +2948,255 @@
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
       else { if ((await sb.from("articles").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
       toast("Saved"); renderArticleForm(sid);
+    };
+  }
+
+  // ============================ SITE OPS: SNAGGING / QHSE ============================
+  var SEV = { low: ["Low", "var(--slate)"], medium: ["Medium", "var(--warn)"], high: ["High", "#ea580c"], critical: ["Critical", "var(--bad)"] };
+  function sevBadge(s) { var m = SEV[s] || ["?", "var(--slate)"]; return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;background:' + m[1] + ';color:#fff">' + m[0] + '</span>'; }
+  function snagStatusBadge(s) { return (s === "closed" || s === "verified") ? '<span class="badge paid">' + esc(s.charAt(0).toUpperCase() + s.slice(1)) + '</span>' : s === "fixed" ? '<span class="badge partial">Fixed</span>' : s === "in_progress" ? '<span class="badge partial">In progress</span>' : '<span class="badge unpaid">Open</span>'; }
+  function cfgSnags() {
+    return {
+      title: "Snags", pageSize: 120,
+      fetch: function () { return sb.from("snags").select("*, projects(name), hr_employees(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.number || "") + " " + (s.description || "") + " " + (s.location || "") + " " + (s.trade || "") + " " + (s.projects ? s.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
+        { label: "Description", get: function (s) { return esc(s.description); } },
+        { label: "Location", get: function (s) { return esc(s.location || ""); } },
+        { label: "Severity", get: function (s) { return sevBadge(s.severity); } },
+        { label: "Project", get: function (s) { return esc(s.projects ? s.projects.name : ""); } },
+        { label: "Assigned", get: function (s) { return esc(s.hr_employees ? s.hr_employees.name : ""); } },
+        { label: "Due", get: function (s) { return '<span class="muted">' + esc(s.due_date || "") + '</span>' + (["closed", "verified"].indexOf(s.status) < 0 && isOverdue(s.due_date) ? ' <span class="ob-flag">overdue</span>' : ''); } },
+        { label: "Status", get: function (s) { return snagStatusBadge(s.status); } }
+      ],
+      filters: [{ label: "Open", test: function (s) { return ["closed", "verified"].indexOf(s.status) < 0; } }, { label: "Critical / high", test: function (s) { return s.severity === "critical" || s.severity === "high"; } }, { label: "Overdue", test: function (s) { return ["closed", "verified"].indexOf(s.status) < 0 && isOverdue(s.due_date); } }],
+      groupBy: [{ label: "Project", get: function (s) { return s.projects ? s.projects.name : "None"; } }, { label: "Severity", get: function (s) { return (SEV[s.severity] || ["?"])[0]; } }, { label: "Status", get: function (s) { return s.status; } }, { label: "Trade", get: function (s) { return s.trade || "None"; } }],
+      kanbanCard: function (s) { return '<div class="t">' + esc(s.description) + '</div><div class="muted">' + esc(s.location || "") + '</div><div class="r"><span>' + sevBadge(s.severity) + '</span><span>' + esc(s.hr_employees ? s.hr_employees.name : "") + '</span></div>'; },
+      onOpen: function (s) { openSnagModal(s); }, onNew: function () { openSnagModal(null); }
+    };
+  }
+  async function openSnagModal(s) {
+    s = s || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Snag " + esc(s.number || "") : "New snag") + '</h3><div class="form">' +
+      '<div><label>Description</label><input id="sn-desc" value="' + esc(s.description || "") + '" placeholder="What is the defect?"></div>' +
+      '<div class="row2"><div><label>Project / site</label><select id="sn-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Location</label><input id="sn-loc" value="' + esc(s.location || "") + '" placeholder="e.g. North elevation L5"></div></div>' +
+      '<div class="row2"><div><label>Severity</label><select id="sn-sev"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div><div><label>Trade</label><input id="sn-trade" value="' + esc(s.trade || "") + '" placeholder="e.g. Glazing, Sealant"></div></div>' +
+      '<div class="row2"><div><label>Assigned to</label><select id="sn-emp"><option value="">(none)</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (s.assigned_to === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("") + '</select></div><div><label>Due date</label><input id="sn-due" type="date" value="' + (s.due_date || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Status</label><select id="sn-status"><option value="open">Open</option><option value="in_progress">In progress</option><option value="fixed">Fixed</option><option value="verified">Verified</option><option value="closed">Closed</option></select></div><div><label>Photo URL</label><input id="sn-photo" value="' + esc(s.photo_url || "") + '" placeholder="optional link"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="sn-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sn-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sn-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sn-sev").value = s.severity || "medium";
+    document.getElementById("sn-status").value = s.status || "open";
+    document.getElementById("sn-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("sn-del"); if (del) del.onclick = async function () { await sb.from("snags").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("sn-save").onclick = async function () {
+      var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: document.getElementById("sn-status").value, photo_url: gv("sn-photo") };
+      var r; if (s.id) r = await sb.from("snags").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("snags", "SNAG"); r = await sb.from("snags").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgInspections() {
+    return {
+      title: "Inspections", pageSize: 100,
+      fetch: function () { return sb.from("inspections").select("*, projects(name)").eq("company_id", S.company.id).order("insp_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (i) { return (i.number || "") + " " + (i.insp_type || "") + " " + (i.inspector || "") + " " + (i.area || "") + " " + (i.projects ? i.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (i) { return '<b>' + esc(i.number || "/") + '</b>'; } },
+        { label: "Type", get: function (i) { return esc((i.insp_type || "").replace("_", " ")); } },
+        { label: "Project", get: function (i) { return esc(i.projects ? i.projects.name : ""); } },
+        { label: "Inspector", get: function (i) { return esc(i.inspector || ""); } },
+        { label: "Date", get: function (i) { return '<span class="muted">' + esc(i.insp_date || "") + '</span>'; } },
+        { label: "Status", get: function (i) { return i.status === "closed" ? '<span class="badge paid">Closed</span>' : '<span class="badge partial">Open</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (i) { return i.status !== "closed"; } }, { label: "Safety", test: function (i) { return i.insp_type === "safety"; } }],
+      groupBy: [{ label: "Project", get: function (i) { return i.projects ? i.projects.name : "None"; } }, { label: "Type", get: function (i) { return i.insp_type || "None"; } }],
+      onOpen: function (i) { openInspectionModal(i); }, onNew: function () { openInspectionModal(null); }
+    };
+  }
+  async function openInspectionModal(i) {
+    i = i || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (i.id ? "Inspection " + esc(i.number || "") : "New inspection") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Type</label><select id="in-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option><option value="snag">Snag</option></select></div><div><label>Date</label><input id="in-date" type="date" value="' + (i.insp_date || today()) + '"></div></div>' +
+      '<div class="row2"><div><label>Project</label><select id="in-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (i.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Area</label><input id="in-area" value="' + esc(i.area || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Inspector</label><input id="in-insp" value="' + esc(i.inspector || "") + '"></div><div><label>Score (%)</label><input id="in-score" type="number" min="0" max="100" value="' + (i.score || 0) + '"></div></div>' +
+      '<div><label>Notes</label><textarea id="in-notes" rows="2">' + esc(i.notes || "") + '</textarea></div>' +
+      '<div><label>Status</label><select id="in-status"><option value="open">Open</option><option value="closed">Closed</option></select></div>' +
+      '</div><div class="foot"><button class="btn" id="in-cancel">Cancel</button>' + (i.id ? '<button class="btn" id="in-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("in-type").value = i.insp_type || "quality";
+    document.getElementById("in-status").value = i.status || "open";
+    document.getElementById("in-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("in-del"); if (del) del.onclick = async function () { await sb.from("inspections").delete().eq("id", i.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("in-save").onclick = async function () {
+      var row = { insp_type: document.getElementById("in-type").value, insp_date: gv("in-date") || null, project_id: document.getElementById("in-proj").value || null, area: gv("in-area"), inspector: gv("in-insp"), score: parseInt(gv("in-score"), 10) || 0, notes: (document.getElementById("in-notes") || {}).value || "", status: document.getElementById("in-status").value };
+      var r; if (i.id) r = await sb.from("inspections").update(row).eq("id", i.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("inspections", "INSP"); r = await sb.from("inspections").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ SITE OPS: PLANT & EQUIPMENT ============================
+  function cfgPlant() {
+    return {
+      title: "Plant & Equipment", pageSize: 100,
+      fetch: function () { return sb.from("plant_equipment").select("*, projects(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.code || "") + " " + (p.name || "") + " " + (p.category || "") + " " + (p.supplier || ""); },
+      columns: [
+        { label: "Code", get: function (p) { return '<b>' + esc(p.code || "") + '</b>'; } },
+        { label: "Name", get: function (p) { return esc(p.name); } },
+        { label: "Category", get: function (p) { return esc(p.category || ""); } },
+        { label: "Ownership", get: function (p) { return p.ownership === "hired" ? '<span class="badge partial">Hired</span>' : '<span class="badge">Owned</span>'; } },
+        { label: "On project", get: function (p) { return esc(p.projects ? p.projects.name : ""); } },
+        { label: "Day rate", num: true, get: function (p) { return money(p.daily_rate); } },
+        { label: "Status", get: function (p) { return p.status === "on_site" ? '<span class="badge paid">On site</span>' : p.status === "maintenance" ? '<span class="badge unpaid">Maintenance</span>' : p.status === "off_hired" ? '<span class="badge draft">Off-hired</span>' : '<span class="badge partial">Available</span>'; } }
+      ],
+      filters: [{ label: "On site", test: function (p) { return p.status === "on_site"; } }, { label: "Hired", test: function (p) { return p.ownership === "hired"; } }, { label: "Maintenance", test: function (p) { return p.status === "maintenance"; } }],
+      groupBy: [{ label: "Category", get: function (p) { return p.category || "None"; } }, { label: "Status", get: function (p) { return p.status; } }, { label: "Ownership", get: function (p) { return p.ownership; } }],
+      onOpen: function (p) { openPlantModal(p); }, onNew: function () { openPlantModal(null); }
+    };
+  }
+  async function openPlantModal(p) {
+    p = p || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (p.id ? "Edit equipment" : "New equipment") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Code</label><input id="pl2-code" value="' + esc(p.code || "") + '" placeholder="e.g. CR-01"></div><div><label>Name</label><input id="pl2-name" value="' + esc(p.name || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Category</label><input id="pl2-cat" value="' + esc(p.category || "") + '" placeholder="e.g. Crane, Hoist, Access"></div><div><label>Ownership</label><select id="pl2-own"><option value="owned">Owned</option><option value="hired">Hired</option></select></div></div>' +
+      '<div class="row2"><div><label>Supplier (if hired)</label><input id="pl2-sup" value="' + esc(p.supplier || "") + '"></div><div><label>Day rate</label><input id="pl2-rate" type="number" step="0.01" value="' + (p.daily_rate || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Status</label><select id="pl2-status"><option value="available">Available</option><option value="on_site">On site</option><option value="maintenance">Maintenance</option><option value="off_hired">Off-hired</option></select></div><div><label>On project</label><select id="pl2-proj"><option value="">(none)</option>' + projs.map(function (x) { return '<option value="' + x.id + '"' + (p.project_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Location</label><input id="pl2-loc" value="' + esc(p.location || "") + '"></div><div><label>Next service</label><input id="pl2-serv" type="date" value="' + (p.next_service_date || "") + '"></div></div>' +
+      '<div class="row2"><div><label>On hire from</label><input id="pl2-start" type="date" value="' + (p.start_date || "") + '"></div><div><label>Off hire</label><input id="pl2-end" type="date" value="' + (p.end_date || "") + '"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pl2-own").value = p.ownership || "owned";
+    document.getElementById("pl2-status").value = p.status || "available";
+    document.getElementById("pl2-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("pl2-del"); if (del) del.onclick = async function () { await sb.from("plant_equipment").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("pl2-save").onclick = async function () {
+      var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null };
+      var r; if (p.id) r = await sb.from("plant_equipment").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("plant_equipment").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ SITE OPS: SITE DIARY ============================
+  function cfgSiteDiary() {
+    return {
+      title: "Site Diary", pageSize: 100,
+      fetch: function () { return sb.from("site_diaries").select("*, projects(name)").eq("company_id", S.company.id).order("diary_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (d) { return (d.diary_date || "") + " " + (d.work_done || "") + " " + (d.projects ? d.projects.name : ""); },
+      columns: [
+        { label: "Date", get: function (d) { return '<b>' + esc(d.diary_date || "") + '</b>'; } },
+        { label: "Project", get: function (d) { return esc(d.projects ? d.projects.name : ""); } },
+        { label: "Weather", get: function (d) { return esc(d.weather || ""); } },
+        { label: "Manpower", num: true, get: function (d) { return String(d.manpower || 0); } },
+        { label: "Work done", get: function (d) { return '<span class="muted">' + esc((d.work_done || "").slice(0, 60)) + '</span>'; } }
+      ],
+      groupBy: [{ label: "Project", get: function (d) { return d.projects ? d.projects.name : "None"; } }],
+      onOpen: function (d) { renderSiteDiaryForm(d.id); }, onNew: function () { renderSiteDiaryForm("new"); }
+    };
+  }
+  async function renderSiteDiaryForm(id) {
+    var parent = { action: "site.diary", title: "Site Diary" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var d = id === "new" ? { diary_date: today() } : (await sb.from("site_diaries").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.diary_date || "Diary");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sd-save">Save</button><button id="sd-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-groups"><div>' +
+      fld("Project / site", '<select id="sd-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>') +
+      fld("Date", '<input id="sd-date" type="date" value="' + (d.diary_date || today()) + '">') +
+      fld("Weather", '<input id="sd-weather" value="' + esc(d.weather || "") + '" placeholder="e.g. Clear, Rain PM">') +
+      fld("Temperature", '<input id="sd-temp" value="' + esc(d.temperature || "") + '" placeholder="e.g. 28C">') +
+      '</div><div>' +
+      fld("Own manpower", '<input id="sd-man" type="number" value="' + (d.manpower || 0) + '">', "Number of your own staff on site.") +
+      fld("Subcontractor staff", '<input id="sd-subs" type="number" value="' + (d.subcontractor_count || 0) + '">') +
+      fld("Visitors", '<input id="sd-vis" value="' + esc(d.visitors || "") + '" placeholder="e.g. Consultant, client rep">') +
+      '</div></div>' +
+      fld("Work done today", '<textarea id="sd-work" rows="3">' + esc(d.work_done || "") + '</textarea>') +
+      fld("Delays / issues", '<textarea id="sd-delays" rows="2">' + esc(d.delays || "") + '</textarea>', "Anything that held up work - weather, access, materials, instructions.") +
+      fld("Materials received", '<input id="sd-mat" value="' + esc(d.materials_received || "") + '">') +
+      fld("Notes", '<input id="sd-notes" value="' + esc(d.notes || "") + '">') +
+      '</div>';
+    document.getElementById("sd-discard").onclick = function () { go("site.diary"); };
+    document.getElementById("sd-save").onclick = async function () {
+      var row = { project_id: document.getElementById("sd-proj").value || null, diary_date: gv("sd-date") || null, weather: gv("sd-weather"), temperature: gv("sd-temp"), manpower: parseInt(gv("sd-man"), 10) || 0, subcontractor_count: parseInt(gv("sd-subs"), 10) || 0, visitors: gv("sd-vis"), work_done: (document.getElementById("sd-work") || {}).value || "", delays: (document.getElementById("sd-delays") || {}).value || "", materials_received: gv("sd-mat"), notes: gv("sd-notes") };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("site_diaries").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      else { if ((await sb.from("site_diaries").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
+      toast("Saved"); renderSiteDiaryForm(sid);
+    };
+  }
+
+  // ============================ PROGRAMME (GANTT) - client-facing schedule ============================
+  async function renderSchedule(projectId) {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Programme") + '<div class="gap"></div><select id="sc-proj" class="o-filtbtn"></select><button class="o-filtbtn" id="sc-add">+ Activity</button><button class="o-filtbtn" id="sc-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var psel = document.getElementById("sc-proj");
+    psel.innerHTML = '<option value="">Pick a project</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (projectId === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.getElementById("sc-print").onclick = function () { window.print(); };
+    psel.onchange = function () { renderSchedule(psel.value); };
+    document.getElementById("sc-add").onclick = function () { if (!projectId) { toast("Pick a project first"); return; } openScheduleTaskModal(null, projectId); };
+    var body = document.getElementById("o-body");
+    if (!projectId) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Pick a project</div><div class="o-empty2-h">Choose a project above to build and view its programme (Gantt).</div></div>'; return; }
+    var tasks = (await sb.from("schedule_tasks").select("*").eq("project_id", projectId).order("sort_order").order("start_date")).data || [];
+    if (!tasks.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No activities yet</div><div class="o-empty2-h">Add activities with start and end dates to draw the programme.</div><button class="o-new" id="sc-add2" style="margin-top:14px">+ Add activity</button></div>'; document.getElementById("sc-add2").onclick = function () { openScheduleTaskModal(null, projectId); }; return; }
+    var dated = tasks.filter(function (t) { return t.start_date && t.end_date; });
+    var minD = null, maxD = null;
+    dated.forEach(function (t) { var s = parseD(t.start_date), e = parseD(t.end_date); if (!minD || s < minD) minD = s; if (!maxD || e > maxD) maxD = e; });
+    if (!minD) { minD = new Date(); maxD = new Date(minD.getFullYear(), minD.getMonth() + 3, 0); }
+    // pad a few days
+    minD = new Date(minD); minD.setDate(minD.getDate() - 2);
+    maxD = new Date(maxD); maxD.setDate(maxD.getDate() + 2);
+    var totalDays = Math.max(1, Math.round((maxD - minD) / 864e5));
+    function pct(dt) { return ((parseD(dt) - minD) / 864e5) / totalDays * 100; }
+    // month gridlines
+    var grid = "", cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    var monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    while (cur <= maxD) {
+      var lp = ((cur - minD) / 864e5) / totalDays * 100;
+      if (lp >= 0 && lp <= 100) grid += '<div class="gantt-month" style="left:' + lp + '%"><span>' + monthNames[cur.getMonth()] + " " + String(cur.getFullYear()).slice(2) + '</span></div>';
+      cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+    }
+    var todayPct = pct(today());
+    var rows = tasks.map(function (t) {
+      var hasDates = t.start_date && t.end_date;
+      var left = hasDates ? pct(t.start_date) : 0, right = hasDates ? pct(t.end_date) : 0, w = Math.max(0.6, right - left);
+      var prog = Math.max(0, Math.min(100, Number(t.progress || 0)));
+      var bar = t.is_milestone
+        ? '<div class="gantt-ms" style="left:' + left + '%" title="' + esc(t.name) + '"></div>'
+        : (hasDates ? '<div class="gantt-bar" style="left:' + left + '%;width:' + w + '%" title="' + esc(t.name) + ' (' + prog + '%)"><div class="gantt-fill" style="width:' + prog + '%"></div></div>' : '');
+      return '<div class="gantt-row" data-id="' + t.id + '"><div class="gantt-label">' + (t.wbs ? '<span class="muted">' + esc(t.wbs) + '</span> ' : '') + esc(t.name) + '</div><div class="gantt-track">' + bar + '</div></div>';
+    }).join("");
+    body.innerHTML = '<div style="padding:14px 16px"><div class="o-rt-wrap"><div class="gantt" style="min-width:820px"><div class="gantt-head"><div class="gantt-label" style="font-weight:700">Activity</div><div class="gantt-track gantt-grid">' + grid + (todayPct >= 0 && todayPct <= 100 ? '<div class="gantt-today" style="left:' + todayPct + '%"></div>' : '') + '</div></div>' + rows + '</div></div><div class="sub" style="margin-top:8px">This is the client-facing programme. Click an activity to edit. The internal team board lives on the project\'s Execution tab.</div></div>';
+    document.querySelectorAll(".gantt-row").forEach(function (r) { r.onclick = function () { var t = tasks.filter(function (x) { return x.id === r.dataset.id; })[0]; openScheduleTaskModal(t, projectId); }; });
+  }
+  async function openScheduleTaskModal(t, projectId) {
+    t = t || {};
+    var others = (await sb.from("schedule_tasks").select("id,name").eq("project_id", projectId)).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Edit activity" : "New activity") + '</h3><div class="form">' +
+      '<div><label>Activity</label><input id="st-name" value="' + esc(t.name || "") + '"></div>' +
+      '<div class="row2"><div><label>WBS / code</label><input id="st-wbs" value="' + esc(t.wbs || "") + '" placeholder="e.g. 2.1"></div><div><label>Progress (%)</label><input id="st-prog" type="number" min="0" max="100" value="' + (t.progress || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Start</label><input id="st-start" type="date" value="' + (t.start_date || "") + '"></div><div><label>End</label><input id="st-end" type="date" value="' + (t.end_date || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Depends on</label><select id="st-dep"><option value="">(none)</option>' + others.filter(function (o) { return o.id !== t.id; }).map(function (o) { return '<option value="' + o.id + '"' + (t.depends_on === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join("") + '</select></div><div><label>Milestone?</label><select id="st-ms"><option value="0">No</option><option value="1">Yes</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="st-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="st-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="st-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("st-ms").value = t.is_milestone ? "1" : "0";
+    document.getElementById("st-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("st-del"); if (del) del.onclick = async function () { await sb.from("schedule_tasks").delete().eq("id", t.id); m.remove(); toast("Deleted"); renderSchedule(projectId); };
+    document.getElementById("st-save").onclick = async function () {
+      var row = { name: gv("st-name") || "Activity", wbs: gv("st-wbs"), progress: parseFloat(gv("st-prog")) || 0, start_date: gv("st-start") || null, end_date: gv("st-end") || null, depends_on: document.getElementById("st-dep").value || null, is_milestone: document.getElementById("st-ms").value === "1" };
+      var r; if (t.id) r = await sb.from("schedule_tasks").update(row).eq("id", t.id); else { row.company_id = S.company.id; row.project_id = projectId; r = await sb.from("schedule_tasks").insert(row); }
+      if (r.error) { toast(r.error.message); return; } m.remove(); renderSchedule(projectId);
     };
   }
 
