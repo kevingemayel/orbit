@@ -41,7 +41,7 @@
   // Mark stroke + wordmark inherit currentColor (theme-aware); the AI dot stays blue.
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
-  var money = function (n) { return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   var today = function () { return new Date().toISOString().slice(0, 10); };
   var fmtD = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
   var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
@@ -197,6 +197,7 @@
       menus: [
         { label: "Companies", action: "companies" },
         { label: "Users & Roles", action: "settings.users" },
+        { label: "Roles & Permissions", action: "settings.roles" },
         { label: "Approvals", action: "approvals.inbox" },
         { label: "Approval Rules", action: "approvals.rules" },
         { label: "Portal Access", action: "portal.admin" },
@@ -231,11 +232,88 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights"
   };
+  // ============================ PERMISSIONS (RBAC) ============================
+  // S.role is the resolved role row (from public.roles). full_access => god.
+  // permissions jsonb: { "*":{v,m}, "<module>":{v,m,f:{feature:bool}} }.
+  var MOD_ALIAS = { project: "projects", hr: "employees" };
+  function modKey(appKey) { return MOD_ALIAS[appKey] || appKey; }
+  // Every module + the "parts" that can be toggled on/off inside it (enforced ones only).
+  var MODULE_CATALOG = [
+    { key: "accounting", label: "Accounting", features: [["reporting", "Financial reports"]] },
+    { key: "sales", label: "Sales", features: [] },
+    { key: "purchase", label: "Purchase", features: [] },
+    { key: "crm", label: "CRM", features: [] },
+    { key: "estimation", label: "Estimation", features: [] },
+    { key: "inventory", label: "Inventory", features: [] },
+    { key: "projects", label: "Projects", features: [["delivery", "Delivery view"], ["execution", "Execution board"], ["costs", "Costs & P&L"]] },
+    { key: "manufacturing", label: "Manufacturing", features: [] },
+    { key: "installation", label: "Installation", features: [] },
+    { key: "documents", label: "Documents", features: [] },
+    { key: "site", label: "Site Ops", features: [] },
+    { key: "contacts", label: "Contacts", features: [] },
+    { key: "calendar", label: "Calendar", features: [] },
+    { key: "sign", label: "Sign", features: [] },
+    { key: "recruitment", label: "Recruitment", features: [] },
+    { key: "knowledge", label: "Knowledge", features: [] },
+    { key: "employees", label: "Employees (HR)", features: [["payroll", "Payroll"]] },
+    { key: "insights", label: "Insights", features: [] },
+    { key: "settings", label: "Settings", features: [] }
+  ];
+  var MODULE_LABEL = {}; MODULE_CATALOG.forEach(function (m) { MODULE_LABEL[m.key] = m.label; });
+  // action -> [module, feature] for the toggleable "parts" (clean in-module subsets only).
+  var FEATURE_ACTIONS = {};
+  (function () {
+    ["rep.pl", "rep.bs", "rep.gl", "rep.tb", "rep.partner", "rep.aged.recv", "rep.aged.pay", "rep.tax", "rep.stmt", "rep.cons", "rep.cashfwd", "rep.collections", "budget.list", "cockpit", "dashboard"].forEach(function (a) { FEATURE_ACTIONS[a] = ["accounting", "reporting"]; });
+    ["proj.list", "pc.list", "var.list", "proj.wip", "proj.schedule", "ts.list"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "delivery"]; });
+    ["proj.board", "proj.mywork", "task.list"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "execution"]; });
+    ["sc.list", "proj.pnl", "proj.retention"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "costs"]; });
+    ["hr.runs", "hr.slips", "hr.struct", "hr.heads", "hr.eos", "hr.payconsol"].forEach(function (a) { FEATURE_ACTIONS[a] = ["employees", "payroll"]; });
+  })();
+  function moduleForAction(action) { var app = ACTION_APP[action] || S.app; return app ? modKey(app) : null; }
+  function permFor(mod) {
+    var r = S.role;
+    if (!r) return { v: true, m: true };          // boot / owner fallback (never lock the owner out)
+    if (r.full_access) return { v: true, m: true };
+    var p = r.permissions || {};
+    var e = p[mod] || p["*"] || { v: false, m: false };
+    return { v: !!e.v, m: !!e.m };
+  }
+  function canView(mod) { return permFor(mod).v; }
+  function canManage(mod) { return permFor(mod).m; }
+  function canViewApp(appKey) { return canView(modKey(appKey)); }
+  function canManageApp(appKey) { return canManage(modKey(appKey)); }
+  function featureAllowed(action) {
+    var fa = FEATURE_ACTIONS[action]; if (!fa) return true;
+    var r = S.role; if (!r || r.full_access) return true;
+    var mp = (r.permissions || {})[fa[0]]; if (!mp || !mp.f) return true;
+    return mp.f[fa[1]] !== false;                  // parts are opt-out: allowed unless explicitly off
+  }
+  function canGo(action) {
+    var mod = moduleForAction(action);
+    if (mod && !canView(mod)) return false;
+    if (!featureAllowed(action)) return false;
+    return true;
+  }
+  function canSeeMoney() { return !S.role || S.role.can_see_money !== false; }
+  function canManageRoles() { return !S.role || !!S.role.full_access || !!S.role.can_manage_roles; }
+  function myRoleRank() { return S.role && typeof S.role.rank === "number" ? S.role.rank : 100; }
+  // resolve the current user's role for the active company's org (org-specific first, then global template)
+  async function loadRole() {
+    try {
+      if (!S.company || !S.company.org_id) return { slug: "owner", full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 };
+      var mem = (await sb.from("org_members").select("role").eq("org_id", S.company.org_id).eq("user_id", S.user.id).maybeSingle()).data;
+      var slug = mem && mem.role ? mem.role : "owner";   // fail-open to owner (only ever hits owners in practice)
+      var rows = (await sb.from("roles").select("*").eq("slug", slug).or("org_id.eq." + S.company.org_id + ",org_id.is.null")).data || [];
+      var orgRole = rows.filter(function (r) { return r.org_id === S.company.org_id; })[0];
+      var globalRole = rows.filter(function (r) { return !r.org_id; })[0];
+      return orgRole || globalRole || { slug: slug, full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 };
+    } catch (e) { return { slug: "owner", full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 }; }
+  }
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
@@ -303,6 +381,7 @@
     if (!S.companies.length) { renderNoCompany(); return; }
     S.company = S.companies.filter(function (c) { return c.id === S.profile.active_company_id; })[0] || S.companies[0];
     if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
+    S.role = await loadRole();
     S.types = (await sb.from("account_types").select("*")).data || [];
     renderHome();
   }
@@ -316,7 +395,7 @@
   // ======================= APP SWITCHER (HOME) =======================
   function renderHome() {
     S.app = null; S.action = null;
-    var tiles = Object.keys(APPS).map(function (k) {
+    var tiles = Object.keys(APPS).filter(function (k) { return canViewApp(k); }).map(function (k) {
       var a = APPS[k];
       return '<div class="o-tile" data-app="' + k + '"><div class="ic">' + (APP_ICONS[k] || a.icon) + '</div><div class="nm">' + esc(a.name) + '</div></div>';
     }).join("");
@@ -336,6 +415,7 @@
   }
 
   function openApp(key) {
+    if (!canViewApp(key)) { toast("You do not have access to " + (APPS[key] ? APPS[key].name : key)); return; }
     S.app = key;
     applyAppColor();
     go(APPS[key].home);
@@ -345,7 +425,12 @@
   function renderShell() {
     var a = APPS[S.app];
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
-    var menu = a.menus.map(function (m, i) {
+    function menuItemVisible(action) { return action === "settings.roles" ? canManageRoles() : canGo(action); }
+    var vmenus = a.menus.map(function (m) {
+      if (m.items) { var its = m.items.filter(function (it) { return menuItemVisible(it[1]); }); return its.length ? { label: m.label, items: its } : null; }
+      return menuItemVisible(m.action) ? m : null;
+    }).filter(Boolean);
+    var menu = vmenus.map(function (m, i) {
       return '<button class="mi" data-mi="' + i + '">' + esc(m.label) + (m.items ? ' <span class="car">&#9660;</span>' : '') + '</button>';
     }).join("");
     root.innerHTML =
@@ -369,7 +454,7 @@
     window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
     wireCompanySelect("bar");
     document.querySelectorAll(".o-menu .mi").forEach(function (mi) {
-      mi.onclick = function (e) { onMenuClick(mi, a.menus[+mi.dataset.mi]); };
+      mi.onclick = function (e) { onMenuClick(mi, vmenus[+mi.dataset.mi]); };
     });
     applyAppColor(); applyFontScale();
   }
@@ -382,7 +467,10 @@
     if (!el) return;
     el.onchange = async function () {
       S.company = S.companies.filter(function (c) { return c.id === this.value; }.bind(this))[0];
+      if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
+      S.role = await loadRole();
       await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
+      if (S.app && !canViewApp(S.app)) { renderHome(); return; }
       if (S.app) go(S.action || APPS[S.app].home); else renderHome();
     };
   }
@@ -674,6 +762,8 @@
 
   // ============================ ROUTER ============================
   function go(action) {
+    if (action === "settings.roles" && !canManageRoles()) { toast("Only owners and super admins can manage roles"); if (!S.app) renderHome(); return; }
+    if (!canGo(action)) { toast("You do not have access to that"); if (!S.app) renderHome(); return; }
     S.action = action;
     if (!S.app) { S.app = ACTION_APP[action] || "accounting"; applyAppColor(); }
     if (!document.getElementById("o-main")) renderShell();
@@ -745,6 +835,7 @@
       case "rec.applicants": return renderList(cfgApplicants());
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
+      case "settings.roles": return renderRoles();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
@@ -820,7 +911,7 @@
     main.innerHTML =
       '<div class="o-view">' +
       '<div class="o-cp">' + bcHTML(cfg.title) +
-      (cfg.onNew ? '<button class="o-new" id="o-new">New</button>' : '') +
+      (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-new">New</button>' : '') +
       '<div class="o-search"><span style="display:flex">' + SEARCH_SVG + '</span><span id="o-facets"></span><input id="o-q" placeholder="Search..."></div>' +
       (cfg.filters ? '<button class="o-filtbtn" id="o-fbtn">Filters &#9660;</button>' : '') +
       (cfg.groupBy ? '<button class="o-filtbtn" id="o-gbtn">Group By &#9660;</button>' : '') +
@@ -834,7 +925,7 @@
       '</div>';
     wireBc();
     L = { cfg: cfg, all: [], view: "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null };
-    if (cfg.onNew) document.getElementById("o-new").onclick = cfg.onNew;
+    var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     document.getElementById("o-q").addEventListener("input", function () { L.query = this.value.toLowerCase(); L.page = 0; paintBody(); });
     document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
       b.onclick = function () { L.view = b.dataset.v; document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
@@ -914,7 +1005,7 @@
       if (noneAtAll) {
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No ' + esc(titleWord) + ' yet</div>' +
           '<div class="o-empty2-h">' + esc(cfg.emptyHint || ("Create your first " + titleWord.replace(/s$/, "") + " to get started.")) + '</div>' +
-          (cfg.onNew ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') + '</div>';
+          (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') + '</div>';
         var eb = document.getElementById("o-empty-new"); if (eb) eb.onclick = cfg.onNew;
       } else {
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No matches</div><div class="o-empty2-h">Nothing matches your current search or filters. Clear them to see everything.</div></div>';
@@ -2610,22 +2701,116 @@
   }
 
   // ============================ SETTINGS: USERS & ROLES ============================
+  function slugify(s) { return ((s || "role").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40)) || "role"; }
+  async function rolesForOrg() {
+    var roles = (await sb.from("roles").select("*").or("org_id.eq." + S.company.org_id + ",org_id.is.null")).data || [];
+    var bySlug = {}; roles.forEach(function (r) { if (!bySlug[r.slug] || r.org_id) bySlug[r.slug] = r; });   // org copy overrides global
+    return Object.keys(bySlug).map(function (k) { return bySlug[k]; }).sort(function (a, b) { return b.rank - a.rank; });
+  }
   async function renderUsers() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Users & Roles") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
     var members = (await sb.from("org_members").select("*").eq("org_id", S.company.org_id)).data || [];
+    var roleList = await rolesForOrg();
+    var ids = members.map(function (m) { return m.user_id; }).filter(Boolean);
+    var profs = ids.length ? ((await sb.from("profiles").select("*").in("id", ids)).data || []) : [];
+    var pmap = {}; profs.forEach(function (p) { pmap[p.id] = p; });
+    var myRank = myRoleRank();
     var body = document.getElementById("o-body");
-    var ROLES = ["owner", "admin", "accountant"];
     var rows = members.map(function (mem) {
       var mine = mem.user_id === (S.user && S.user.id);
-      var sel = '<select class="um-role" data-id="' + mem.id + '"' + (mine ? " disabled" : "") + '>' + ROLES.map(function (r) { return '<option value="' + r + '"' + (mem.role === r ? " selected" : "") + '>' + r.charAt(0).toUpperCase() + r.slice(1) + '</option>'; }).join("") + '</select>';
-      return '<tr><td><b>' + esc((mem.user_id || "").slice(0, 8)) + '...</b>' + (mine ? ' <span class="badge paid">you</span>' : '') + '</td><td>' + sel + '</td></tr>';
+      var p = pmap[mem.user_id] || {};
+      var who = esc(p.full_name || p.email || ((mem.user_id || "").slice(0, 8) + "..."));
+      var known = roleList.some(function (r) { return r.slug === mem.role; });
+      var opts = roleList.map(function (r) {
+        var dis = r.rank > myRank && r.slug !== mem.role;   // cannot assign a role above your own rank
+        return '<option value="' + r.slug + '"' + (mem.role === r.slug ? " selected" : "") + (dis ? " disabled" : "") + '>' + esc(r.label || r.slug) + '</option>';
+      }).join("") + (known ? "" : '<option selected>' + esc(mem.role || "(none)") + '</option>');
+      var sel = '<select class="um-role" data-id="' + mem.id + '"' + (mine ? " disabled" : "") + '>' + opts + '</select>';
+      return '<tr><td><b>' + who + '</b>' + (mine ? ' <span class="badge paid">you</span>' : '') + '</td><td>' + sel + '</td></tr>';
     }).join("");
-    body.innerHTML = '<div style="padding:16px"><div class="card"><h3>Team members <span class="muted" style="font-weight:500;font-size:12px">roles control what each person can do &middot; owner + admin have full access, accountant is finance-only</span></h3>' +
-      '<table><thead><tr><th>User</th><th style="width:200px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
-      '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then you set their role here. You cannot change your own role.</div></div></div>';
+    var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage" style="margin-left:auto">Manage roles &amp; permissions</button>' : '';
+    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Team members</h3>' + manageBtn + '</div>' +
+      '<div class="sub" style="margin:6px 0 12px">Each person\'s role controls which apps they see and what they can change. Define roles in Roles &amp; Permissions.</div>' +
+      '<table><thead><tr><th>User</th><th style="width:260px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
+      '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then set their role here. You cannot change your own role.</div></div></div>';
+    var mb = document.getElementById("ur-manage"); if (mb) mb.onclick = function () { go("settings.roles"); };
     body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(r.error.message); } else toast("Role updated"); }; });
+  }
+
+  // ============================ SETTINGS: ROLES & PERMISSIONS ============================
+  async function renderRoles() {
+    if (!canManageRoles()) { toast("Only owners and super admins can manage roles"); go("companies"); return; }
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roles & Permissions") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var list = await rolesForOrg();
+    var bySlug = {}; list.forEach(function (r) { bySlug[r.slug] = r; });
+    var myRank = myRoleRank();
+    var body = document.getElementById("o-body");
+    var cards = list.map(function (r) {
+      var editable = !r.protected && (S.role.full_access || r.rank < myRank);
+      var isOrg = !!r.org_id;
+      var tags = (isOrg ? '<span class="badge draft">Custom</span>' : '<span class="badge">Template</span>') +
+        (r.full_access ? ' <span class="badge paid">Full access</span>' : '') +
+        (r.can_see_money === false ? ' <span class="badge unpaid">No money</span>' : '') +
+        (r.can_manage_roles ? ' <span class="badge">Roles</span>' : '');
+      var actions = (isOrg && editable ? '<button class="o-filtbtn rl-del" data-id="' + r.id + '" style="color:var(--bad)">Delete</button>' : '') +
+        (editable ? '<button class="o-filtbtn rl-edit" data-slug="' + r.slug + '">' + (isOrg ? "Edit" : "Customize") + '</button>' : '<span class="muted" style="font-size:11.5px">Locked</span>');
+      return '<div class="rl-card"><div class="rl-h"><b>' + esc(r.label || r.slug) + '</b> ' + tags + '</div>' +
+        '<div class="muted" style="font-size:12.5px;margin:4px 0 8px">' + esc(r.description || "") + '</div>' +
+        '<div class="rl-f"><span class="muted" style="font-size:11.5px">Rank ' + r.rank + '</span><div style="margin-left:auto;display:flex;gap:6px;align-items:center">' + actions + '</div></div></div>';
+    }).join("");
+    body.innerHTML = '<div style="padding:16px"><div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:14px"><div><h3 style="margin:0">Roles &amp; Permissions</h3><div class="sub" style="max-width:60ch">Switch each app, and parts of an app, on or off for every role. Templates are shared defaults; Customize one to make an editable copy for ' + esc(S.org ? S.org.name : "your company") + '. Owner and Developer are locked so no one can weaken them.</div></div><button class="o-new" id="rl-new" style="margin-left:auto">+ New role</button></div>' +
+      '<div class="rl-grid">' + cards + '</div></div>';
+    document.getElementById("rl-new").onclick = function () { openRoleEditor(null); };
+    body.querySelectorAll(".rl-edit").forEach(function (b) { b.onclick = function () { openRoleEditor(bySlug[b.dataset.slug]); }; });
+    body.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = async function () { var m = document.createElement("div"); m.className = "modal on"; m.innerHTML = '<div class="sheet"><h3>Delete role?</h3><div class="form"><div class="sub">People currently on this role fall back to the shared template with the same name, if any.</div></div><div class="foot"><button class="btn" id="rd-c">Cancel</button><button class="btn pri" id="rd-y" style="background:var(--bad);border-color:var(--bad)">Delete</button></div></div>'; document.body.appendChild(m); document.getElementById("rd-c").onclick = function () { m.remove(); }; document.getElementById("rd-y").onclick = async function () { var r = await sb.from("roles").delete().eq("id", b.dataset.id); m.remove(); if (r.error) { toast(r.error.message); } else { toast("Deleted"); renderRoles(); } }; }; });
+  }
+  function openRoleEditor(role) {
+    var isNew = !role;
+    var t = role || { label: "", description: "", rank: 10, can_see_money: true, can_manage_roles: false, full_access: false, permissions: {} };
+    function eff(k) { var p = t.permissions || {}; var e = p[k] || p["*"] || { v: false, m: false }; return { v: !!e.v, m: !!e.m }; }
+    function featOn(k, f) { var p = t.permissions || {}; var mp = p[k]; if (mp && mp.f && mp.f[f] === false) return false; return true; }
+    var rowsHtml = MODULE_CATALOG.map(function (mm) {
+      var e = eff(mm.key);
+      var feats = mm.features.map(function (f) { return '<label class="rl-feat"><input type="checkbox" class="rl-fx" data-mod="' + mm.key + '" data-feat="' + f[0] + '"' + (featOn(mm.key, f[0]) ? " checked" : "") + '> ' + esc(f[1]) + '</label>'; }).join("");
+      return '<tr data-mod="' + mm.key + '"><td>' + esc(mm.label) + '</td>' +
+        '<td style="text-align:center"><input type="checkbox" class="rl-v" data-mod="' + mm.key + '"' + (e.v ? " checked" : "") + '></td>' +
+        '<td style="text-align:center"><input type="checkbox" class="rl-m" data-mod="' + mm.key + '"' + (e.m ? " checked" : "") + '></td>' +
+        '<td>' + (feats ? '<div class="rl-feats">' + feats + '</div>' : '<span class="muted" style="font-size:11px">whole module</span>') + '</td></tr>';
+    }).join("");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet wide"><h3>' + (isNew ? "New role" : (role.org_id ? "Edit role" : "Customize role") + ": " + esc(t.label || t.slug)) + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Role name</label><input id="rl-label" value="' + esc(t.label || "") + '" placeholder="e.g. Site Manager"></div><div><label>Rank (higher = more senior)</label><input id="rl-rank" type="number" value="' + (t.rank || 10) + '"></div></div>' +
+      '<div><label>Description</label><input id="rl-desc" value="' + esc(t.description || "") + '" placeholder="What this role is for"></div>' +
+      '<div class="row2"><div><label>Can see money</label><select id="rl-money"><option value="1"' + (t.can_see_money !== false ? " selected" : "") + '>Yes</option><option value="0"' + (t.can_see_money === false ? " selected" : "") + '>No - hide all amounts</option></select></div>' +
+      '<div><label>Can manage roles</label><select id="rl-cmr"><option value="0"' + (!t.can_manage_roles ? " selected" : "") + '>No</option><option value="1"' + (t.can_manage_roles ? " selected" : "") + '>Yes</option></select></div></div>' +
+      '<div class="rl-tablewrap"><table class="rl-table"><thead><tr><th>App / module</th><th>View</th><th>Manage</th><th>Parts of it</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
+      '<div class="sub"><b>View</b> lets them open the app. <b>Manage</b> lets them create and edit. <b>Parts</b> switch off pieces of an app while keeping the rest. Junior-style roles usually have View on and Manage off.</div>' +
+      '</div><div class="foot"><button class="btn" id="rl-cancel">Cancel</button><button class="btn pri" id="rl-save" style="background:var(--accent);border-color:var(--accent)">Save role</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelectorAll(".rl-m").forEach(function (x) { x.onchange = function () { if (x.checked) { var v = m.querySelector('.rl-v[data-mod="' + x.dataset.mod + '"]'); if (v) v.checked = true; } }; });
+    document.getElementById("rl-cancel").onclick = function () { m.remove(); };
+    document.getElementById("rl-save").onclick = async function () {
+      var label = gv("rl-label"); if (!label) { toast("Name the role"); return; }
+      var perms = {};
+      MODULE_CATALOG.forEach(function (mm) {
+        var v = m.querySelector('.rl-v[data-mod="' + mm.key + '"]').checked;
+        var man = m.querySelector('.rl-m[data-mod="' + mm.key + '"]').checked;
+        var entry = { v: v, m: man };
+        if (mm.features.length) { var f = {}; mm.features.forEach(function (ff) { var cb = m.querySelector('.rl-fx[data-mod="' + mm.key + '"][data-feat="' + ff[0] + '"]'); f[ff[0]] = cb ? cb.checked : true; }); entry.f = f; }
+        perms[mm.key] = entry;
+      });
+      var payload = { label: label, description: gv("rl-desc"), rank: parseInt(gv("rl-rank"), 10) || 10, can_see_money: document.getElementById("rl-money").value === "1", can_manage_roles: document.getElementById("rl-cmr").value === "1", permissions: perms, org_id: S.company.org_id, is_system: false, protected: false, full_access: false };
+      var res;
+      if (role && role.org_id) { res = await sb.from("roles").update(payload).eq("id", role.id); }
+      else if (role && !role.org_id) { payload.slug = role.slug; res = await sb.from("roles").insert(payload); }
+      else { payload.slug = slugify(label); res = await sb.from("roles").insert(payload); }
+      if (res.error) { toast(/duplicate|unique/i.test(res.error.message) ? "A role with that name already exists. Pick another name." : res.error.message); return; }
+      m.remove(); toast("Role saved"); renderRoles();
+    };
   }
 
   function openLockDateModal() {
