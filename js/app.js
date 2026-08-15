@@ -3699,7 +3699,7 @@
 
   async function renderBoard(projectId) {
     if (projectId !== undefined) AGS.proj = projectId;
-    var vt = [["board", "Board"], ["sprints", "Sprints"], ["list", "List"]].map(function (v) { return '<button class="o-filtbtn ag-vt' + (AGS.view === v[0] ? " on" : "") + '" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join("");
+    var vt = [["board", "Board"], ["tree", "Breakdown"], ["sprints", "Sprints"], ["list", "List"]].map(function (v) { return '<button class="o-filtbtn ag-vt' + (AGS.view === v[0] ? " on" : "") + '" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join("");
     document.getElementById("o-main").innerHTML =
       '<div class="o-view"><div class="o-cp">' + bcHTML("Execution") + '<div class="gap"></div>' +
       '<select id="ab-proj" class="o-filtbtn"></select>' + vt +
@@ -3736,6 +3736,7 @@
     msel.onchange = function () { AGS.member = msel.value; renderBoard(); };
 
     if (AGS.view === "sprints") { renderSprintsView(body, tasks, sprints, ctx); return; }
+    if (AGS.view === "tree") { renderBoardTree(body, tasks, ctx); return; }
 
     var shown = tasks.filter(function (t) { return !t.parent_task_id; });
     if (AGS.member === "__none") shown = shown.filter(function (t) { return !t.assignee_id; });
@@ -3884,6 +3885,48 @@
     };
   }
 
+  function stageProgress(stage) { return ({ done: 100, review: 70, in_progress: 40, todo: 10, backlog: 0 })[stage || "backlog"] || 0; }
+  function renderBoardTree(body, tasks, ctx) {
+    var childrenOf = {};
+    tasks.forEach(function (t) { var p = t.parent_task_id || "__root"; (childrenOf[p] = childrenOf[p] || []).push(t); });
+    Object.keys(childrenOf).forEach(function (k) { childrenOf[k].sort(function (a, b) { return (a.sort_order || 0) - (b.sort_order || 0) || ((a.created_at || "") < (b.created_at || "") ? -1 : 1); }); });
+    var roots = childrenOf["__root"] || [];
+    function prog(t) { var kids = childrenOf[t.id]; if (!kids || !kids.length) return stageProgress(t.board_stage); var s = 0; kids.forEach(function (k) { s += prog(k); }); return Math.round(s / kids.length); }
+    var totalLeaves = 0, doneLeaves = 0;
+    tasks.forEach(function (t) { if (!(childrenOf[t.id] && childrenOf[t.id].length)) { totalLeaves++; if (t.board_stage === "done") doneLeaves++; } });
+    var overall = totalLeaves ? Math.round(doneLeaves / totalLeaves * 100) : 0;
+    function nodeHtml(t, wbs, depth) {
+      var kids = childrenOf[t.id] || [], has = kids.length > 0;
+      var emp = t.assignee_id ? ctx.empById[t.assignee_id] : null, p = prog(t);
+      var row = '<div class="wbs-row" data-id="' + t.id + '" style="padding-left:' + (depth * 22 + 10) + 'px">' +
+        (has ? '<span class="wbs-caret" data-t="' + t.id + '">&#9662;</span>' : '<span class="wbs-caret empty"></span>') +
+        '<span class="wbs-no">' + wbs + '</span>' +
+        '<span class="wbs-name">' + esc(t.name) + '</span>' +
+        '<span class="wbs-mid">' + agPrio(t.priority) + (Number(t.points) ? '<span class="ag-pts">' + Number(t.points) + '</span>' : '') + '</span>' +
+        '<span class="wbs-stage">' + esc(agStageLabel(t.board_stage || "backlog")) + '</span>' +
+        '<span class="wbs-bar"><span class="wbs-fill" style="width:' + p + '%"></span></span><span class="wbs-pct">' + p + '%</span>' +
+        (emp ? agAvatar(emp, true) : '<span class="wbs-un">&ndash;</span>') +
+        '<button class="wbs-add" data-parent="' + t.id + '" title="Add sub-activity">+</button></div>';
+      var childHtml = has ? '<div class="wbs-children" data-parent="' + t.id + '">' + kids.map(function (k, i) { return nodeHtml(k, wbs + "." + (i + 1), depth + 1); }).join("") + '</div>' : '';
+      return row + childHtml;
+    }
+    var tree = roots.length ? roots.map(function (r, i) { return nodeHtml(r, String(i + 1), 0); }).join("") : '<div class="o-empty2"><div class="o-empty2-t">No activities yet</div><div class="o-empty2-h">Break the work down into activities and sub-activities. Add the first with + Task above, then + on any row to nest work under it.</div></div>';
+    body.innerHTML = '<div class="wbs-wrap">' +
+      '<div class="wbs-top"><div><b>Work breakdown</b> <span class="muted">' + tasks.length + ' activities &middot; ' + overall + '% complete</span></div>' +
+      '<div class="muted" style="font-size:11.5px">Numbered by structure &middot; percent rolls up from the lowest level</div></div>' +
+      '<div class="wbs-body">' + tree + '</div></div>';
+    body.querySelectorAll(".wbs-caret[data-t]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var kids = body.querySelector('.wbs-children[data-parent="' + c.dataset.t + '"]'); if (kids) { var open = kids.style.display !== "none"; kids.style.display = open ? "none" : ""; c.innerHTML = open ? "&#9656;" : "&#9662;"; } }; });
+    body.querySelectorAll(".wbs-row").forEach(function (r) { r.onclick = function (e) { if (e.target.closest(".wbs-add") || e.target.closest(".wbs-caret[data-t]")) return; openTaskPanel(r.dataset.id, AGS.proj, function () { renderBoard(); }); }; });
+    body.querySelectorAll(".wbs-add").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openSubQuickAdd(b.dataset.parent); }; });
+  }
+  function openSubQuickAdd(parentId) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Add sub-activity</h3><div class="form"><div><label>Name</label><input id="wq-name" placeholder="Sub-activity name"></div></div><div class="foot"><button class="btn" id="wq-c">Cancel</button><button class="btn pri" id="wq-s" style="background:var(--accent);border-color:var(--accent)">Add</button></div></div>';
+    document.body.appendChild(m); var inp = document.getElementById("wq-name"); inp.focus();
+    document.getElementById("wq-c").onclick = function () { m.remove(); };
+    async function save() { var n = inp.value.trim(); if (!n) { m.remove(); return; } var r = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: AGS.proj, name: n, parent_task_id: parentId, board_stage: "backlog", is_agile: true, priority: "medium", sort_order: Math.round(Date.now() / 1000) % 1000000 }); m.remove(); if (r.error) { toast(r.error.message); } else { toast("Added"); renderBoard(); } }
+    document.getElementById("wq-s").onclick = save; inp.onkeydown = function (e) { if (e.key === "Enter") save(); };
+  }
   async function openTaskPanel(taskId, projectId, onClose) {
     var isNew = taskId === "new";
     var t = isNew ? { priority: "medium", board_stage: "backlog", points: 0 } : ((await sb.from("project_tasks").select("*").eq("id", taskId).maybeSingle()).data || {});

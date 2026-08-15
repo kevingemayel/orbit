@@ -607,3 +607,23 @@ button{font-family:inherit}
 .rl-feats{display:flex;flex-wrap:wrap;gap:4px 12px}
 .rl-feat{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--ink2);cursor:pointer}
 .rl-feat input{width:15px;height:15px;accent-color:var(--accent)}
+/* Work breakdown structure (WBS tree) */
+.wbs-wrap{padding:14px 16px}
+.wbs-top{display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.wbs-body{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.wbs-row{display:flex;align-items:center;gap:8px;padding:7px 10px;border-bottom:1px solid var(--line);cursor:pointer}
+.wbs-body>.wbs-row:last-child,.wbs-children>.wbs-row:last-child{border-bottom:none}
+.wbs-row:hover{background:var(--panel2)}
+.wbs-caret{width:14px;flex:none;color:var(--ink3);cursor:pointer;font-size:11px;user-select:none;text-align:center}
+.wbs-caret.empty{cursor:default}
+.wbs-no{font-variant-numeric:tabular-nums;color:var(--ink3);font-size:12px;min-width:38px;font-weight:700}
+.wbs-name{flex:1;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wbs-mid{display:flex;align-items:center;gap:6px;flex:none}
+.wbs-stage{width:92px;font-size:12px;color:var(--ink2);flex:none}
+.wbs-bar{width:110px;height:7px;border-radius:4px;background:var(--panel2);border:1px solid var(--line);overflow:hidden;flex:none}
+.wbs-fill{display:block;height:100%;background:var(--accent)}
+.wbs-pct{width:38px;text-align:right;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink2);flex:none}
+.wbs-un{width:24px;text-align:center;color:var(--ink3);flex:none}
+.wbs-add{width:24px;height:24px;border:1px solid var(--line);background:var(--panel);border-radius:7px;cursor:pointer;color:var(--accent);font-size:15px;line-height:1;flex:none}
+.wbs-add:hover{background:var(--accent-soft)}
+@media(max-width:720px){.wbs-stage{display:none}.wbs-bar{width:64px}}
