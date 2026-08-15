@@ -627,3 +627,31 @@ button{font-family:inherit}
 .wbs-add{width:24px;height:24px;border:1px solid var(--line);background:var(--panel);border-radius:7px;cursor:pointer;color:var(--accent);font-size:15px;line-height:1;flex:none}
 .wbs-add:hover{background:var(--accent-soft)}
 @media(max-width:720px){.wbs-stage{display:none}.wbs-bar{width:64px}}
+/* Complete-checkbox (board cards + outline) + the task outline (List view) */
+.ag-check,.ol-check{width:18px;height:18px;border:2px solid var(--line);border-radius:50%;flex:none;cursor:pointer;display:inline-block;position:relative;box-sizing:border-box;transition:background .12s,border-color .12s;margin-top:1px}
+.ag-check:hover,.ol-check:hover{border-color:var(--good)}
+.ag-check.on,.ol-check.on{background:var(--good);border-color:var(--good)}
+.ag-check.on::after,.ol-check.on::after{content:"";position:absolute;left:4px;top:1px;width:5px;height:9px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.ag-card-th{display:flex;align-items:flex-start;gap:8px}
+.ag-card-t.done{text-decoration:line-through;color:var(--ink3)}
+.ol-wrap{padding:14px 16px;max-width:940px}
+.ol-top{padding:2px 4px 10px;font-size:13px}
+.ol-body{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.ol-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.ol-body>.ol-row:last-child{border-bottom:none}
+.ol-row:hover{background:var(--panel2)}
+.ol-row.done .ol-name{text-decoration:line-through;color:var(--ink3)}
+.ol-caret{width:14px;flex:none;color:var(--ink3);cursor:pointer;font-size:11px;text-align:center;user-select:none}
+.ol-caret.empty{visibility:hidden;cursor:default}
+.ol-name{flex:1;font-size:13.5px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ol-count{font-size:11.5px;color:var(--ink3);background:var(--panel2);border:1px solid var(--line);border-radius:999px;padding:1px 8px;font-variant-numeric:tabular-nums;flex:none}
+.ol-meta{display:flex;align-items:center;gap:8px;flex:none}
+.ol-due{font-size:12px;color:var(--ink2)}
+.ol-due.over{color:var(--bad)}
+.ol-add{width:22px;height:22px;border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer;color:var(--accent);font-size:14px;line-height:1;flex:none;opacity:0;transition:opacity .12s}
+.ol-row:hover .ol-add{opacity:1}
+.ag-addwrap{margin-top:12px}
+.ag-add-root{width:100%;max-width:560px;padding:10px 13px;border:1px dashed var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit}
+.ag-add-root::placeholder{color:var(--ink3)}
+.ag-add-root:focus{border-style:solid;border-color:var(--accent);outline:none;background:var(--panel)}
+@media(max-width:600px){.ol-add{opacity:1}}
