@@ -196,6 +196,7 @@
     settings: {
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
+        { label: "Getting started", action: "settings.setup" },
         { label: "Companies", action: "companies" },
         { label: "Users & Roles", action: "settings.users" },
         { label: "Roles & Permissions", action: "settings.roles" },
@@ -223,7 +224,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -413,6 +414,7 @@
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
+    setupBannerInject();
   }
 
   function openApp(key) {
@@ -871,6 +873,14 @@
   }
   // Re-render the current view (used by modals to refresh the list after a save).
   function renderView() { if (S.action) routeAction(S.action); }
+  // Navigate to an action that may belong to a different app: switch the shell/sidebar to
+  // the owning app first (so the sidebar matches the content), then route. Used by the
+  // Getting-started wizard's deep links.
+  function goApp(action) {
+    var app = ACTION_APP[action] || S.app;
+    if (app && app !== S.app) { S.app = app; applyAppColor(); renderShell(); }
+    go(action);
+  }
   function routeAction(action) {
     switch (action) {
       case "dashboard": return renderDashboard();
@@ -935,6 +945,7 @@
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
       case "settings.roles": return renderRoles();
+      case "settings.setup": return renderSetup();
       case "settings.numbering": return renderNumbering();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
@@ -4547,6 +4558,109 @@
     return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
   // Settings > Document Numbering (ORB-06): admin edits prefix / digits / year per document type
+  // ============================ GETTING STARTED (ORB-05 onboarding) ============================
+  function suCheck() { return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>'; }
+  // the checklist model: what each step is, why it matters, and where it takes you.
+  var SETUP_STEPS = [
+    { key: "profile", n: "Company profile", why: "Your legal name, country and currency stamp every invoice, quote and report.", cta: "Save profile" },
+    { key: "numbering", n: "Document numbering", why: "Choose how invoices, POs, tenders and certificates are numbered (prefix, year, running digits).", cta: "Set numbering", go: "settings.numbering" },
+    { key: "taxes", n: "Tax rates", why: "Add your VAT / sales-tax rates so quotes and invoices calculate the right totals.", cta: "Add tax rates", go: "taxes" },
+    { key: "team", n: "Your team", why: "Add the people who work with you, so you can assign tasks and run payroll.", cta: "Add people", go: "hr.emp" },
+    { key: "customer", n: "First customer", why: "Add a client you will bill. Contacts are shared across all your companies.", cta: "Add a customer", go: "cust" },
+    { key: "project", n: "First project", why: "Create the job you are delivering. Budget, BOQ, certificates and the execution board all hang off a project.", cta: "Create a project", go: "proj.list" }
+  ];
+  // compute which steps are done, from live data (cheap head/count queries, each tolerant of failure)
+  async function setupState() {
+    var cid = S.company.id, oid = S.company.org_id;
+    function cnt(q) { return q.then(function (r) { return (r && r.count) || 0; }).catch(function () { return 0; }); }
+    var r = await Promise.all([
+      cnt(sb.from("number_sequences").select("id", { count: "exact", head: true }).eq("company_id", cid)),
+      cnt(sb.from("taxes").select("id", { count: "exact", head: true }).eq("company_id", cid)),
+      cnt(sb.from("hr_employees").select("id", { count: "exact", head: true }).eq("company_id", cid)),
+      oid ? cnt(sb.from("partners").select("id", { count: "exact", head: true }).eq("org_id", oid).eq("is_customer", true)) : Promise.resolve(0),
+      cnt(sb.from("projects").select("id", { count: "exact", head: true }).eq("company_id", cid))
+    ]);
+    var profileDone = !!(S.company.legal_name && S.company.country && S.company.currency_code);
+    var doneMap = { profile: profileDone, numbering: r[0] > 0, taxes: r[1] > 0, team: r[2] > 0, customer: r[3] > 0, project: r[4] > 0 };
+    return SETUP_STEPS.map(function (s) { return { key: s.key, done: !!doneMap[s.key] }; });
+  }
+  async function renderSetup() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Getting started") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var state = await setupState();
+    var doneN = state.filter(function (s) { return s.done; }).length, tot = state.length, pct = Math.round(doneN / tot * 100);
+    var co = S.company;
+    var cards = SETUP_STEPS.map(function (m, i) {
+      var done = state[i].done;
+      var numHtml = done ? suCheck() : String(i + 1);
+      var pill = done ? '<span class="su-pill done">Done</span>' : '<span class="su-pill">To do</span>';
+      var info = '<div class="su-info"><div class="su-step-t">' + esc(m.n) + ' ' + pill + '</div><div class="su-step-w">' + esc(m.why) + '</div></div>';
+      var right, extra = "";
+      if (m.key === "profile") {
+        right = '<div class="su-cta-slot"></div>';
+        extra = '<div class="su-profile">' +
+          '<div class="su-fg"><label for="su-name">Company name</label><input id="su-name" value="' + esc(co.name || "") + '"></div>' +
+          '<div class="su-fg"><label for="su-legal">Legal name</label><input id="su-legal" value="' + esc(co.legal_name || "") + '" placeholder="Registered name"></div>' +
+          '<div class="su-fg"><label for="su-country">Country</label><input id="su-country" value="' + esc(co.country || "") + '" placeholder="e.g. Lebanon"></div>' +
+          '<div class="su-fg"><label for="su-cur">Currency</label><input id="su-cur" value="' + esc(co.currency_code || "") + '" placeholder="e.g. USD" style="text-transform:uppercase"></div>' +
+          '<div class="su-profile-save"><button class="pri" id="su-save">' + esc(m.cta) + '</button></div>' +
+          '</div>';
+      } else {
+        right = '<div class="su-cta"><button class="' + (done ? "" : "pri") + '" data-go="' + m.go + '">' + (done ? "Review" : esc(m.cta)) + '</button></div>';
+      }
+      return '<div class="su-step' + (done ? " done" : "") + '"><div class="su-step-h"><span class="su-num' + (done ? " done" : "") + '">' + numHtml + '</span>' + info + right + '</div>' + extra + '</div>';
+    }).join("");
+    var allset = doneN >= tot
+      ? '<div class="card su-allset"><span class="su-allset-ic">' + suCheck() + '</span><div><b>You are all set up.</b> Orbit has the basics it needs to run real projects. You can revisit this checklist any time from Settings &rsaquo; Getting started.</div></div>'
+      : '';
+    document.getElementById("o-body").innerHTML = '<div class="su-wrap">' +
+      '<div class="su-head"><div><h2 style="margin:0 0 3px">Getting started</h2><div class="sub" style="margin:0">A short checklist to get <b>' + esc(co.name) + '</b> ready. Finish these and Orbit is ready to run real projects.</div></div>' +
+      '<div class="su-prog"><div class="su-prog-n">' + doneN + ' / ' + tot + '</div><div class="su-bar"><span style="width:' + pct + '%"></span></div></div></div>' +
+      allset + '<div class="su-steps">' + cards + '</div></div>';
+    var sv = document.getElementById("su-save");
+    if (sv) sv.onclick = async function () {
+      var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
+      var upd = { name: g("su-name"), legal_name: g("su-legal"), country: g("su-country"), currency_code: (g("su-cur") || "USD").toUpperCase() };
+      if (!upd.name) { toast("Company name is required"); return; }
+      sv.disabled = true;
+      var res = await sb.from("companies").update(upd).eq("id", S.company.id);
+      sv.disabled = false;
+      if (res.error) { toast("Save failed: " + res.error.message); return; }
+      Object.assign(S.company, upd);
+      var ci = S.companies.filter(function (c) { return c.id === S.company.id; })[0]; if (ci) Object.assign(ci, upd);
+      toast("Company profile saved");
+      renderSetup();
+    };
+    document.querySelectorAll("#o-body .su-cta [data-go]").forEach(function (b) { b.onclick = function () { goApp(b.dataset.go); }; });
+  }
+  // Home-screen nudge: a compact progress card above the app grid, for admins, until dismissed.
+  async function setupBannerInject() {
+    try {
+      if (!S.company || !canManage("settings")) return;
+      var cid = S.company.id;
+      if (localStorage.getItem("orbit_setup_hide_" + cid) === "1") return;
+      var state = await setupState();
+      var doneN = state.filter(function (s) { return s.done; }).length, tot = state.length;
+      var grid = root.querySelector(".o-grid"); if (!grid) return;           // user navigated away while loading
+      if (doneN >= tot) return;                                              // fully set up, no nudge
+      var pct = Math.round(doneN / tot * 100);
+      var chips = SETUP_STEPS.map(function (m, i) {
+        var done = state[i].done;
+        return '<span class="su-chip' + (done ? " done" : "") + '">' + (done ? suCheck() : '<span class="su-cdot"></span>') + esc(m.n) + '</span>';
+      }).join("");
+      var html = '<div class="su-home card">' +
+        '<div class="su-home-top"><div><div class="su-home-t">Finish setting up ' + esc(S.company.name) + '</div>' +
+        '<div class="su-home-s">' + doneN + ' of ' + tot + ' steps done &middot; a few basics make Orbit ready to run real projects.</div></div>' +
+        '<div class="su-home-btns"><button class="pri" id="su-continue">Continue setup</button><button class="lnk" id="su-hide">Hide</button></div></div>' +
+        '<div class="su-bar"><span style="width:' + pct + '%"></span></div>' +
+        '<div class="su-chips">' + chips + '</div></div>';
+      grid.insertAdjacentHTML("beforebegin", html);
+      document.getElementById("su-continue").onclick = function () { goApp("settings.setup"); };
+      document.getElementById("su-hide").onclick = function () { localStorage.setItem("orbit_setup_hide_" + cid, "1"); var el = root.querySelector(".su-home"); if (el) el.remove(); };
+    } catch (e) { /* nudge is best-effort */ }
+  }
+
   async function renderNumbering() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
