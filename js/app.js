@@ -42,6 +42,13 @@
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  // central modal accessibility (ORB-07): every .modal gets dialog semantics + autofocus + Escape-to-close
+  function _a11yEnhanceModal(m) { if (!m || m._a11y) return; m._a11y = 1; var sheet = m.querySelector(".sheet") || m; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); setTimeout(function () { var f = m.querySelector("input:not([type=hidden]),select,textarea,button"); if (f) { try { f.focus(); } catch (e) { } } }, 40); }
+  (function initModalA11y() {
+    function start() { try { new MutationObserver(function (ms) { ms.forEach(function (mu) { [].forEach.call(mu.addedNodes || [], function (n) { if (n.nodeType === 1 && n.classList && n.classList.contains("modal")) _a11yEnhanceModal(n); }); }); }).observe(document.body, { childList: true }); } catch (e) { } }
+    if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { var mods = document.querySelectorAll(".modal.on"); if (mods.length) { var top = mods[mods.length - 1]; var c = top.querySelector('[id$="-cancel"]') || top.querySelector(".foot .btn:not(.pri)"); if (c) c.click(); else top.remove(); } } });
+  })();
   var today = function () { return new Date().toISOString().slice(0, 10); };
   var fmtD = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
   var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
@@ -195,6 +202,7 @@
         { label: "Approvals", action: "approvals.inbox" },
         { label: "Approval Rules", action: "approvals.rules" },
         { label: "Portal Access", action: "portal.admin" },
+        { label: "Document Numbering", action: "settings.numbering" },
         { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
@@ -226,7 +234,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights"
@@ -556,6 +564,7 @@
     if (!el) return;
     el.onchange = async function () {
       S.company = S.companies.filter(function (c) { return c.id === this.value; }.bind(this))[0];
+      resetSeqCache();
       if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
       S.role = await loadRole();
       await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
@@ -926,6 +935,7 @@
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
       case "settings.roles": return renderRoles();
+      case "settings.numbering": return renderNumbering();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
@@ -1774,11 +1784,30 @@
   }
   // collision-safe sequence: highest existing numeric suffix + 1 (count-based numbering repeats a number after any deletion)
   function maxSeq(rows, prefixYear) { var mx = 0; (rows || []).forEach(function (r) { var num = r.number || ""; if (prefixYear && num.indexOf(prefixYear) !== 0) return; var m = /(\d+)\s*$/.exec(num); if (m) { var n = parseInt(m[1], 10); if (n > mx) mx = n; } }); return mx; }
+  // ---- configurable document numbering (ORB-06): admin-editable prefix / padding / year per doc type ----
+  var DOC_TYPES = [
+    ["INV", "Customer invoice"], ["RINV", "Customer credit note"], ["BILL", "Vendor bill"], ["RBILL", "Vendor refund"],
+    ["SO", "Sales order / quotation"], ["PO", "Purchase order"], ["TND", "Tender / estimate"],
+    ["SUB", "Submittal"], ["RFI", "RFI"], ["TRN", "Transmittal"],
+    ["SNAG", "Snag / punch item"], ["INSP", "Inspection"], ["INS", "Install job"], ["SIGN", "Signature request"], ["WO", "Work order"]
+  ];
+  var _seqCache = null, _seqCacheCo = null;
+  async function loadSeqCfg() {
+    if (_seqCache && _seqCacheCo === S.company.id) return _seqCache;
+    _seqCacheCo = S.company.id; var rows = [];
+    try { rows = (await sb.from("number_sequences").select("*").eq("company_id", S.company.id)).data || []; } catch (e) {}
+    _seqCache = {}; rows.forEach(function (r) { _seqCache[r.doc_type] = r; });
+    return _seqCache;
+  }
+  function resetSeqCache() { _seqCache = null; }
+  async function seqCfg(defPrefix) { var c = await loadSeqCfg(); var r = c[defPrefix]; return { prefix: (r && r.prefix) || defPrefix, padding: (r && r.padding) || 4, use_year: r ? r.use_year !== false : true }; }
+  function seqPrefixYear(cfg) { return cfg.prefix + (cfg.use_year ? "/" + new Date().getFullYear() : "") + "/"; }
+  function seqPad(cfg, n) { return ("000000000" + n).slice(-Math.max(1, cfg.padding || 4)); }
   async function nextNumber(moveType) {
-    var prefix = { out_invoice: "INV", out_refund: "RINV", in_invoice: "BILL", in_refund: "RBILL" }[moveType] || "INV";
-    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var defPrefix = { out_invoice: "INV", out_refund: "RINV", in_invoice: "BILL", in_refund: "RBILL" }[moveType] || "INV";
+    var cfg = await seqCfg(defPrefix), py = seqPrefixYear(cfg);
     var rows = (await sb.from("invoices").select("number").eq("company_id", S.company.id).eq("move_type", moveType).like("number", py + "%")).data || [];
-    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+    return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
 
   // ============================ SALES / PURCHASE ORDER FORM ============================
@@ -1946,10 +1975,10 @@
     toast(got ? ("Goods received - " + got + " stock item(s) added to inventory") : "Goods received"); renderOrderForm(order.id, "purchase");
   }
   async function nextOrderNumber(kind) {
-    var prefix = kind === "sale" ? "SO" : "PO", tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
-    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
+    var cfg = await seqCfg(kind === "sale" ? "SO" : "PO"), py = seqPrefixYear(cfg);
     var rows = (await sb.from(tbl).select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
-    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+    return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
   async function createInvoiceFromOrder(order, lines, kind) {
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
@@ -4512,9 +4541,40 @@
   function rfiStatusBadge(s) { var m = { open: ["Open", "var(--warn)"], answered: ["Answered", "var(--good)"], closed: ["Closed", "var(--slate)"] }[s] || [s, "var(--slate)"]; return docBadge(m[0], m[1]); }
   function nextRev(r) { r = String(r || "A"); if (/^[A-Za-z]$/.test(r)) return String.fromCharCode(r.toUpperCase().charCodeAt(0) + 1); var n = parseInt(r, 10); return isNaN(n) ? r + "'" : (n + 1) + ""; }
   async function nextDocNumber(table, prefix) {
-    var py = prefix + "/" + new Date().getFullYear() + "/";
+    var cfg = await seqCfg(prefix), py = seqPrefixYear(cfg);
     var rows = (await sb.from(table).select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
-    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+    return py + seqPad(cfg, maxSeq(rows, py) + 1);
+  }
+  // Settings > Document Numbering (ORB-06): admin edits prefix / digits / year per document type
+  async function renderNumbering() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    resetSeqCache(); var cfg = await loadSeqCfg(); var yr = new Date().getFullYear();
+    function preview(p, pad, uy) { return esc((p || "DOC") + (uy ? "/" + yr : "") + "/" + ("000000000" + 1).slice(-Math.max(1, pad || 4))); }
+    var rows = DOC_TYPES.map(function (d) {
+      var key = d[0], r = cfg[key] || {}; var p = r.prefix || key, pad = r.padding || 4, uy = r.use_year !== false;
+      return '<tr data-key="' + key + '"><td><b>' + esc(d[1]) + '</b></td>' +
+        '<td><input class="ns-prefix" aria-label="Prefix for ' + esc(d[1]) + '" value="' + esc(p) + '" style="width:96px"></td>' +
+        '<td><input class="ns-pad" type="number" min="1" max="8" aria-label="Digits for ' + esc(d[1]) + '" value="' + pad + '" style="width:64px"></td>' +
+        '<td style="text-align:center"><input class="ns-year" type="checkbox" aria-label="Include year for ' + esc(d[1]) + '"' + (uy ? " checked" : "") + '></td>' +
+        '<td class="ns-prev muted" style="font-variant-numeric:tabular-nums">' + preview(p, pad, uy) + '</td></tr>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Document Numbering</h3><button class="pri" id="ns-save" style="margin-left:auto">Save</button></div>' +
+      '<div class="sub" style="margin:6px 0 12px">Choose how each document is numbered. Changes affect new documents only, per company. Format is <b>PREFIX / year / running number</b>.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Document</th><th>Prefix</th><th>Digits</th><th style="text-align:center">Year</th><th>Next looks like</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+    function upd(tr) { tr.querySelector(".ns-prev").innerHTML = preview(tr.querySelector(".ns-prefix").value, parseInt(tr.querySelector(".ns-pad").value, 10) || 4, tr.querySelector(".ns-year").checked); }
+    document.querySelectorAll("#o-body tbody tr").forEach(function (tr) { tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", function () { upd(tr); }); i.addEventListener("change", function () { upd(tr); }); }); });
+    document.getElementById("ns-save").onclick = async function () {
+      var ups = [].map.call(document.querySelectorAll("#o-body tbody tr"), function (tr) {
+        var key = tr.dataset.key, lbl = (DOC_TYPES.filter(function (d) { return d[0] === key; })[0] || [])[1] || "";
+        return { company_id: S.company.id, doc_type: key, label: lbl, prefix: (tr.querySelector(".ns-prefix").value || "").trim() || key, padding: Math.min(8, Math.max(1, parseInt(tr.querySelector(".ns-pad").value, 10) || 4)), use_year: tr.querySelector(".ns-year").checked };
+      });
+      var r = await sb.from("number_sequences").upsert(ups, { onConflict: "company_id,doc_type" });
+      resetSeqCache();
+      if (r.error) { toast("Save failed: " + r.error.message); return; }
+      toast("Numbering saved");
+    };
   }
   function isOverdue(dateStr) { var d = parseD(dateStr); var t0 = new Date(); t0.setHours(0, 0, 0, 0); return d && d < t0; }
 
@@ -7338,9 +7398,9 @@
     };
   }
   async function nextTenderNumber() {
-    var py = "TND/" + new Date().getFullYear() + "/";
+    var cfg = await seqCfg("TND"), py = seqPrefixYear(cfg);
     var rows = (await sb.from("tenders").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
-    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+    return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
   async function renderTenderForm(id) {
     var parent = { action: "est.list", title: "Tenders" };
