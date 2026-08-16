@@ -440,6 +440,44 @@
     for (var i = 0; i < map.length; i++) if (map[i][0].test(t)) return svgIc(map[i][1]);
     return svgIc('<circle cx="12" cy="12" r="2.5"/>');
   }
+  // distinct icons pool: if two items in the same menu would share an icon, the
+  // builder pulls the next unused one from here so no two items look the same.
+  var FALLBACK_POOL = [
+    '<path d="M4 15a8 8 0 0116 0"/><path d="M12 15l4-3"/>',
+    '<path d="M4 20V5M4 20h16"/><path d="M8 16l3-4 3 2 4-6"/>',
+    '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.5 3-5.5 6-5.5s6 2 6 5.5"/>',
+    '<rect x="1.5" y="6" width="12" height="10" rx="1"/><path d="M13.5 9h4l3.5 3.5V16h-7.5z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',
+    '<path d="M5 4h11a2 2 0 012 2v15H7a2 2 0 01-2-2z"/><path d="M9 4v15"/>',
+    '<path d="M3 10l9-6 9 6"/><path d="M5 10v8M10 10v8M14 10v8M19 10v8M3 20.5h18"/>',
+    '<rect x="5" y="3" width="14" height="18" rx="1"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2"/>',
+    '<path d="M4 5h16M8 10h12M12 15h8M4 5v14"/>',
+    '<path d="M12 3v18M5 21h14M4 8h16"/><path d="M4 8l-1.6 4a2.6 2.6 0 005.2 0zM20 8l-1.6 4a2.6 2.6 0 005.2 0z"/>',
+    '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+    '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+    '<path d="M3 12c3-4 6 4 9 0s6-4 9 0"/><path d="M3 17c3-4 6 4 9 0s6-4 9 0"/>',
+    '<circle cx="7" cy="7" r="2.2"/><circle cx="17" cy="17" r="2.2"/><path d="M6 18L18 6"/>',
+    '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
+    '<path d="M4 8h12l-3-3M20 16H8l3 3"/>',
+    '<path d="M6 9a6 6 0 0112 0c0 6 2 7 2 7H4s2-1 2-7"/><path d="M10 21a2 2 0 004 0"/>',
+    '<path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="7.5" cy="7.5" r="1.5"/>',
+    '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>',
+    '<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+    '<path d="M3 5h18l-7 8v6l-4-2v-4z"/>',
+    '<rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/>',
+    '<rect x="5" y="4" width="14" height="17" rx="2"/><rect x="9" y="2" width="6" height="4" rx="1"/><path d="M9 11h6M9 15h4"/>',
+    '<path d="M4 6h8M4 12h12M4 18h6"/><path d="M4 4v16"/>',
+    '<path d="M14 7a4 4 0 00-5.5 5.2l-5 5a2 2 0 002.8 2.8l5-5A4 4 0 0017 10l-2 2-2-2z"/>',
+    '<path d="M4 16a8 8 0 0116 0"/><path d="M4 16h16"/><path d="M9 8V5h6v3"/>',
+    '<path d="M5 21V4M5 4h11l-2 3 2 3H5"/>',
+    '<path d="M3 21V10l9-5 9 5v11"/><path d="M8 21v-6h8v6"/>',
+    '<path d="M12 21s7-6 7-11a7 7 0 10-14 0c0 5 7 11 7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8" cy="11" r="2"/><path d="M5.5 16c0-1.5 1.5-2.5 2.5-2.5s2.5 1 2.5 2.5M14 9h4M14 12h4"/>',
+    '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5h8v2M3 12h18"/>',
+    '<rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/>',
+    '<path d="M6 3h12v18l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5L6 21z"/><path d="M9 8h6M9 12h4"/>',
+    '<path d="M3 6h6l2 2h10v11H3z"/>',
+    '<path d="M4 4h16v6H4zM4 14h16v6H4z"/>'
+  ];
   // keep the sidebar's active item in sync as you navigate within an app
   function highlightSide() {
     var side = document.getElementById("oside"); if (!side) return;
@@ -453,20 +491,27 @@
   }
   function renderShell() {
     var a = APPS[S.app];
+    if (S.sideCollapsed === undefined) { var _ss = localStorage.getItem("orbit_side"); S.sideCollapsed = _ss === null ? (window.innerWidth <= 760) : _ss === "1"; }
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     function menuItemVisible(action) { return action === "settings.roles" ? canManageRoles() : canGo(action); }
     var vmenus = a.menus.map(function (m) {
       if (m.items) { var its = m.items.filter(function (it) { return menuItemVisible(it[1]); }); return its.length ? { label: m.label, items: its } : null; }
       return menuItemVisible(m.action) ? m : null;
     }).filter(Boolean);
+    var usedSvg = {};
+    function pickIcon(label) {
+      var s = menuIcon(label);
+      if (usedSvg[s]) { for (var k = 0; k < FALLBACK_POOL.length; k++) { var f = svgIc(FALLBACK_POOL[k]); if (!usedSvg[f]) { s = f; break; } } }
+      usedSvg[s] = 1; return s;
+    }
     function siItem(action, label, sub) {
-      return '<button class="o-si' + (sub ? " o-si-sub" : "") + '" data-go="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"><span class="o-si-ic">' + menuIcon(label) + '</span><span class="o-si-l">' + esc(label) + '</span></button>';
+      return '<button class="o-si' + (sub ? " o-si-sub" : "") + '" data-go="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"><span class="o-si-ic">' + pickIcon(label) + '</span><span class="o-si-l">' + esc(label) + '</span></button>';
     }
     var side = vmenus.map(function (m, i) {
       if (m.items) {
         var open = m.items.some(function (it) { return it[1] === S.action; });
         var subs = m.items.map(function (it) { return siItem(it[1], it[0], true); }).join("");
-        return '<div class="o-sgrp"><button class="o-si o-si-grp" data-grp="' + i + '" aria-expanded="' + (open ? "true" : "false") + '"><span class="o-si-ic">' + menuIcon(m.label) + '</span><span class="o-si-l">' + esc(m.label) + '</span><span class="o-si-caret" aria-hidden="true">&#8250;</span></button><div class="o-sub" data-sub="' + i + '"' + (open ? "" : " hidden") + '>' + subs + '</div></div>';
+        return '<div class="o-sgrp"><button class="o-si o-si-grp" data-grp="' + i + '" aria-expanded="' + (open ? "true" : "false") + '"><span class="o-si-l">' + esc(m.label) + '</span><span class="o-si-caret" aria-hidden="true">&#8250;</span></button><div class="o-sub" data-sub="' + i + '"' + (open ? "" : " hidden") + '>' + subs + '</div></div>';
       }
       return siItem(m.action, m.label, false);
     }).join("");
@@ -482,7 +527,10 @@
       '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
-      '<nav class="o-side" id="oside" aria-label="' + esc(a.name) + ' menu">' + side + '</nav>' +
+      '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
+      '<div class="o-side-items">' + side + '</div>' +
+      '<button class="o-side-toggle" id="osidetoggle" aria-label="' + (S.sideCollapsed ? "Expand menu" : "Collapse menu") + '" title="' + (S.sideCollapsed ? "Expand menu" : "Collapse menu") + '"><span class="o-side-tg-ic" aria-hidden="true">&#8249;</span><span class="o-si-l">Collapse</span></button>' +
+      '</nav>' +
       '<main id="o-main" tabindex="-1" style="overflow:hidden"></main>' +
       '</div>' +
       '</div>';
@@ -493,8 +541,10 @@
     if (window._bellIv) clearInterval(window._bellIv);
     window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
     wireCompanySelect("bar");
-    document.querySelectorAll("#oside .o-si[data-go]").forEach(function (b) { b.onclick = function () { go(b.dataset.go); }; });
+    document.querySelectorAll("#oside .o-si[data-go]").forEach(function (b) { b.onclick = function () { go(b.dataset.go); if (window.innerWidth <= 760 && !S.sideCollapsed) { S.sideCollapsed = true; var sd0 = document.getElementById("oside"); if (sd0) sd0.classList.add("collapsed"); } }; });
     document.querySelectorAll("#oside .o-si-grp").forEach(function (b) { b.onclick = function () { var sub = document.querySelector('.o-sub[data-sub="' + b.dataset.grp + '"]'); if (!sub) return; if (sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); b.setAttribute("aria-expanded", "true"); } else { sub.setAttribute("hidden", ""); b.setAttribute("aria-expanded", "false"); } }; });
+    var _stg = document.getElementById("osidetoggle");
+    if (_stg) _stg.onclick = function () { S.sideCollapsed = !S.sideCollapsed; var sd = document.getElementById("oside"); if (sd) sd.classList.toggle("collapsed", S.sideCollapsed); localStorage.setItem("orbit_side", S.sideCollapsed ? "1" : "0"); _stg.setAttribute("aria-label", S.sideCollapsed ? "Expand menu" : "Collapse menu"); _stg.setAttribute("title", S.sideCollapsed ? "Expand menu" : "Collapse menu"); };
     applyAppColor(); applyFontScale(); highlightSide();
   }
   function companySelectHTML(scope) {

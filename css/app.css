@@ -112,7 +112,12 @@ button{font-family:inherit}
 
 /* ===== app shell: left sidebar navigation ===== */
 .o-shell{display:flex;min-height:0;overflow:hidden}
-.o-side{width:236px;flex:none;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:10px 8px 24px;display:flex;flex-direction:column;gap:1px}
+.o-side{width:236px;flex:none;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden;transition:width .16s ease}
+.o-side-items{flex:1;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;gap:1px;padding:10px 8px 14px}
+.o-side-toggle{flex:none;display:flex;align-items:center;gap:11px;border:0;border-top:1px solid var(--line);background:none;color:var(--ink3);font:inherit;font-size:12.5px;padding:11px 14px;cursor:pointer;min-height:44px;width:100%;text-align:left}
+.o-side-toggle:hover{background:var(--panel2);color:var(--ink)}
+.o-side-tg-ic{display:inline-grid;place-items:center;width:20px;font-size:18px;line-height:1;transition:transform .16s}
+.o-si-grp .o-si-l{font-weight:700;color:var(--ink)}
 #o-main{flex:1;min-width:0}
 .o-sgrp{display:flex;flex-direction:column}
 .o-si{display:flex;align-items:center;gap:11px;width:100%;min-height:40px;padding:8px 11px;border:none;background:none;color:var(--ink2);font:inherit;font-size:13.5px;border-radius:9px;cursor:pointer;text-align:left}
@@ -134,25 +139,20 @@ button{font-family:inherit}
 a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible,.o-si:focus-visible,.o-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #o-main:focus{outline:none}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
-/* sidebar responsive: tablet icon-rail, phone top strip */
-@media(max-width:980px) and (min-width:761px){
-  .o-side{width:60px;padding:10px 6px;align-items:center}
-  .o-si-l,.o-si-caret{display:none}
-  .o-si{justify-content:center;padding:9px 0;gap:0}
-  .o-si-sub{padding-left:0}
-  .o-sub{align-items:center}
-}
+/* collapsed = vertical icon rail (manual bottom toggle; default on phones) */
+.o-side.collapsed{width:64px}
+.o-side.collapsed .o-si-l,.o-side.collapsed .o-si-caret,.o-side.collapsed .o-si-grp{display:none}
+.o-side.collapsed .o-side-items{padding:10px 6px 14px;align-items:center}
+.o-side.collapsed .o-si{justify-content:center;padding:9px 0;gap:0;width:50px}
+.o-side.collapsed .o-si-sub{padding-left:0;width:50px}
+.o-side.collapsed .o-sub{display:flex!important;flex-direction:column;align-items:center}
+.o-side.collapsed .o-side-toggle{justify-content:center;padding:11px 0}
+.o-side.collapsed .o-side-toggle .o-si-l{display:none}
+.o-side.collapsed .o-side-tg-ic{transform:rotate(180deg)}
+/* phone: an expanded sidebar overlays the content over a dim backdrop */
 @media(max-width:760px){
-  .o-shell{flex-direction:column}
-  .o-side{width:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--line);padding:6px 8px;gap:4px;align-items:center}
-  .o-sgrp{flex-direction:row;align-items:center;gap:4px}
-  .o-side .o-sub{display:flex!important;flex-direction:row;gap:4px;padding:0}
-  .o-si{white-space:nowrap;min-height:36px;padding:7px 10px}
-  .o-si-l{display:inline}
-  .o-si-caret{display:none}
-  .o-si-sub{padding-left:10px}
-  .o-si-grp{font-weight:700;opacity:.75}
-  #o-main{flex:1;min-height:0;overflow:auto}
+  .o-side:not(.collapsed){position:fixed;top:46px;left:0;bottom:0;z-index:60;width:252px;box-shadow:0 0 0 100vmax rgba(0,0,0,.45),var(--sh)}
+  #o-main{overflow:auto}
 }
 
 /* ===== app switcher home ===== */
