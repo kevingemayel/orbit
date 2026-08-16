@@ -126,13 +126,6 @@
         { label: "Products", action: "products" }
       ]
     },
-    installation: {
-      name: "Installation", icon: "⛑", color: "#ea580c", color2: "#c2410c", home: "inst.jobs",
-      menus: [
-        { label: "Install Jobs", action: "inst.jobs" },
-        { label: "Projects", action: "proj.list" }
-      ]
-    },
     documents: {
       name: "Documents", icon: "▤", color: "#0369a1", color2: "#075985", home: "doc.subs",
       menus: [
@@ -145,6 +138,7 @@
     site: {
       name: "Site Ops", icon: "✓", color: "#ca8a04", color2: "#a16207", home: "site.snags",
       menus: [
+        { label: "Install Jobs", action: "inst.jobs" },
         { label: "Snagging", action: "site.snags" },
         { label: "Inspections", action: "site.insp" },
         { label: "Plant & Equipment", action: "site.plant" },
@@ -222,7 +216,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "installation", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -252,7 +246,6 @@
     { key: "inventory", label: "Inventory", features: [] },
     { key: "projects", label: "Projects", features: [["delivery", "Delivery view"], ["execution", "Execution board"], ["costs", "Costs & P&L"]] },
     { key: "manufacturing", label: "Manufacturing", features: [] },
-    { key: "installation", label: "Installation", features: [] },
     { key: "documents", label: "Documents", features: [] },
     { key: "site", label: "Site Ops", features: [] },
     { key: "contacts", label: "Contacts", features: [] },
