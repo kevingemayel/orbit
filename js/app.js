@@ -1721,7 +1721,10 @@
   };
   function fld(label, valueHtml, desc) {
     desc = desc || FIELD_DESC[label] || "";
-    return '<div class="o-fld"><div class="lbl"><label>' + esc(label) + '</label>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
+    // associate the <label> with the field's control when the value markup carries an id (ORB-07)
+    var m = /\bid="([^"]+)"/.exec(valueHtml || "");
+    var forAttr = m ? ' for="' + m[1] + '"' : "";
+    return '<div class="o-fld"><div class="lbl"><label' + forAttr + '>' + esc(label) + '</label>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
   }
   function fhint(label, override) { var d = override || FIELD_DESC[label] || ""; return d ? '<div class="fd">' + esc(d) + '</div>' : ""; }
   async function createCreditNote(inv, lines, isSale) {

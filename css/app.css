@@ -251,7 +251,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-fld .lbl .d{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;line-height:1.35}
 .o-fld .v{font-size:13.5px;padding-top:1px}
 .o-fld input,.o-fld select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px}
-.o-fld input:focus,.o-fld select:focus{outline:none;border-color:var(--accent)}
+.o-fld input:focus,.o-fld select:focus,.o-fld textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
 .o-fld input[readonly]{background:transparent;border-color:transparent;padding-left:0}
 
 /* notebook */
@@ -707,6 +707,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:760px){
   .o-groups{grid-template-columns:1fr}
   .form .row2,.form .row3,.row2,.row3{grid-template-columns:1fr!important}
+  /* stack the label above the field so inputs use the full phone width (was 180px label + field) */
+  .o-fld{grid-template-columns:1fr;gap:5px}
   .o-form{max-width:100%}
   /* full-width for standard fields; line-item inputs keep their inline widths and scroll */
   .o-form input:not([type=checkbox]):not([type=radio]):not([class*="tl-"]):not([class*="pi-"]):not([class*="pc-"]),
