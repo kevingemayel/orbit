@@ -390,10 +390,10 @@
     S.app = null; S.action = null;
     var tiles = Object.keys(APPS).filter(function (k) { return canViewApp(k); }).map(function (k) {
       var a = APPS[k];
-      return '<div class="o-tile" data-app="' + k + '"><div class="ic">' + (APP_ICONS[k] || a.icon) + '</div><div class="nm">' + esc(a.name) + '</div></div>';
+      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(a.name) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(a.name) + '</span></button>';
     }).join("");
     var soon = SOON.map(function (s) {
-      return '<div class="o-tile soon"><div class="ic">' + (APP_ICONS[s[0]] || s[1]) + '</div><div class="nm">' + esc(s[0]) + '</div></div>';
+      return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>';
     }).join("");
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
@@ -415,6 +415,42 @@
   }
 
   // ============================ SHELL ============================
+  // small line-icon for a sidebar menu item, chosen by keyword; decorative (aria-hidden)
+  function svgIc(inner) { return '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + inner + '</svg>'; }
+  function menuIcon(t) {
+    t = (t || "").toLowerCase();
+    var map = [
+      [/dash|cockpit|insight|report|overview|p&l|balance|ledger|trial|aged|wip|consolidat|vat|analytic/, '<path d="M4 20V10M10 20V4M16 20v-8M22 20H2"/>'],
+      [/customer|vendor|contact|employee|applicant|user|team|member|supplier|department/, '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>'],
+      [/invoice|bill|quotation|order|certificate|submittal|rfi|transmittal|article|document|payslip|journal|statement|\bmove|requisition|note/, '<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 13h6M9 17h4"/>'],
+      [/payment|account|budget|\btax|exchange|\brate|pricelist|salary|payroll|expense|retention|cash|collection|dunning|follow|advance/, '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M9.5 9.6c0-1.4 5-1.4 5 .2s-5 .6-5 2.4 5 1.4 5 0"/>'],
+      [/product|inventory|stock|\bbom|warehouse|\blot|serial|material|scrap|package|\buom|categor|putaway|storage|replenish|reorder|on hand/, '<path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/>'],
+      [/project|task|execution|programme|breakdown|my work|sprint/, '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'],
+      [/calendar|agenda|planning|shift|attendance|roster|time off|allocation|timesheet/, '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/>'],
+      [/config|setting|compan|appearance|period lock|numbering/, '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>'],
+      [/sign|signature/, '<path d="M3 17c4 0 4-10 8-10s2 8 5 8 3-4 5-4"/><path d="M3 21h18"/>'],
+      [/knowledge|method statement/, '<path d="M4 4h9a3 3 0 013 3v13a2 2 0 00-2-2H4z"/><path d="M20 4h-4a2 2 0 00-2 2"/>'],
+      [/snag|inspection|plant|equipment|site diary|install|qhse|safety|foreman/, '<path d="M12 2l8 4v6c0 5-4 8-8 10-4-2-8-5-8-10V6z"/><path d="M9 12l2 2 4-4"/>'],
+      [/role|permission|approval/, '<path d="M12 2l8 4v6c0 5-4 8-8 10-4-2-8-5-8-10V6z"/>'],
+      [/pipeline|lead|stage|\bcrm/, '<path d="M3 5h18l-7 8v6l-4-2v-4z"/>'],
+      [/work order|manufactur|fabricat/, '<path d="M14 7a4 4 0 00-5.5 5.2l-5 5a2 2 0 002.8 2.8l5-5A4 4 0 0017 10l-2 2-2-2 2-2z"/>'],
+      [/portal/, '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>'],
+      [/tender|estimat/, '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>']
+    ];
+    for (var i = 0; i < map.length; i++) if (map[i][0].test(t)) return svgIc(map[i][1]);
+    return svgIc('<circle cx="12" cy="12" r="2.5"/>');
+  }
+  // keep the sidebar's active item in sync as you navigate within an app
+  function highlightSide() {
+    var side = document.getElementById("oside"); if (!side) return;
+    side.querySelectorAll(".o-si").forEach(function (b) {
+      var on = b.dataset.go === S.action;
+      b.classList.toggle("on", on);
+      if (on) b.setAttribute("aria-current", "page"); else b.removeAttribute("aria-current");
+    });
+    var act = side.querySelector(".o-si.o-si-sub.on");
+    if (act) { var sub = act.closest(".o-sub"); if (sub && sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); var grp = sub.previousElementSibling; if (grp) grp.setAttribute("aria-expanded", "true"); } }
+  }
   function renderShell() {
     var a = APPS[S.app];
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
@@ -423,21 +459,32 @@
       if (m.items) { var its = m.items.filter(function (it) { return menuItemVisible(it[1]); }); return its.length ? { label: m.label, items: its } : null; }
       return menuItemVisible(m.action) ? m : null;
     }).filter(Boolean);
-    var menu = vmenus.map(function (m, i) {
-      return '<button class="mi" data-mi="' + i + '">' + esc(m.label) + (m.items ? ' <span class="car">&#9660;</span>' : '') + '</button>';
+    function siItem(action, label, sub) {
+      return '<button class="o-si' + (sub ? " o-si-sub" : "") + '" data-go="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"><span class="o-si-ic">' + menuIcon(label) + '</span><span class="o-si-l">' + esc(label) + '</span></button>';
+    }
+    var side = vmenus.map(function (m, i) {
+      if (m.items) {
+        var open = m.items.some(function (it) { return it[1] === S.action; });
+        var subs = m.items.map(function (it) { return siItem(it[1], it[0], true); }).join("");
+        return '<div class="o-sgrp"><button class="o-si o-si-grp" data-grp="' + i + '" aria-expanded="' + (open ? "true" : "false") + '"><span class="o-si-ic">' + menuIcon(m.label) + '</span><span class="o-si-l">' + esc(m.label) + '</span><span class="o-si-caret" aria-hidden="true">&#8250;</span></button><div class="o-sub" data-sub="' + i + '"' + (open ? "" : " hidden") + '>' + subs + '</div></div>';
+      }
+      return siItem(m.action, m.label, false);
     }).join("");
     root.innerHTML =
       '<div class="o-app">' +
-      '<div class="o-navbar">' +
-      '<button class="o-waffle" id="waffle" title="Apps">' +
+      '<a href="#o-main" class="o-skip">Skip to content</a>' +
+      '<header class="o-navbar">' +
+      '<button class="o-waffle" id="waffle" title="All apps" aria-label="All apps">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="6" height="6" rx="1.4"/><rect x="9.5" y="2" width="6" height="6" rx="1.4"/><rect x="17" y="2" width="6" height="6" rx="1.4"/><rect x="2" y="9.5" width="6" height="6" rx="1.4"/><rect x="9.5" y="9.5" width="6" height="6" rx="1.4"/><rect x="17" y="9.5" width="6" height="6" rx="1.4"/><rect x="2" y="17" width="6" height="6" rx="1.4"/><rect x="9.5" y="17" width="6" height="6" rx="1.4"/><rect x="17" y="17" width="6" height="6" rx="1.4"/></svg>' +
       '</button>' +
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(a.name) + '</span>' +
-      '<nav class="o-menu" id="omenu">' + menu + '</nav>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<div class="o-ava" id="ava">' + initials + '</div></div>' +
+      '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '</header>' +
+      '<div class="o-shell">' +
+      '<nav class="o-side" id="oside" aria-label="' + esc(a.name) + ' menu">' + side + '</nav>' +
+      '<main id="o-main" tabindex="-1" style="overflow:hidden"></main>' +
       '</div>' +
-      '<div id="o-main" style="overflow:hidden"></div>' +
       '</div>';
     document.getElementById("waffle").onclick = renderHome;
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
@@ -446,10 +493,9 @@
     if (window._bellIv) clearInterval(window._bellIv);
     window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
     wireCompanySelect("bar");
-    document.querySelectorAll(".o-menu .mi").forEach(function (mi) {
-      mi.onclick = function (e) { onMenuClick(mi, vmenus[+mi.dataset.mi]); };
-    });
-    applyAppColor(); applyFontScale();
+    document.querySelectorAll("#oside .o-si[data-go]").forEach(function (b) { b.onclick = function () { go(b.dataset.go); }; });
+    document.querySelectorAll("#oside .o-si-grp").forEach(function (b) { b.onclick = function () { var sub = document.querySelector('.o-sub[data-sub="' + b.dataset.grp + '"]'); if (!sub) return; if (sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); b.setAttribute("aria-expanded", "true"); } else { sub.setAttribute("hidden", ""); b.setAttribute("aria-expanded", "false"); } }; });
+    applyAppColor(); applyFontScale(); highlightSide();
   }
   function companySelectHTML(scope) {
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
@@ -762,6 +808,7 @@
     if (!document.getElementById("o-main")) renderShell();
     else { /* keep shell, but ensure menu highlights current app */ }
     routeAction(action);
+    highlightSide();
   }
   // Re-render the current view (used by modals to refresh the list after a save).
   function renderView() { if (S.action) routeAction(S.action); }

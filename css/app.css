@@ -110,6 +110,51 @@ button{font-family:inherit}
 .o-dd .it.dis:hover{background:none;color:var(--ink3)}
 .o-dd .sep{height:1px;background:var(--line);margin:5px 4px}
 
+/* ===== app shell: left sidebar navigation ===== */
+.o-shell{display:flex;min-height:0;overflow:hidden}
+.o-side{width:236px;flex:none;background:var(--panel);border-right:1px solid var(--line);overflow-y:auto;overflow-x:hidden;padding:10px 8px 24px;display:flex;flex-direction:column;gap:1px}
+#o-main{flex:1;min-width:0}
+.o-sgrp{display:flex;flex-direction:column}
+.o-si{display:flex;align-items:center;gap:11px;width:100%;min-height:40px;padding:8px 11px;border:none;background:none;color:var(--ink2);font:inherit;font-size:13.5px;border-radius:9px;cursor:pointer;text-align:left}
+.o-si:hover{background:var(--panel2);color:var(--ink)}
+.o-si.on{background:color-mix(in srgb,var(--app) 15%,transparent);color:var(--app);font-weight:600}
+.o-si-ic{display:grid;place-items:center;width:20px;flex:none;color:currentColor;opacity:.92}
+.o-si.on .o-si-ic{opacity:1}
+.o-si-l{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-si-caret{color:var(--ink3);font-size:17px;line-height:1;transition:transform .15s}
+.o-si-grp[aria-expanded="true"] .o-si-caret{transform:rotate(90deg)}
+.o-sub{display:flex;flex-direction:column;gap:1px;padding:1px 0 4px}
+.o-si-sub{padding-left:20px;font-size:13px;min-height:36px;color:var(--ink3)}
+.o-si-sub .o-si-ic{width:17px}
+.o-si-sub .o-si-ic svg{width:15px;height:15px}
+.o-si-sub.on{color:var(--app)}
+/* ===== accessibility fundamentals (ORB-07) ===== */
+.o-skip{position:absolute;left:8px;top:-60px;z-index:200;background:var(--app);color:#fff;padding:9px 16px;border-radius:0 0 9px 9px;font-size:13px;font-weight:600;transition:top .15s}
+.o-skip:focus{top:0}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,[tabindex]:focus-visible,.o-si:focus-visible,.o-tile:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#o-main:focus{outline:none}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}}
+/* sidebar responsive: tablet icon-rail, phone top strip */
+@media(max-width:980px) and (min-width:761px){
+  .o-side{width:60px;padding:10px 6px;align-items:center}
+  .o-si-l,.o-si-caret{display:none}
+  .o-si{justify-content:center;padding:9px 0;gap:0}
+  .o-si-sub{padding-left:0}
+  .o-sub{align-items:center}
+}
+@media(max-width:760px){
+  .o-shell{flex-direction:column}
+  .o-side{width:auto;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;overflow-y:hidden;border-right:none;border-bottom:1px solid var(--line);padding:6px 8px;gap:4px;align-items:center}
+  .o-sgrp{flex-direction:row;align-items:center;gap:4px}
+  .o-side .o-sub{display:flex!important;flex-direction:row;gap:4px;padding:0}
+  .o-si{white-space:nowrap;min-height:36px;padding:7px 10px}
+  .o-si-l{display:inline}
+  .o-si-caret{display:none}
+  .o-si-sub{padding-left:10px}
+  .o-si-grp{font-weight:700;opacity:.75}
+  #o-main{flex:1;min-height:0;overflow:auto}
+}
+
 /* ===== app switcher home ===== */
 .o-home{height:100%;overflow:auto;background:var(--bg)}
 .o-home-top{display:flex;align-items:center;height:46px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px;gap:10px}
@@ -119,7 +164,7 @@ button{font-family:inherit}
 .o-home-top .lockup svg{height:26px;width:auto;display:block}
 .o-home-top b{font-size:15px}
 .o-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px 4px;max-width:920px;margin:34px auto;padding:0 20px}
-.o-tile{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:12px;cursor:pointer;text-align:center}
+.o-tile{display:flex;flex-direction:column;align-items:center;gap:10px;padding:18px 10px;border-radius:12px;cursor:pointer;text-align:center;border:0;background:none;font:inherit;width:100%;color:var(--ink)}
 .o-tile:hover{background:var(--panel)}
 .o-tile .ic{width:56px;height:56px;border-radius:14px;display:grid;place-items:center;background:#16171c;color:#fff;box-shadow:var(--sh);border:1px solid rgba(255,255,255,.08)}
 .o-tile .ic svg{width:34px;height:34px;display:block}
