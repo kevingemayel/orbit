@@ -5453,6 +5453,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? { is_active: true, billing_type: "none" } : (await sb.from("projects").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
+    var srcTender = (id !== "new" && p.source_tender_id) ? (await sb.from("tenders").select("id,number,name").eq("id", p.source_tender_id).maybeSingle()).data : null;
     var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
     var tasks = id === "new" ? [] : (await sb.from("project_tasks").select("*").eq("project_id", id).order("created_at")).data || [];
     var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced").eq("project_id", id)).data || [];
@@ -5472,6 +5473,7 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-exec">Execution board</button>' : '') + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart + '<div class="o-title"><input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name"></div>' +
+      (srcTender ? '<div class="sub" style="margin:-2px 0 8px"><b>From tender:</b> <button class="lnk" id="pf-fromtender">' + esc(srcTender.number || srcTender.name || "tender") + '</button> &middot; budget &amp; BOQ carried from the estimate</div>' : '') +
       '<div class="o-groups"><div>' +
       fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
       fld("Billing", '<select id="pf-bill">' + billOpts + '</select>', "How the project is billed: non-billable, fixed price, time & material, or milestones.") +
@@ -5490,6 +5492,7 @@
       (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
+    var pft = document.getElementById("pf-fromtender"); if (pft) pft.onclick = function () { renderTenderForm(srcTender.id); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
@@ -5719,7 +5722,7 @@
     var tndb = document.getElementById("ld-tender"); if (tndb) tndb.onclick = async function () {
       if (!l.partner_id) { toast("Link or create a customer first (use Create Customer)."); return; }
       var num = await nextTenderNumber();
-      var tn = await sb.from("tenders").insert({ company_id: S.company.id, number: num, name: l.name || "Tender", partner_id: l.partner_id, status: "draft", tender_date: today(), margin_pct: 15, total_cost: 0, total_sell: Number(l.expected_revenue || 0), notes: "From opportunity: " + (l.name || "") }).select("id").single();
+      var tn = await sb.from("tenders").insert({ company_id: S.company.id, number: num, name: l.name || "Tender", partner_id: l.partner_id, status: "draft", tender_date: today(), margin_pct: 15, total_cost: 0, total_sell: Number(l.expected_revenue || 0), source_lead_id: id, notes: "From opportunity: " + (l.name || "") }).select("id").single();
       if (tn.error) { toast("Could not create tender: " + tn.error.message); return; }
       toast("Tender created from lead - price it, then Mark Won to open the project"); renderTenderForm(tn.data.id);
     };
@@ -7411,6 +7414,7 @@
     var t = id === "new" ? { status: "draft", tender_date: today(), margin_pct: 15 } : (await sb.from("tenders").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("tender_lines").select("*").eq("tender_id", id).order("sequence")).data || [];
     var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var srcLead = t.source_lead_id ? (await sb.from("crm_leads").select("id,name").eq("id", t.source_lead_id).maybeSingle()).data : null;
     var locked = t.status === "won";
     var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || t.name || "Tender");
@@ -7424,6 +7428,7 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="tn-name" value="' + esc(t.name || "") + '" placeholder="Tender name"' + (locked ? " disabled" : "") + '></div>' +
+      (srcLead ? '<div class="sub" style="margin:-2px 0 8px"><b>From opportunity:</b> <button class="lnk" id="tn-fromlead">' + esc(srcLead.name) + '</button></div>' : '') +
       '<div class="o-groups"><div>' +
       fld("Number", '<input id="tn-num" value="' + esc(t.number || "") + '"' + (locked ? " disabled" : "") + ' placeholder="auto">', "Your tender reference. Left blank, we number it.") +
       fld("Client", '<select id="tn-client"' + (locked ? " disabled" : "") + '>' + partnerOpts + '</select>', "The client inviting the tender.") +
@@ -7435,6 +7440,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Priced BOQ &middot; cost buildup</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-lines" style="min-width:920px"><thead><tr><th style="width:56px">Code</th><th>Description</th><th style="width:54px">Unit</th><th style="width:60px;text-align:right">Qty</th><th style="width:72px;text-align:right">Material</th><th style="width:72px;text-align:right">Labour</th><th style="width:72px;text-align:right">Subcont</th><th style="width:66px;text-align:right">Other</th><th style="width:62px;text-align:right">Margin%</th><th style="width:78px;text-align:right">Rate</th><th style="width:86px;text-align:right">Total</th>' + (locked ? "" : '<th style="width:20px"></th>') + '</tr></thead><tbody id="tlbody"></tbody></table></div>' + (locked ? "" : '<button class="o-addln" id="tn-addln">+ Add a line</button>') + '<div class="o-tot" id="tn-tot" style="margin-top:12px"></div></div></div>' +
       '</div>';
     document.getElementById("tn-discard").onclick = function () { go("est.list"); };
+    var tfl = document.getElementById("tn-fromlead"); if (tfl) tfl.onclick = function () { renderLeadForm(srcLead.id); };
     var lb = document.getElementById("tlbody");
     function recalc() {
       var tc = 0, ts = 0;
@@ -7491,7 +7497,7 @@
     var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
     if (!t) { toast("Tender not found"); return; }
     var lines = (await sb.from("tender_lines").select("*").eq("tender_id", tenderId).order("sequence")).data || [];
-    var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), is_active: true }).select("id").single();
+    var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
     if (proj.error) { toast("Could not create project: " + proj.error.message); return; }
     var pid = proj.data.id;
     var mat = 0, lab = 0, sub = 0, oth = 0;

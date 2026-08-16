@@ -127,6 +127,8 @@ button{font-family:inherit}
 .o-si-ic{display:grid;place-items:center;width:20px;flex:none;color:currentColor;opacity:.92}
 .o-si.on .o-si-ic{opacity:1}
 .o-si-l{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lnk{background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;padding:0;text-decoration:underline}
+.lnk:hover{opacity:.8}
 .o-si-caret{color:var(--ink3);font-size:17px;line-height:1;transition:transform .15s}
 .o-si-grp[aria-expanded="true"] .o-si-caret{transform:rotate(90deg)}
 .o-sub{display:flex;flex-direction:column;gap:1px;padding:1px 0 4px}
