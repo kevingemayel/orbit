@@ -1458,6 +1458,7 @@
       var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name; });
       if (!lns.length) { toast("Add at least one line"); return null; }
       var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+      if (alsoPost && !(untax > 0.005)) { toast("Cannot post an invoice with a zero total. Add amounts to the lines first."); return null; }
       if (isLocked(document.getElementById("f-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return null; }
       var hdr = {
         partner_id: partnerId, invoice_date: document.getElementById("f-date").value,
@@ -5310,7 +5311,7 @@
     var boqTot = id === "new" ? 0 : ((await sb.from("project_boq").select("amount").eq("project_id", id)).data || []).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
     var certTot = id === "new" ? 0 : ((await sb.from("project_certificates").select("current_certified,state").eq("project_id", id)).data || []).filter(function (x) { return x.state !== "draft"; }).reduce(function (s, x) { return s + Number(x.current_certified || 0); }, 0);
     var smart = id !== "new" ? '<div class="o-smart">' +
-      '<button class="sb" id="pf-sm-boq"><span class="v">' + cc + " " + money(boqTot) + '</span><span class="k">Contract (BOQ)</span></button>' +
+      '<button class="sb" id="pf-sm-boq"><span class="v">' + cc + " " + money(boqTot > 0 ? boqTot : (p.contract_value || 0)) + '</span><span class="k">Contract' + (boqTot > 0 ? ' (BOQ)' : '') + '</span></button>' +
       '<button class="sb" id="pf-sm-cert"><span class="v">' + cc + " " + money(certTot) + '</span><span class="k">Certified</span></button>' +
       '<button class="sb" id="pf-sm-budget"><span class="v">&#9776;</span><span class="k">Cost budget</span></button>' +
       '<button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours</span></button></div>' : "";
@@ -5330,7 +5331,7 @@
       '</div></div>' +
       '<div class="o-groups"><div>' +
       fld("Project Code", '<input id="pf-code" value="' + esc(p.code || "") + '" placeholder="e.g. PRJ-001">', "Your internal reference for this contract.") +
-      fld("Contract Value", '<input id="pf-cval" type="number" step="0.01" value="' + (p.contract_value || 0) + '">', "The awarded contract sum (grows with approved variations).") +
+      fld("Contract Value", '<input id="pf-cval" type="number" step="0.01" value="' + (boqTot > 0 ? boqTot : (p.contract_value || 0)) + '"' + (boqTot > 0 ? ' readonly' : '') + '>', boqTot > 0 ? "Set automatically from the Bill of Quantities. Edit the BOQ to change it." : "The awarded contract sum (grows with approved variations).") +
       '</div><div>' +
       fld("Retention %", '<input id="pf-ret" type="number" step="0.1" value="' + (p.retention_pct || 0) + '">', "Percent held back on each progress certificate, e.g. 10.") +
       fld("Advance Payment", '<input id="pf-adv" type="number" step="0.01" value="' + (p.advance_amount || 0) + '">', "Advance / mobilisation paid up front, recovered across certificates.") +
@@ -5340,7 +5341,7 @@
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: parseFloat(gv("pf-cval")) || 0, retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
+      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("projects").insert(row); } else r = await sb.from("projects").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + r.error.message); return; }
       toast("Saved"); go("proj.list");
@@ -6692,8 +6693,10 @@
     var cert2 = document.getElementById("pc-certify"); if (cert2) cert2.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("project_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderCertificateForm(sid); };
     var inv = document.getElementById("pc-invoice"); if (inv) inv.onclick = async function () {
       if (!proj.partner_id) { toast("Set a Customer on the project first."); return; }
+      var amt = Number(cert.current_certified) || 0;
+      if (!(amt > 0.005)) { toast("This certificate has nothing to invoice - the current amount is zero."); return; }
       var num = await nextNumber("out_invoice");
-      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || "") }).select("id").single();
+      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || ""), amount_untaxed: amt, amount_total: amt, amount_residual: amt }).select("id").single();
       if (ins.error) { toast("Invoice failed: " + ins.error.message); return; }
       var incAcc = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("code", "7000").maybeSingle()).data;
       await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
