@@ -2231,8 +2231,9 @@
     var overdueHtml = overdue.length
       ? '<div class="o-chart" style="margin-top:14px"><h3>Overdue invoices &middot; ' + cc + ' ' + money(overdueTotal) + ' across ' + overdue.length + ' invoice' + (overdue.length === 1 ? "" : "s") + '</h3><div class="o-chart-bd" style="padding:0"><table class="o-list"><thead><tr><th>Customer</th><th>Number</th><th>Due</th><th class="num">Overdue</th><th class="num">Amount</th></tr></thead><tbody>' + overdueRows + '</tbody></table></div></div>'
       : '';
-    document.getElementById("db").className = "";
-    document.getElementById("db").innerHTML =
+    var _db = document.getElementById("db"); if (!_db) return;   // guard: user navigated away before this async render resolved
+    _db.className = "";
+    _db.innerHTML =
       '<div class="kpis">' +
       kpi("Cash &amp; Bank", cc + " " + money(cash)) + kpi("Receivable", cc + " " + money(recv)) +
       kpi("Payable", cc + " " + money(pay)) + kpi("Net Result (YTD)", cc + " " + money(income - expense)) + '</div>' +
