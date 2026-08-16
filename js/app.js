@@ -136,7 +136,7 @@
       ]
     },
     site: {
-      name: "Site Ops", icon: "✓", color: "#ca8a04", color2: "#a16207", home: "site.snags",
+      name: "Site & Install", icon: "✓", color: "#ca8a04", color2: "#a16207", home: "site.snags",
       menus: [
         { label: "Install Jobs", action: "inst.jobs" },
         { label: "Snagging", action: "site.snags" },
