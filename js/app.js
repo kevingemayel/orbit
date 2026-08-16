@@ -1340,6 +1340,7 @@
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders";
     return {
       title: isSale ? "Quotations" : "Purchase Orders", pageSize: 80,
+      emptyHint: isSale ? "Use a quotation for a straightforward product or service sale. For a priced construction bid with a cost breakdown and margin, use Estimation → Tenders instead, then turn the won tender into a project." : "Raise a purchase order to buy materials or subcontract work from a vendor.",
       fetch: function () { return sb.from(tbl).select("*, partners(name)").eq("company_id", S.company.id).order("date_order", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (o) { return (o.number || "") + " " + (o.partners ? o.partners.name : ""); },
       columns: [
@@ -7380,6 +7381,7 @@
   function cfgTenders() {
     return {
       title: "Tenders", pageSize: 80,
+      emptyHint: "A tender is a priced construction bid: build up cost by trade, add margin, and track win/loss. This is the right place for project bids (not Sales quotations). Win one and it becomes a project.",
       fetch: function () { return sb.from("tenders").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (t) { return (t.number || "") + " " + (t.name || "") + " " + (t.partners ? t.partners.name : ""); },
       columns: [
