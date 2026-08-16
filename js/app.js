@@ -5535,7 +5535,7 @@
     var custOpts = '<option value="">(none yet)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (l.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>';
     if (id !== "new" && !l.partner_id) btns += '<button id="ld-tocust">Create Customer</button>';
-    if (id !== "new") btns += '<button id="ld-quote">Create Quotation</button>';
+    if (id !== "new") btns += '<button id="ld-tender">Create Tender</button><button id="ld-quote">Create Quotation</button>';
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stageBar + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="ld-name" value="' + esc(l.name || "") + '" placeholder="Opportunity name"></div>' +
@@ -5548,7 +5548,7 @@
       fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
       fld("Probability", '<input id="ld-prob" type="number" step="1" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent.") +
       fld("Source", '<input id="ld-src" value="' + esc(l.source || "") + '">', "Where the lead came from, e.g. referral or website.") +
-      '</div></div></div>';
+      '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + '</div>';
     document.querySelectorAll(".o-stages .st[data-stage]").forEach(function (x) { x.onclick = async function () { l.stage_id = x.dataset.stage; document.querySelectorAll(".o-stages .st").forEach(function (y) { y.classList.toggle("on", y === x); }); if (id !== "new") { await sb.from("crm_leads").update({ stage_id: l.stage_id }).eq("id", id); toast("Stage updated"); } }; });
     document.getElementById("ld-discard").onclick = function () { go("crm.pipe"); };
     document.getElementById("ld-save").onclick = async function () {
@@ -5564,6 +5564,13 @@
       if (pr.error) { toast("Could not create: " + pr.error.message); return; }
       await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
       toast("Customer created & linked"); renderLeadForm(id);
+    };
+    var tndb = document.getElementById("ld-tender"); if (tndb) tndb.onclick = async function () {
+      if (!l.partner_id) { toast("Link or create a customer first (use Create Customer)."); return; }
+      var num = await nextTenderNumber();
+      var tn = await sb.from("tenders").insert({ company_id: S.company.id, number: num, name: l.name || "Tender", partner_id: l.partner_id, status: "draft", tender_date: today(), margin_pct: 15, total_cost: 0, total_sell: Number(l.expected_revenue || 0), notes: "From opportunity: " + (l.name || "") }).select("id").single();
+      if (tn.error) { toast("Could not create tender: " + tn.error.message); return; }
+      toast("Tender created from lead - price it, then Mark Won to open the project"); renderTenderForm(tn.data.id);
     };
     var qb = document.getElementById("ld-quote"); if (qb) qb.onclick = async function () {
       if (!l.partner_id) { toast("Link or create a customer first"); return; }

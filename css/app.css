@@ -655,3 +655,23 @@ button{font-family:inherit}
 .ag-add-root::placeholder{color:var(--ink3)}
 .ag-add-root:focus{border-style:solid;border-color:var(--accent);outline:none;background:var(--panel)}
 @media(max-width:600px){.ol-add{opacity:1}}
+/* ORB-08: mobile / field-use hardening */
+@media(max-width:760px){
+  .o-groups{grid-template-columns:1fr}
+  .form .row2,.form .row3,.row2,.row3{grid-template-columns:1fr!important}
+  .o-form{max-width:100%}
+  /* full-width for standard fields; line-item inputs keep their inline widths and scroll */
+  .o-form input:not([type=checkbox]):not([type=radio]):not([class*="tl-"]):not([class*="pi-"]):not([class*="pc-"]),
+  .o-form select:not([class*="tl-"]),.o-form textarea{width:100%;max-width:100%}
+  .modal .sheet{width:96vw;max-width:96vw;max-height:90vh;overflow:auto}
+  .modal .form input:not([type=checkbox]):not([type=radio]),.modal .form select,.modal .form textarea{width:100%}
+  .modal .form .row2{grid-template-columns:1fr}
+  .o-statusbar{flex-wrap:wrap;row-gap:6px}
+  .o-statusbar button,.o-sb-btns button,.o-filtbtn{min-height:40px}
+  .o-tile{min-height:98px}
+  .rl-tablewrap{max-height:60vh}
+  .ol-row,.wbs-row{padding-top:11px;padding-bottom:11px}
+  .ol-check,.ag-check{width:22px;height:22px}
+  .o-cp{flex-wrap:wrap}
+  .cp-grid,.cal-grid{overflow-x:auto}
+}
