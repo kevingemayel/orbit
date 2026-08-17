@@ -1,6 +1,6 @@
 :root{
   /* Space Work brand palette (matches spacework.ai) */
-  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#8a909b;
+  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
   --line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--accent-soft:#e9eeff;
   --good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--warn-s:#fbf0da;--bad:#f4573d;--bad-s:#fdeae6;--slate:#55565c;--slate-s:#f1eee8;
   --mono:"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
@@ -11,44 +11,44 @@
 }
 /* auto dark only when the user hasn't picked an explicit theme (System) */
 @media (prefers-color-scheme:dark){:root:not([data-theme]){
-  --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#63718a;
+  --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#8b96a8;
   --line:#262832;--accent:#6f9bff;--accent2:#3f6fe0;--accent-soft:#18243f;
   --good:#3ec483;--good-s:#112720;--warn:#e0a53a;--warn-s:#291f12;--bad:#f4573d;--bad-s:#2a1513;--slate:#8595a9;--slate-s:#1a212b;
   --sh:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
 }}
 /* ===== preset themes (chosen in Settings > Appearance) ===== */
 :root[data-theme="dark"]{
-  --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#63718a;
+  --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#8b96a8;
   --line:#262832;--accent:#6f9bff;--accent2:#3f6fe0;--accent-soft:#18243f;
   --good:#3ec483;--good-s:#112720;--warn:#e0a53a;--warn-s:#291f12;--bad:#f4573d;--bad-s:#2a1513;--slate:#8595a9;--slate-s:#1a212b;
   --sh:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
 }
 :root[data-theme="corporate"]{
-  --bg:#eef1f5;--panel:#ffffff;--panel2:#f5f7fa;--ink:#1a2432;--ink2:#4a5768;--ink3:#8793a4;
+  --bg:#eef1f5;--panel:#ffffff;--panel2:#f5f7fa;--ink:#1a2432;--ink2:#4a5768;--ink3:#616d7e;
   --line:#dde3ec;--accent:#1f4e79;--accent2:#15385a;--accent-soft:#e6edf5;
   --good:#1f8f5f;--good-s:#e7f4ee;--warn:#b3781a;--warn-s:#f8efdc;--bad:#b23b34;--bad-s:#f7e6e4;--slate:#64748b;--slate-s:#eceff3;
   --app:#1f4e79;--app2:#15385a;--sh:0 1px 2px rgba(16,32,46,.06),0 8px 22px rgba(16,32,46,.08);
 }
 :root[data-theme="colorful"]{
-  --bg:#f6f4ff;--panel:#ffffff;--panel2:#f3f0fd;--ink:#241a3a;--ink2:#5b5177;--ink3:#8b82a8;
+  --bg:#f6f4ff;--panel:#ffffff;--panel2:#f3f0fd;--ink:#241a3a;--ink2:#5b5177;--ink3:#6a6285;
   --line:#e7e1f7;--accent:#7c3aed;--accent2:#6d28d9;--accent-soft:#efe9fe;
   --good:#12a150;--good-s:#e4f6ea;--warn:#d97706;--warn-s:#fbeede;--bad:#e11d48;--bad-s:#fbe4ea;--slate:#7c6f9c;--slate-s:#efeaf8;
   --sh:0 1px 2px rgba(60,40,90,.06),0 10px 26px rgba(80,50,120,.12);
 }
 :root[data-theme="blue"]{
-  --bg:#eef4fc;--panel:#ffffff;--panel2:#f2f7fd;--ink:#12233b;--ink2:#425571;--ink3:#7d90ab;
+  --bg:#eef4fc;--panel:#ffffff;--panel2:#f2f7fd;--ink:#12233b;--ink2:#425571;--ink3:#5f7290;
   --line:#dbe6f4;--accent:#2563eb;--accent2:#1d4ed8;--accent-soft:#e2ecfd;
   --good:#1f9d63;--good-s:#e7f6ee;--warn:#c07d17;--warn-s:#f9efda;--bad:#c0392b;--bad-s:#fae7e4;--slate:#5a7093;--slate-s:#e8eef6;
   --app:#2563eb;--app2:#1d4ed8;--sh:0 1px 2px rgba(20,50,90,.06),0 8px 22px rgba(20,60,120,.10);
 }
 :root[data-theme="pink"]{
-  --bg:#fdf2f7;--panel:#ffffff;--panel2:#fcf1f6;--ink:#3a1f2c;--ink2:#6e4f5e;--ink3:#a8889a;
+  --bg:#fdf2f7;--panel:#ffffff;--panel2:#fcf1f6;--ink:#3a1f2c;--ink2:#6e4f5e;--ink3:#7a5e6d;
   --line:#f5dbe7;--accent:#db2777;--accent2:#be185d;--accent-soft:#fce7f0;
   --good:#1f9d63;--good-s:#e7f6ee;--warn:#c07d17;--warn-s:#f9efda;--bad:#c0392b;--bad-s:#fae7e4;--slate:#9a7787;--slate-s:#f5e9ef;
   --app:#db2777;--app2:#be185d;--sh:0 1px 2px rgba(90,20,50,.06),0 8px 22px rgba(150,30,90,.10);
 }
 :root[data-theme="spacework"]{
-  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#8a909b;
+  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
   --line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--accent-soft:#e9eeff;
   --good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--warn-s:#fbf0da;--bad:#f4573d;--bad-s:#fdeae6;--slate:#55565c;--slate-s:#f1eee8;
   --app:#16171c;--app2:#24252c;--sh:0 1px 2px rgba(22,23,28,.05),0 14px 40px -20px rgba(22,23,28,.22);
@@ -535,7 +535,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .ag-col-b.ag-over{background:var(--accent-soft)}
 .ag-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 11px;cursor:pointer;box-shadow:var(--sh);transition:border-color .1s}
 .ag-card:hover{border-color:var(--accent)}
+.ag-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-color:var(--accent)}
 .ag-card.dragging{opacity:.4}
+/* ORB-07: keyboard/click move buttons (drag alternative); shown on hover/focus */
+.ag-move{display:flex;gap:4px;justify-content:flex-end;margin-top:6px;opacity:0;transition:opacity .12s}
+.ag-card:hover .ag-move,.ag-card:focus .ag-move,.ag-card:focus-within .ag-move{opacity:1}
+.ag-mv{width:24px;height:20px;padding:0;border:1px solid var(--line);border-radius:5px;background:var(--panel2);color:var(--ink2);cursor:pointer;font-size:14px;line-height:1;display:flex;align-items:center;justify-content:center}
+.ag-mv:hover{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+@media(hover:none){.ag-move{opacity:1}}
 .ag-card-t{font-weight:600;font-size:13.5px;color:var(--ink);line-height:1.32;word-break:break-word}
 .ag-card-f{display:flex;justify-content:space-between;align-items:center;gap:6px;margin-top:8px}
 .ag-card-l{display:flex;align-items:center;gap:6px;flex-wrap:wrap}

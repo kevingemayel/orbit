@@ -3899,11 +3899,15 @@
     if (sub) meta.push('<span class="ag-m" title="Subtasks">&#9776; ' + sub + '</span>');
     if (cm) meta.push('<span class="ag-m" title="Comments">&#9993; ' + cm + '</span>');
     if (t.blocked_by) meta.push('<span class="ag-m block" title="Blocked by another task">&#9888;</span>');
-    return '<div class="ag-card" draggable="true" data-id="' + t.id + '" data-stage="' + (t.board_stage || "backlog") + '" data-pts="' + (Number(t.points) || 0) + '">' +
+    var stg = t.board_stage || "backlog", stLbl = agStageLabel(stg);
+    // move buttons = the keyboard/click alternative to dragging (ORB-07). aria-hidden because the
+    // card's own aria-label already tells screen-reader users to use the arrow keys.
+    var mv = '<div class="ag-move" aria-hidden="true"><button type="button" class="ag-mv" data-dir="-1" tabindex="-1" title="Move to previous column">‹</button><button type="button" class="ag-mv" data-dir="1" tabindex="-1" title="Move to next column">›</button></div>';
+    return '<div class="ag-card" draggable="true" tabindex="0" role="group" aria-roledescription="Task card" aria-keyshortcuts="Enter ArrowLeft ArrowRight" aria-label="' + esc(t.name) + ', in ' + esc(stLbl) + '. Press Enter to open, or use the left and right arrow keys to move it between columns." data-id="' + t.id + '" data-stage="' + stg + '" data-pts="' + (Number(t.points) || 0) + '">' +
       (labels ? '<div class="ag-labels">' + labels + '</div>' : '') +
       '<div class="ag-card-th"><span class="ag-check' + (t.board_stage === "done" ? " on" : "") + '" data-id="' + t.id + '" title="Mark complete"></span><span class="ag-card-t' + (t.board_stage === "done" ? " done" : "") + '">' + esc(t.name) + '</span></div>' +
       '<div class="ag-card-f"><div class="ag-card-l">' + agPrio(t.priority) + (Number(t.points) ? '<span class="ag-pts" title="Effort points">' + Number(t.points) + '</span>' : '') + (due ? '<span class="ag-due' + (over ? " over" : "") + '">' + agDate(due) + '</span>' : '') + '</div>' + agAvatar(emp) + '</div>' +
-      (meta.length ? '<div class="ag-card-m">' + meta.join("") + '</div>' : '') + '</div>';
+      (meta.length ? '<div class="ag-card-m">' + meta.join("") + '</div>' : '') + mv + '</div>';
   }
   function renderBoardKanban(body, shown, ctx) {
     var cols = BOARD_STAGES.map(function (st) {
@@ -3915,7 +3919,16 @@
     }).join("");
     body.innerHTML = agSprintBar(ctx.sprints) + '<div class="ag-board">' + cols + '</div>';
     document.querySelectorAll(".ag-schip").forEach(function (b) { b.onclick = function () { AGS.sprint = b.dataset.s; renderBoard(); }; });
-    document.querySelectorAll(".ag-card").forEach(function (c) { c.addEventListener("click", function (e) { if (e.target.closest(".ag-check")) return; openTaskPanel(c.dataset.id, AGS.proj); }); });
+    document.querySelectorAll(".ag-card").forEach(function (c) {
+      c.addEventListener("click", function (e) { if (e.target.closest(".ag-check") || e.target.closest(".ag-mv")) return; openTaskPanel(c.dataset.id, AGS.proj); });
+      c.addEventListener("keydown", function (e) {
+        if (e.target !== c) return;                        // only when the card itself is focused
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openTaskPanel(c.dataset.id, AGS.proj); }
+        else if (e.key === "ArrowRight") { e.preventDefault(); agMoveCard(c.dataset.id, 1); }
+        else if (e.key === "ArrowLeft") { e.preventDefault(); agMoveCard(c.dataset.id, -1); }
+      });
+    });
+    document.querySelectorAll(".ag-mv").forEach(function (b) { b.addEventListener("click", function (e) { e.stopPropagation(); var card = b.closest(".ag-card"); if (card) agMoveCard(card.dataset.id, Number(b.dataset.dir)); }); });
     document.querySelectorAll(".ag-check").forEach(function (cb) { cb.addEventListener("click", function (e) { e.stopPropagation(); agToggleDone(cb.dataset.id, !cb.classList.contains("on")); }); });
     wireBoardDnD();
     wireQuickAdd();
@@ -3926,6 +3939,29 @@
       cards.forEach(function (c) { pts += Number(c.dataset.pts || 0); });
       var el = col.querySelector(".ag-col-n"); if (el) el.innerHTML = cards.length + (pts ? ' &middot; ' + pts + ' pts' : '');
     });
+  }
+  // shared stage-change persistence for drag, keyboard arrows and the move buttons (ORB-07)
+  async function agPersistStage(id, newStage) {
+    var upd = { board_stage: newStage, is_agile: true, completed_at: newStage === "done" ? new Date().toISOString() : null };
+    var r = await sb.from("project_tasks").update(upd).eq("id", id);
+    if (r.error) { toast("Move failed: " + r.error.message); renderBoard(); return false; }
+    logTaskActivity(id, AGS.proj, "moved", "to " + agStageLabel(newStage));
+    return true;
+  }
+  function agRelabelCard(card, newStage) {
+    card.setAttribute("aria-label", (card.getAttribute("aria-label") || "").replace(/, in .*?\./, ", in " + agStageLabel(newStage) + "."));
+  }
+  // keyboard/button move: shift a focused card to the adjacent column (the drag alternative)
+  async function agMoveCard(id, dir) {
+    var card = document.querySelector('.ag-card[data-id="' + id + '"]'); if (!card) return;
+    var cur = card.dataset.stage || "backlog", idx = -1;
+    for (var i = 0; i < BOARD_STAGES.length; i++) if (BOARD_STAGES[i].key === cur) { idx = i; break; }
+    var ni = idx + dir; if (idx < 0 || ni < 0 || ni >= BOARD_STAGES.length) return;
+    var newStage = BOARD_STAGES[ni].key;
+    var col = document.querySelector('.ag-col-b[data-stage="' + newStage + '"]'); if (!col) return;
+    col.appendChild(card); card.dataset.stage = newStage; agRelabelCard(card, newStage); agRecount(); card.focus();
+    toast("Moved to " + agStageLabel(newStage));
+    await agPersistStage(id, newStage);
   }
   function wireBoardDnD() {
     var dragId = null;
@@ -3941,11 +3977,8 @@
         var id = dragId || (e.dataTransfer && e.dataTransfer.getData("text/plain")); if (!id) return;
         var card = document.querySelector('.ag-card[data-id="' + id + '"]'); if (!card) return;
         var newStage = col.dataset.stage; if (card.dataset.stage === newStage && card.parentNode === col) return;
-        col.appendChild(card); card.dataset.stage = newStage; agRecount();
-        var upd = { board_stage: newStage, is_agile: true, completed_at: newStage === "done" ? new Date().toISOString() : null };
-        var r = await sb.from("project_tasks").update(upd).eq("id", id);
-        if (r.error) { toast("Move failed: " + r.error.message); renderBoard(); return; }
-        logTaskActivity(id, AGS.proj, "moved", "to " + agStageLabel(newStage));
+        col.appendChild(card); card.dataset.stage = newStage; agRelabelCard(card, newStage); agRecount();
+        await agPersistStage(id, newStage);
       });
     });
   }
