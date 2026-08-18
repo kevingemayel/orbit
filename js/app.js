@@ -128,7 +128,7 @@
         { label: "Programme", action: "proj.schedule" },
         { label: "Timesheets", action: "ts.list" },
         { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"], ["WIP Schedule", "proj.wip"]] },
-        { label: "Costs", items: [["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
+        { label: "Costs", items: [["Job Cost", "proj.jobcost"], ["Cost Codes", "cost.codes"], ["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
       ]
     },
     manufacturing: {
@@ -236,7 +236,7 @@
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
-    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
@@ -279,7 +279,7 @@
     ["rep.pl", "rep.bs", "rep.gl", "rep.tb", "rep.partner", "rep.aged.recv", "rep.aged.pay", "rep.tax", "rep.stmt", "rep.cons", "rep.cashfwd", "rep.collections", "budget.list", "cockpit", "dashboard"].forEach(function (a) { FEATURE_ACTIONS[a] = ["accounting", "reporting"]; });
     ["proj.list", "pc.list", "var.list", "proj.wip", "proj.schedule", "ts.list"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "delivery"]; });
     ["proj.board", "proj.mywork", "task.list"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "execution"]; });
-    ["sc.list", "proj.pnl", "proj.retention"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "costs"]; });
+    ["sc.list", "proj.pnl", "proj.retention", "proj.jobcost", "cost.codes"].forEach(function (a) { FEATURE_ACTIONS[a] = ["projects", "costs"]; });
     ["hr.runs", "hr.slips", "hr.struct", "hr.heads", "hr.eos", "hr.payconsol"].forEach(function (a) { FEATURE_ACTIONS[a] = ["employees", "payroll"]; });
   })();
   function moduleForAction(action) { var app = ACTION_APP[action] || S.app; return app ? modKey(app) : null; }
@@ -1034,6 +1034,8 @@
       case "var.list": return renderList(cfgVariations());
       case "sc.list": return renderList(cfgSubcontracts());
       case "proj.pnl": return renderProjectPnL();
+      case "proj.jobcost": return renderJobCost();
+      case "cost.codes": return renderList(cfgCostCodes());
       case "proj.retention": return renderRetention();
       case "proj.wip": return renderWIP();
       case "proj.schedule": return renderSchedule();
@@ -6865,21 +6867,109 @@
   // ---- Cost budget ----
   async function renderBudget(projectId) {
     var proj = (await sb.from("projects").select("name,contract_value").eq("id", projectId).maybeSingle()).data || {};
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cost Budget", { action: "proj.list", title: "Projects" }) + '<div class="gap"></div><button class="o-new" id="bg-add">+ Add line</button><button class="o-filtbtn" id="bg-save">Save</button></div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-title">Cost Budget &middot; ' + esc(proj.name || "") + '</div><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:180px">Category</th><th>Description</th><th style="width:130px;text-align:right">Budgeted cost</th><th style="width:24px"></th></tr></thead><tbody id="bg-body"></tbody></table></div><div class="o-tot" id="bg-tot" style="margin-top:10px"></div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cost Budget", { action: "proj.list", title: "Projects" }) + '<div class="gap"></div><button class="o-new" id="bg-add">+ Add line</button><button class="o-filtbtn" id="bg-save">Save</button></div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-title">Cost Budget &middot; ' + esc(proj.name || "") + '</div><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:160px">Cost code</th><th style="width:140px">Category</th><th>Description</th><th style="width:130px;text-align:right">Budgeted cost</th><th style="width:24px"></th></tr></thead><tbody id="bg-body"></tbody></table></div><div class="o-tot" id="bg-tot" style="margin-top:10px"></div></div></div></div></div>';
     wireBc();
     var lines = (await sb.from("project_budgets").select("*").eq("project_id", projectId).order("id")).data || [];
+    var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
+    function ccOpts(sel) { return '<option value="">&mdash;</option>' + ccs.map(function (c) { return '<option value="' + c.id + '"' + (sel === c.id ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join(""); }
     var body = document.getElementById("bg-body"), cv = Number(proj.contract_value) || 0;
     function recalc() { var tot = 0; body.querySelectorAll("tr").forEach(function (tr) { tot += parseFloat(tr.querySelector(".bg-amt").value) || 0; }); document.getElementById("bg-tot").innerHTML = '<div class="r"><span class="k">Total budgeted cost</span><span>' + S.company.currency_code + " " + money(tot) + '</span></div><div class="r"><span class="k">Contract value</span><span>' + S.company.currency_code + " " + money(cv) + '</span></div><div class="r tt"><span class="k">Estimated margin</span><span>' + S.company.currency_code + " " + money(cv - tot) + " (" + (cv ? ((cv - tot) / cv * 100).toFixed(1) : "0") + '%)</span></div>'; }
-    function addRow(l) { var tr = document.createElement("tr"); tr.innerHTML = '<td><input class="bg-cat" value="' + esc(l ? l.category : "") + '" placeholder="e.g. Labour"></td><td><input class="bg-desc" value="' + esc(l ? l.description : "") + '"></td><td><input class="bg-amt num" type="number" step="0.01" value="' + (l ? l.amount : 0) + '"></td><td><button class="del">&times;</button></td>'; body.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); }; tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", recalc); }); }
+    function addRow(l) { var tr = document.createElement("tr"); tr.innerHTML = '<td><select class="bg-cc">' + ccOpts(l ? l.cost_code_id : "") + '</select></td><td><input class="bg-cat" value="' + esc(l ? l.category : "") + '" placeholder="e.g. Labour"></td><td><input class="bg-desc" value="' + esc(l ? l.description : "") + '"></td><td><input class="bg-amt num" type="number" step="0.01" value="' + (l ? l.amount : 0) + '"></td><td><button class="del">&times;</button></td>'; body.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); }; tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", recalc); }); }
     document.getElementById("bg-add").onclick = function () { addRow(null); recalc(); };
     document.getElementById("bg-save").onclick = async function () {
       await sb.from("project_budgets").delete().eq("project_id", projectId);
-      var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) { return { company_id: S.company.id, project_id: projectId, category: tr.querySelector(".bg-cat").value.trim() || "Cost", description: tr.querySelector(".bg-desc").value.trim(), amount: parseFloat(tr.querySelector(".bg-amt").value) || 0 }; });
+      var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) { return { company_id: S.company.id, project_id: projectId, cost_code_id: tr.querySelector(".bg-cc").value || null, category: tr.querySelector(".bg-cat").value.trim() || "Cost", description: tr.querySelector(".bg-desc").value.trim(), amount: parseFloat(tr.querySelector(".bg-amt").value) || 0 }; });
       if (rows.length) { var ins = await sb.from("project_budgets").insert(rows); if (ins.error) { toast(ins.error.message); return; } }
       toast("Budget saved"); renderProjectForm(projectId);
     };
     if (lines.length) lines.forEach(addRow); else addRow(null);
     recalc();
+  }
+
+  // ---- Cost codes (ORB-13): the shared cost dimension used across budget / PO / bill ----
+  function cfgCostCodes() {
+    return {
+      title: "Cost Codes", pageSize: 300,
+      fetch: function () { return sb.from("cost_codes").select("*").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.code || "") + " " + (c.name || "") + " " + (c.category || ""); },
+      columns: [
+        { label: "Code", get: function (c) { return '<b>' + esc(c.code) + '</b>'; } },
+        { label: "Name", get: function (c) { return esc(c.name || ""); } },
+        { label: "Category", get: function (c) { return '<span class="muted">' + esc(c.category || "") + '</span>'; } },
+        { label: "Status", get: function (c) { return c.is_active === false ? '<span class="badge draft">Inactive</span>' : '<span class="badge partial">Active</span>'; } }
+      ],
+      groupBy: [{ label: "Category", get: function (c) { return c.category || "Uncategorised"; } }],
+      emptyHint: "Cost codes are your standard cost buckets (Labour, Materials, Subcontract, Plant, Preliminaries...). Add your set once, assign them on budget / PO / bill lines, and the Job Cost report shows budget vs committed vs actual per code.",
+      onOpen: function (c) { openCostCodeModal(c); }, onNew: function () { openCostCodeModal(null); }
+    };
+  }
+  function openCostCodeModal(c) {
+    c = c || {};
+    var cats = ["Labour", "Materials", "Subcontract", "Plant & Equipment", "Preliminaries", "Overheads", "Other"];
+    var catOpts = cats.map(function (x) { return '<option' + (c.category === x ? " selected" : "") + '>' + x + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (c.id ? "Edit" : "New") + ' cost code</h3><div class="form">' +
+      '<div class="row2"><div><label for="cc-code">Code</label><input id="cc-code" value="' + esc(c.code || "") + '" placeholder="e.g. 100"></div><div><label for="cc-cat">Category</label><select id="cc-cat">' + catOpts + '</select></div></div>' +
+      '<div><label for="cc-name">Name</label><input id="cc-name" value="' + esc(c.name || "") + '" placeholder="e.g. Site labour"></div>' +
+      '<div class="row2"><div><label for="cc-sort">Sort</label><input id="cc-sort" type="number" value="' + (c.sort != null ? c.sort : 10) + '"></div><div><label for="cc-active">Active</label><select id="cc-active"><option value="1">Active</option><option value="0">Inactive</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="cc-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="cc-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("cc-active").value = c.is_active === false ? "0" : "1";
+    document.getElementById("cc-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("cc-del"); if (del) del.onclick = async function () { await sb.from("cost_codes").delete().eq("id", c.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("cc-save").onclick = async function () {
+      var code = document.getElementById("cc-code").value.trim();
+      if (!code) { toast("Enter a code"); return; }
+      var row = { code: code, name: document.getElementById("cc-name").value.trim(), category: document.getElementById("cc-cat").value, sort: parseInt(document.getElementById("cc-sort").value, 10) || 10, is_active: document.getElementById("cc-active").value === "1" };
+      var r; if (c.id) r = await sb.from("cost_codes").update(row).eq("id", c.id); else { row.company_id = S.company.id; r = await sb.from("cost_codes").insert(row); }
+      if (r.error) { toast(r.error.message); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ---- Job Cost report (ORB-12): budget vs committed vs actual, by cost code ----
+  async function renderJobCost() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Job Cost") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
+    var sel = (S.jobCostProj && projs.some(function (p) { return p.id === S.jobCostProj; })) ? S.jobCostProj : projs[0].id;
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills), grouped by cost code. Assign cost codes on budget, PO and bill lines to fill it in.</div><div id="jc-table"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("jc-proj").onchange = function () { jobCostTable(this.value); };
+    jobCostTable(sel);
+  }
+  async function jobCostTable(projectId) {
+    S.jobCostProj = projectId;
+    var el = document.getElementById("jc-table"); if (!el) return;
+    var codes = (await sb.from("cost_codes").select("id,code,name,sort").eq("company_id", S.company.id).order("sort")).data || [];
+    var buds = (await sb.from("project_budgets").select("cost_code_id,amount").eq("project_id", projectId)).data || [];
+    var pos = (await sb.from("purchase_orders").select("id,state").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var poIds = pos.filter(function (p) { return ["sent", "purchase", "done"].indexOf(p.state) >= 0; }).map(function (p) { return p.id; });
+    var poLines = poIds.length ? ((await sb.from("purchase_order_lines").select("cost_code_id,price_subtotal,order_id").in("order_id", poIds)).data || []) : [];
+    var bills = (await sb.from("invoices").select("id,state").eq("company_id", S.company.id).eq("project_id", projectId).eq("move_type", "in_invoice")).data || [];
+    var billIds = bills.filter(function (b) { return b.state === "posted"; }).map(function (b) { return b.id; });
+    var billLines = billIds.length ? ((await sb.from("invoice_lines").select("cost_code_id,quantity,unit_price,invoice_id").in("invoice_id", billIds)).data || []) : [];
+    var map = {};
+    function bucket(id) { id = id || "_none"; if (!map[id]) map[id] = { budget: 0, committed: 0, actual: 0 }; return map[id]; }
+    buds.forEach(function (b) { bucket(b.cost_code_id).budget += Number(b.amount) || 0; });
+    poLines.forEach(function (l) { bucket(l.cost_code_id).committed += Number(l.price_subtotal) || 0; });
+    billLines.forEach(function (l) { bucket(l.cost_code_id).actual += (Number(l.quantity) || 0) * (Number(l.unit_price) || 0); });
+    var codeById = {}; codes.forEach(function (c) { codeById[c.id] = c; });
+    var order = codes.map(function (c) { return c.id; }).filter(function (id) { return map[id]; });
+    Object.keys(map).forEach(function (id) { if (id !== "_none" && order.indexOf(id) < 0) order.push(id); });
+    if (map["_none"]) order.push("_none");
+    var cc = S.company.currency_code, tot = { budget: 0, committed: 0, actual: 0 };
+    var rows = order.map(function (id) {
+      var m = map[id]; tot.budget += m.budget; tot.committed += m.committed; tot.actual += m.actual;
+      var name = id === "_none" ? "Uncoded" : (codeById[id] ? (codeById[id].code + (codeById[id].name ? " - " + codeById[id].name : "")) : "Cost code");
+      var variance = m.budget - m.actual, pct = m.budget ? Math.round(m.actual / m.budget * 100) : 0;
+      return '<tr><td>' + esc(name) + '</td><td class="num">' + money(m.budget) + '</td><td class="num">' + money(m.committed) + '</td><td class="num">' + money(m.actual) + '</td><td class="num" style="color:' + (variance < 0 ? "var(--bad)" : "var(--good)") + '">' + money(variance) + '</td><td class="num">' + pct + '%</td></tr>';
+    }).join("");
+    var totVar = tot.budget - tot.actual, totPct = tot.budget ? Math.round(tot.actual / tot.budget * 100) : 0;
+    el.innerHTML = '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Cost code</th><th class="num">Budget</th><th class="num">Committed</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% used</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">No budget or costs yet. Add a cost budget, then raise POs / bills against this project.</td></tr>') +
+      '</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td>Total (' + esc(cc) + ')</td><td class="num">' + money(tot.budget) + '</td><td class="num">' + money(tot.committed) + '</td><td class="num">' + money(tot.actual) + '</td><td class="num" style="color:' + (totVar < 0 ? "var(--bad)" : "var(--good)") + '">' + money(totVar) + '</td><td class="num">' + totPct + '%</td></tr></tfoot></table></div>';
   }
 
   // ---- Variations ----
