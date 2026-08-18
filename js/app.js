@@ -364,7 +364,7 @@
   // present (set below or via window.APP_CONFIG.TURNSTILE_SITE_KEY). When set, the
   // login + signup render the widget and pass its token to Supabase; when empty,
   // auth behaves exactly as before (no widget, no token).
-  var TURNSTILE_SITE_KEY = (window.APP_CONFIG && window.APP_CONFIG.TURNSTILE_SITE_KEY) || "";
+  var TURNSTILE_SITE_KEY = (window.APP_CONFIG && window.APP_CONFIG.TURNSTILE_SITE_KEY) || "0x4AAAAAAEUjGpVLqP-zNy-m";
   function mountTurnstile() {
     if (!TURNSTILE_SITE_KEY) return;
     window.__cfToken = "";
