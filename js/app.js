@@ -203,6 +203,7 @@
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
         { label: "Getting started", action: "settings.setup" },
+        { label: "Pending signups", action: "platform.pending" },
         { label: "Companies", action: "companies" },
         { label: "Users & Roles", action: "settings.users" },
         { label: "Roles & Permissions", action: "settings.roles" },
@@ -231,7 +232,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "platform.pending": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -303,6 +304,7 @@
     return mp.f[fa[1]] !== false;                  // parts are opt-out: allowed unless explicitly off
   }
   function canGo(action) {
+    if (action.indexOf("platform.") === 0) return !!S.isPlatformAdmin;
     var mod = moduleForAction(action);
     if (mod && !canView(mod)) return false;
     if (!featureAllowed(action)) return false;
@@ -405,6 +407,7 @@
     if (!S.company && S.isPlatformAdmin && S.homeOrgIds && S.homeOrgIds.length) S.company = S.companies.filter(function (c) { return S.homeOrgIds.indexOf(c.org_id) >= 0; })[0];
     if (!S.company) S.company = S.companies[0];
     if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
+    if (S.org && (S.org.status === "pending" || S.org.status === "rejected") && !S.isPlatformAdmin) { renderPendingApproval(S.org.status); return; }
     S.role = await loadRole();
     S.types = (await sb.from("account_types").select("*")).data || [];
     maybeLogSupport();
@@ -413,45 +416,83 @@
   // First-run for a brand-new signup with no company yet: let them create their company
   // right here (calls the create_org_for_me RPC = org + owner membership + company), then
   // boot straight into the app (where the Getting-started checklist takes over).
+  var TC_VERSION = "v1";
+  // A brand-new signup applies for access: a few KYC questions + Terms acceptance.
+  // apply_for_company creates a PENDING org; a Space Work admin approves within 6h.
   function renderNoCompany() {
+    var ss = 'style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px"';
+    var btypes = ["General contractor", "Subcontractor", "Property developer", "Consultant / engineering", "Facade / cladding", "Fit-out / interiors", "Supplier / trading", "Other"];
+    var emps = ["1-5", "6-20", "21-50", "51-200", "200+"];
     root.innerHTML =
-      '<div class="login"><div class="card">' +
+      '<div class="login"><div class="card" style="width:560px;max-width:100%;text-align:left">' +
       '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div><div class="byline">by Space Work</div></div>' +
-      '<h1>Create your company</h1>' +
-      '<p class="sub">Welcome, ' + esc(S.user.email) + '. Set up your company to start using Orbit &mdash; you can add more companies and invite your team later.</p>' +
+      '<h1>Apply for access</h1>' +
+      '<p class="sub">Welcome, ' + esc(S.user.email) + '. Tell us a little about your business. We review new accounts and email you within 6 hours.</p>' +
       '<label for="nc-name">Company name</label><input id="nc-name" placeholder="e.g. Skyline Facades SARL" autocomplete="organization">' +
-      '<label for="nc-country">Country</label><input id="nc-country" placeholder="e.g. Lebanon" autocomplete="country-name">' +
-      '<label for="nc-cur">Currency</label><input id="nc-cur" value="USD" maxlength="3" placeholder="USD" style="text-transform:uppercase">' +
-      '<label for="nc-group">Group name <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-group" placeholder="If you run several companies under one group">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-country">Country</label><input id="nc-country" placeholder="e.g. Lebanon" autocomplete="country-name"></div><div><label for="nc-city">City <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-city" placeholder="e.g. Beirut"></div></div>' +
+      '<label for="nc-btype">Business type</label><select id="nc-btype" ' + ss + '><option value="">Select...</option>' + btypes.map(function (b) { return '<option>' + b + '</option>'; }).join("") + '</select>' +
+      '<label for="nc-scope">Scope of work</label><input id="nc-scope" placeholder="e.g. Aluminium &amp; glazing facades, curtain walling">' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-emp">Number of employees</label><select id="nc-emp" ' + ss + '><option value="">Select...</option>' + emps.map(function (e) { return '<option>' + e + '</option>'; }).join("") + '</select></div><div><label for="nc-phone">Contact phone</label><input id="nc-phone" placeholder="+961 ..." autocomplete="tel"></div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-reg">Registration / Tax no. <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-reg"></div><div><label for="nc-cur">Currency</label><input id="nc-cur" value="USD" maxlength="3" style="text-transform:uppercase"></div></div>' +
+      '<label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;font-size:13px;color:var(--ink2);font-weight:400"><input type="checkbox" id="nc-tc" style="margin-top:3px"><span>I have read and agree to the <a id="nc-terms" style="cursor:pointer">Terms &amp; Conditions</a> on behalf of my company.</span></label>' +
       '<div class="err" id="nc-err" role="alert"></div>' +
-      '<button class="btn pri" id="nc-create" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Create company and continue</button>' +
+      '<button class="btn pri" id="nc-create" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Submit application</button>' +
       '<div class="switch">Signed in as ' + esc(S.user.email) + ' &middot; <a id="nc-out">Sign out</a></div>' +
       '</div></div>';
-    var nameEl = document.getElementById("nc-name"); if (nameEl) nameEl.focus();
+    document.getElementById("nc-name").focus();
     document.getElementById("nc-out").onclick = signOut;
+    document.getElementById("nc-terms").onclick = openTermsModal;
     var create = document.getElementById("nc-create");
-    ["nc-name", "nc-country", "nc-cur", "nc-group"].forEach(function (id) {
-      var el = document.getElementById(id); if (el) el.addEventListener("keydown", function (e) { if (e.key === "Enter") create.click(); });
-    });
     create.onclick = async function () {
       var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
-      var name = g("nc-name"), country = g("nc-country"), cur = (g("nc-cur") || "USD").toUpperCase().slice(0, 3) || "USD", group = g("nc-group") || name;
       var err = document.getElementById("nc-err"); err.textContent = "";
-      if (!name) { err.textContent = "Please enter your company name."; nameEl.focus(); return; }
-      create.disabled = true; create.textContent = "Creating...";
-      var res = await sb.rpc("create_org_for_me", { p_org: group, p_company: name, p_currency: cur });
-      if (res.error || !res.data) {
-        err.textContent = "Could not create the company: " + ((res.error && res.error.message) || "unexpected error") + ". Please try again.";
-        create.disabled = false; create.textContent = "Create company and continue"; return;
-      }
-      if (country) { // stamp the country we collected onto the new company (best-effort)
-        try {
-          var co = (await sb.from("companies").select("id").eq("org_id", res.data).order("created_at", { ascending: true }).limit(1)).data;
-          if (co && co[0]) await sb.from("companies").update({ country: country }).eq("id", co[0].id);
-        } catch (e) { /* not critical; Getting started will prompt for it */ }
-      }
-      boot(); // reload: the new company is now active -> home + Getting-started checklist
+      var name = g("nc-name"), country = g("nc-country"), btype = g("nc-btype"), scope = g("nc-scope"), emp = g("nc-emp"), phone = g("nc-phone");
+      if (!name) { err.textContent = "Enter your company name."; return; }
+      if (!country) { err.textContent = "Enter your country."; return; }
+      if (!btype) { err.textContent = "Select your business type."; return; }
+      if (!scope) { err.textContent = "Describe your scope of work."; return; }
+      if (!emp) { err.textContent = "Select your number of employees."; return; }
+      if (!phone) { err.textContent = "Enter a contact phone."; return; }
+      if (!document.getElementById("nc-tc").checked) { err.textContent = "Please accept the Terms & Conditions to continue."; return; }
+      create.disabled = true; create.textContent = "Submitting...";
+      var res = await sb.rpc("apply_for_company", { p_company: name, p_country: country, p_business_type: btype, p_scope: scope, p_employees: emp, p_phone: phone, p_city: g("nc-city"), p_reg_no: g("nc-reg"), p_currency: (g("nc-cur") || "USD").toUpperCase().slice(0, 3) || "USD", p_tc_version: TC_VERSION });
+      if (res.error || !res.data) { err.textContent = "Could not submit: " + ((res.error && res.error.message) || "unexpected error") + "."; create.disabled = false; create.textContent = "Submit application"; return; }
+      boot(); // -> pending gate -> renderPendingApproval
     };
+  }
+  function renderPendingApproval(status) {
+    var rejected = status === "rejected";
+    root.innerHTML = '<div class="login"><div class="card" style="text-align:center">' +
+      '<div class="brandrow" style="justify-content:center"><div class="lockup">' + orbitLockup() + '</div></div>' +
+      '<div style="font-size:38px;margin:6px 0">' + (rejected ? "&#9888;&#65039;" : "&#9203;") + '</div>' +
+      '<h1 style="font-size:20px">' + (rejected ? "Application not approved" : "Application received") + '</h1>' +
+      '<p class="sub">' + (rejected
+        ? "Your account was not approved. If you think this is a mistake, reply to our email or contact us."
+        : "Thanks, " + esc(S.user.email) + ". Your account is under review &mdash; we&rsquo;ll email you within <b>6 hours</b>. You can close this window; sign back in after you hear from us.") + '</p>' +
+      '<button class="btn" id="pa-out" style="margin-top:14px">Sign out</button>' +
+      '</div></div>';
+    document.getElementById("pa-out").onclick = signOut;
+  }
+  function termsHtml() {
+    return '<p class="muted" style="margin-top:0">Draft ' + TC_VERSION + ' &mdash; <b>[FILL: have a lawyer review before onboarding paying customers.]</b></p><ol style="padding-left:18px;font-size:13.5px;line-height:1.6">' +
+      '<li><b>Parties.</b> These terms are between <b>[FILL: legal entity, e.g. Space Work SARL]</b> ("Space Work", "we") and the company that registers ("you").</li>' +
+      '<li><b>Service.</b> Orbit is a cloud construction-management platform provided on an as-is, as-available basis. Access requires our approval of your application.</li>' +
+      '<li><b>Your account &amp; data.</b> You are responsible for your account, your users and the accuracy of the data you enter. You keep ownership of your data and grant us the limited rights needed to host and operate the service for you.</li>' +
+      '<li><b>Acceptable use.</b> No unlawful use; no attempts to breach security or other tenants&rsquo; isolation; no reselling of the service without our agreement.</li>' +
+      '<li><b>Fees.</b> [FILL: is Orbit paid? subscription / per-company pricing / free during beta.]</li>' +
+      '<li><b>Privacy &amp; security.</b> We process personal data to run the service and apply reasonable security measures, in line with applicable data-protection law (including GDPR / CCPA where relevant). [FILL: link your privacy policy.]</li>' +
+      '<li><b>Availability &amp; liability.</b> We aim for high availability but do not warrant uninterrupted service. To the maximum extent permitted by law, our liability is limited [FILL: cap, e.g. to the fees paid in the prior 3 months].</li>' +
+      '<li><b>Suspension &amp; termination.</b> We may suspend or terminate accounts that breach these terms or whose application is rejected. You may stop using the service at any time.</li>' +
+      '<li><b>Changes.</b> We may update these terms; continued use means you accept the current version.</li>' +
+      '<li><b>Governing law.</b> These terms are governed by the laws of <b>[FILL: country / jurisdiction]</b> and disputes are subject to its courts.</li>' +
+      '<li><b>Contact.</b> [FILL: support / legal email].</li>' +
+      '</ol>';
+  }
+  function openTermsModal() {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:640px"><h3>Terms &amp; Conditions</h3><div class="form" style="max-height:60vh;overflow:auto">' + termsHtml() + '</div><div class="foot"><button class="btn pri" id="tc-close" style="background:var(--accent);border-color:var(--accent)">Close</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("tc-close").onclick = function () { m.remove(); };
   }
 
   // ======================= APP SWITCHER (HOME) =======================
@@ -1008,6 +1049,7 @@
       case "settings.roles": return renderRoles();
       case "settings.setup": return renderSetup();
       case "settings.import": return renderImport();
+      case "platform.pending": return renderPendingSignups();
       case "settings.numbering": return renderNumbering();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
@@ -4767,6 +4809,36 @@
       document.getElementById("su-continue").onclick = function () { goApp("settings.setup"); };
       document.getElementById("su-hide").onclick = function () { localStorage.setItem("orbit_setup_hide_" + cid, "1"); var el = root.querySelector(".su-home"); if (el) el.remove(); };
     } catch (e) { /* nudge is best-effort */ }
+  }
+
+  // ============================ PLATFORM: PENDING SIGNUPS (approval) ============================
+  async function renderPendingSignups() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pending signups") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body");
+    if (!S.isPlatformAdmin) { body.innerHTML = '<div style="padding:18px"><div class="o-empty">Platform admins only.</div></div>'; return; }
+    var pend = ((await sb.rpc("pending_signups")).data) || [];
+    if (!pend.length) { body.innerHTML = '<div style="padding:18px"><div class="o-empty2"><div class="o-empty2-t">No pending applications</div><div class="o-empty2-h">New signups that are awaiting review will appear here for you to approve or reject.</div></div></div>'; return; }
+    function kv(k, v) { return v ? '<div><span style="color:var(--ink3)">' + esc(k) + ':</span> ' + esc(v) + '</div>' : ""; }
+    var cards = pend.map(function (o) {
+      return '<div class="card"><div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap">' +
+        '<div style="flex:1;min-width:240px"><h3 style="margin:0 0 3px">' + esc(o.name) + '</h3>' +
+        '<div class="mini">' + esc(o.business_type || "") + ((o.country || o.city) ? ' &middot; ' + esc((o.city ? o.city + ", " : "") + (o.country || "")) : "") + '</div>' +
+        '<div style="margin-top:8px;font-size:13px;color:var(--ink2);display:flex;flex-direction:column;gap:3px">' +
+        kv("Scope of work", o.scope_of_work) + kv("Employees", o.employee_count) + kv("Phone", o.contact_phone) + kv("Reg / Tax no.", o.reg_no) + kv("Applied", (o.applied_at || "").slice(0, 16).replace("T", " ")) + kv("Terms accepted", o.tc_version) +
+        '</div></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;flex:none"><button class="btn pri pa-appr" data-id="' + o.id + '" data-name="' + esc(o.name) + '" style="background:var(--good);border-color:var(--good)">Approve</button><button class="btn pa-rej" data-id="' + o.id + '" style="color:var(--bad)">Reject</button></div>' +
+        '</div></div>';
+    }).join("");
+    body.innerHTML = '<div style="padding:16px;max-width:880px"><div class="sub" style="margin:0 0 12px"><b>' + pend.length + '</b> application' + (pend.length === 1 ? "" : "s") + ' awaiting review. Approving unlocks the account immediately; the applicant can then sign in.</div>' + cards + '</div>';
+    async function setStatus(id, status, verb) {
+      var r = await sb.rpc("set_org_status", { p_org: id, p_status: status });
+      if (r.error) { toast(r.error.message); return; }
+      toast(verb); renderPendingSignups();
+    }
+    document.querySelectorAll(".pa-appr").forEach(function (b) { b.onclick = function () { setStatus(b.dataset.id, "active", "Approved " + b.dataset.name); }; });
+    document.querySelectorAll(".pa-rej").forEach(function (b) { b.onclick = function () { setStatus(b.dataset.id, "rejected", "Rejected"); }; });
   }
 
   // ============================ DATA IMPORT (ORB-15) ============================
