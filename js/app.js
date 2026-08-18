@@ -45,7 +45,13 @@
   // central modal accessibility (ORB-07): every .modal gets dialog semantics + autofocus + Escape-to-close
   function _a11yEnhanceModal(m) { if (!m || m._a11y) return; m._a11y = 1; var sheet = m.querySelector(".sheet") || m; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); setTimeout(function () { var f = m.querySelector("input:not([type=hidden]),select,textarea,button"); if (f) { try { f.focus(); } catch (e) { } } }, 40); }
   (function initModalA11y() {
-    function start() { try { new MutationObserver(function (ms) { ms.forEach(function (mu) { [].forEach.call(mu.addedNodes || [], function (n) { if (n.nodeType === 1 && n.classList && n.classList.contains("modal")) _a11yEnhanceModal(n); }); }); }).observe(document.body, { childList: true }); } catch (e) { } }
+    // stamp an accessible name on the prominent record-name field (it otherwise has only a placeholder)
+    function _a11yTitles(n) {
+      if (!n.querySelectorAll) return;
+      [].forEach.call(n.querySelectorAll(".o-title input[placeholder]:not([aria-label]):not([aria-labelledby])"), function (inp) { inp.setAttribute("aria-label", inp.getAttribute("placeholder")); });
+      if (n.matches && n.matches(".o-title input[placeholder]:not([aria-label])")) n.setAttribute("aria-label", n.getAttribute("placeholder"));
+    }
+    function start() { try { new MutationObserver(function (ms) { ms.forEach(function (mu) { [].forEach.call(mu.addedNodes || [], function (n) { if (n.nodeType !== 1) return; if (n.classList && n.classList.contains("modal")) _a11yEnhanceModal(n); _a11yTitles(n); }); }); }).observe(document.body, { childList: true, subtree: true }); } catch (e) { } }
     if (document.body) start(); else document.addEventListener("DOMContentLoaded", start);
     document.addEventListener("keydown", function (e) { if (e.key === "Escape") { var mods = document.querySelectorAll(".modal.on"); if (mods.length) { var top = mods[mods.length - 1]; var c = top.querySelector('[id$="-cancel"]') || top.querySelector(".foot .btn:not(.pri)"); if (c) c.click(); else top.remove(); } } });
   })();
