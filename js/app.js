@@ -562,7 +562,7 @@
   // ORB-11: a compact owner/manager KPI strip on the home, above the app grid (money roles only)
   async function homeDashInject() {
     try {
-      if (!S.company || !canSeeMoney() || !canView("accounting")) return;
+      if (!S.company || !canView("accounting")) return;   // money values self-mask via money() for hidden roles
       var cid = S.company.id, cc = S.company.currency_code, td = today();
       var invs = (await sb.from("invoices").select("amount_residual,due_date,state,move_type").eq("company_id", cid).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
       var recv = 0, overdue = 0;
