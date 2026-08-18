@@ -210,6 +210,7 @@
         { label: "Approval Rules", action: "approvals.rules" },
         { label: "Portal Access", action: "portal.admin" },
         { label: "Document Numbering", action: "settings.numbering" },
+        { label: "Import Data", action: "settings.import" },
         { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
@@ -230,7 +231,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -1006,6 +1007,7 @@
       case "settings.users": return renderUsers();
       case "settings.roles": return renderRoles();
       case "settings.setup": return renderSetup();
+      case "settings.import": return renderImport();
       case "settings.numbering": return renderNumbering();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
@@ -4765,6 +4767,105 @@
       document.getElementById("su-continue").onclick = function () { goApp("settings.setup"); };
       document.getElementById("su-hide").onclick = function () { localStorage.setItem("orbit_setup_hide_" + cid, "1"); var el = root.querySelector(".su-home"); if (el) el.remove(); };
     } catch (e) { /* nudge is best-effort */ }
+  }
+
+  // ============================ DATA IMPORT (ORB-15) ============================
+  // per-entity import spec: fields = [key, label, required, type]
+  var IMPORT_SPECS = {
+    customers: { label: "Customers", table: "partners", scope: "org", extra: { is_customer: true, is_company: true }, fields: [["name", "Name", true], ["email", "Email", false], ["phone", "Phone", false], ["city", "City", false], ["country", "Country", false], ["vat", "Tax / VAT no.", false]] },
+    vendors: { label: "Vendors / Suppliers", table: "partners", scope: "org", extra: { is_vendor: true, is_company: true }, fields: [["name", "Name", true], ["email", "Email", false], ["phone", "Phone", false], ["city", "City", false], ["country", "Country", false], ["vat", "Tax / VAT no.", false]] },
+    products: { label: "Products / Items", table: "products", scope: "company", extra: { is_active: true }, fields: [["name", "Name", true], ["default_code", "Code", false], ["list_price", "Sale price", false, "num"], ["cost_price", "Cost price", false, "num"]] },
+    cost_codes: { label: "Cost Codes", table: "cost_codes", scope: "company", extra: { is_active: true }, fields: [["code", "Code", true], ["name", "Name", false], ["category", "Category", false]] },
+    projects: { label: "Projects", table: "projects", scope: "company", extra: { is_active: true }, fields: [["name", "Name", true], ["contract_value", "Contract value", false, "num"]] }
+  };
+  function csvParse(text) {
+    text = String(text).replace(/^﻿/, "");
+    var rows = [], row = [], cur = "", i = 0, q = false;
+    while (i < text.length) {
+      var ch = text[i];
+      if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i += 2; continue; } q = false; i++; continue; } cur += ch; i++; continue; }
+      if (ch === '"') { q = true; i++; continue; }
+      if (ch === ',') { row.push(cur); cur = ""; i++; continue; }
+      if (ch === '\r') { i++; continue; }
+      if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ""; i++; continue; }
+      cur += ch; i++;
+    }
+    if (cur !== "" || row.length) { row.push(cur); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (c) { return (c || "").trim() !== ""; }); });
+  }
+  function importTemplate(spec) {
+    var header = spec.fields.map(function (f) { return csvCell(f[1] + (f[2] ? " *" : "")); }).join(",");
+    var example = spec.fields.map(function (f) { return csvCell(f[3] === "num" ? "0" : ("Example " + f[1])); }).join(",");
+    return "﻿" + header + "\r\n" + example;
+  }
+  function downloadBlob(name, text, mime) {
+    var blob = new Blob([text], { type: (mime || "text/csv") + ";charset=utf-8" });
+    var url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+  async function renderImport() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Import Data") + '</div><div class="o-body" id="o-body"></div></div>';
+    wireBc();
+    var keys = Object.keys(IMPORT_SPECS);
+    var entityOpts = keys.map(function (k) { return '<option value="' + k + '">' + esc(IMPORT_SPECS[k].label) + '</option>'; }).join("");
+    document.getElementById("o-body").innerHTML =
+      '<div style="padding:16px;max-width:820px"><div class="card">' +
+      '<h3 style="margin-top:0">Import data from a spreadsheet</h3>' +
+      '<div class="sub" style="margin:0 0 14px">Pick what to import, download the template, fill it in (keep the header row), and upload it. Columns marked <b>*</b> are required. Existing records are not changed &mdash; this adds new rows.</div>' +
+      '<div class="su-fg" style="max-width:340px"><label for="im-entity">What are you importing?</label><select id="im-entity">' + entityOpts + '</select></div>' +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><button class="btn" id="im-tmpl">Download template</button><label class="btn" for="im-file" style="cursor:pointer;background:var(--accent);border-color:var(--accent);color:#fff">Choose CSV file</label><input id="im-file" type="file" accept=".csv,text/csv" style="display:none"></div>' +
+      '<div id="im-fields" class="mini"></div>' +
+      '<div id="im-preview" style="margin-top:14px"></div>' +
+      '</div></div>';
+    function showFields() {
+      var spec = IMPORT_SPECS[document.getElementById("im-entity").value];
+      document.getElementById("im-fields").innerHTML = 'Columns: ' + spec.fields.map(function (f) { return '<b>' + esc(f[1]) + '</b>' + (f[2] ? ' <span style="color:var(--bad)">*</span>' : ''); }).join(", ");
+      document.getElementById("im-preview").innerHTML = "";
+    }
+    document.getElementById("im-entity").onchange = showFields; showFields();
+    document.getElementById("im-tmpl").onclick = function () { var k = document.getElementById("im-entity").value, spec = IMPORT_SPECS[k]; downloadBlob(k + "_template.csv", importTemplate(spec)); toast("Template downloaded"); };
+    document.getElementById("im-file").onchange = function () {
+      var file = this.files && this.files[0]; if (!file) return;
+      var rd = new FileReader();
+      rd.onload = function () { previewImport(document.getElementById("im-entity").value, csvParse(rd.result)); };
+      rd.readAsText(file);
+    };
+    function previewImport(entKey, rows) {
+      var spec = IMPORT_SPECS[entKey], prev = document.getElementById("im-preview");
+      if (rows.length < 2) { prev.innerHTML = '<div class="ob-banner">That file has no data rows. Use the template and add at least one row under the header.</div>'; return; }
+      var headers = rows[0].map(function (h) { return (h || "").replace(/\*/g, "").trim().toLowerCase(); });
+      var colFor = {};
+      spec.fields.forEach(function (f) { var idx = headers.indexOf(f[1].toLowerCase()); if (idx < 0) idx = headers.indexOf(f[0].toLowerCase()); colFor[f[0]] = idx; });
+      var data = rows.slice(1).map(function (r) {
+        var obj = { __err: [] };
+        spec.fields.forEach(function (f) { var v = colFor[f[0]] >= 0 ? (r[colFor[f[0]]] || "").trim() : ""; if (f[2] && !v) obj.__err.push(f[1]); obj[f[0]] = v; });
+        return obj;
+      });
+      var okN = data.filter(function (d) { return !d.__err.length; }).length, badN = data.length - okN;
+      var head = spec.fields.map(function (f) { return '<th>' + esc(f[1]) + (f[2] ? ' *' : '') + '</th>'; }).join("");
+      var body = data.slice(0, 25).map(function (d) {
+        var tds = spec.fields.map(function (f) { var bad = f[2] && !d[f[0]]; return '<td' + (bad ? ' style="background:var(--bad-s);color:var(--bad)"' : '') + '>' + esc(d[f[0]] || (bad ? "missing" : "")) + '</td>'; }).join("");
+        return '<tr>' + tds + '</tr>';
+      }).join("");
+      prev.innerHTML = '<div class="sub" style="margin:0 0 8px"><b>' + data.length + '</b> rows found &middot; <span style="color:var(--good)">' + okN + ' ready</span>' + (badN ? ' &middot; <span style="color:var(--bad)">' + badN + ' missing a required field (skipped)</span>' : '') + (data.length > 25 ? ' &middot; showing first 25' : '') + '</div>' +
+        '<div class="o-rt-wrap"><table class="o-list"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
+        '<button class="btn pri" id="im-go" style="margin-top:12px;background:var(--accent);border-color:var(--accent)"' + (okN ? '' : ' disabled') + '>Import ' + okN + ' row' + (okN === 1 ? '' : 's') + '</button>';
+      var go = document.getElementById("im-go");
+      if (go) go.onclick = async function () {
+        go.disabled = true; go.textContent = "Importing...";
+        var payload = data.filter(function (d) { return !d.__err.length; }).map(function (d) {
+          var row = {}; for (var kk in spec.extra) row[kk] = spec.extra[kk];
+          row[spec.scope === "org" ? "org_id" : "company_id"] = spec.scope === "org" ? S.company.org_id : S.company.id;
+          spec.fields.forEach(function (f) { var v = d[f[0]]; if (v === "" || v == null) return; row[f[0]] = f[3] === "num" ? (Number(v) || 0) : v; });
+          return row;
+        });
+        var res = await sb.from(spec.table).insert(payload);
+        if (res.error) { toast("Import failed: " + res.error.message); go.disabled = false; go.textContent = "Import " + okN + " rows"; return; }
+        toast("Imported " + payload.length + " " + spec.label.toLowerCase()); prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good);border:0">Imported ' + payload.length + ' rows successfully.</div>';
+      };
+    }
   }
 
   // ============================ RFQ / SUPPLIER COMPARISON (ORB-14) ============================
