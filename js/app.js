@@ -387,11 +387,48 @@
     S.types = (await sb.from("account_types").select("*")).data || [];
     renderHome();
   }
+  // First-run for a brand-new signup with no company yet: let them create their company
+  // right here (calls the create_org_for_me RPC = org + owner membership + company), then
+  // boot straight into the app (where the Getting-started checklist takes over).
   function renderNoCompany() {
-    root.innerHTML = '<div class="login"><div class="card"><div class="logo">' + orbitMark() + '</div><h1>Welcome to Orbit</h1>' +
-      '<p class="sub">You are signed in as ' + esc(S.user.email) + ', but you are not attached to a company yet.</p>' +
-      '<button class="btn" id="out" style="margin-top:12px">Sign out</button></div></div>';
-    document.getElementById("out").onclick = signOut;
+    root.innerHTML =
+      '<div class="login"><div class="card">' +
+      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div><div class="byline">by Space Work</div></div>' +
+      '<h1>Create your company</h1>' +
+      '<p class="sub">Welcome, ' + esc(S.user.email) + '. Set up your company to start using Orbit &mdash; you can add more companies and invite your team later.</p>' +
+      '<label for="nc-name">Company name</label><input id="nc-name" placeholder="e.g. Skyline Facades SARL" autocomplete="organization">' +
+      '<label for="nc-country">Country</label><input id="nc-country" placeholder="e.g. Lebanon" autocomplete="country-name">' +
+      '<label for="nc-cur">Currency</label><input id="nc-cur" value="USD" maxlength="3" placeholder="USD" style="text-transform:uppercase">' +
+      '<label for="nc-group">Group name <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-group" placeholder="If you run several companies under one group">' +
+      '<div class="err" id="nc-err" role="alert"></div>' +
+      '<button class="btn pri" id="nc-create" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Create company and continue</button>' +
+      '<div class="switch">Signed in as ' + esc(S.user.email) + ' &middot; <a id="nc-out">Sign out</a></div>' +
+      '</div></div>';
+    var nameEl = document.getElementById("nc-name"); if (nameEl) nameEl.focus();
+    document.getElementById("nc-out").onclick = signOut;
+    var create = document.getElementById("nc-create");
+    ["nc-name", "nc-country", "nc-cur", "nc-group"].forEach(function (id) {
+      var el = document.getElementById(id); if (el) el.addEventListener("keydown", function (e) { if (e.key === "Enter") create.click(); });
+    });
+    create.onclick = async function () {
+      var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
+      var name = g("nc-name"), country = g("nc-country"), cur = (g("nc-cur") || "USD").toUpperCase().slice(0, 3) || "USD", group = g("nc-group") || name;
+      var err = document.getElementById("nc-err"); err.textContent = "";
+      if (!name) { err.textContent = "Please enter your company name."; nameEl.focus(); return; }
+      create.disabled = true; create.textContent = "Creating...";
+      var res = await sb.rpc("create_org_for_me", { p_org: group, p_company: name, p_currency: cur });
+      if (res.error || !res.data) {
+        err.textContent = "Could not create the company: " + ((res.error && res.error.message) || "unexpected error") + ". Please try again.";
+        create.disabled = false; create.textContent = "Create company and continue"; return;
+      }
+      if (country) { // stamp the country we collected onto the new company (best-effort)
+        try {
+          var co = (await sb.from("companies").select("id").eq("org_id", res.data).order("created_at", { ascending: true }).limit(1)).data;
+          if (co && co[0]) await sb.from("companies").update({ country: country }).eq("id", co[0].id);
+        } catch (e) { /* not critical; Getting started will prompt for it */ }
+      }
+      boot(); // reload: the new company is now active -> home + Getting-started checklist
+    };
   }
 
   // ======================= APP SWITCHER (HOME) =======================
