@@ -1505,6 +1505,7 @@
     var partnerField = editable
       ? '<select id="f-partner">' + opt(partners, inv ? inv.partner_id : null, function (p) { return p.id; }, function (p) { return p.name; }) + '</select>'
       : '<span class="v">' + esc(inv && inv.partners ? inv.partners.name : "") + '</span>';
+    var invCosts = isSale ? [] : (((await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data) || []);
     var groups =
       '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
@@ -1514,6 +1515,7 @@
       (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
       fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>', "When payment is expected. Set automatically from the payment terms; you can override it.") +
       fld("Project", editable ? '<select id="f-proj"><option value="">(none)</option>' + projects.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((projects.filter(function (pr) { return inv && pr.id === inv.project_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a project/site so its cost and revenue roll up in the Project P&L.") +
+      (isSale ? "" : fld("Cost Code", editable ? '<select id="f-costcode"><option value="">(none)</option>' + invCosts.map(function (c) { return '<option value="' + c.id + '"' + ((inv && inv.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((invCosts.filter(function (c) { return inv && c.id === inv.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing — this bill rolls up under this code in the Job Cost report.")) +
       '</div></div>';
 
     // notebook
@@ -1638,6 +1640,7 @@
         partner_id: partnerId, invoice_date: document.getElementById("f-date").value,
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
         project_id: document.getElementById("f-proj") ? (document.getElementById("f-proj").value || null) : null,
+        cost_code_id: document.getElementById("f-costcode") ? (document.getElementById("f-costcode").value || null) : null,
         amount_untaxed: untax, amount_total: untax, amount_residual: untax
       };
       var invId = id;
@@ -1920,6 +1923,7 @@
       return null;
     }
     var orderProjects = ((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var orderCosts = isSale ? [] : (((await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data) || []);
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
     document.querySelector(".o-bc span:last-child").textContent = order ? (order.number || "Draft") : "New";
@@ -1937,6 +1941,7 @@
     var groups = '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Project", editable ? '<select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0] || {}).name || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L.") +
+      (isSale ? "" : fld("Cost Code", editable ? '<select id="o-costcode"><option value="">(none)</option>' + orderCosts.map(function (c) { return '<option value="' + c.id + '"' + ((order && order.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderCosts.filter(function (c) { return order && c.id === order.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing — this PO rolls up under this code in the Job Cost report.")) +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div><div>' +
       fld("Order Date", editable ? '<input id="o-date" type="date" value="' + (order ? order.date_order || today() : today()) + '">' : '<span class="v">' + esc(order.date_order || "") + '</span>') +
@@ -2002,6 +2007,7 @@
       var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
       var tax = lns.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
       var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(), project_id: document.getElementById("o-proj") ? (document.getElementById("o-proj").value || null) : null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
+      if (!isSale) hdr.cost_code_id = document.getElementById("o-costcode") ? (document.getElementById("o-costcode").value || null) : null;
       var oid = id;
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.currency_code = S.company.currency_code; hdr.state = confirmIt ? (isSale ? "sale" : "purchase") : "draft"; hdr.number = await nextOrderNumber(kind);
@@ -6944,17 +6950,13 @@
     var el = document.getElementById("jc-table"); if (!el) return;
     var codes = (await sb.from("cost_codes").select("id,code,name,sort").eq("company_id", S.company.id).order("sort")).data || [];
     var buds = (await sb.from("project_budgets").select("cost_code_id,amount").eq("project_id", projectId)).data || [];
-    var pos = (await sb.from("purchase_orders").select("id,state").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
-    var poIds = pos.filter(function (p) { return ["sent", "purchase", "done"].indexOf(p.state) >= 0; }).map(function (p) { return p.id; });
-    var poLines = poIds.length ? ((await sb.from("purchase_order_lines").select("cost_code_id,price_subtotal,order_id").in("order_id", poIds)).data || []) : [];
-    var bills = (await sb.from("invoices").select("id,state").eq("company_id", S.company.id).eq("project_id", projectId).eq("move_type", "in_invoice")).data || [];
-    var billIds = bills.filter(function (b) { return b.state === "posted"; }).map(function (b) { return b.id; });
-    var billLines = billIds.length ? ((await sb.from("invoice_lines").select("cost_code_id,quantity,unit_price,invoice_id").in("invoice_id", billIds)).data || []) : [];
+    var pos = (await sb.from("purchase_orders").select("cost_code_id,state,amount_untaxed,amount_total").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var bills = (await sb.from("invoices").select("cost_code_id,state,amount_untaxed,amount_total").eq("company_id", S.company.id).eq("project_id", projectId).eq("move_type", "in_invoice")).data || [];
     var map = {};
     function bucket(id) { id = id || "_none"; if (!map[id]) map[id] = { budget: 0, committed: 0, actual: 0 }; return map[id]; }
     buds.forEach(function (b) { bucket(b.cost_code_id).budget += Number(b.amount) || 0; });
-    poLines.forEach(function (l) { bucket(l.cost_code_id).committed += Number(l.price_subtotal) || 0; });
-    billLines.forEach(function (l) { bucket(l.cost_code_id).actual += (Number(l.quantity) || 0) * (Number(l.unit_price) || 0); });
+    pos.forEach(function (p) { if (["sent", "purchase", "done"].indexOf(p.state) >= 0) bucket(p.cost_code_id).committed += Number(p.amount_untaxed) || Number(p.amount_total) || 0; });
+    bills.forEach(function (b) { if (b.state === "posted") bucket(b.cost_code_id).actual += Number(b.amount_untaxed) || Number(b.amount_total) || 0; });
     var codeById = {}; codes.forEach(function (c) { codeById[c.id] = c; });
     var order = codes.map(function (c) { return c.id; }).filter(function (id) { return map[id]; });
     Object.keys(map).forEach(function (id) { if (id !== "_none" && order.indexOf(id) < 0) order.push(id); });
