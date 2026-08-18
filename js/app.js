@@ -322,6 +322,13 @@
       return orgRole || globalRole || { slug: slug, full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 };
     } catch (e) { return { slug: "owner", full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 }; }
   }
+  // platform-operator "support mode": true when I'm an operator viewing a company outside my own orgs
+  function isSupportView() { return !!(S.isPlatformAdmin && S.company && S.company.org_id && S.homeOrgIds && S.homeOrgIds.indexOf(S.company.org_id) < 0); }
+  function maybeLogSupport() { if (isSupportView()) { try { sb.rpc("log_platform_access", { p_company: S.company.id }); } catch (e) { } } }
+  function supportBarHTML() {
+    if (!isSupportView()) return "";
+    return '<div class="o-support" role="status"><span class="o-support-dot" aria-hidden="true"></span>Support mode &mdash; you are viewing <b>' + esc(S.company.name) + '</b>, which is not your organisation. Your access is logged.</div>';
+  }
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
@@ -386,11 +393,20 @@
     S.user = sess.user;
     S.profile = (await sb.from("profiles").select("*").eq("id", S.user.id).maybeSingle()).data || {};
     S.companies = (await sb.from("companies").select("*").order("name")).data || [];
+    // platform (operator) support access: am I an operator, and which orgs are truly mine?
+    try {
+      var pa = await sb.rpc("is_platform_admin"); S.isPlatformAdmin = !!(pa && pa.data);
+      S.homeOrgIds = S.isPlatformAdmin ? ((await sb.rpc("my_home_orgs")).data || []) : null;
+    } catch (e) { S.isPlatformAdmin = false; S.homeOrgIds = null; }
     if (!S.companies.length) { renderNoCompany(); return; }
-    S.company = S.companies.filter(function (c) { return c.id === S.profile.active_company_id; })[0] || S.companies[0];
+    S.company = S.companies.filter(function (c) { return c.id === S.profile.active_company_id; })[0];
+    // an operator with no active company set should land in one of their OWN orgs, not a tenant
+    if (!S.company && S.isPlatformAdmin && S.homeOrgIds && S.homeOrgIds.length) S.company = S.companies.filter(function (c) { return S.homeOrgIds.indexOf(c.org_id) >= 0; })[0];
+    if (!S.company) S.company = S.companies[0];
     if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
     S.role = await loadRole();
     S.types = (await sb.from("account_types").select("*")).data || [];
+    maybeLogSupport();
     renderHome();
   }
   // First-run for a brand-new signup with no company yet: let them create their company
@@ -449,7 +465,7 @@
     }).join("");
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
-      '<div class="o-home">' +
+      '<div class="o-home">' + supportBarHTML() +
       '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
       '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
       '<div class="o-grid">' + tiles + soon + '</div></div>';
@@ -569,7 +585,7 @@
       return siItem(m.action, m.label, false);
     }).join("");
     root.innerHTML =
-      '<div class="o-app">' +
+      '<div class="o-app' + (isSupportView() ? " has-support" : "") + '">' + supportBarHTML() +
       '<a href="#o-main" class="o-skip">Skip to content</a>' +
       '<header class="o-navbar">' +
       '<button class="o-waffle" id="waffle" title="All apps" aria-label="All apps">' +
@@ -612,6 +628,7 @@
       resetSeqCache();
       if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
       S.role = await loadRole();
+      maybeLogSupport();
       await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
       if (S.app && !canViewApp(S.app)) { renderHome(); return; }
       if (S.app) go(S.action || APPS[S.app].home); else renderHome();
