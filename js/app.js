@@ -695,6 +695,7 @@
       '</button>' +
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(a.name) + '</span>' +
+      '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
       '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
@@ -706,6 +707,8 @@
       '</div>' +
       '</div>';
     document.getElementById("waffle").onclick = renderHome;
+    var _gs = document.getElementById("o-gs-in");
+    if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     var _bell = document.getElementById("bell"); if (_bell) _bell.onclick = function (e) { openNotifPanel(e.currentTarget); };
     refreshBell();
@@ -717,6 +720,44 @@
     var _stg = document.getElementById("osidetoggle");
     if (_stg) _stg.onclick = function () { S.sideCollapsed = !S.sideCollapsed; var sd = document.getElementById("oside"); if (sd) sd.classList.toggle("collapsed", S.sideCollapsed); localStorage.setItem("orbit_side", S.sideCollapsed ? "1" : "0"); _stg.setAttribute("aria-label", S.sideCollapsed ? "Expand menu" : "Collapse menu"); _stg.setAttribute("title", S.sideCollapsed ? "Expand menu" : "Collapse menu"); };
     applyAppColor(); applyFontScale(); highlightSide();
+  }
+  // ORB-19: global search across records, from the top bar
+  async function runGlobalSearch(q) {
+    var dd = document.getElementById("o-gs-dd"); if (!dd || !S.company) return;
+    q = (q || "").trim();
+    if (q.length < 2) { dd.innerHTML = ""; dd.style.display = "none"; return; }
+    var like = "%" + q.replace(/[%,_]/g, " ") + "%", cid = S.company.id, oid = S.company.org_id, results = [];
+    function P(ok, builder) { return ok ? builder() : Promise.resolve({ data: [] }); }
+    try {
+      var res = await Promise.all([
+        P(canView("accounting") || canView("contacts"), function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("org_id", oid).ilike("name", like).limit(6); }),
+        P(canView("projects"), function () { return sb.from("projects").select("id,name").eq("company_id", cid).ilike("name", like).limit(6); }),
+        P(canView("accounting"), function () { return sb.from("invoices").select("id,number,move_type").eq("company_id", cid).ilike("number", like).limit(6); }),
+        P(canView("purchase"), function () { return sb.from("purchase_orders").select("id,number").eq("company_id", cid).ilike("number", like).limit(6); }),
+        P(canView("sales") || canView("inventory"), function () { return sb.from("products").select("id,name,default_code").eq("company_id", cid).ilike("name", like).limit(6); })
+      ]);
+      (res[0].data || []).forEach(function (p) { results.push({ type: "partner", id: p.id, label: p.name, sub: p.is_customer ? "Customer" : (p.is_vendor ? "Vendor" : "Contact"), extra: p.is_vendor && !p.is_customer ? "vendor" : "customer" }); });
+      (res[1].data || []).forEach(function (p) { results.push({ type: "project", id: p.id, label: p.name, sub: "Project" }); });
+      (res[2].data || []).forEach(function (i) { results.push({ type: "invoice", id: i.id, label: i.number || "Draft", sub: i.move_type === "in_invoice" ? "Bill" : (i.move_type === "out_refund" ? "Credit note" : "Invoice"), extra: i.move_type || "out_invoice" }); });
+      (res[3].data || []).forEach(function (o) { results.push({ type: "po", id: o.id, label: o.number || "Draft", sub: "Purchase order" }); });
+      (res[4].data || []).forEach(function (p) { results.push({ type: "product", id: p.id, label: p.name, sub: p.default_code ? "Item · " + p.default_code : "Item" }); });
+    } catch (e) { }
+    if (!results.length) { dd.innerHTML = '<div class="o-gs-empty">No matches for “' + esc(q) + '”</div>'; dd.style.display = "block"; return; }
+    dd.innerHTML = results.slice(0, 24).map(function (r) { return '<button class="o-gs-item" data-type="' + r.type + '" data-id="' + r.id + '" data-extra="' + (r.extra || "") + '"><span class="o-gs-l">' + esc(r.label) + '</span><span class="o-gs-s">' + esc(r.sub) + '</span></button>'; }).join("");
+    dd.style.display = "block";
+    dd.querySelectorAll(".o-gs-item").forEach(function (b) { b.onmousedown = function (e) { e.preventDefault(); openRecord(b.dataset.type, b.dataset.id, b.dataset.extra); }; });
+  }
+  function openRecord(type, id, extra) {
+    var dd = document.getElementById("o-gs-dd"); if (dd) { dd.style.display = "none"; dd.innerHTML = ""; }
+    var gin = document.getElementById("o-gs-in"); if (gin) gin.value = "";
+    var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales" };
+    var app = appFor[type] || "accounting";
+    if (app !== S.app) { S.app = app; applyAppColor(); renderShell(); }
+    if (type === "partner") renderPartnerForm(id, extra || "customer");
+    else if (type === "project") renderProjectForm(id);
+    else if (type === "invoice") renderInvoiceForm(id, extra || "out_invoice");
+    else if (type === "po") renderOrderForm(id, "purchase");
+    else if (type === "product") renderProductForm(id);
   }
   function companySelectHTML(scope) {
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
