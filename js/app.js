@@ -60,6 +60,22 @@
   var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
   var isLocked = function (dateStr) { var ld = S.company && S.company.lock_date; return !!(ld && dateStr && String(dateStr).slice(0, 10) <= ld); };
   function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
+  // ORB-16: turn raw database / API errors into plain language for toasts
+  function errMsg(e) {
+    var m = (e && (e.message || e.msg)) || (typeof e === "string" ? e : "") || "Something went wrong.";
+    var s = String(m).toLowerCase();
+    if (/posted invoice|locked|greater than zero|non-zero/.test(s)) return m;            // our own friendly raises
+    if (/duplicate key|already exists|unique constraint/.test(s)) return "That already exists — a record with the same code or number is already saved.";
+    if (/foreign key/.test(s)) return "This record is linked to others, so it can’t be changed or removed that way.";
+    if (/not-null|null value in column/.test(s)) return "A required field is missing.";
+    if (/permission denied|row-level security|row level security|not allowed/.test(s)) return "You don’t have permission to do that.";
+    if (/check constraint|violates check/.test(s)) return "That value isn’t allowed here.";
+    if (/jwt|token is expired|not authenticated/.test(s)) return "Your session expired — please sign in again.";
+    if (/failed to fetch|networkerror|network request/.test(s)) return "Network problem — check your connection and try again.";
+    if (/invalid input syntax|invalid text representation|invalid input/.test(s)) return "One of the values is in the wrong format.";
+    if (/pgrst|constraint|relation .* does not exist|column .* does not exist|syntax error/.test(s)) return "Couldn’t save that — please check the fields and try again.";
+    return m;
+  }
   var SEARCH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
 
   // ======================= APP / MENU CONFIG =======================
@@ -540,7 +556,26 @@
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
+    homeDashInject();
     setupBannerInject();
+  }
+  // ORB-11: a compact owner/manager KPI strip on the home, above the app grid (money roles only)
+  async function homeDashInject() {
+    try {
+      if (!S.company || !canSeeMoney() || !canView("accounting")) return;
+      var cid = S.company.id, cc = S.company.currency_code, td = today();
+      var invs = (await sb.from("invoices").select("amount_residual,due_date,state,move_type").eq("company_id", cid).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
+      var recv = 0, overdue = 0;
+      invs.forEach(function (i) { var r = Number(i.amount_residual) || 0; if (r > 0.005) { recv += r; if (i.due_date && i.due_date < td) overdue += r; } });
+      var projN = ((await sb.from("projects").select("id", { count: "exact", head: true }).eq("company_id", cid).eq("is_active", true)).count) || 0;
+      var poRows = (await sb.from("purchase_orders").select("amount_total,state").eq("company_id", cid)).data || [];
+      var openPO = poRows.filter(function (p) { return ["sent", "purchase"].indexOf(p.state) >= 0; }).reduce(function (s, p) { return s + (Number(p.amount_total) || 0); }, 0);
+      var grid = root.querySelector(".o-grid"); if (!grid) return;
+      var cards = [["Receivable", cc + " " + money(recv), "rep.aged.recv"], ["Overdue", cc + " " + money(overdue), "rep.aged.recv", overdue > 0.005], ["Active projects", String(projN), "proj.list"], ["Committed (open POs)", cc + " " + money(openPO), "po.list"]];
+      var html = '<div class="o-hd">' + cards.map(function (c) { return '<button class="o-hd-k" data-go="' + c[2] + '" aria-label="' + esc(c[0]) + '"><div class="o-hd-v' + (c[3] ? " bad" : "") + '">' + esc(c[1]) + '</div><div class="o-hd-l">' + esc(c[0]) + '</div></button>'; }).join("") + '</div>';
+      grid.insertAdjacentHTML("beforebegin", html);
+      root.querySelectorAll(".o-hd-k[data-go]").forEach(function (b) { b.onclick = function () { goApp(b.dataset.go); }; });
+    } catch (e) { /* dashboard strip is best-effort */ }
   }
 
   function openApp(key) {
@@ -813,7 +848,7 @@
     var note = "";
     if (decision === "rejected") { note = window.prompt("Reason for rejection (optional):", "") || ""; }
     var r = await sb.from("approvals").update({ status: decision, approver_note: note, decided_by: (S.user && S.user.email) || "", decided_at: new Date().toISOString() }).eq("id", id);
-    if (r.error) { toast(r.error.message); return; }
+    if (r.error) { toast(errMsg(r.error)); return; }
     notify({ kind: "approval_result", title: (decision === "approved" ? "Approved" : "Rejected") + ": " + (appr.doc_number || APPR_DOC_LABEL[appr.doc_type] || appr.doc_type), body: (APPR_DOC_LABEL[appr.doc_type] || appr.doc_type) + " " + S.company.currency_code + " " + money(appr.doc_amount) + (note ? " - " + note : ""), link_action: appr.link_action || "approvals.inbox" });
     toast(decision === "approved" ? "Approved - the requester can now post it" : "Rejected");
     renderApprovalsInbox();
@@ -854,7 +889,7 @@
     document.getElementById("ar-save").onclick = async function () {
       var row = { name: gv("ar-name") || "Rule", doc_type: document.getElementById("ar-type").value, min_amount: parseFloat(gv("ar-min")) || 0, approver_employee_id: document.getElementById("ar-appr").value || null, is_active: document.getElementById("ar-active").value === "1" };
       var res; if (r.id) res = await sb.from("approval_rules").update(row).eq("id", r.id); else { row.company_id = S.company.id; res = await sb.from("approval_rules").insert(row); }
-      if (res.error) { toast(res.error.message); return; } m.remove(); toast("Saved"); go("approvals.rules");
+      if (res.error) { toast(errMsg(res.error)); return; } m.remove(); toast("Saved"); go("approvals.rules");
     };
   }
 
@@ -936,7 +971,7 @@
     document.getElementById("rp-save").onclick = async function () {
       var row = { name: gv("rp-name") || "Report", source: srcSel.value, measure: document.getElementById("rp-meas").value, group_by: document.getElementById("rp-dim").value, chart: document.getElementById("rp-chart").value };
       var r; if (rep.id) r = await sb.from("reports").update(row).eq("id", rep.id); else { row.company_id = S.company.id; r = await sb.from("reports").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); renderInsights();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); renderInsights();
     };
   }
 
@@ -983,7 +1018,7 @@
       if (!email || email.indexOf("@") < 0) { toast("Enter a valid email"); return; }
       var row = { partner_id: partnerId, email: email, role: document.getElementById("pi-role").value, is_active: document.getElementById("pi-active").value === "1" };
       var res; if (r.id) res = await sb.from("portal_access").update(row).eq("id", r.id); else { row.company_id = S.company.id; res = await sb.from("portal_access").insert(row); }
-      if (res.error) { toast(res.error.message); return; } m.remove(); toast("Portal access saved"); go("portal.admin");
+      if (res.error) { toast(errMsg(res.error)); return; } m.remove(); toast("Portal access saved"); go("portal.admin");
     };
   }
 
@@ -1445,7 +1480,7 @@
       if (!code || !(rate > 0)) { toast("Enter a currency and a positive rate"); return; }
       var row = { org_id: S.org.id, code: code, rate_date: document.getElementById("r-date").value, rate: rate, rate_type: document.getElementById("r-type").value };
       var r = await sb.from("currency_rates").insert(row);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Rate saved"); renderView();
     };
   }
@@ -1718,17 +1753,17 @@
         hdr.company_id = S.company.id; hdr.move_type = moveType; hdr.currency_code = S.company.currency_code; hdr.state = "draft";
         hdr.number = await nextNumber(moveType);
         var ins = await sb.from("invoices").insert(hdr).select("id").single();
-        if (ins.error) { toast("Could not save: " + ins.error.message); return null; }
+        if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; }
         invId = ins.data.id;
       } else {
         var up = await sb.from("invoices").update(hdr).eq("id", id);
-        if (up.error) { toast("Could not save: " + up.error.message); return null; }
+        if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from("invoice_lines").delete().eq("invoice_id", id);
       }
       var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from("invoice_lines").insert(rows);
-      if (lr.error) { toast("Lines failed: " + lr.error.message); return null; }
-      if (alsoPost) { var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + pr.error.message); return invId; } }
+      if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
+      if (alsoPost) { var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + errMsg(pr.error)); return invId; } }
       return invId;
     }
     if (editable) {
@@ -1867,11 +1902,11 @@
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: inv.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: today(), currency_code: inv.currency_code || S.company.currency_code, state: "draft", ref: "Credit note for " + (inv.number || ""), amount_untaxed: untax, amount_total: untax, amount_residual: untax };
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
-    if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+    if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
     var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
-    if (lr.error) { toast("Lines failed: " + lr.error.message); return; }
+    if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return; }
     toast("Credit note created (draft)");
     renderInvoiceForm(invId, moveType);
   }
@@ -2081,14 +2116,14 @@
       var oid = id;
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.currency_code = S.company.currency_code; hdr.state = confirmIt ? (isSale ? "sale" : "purchase") : "draft"; hdr.number = await nextOrderNumber(kind);
-        var ins = await sb.from(tbl).insert(hdr).select("id").single(); if (ins.error) { toast("Could not save: " + ins.error.message); return null; } oid = ins.data.id;
+        var ins = await sb.from(tbl).insert(hdr).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; } oid = ins.data.id;
       } else {
         if (confirmIt) hdr.state = isSale ? "sale" : "purchase";
-        var up = await sb.from(tbl).update(hdr).eq("id", id); if (up.error) { toast("Could not save: " + up.error.message); return null; }
+        var up = await sb.from(tbl).update(hdr).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from(ltbl).delete().eq("order_id", id);
       }
       var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
-      var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; }
+      var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
     if (editable) {
@@ -2139,11 +2174,11 @@
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_total: untax, amount_residual: untax };
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
-    if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+    if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
     var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
-    if (lr.error) { toast("Invoice lines failed: " + lr.error.message); return; }
+    if (lr.error) { toast("Invoice lines failed: " + errMsg(lr.error)); return; }
     if (!isSale) { for (var i = 0; i < lines.length; i++) { if (lines[i].id) await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id); } }
     toast(isSale ? "Invoice created (draft)" : "Bill created (draft)");
     renderInvoiceForm(invId, moveType);
@@ -2206,8 +2241,8 @@
       var creditVal = gv("p-credit");
       var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       var r, sid = id;
-      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + ins.error.message); return; } sid = ins.data.id; }
-      else { r = await sb.from("partners").update(row).eq("id", id); if (r.error) { toast("Could not save: " + r.error.message); return; } }
+      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; }
+      else { r = await sb.from("partners").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
       if (bks.length) await sb.from("partner_bank_accounts").insert(bks);
@@ -2245,7 +2280,7 @@
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("accounts").insert(row); }
       else r = await sb.from("accounts").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("accounts");
     };
   }
@@ -2302,7 +2337,7 @@
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); }
       else r = await sb.from("products").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("products");
     };
   }
@@ -2323,7 +2358,7 @@
       var amt = parseFloat(document.getElementById("p-amt").value);
       if (!(amt > 0)) { toast("Enter an amount"); return; }
       var r = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: document.getElementById("p-date").value, p_journal_code: document.getElementById("p-jrn").value, p_method: "bank", p_ref: document.getElementById("p-ref").value });
-      if (r.error) { toast("Could not register: " + r.error.message); return; }
+      if (r.error) { toast("Could not register: " + errMsg(r.error)); return; }
       m.remove(); toast("Payment registered"); if (onDone) onDone();
     };
   }
@@ -2855,7 +2890,7 @@
     document.getElementById("fu-cancel").onclick = function () { m.remove(); };
     document.getElementById("fu-save").onclick = async function () {
       var row = { company_id: S.company.id, invoice_id: invoiceId || null, partner_id: partnerId || null, followup_date: document.getElementById("fu-date").value, channel: document.getElementById("fu-ch").value, note: document.getElementById("fu-note").value.trim(), promised_date: document.getElementById("fu-pd").value || null, promised_amount: parseFloat(document.getElementById("fu-pa").value) || 0, next_action_date: document.getElementById("fu-na").value || null, status: document.getElementById("fu-st").value };
-      var r = await sb.from("ar_followups").insert(row); if (r.error) { toast(r.error.message); return; }
+      var r = await sb.from("ar_followups").insert(row); if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Follow-up logged"); renderCollections();
     };
   }
@@ -2884,7 +2919,7 @@
     document.getElementById("st2-save").onclick = async function () {
       var row = { name: gv("st2-name") || "Shift", role: gv("st2-role"), start_time: gv("st2-start"), end_time: gv("st2-end"), hours: parseFloat(gv("st2-hours")) || 8 };
       var r; if (s.id) r = await sb.from("shift_templates").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("shift_templates").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgPlanning() {
@@ -2927,7 +2962,7 @@
     document.getElementById("ps-save").onclick = async function () {
       var row = { employee_id: document.getElementById("ps-emp").value || null, role: gv("ps-role"), project_id: document.getElementById("ps-proj").value || null, shift_date: gv("ps-date") || null, start_time: gv("ps-start"), end_time: gv("ps-end"), hours: parseFloat(gv("ps-hours")) || 0, published: document.getElementById("ps-pub").value === "1" };
       var r; if (s.id) r = await sb.from("planning_shifts").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("planning_shifts").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -2970,7 +3005,7 @@
     document.getElementById("ct-save").onclick = async function () {
       var row = { name: gv("ct-name") || "Tag", color: document.getElementById("ct-color").value };
       var r; if (t.id) r = await sb.from("contact_tags").update(row).eq("id", t.id); else { row.company_id = S.company.id; r = await sb.from("contact_tags").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -3010,7 +3045,7 @@
       '<table><thead><tr><th>User</th><th style="width:260px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
       '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then set their role here. You cannot change your own role.</div></div></div>';
     var mb = document.getElementById("ur-manage"); if (mb) mb.onclick = function () { go("settings.roles"); };
-    body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(r.error.message); } else toast("Role updated"); }; });
+    body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(errMsg(r.error)); } else toast("Role updated"); }; });
   }
 
   // ============================ SETTINGS: ROLES & PERMISSIONS ============================
@@ -3040,7 +3075,7 @@
       '<div class="rl-grid">' + cards + '</div></div>';
     document.getElementById("rl-new").onclick = function () { openRoleEditor(null); };
     body.querySelectorAll(".rl-edit").forEach(function (b) { b.onclick = function () { openRoleEditor(bySlug[b.dataset.slug]); }; });
-    body.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = async function () { var m = document.createElement("div"); m.className = "modal on"; m.innerHTML = '<div class="sheet"><h3>Delete role?</h3><div class="form"><div class="sub">People currently on this role fall back to the shared template with the same name, if any.</div></div><div class="foot"><button class="btn" id="rd-c">Cancel</button><button class="btn pri" id="rd-y" style="background:var(--bad);border-color:var(--bad)">Delete</button></div></div>'; document.body.appendChild(m); document.getElementById("rd-c").onclick = function () { m.remove(); }; document.getElementById("rd-y").onclick = async function () { var r = await sb.from("roles").delete().eq("id", b.dataset.id); m.remove(); if (r.error) { toast(r.error.message); } else { toast("Deleted"); renderRoles(); } }; }; });
+    body.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = async function () { var m = document.createElement("div"); m.className = "modal on"; m.innerHTML = '<div class="sheet"><h3>Delete role?</h3><div class="form"><div class="sub">People currently on this role fall back to the shared template with the same name, if any.</div></div><div class="foot"><button class="btn" id="rd-c">Cancel</button><button class="btn pri" id="rd-y" style="background:var(--bad);border-color:var(--bad)">Delete</button></div></div>'; document.body.appendChild(m); document.getElementById("rd-c").onclick = function () { m.remove(); }; document.getElementById("rd-y").onclick = async function () { var r = await sb.from("roles").delete().eq("id", b.dataset.id); m.remove(); if (r.error) { toast(errMsg(r.error)); } else { toast("Deleted"); renderRoles(); } }; }; });
   }
   function openRoleEditor(role) {
     var isNew = !role;
@@ -3097,7 +3132,7 @@
     document.getElementById("lk-save").onclick = async function () {
       var d = document.getElementById("lk-date").value || null;
       var r = await sb.from("companies").update({ lock_date: d }).eq("id", S.company.id);
-      if (r.error) { toast(r.error.message); return; }
+      if (r.error) { toast(errMsg(r.error)); return; }
       S.company.lock_date = d; m.remove(); toast(d ? ("Locked on/before " + d) : "Unlocked");
     };
   }
@@ -3127,7 +3162,7 @@
     document.getElementById("sk-save").onclick = async function () {
       var row = { name: gv("sk-name") || "Skill", category: gv("sk-cat") };
       var r; if (s.id) r = await sb.from("skills").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("skills").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgEmployeeSkills() {
@@ -3162,7 +3197,7 @@
       if (!skills.length) { toast("Add skills first (Talent > Skills)"); return; }
       var row = { employee_id: document.getElementById("es-emp").value, skill_id: document.getElementById("es-skill").value, level: document.getElementById("es-level").value };
       var r; if (es.id) r = await sb.from("employee_skills").update(row).eq("id", es.id); else { row.company_id = S.company.id; r = await sb.from("employee_skills").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgCertifications() {
@@ -3196,7 +3231,7 @@
     document.getElementById("ce-save").onclick = async function () {
       var row = { employee_id: document.getElementById("ce-emp").value, name: gv("ce-name") || "Certificate", authority: gv("ce-auth"), issued_date: gv("ce-iss") || null, expiry_date: gv("ce-exp") || null };
       var r; if (c.id) r = await sb.from("certifications").update(row).eq("id", c.id); else { row.company_id = S.company.id; r = await sb.from("certifications").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgOnboarding() {
@@ -3234,7 +3269,7 @@
     document.getElementById("ob-save").onclick = async function () {
       var row = { employee_id: document.getElementById("ob-emp").value, kind: document.getElementById("ob-kind").value, task: gv("ob-task") || "Task", due_date: gv("ob-due") || null, done: document.getElementById("ob-done").value === "1" };
       var r; if (o.id) r = await sb.from("hr_onboarding").update(row).eq("id", o.id); else { row.company_id = S.company.id; r = await sb.from("hr_onboarding").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgAppraisals() {
@@ -3280,7 +3315,7 @@
     async function persist(extra) {
       var row = Object.assign({ employee_id: (document.getElementById("ap-emp") || {}).value || a.employee_id, appraisal_date: gv("ap-date") || null, period: gv("ap-period"), rating: parseInt(gv("ap-rating"), 10) || 0, manager: gv("ap-mgr"), strengths: (document.getElementById("ap-str") || {}).value || "", improvements: (document.getElementById("ap-imp") || {}).value || "" }, extra || {});
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("appraisals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("appraisals").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("appraisals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -3318,7 +3353,7 @@
     document.getElementById("dm-save").onclick = async function () {
       var row = { name: gv("dm-name") || "Delivery", carrier: gv("dm-carrier"), price: parseFloat(gv("dm-price")) || 0, notes: gv("dm-notes"), is_active: document.getElementById("dm-active").value === "1" };
       var r; if (d.id) r = await sb.from("delivery_methods").update(row).eq("id", d.id); else { row.company_id = S.company.id; r = await sb.from("delivery_methods").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgPackageTypes() {
@@ -3344,7 +3379,7 @@
     document.getElementById("pk-save").onclick = async function () {
       var row = { name: gv("pk-name") || "Package", length: parseFloat(gv("pk-l")) || 0, width: parseFloat(gv("pk-w")) || 0, height: parseFloat(gv("pk-h")) || 0, max_weight: parseFloat(gv("pk-mw")) || 0 };
       var r; if (p.id) r = await sb.from("package_types").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("package_types").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgStorageCategories() {
@@ -3370,7 +3405,7 @@
     document.getElementById("sc2-save").onclick = async function () {
       var row = { name: gv("sc2-name") || "Category", max_weight: parseFloat(gv("sc2-mw")) || 0, capacity: parseFloat(gv("sc2-cap")) || 0, notes: gv("sc2-notes") };
       var r; if (s.id) r = await sb.from("storage_categories").update(row).eq("id", s.id); else { row.company_id = S.company.id; r = await sb.from("storage_categories").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgPutawayRules() {
@@ -3403,7 +3438,7 @@
       var row = { product_id: document.getElementById("pw-prod").value || null, category_id: document.getElementById("pw-cat").value || null, location_id: document.getElementById("pw-loc").value || null };
       if (!row.location_id) { toast("Pick a location"); return; }
       var r; if (p.id) r = await sb.from("putaway_rules").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("putaway_rules").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -3497,7 +3532,7 @@
     document.getElementById("ev-save").onclick = async function () {
       var row = { title: gv("ev-title") || "Event", event_date: gv("ev-date") || today(), category: document.getElementById("ev-cat").value, start_time: gv("ev-start"), end_time: gv("ev-end"), project_id: document.getElementById("ev-proj").value || null, location: gv("ev-loc"), notes: gv("ev-notes") };
       var r; if (eventId) r = await sb.from("calendar_events").update(row).eq("id", eventId); else { row.company_id = S.company.id; r = await sb.from("calendar_events").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderCalendar();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderCalendar();
     };
   }
 
@@ -3558,7 +3593,7 @@
     async function persist() {
       var row = { title: gv("sg-title") || "Signature request", doc_type: document.getElementById("sg-type").value, ref: gv("sg-ref"), project_id: document.getElementById("sg-proj").value || null, notes: gv("sg-notes") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("sign_requests", "SIGN"); var ins = await sb.from("sign_requests").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("sign_requests", "SIGN"); var ins = await sb.from("sign_requests").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("sign_requests").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       if (st === "draft") {
         await sb.from("sign_signatures").delete().eq("request_id", sid);
@@ -3594,7 +3629,7 @@
       if (!name) { toast("Type your name"); return; }
       var data = drew ? cv.toDataURL("image/png") : name;
       var r = await sb.from("sign_signatures").update({ signer_name: name, signature_data: data, signed_at: new Date().toISOString() }).eq("id", sigId);
-      if (r.error) { toast(r.error.message); return; }
+      if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Signed"); renderSignForm(requestId);
     };
   }
@@ -3650,7 +3685,7 @@
     async function persist(extra) {
       var row = Object.assign({ name: gv("ap-name") || "Applicant", email: gv("ap-email"), phone: gv("ap-phone"), job_id: document.getElementById("ap-job").value || null, stage: document.getElementById("ap-stage").value, source: gv("ap-source"), rating: parseInt(gv("ap-rating"), 10) || 0, applied_date: gv("ap-applied") || null, cv_link: gv("ap-cv"), notes: (document.getElementById("ap-notes") || {}).value || "" }, extra || {});
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("applicants").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("applicants").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("applicants").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -3690,7 +3725,7 @@
     document.getElementById("kb-save").onclick = async function () {
       var row = { title: gv("kb-title") || "Untitled", category: gv("kb-cat"), body: (document.getElementById("kb-body") || {}).value || "", is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("articles").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
       toast("Saved"); renderArticleForm(sid);
     };
@@ -3741,7 +3776,7 @@
     document.getElementById("sn-save").onclick = async function () {
       var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: document.getElementById("sn-status").value, photo_url: gv("sn-photo") };
       var r; if (s.id) r = await sb.from("snags").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("snags", "SNAG"); r = await sb.from("snags").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgInspections() {
@@ -3781,7 +3816,7 @@
     document.getElementById("in-save").onclick = async function () {
       var row = { insp_type: document.getElementById("in-type").value, insp_date: gv("in-date") || null, project_id: document.getElementById("in-proj").value || null, area: gv("in-area"), inspector: gv("in-insp"), score: parseInt(gv("in-score"), 10) || 0, notes: (document.getElementById("in-notes") || {}).value || "", status: document.getElementById("in-status").value };
       var r; if (i.id) r = await sb.from("inspections").update(row).eq("id", i.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("inspections", "INSP"); r = await sb.from("inspections").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -3825,7 +3860,7 @@
     document.getElementById("pl2-save").onclick = async function () {
       var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null };
       var r; if (p.id) r = await sb.from("plant_equipment").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("plant_equipment").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -3874,7 +3909,7 @@
     document.getElementById("sd-save").onclick = async function () {
       var row = { project_id: document.getElementById("sd-proj").value || null, diary_date: gv("sd-date") || null, weather: gv("sd-weather"), temperature: gv("sd-temp"), manpower: parseInt(gv("sd-man"), 10) || 0, subcontractor_count: parseInt(gv("sd-subs"), 10) || 0, visitors: gv("sd-vis"), work_done: (document.getElementById("sd-work") || {}).value || "", delays: (document.getElementById("sd-delays") || {}).value || "", materials_received: gv("sd-mat"), notes: gv("sd-notes") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("site_diaries").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("site_diaries").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("site_diaries").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
       toast("Saved"); renderSiteDiaryForm(sid);
     };
@@ -3941,7 +3976,7 @@
     document.getElementById("st-save").onclick = async function () {
       var row = { name: gv("st-name") || "Activity", wbs: gv("st-wbs"), progress: parseFloat(gv("st-prog")) || 0, start_date: gv("st-start") || null, end_date: gv("st-end") || null, depends_on: document.getElementById("st-dep").value || null, is_milestone: document.getElementById("st-ms").value === "1" };
       var r; if (t.id) r = await sb.from("schedule_tasks").update(row).eq("id", t.id); else { row.company_id = S.company.id; row.project_id = projectId; r = await sb.from("schedule_tasks").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); renderSchedule(projectId);
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); renderSchedule(projectId);
     };
   }
 
@@ -4082,7 +4117,7 @@
   async function agPersistStage(id, newStage) {
     var upd = { board_stage: newStage, is_agile: true, completed_at: newStage === "done" ? new Date().toISOString() : null };
     var r = await sb.from("project_tasks").update(upd).eq("id", id);
-    if (r.error) { toast("Move failed: " + r.error.message); renderBoard(); return false; }
+    if (r.error) { toast("Move failed: " + errMsg(r.error)); renderBoard(); return false; }
     logTaskActivity(id, AGS.proj, "moved", "to " + agStageLabel(newStage));
     return true;
   }
@@ -4131,7 +4166,7 @@
         if (AGS.member && AGS.member !== "__none") row.assignee_id = AGS.member;
         var r = await sb.from("project_tasks").insert(row).select("id").single();
         inp.disabled = false;
-        if (r.error) { toast(r.error.message); return; }
+        if (r.error) { toast(errMsg(r.error)); return; }
         logTaskActivity(r.data.id, AGS.proj, "created", name);
         renderBoard();
       });
@@ -4176,14 +4211,14 @@
         if (e.key !== "Enter") return; var n = inp.value.trim(); if (!n) return; inp.value = ""; inp.disabled = true;
         var row = { company_id: S.company.id, project_id: AGS.proj, name: n, board_stage: "todo", is_agile: true, priority: "medium", sort_order: Math.round(Date.now() / 1000) % 1000000 };
         var r = await sb.from("project_tasks").insert(row).select("id").single(); inp.disabled = false;
-        if (r.error) { toast(r.error.message); return; } logTaskActivity(r.data.id, AGS.proj, "created", n); renderBoard();
+        if (r.error) { toast(errMsg(r.error)); return; } logTaskActivity(r.data.id, AGS.proj, "created", n); renderBoard();
       };
     });
   }
   async function agToggleDone(id, done) {
     var upd = { board_stage: done ? "done" : "todo", completed_at: done ? new Date().toISOString() : null, is_agile: true };
     var r = await sb.from("project_tasks").update(upd).eq("id", id);
-    if (r.error) { toast(r.error.message); return; }
+    if (r.error) { toast(errMsg(r.error)); return; }
     logTaskActivity(id, AGS.proj, done ? "completed" : "reopened", "");
     renderBoard();
   }
@@ -4228,7 +4263,7 @@
     document.getElementById("sp-save").onclick = async function () {
       var row = { name: gv("sp-name") || "Sprint", goal: gv("sp-goal"), start_date: gv("sp-start") || null, end_date: gv("sp-end") || null, status: document.getElementById("sp-status").value };
       var r; if (s.id) r = await sb.from("sprints").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.project_id = projectId; r = await sb.from("sprints").insert(row); }
-      if (r.error) { toast(r.error.message); return; } m.remove(); renderBoard();
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); renderBoard();
     };
   }
 
@@ -4271,7 +4306,7 @@
     m.innerHTML = '<div class="sheet"><h3>Add sub-activity</h3><div class="form"><div><label>Name</label><input id="wq-name" placeholder="Sub-activity name"></div></div><div class="foot"><button class="btn" id="wq-c">Cancel</button><button class="btn pri" id="wq-s" style="background:var(--accent);border-color:var(--accent)">Add</button></div></div>';
     document.body.appendChild(m); var inp = document.getElementById("wq-name"); inp.focus();
     document.getElementById("wq-c").onclick = function () { m.remove(); };
-    async function save() { var n = inp.value.trim(); if (!n) { m.remove(); return; } var r = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: AGS.proj, name: n, parent_task_id: parentId, board_stage: "backlog", is_agile: true, priority: "medium", sort_order: Math.round(Date.now() / 1000) % 1000000 }); m.remove(); if (r.error) { toast(r.error.message); } else { toast("Added"); renderBoard(); } }
+    async function save() { var n = inp.value.trim(); if (!n) { m.remove(); return; } var r = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: AGS.proj, name: n, parent_task_id: parentId, board_stage: "backlog", is_agile: true, priority: "medium", sort_order: Math.round(Date.now() / 1000) % 1000000 }); m.remove(); if (r.error) { toast(errMsg(r.error)); } else { toast("Added"); renderBoard(); } }
     document.getElementById("wq-s").onclick = save; inp.onkeydown = function (e) { if (e.key === "Enter") save(); };
   }
   async function openTaskPanel(taskId, projectId, onClose) {
@@ -4347,13 +4382,13 @@
       if (isNew) return;
       document.querySelectorAll(".tp-cl-tog").forEach(function (x) { x.onclick = async function () { var it = checklist.filter(function (c) { return c.id === x.dataset.id; })[0]; it.is_done = x.checked; await sb.from("task_checklists").update({ is_done: x.checked }).eq("id", x.dataset.id); paintCollab(); }; });
       document.querySelectorAll(".tp-cl-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_checklists").delete().eq("id", x.dataset.id); checklist = checklist.filter(function (c) { return c.id !== x.dataset.id; }); paintCollab(); }; });
-      var cln = document.getElementById("tp-cl-new"); if (cln) cln.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = cln.value.trim(); if (!v) return; cln.value = ""; var ins = await sb.from("task_checklists").insert({ company_id: S.company.id, task_id: taskId, title: v, sort_order: (checklist.length + 1) * 10 }).select("*").single(); if (ins.error) { toast(ins.error.message); return; } checklist.push(ins.data); paintCollab(); document.getElementById("tp-cl-new").focus(); };
-      var subn = document.getElementById("tp-sub-new"); if (subn) subn.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = subn.value.trim(); if (!v) return; subn.value = ""; var ins = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: projectId, name: v, parent_task_id: taskId, is_agile: true, board_stage: "backlog", priority: "medium" }).select("id,name,board_stage,assignee_id").single(); if (ins.error) { toast(ins.error.message); return; } subtasks.push(ins.data); logTaskActivity(taskId, projectId, "added subtask", v); paintCollab(); document.getElementById("tp-sub-new").focus(); };
+      var cln = document.getElementById("tp-cl-new"); if (cln) cln.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = cln.value.trim(); if (!v) return; cln.value = ""; var ins = await sb.from("task_checklists").insert({ company_id: S.company.id, task_id: taskId, title: v, sort_order: (checklist.length + 1) * 10 }).select("*").single(); if (ins.error) { toast(errMsg(ins.error)); return; } checklist.push(ins.data); paintCollab(); document.getElementById("tp-cl-new").focus(); };
+      var subn = document.getElementById("tp-sub-new"); if (subn) subn.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = subn.value.trim(); if (!v) return; subn.value = ""; var ins = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: projectId, name: v, parent_task_id: taskId, is_agile: true, board_stage: "backlog", priority: "medium" }).select("id,name,board_stage,assignee_id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } subtasks.push(ins.data); logTaskActivity(taskId, projectId, "added subtask", v); paintCollab(); document.getElementById("tp-sub-new").focus(); };
       document.querySelectorAll(".tp-sub-open").forEach(function (r) { r.onclick = function () { close(); setTimeout(function () { openTaskPanel(r.dataset.id, projectId); }, 60); }; });
       document.querySelectorAll(".tp-w-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_watchers").delete().eq("task_id", taskId).eq("employee_id", x.dataset.id); watchers = watchers.filter(function (w) { return w.employee_id !== x.dataset.id; }); paintCollab(); }; });
-      var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(ins.error.message); return; } watchers.push({ employee_id: eid }); paintCollab(); };
+      var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(errMsg(ins.error)); return; } watchers.push({ employee_id: eid }); paintCollab(); };
       document.querySelectorAll(".ag-mchip").forEach(function (b) { b.onclick = function () { var ta = document.getElementById("tp-comment"); ta.value = (ta.value + (ta.value && !/\s$/.test(ta.value) ? " " : "") + "@" + b.dataset.name.split(/\s+/)[0] + " ").replace(/^\s+/, ""); ta.focus(); }; });
-      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var mids = agResolveMentions(v, emps); var who = await agActor(); var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: who, mentions: mids }).select("*").single(); cp.disabled = false; if (ins.error) { toast(ins.error.message); return; } comments.push(ins.data); mids.forEach(function (mid) { notify({ kind: "mention", employee_id: mid, title: who + " mentioned you", body: v.slice(0, 120), link_action: "task", link_id: taskId }); }); paintCollab(); };
+      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var mids = agResolveMentions(v, emps); var who = await agActor(); var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: who, mentions: mids }).select("*").single(); cp.disabled = false; if (ins.error) { toast(errMsg(ins.error)); return; } comments.push(ins.data); mids.forEach(function (mid) { notify({ kind: "mention", employee_id: mid, title: who + " mentioned you", body: v.slice(0, 120), link_action: "task", link_id: taskId }); }); paintCollab(); };
     }
     paintCollab();
 
@@ -4366,13 +4401,13 @@
       if (isNew) {
         row.company_id = S.company.id; row.project_id = projectId;
         var ins = await sb.from("project_tasks").insert(row).select("id").single();
-        if (ins.error) { toast(ins.error.message); return; }
+        if (ins.error) { toast(errMsg(ins.error)); return; }
         logTaskActivity(ins.data.id, projectId, "created", name);
         if (newAssignee) notify({ kind: "assignment", employee_id: newAssignee, title: "You were assigned a task", body: name, link_action: "task", link_id: ins.data.id });
         toast("Task created"); bg.remove(); document.removeEventListener("keydown", onKey); openTaskPanel(ins.data.id, projectId, onClose); return;
       }
       var r = await sb.from("project_tasks").update(row).eq("id", taskId);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if ((newAssignee || null) !== (t.assignee_id || null)) { logTaskActivity(taskId, projectId, "assigned", newAssignee ? ("to " + (empById[newAssignee] ? empById[newAssignee].name : "someone")) : "unassigned"); if (newAssignee) notify({ kind: "assignment", employee_id: newAssignee, title: "You were assigned a task", body: name, link_action: "task", link_id: taskId }); }
       if (newStage !== (t.board_stage || "backlog")) logTaskActivity(taskId, projectId, "moved", "to " + agStageLabel(newStage));
       if (newPrio !== (t.priority || "medium")) logTaskActivity(taskId, projectId, "set priority", TASK_PRIO[newPrio].label);
@@ -4443,11 +4478,11 @@
     document.getElementById("pl-save").onclick = async function () {
       var row = { name: gv("pl-name") || "Pricelist", currency_code: gv("pl-cur") || S.company.currency_code, is_active: document.getElementById("pl-active").value === "1" };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("pricelists").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("pricelists").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("pricelists").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
       await sb.from("pricelist_items").delete().eq("pricelist_id", sid);
       var its = [].map.call(document.querySelectorAll("#pl-lines tr"), function (tr, i) { var fx = tr.querySelector(".pi-fixed").value; return { company_id: S.company.id, pricelist_id: sid, product_id: tr.querySelector(".pi-prod").value || null, min_qty: parseFloat(tr.querySelector(".pi-min").value) || 1, fixed_price: fx === "" ? null : parseFloat(fx), percent_off: parseFloat(tr.querySelector(".pi-off").value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.product_id || l.fixed_price != null || l.percent_off; });
-      if (its.length) { var ir = await sb.from("pricelist_items").insert(its); if (ir.error) { toast(ir.error.message); return; } }
+      if (its.length) { var ir = await sb.from("pricelist_items").insert(its); if (ir.error) { toast(errMsg(ir.error)); return; } }
       toast("Saved"); renderPricelistForm(sid);
     };
   }
@@ -4488,11 +4523,11 @@
     async function persist() {
       var row = { name: gv("qt-tname") || "Template", note: gv("qt-note") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("quote_templates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("quote_templates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("quote_templates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       await sb.from("quote_template_lines").delete().eq("template_id", sid);
       var ls = readLines().map(function (l) { l.company_id = S.company.id; l.template_id = sid; return l; });
-      if (ls.length) { var ir = await sb.from("quote_template_lines").insert(ls); if (ir.error) { toast(ir.error.message); return null; } }
+      if (ls.length) { var ir = await sb.from("quote_template_lines").insert(ls); if (ir.error) { toast(errMsg(ir.error)); return null; } }
       return sid;
     }
     document.getElementById("qt-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderQuoteTemplateForm(sid); } };
@@ -4501,7 +4536,7 @@
       var tl = readLines();
       var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "From template: " + (gv("qt-tname") || "") };
       var so = await sb.from("sale_orders").insert(hdr).select("id").single();
-      if (so.error) { toast(so.error.message); return; }
+      if (so.error) { toast(errMsg(so.error)); return; }
       var sub = 0, ln = tl.map(function (l, i) { sub += l.quantity * l.unit_price; return { company_id: S.company.id, order_id: so.data.id, product_id: l.product_id, name: l.name || "Item", quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price, sequence: (i + 1) * 10 }; });
       if (ln.length) await sb.from("sale_order_lines").insert(ln);
       await sb.from("sale_orders").update({ amount_untaxed: sub, amount_total: sub }).eq("id", so.data.id);
@@ -4579,7 +4614,7 @@
     async function persist() {
       var row = { name: gv("as-name") || "Asset", category: gv("as-cat"), acquisition_value: parseFloat(gv("as-val")) || 0, salvage_value: parseFloat(gv("as-sal")) || 0, life_months: parseInt(gv("as-life"), 10) || 60, acquisition_date: gv("as-acq") || null, start_date: gv("as-start") || null, expense_account: gv("as-exp") || "6800", depr_account: gv("as-depr") || "2800" };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextDocNumber("assets", "FA"); var ins = await sb.from("assets").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextDocNumber("assets", "FA"); var ins = await sb.from("assets").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("assets").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -4589,7 +4624,7 @@
       var fresh = (await sb.from("assets").select("*").eq("id", sid).maybeSingle()).data;
       var sc = assetSchedule(fresh).map(function (l) { l.company_id = S.company.id; l.asset_id = sid; return l; });
       await sb.from("asset_lines").delete().eq("asset_id", sid);
-      if (sc.length) { var ir = await sb.from("asset_lines").insert(sc); if (ir.error) { toast(ir.error.message); return; } }
+      if (sc.length) { var ir = await sb.from("asset_lines").insert(sc); if (ir.error) { toast(errMsg(ir.error)); return; } }
       await sb.from("assets").update({ state: "running" }).eq("id", sid);
       toast("Scheduled over " + sc.length + " months"); renderAssetForm(sid);
     };
@@ -4647,11 +4682,11 @@
     async function persist() {
       var row = { name: gv("bg-name") || "Budget", date_start: gv("bg-start") || null, date_end: gv("bg-end") || null };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("budgets").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("budgets").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("budgets").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       await sb.from("budget_lines").delete().eq("budget_id", sid);
       var ls = readLines().map(function (l) { l.company_id = S.company.id; l.budget_id = sid; return l; });
-      if (ls.length) { var ir = await sb.from("budget_lines").insert(ls); if (ir.error) { toast(ir.error.message); return null; } }
+      if (ls.length) { var ir = await sb.from("budget_lines").insert(ls); if (ir.error) { toast(errMsg(ir.error)); return null; } }
       return sid;
     }
     document.getElementById("bg-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderBudgetForm(sid); } };
@@ -4715,7 +4750,7 @@
       var r;
       if (lvl.id) r = await sb.from("followup_levels").update(row).eq("id", lvl.id);
       else { row.company_id = S.company.id; r = await sb.from("followup_levels").insert(row); }
-      if (r.error) { toast(r.error.message); return; }
+      if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -4801,7 +4836,7 @@
       sv.disabled = true;
       var res = await sb.from("companies").update(upd).eq("id", S.company.id);
       sv.disabled = false;
-      if (res.error) { toast("Save failed: " + res.error.message); return; }
+      if (res.error) { toast("Save failed: " + errMsg(res.error)); return; }
       Object.assign(S.company, upd);
       var ci = S.companies.filter(function (c) { return c.id === S.company.id; })[0]; if (ci) Object.assign(ci, upd);
       toast("Company profile saved");
@@ -4859,7 +4894,7 @@
     body.innerHTML = '<div style="padding:16px;max-width:880px"><div class="sub" style="margin:0 0 12px"><b>' + pend.length + '</b> application' + (pend.length === 1 ? "" : "s") + ' awaiting review. Approving unlocks the account immediately; the applicant can then sign in.</div>' + cards + '</div>';
     async function setStatus(id, status, verb) {
       var r = await sb.rpc("set_org_status", { p_org: id, p_status: status });
-      if (r.error) { toast(r.error.message); return; }
+      if (r.error) { toast(errMsg(r.error)); return; }
       toast(verb); renderPendingSignups();
     }
     document.querySelectorAll(".pa-appr").forEach(function (b) { b.onclick = function () { setStatus(b.dataset.id, "active", "Approved " + b.dataset.name); }; });
@@ -4959,7 +4994,7 @@
           return row;
         });
         var res = await sb.from(spec.table).insert(payload);
-        if (res.error) { toast("Import failed: " + res.error.message); go.disabled = false; go.textContent = "Import " + okN + " rows"; return; }
+        if (res.error) { toast("Import failed: " + errMsg(res.error)); go.disabled = false; go.textContent = "Import " + okN + " rows"; return; }
         toast("Imported " + payload.length + " " + spec.label.toLowerCase()); prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good);border:0">Imported ' + payload.length + ' rows successfully.</div>';
       };
     }
@@ -5026,7 +5061,7 @@
         var ex = (await sb.from("rfqs").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
         hdr.number = py + ("000" + (maxSeq(ex, py) + 1)).slice(-4);
         var r = await sb.from("rfqs").insert(hdr).select("id,number,status").single();
-        if (r.error) { toast(r.error.message); return false; }
+        if (r.error) { toast(errMsg(r.error)); return false; }
         id = r.data.id; isNew = false; rfq.number = r.data.number; rfq.status = r.data.status;
       } else { await sb.from("rfqs").update(hdr).eq("id", id); }
       var Lf = L.filter(function (l) { return l.description; });
@@ -5034,16 +5069,16 @@
       var kToId = {};
       if (Lf.length) {
         var ins = await sb.from("rfq_lines").insert(Lf.map(function (l, i) { return { company_id: S.company.id, rfq_id: id, description: l.description, unit: l.unit || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; })).select("id,sequence");
-        if (ins.error) { toast(ins.error.message); return false; }
+        if (ins.error) { toast(errMsg(ins.error)); return false; }
         var sorted = (ins.data || []).slice().sort(function (a, b) { return a.sequence - b.sequence; });
         sorted.forEach(function (row, i) { if (Lf[i]) kToId[Lf[i].k] = row.id; });
       }
       await sb.from("rfq_vendors").delete().eq("rfq_id", id);
-      if (V.length) { var vi = await sb.from("rfq_vendors").insert(V.map(function (v) { return { company_id: S.company.id, rfq_id: id, partner_id: v.partner_id, status: "invited" }; })); if (vi.error) { toast(vi.error.message); return false; } }
+      if (V.length) { var vi = await sb.from("rfq_vendors").insert(V.map(function (v) { return { company_id: S.company.id, rfq_id: id, partner_id: v.partner_id, status: "invited" }; })); if (vi.error) { toast(errMsg(vi.error)); return false; } }
       await sb.from("rfq_bids").delete().eq("rfq_id", id);
       var bidRows = [];
       Lf.forEach(function (l) { V.forEach(function (v) { var val = B[l.k + "|" + v.partner_id]; if (val != null && val !== "" && kToId[l.k]) bidRows.push({ company_id: S.company.id, rfq_id: id, rfq_line_id: kToId[l.k], partner_id: v.partner_id, unit_price: Number(val) }); }); });
-      if (bidRows.length) { var bi = await sb.from("rfq_bids").insert(bidRows); if (bi.error) { toast(bi.error.message); return false; } }
+      if (bidRows.length) { var bi = await sb.from("rfq_bids").insert(bidRows); if (bi.error) { toast(errMsg(bi.error)); return false; } }
       return true;
     }
     async function award(partnerId) {
@@ -5053,7 +5088,7 @@
       var pb = {}; ((await sb.from("rfq_bids").select("*").eq("rfq_id", id).eq("partner_id", partnerId)).data || []).forEach(function (b) { pb[b.rfq_line_id] = b.unit_price; });
       var untax = lns.reduce(function (s, l) { return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0); }, 0);
       var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: await nextOrderNumber("purchase"), partner_id: partnerId, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: rfq.project_id || null, cost_code_id: rfq.cost_code_id || null, amount_untaxed: untax, amount_total: untax, note: "Awarded from " + (rfq.number || "RFQ") }).select("id,number").single();
-      if (po.error) { toast(po.error.message); return; }
+      if (po.error) { toast(errMsg(po.error)); return; }
       var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, name: l.description, quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
       if (poLines.length) await sb.from("purchase_order_lines").insert(poLines);
       await sb.from("rfqs").update({ status: "awarded", awarded_partner_id: partnerId }).eq("id", id);
@@ -5130,7 +5165,7 @@
       });
       var r = await sb.from("number_sequences").upsert(ups, { onConflict: "company_id,doc_type" });
       resetSeqCache();
-      if (r.error) { toast("Save failed: " + r.error.message); return; }
+      if (r.error) { toast("Save failed: " + errMsg(r.error)); return; }
       toast("Numbering saved");
     };
   }
@@ -5197,7 +5232,7 @@
     async function persist(extra) {
       var row = Object.assign({ title: gv("sm-title") || "Submittal", project_id: (document.getElementById("sm-proj") || {}).value || null, doc_type: (document.getElementById("sm-type") || {}).value || "shop_drawing", revision: gv("sm-rev-in") || "A", ref: gv("sm-ref"), consultant: gv("sm-cons"), due_date: gv("sm-due") || null, notes: (document.getElementById("sm-notes") || {}).value || "" }, extra || {});
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("submittals", "SUB"); var ins = await sb.from("submittals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("submittals", "SUB"); var ins = await sb.from("submittals").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("submittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -5210,7 +5245,7 @@
     var rv = document.getElementById("sm-rev"); if (rv) rv.onclick = async function () {
       await persist({ status: "superseded" });
       var copy = { company_id: S.company.id, project_id: (document.getElementById("sm-proj") || {}).value || null, title: gv("sm-title") || "Submittal", doc_type: (document.getElementById("sm-type") || {}).value, revision: nextRev(gv("sm-rev-in")), ref: gv("sm-ref"), consultant: gv("sm-cons"), status: "draft", number: await nextDocNumber("submittals", "SUB") };
-      var ins = await sb.from("submittals").insert(copy).select("id").single(); if (ins.error) { toast(ins.error.message); return; }
+      var ins = await sb.from("submittals").insert(copy).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; }
       toast("New revision " + copy.revision + " created"); renderSubmittalForm(ins.data.id);
     };
   }
@@ -5269,7 +5304,7 @@
     async function persist(extra) {
       var row = Object.assign({ subject: gv("rf-subj") || "RFI", project_id: (document.getElementById("rf-proj") || {}).value || null, discipline: gv("rf-disc"), raised_date: gv("rf-raised") || null, needed_by: gv("rf-needed") || null, question: (document.getElementById("rf-q") || {}).value || "", answer: (document.getElementById("rf-a") || {}).value || "" }, extra || {});
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.status = "open"; row.number = await nextDocNumber("rfis", "RFI"); var ins = await sb.from("rfis").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.status = "open"; row.number = await nextDocNumber("rfis", "RFI"); var ins = await sb.from("rfis").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("rfis").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -5326,11 +5361,11 @@
     async function persist() {
       var row = { to_party: gv("tr-to"), project_id: (document.getElementById("tr-proj") || {}).value || null, purpose: gv("tr-purpose"), transmittal_date: gv("tr-date") || null, notes: gv("tr-notes") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.number = await nextDocNumber("transmittals", "TR"); var ins = await sb.from("transmittals").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.number = await nextDocNumber("transmittals", "TR"); var ins = await sb.from("transmittals").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("transmittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       await sb.from("transmittal_items").delete().eq("transmittal_id", sid);
       var its = readItems().map(function (it) { it.company_id = S.company.id; it.transmittal_id = sid; return it; });
-      if (its.length) { var ir = await sb.from("transmittal_items").insert(its); if (ir.error) { toast(ir.error.message); return null; } }
+      if (its.length) { var ir = await sb.from("transmittal_items").insert(its); if (ir.error) { toast(errMsg(ir.error)); return null; } }
       return sid;
     }
     document.getElementById("tr-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderTransmittalForm(sid); } };
@@ -5481,10 +5516,10 @@
         var jsel = document.getElementById("b-jrn");
         var hdr = { company_id: S.company.id, name: name, journal_id: jsel.value || null, statement_date: document.getElementById("b-date").value, balance_end: parseFloat(document.getElementById("b-end").value) || 0 };
         var ins = await sb.from("bank_statements").insert(hdr).select("id").single();
-        if (ins.error) { toast("Could not save: " + ins.error.message); return; }
+        if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; }
         var sid = ins.data.id;
         var rows = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { return { statement_id: sid, company_id: S.company.id, line_date: tr.querySelector(".l-date").value, label: tr.querySelector(".l-label").value.trim(), amount: parseFloat(tr.querySelector(".l-amt").value) || 0 }; }).filter(function (r) { return r.amount || r.label; });
-        if (rows.length) { var lr = await sb.from("bank_statement_lines").insert(rows); if (lr.error) { toast("Lines failed: " + lr.error.message); return; } }
+        if (rows.length) { var lr = await sb.from("bank_statement_lines").insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return; } }
         toast("Statement saved"); renderBankStatementForm(sid);
       };
     } else {
@@ -5505,7 +5540,7 @@
           if (!sel.value) { toast("Pick a counterpart account"); return; }
           b.disabled = true; b.textContent = "Posting...";
           var r = await sb.rpc("reconcile_bank_line", { p_line: b.dataset.id, p_account: sel.value, p_journal_code: jrnCode });
-          if (r.error) { toast("Could not reconcile: " + r.error.message); b.disabled = false; b.textContent = "Reconcile"; return; }
+          if (r.error) { toast("Could not reconcile: " + errMsg(r.error)); b.disabled = false; b.textContent = "Reconcile"; return; }
           toast("Reconciled to the ledger"); renderBankStatementForm(id);
         };
       });
@@ -5513,7 +5548,7 @@
         var amt = parseFloat(document.getElementById("al-amt").value) || 0, label = document.getElementById("al-label").value.trim();
         if (!amt && !label) { toast("Enter a line"); return; }
         var r = await sb.from("bank_statement_lines").insert({ statement_id: id, company_id: S.company.id, line_date: document.getElementById("al-date").value, label: label, amount: amt });
-        if (r.error) { toast("Could not add: " + r.error.message); return; }
+        if (r.error) { toast("Could not add: " + errMsg(r.error)); return; }
         toast("Line added"); renderBankStatementForm(id);
       };
     }
@@ -5556,7 +5591,7 @@
   async function ensureInventory() {
     if (INV && INV.company === S.company.id) return INV;
     var whs = (await sb.from("warehouses").select("id,name,code").eq("company_id", S.company.id).order("name")).data || [];
-    if (!whs.length) { var w = await sb.from("warehouses").insert({ company_id: S.company.id, name: "Main Warehouse", code: "WH" }).select("id,name,code").single(); if (w.error) { toast("Inventory setup failed: " + w.error.message); return null; } whs = [w.data]; }
+    if (!whs.length) { var w = await sb.from("warehouses").insert({ company_id: S.company.id, name: "Main Warehouse", code: "WH" }).select("id,name,code").single(); if (w.error) { toast("Inventory setup failed: " + errMsg(w.error)); return null; } whs = [w.data]; }
     var locs = (await sb.from("stock_locations").select("id,name,usage,warehouse_id").eq("company_id", S.company.id)).data || [];
     async function ensureLoc(usage, name, whId) {
       var l = locs.filter(function (x) { return x.usage === usage && (whId ? x.warehouse_id === whId : true); })[0];
@@ -5672,7 +5707,7 @@
       else if (kind === "scrap") { src = loc; dest = inv.adjust; vkind = "adjust_down"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
       var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
       var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
       if (lotName && r.data && r.data.id) { var lotId = await findOrCreateLot(pid, lotName, document.getElementById("k-exp") ? document.getElementById("k-exp").value : null); if (lotId) await sb.from("stock_move_lines").insert({ company_id: S.company.id, move_id: r.data.id, lot_id: lotId, quantity: q }); }
@@ -5704,12 +5739,12 @@
     if (!dr || !cr) return;
     var narr = (projId ? "Material issued: " : "Stock: ") + (product.name || "");
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: a.journal, date: today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: projId ? "material_issue" : "stock", source_id: moveId ? String(moveId) : "" }).select("id").single();
-    if (e.error) { toast("Stock saved; GL entry failed: " + e.error.message); return; }
+    if (e.error) { toast("Stock saved; GL entry failed: " + errMsg(e.error)); return; }
     var eid = e.data.id;
     var lr = await sb.from("journal_lines").insert([{ entry_id: eid, company_id: S.company.id, account_id: dr, label: product.name || "", debit: value, credit: 0 }, { entry_id: eid, company_id: S.company.id, account_id: cr, label: product.name || "", debit: 0, credit: value }]);
-    if (lr.error) { toast("Stock saved; GL lines failed: " + lr.error.message); return; }
+    if (lr.error) { toast("Stock saved; GL lines failed: " + errMsg(lr.error)); return; }
     var pr = await sb.rpc("post_entry", { p_entry: eid });
-    if (pr.error) { toast("Stock saved; GL post failed: " + pr.error.message); return; }
+    if (pr.error) { toast("Stock saved; GL post failed: " + errMsg(pr.error)); return; }
     await sb.from("stock_valuation_layers").insert({ company_id: S.company.id, product_id: product.id, move_id: moveId || null, quantity: sQ, unit_cost: cost, value: sV, journal_entry_id: eid });
   }
   function cfgStockMoves() {
@@ -5799,7 +5834,7 @@
       var name = gv("c-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, parent_id: document.getElementById("c-parent").value || null };
       var r; if (cat.id) r = await sb.from("product_categories").update(row).eq("id", cat.id); else { row.company_id = S.company.id; r = await sb.from("product_categories").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -5833,7 +5868,7 @@
       var name = gv("u-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, category: document.getElementById("u-cat").value, is_active: document.getElementById("u-active").value === "1" };
       var r; if (u.id) r = await sb.from("uoms").update(row).eq("id", u.id); else { row.company_id = S.company.id; r = await sb.from("uoms").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -5859,7 +5894,7 @@
     document.getElementById("w-save").onclick = async function () {
       var name = document.getElementById("w-name").value.trim(); if (!name) { toast("Name required"); return; }
       var r = await sb.from("warehouses").insert({ company_id: S.company.id, name: name, code: document.getElementById("w-code").value.trim() });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       INV = null; m.remove(); toast("Warehouse added"); renderView();
     };
   }
@@ -5896,7 +5931,7 @@
     document.getElementById("l-save").onclick = async function () {
       var name = document.getElementById("l-name").value.trim(); if (!name) { toast("Name required"); return; }
       var r = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: document.getElementById("l-wh").value, name: name, usage: "internal" });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       INV = null; m.remove(); toast("Location added"); renderView();
     };
   }
@@ -5930,9 +5965,9 @@
     if (schedBtn) schedBtn.onclick = async function () {
       var num = await nextOrderNumber("purchase");
       var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: num, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "Auto-generated from replenishment" }).select("id").single();
-      if (po.error) { toast(po.error.message); return; }
+      if (po.error) { toast(errMsg(po.error)); return; }
       var sub = 0, plines = needs.map(function (x, i) { var price = Number(x.p.cost_price || 0); sub += x.need * price; return { company_id: S.company.id, order_id: po.data.id, product_id: x.p.id, name: x.p.name, quantity: x.need, unit_price: price, price_subtotal: x.need * price, qty_received: 0, qty_billed: 0, sequence: (i + 1) * 10 }; });
-      var lr = await sb.from("purchase_order_lines").insert(plines); if (lr.error) { toast(lr.error.message); return; }
+      var lr = await sb.from("purchase_order_lines").insert(plines); if (lr.error) { toast(errMsg(lr.error)); return; }
       await sb.from("purchase_orders").update({ amount_untaxed: sub, amount_total: sub }).eq("id", po.data.id);
       toast("Draft PO " + num + " created with " + needs.length + " items"); renderOrderForm(po.data.id, "purchase");
     };
@@ -6054,7 +6089,7 @@
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("projects").insert(row); } else r = await sb.from("projects").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("proj.list");
     };
     if (id !== "new") {
@@ -6084,10 +6119,10 @@
       var untax = hours * rate;
       var hdr = { company_id: S.company.id, move_type: "out_invoice", partner_id: project.partner_id, project_id: project.id, number: await nextNumber("out_invoice"), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", amount_untaxed: untax, amount_total: untax, amount_residual: untax };
       var ins = await sb.from("invoices").insert(hdr).select("id").single();
-      if (ins.error) { toast("Could not create: " + ins.error.message); return; }
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
       var invId = ins.data.id;
       var lr = await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: invId, sequence: 10, name: document.getElementById("b-desc").value.trim() || project.name, quantity: hours, unit_price: rate, price_subtotal: untax });
-      if (lr.error) { toast("Invoice line failed: " + lr.error.message); return; }
+      if (lr.error) { toast("Invoice line failed: " + errMsg(lr.error)); return; }
       await sb.from("timesheets").update({ is_invoiced: true }).in("id", tsIds);
       m.remove(); toast("Draft invoice created from " + hours.toFixed(1) + " h"); renderInvoiceForm(invId, "out_invoice");
     };
@@ -6142,7 +6177,7 @@
       if (!document.getElementById("tf-proj").value) { toast("Pick a project"); return; }
       var row = { name: name, project_id: document.getElementById("tf-proj").value, planned_hours: parseFloat(gv("tf-planned")) || 0, date_deadline: gv("tf-deadline") || null, description: document.getElementById("tf-desc").value };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("project_tasks").insert(row); } else r = await sb.from("project_tasks").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("task.list");
     };
   }
@@ -6184,7 +6219,7 @@
       var hours = parseFloat(document.getElementById("ts-hours").value); if (!(hours > 0)) { toast("Enter the hours worked"); return; }
       var row = { company_id: S.company.id, project_id: document.getElementById("ts-proj").value, task_id: document.getElementById("ts-task").value || null, work_date: document.getElementById("ts-date").value, hours: hours, name: document.getElementById("ts-desc").value.trim() };
       var r = await sb.from("timesheets").insert(row);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Time logged"); if (onDone) onDone(); else renderView();
     };
   }
@@ -6266,13 +6301,13 @@
       var name = gv("ld-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, partner_id: document.getElementById("ld-cust").value || null, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: gv("ld-phone"), expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: parseFloat(gv("ld-prob")) || 0, source: gv("ld-src"), stage_id: l.stage_id };
       var r; if (id === "new") { row.company_id = S.company.id; row.is_active = true; r = await sb.from("crm_leads").insert(row); } else r = await sb.from("crm_leads").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("crm.pipe");
     };
     var cb = document.getElementById("ld-tocust"); if (cb) cb.onclick = async function () {
       var cname = gv("ld-contact") || gv("ld-name");
       var pr = await sb.from("partners").insert({ org_id: S.company.org_id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: gv("ld-phone") || null }).select("id").single();
-      if (pr.error) { toast("Could not create: " + pr.error.message); return; }
+      if (pr.error) { toast("Could not create: " + errMsg(pr.error)); return; }
       await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
       toast("Customer created & linked"); renderLeadForm(id);
     };
@@ -6280,14 +6315,14 @@
       if (!l.partner_id) { toast("Link or create a customer first (use Create Customer)."); return; }
       var num = await nextTenderNumber();
       var tn = await sb.from("tenders").insert({ company_id: S.company.id, number: num, name: l.name || "Tender", partner_id: l.partner_id, status: "draft", tender_date: today(), margin_pct: 15, total_cost: 0, total_sell: Number(l.expected_revenue || 0), source_lead_id: id, notes: "From opportunity: " + (l.name || "") }).select("id").single();
-      if (tn.error) { toast("Could not create tender: " + tn.error.message); return; }
+      if (tn.error) { toast("Could not create tender: " + errMsg(tn.error)); return; }
       toast("Tender created from lead - price it, then Mark Won to open the project"); renderTenderForm(tn.data.id);
     };
     var qb = document.getElementById("ld-quote"); if (qb) qb.onclick = async function () {
       if (!l.partner_id) { toast("Link or create a customer first"); return; }
       var num = await nextOrderNumber("sale");
       var so = await sb.from("sale_orders").insert({ company_id: S.company.id, number: num, partner_id: l.partner_id, date_order: today(), state: "draft", currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "From opportunity: " + l.name }).select("id").single();
-      if (so.error) { toast("Could not create: " + so.error.message); return; }
+      if (so.error) { toast("Could not create: " + errMsg(so.error)); return; }
       toast("Quotation created (draft)"); renderOrderForm(so.data.id, "sale");
     };
   }
@@ -6311,7 +6346,7 @@
     document.getElementById("stg-save").onclick = async function () {
       var name = document.getElementById("stg-name").value.trim(); if (!name) { toast("Name required"); return; }
       var r = await sb.from("crm_stages").insert({ company_id: S.company.id, name: name, sequence: parseInt(document.getElementById("stg-seq").value) || 50, is_won: document.getElementById("stg-won").value === "1" });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Stage added"); renderView();
     };
   }
@@ -6371,7 +6406,7 @@
       var name = gv("e-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, work_email: gv("e-email"), department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null, manager_id: document.getElementById("e-mgr").value || null, is_active: document.getElementById("e-active").value === "1" };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_employees").insert(row); } else r = await sb.from("hr_employees").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("hr.emp");
     };
   }
@@ -6411,7 +6446,7 @@
       var name = gv("d-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, parent_id: document.getElementById("d-parent").value || null, manager_id: document.getElementById("d-mgr").value || null };
       var r; if (dept.id) r = await sb.from("hr_departments").update(row).eq("id", dept.id); else { row.company_id = S.company.id; r = await sb.from("hr_departments").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -6443,7 +6478,7 @@
       var name = gv("j-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, department_id: document.getElementById("j-dept").value || null };
       var r; if (job.id) r = await sb.from("hr_jobs").update(row).eq("id", job.id); else { row.company_id = S.company.id; r = await sb.from("hr_jobs").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -6505,7 +6540,7 @@
     document.getElementById("lv-save").onclick = async function () {
       var row = collect();
       var r; if (leave.id) r = await sb.from("hr_leaves").update(row).eq("id", leave.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("hr_leaves").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
     var ap = document.getElementById("lv-approve"); if (ap) ap.onclick = async function () {
@@ -6513,7 +6548,7 @@
       if (row.leave_type !== "unpaid" && row.days > LV_REM + 0.001) { toast("Exceeds balance: only " + (isFinite(LV_REM) ? LV_REM : 0) + " day(s) remaining. Add an allocation first."); return; }
       row.state = "approved";
       var r = await sb.from("hr_leaves").update(row).eq("id", leave.id);
-      if (r.error) { toast("Could not approve: " + r.error.message); return; }
+      if (r.error) { toast("Could not approve: " + errMsg(r.error)); return; }
       m.remove(); toast("Approved"); renderView();
     };
   }
@@ -6548,7 +6583,7 @@
       if (!ci) { toast("Check in required"); return; }
       var wh = (ci && co) ? Math.max(0, (new Date(co) - new Date(ci)) / 3600000) : 0;
       var r = await sb.from("hr_attendances").insert({ company_id: S.company.id, employee_id: document.getElementById("at-emp").value, check_in: new Date(ci).toISOString(), check_out: co ? new Date(co).toISOString() : null, worked_hours: Number(wh.toFixed(2)) });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Attendance logged"); renderView();
     };
   }
@@ -6588,12 +6623,12 @@
       if (!gv("ex-name")) { toast("Description required"); return; }
       var row = collect();
       var r; if (exp.id) r = await sb.from("hr_expenses").update(row).eq("id", exp.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("hr_expenses").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
     var ap = document.getElementById("ex-approve"); if (ap) ap.onclick = async function () {
       var r = await sb.from("hr_expenses").update({ state: "approved" }).eq("id", exp.id);
-      if (r.error) { toast("Could not approve: " + r.error.message); return; }
+      if (r.error) { toast("Could not approve: " + errMsg(r.error)); return; }
       m.remove(); toast("Approved"); renderView();
     };
   }
@@ -6661,14 +6696,14 @@
     var elines = (await sb.from("hr_payslip_lines").select("amount,category").eq("payslip_id", slip.id)).data || [];
     var employer = elines.filter(function (l) { return l.category === "employer_cost"; }).reduce(function (s, l) { return s + Number(l.amount || 0); }, 0);
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: slip.date_to || today(), ref: "Payslip", narration: "Payroll " + (slip.date_from || ""), currency_code: S.company.currency_code, state: "draft", source_type: "payslip", source_id: String(slip.id) }).select("id").single();
-    if (e.error) { toast("Entry failed: " + e.error.message); return false; }
+    if (e.error) { toast("Entry failed: " + errMsg(e.error)); return false; }
     var eid = e.data.id, jl = [{ entry_id: eid, company_id: S.company.id, account_id: exp, label: "Gross salary", debit: gross, credit: 0 }];
     if (ded > 0.005) jl.push({ entry_id: eid, company_id: S.company.id, account_id: dedAcc, label: "Payroll deductions", debit: 0, credit: ded });
     jl.push({ entry_id: eid, company_id: S.company.id, account_id: netAcc, label: "Net salary payable", debit: 0, credit: net });
     if (employer > 0.005) { jl.push({ entry_id: eid, company_id: S.company.id, account_id: exp, label: "Employer costs (EOS/SSF)", debit: employer, credit: 0 }); jl.push({ entry_id: eid, company_id: S.company.id, account_id: dedAcc, label: "Employer cost provision", debit: 0, credit: employer }); }
     if ((await sb.from("journal_lines").insert(jl)).error) { toast("Lines failed"); return false; }
     var pr = await sb.rpc("post_entry", { p_entry: eid });
-    if (pr.error) { toast("Post failed: " + pr.error.message); return false; }
+    if (pr.error) { toast("Post failed: " + errMsg(pr.error)); return false; }
     await sb.from("hr_payslips").update({ state: "confirmed", journal_entry_id: eid }).eq("id", slip.id);
     return true;
   }
@@ -6724,7 +6759,7 @@
       if (!document.getElementById("ct-emp").value) { toast("Pick an employee"); return; }
       var row = { employee_id: document.getElementById("ct-emp").value, structure_id: document.getElementById("ct-struct").value || null, wage: parseFloat(gv("ct-wage")) || 0, currency_code: S.company.currency_code, working_days: parseFloat(gv("ct-wdays")) || 26, daily_hours: parseFloat(gv("ct-dhours")) || 8, ot_multiplier: parseFloat(gv("ct-otm")) || 1.25, state: document.getElementById("ct-state").value, date_start: gv("ct-start") || null };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_contracts").insert(row); } else r = await sb.from("hr_contracts").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("hr.contracts");
     };
   }
@@ -6760,7 +6795,7 @@
       var name = gv("sh-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, start_time: gv("sh-start"), end_time: gv("sh-end"), break_minutes: parseInt(gv("sh-break")) || 0, hours: parseFloat(gv("sh-hours")) || 0 };
       var r; if (shift.id) r = await sb.from("hr_shifts").update(row).eq("id", shift.id); else { row.company_id = S.company.id; r = await sb.from("hr_shifts").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -6799,7 +6834,7 @@
       while (d <= end) { var dow = d.getDay(); if (!(skip && (dow === 0 || dow === 6))) rows.push({ company_id: S.company.id, employee_id: emp, work_date: d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2), shift_id: shift }); d.setDate(d.getDate() + 1); }
       if (!rows.length) { toast("No days to assign"); return; }
       var r = await sb.from("hr_roster").upsert(rows, { onConflict: "employee_id,work_date" });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast(rows.length + " day(s) rostered"); renderView();
     };
   }
@@ -6826,7 +6861,7 @@
     document.getElementById("st-save").onclick = async function () {
       var name = gv("st-name"); if (!name) { toast("Name required"); return; }
       var r; if (st.id) r = await sb.from("hr_salary_structures").update({ name: name }).eq("id", st.id); else r = await sb.from("hr_salary_structures").insert({ company_id: S.company.id, name: name });
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -6869,7 +6904,7 @@
       if (!document.getElementById("hd-struct").value) { toast("Pick a structure"); return; }
       var row = { code: code, name: name, structure_id: document.getElementById("hd-struct").value, category: document.getElementById("hd-cat").value, calc_type: document.getElementById("hd-calc").value, amount: parseFloat(gv("hd-amt")) || 0, base_code: gv("hd-base").toUpperCase() || "BASIC", formula: gv("hd-formula"), sequence: parseInt(gv("hd-seq")) || 10, is_active: document.getElementById("hd-active").value === "1" };
       var r; if (head.id) r = await sb.from("hr_salary_heads").update(row).eq("id", head.id); else { row.company_id = S.company.id; r = await sb.from("hr_salary_heads").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -6914,7 +6949,7 @@
     document.querySelectorAll("[data-slip]").forEach(function (el) { el.onclick = function () { renderPayslipForm(el.dataset.slip); }; });
     document.getElementById("pr-save").onclick = async function () {
       var row = { name: gv("pr-name") || "Run", date_from: gv("pr-from") || null, date_to: gv("pr-to") || null };
-      var nid = id; if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslip_runs").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } nid = ins.data.id; } else { if ((await sb.from("hr_payslip_runs").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
+      var nid = id; if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslip_runs").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } nid = ins.data.id; } else { if ((await sb.from("hr_payslip_runs").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
       toast("Saved"); renderPayslipRunForm(nid);
     };
     var gb = document.getElementById("pr-gen"); if (gb) gb.onclick = async function () {
@@ -7027,7 +7062,7 @@
       if (persist) {
         var row = { employee_id: g.employee_id, contract_id: contract.id, date_from: g.date_from || null, date_to: g.date_to || null, worked_days: g.worked_days, ot_hours: g.ot_hours, ut_hours: g.ut_hours, leave_days: g.leave_days, gross: res.gross, total_deductions: res.deductions, net: res.net, currency_code: slip.currency_code };
         var sid = id;
-        if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslips").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+        if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("hr_payslips").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
         else { if ((await sb.from("hr_payslips").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
         await sb.from("hr_payslip_lines").delete().eq("payslip_id", sid);
         await sb.from("hr_payslip_lines").insert(res.lines.map(function (l) { return { company_id: S.company.id, payslip_id: sid, code: l.code, name: l.name, category: l.category, amount: l.amount, sequence: l.sequence }; }));
@@ -7078,7 +7113,7 @@
     document.getElementById("al-save").onclick = async function () {
       var row = { employee_id: document.getElementById("al-emp").value, leave_type: document.getElementById("al-type").value, year: parseInt(gv("al-year")) || new Date().getFullYear(), days: parseFloat(gv("al-days")) || 0 };
       var r; if (al.id) r = await sb.from("hr_leave_allocations").update(row).eq("id", al.id); else { row.company_id = S.company.id; r = await sb.from("hr_leave_allocations").insert(row); }
-      if (r.error) { toast("Could not save: " + r.error.message); return; }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -7114,7 +7149,7 @@
         var emp = sel.dataset.emp, date = sel.dataset.date, sh = sel.value, r;
         if (sh) r = await sb.from("hr_roster").upsert({ company_id: S.company.id, employee_id: emp, work_date: date, shift_id: sh }, { onConflict: "employee_id,work_date" });
         else r = await sb.from("hr_roster").delete().eq("company_id", S.company.id).eq("employee_id", emp).eq("work_date", date);
-        if (r && r.error) toast("Could not save: " + r.error.message); else toast("Roster updated");
+        if (r && r.error) toast("Could not save: " + errMsg(r.error)); else toast("Roster updated");
       };
     });
   }
@@ -7200,7 +7235,7 @@
     document.getElementById("boq-save").onclick = async function () {
       await sb.from("project_boq").delete().eq("project_id", projectId);
       var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr, i) { var q = parseFloat(tr.querySelector(".bq-qty").value) || 0, r = parseFloat(tr.querySelector(".bq-rate").value) || 0; return { company_id: S.company.id, project_id: projectId, code: tr.querySelector(".bq-code").value.trim(), description: tr.querySelector(".bq-desc").value.trim() || "Item", unit: tr.querySelector(".bq-unit").value.trim(), quantity: q, rate: r, amount: q * r, sequence: (i + 1) * 10 }; });
-      if (rows.length) { var ins = await sb.from("project_boq").insert(rows); if (ins.error) { toast(ins.error.message); return; } }
+      if (rows.length) { var ins = await sb.from("project_boq").insert(rows); if (ins.error) { toast(errMsg(ins.error)); return; } }
       await sb.from("projects").update({ contract_value: rows.reduce(function (s, x) { return s + x.amount; }, 0) }).eq("id", projectId);
       toast("Schedule of values saved"); renderProjectForm(projectId);
     };
@@ -7223,7 +7258,7 @@
     document.getElementById("bg-save").onclick = async function () {
       await sb.from("project_budgets").delete().eq("project_id", projectId);
       var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) { return { company_id: S.company.id, project_id: projectId, cost_code_id: tr.querySelector(".bg-cc").value || null, category: tr.querySelector(".bg-cat").value.trim() || "Cost", description: tr.querySelector(".bg-desc").value.trim(), amount: parseFloat(tr.querySelector(".bg-amt").value) || 0 }; });
-      if (rows.length) { var ins = await sb.from("project_budgets").insert(rows); if (ins.error) { toast(ins.error.message); return; } }
+      if (rows.length) { var ins = await sb.from("project_budgets").insert(rows); if (ins.error) { toast(errMsg(ins.error)); return; } }
       toast("Budget saved"); renderProjectForm(projectId);
     };
     if (lines.length) lines.forEach(addRow); else addRow(null);
@@ -7266,7 +7301,7 @@
       if (!code) { toast("Enter a code"); return; }
       var row = { code: code, name: document.getElementById("cc-name").value.trim(), category: document.getElementById("cc-cat").value, sort: parseInt(document.getElementById("cc-sort").value, 10) || 10, is_active: document.getElementById("cc-active").value === "1" };
       var r; if (c.id) r = await sb.from("cost_codes").update(row).eq("id", c.id); else { row.company_id = S.company.id; r = await sb.from("cost_codes").insert(row); }
-      if (r.error) { toast(r.error.message); return; }
+      if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
   }
@@ -7344,8 +7379,8 @@
     document.body.appendChild(m);
     document.getElementById("v-cancel").onclick = function () { m.remove(); };
     function collect() { return { project_id: document.getElementById("v-proj").value, number: gv("v-num"), vdate: gv("v-date"), description: gv("v-desc") || "Variation", amount: parseFloat(gv("v-amt")) || 0 }; }
-    document.getElementById("v-save").onclick = async function () { if (!gv("v-desc")) { toast("Description required"); return; } var row = collect(); var r; if (v.id) r = await sb.from("project_variations").update(row).eq("id", v.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("project_variations").insert(row); } if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView(); };
-    var ap = document.getElementById("v-approve"); if (ap) ap.onclick = async function () { var row = collect(); row.state = "approved"; var r = await sb.from("project_variations").update(row).eq("id", v.id); if (r.error) { toast(r.error.message); return; } var pr = (await sb.from("projects").select("contract_value").eq("id", row.project_id).maybeSingle()).data; await sb.from("projects").update({ contract_value: (Number(pr.contract_value) || 0) + row.amount }).eq("id", row.project_id); m.remove(); toast("Approved - contract value updated"); renderView(); };
+    document.getElementById("v-save").onclick = async function () { if (!gv("v-desc")) { toast("Description required"); return; } var row = collect(); var r; if (v.id) r = await sb.from("project_variations").update(row).eq("id", v.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("project_variations").insert(row); } if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView(); };
+    var ap = document.getElementById("v-approve"); if (ap) ap.onclick = async function () { var row = collect(); row.state = "approved"; var r = await sb.from("project_variations").update(row).eq("id", v.id); if (r.error) { toast(errMsg(r.error)); return; } var pr = (await sb.from("projects").select("contract_value").eq("id", row.project_id).maybeSingle()).data; await sb.from("projects").update({ contract_value: (Number(pr.contract_value) || 0) + row.amount }).eq("id", row.project_id); m.remove(); toast("Approved - contract value updated"); renderView(); };
   }
 
   // ---- Subcontracts ----
@@ -7382,7 +7417,7 @@
       '</div><div class="foot"><button class="btn" id="sc-cancel">Cancel</button><button class="btn pri" id="sc-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sc-cancel").onclick = function () { m.remove(); };
-    document.getElementById("sc-save").onclick = async function () { if (!gv("sc-name")) { toast("Name required"); return; } var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value }; var r; if (sc.id) r = await sb.from("subcontracts").update(row).eq("id", sc.id); else { row.company_id = S.company.id; r = await sb.from("subcontracts").insert(row); } if (r.error) { toast(r.error.message); return; } m.remove(); toast("Saved"); renderView(); };
+    document.getElementById("sc-save").onclick = async function () { if (!gv("sc-name")) { toast("Name required"); return; } var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value }; var r; if (sc.id) r = await sb.from("subcontracts").update(row).eq("id", sc.id); else { row.company_id = S.company.id; r = await sb.from("subcontracts").insert(row); } if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView(); };
   }
 
   // ---- Progress certificates (IPC) ----
@@ -7479,7 +7514,7 @@
       var s = computeSummary();
       var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("project_certificates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("project_certificates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("project_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       await sb.from("project_certificate_lines").delete().eq("certificate_id", sid);
       var lrows = [];
@@ -7499,7 +7534,7 @@
       if (!(amt > 0.005)) { toast("This certificate has nothing to invoice - the current amount is zero."); return; }
       var num = await nextNumber("out_invoice");
       var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || ""), amount_untaxed: amt, amount_total: amt, amount_residual: amt }).select("id").single();
-      if (ins.error) { toast("Invoice failed: " + ins.error.message); return; }
+      if (ins.error) { toast("Invoice failed: " + errMsg(ins.error)); return; }
       var incAcc = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("code", "7000").maybeSingle()).data;
       await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
       // book the retention held by the client as a receivable (revenue recognised on gross work)
@@ -7753,14 +7788,14 @@
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     if (!jr) { toast("No misc journal"); return false; }
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: date || today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "retention_release", source_id: "" }).select("id").single();
-    if (e.error) { toast(e.error.message); return false; }
+    if (e.error) { toast(errMsg(e.error)); return false; }
     var lr = await sb.from("journal_lines").insert([
       { entry_id: e.data.id, company_id: S.company.id, account_id: by[drCode], label: narr, debit: Number(amount), credit: 0 },
       { entry_id: e.data.id, company_id: S.company.id, account_id: by[crCode], label: narr, debit: 0, credit: Number(amount) }
     ]);
-    if (lr.error) { toast(lr.error.message); return false; }
+    if (lr.error) { toast(errMsg(lr.error)); return false; }
     var pr = await sb.rpc("post_entry", { p_entry: e.data.id });
-    if (pr.error) { toast(pr.error.message); return false; }
+    if (pr.error) { toast(errMsg(pr.error)); return false; }
     var rec = { company_id: S.company.id, side: side, amount: Number(amount), release_date: date || today(), journal_entry_id: e.data.id };
     if (side === "client") rec.project_id = entityId; else rec.subcontract_id = entityId;
     await sb.from("retention_releases").insert(rec);
@@ -7902,9 +7937,9 @@
       var num = gv("mr-num") || (req.number || (await nextReqNumber()));
       var row = { number: num, project_id: document.getElementById("mr-proj").value || null, requested_by: gv("mr-by"), req_date: gv("mr-date"), note: gv("mr-note") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("material_requisitions").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("material_requisitions").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("material_requisitions").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("material_requisition_lines").delete().eq("requisition_id", id); }
-      if (lns.length) { var lr = await sb.from("material_requisition_lines").insert(lns.map(function (l, i) { return { company_id: S.company.id, requisition_id: sid, product_id: l.product_id, name: l.name, quantity: l.quantity, uom: l.uom, sequence: (i + 1) * 10 }; })); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; } }
+      if (lns.length) { var lr = await sb.from("material_requisition_lines").insert(lns.map(function (l, i) { return { company_id: S.company.id, requisition_id: sid, product_id: l.product_id, name: l.name, quantity: l.quantity, uom: l.uom, sequence: (i + 1) * 10 }; })); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; } }
       return sid;
     }
     var sv = document.getElementById("mr-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderRequisitionForm(sid); } };
@@ -7913,7 +7948,7 @@
       var lns = currentLines(); if (!lns.length) { toast("Add at least one item first"); return; }
       var poNum = await nextOrderNumber("purchase");
       var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: poNum, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: document.getElementById("mr-proj").value || null, note: "From requisition " + (gv("mr-num") || "") }).select("id").single();
-      if (ins.error) { toast("Could not create PO: " + ins.error.message); return; }
+      if (ins.error) { toast("Could not create PO: " + errMsg(ins.error)); return; }
       var prMap = {}; products.forEach(function (p) { prMap[p.id] = p; });
       await sb.from("purchase_order_lines").insert(lns.map(function (l, i) { var pr = l.product_id ? prMap[l.product_id] : null, price = pr ? Number(pr.cost_price || 0) : 0; return { company_id: S.company.id, order_id: ins.data.id, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name + (l.uom ? " (" + l.uom + ")" : ""), quantity: l.quantity, unit_price: price, price_subtotal: l.quantity * price }; }));
       await sb.from("material_requisitions").update({ state: "ordered" }).eq("id", sid);
@@ -7997,7 +8032,7 @@
       var s = compute();
       var row = { subcontract_id: scId, number: gv("sx-num"), date_to: gv("sx-date"), percent_complete: s.pct, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, net_to_date: s.net, previous_certified: prevNet, current_certified: s.current };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("subcontract_certificates").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("subcontract_certificates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("subcontract_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -8011,7 +8046,7 @@
       var accBy = {}; accs.forEach(function (a) { accBy[a.code] = a.id; });
       var expAcc = accBy["6100"] || accBy["6000"] || null;
       var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "in_invoice", partner_id: full.vendor_id, number: num, invoice_date: cert.date_to || today(), currency_code: S.company.currency_code, state: "draft", project_id: full.project_id || null, ref: "Subcontract cert " + (cert.number || "") }).select("id").single();
-      if (ins.error) { toast("Bill failed: " + ins.error.message); return; }
+      if (ins.error) { toast("Bill failed: " + errMsg(ins.error)); return; }
       await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Subcontract certificate " + (cert.number || "") + " - " + (full.name || ""), account_id: expAcc, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
       // book the retention we hold from the subcontractor as a payable (cost recognised on gross work)
       var prevRet = prevCerts[0] ? Number(prevCerts[0].retention_amount || 0) : 0;
@@ -8122,10 +8157,10 @@
       var n = gv("tn-num") || (t.number || (await nextTenderNumber()));
       var row = { number: n, name: gv("tn-name") || "Tender", partner_id: document.getElementById("tn-client").value || null, tender_date: gv("tn-date"), valid_until: gv("tn-valid") || null, margin_pct: num(gv("tn-margin")), total_cost: tot.cost, total_sell: tot.sell };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; var ins = await sb.from("tenders").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; var ins = await sb.from("tenders").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("tenders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("tender_lines").delete().eq("tender_id", id); }
       var lns = currentLines();
-      if (lns.length) { var lr = await sb.from("tender_lines").insert(lns.map(function (l, i) { return Object.assign({ company_id: S.company.id, tender_id: sid, sequence: (i + 1) * 10 }, l); })); if (lr.error) { toast("Lines failed: " + lr.error.message); return null; } }
+      if (lns.length) { var lr = await sb.from("tender_lines").insert(lns.map(function (l, i) { return Object.assign({ company_id: S.company.id, tender_id: sid, sequence: (i + 1) * 10 }, l); })); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; } }
       return sid;
     }
     var sv = document.getElementById("tn-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderTenderForm(sid); } };
@@ -8139,7 +8174,7 @@
     if (!t) { toast("Tender not found"); return; }
     var lines = (await sb.from("tender_lines").select("*").eq("tender_id", tenderId).order("sequence")).data || [];
     var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
-    if (proj.error) { toast("Could not create project: " + proj.error.message); return; }
+    if (proj.error) { toast("Could not create project: " + errMsg(proj.error)); return; }
     var pid = proj.data.id;
     var mat = 0, lab = 0, sub = 0, oth = 0;
     lines.forEach(function (l) { var q = Number(l.quantity || 0); mat += Number(l.material_cost || 0) * q; lab += Number(l.labour_cost || 0) * q; sub += Number(l.subcontract_cost || 0) * q; oth += Number(l.other_cost || 0) * q; });
@@ -8202,10 +8237,10 @@
     document.getElementById("bm-save").onclick = async function () {
       var row = { name: gv("bm-name") || "BOM", product_id: document.getElementById("bm-prod").value || null, output_qty: parseFloat(gv("bm-outqty")) || 1 };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("boms").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("boms").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("boms").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("bom_lines").delete().eq("bom_id", id); }
       var lns = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr, i) { var ps = tr.querySelector(".bl-prod"); return { company_id: S.company.id, bom_id: sid, product_id: ps.value || null, name: tr.querySelector(".bl-name").value.trim(), quantity: parseFloat(tr.querySelector(".bl-qty").value) || 0, unit: tr.querySelector(".bl-unit").value.trim(), sequence: (i + 1) * 10 }; }).filter(function (l) { return l.product_id || l.name; });
-      if (lns.length) { var lr = await sb.from("bom_lines").insert(lns); if (lr.error) { toast("Components failed: " + lr.error.message); return; } }
+      if (lns.length) { var lr = await sb.from("bom_lines").insert(lns); if (lr.error) { toast("Components failed: " + errMsg(lr.error)); return; } }
       toast("Saved"); go("mfg.boms");
     };
   }
@@ -8271,7 +8306,7 @@
     async function woPersist() {
       var row = { product_id: document.getElementById("wo-prod") ? (document.getElementById("wo-prod").value || null) : wo.product_id, bom_id: document.getElementById("wo-bom") ? (document.getElementById("wo-bom").value || null) : wo.bom_id, project_id: document.getElementById("wo-proj") ? (document.getElementById("wo-proj").value || null) : wo.project_id, quantity: parseFloat(gv("wo-qty")) || 0, date_planned: gv("wo-date") };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextWoNumber(); var ins = await sb.from("work_orders").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextWoNumber(); var ins = await sb.from("work_orders").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("work_orders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -8361,7 +8396,7 @@
     async function persist() {
       var row = { description: gv("ij-desc") || "Installation", project_id: (document.getElementById("ij-proj") ? document.getElementById("ij-proj").value : j.project_id) || null, area: gv("ij-area"), foreman: gv("ij-foreman"), crew_size: parseInt(gv("ij-crew"), 10) || 0, planned_qty: parseFloat(gv("ij-planned")) || 0, unit: gv("ij-unit"), labour_rate: parseFloat(gv("ij-rate")) || 0, due_date: gv("ij-due") || null };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextInstNumber(); var ins = await sb.from("install_jobs").insert(row).select("id").single(); if (ins.error) { toast(ins.error.message); return null; } sid = ins.data.id; }
+      if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextInstNumber(); var ins = await sb.from("install_jobs").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("install_jobs").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       return sid;
     }
@@ -8389,7 +8424,7 @@
       var cost = hours * rate, eid = null;
       if (cost > 0.005 && j.project_id) eid = await postRetentionEntry("6400", "4200", cost, "Install labour " + (j.number || "") + " - " + (j.description || ""), jobId, "install_labour");
       var ins = await sb.from("install_logs").insert({ company_id: S.company.id, job_id: jobId, log_date: document.getElementById("il-date").value, installed_qty: qty, hours: hours, note: document.getElementById("il-note").value.trim(), journal_entry_id: eid || null }).select("id").single();
-      if (ins.error) { toast(ins.error.message); return; }
+      if (ins.error) { toast(errMsg(ins.error)); return; }
       await sb.from("install_jobs").update({ installed_qty: Number(j.installed_qty || 0) + qty, labour_hours: Number(j.labour_hours || 0) + hours, labour_cost: Number(j.labour_cost || 0) + cost, status: j.status === "draft" ? "in_progress" : j.status }).eq("id", jobId);
       m.remove(); toast(cost > 0 ? ("Logged - " + cc + " " + money(cost) + " labour costed to the project") : "Logged"); renderInstallJobForm(jobId);
     };
