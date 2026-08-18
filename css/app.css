@@ -8,12 +8,10 @@
   --brand:"Onest","Segoe UI",sans-serif;
   --sh:0 1px 2px rgba(22,23,28,.05),0 14px 40px -20px rgba(22,23,28,.22);
   --app:#16171c;--app2:#24252c;         /* Orbit ink navbar (brand: ink + paper, blue reserved for AI/actions) */
-  --bg-photo:url("/img/bg-light.svg");--bg-scrim:rgba(250,250,248,.46);  /* themed backdrop for login + home; replace the /img files to change the picture */
 }
 /* auto dark only when the user hasn't picked an explicit theme (System) */
 @media (prefers-color-scheme:dark){:root:not([data-theme]){
   --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#8b96a8;
-  --bg-photo:url("/img/bg-dark.svg");--bg-scrim:rgba(10,11,16,.55);
   --line:#262832;--accent:#6f9bff;--accent2:#3f6fe0;--accent-soft:#18243f;
   --good:#3ec483;--good-s:#112720;--warn:#e0a53a;--warn-s:#291f12;--bad:#f4573d;--bad-s:#2a1513;--slate:#8595a9;--slate-s:#1a212b;
   --sh:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
@@ -21,7 +19,6 @@
 /* ===== preset themes (chosen in Settings > Appearance) ===== */
 :root[data-theme="dark"]{
   --bg:#0c0d12;--panel:#16181f;--panel2:#101219;--ink:#e6ebf2;--ink2:#9a9ba2;--ink3:#8b96a8;
-  --bg-photo:url("/img/bg-dark.svg");--bg-scrim:rgba(10,11,16,.55);
   --line:#262832;--accent:#6f9bff;--accent2:#3f6fe0;--accent-soft:#18243f;
   --good:#3ec483;--good-s:#112720;--warn:#e0a53a;--warn-s:#291f12;--bad:#f4573d;--bad-s:#2a1513;--slate:#8595a9;--slate-s:#1a212b;
   --sh:0 1px 2px rgba(0,0,0,.3),0 10px 28px rgba(0,0,0,.4);
@@ -66,7 +63,7 @@ a{color:var(--accent);text-decoration:none}
 button{font-family:inherit}
 
 /* ===== login ===== */
-.login{display:grid;place-items:center;min-height:100vh;padding:20px;background:linear-gradient(var(--bg-scrim),var(--bg-scrim)),var(--bg-photo) center/cover fixed no-repeat,var(--bg)}
+.login{display:grid;place-items:center;min-height:100vh;padding:20px}
 .login .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--sh);width:380px;max-width:100%;padding:28px}
 .login .logo{width:46px;height:46px;display:grid;place-items:center;margin-bottom:12px;color:var(--ink)}
 .login .logo svg{width:44px;height:44px;display:block}
@@ -162,7 +159,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 }
 
 /* ===== app switcher home ===== */
-.o-home{height:100%;overflow:auto;background:linear-gradient(var(--bg-scrim),var(--bg-scrim)),var(--bg-photo) center/cover fixed no-repeat,var(--bg)}
+.o-home{height:100%;overflow:auto;background:var(--bg)}
 .o-home-top{display:flex;align-items:center;height:46px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px;gap:10px}
 .o-home-top .logo{width:26px;height:26px;display:grid;place-items:center;color:var(--ink)}
 .o-home-top .logo svg{width:26px;height:26px;display:block}
