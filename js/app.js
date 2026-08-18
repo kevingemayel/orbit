@@ -499,18 +499,18 @@
     document.getElementById("pa-out").onclick = signOut;
   }
   function termsHtml() {
-    return '<p class="muted" style="margin-top:0">Draft ' + TC_VERSION + ' &mdash; <b>[FILL: have a lawyer review before onboarding paying customers.]</b></p><ol style="padding-left:18px;font-size:13.5px;line-height:1.6">' +
-      '<li><b>Parties.</b> These terms are between <b>[FILL: legal entity, e.g. Space Work SARL]</b> ("Space Work", "we") and the company that registers ("you").</li>' +
-      '<li><b>Service.</b> Orbit is a cloud construction-management platform provided on an as-is, as-available basis. Access requires our approval of your application.</li>' +
-      '<li><b>Your account &amp; data.</b> You are responsible for your account, your users and the accuracy of the data you enter. You keep ownership of your data and grant us the limited rights needed to host and operate the service for you.</li>' +
-      '<li><b>Acceptable use.</b> No unlawful use; no attempts to breach security or other tenants&rsquo; isolation; no reselling of the service without our agreement.</li>' +
-      '<li><b>Fees.</b> [FILL: is Orbit paid? subscription / per-company pricing / free during beta.]</li>' +
-      '<li><b>Privacy &amp; security.</b> We process personal data to run the service and apply reasonable security measures, in line with applicable data-protection law (including GDPR / CCPA where relevant). [FILL: link your privacy policy.]</li>' +
-      '<li><b>Availability &amp; liability.</b> We aim for high availability but do not warrant uninterrupted service. To the maximum extent permitted by law, our liability is limited [FILL: cap, e.g. to the fees paid in the prior 3 months].</li>' +
-      '<li><b>Suspension &amp; termination.</b> We may suspend or terminate accounts that breach these terms or whose application is rejected. You may stop using the service at any time.</li>' +
-      '<li><b>Changes.</b> We may update these terms; continued use means you accept the current version.</li>' +
-      '<li><b>Governing law.</b> These terms are governed by the laws of <b>[FILL: country / jurisdiction]</b> and disputes are subject to its courts.</li>' +
-      '<li><b>Contact.</b> [FILL: support / legal email].</li>' +
+    return '<p class="muted" style="margin-top:0">Last updated 19 August 2026 &middot; version ' + TC_VERSION + '</p><ol style="padding-left:18px;font-size:13.5px;line-height:1.6">' +
+      '<li><b>Parties.</b> These Terms are an agreement between <b>SPACE WORK S.A.R.L</b>, a company registered in Lebanon (Commercial Registration No. 1032139), registered office at CityGate, Sioufi, Ashrafieh, Beirut, Lebanon ("Space Work", "we", "us"), and the company or organisation that registers for an account ("you").</li>' +
+      '<li><b>The service.</b> Orbit is a cloud-based construction and business-management platform ("the Service"), provided on an "as is" and "as available" basis. Access requires that we review and approve your application. We may add, change or withdraw features.</li>' +
+      '<li><b>Your account &amp; your data.</b> You are responsible for your account, the users you invite, and the accuracy and lawfulness of the data you enter. You retain ownership of your data; you grant us the limited rights needed to host, process, back up and operate the Service for you. You can request an export or deletion of your data by emailing info@spacework.ai.</li>' +
+      '<li><b>Acceptable use.</b> You must not use the Service unlawfully, attempt to breach its security or access other customers&rsquo; data, upload malware, or resell or provide the Service to third parties without our written agreement.</li>' +
+      '<li><b>Fees.</b> Orbit is currently provided <b>free of charge</b>, with no ongoing commitment. We may introduce fees in future; if we do, we will give reasonable notice, and you may stop using the Service if you do not wish to accept them.</li>' +
+      '<li><b>Privacy &amp; security.</b> We process personal data only to provide and improve the Service, and apply reasonable technical and organisational security measures, consistent with applicable data-protection law (including the GDPR and CCPA where they apply). We do not sell your data. For any privacy request, contact info@spacework.ai.</li>' +
+      '<li><b>Availability &amp; liability.</b> We aim for high availability but do not warrant that the Service will be uninterrupted or error-free. To the maximum extent permitted by law, Space Work is not liable for indirect or consequential loss, or loss of profit or data; and as the Service is provided free of charge, our total liability is limited to the greatest extent the law allows. You remain responsible for keeping your own records.</li>' +
+      '<li><b>Suspension &amp; termination.</b> We may suspend or terminate access that breaches these Terms, poses a security risk, or where an application is not approved. You may stop using the Service and close your account at any time.</li>' +
+      '<li><b>Changes to these Terms.</b> We may update these Terms from time to time; the current version is shown at sign-up, and continued use of the Service means you accept the version in force.</li>' +
+      '<li><b>Governing law.</b> These Terms are governed by the laws of <b>Lebanon</b>, and any dispute is subject to the competent courts of <b>Beirut</b>.</li>' +
+      '<li><b>Contact.</b> Space Work S.A.R.L &mdash; info@spacework.ai.</li>' +
       '</ol>';
   }
   function openTermsModal() {
