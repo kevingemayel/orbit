@@ -1872,17 +1872,18 @@
     return {
       title: "Products", pageSize: 80,
       fetch: function () { return sb.from("products").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
-      searchText: function (p) { return (p.name || "") + " " + (p.default_code || ""); },
+      searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
         { label: "Reference", get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
-        { label: "Type", get: function (p) { return '<span class="muted">' + esc(PTYPE[p.type] || p.type) + '</span>'; } },
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
+        { label: "Family", get: function (p) { return esc(p.family || ""); } },
+        { label: "Form", get: function (p) { return p.material_form && p.material_form !== "generic" ? '<span class="badge">' + esc(matFormLabel(p.material_form)) + '</span>' : ""; } },
         { label: "Sales Price", num: true, get: function (p) { return money(p.list_price); } },
         { label: "Cost", num: true, get: function (p) { return money(p.cost_price); } },
         { label: "Status", get: function (p) { return p.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
-      groupBy: [{ label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
+      groupBy: [{ label: "Family", get: function (p) { return p.family || "Unclassified"; } }, { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } }, { label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
       kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
       onOpen: function (p) { renderProductForm(p.id); },
       onNew: function () { renderProductForm("new"); }
@@ -2734,6 +2735,117 @@
   }
 
   // ============================ PRODUCT FORM ============================
+  // ============================ MATERIAL SPECIFICATION ============================
+  // A fabricator's material catalog: classification tree + a form-specific dimensional
+  // and pricing model (bar / sheet / liquid / roll) with live unit conversions. The
+  // classification + dimensions + computed unit prices are kept in products.spec (jsonb);
+  // material_form + family are real columns for grouping. The computed base unit price
+  // is pushed into the product Cost field so purchasing and stock use it.
+  var MATERIAL_FORMS = [["generic", "General item"], ["bar", "Bar / profile"], ["sheet", "Sheet / plate"], ["liquid", "Liquid (paint, sealant)"], ["roll", "Roll / coil"]];
+  function matFormLabel(f) { if (!f || f === "generic") return ""; var m = {}; MATERIAL_FORMS.forEach(function (x) { m[x[0]] = x[1]; }); return m[f] || f; }
+  var MATERIAL_DENSITY = { "Aluminium": 2700, "Steel": 7850, "Stainless steel": 8000, "Glass": 2500, "Copper": 8960, "Brass": 8500, "Bronze": 8800, "Zinc": 7140, "Lead": 11340, "PVC": 1400, "Polycarbonate": 1200, "Acrylic": 1180, "Wood": 700, "MDF": 750, "Concrete": 2400, "Rubber": 1500, "Other": 0 };
+  function msNum(id) { var e = document.getElementById(id); return e ? (parseFloat(e.value) || 0) : 0; }
+  function msVal(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
+  function msFmt(x, dp) { if (!isFinite(x)) return "-"; var f = dp == null ? 2 : dp; return (Math.round(x * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString("en-US", { minimumFractionDigits: (f === 2 ? 2 : 0), maximumFractionDigits: f }); }
+  function materialSpecHTML(p) {
+    var sp = (p && p.spec) || {}, form = p.material_form || "generic";
+    function ti(id, val, ph) { return '<input id="' + id + '" value="' + esc(val || "") + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + '>'; }
+    var matOpts = '<option value="">(none)</option>' + Object.keys(MATERIAL_DENSITY).map(function (m) { return '<option' + (sp.material === m ? " selected" : "") + '>' + m + '</option>'; }).join("");
+    var formSel = '<select id="ms-form">' + MATERIAL_FORMS.map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
+    return '<div class="o-matspec"><div class="o-cf-head">Material specification</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Family", ti("ms-family", p.family, "e.g. Aluminium"), "The top level of the material tree - the broadest group.") +
+      fld("Subfamily", ti("ms-subfamily", sp.subfamily, "e.g. Extrusion"), "") +
+      fld("Sub-subfamily", ti("ms-subsubfamily", sp.subsubfamily), "") +
+      '</div><div>' +
+      fld("Type", ti("ms-type", sp.type, "e.g. Mullion"), "") +
+      fld("Subtype", ti("ms-subtype", sp.subtype), "") +
+      fld("Sub-subtype", ti("ms-subsubtype", sp.subsubtype), "") +
+      '</div></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Material", '<select id="ms-material">' + matOpts + '</select>', "Sets the density used to work out weight automatically.") +
+      fld("Colour", ti("ms-color", sp.color, "e.g. RAL 9016"), "") +
+      '</div><div>' +
+      fld("Brand", ti("ms-brand", sp.brand), "") +
+      fld("Supplier", ti("ms-supplier", sp.supplier), "") +
+      '</div></div>' +
+      '<div class="ms-formrow"><label for="ms-form">Material form</label>' + formSel + '<span class="muted" style="font-size:12px">Pick the shape so the right measurements and price conversions appear.</span></div>' +
+      '<div id="ms-dims"></div></div>';
+  }
+  function matDimsHTML(form, sp) {
+    var d = sp.dims || {};
+    function f(id, label, val, unit) { return '<div class="ms-f"><label>' + label + (unit ? ' <span class="muted">(' + unit + ')</span>' : "") + '</label><input id="' + id + '" type="number" step="any" value="' + (val != null ? val : "") + '"></div>'; }
+    function basis(id, opts, cur) { return '<div class="ms-f"><label>Priced by</label><select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>'; }
+    var pval = f("ms-pval", "Price value", sp.pval, S.company.currency_code), out = '<div class="ms-out" id="ms-out"></div>';
+    if (form === "bar") {
+      return '<div class="ms-grid">' + f("ms-len", "Length per bar", d.len, "m") + f("ms-wpm", "Weight", d.wpm, "kg/m") +
+        basis("ms-basis", [["kg", "Price per kg"], ["m", "Price per metre"], ["bar", "Price per bar"]], sp.basis || "kg") + pval + '</div>' + out;
+    }
+    if (form === "sheet") {
+      var dens = d.density != null ? d.density : (MATERIAL_DENSITY[sp.material] || "");
+      return '<div class="ms-grid">' + f("ms-w", "Width", d.w, "mm") + f("ms-h", "Height", d.h, "mm") + f("ms-t", "Thickness", d.t, "mm") +
+        '<div class="ms-f"><label>Density <span class="muted">(kg/m3)</span></label><input id="ms-density" type="number" step="any" value="' + (dens !== "" ? dens : "") + '"></div>' +
+        basis("ms-basis", [["kg", "Price per kg"], ["sheet", "Price per sheet"], ["m2", "Price per m2"]], sp.basis || "sheet") + pval + '</div>' + out;
+    }
+    if (form === "liquid") {
+      var units = [["L", "L"], ["ml", "ml"], ["gal", "Gallon"]];
+      return '<div class="ms-grid">' + f("ms-vol", "Container size", d.vol) +
+        '<div class="ms-f"><label>Unit</label><select id="ms-volunit">' + units.map(function (u) { return '<option value="' + u[0] + '"' + ((d.volunit || "L") === u[0] ? " selected" : "") + '>' + u[1] + '</option>'; }).join("") + '</select></div>' +
+        f("ms-batch", "Batch size", d.batch, "units") + f("ms-pval", "Price per container", sp.pval, S.company.currency_code) + '</div>' + out;
+    }
+    if (form === "roll") {
+      return '<div class="ms-grid">' + f("ms-rlen", "Roll length", d.rlen, "m") + f("ms-rwt", "Roll weight", d.rwt, "kg") +
+        basis("ms-basis", [["kg", "Price per kg"], ["lm", "Price per linear m"], ["roll", "Price per roll"]], sp.basis || "roll") + pval + '</div>' + out;
+    }
+    return "";  // generic: no dimensional panel
+  }
+  function matCompute() {
+    var fe = document.getElementById("ms-form"); if (!fe) return;
+    var form = fe.value, out = document.getElementById("ms-out"); if (!out) return;
+    var cc = S.company.currency_code, cost = null, html = "";
+    function chip(k, v, u) { return '<span class="ms-chip"><span class="ms-chip-k">' + k + '</span><b>' + v + (u ? " " + u : "") + '</b></span>'; }
+    if (form === "bar") {
+      var L = msNum("ms-len"), wpm = msNum("ms-wpm"), b = msVal("ms-basis"), pv = msNum("ms-pval"), wpb = wpm * L, pk, pm, pb;
+      if (b === "kg") { pk = pv; pm = pv * wpm; pb = pv * wpb; } else if (b === "m") { pm = pv; pk = wpm ? pv / wpm : 0; pb = pv * L; } else { pb = pv; pk = wpb ? pv / wpb : 0; pm = L ? pv / L : 0; }
+      cost = pb; html = chip("Weight/bar", msFmt(wpb), "kg") + chip(cc + "/kg", msFmt(pk)) + chip(cc + "/m", msFmt(pm)) + chip(cc + "/bar", msFmt(pb));
+    } else if (form === "sheet") {
+      var w = msNum("ms-w"), h = msNum("ms-h"), t = msNum("ms-t"), dn = msNum("ms-density"), b2 = msVal("ms-basis"), p2 = msNum("ms-pval");
+      var area = w * h / 1e6, wt = area * (t / 1000) * dn, kgm2 = (t / 1000) * dn, pk2, ps, pm2;
+      if (b2 === "kg") { pk2 = p2; ps = p2 * wt; pm2 = p2 * kgm2; } else if (b2 === "sheet") { ps = p2; pk2 = wt ? p2 / wt : 0; pm2 = area ? ps / area : 0; } else { pm2 = p2; ps = p2 * area; pk2 = wt ? ps / wt : 0; }
+      cost = ps; html = chip("Area", msFmt(area, 3), "m2") + chip("Weight/sheet", msFmt(wt), "kg") + chip("kg/m2", msFmt(kgm2)) + chip(cc + "/kg", msFmt(pk2)) + chip(cc + "/sheet", msFmt(ps)) + chip(cc + "/m2", msFmt(pm2));
+    } else if (form === "liquid") {
+      var vol = msNum("ms-vol"), u = msVal("ms-volunit") || "L", pv3 = msNum("ms-pval");
+      var factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1), liters = vol * factor, perL = liters ? pv3 / liters : 0;
+      cost = pv3; html = chip("Litres/container", msFmt(liters, 3), "L") + chip(cc + "/L", msFmt(perL)) + chip(cc + "/container", msFmt(pv3));
+    } else if (form === "roll") {
+      var L2 = msNum("ms-rlen"), wt2 = msNum("ms-rwt"), b3 = msVal("ms-basis"), pv4 = msNum("ms-pval"), pk3, plm, pr;
+      if (b3 === "kg") { pk3 = pv4; plm = L2 ? pv4 * wt2 / L2 : 0; pr = pv4 * wt2; } else if (b3 === "lm") { plm = pv4; pk3 = wt2 ? pv4 * L2 / wt2 : 0; pr = pv4 * L2; } else { pr = pv4; pk3 = wt2 ? pv4 / wt2 : 0; plm = L2 ? pv4 / L2 : 0; }
+      cost = pr; html = chip("Weight", msFmt(wt2), "kg") + chip("Length", msFmt(L2), "m") + chip(cc + "/kg", msFmt(pk3)) + chip(cc + "/lm", msFmt(plm)) + chip(cc + "/roll", msFmt(pr));
+    } else { out.innerHTML = ""; return; }
+    out.innerHTML = html;
+    if (cost != null && isFinite(cost) && cost > 0) { var c = document.getElementById("pr-cost"); if (c) c.value = Math.round(cost * 10000) / 10000; }
+  }
+  function wireMatSpec(p) {
+    var fe = document.getElementById("ms-form"); if (!fe) return;
+    var dims = document.getElementById("ms-dims");
+    function render() { dims.innerHTML = matDimsHTML(fe.value, (p && p.spec) || {}); dims.querySelectorAll("input,select").forEach(function (el) { el.oninput = matCompute; el.onchange = matCompute; }); matCompute(); }
+    fe.onchange = render;
+    var mat = document.getElementById("ms-material");
+    if (mat) mat.onchange = function () { var dn = MATERIAL_DENSITY[mat.value]; var de = document.getElementById("ms-density"); if (de && dn) { de.value = dn; matCompute(); } };
+    render();
+  }
+  function collectMatSpec() {
+    var fe = document.getElementById("ms-form"); if (!fe) return { material_form: null, family: null, spec: {} };
+    var spec = { subfamily: msVal("ms-subfamily"), subsubfamily: msVal("ms-subsubfamily"), type: msVal("ms-type"), subtype: msVal("ms-subtype"), subsubtype: msVal("ms-subsubtype"), material: msVal("ms-material"), color: msVal("ms-color"), brand: msVal("ms-brand"), supplier: msVal("ms-supplier") };
+    var dims = {};
+    ["len", "wpm", "w", "h", "t", "density", "vol", "batch", "rlen", "rwt"].forEach(function (k) { var e = document.getElementById("ms-" + k); if (e && e.value !== "") dims[k] = parseFloat(e.value); });
+    var vu = document.getElementById("ms-volunit"); if (vu) dims.volunit = vu.value;
+    var bs = document.getElementById("ms-basis"); if (bs) spec.basis = bs.value;
+    var pv = document.getElementById("ms-pval"); if (pv && pv.value !== "") spec.pval = parseFloat(pv.value);
+    spec.dims = dims;
+    var o = document.getElementById("ms-out"); if (o) spec.summary = o.textContent;
+    return { material_form: fe.value, family: msVal("ms-family"), spec: spec };
+  }
   async function renderProductForm(id) {
     var parent = { action: "products", title: "Products" };
     var main = document.getElementById("o-main");
@@ -2769,8 +2881,9 @@
       fld("Expense Account", sel("pr-exp", exp, p.expense_account_id, "Default")) +
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
-      '</div></div>' + customFieldsHTML("product", p) + '</div>';
+      '</div></div>' + materialSpecHTML(p) + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
+    wireMatSpec(p);
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
       var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
@@ -2784,6 +2897,8 @@
       };
       var cerrPr = customError("product"); if (cerrPr) { toast(cerrPr); return; }
       row.custom = collectCustom("product");
+      row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
+      var msp = collectMatSpec(); row.material_form = msp.material_form; row.family = msp.family; row.spec = msp.spec;
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
