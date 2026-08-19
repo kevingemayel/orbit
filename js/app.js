@@ -7810,30 +7810,35 @@
   var BILLING = { none: "Non-billable", fixed: "Fixed price", tm: "Time & material", milestone: "Milestones" };
   function cfgProjects() {
     return {
-      title: "Projects", pageSize: 80,
+      title: "Projects", pageSize: 80, table: "projects",
+      kanban: { groups: [{ label: "Stage", field: "status", options: PROJECT_STATUS }] },
       fetch: function () {
         return Promise.all([
           sb.from("projects").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
           sb.from("timesheets").select("project_id,hours").eq("company_id", S.company.id)
-        ]).then(function (res) { var h = {}; (res[1].data || []).forEach(function (t) { h[t.project_id] = (h[t.project_id] || 0) + Number(t.hours || 0); }); return (res[0].data || []).map(function (p) { p._hours = h[p.id] || 0; return p; }); });
+        ]).then(async function (res) { var h = {}; (res[1].data || []).forEach(function (t) { h[t.project_id] = (h[t.project_id] || 0) + Number(t.hours || 0); }); var rows = (res[0].data || []).map(function (p) { p._hours = h[p.id] || 0; return p; }); await attachThumbs(rows, "project"); return rows; });
       },
       searchText: function (p) { return (p.name || "") + " " + (p.partners ? p.partners.name : ""); },
       columns: [
+        { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
         { label: "Project", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
         { label: "Customer", get: function (p) { return esc(p.partners ? p.partners.name : ""); } },
         { label: "Deadline", get: function (p) { return '<span class="muted">' + esc(p.date_deadline || "") + '</span>'; } },
         { label: "Billing", get: function (p) { return '<span class="muted">' + esc(BILLING[p.billing_type] || p.billing_type) + '</span>'; } },
         { label: "Hours", num: true, get: function (p) { return Number(p._hours).toFixed(2); } },
+        { label: "Stage", get: function (p) { var m = {}; PROJECT_STATUS.forEach(function (s) { m[s[0]] = s[1]; }); return '<span class="muted">' + esc(m[p.status] || p.status || "") + '</span>'; } },
         { label: "Status", get: function (p) { return p.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge unpaid">Closed</span>'; } }
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Closed", test: function (p) { return !p.is_active; } }],
-      groupBy: [{ label: "Customer", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Billing", get: function (p) { return BILLING[p.billing_type] || p.billing_type; } }],
-      kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.partners ? p.partners.name : "") + '</div><div class="r"><span>' + esc(p.date_deadline || "") + '</span><b>' + Number(p._hours).toFixed(1) + ' h</b></div>'; },
+      groupBy: [{ label: "Stage", get: function (p) { var m = {}; PROJECT_STATUS.forEach(function (s) { m[s[0]] = s[1]; }); return m[p.status] || p.status || "None"; } }, { label: "Customer", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Billing", get: function (p) { return BILLING[p.billing_type] || p.billing_type; } }],
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.partners ? p.partners.name : "") + '</div><div class="r"><span>' + esc(p.date_deadline || "") + '</span><b>' + Number(p._hours).toFixed(1) + ' h</b></div>'; },
       onOpen: function (p) { renderProjectForm(p.id); },
       onNew: function () { renderProjectForm("new"); }
     };
   }
+  var PROJECT_STATUS = [["planning", "Planning"], ["active", "Active"], ["on_hold", "On hold"], ["completed", "Completed"], ["cancelled", "Cancelled"]];
   async function renderProjectForm(id) {
+    mediaClearStage();
     var parent = { action: "proj.list", title: "Projects" };
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
@@ -7858,7 +7863,7 @@
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-exec">Execution board</button>' : '') + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
-      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name"></div>' +
+      '<div class="o-sheet">' + smart + titleRowHTML('<input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name">', "project", id) +
       (srcTender ? '<div class="sub" style="margin:-2px 0 8px"><b>From tender:</b> <button class="lnk" id="pf-fromtender">' + esc(srcTender.number || srcTender.name || "tender") + '</button> &middot; budget &amp; BOQ carried from the estimate</div>' : '') +
       '<div class="o-groups"><div>' +
       fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
@@ -7867,6 +7872,7 @@
       fld("Start date", '<input id="pf-start" type="date" value="' + (p.date_start || "") + '">', "When work on the project begins.") +
       fld("Deadline", '<input id="pf-deadline" type="date" value="' + (p.date_deadline || "") + '">', "Target completion date.") +
       fld("Status", '<select id="pf-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Closed</option></select>', "Active projects accept time entries; closed ones are archived.") +
+      fld("Stage", '<select id="pf-status">' + PROJECT_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (((p.status || "active") === s[0]) ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "The lifecycle stage, used for the drag-and-drop board view.") +
       '</div></div>' +
       '<div class="o-groups"><div>' +
       fld("Project Code", '<input id="pf-code" value="' + esc(p.code || "") + '" placeholder="e.g. PRJ-001">', "Your internal reference for this contract.") +
@@ -7879,13 +7885,14 @@
       (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
+    wireAttach("project");
     var pft = document.getElementById("pf-fromtender"); if (pft) pft.onclick = function () { renderTenderForm(srcTender.id); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
+      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", status: document.getElementById("pf-status").value, code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
       var cerrPj = customError("project"); if (cerrPj) { toast(cerrPj); return; }
       row.custom = collectCustom("project");
-      if (id === "new") { row.company_id = S.company.id; var r = await sb.from("projects").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      if (id === "new") { row.company_id = S.company.id; var r = await sb.from("projects").insert(row).select("id").single(); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } await mediaFlush("project", r.data.id); }
       else { var gu = await guardedUpdate("projects", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("project"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       toast("Saved"); go("proj.list");
     };
@@ -7926,7 +7933,8 @@
   }
   function cfgTasks() {
     return {
-      title: "Tasks", pageSize: 100,
+      title: "Tasks", pageSize: 100, table: "project_tasks",
+      kanban: { groups: [{ label: "Stage", field: "board_stage", options: BOARD_STAGES.map(function (s) { return [s.key, s.label]; }) }] },
       fetch: function () {
         return Promise.all([
           sb.from("project_tasks").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
