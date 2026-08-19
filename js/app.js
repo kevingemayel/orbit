@@ -324,6 +324,7 @@
         { label: "Import Data", action: "settings.import" },
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
+        { label: "Automations", action: "settings.automations" },
         { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
@@ -344,7 +345,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.terminology": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -553,6 +554,7 @@
     maybeLogSupport();
     renderHome();
     maybeWelcome();
+    runAutomations();   // best-effort, once/day/company; drops alerts into the bell
   }
   // Onboarding safety net: a newly created/approved company starts with an empty
   // accounting shell (apply_for_company doesn't seed one), so nothing can post. If the
@@ -1008,6 +1010,93 @@
     go(act);
   }
 
+  // ============================ AUTOMATIONS (rules -> notifications) ============================
+  function isoShift(days) { var d = new Date(); d.setDate(d.getDate() + days); return fmtD(d); }
+  // Each rule: a catalog key, a plain-English name/description, one tunable param, and a run()
+  // that returns the matching records. Bodies never include money amounts (notifications are
+  // company-wide and money is role-masked elsewhere).
+  var AUTOMATION_RULES = [
+    { key: "invoice_overdue", name: "Overdue invoice alert", desc: "Raise an alert when a posted customer invoice is past its due date.", pkey: "days", plabel: "Days overdue", pdef: 7,
+      run: async function (cid, days) {
+        var rows = (await sb.from("invoices").select("id,number,due_date,partners(name)").eq("company_id", cid).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0.005).lte("due_date", isoShift(-days)).limit(50)).data || [];
+        return rows.map(function (i) { return { entity: i.id, title: "Invoice " + (i.number || "") + " is overdue", body: (i.partners ? i.partners.name + " - " : "") + "was due " + (i.due_date || ""), link_action: "inv.out", link_id: i.id }; });
+      } },
+    { key: "bill_due_soon", name: "Bill due soon", desc: "Remind you when a vendor bill falls due within a few days.", pkey: "days", plabel: "Days ahead", pdef: 5,
+      run: async function (cid, days) {
+        var rows = (await sb.from("invoices").select("id,number,due_date,partners(name)").eq("company_id", cid).eq("move_type", "in_invoice").eq("state", "posted").gt("amount_residual", 0.005).gte("due_date", today()).lte("due_date", isoShift(days)).limit(50)).data || [];
+        return rows.map(function (i) { return { entity: i.id, title: "Bill " + (i.number || "") + " is due soon", body: (i.partners ? i.partners.name + " - " : "") + "due " + (i.due_date || ""), link_action: "inv.in", link_id: i.id }; });
+      } },
+    { key: "project_deadline", name: "Project deadline approaching", desc: "Flag an active project whose deadline is coming up.", pkey: "days", plabel: "Days ahead", pdef: 7,
+      run: async function (cid, days) {
+        var rows = (await sb.from("projects").select("id,name,date_deadline").eq("company_id", cid).eq("is_active", true).not("date_deadline", "is", null).gte("date_deadline", today()).lte("date_deadline", isoShift(days)).limit(50)).data || [];
+        return rows.map(function (p) { return { entity: p.id, title: "Deadline approaching: " + (p.name || "project"), body: "Due " + (p.date_deadline || ""), link_action: "proj.list", link_id: p.id }; });
+      } },
+    { key: "quote_stale", name: "Quotation follow-up", desc: "Nudge you about a draft quotation that has been sitting with no action.", pkey: "days", plabel: "Days old", pdef: 10,
+      run: async function (cid, days) {
+        var rows = (await sb.from("sale_orders").select("id,number,date_order,partners(name)").eq("company_id", cid).eq("state", "draft").lte("date_order", isoShift(-days)).limit(50)).data || [];
+        return rows.map(function (o) { return { entity: o.id, title: "Follow up on quotation " + (o.number || ""), body: (o.partners ? o.partners.name + " - " : "") + "from " + (o.date_order || ""), link_action: "so.list", link_id: o.id }; });
+      } }
+  ];
+  // The engine: runs each enabled rule and inserts a notification per match, deduped by a
+  // per-rule/per-record/per-day key (unique index), so multiple runs never spam the bell.
+  // Runs at most once a day per company per browser (localStorage guard); force=true overrides.
+  async function runAutomations(force) {
+    try {
+      if (!S.company || !canView("accounting")) return 0;
+      var cid = S.company.id, dayKey = "orbit_auto_" + cid + "_" + today();
+      if (!force && localStorage.getItem(dayKey)) return 0;
+      var rules = (await sb.from("automation_rules").select("*").eq("company_id", cid).eq("enabled", true)).data || [];
+      localStorage.setItem(dayKey, "1");
+      if (!rules.length) return 0;
+      var byKey = {}; rules.forEach(function (r) { byKey[r.rule_key] = r; });
+      var made = 0;
+      for (var i = 0; i < AUTOMATION_RULES.length; i++) {
+        var def = AUTOMATION_RULES[i], rule = byKey[def.key]; if (!rule) continue;
+        var param = Number((rule.params && rule.params[def.pkey]) || def.pdef);
+        var items = []; try { items = await def.run(cid, param); } catch (e) { items = []; }
+        for (var j = 0; j < items.length; j++) {
+          var it = items[j], dk = def.key + ":" + it.entity + ":" + today();
+          var ins = await sb.from("notifications").insert({ company_id: cid, kind: "automation", title: it.title, body: it.body || "", link_action: it.link_action || null, link_id: it.link_id || null, actor_name: "Automation", dedupe_key: dk });
+          if (!ins.error) made++;   // duplicates hit the unique index and are ignored
+        }
+      }
+      if (made > 0) refreshBell();
+      return made;
+    } catch (e) { return 0; }
+  }
+  async function renderAutomations() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Automations") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var canEdit = !!(S.role && (S.role.full_access || canManage("settings")));
+    var rules = (await sb.from("automation_rules").select("*").eq("company_id", S.company.id)).data || [];
+    var byKey = {}; rules.forEach(function (r) { byKey[r.rule_key] = r; });
+    var cards = AUTOMATION_RULES.map(function (def) {
+      var r = byKey[def.key], enabled = r ? r.enabled : false, pv = (r && r.params && r.params[def.pkey] != null) ? r.params[def.pkey] : def.pdef;
+      return '<div class="au-rule"><div style="display:flex;gap:14px;align-items:flex-start"><label class="au-on"><input type="checkbox" class="au-en" data-key="' + def.key + '"' + (enabled ? " checked" : "") + (canEdit ? "" : " disabled") + '> On</label>' +
+        '<div style="flex:1"><b>' + esc(def.name) + '</b><div class="muted" style="font-size:12.5px">' + esc(def.desc) + '</div>' +
+        '<div style="margin-top:7px;font-size:12.5px;color:var(--ink2)">' + esc(def.plabel) + ': <input type="number" min="1" max="365" class="au-p" data-key="' + def.key + '" value="' + esc(String(pv)) + '" style="width:72px"' + (canEdit ? "" : " disabled") + '></div></div></div></div>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px"><div><h3 style="margin:0">Automations</h3><div class="sub" style="max-width:62ch">Let Orbit watch your data and drop a note in the bell when something needs attention. Rules run once a day, and each alert appears at most once per record per day.</div></div>' +
+      (canEdit ? '<div style="margin-left:auto;display:flex;gap:8px"><button class="o-filtbtn" id="au-run">Run now</button><button class="o-new" id="au-save">Save</button></div>' : '') + '</div>' +
+      '<div class="au-list">' + cards + '</div></div>';
+    var sv = document.getElementById("au-save");
+    if (sv) sv.onclick = async function () {
+      var ups = AUTOMATION_RULES.map(function (def) {
+        var en = document.querySelector('.au-en[data-key="' + def.key + '"]').checked;
+        var pv = parseInt(document.querySelector('.au-p[data-key="' + def.key + '"]').value, 10) || def.pdef;
+        var params = {}; params[def.pkey] = Math.min(365, Math.max(1, pv));
+        return { company_id: S.company.id, rule_key: def.key, enabled: en, params: params };
+      });
+      var r = await sb.from("automation_rules").upsert(ups, { onConflict: "company_id,rule_key" });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast("Automations saved");
+    };
+    var rb = document.getElementById("au-run");
+    if (rb) rb.onclick = async function () { rb.disabled = true; rb.textContent = "Running..."; localStorage.removeItem("orbit_auto_" + S.company.id + "_" + today()); var n = await runAutomations(true); rb.disabled = false; rb.textContent = "Run now"; toast(n > 0 ? (n + " alert" + (n === 1 ? "" : "s") + " added to your bell") : "Nothing needs attention right now"); };
+  }
+
   // ============================ APPROVALS ============================
   var APPR_DOC_LABEL = { purchase_order: "Purchase order", sales_order: "Sales order", vendor_bill: "Vendor bill", customer_invoice: "Customer invoice", subcontract: "Subcontract", variation: "Variation", expense: "Expense" };
   // Returns "ok" (allowed to post) or "blocked" (approval requested / awaiting).
@@ -1310,6 +1399,7 @@
       case "settings.import": return renderImport();
       case "settings.customfields": return renderCustomFieldsAdmin();
       case "settings.terminology": return renderTerminologyAdmin();
+      case "settings.automations": return renderAutomations();
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
       case "settings.audit": return renderList(cfgAuditLog());
