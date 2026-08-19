@@ -7,7 +7,16 @@
 // ============================================================================
 (function () {
   var cfg = window.APP_CONFIG || {};
-  var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY);
+  // "Keep me signed in": remember -> the session lives in localStorage (survives closing
+  // the browser); off -> sessionStorage (cleared when the tab closes). Default is remember.
+  var REMEMBER_KEY = "orbit_remember";
+  var _remember = localStorage.getItem(REMEMBER_KEY) !== "0";
+  var _authStore = {
+    getItem: function (k) { var pri = _remember ? window.localStorage : window.sessionStorage; var v = pri.getItem(k); return v != null ? v : window.localStorage.getItem(k); },
+    setItem: function (k, v) { if (_remember) { window.localStorage.setItem(k, v); try { window.sessionStorage.removeItem(k); } catch (e) {} } else { try { window.sessionStorage.setItem(k, v); } catch (e) {} window.localStorage.removeItem(k); } },
+    removeItem: function (k) { window.localStorage.removeItem(k); try { window.sessionStorage.removeItem(k); } catch (e) {} }
+  };
+  var sb = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_ANON_KEY, { auth: { persistSession: true, autoRefreshToken: true, storageKey: "sb-hlkwzbkgkwywomuvilwe-auth-token", storage: _authStore } });
   var root = document.getElementById("root");
   var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
@@ -586,6 +595,7 @@
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
       '<label>Password</label><input id="pw" type="password" autocomplete="current-password" placeholder="........">' +
       (TURNSTILE_SITE_KEY ? '<div id="cf-widget" style="margin-top:14px"></div>' : '') +
+      (mode === "in" ? '<label class="rememberrow"><input type="checkbox" id="remember"' + (_remember ? " checked" : "") + '> Keep me signed in on this device</label>' : '') +
       '<div class="err" id="err"></div>' +
       '<button class="btn pri" id="go" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">' + (mode === "in" ? "Sign in" : "Sign up") + "</button>" +
       '<div class="switch">' + (mode === "in" ? 'No account yet? <a id="sw">Create one</a>' : 'Already have an account? <a id="sw">Sign in</a>') + "</div>" +
@@ -600,6 +610,7 @@
     var pw = document.getElementById("pw").value;
     var err = document.getElementById("err"); err.textContent = "";
     if (!email || !pw) { err.textContent = "Enter your email and password."; return; }
+    var rm = document.getElementById("remember"); if (rm) { _remember = rm.checked; localStorage.setItem(REMEMBER_KEY, _remember ? "1" : "0"); }
     var creds = { email: email, password: pw };
     if (TURNSTILE_SITE_KEY) {
       if (!window.__cfToken) { err.textContent = "Please complete the verification below."; return; }
@@ -660,6 +671,7 @@
   function maybeWelcome() {
     try {
       if (localStorage.getItem("orbit_welcomed") === "1") return;
+      if (tourDone("orientation")) { localStorage.setItem("orbit_welcomed", "1"); return; }   // already toured
       localStorage.setItem("orbit_welcomed", "1");
       var m = document.createElement("div"); m.className = "modal on";
       m.innerHTML = '<div class="sheet"><h3>Welcome to Orbit</h3><div class="form"><div class="sub">Orbit runs your quotes, invoices, purchases, projects and reports in one place. Would you like a quick look around first?</div></div><div class="foot"><button class="btn" id="wl-skip">I&rsquo;ll explore on my own</button><button class="btn pri" id="wl-tour" style="background:var(--accent);border-color:var(--accent)">Take the 60-second tour</button></div></div>';
@@ -2277,29 +2289,44 @@
   // Fuller, on-demand help shown by the "?" next to a field. Any label here overrides the
   // brief inline text with a complete explanation; labels not listed fall back to their
   // FIELD_DESC (still shown fully in the popover). Add entries as fields need more detail.
+  // Each entry gives the field's FUNCTION (what it does / why it matters) AND a concrete
+  // EXAMPLE. Shown by the "?" next to the field. Plain text (the popover uses textContent).
   var FIELD_HELP = {
-    "Customer": "The client this document is billed to. Only contacts marked as customers appear here. Add a new one from Accounting > Customers if they are not in the list. The customer's payment terms and credit limit are pulled in automatically.",
-    "Vendor": "The supplier this bill or order is for. Only contacts marked as vendors appear. Add one from Vendors if missing.",
-    "Invoice Date": "The date the invoice is issued. This decides which accounting period and tax report it lands in, so it must sit inside an open (unlocked) period. It also starts the clock for the due date.",
-    "Due Date": "The date payment is expected. Overdue amounts are bucketed by this date in Aged Receivable and can trigger overdue alerts. It is filled automatically from the payment terms, but you can override it.",
-    "Payment terms (days)": "How long the customer has to pay. Choosing a term auto-fills the due date on their invoices (for example 30 days, or end of month). Leave blank if you set due dates by hand.",
-    "Credit limit": "A soft ceiling on how much this customer may owe you at once. When their open balance approaches it, Orbit warns you on new invoices. Leave blank for no limit; it never blocks a save on its own.",
-    "Cost code": "The job-cost bucket this line rolls up to (Labour, Materials, Subcontract, and so on). Threading the same cost code through budgets, purchase orders and invoices is what lets the job-costing report compare Budget vs Committed vs Actual.",
-    "Tax": "The tax applied to this line. The rate comes from the tax you pick; the amount is added on top of the line total. Sales taxes show on customer documents, purchase taxes on vendor ones.",
-    "Sales Tax": "The tax added by default when you sell this product. You can still change it on any individual line.",
-    "Purchase Tax": "The tax added by default when you buy this product.",
-    "Sales Price": "The default unit price when you sell this product. It pre-fills the line but you can override it per document, or use a pricelist to vary it by customer.",
-    "Cost": "What the item costs you. It drives the margin shown on sales and, for stocked items, the value posted when stock moves.",
-    "Income Account": "The revenue account credited when this product is sold. Leave blank to use the company default (7000). Change it only if this product's sales should report separately.",
-    "Expense Account": "The expense account debited when this product is bought. Leave blank to use the default (6000).",
-    "Type": "What kind of product this is. Service has no stock; Storable is tracked in inventory (on-hand, valuation, reordering); Consumable is bought and used but not stock-tracked.",
-    "Billing": "How this project is billed: Non-billable (internal), Fixed price (a set contract sum), Time & material (bill logged hours and costs), or Milestones (bill on certificates). It changes which billing tools appear on the project.",
-    "Contract Value": "The awarded contract sum for the project. If you build a Bill of Quantities, this is set from it automatically and grows as you approve variations.",
-    "Retention %": "The percentage held back on each progress certificate (commonly 5 or 10). It accumulates as a retention balance and is released later, per your contract.",
-    "Advance Payment": "Money paid up front (mobilisation), recovered gradually across later certificates rather than invoiced separately.",
-    "Reference": "Your own note or the other party's document number (their PO, a contract ref). It is optional and appears on the document for matching.",
-    "Currency": "The currency this document is written in. It defaults to the company currency; multi-currency reports translate everything back using your exchange rates.",
-    "Status": "Active records show in pickers and lists; archived ones are hidden but keep their history. Archiving is the safe alternative to deleting something you have used."
+    "Name": "What this record is called - it is how you will find it in lists and searches, so make it clear and specific. Example: 'Aluminium mullion 50x100' rather than just 'profile'.",
+    "Customer": "Who the document is billed to. Only contacts marked as customers appear; add one from Accounting > Customers if missing. Their payment terms and credit limit fill in automatically. Example: pick 'Skyline Developers' and their 30-day terms set the due date for you.",
+    "Vendor": "The supplier this bill or order is for. Only contacts marked as vendors appear. Example: choose 'Gulf Aluminium Co.' when raising a purchase order for extrusions.",
+    "Reference": "Your own note or the other side's document number, so you can match paperwork later. It is optional and prints on the document. Example: put the customer's purchase-order number, 'PO-4471', here.",
+    "Email": "The address used to send this contact their invoices and documents straight from Orbit. Example: accounts@skyline.com - then the Email button on a posted invoice reaches them.",
+    "Phone": "A contact number for this person or company. Example: +961 3 123 456. It is just for reference; nothing is dialled automatically.",
+    "Invoice Date": "The day the invoice is issued. It decides which month and tax report the invoice falls into (so it must be inside an open, unlocked period) and starts the due-date clock. Example: dating it 31 Jan puts it in January's numbers even if you type it in February.",
+    "Bill Date": "The date printed on the supplier's bill. It sets the accounting period the cost lands in. Example: 05 Feb on the supplier invoice means the cost is a February cost.",
+    "Due Date": "When you expect to be paid. Overdue amounts are grouped by this date in Aged Receivable and can trigger alerts. It fills from the payment terms but you can override it. Example: an invoice dated 1 March with 30-day terms gets a due date of 31 March.",
+    "Payment terms (days)": "How long the customer has to pay, which auto-fills the due date on their invoices. Example: choose '30 days' and every invoice to them is due 30 days after its date; 'End of month' makes it due the last day of the month.",
+    "Credit limit": "A soft ceiling on how much this customer may owe at once; Orbit warns you as their balance nears it. Leave blank for no limit - it never blocks a save. Example: set 10,000 and you are warned when their unpaid invoices reach that.",
+    "Cost code": "A label (Labour, Materials, Subcontract...) that groups spending so the job-costing report can compare Budget vs Committed vs Actual per part of the job. Use the SAME code on the budget, the purchase order and the bill. Example: tag a glass purchase 'MAT-GLASS' and it lines up against your glass budget.",
+    "Tax": "The tax added to this line; the rate comes from the tax you pick and the amount is added on top. Example: pick 'VAT 11%' on a 100 line and 11 tax is added, making 111.",
+    "Sales Tax": "The tax added by default when you SELL this product, so invoices work it out automatically. You can still change it on any line. Example: set 'VAT 11%' so every sale of this item adds 11%.",
+    "Purchase Tax": "The tax added by default when you BUY this product. Example: 'VAT 11% (purchase)' so bills for this item reclaim the input tax.",
+    "Sales Price": "The default price when you sell this item; it pre-fills the invoice line but you can override it. Example: 25 per unit, or use a pricelist to charge a key account 22.",
+    "Cost": "What the item costs you. It drives the profit margin shown on sales and, for stocked items, the value recorded when stock moves. Example: if cost is 15 and you sell at 25, the margin is 10.",
+    "Income Account": "The revenue folder credited when this product is sold. Leave blank to use the default (7000). Example: point aluminium sales to a '7010 Aluminium sales' account to see them separately in reports.",
+    "Expense Account": "The expense folder charged when this product is bought. Leave blank to use the default (6000). Example: send subcontract costs to a '6100 Subcontractors' account.",
+    "Type": "What kind of product this is, which decides how much Orbit tracks. Service has no stock; Storable is counted in inventory (on-hand, value, reordering); Consumable is bought and used but not counted. Example: 'Installation' is a Service; 'Aluminium bar' is Storable.",
+    "Unit of Measure": "How this item is counted and stocked. Example: m2 for glass, kg for sealant, 'bar' for profiles, 'tube' for silicone.",
+    "Category": "A group for organising products in lists and reports. Example: Aluminium, Glass, Hardware, Sealants.",
+    "Billing": "How the project is billed, which changes the billing tools shown. Non-billable (internal), Fixed price (a set sum), Time & material (bill the hours and costs), or Milestones (bill on certificates). Example: a design job might be Fixed price; a call-out job Time & material.",
+    "Contract Value": "The agreed price of the project. If you build a Bill of Quantities it fills from that and grows as you approve variations. Example: a 250,000 facade contract.",
+    "Retention %": "The slice the customer holds back on each certificate as a guarantee, released when the job is finished. Example: 10% retention on a 10,000 certificate means you bill 9,000 now and 1,000 is held.",
+    "Advance Payment": "Money paid up front (mobilisation), then recovered bit by bit from later certificates instead of billed separately. Example: a 20,000 advance recovered 10% at a time across claims.",
+    "Currency": "The currency this document is written in; it defaults to the company currency. Multi-currency reports translate it back using your exchange rates. Example: raise a bill in USD while your company reports in LBP.",
+    "Status": "Active records show everywhere; Archived ones are hidden but keep their history - the safe alternative to deleting something you have used. Example: archive a discontinued product so it stays on old invoices but no longer clutters the picker.",
+    "Family": "The broadest group in the material tree - the top drawer everything sorts under. Example: 'Aluminium', then subfamily 'Extrusion', then type 'Mullion'.",
+    "Material": "The substance the item is made of; it sets the density used to work out weight automatically. Example: choose 'Aluminium' (2700 kg/m3) and a sheet's weight is calculated from its size.",
+    "Colour": "The finish or colour of the item, usually a code. Example: 'RAL 9016' (traffic white) or 'Anodised silver'.",
+    "Brand": "The maker or brand of the item, for when it matters which one. Example: 'Sika' for a sealant, 'Technal' for a profile system.",
+    "Supplier": "The usual supplier for this material, as a quick reference. Example: 'Gulf Aluminium Co.'",
+    "Industry": "The sector this contact works in, used to group and filter your contacts. Example: 'Construction', 'Property developer', 'Fit-out'.",
+    "Specialty": "A short note on what this contact is especially known for, under their industry. Example: 'Structural glazing and curtain walling'."
   };
   // A "?" help affordance next to a field. Clicking it opens a popover with the FULL
   // description (fuller FIELD_HELP text where we have it, otherwise the field's own).
@@ -9436,11 +9463,13 @@
     var bk = document.getElementById("tourBack"); if (bk) bk.onclick = function () { tourGoto(TOUR.i - 1); };
     document.getElementById("tourNext").onclick = function () { tourGoto(TOUR.i + 1); };
   }
+  function tourDone(id) { try { return localStorage.getItem("orbit_tour_done_" + id) === "1"; } catch (e) { return false; } }
   function tourEnd(completed) {
+    var id = TOUR && TOUR.id;
     TOUR = null;
-    ["tourCatch", "tourSpot", "tourBubble"].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+    ["tourCatch", "tourSpot", "tourBubble"].forEach(function (k) { var e = document.getElementById(k); if (e) e.remove(); });
     window.removeEventListener("resize", tourReposition); window.removeEventListener("scroll", tourReposition, true);
-    if (completed) toast("Nicely done - that's the guide finished.");
+    if (completed) { if (id) { try { localStorage.setItem("orbit_tour_done_" + id, "1"); } catch (e) {} } toast("Nicely done - that guide is marked complete and won't pop up again."); }
   }
   // ---- help panel (slide-over) ----
   function closeHelp() { var p = document.getElementById("helpWrap"); if (p) p.remove(); }
@@ -9458,7 +9487,7 @@
     q = (q || "").trim().toLowerCase();
     var match = HELP_ARTICLES.filter(function (a) { return !q || (a.title + " " + a.teaser + " " + a.html + " " + a.cat).toLowerCase().indexOf(q) >= 0; });
     var contextual = !q && S.app ? HELP_ARTICLES.filter(function (a) { return a.apps && a.apps.indexOf(S.app) >= 0; }) : [];
-    var tourHtml = !q ? '<div class="help-sec">Guided tours</div><div class="help-tours">' + Object.keys(HELP_TOURS).map(function (k) { var t = HELP_TOURS[k]; return '<button class="help-tour" data-tour="' + k + '"><span class="ht-play">&#9658;</span><span><b>' + esc(t.title) + '</b><span class="ht-desc">' + esc(t.desc) + ' &middot; ' + t.mins + ' min</span></span></button>'; }).join("") + '</div>' : '';
+    var tourHtml = !q ? '<div class="help-sec">Guided tours</div><div class="help-tours">' + Object.keys(HELP_TOURS).map(function (k) { var t = HELP_TOURS[k], done = tourDone(k); return '<button class="help-tour' + (done ? " done" : "") + '" data-tour="' + k + '"><span class="ht-play">' + (done ? "&#10003;" : "&#9658;") + '</span><span><b>' + esc(t.title) + (done ? ' <span class="ht-done">Done</span>' : "") + '</b><span class="ht-desc">' + (done ? "Completed - click to watch again" : esc(t.desc) + ' &middot; ' + t.mins + ' min') + '</span></span></button>'; }).join("") + '</div>' : '';
     function card(a) { return '<button class="help-art" data-art="' + a.id + '"><b>' + esc(a.title) + '</b><span>' + esc(a.teaser) + '</span></button>'; }
     var ctxHtml = contextual.length ? '<div class="help-sec">For this screen</div>' + contextual.map(card).join("") : "";
     var cats = {}; match.forEach(function (a) { (cats[a.cat] = cats[a.cat] || []).push(a); });
