@@ -1754,15 +1754,15 @@
     return {
       title: isCust ? "Customers" : "Vendors", pageSize: 80,
       fetch: function () { return sb.from("partners").select("*").eq(flag, true).order("name").then(function (r) { return r.data || []; }); },
-      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || ""); },
+      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
+        { label: "Industry", get: function (p) { return '<span class="muted">' + esc(p.industry || "") + '</span>'; } },
         { label: "Email", get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
-        { label: "Phone", get: function (p) { return '<span class="muted">' + esc(p.phone || "") + '</span>'; } },
         { label: "City", get: function (p) { return '<span class="muted">' + esc(p.city || "") + '</span>'; } },
         { label: "Country", get: function (p) { return '<span class="muted">' + esc(p.country || "") + '</span>'; } }
-      ],
-      groupBy: [{ label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
+      ].concat(isCust ? [] : [{ label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } }]),
+      groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
       kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
       onOpen: function (p) { renderPartnerForm(p.id, kind); },
       onNew: function () { renderPartnerForm("new", kind); }
@@ -2658,6 +2658,11 @@
   }
 
   // ============================ PARTNER FORM ============================
+  // Full list of countries for the address dropdown (cities stay free text - a world
+  // cities list is far too large to embed; type the town/city).
+  var COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Cape Verde", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo (Brazzaville)", "Congo (Kinshasa)", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Cyprus", "Czechia", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
+  var INDUSTRY_SEED = ["Construction", "General contractor", "Subcontractor", "Property developer", "Consultant / engineering", "Architecture", "Facade / cladding", "Fit-out / interiors", "Glass / glazing", "Aluminium / metalwork", "Steel fabrication", "Manufacturing", "Supplier / trading", "Real estate", "Hospitality", "Retail", "Government / public", "Education", "Healthcare", "Other"];
+  var CAP_SEED = ["Aluminium profiles", "Glass", "Sealants & adhesives", "Hardware & accessories", "Steel & metalwork", "Fabrication", "Powder coating / anodising", "Gaskets & rubber", "Fasteners", "Installation / labour", "Transport / logistics", "Composite panels"];
   async function renderPartnerForm(id, kind) {
     var isCust = kind === "customer", isContact = kind === "contact";
     var parent = isContact ? { action: "contacts", title: "Contacts" } : { action: isCust ? "cust" : "vend", title: isCust ? "Customers" : "Vendors" };
@@ -2668,6 +2673,18 @@
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
     var pricelists = (await sb.from("pricelists").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
+    var industries = (await sb.from("industries").select("name").eq("org_id", S.company.org_id).order("name")).data || [];
+    var caps = (await sb.from("capabilities").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
+    var indNames = INDUSTRY_SEED.slice(); industries.forEach(function (i) { if (indNames.indexOf(i.name) < 0) indNames.push(i.name); });
+    var capNames = CAP_SEED.slice(); caps.forEach(function (c) { if (capNames.indexOf(c.name) < 0) capNames.push(c.name); });
+    (p.capabilities || []).forEach(function (c) { if (capNames.indexOf(c) < 0) capNames.push(c); });
+    var pcaps = p.capabilities || [], showCaps = !isCust;   // vendors + contacts (suppliers), not pure customers
+    function countryOpts() { var list = COUNTRIES.slice(); if (p.country && list.indexOf(p.country) < 0) list.unshift(p.country); return '<option value="">(select country)</option>' + list.map(function (c) { return '<option' + (p.country === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join(""); }
+    function capBox(c, checked) { return '<label class="cap-box"><input type="checkbox" class="p-cap" value="' + esc(c) + '"' + (checked ? " checked" : "") + '> ' + esc(c) + '</label>'; }
+    function capsBlock() {
+      var boxes = capNames.map(function (c) { return capBox(c, pcaps.indexOf(c) >= 0); }).join("");
+      return '<div class="o-matspec" style="margin-top:14px"><div class="o-cf-head">What they can supply</div><div class="sub" style="margin:-2px 0 9px">Tick the products or services this supplier offers. Not listed? Add it and it is saved for next time.</div><div class="cap-list" id="cap-list">' + boxes + '</div><div class="cap-add"><input id="cap-new" placeholder="Add a type, e.g. Insulation"><button type="button" class="o-filtbtn" id="cap-addbtn">Add</button></div></div>';
+    }
     function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
@@ -2683,19 +2700,23 @@
       fld("Mobile", '<input id="p-mobile" value="' + esc(p.mobile || "") + '">') +
       fld("Tax / VAT no.", '<input id="p-vat" value="' + esc(p.vat || "") + '">') +
       '</div><div>' +
-      fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '">') +
-      fld("City", '<input id="p-city" value="' + esc(p.city || "") + '">') +
-      fld("Country", '<input id="p-country" value="' + esc(p.country || "") + '">') +
+      fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '" placeholder="Street / area">') +
+      fld("Building", '<input id="p-building" value="' + esc(p.building || "") + '" placeholder="Building / block">') +
+      fld("Floor", '<input id="p-floor" value="' + esc(p.floor || "") + '" placeholder="Floor / unit">') +
+      fld("City", '<input id="p-city" value="' + esc(p.city || "") + '" placeholder="Town / city">') +
+      fld("Country", '<select id="p-country">' + countryOpts() + '</select>') +
       '</div></div>' +
       '<div class="o-groups"><div>' +
       fld("Payment terms (days)", '<select id="p-payterms"><option value="">(none)</option><option value="0">Due on receipt</option><option value="15">15 days</option><option value="30">30 days</option><option value="45">45 days</option><option value="60">60 days</option><option value="90">90 days</option></select>', "Default number of days to pay. Pre-fills the due date on their invoices.") +
       fld("Credit limit", '<input id="p-credit" type="number" step="0.01" value="' + (p.credit_limit != null ? p.credit_limit : "") + '" placeholder="0 = no limit">', "A soft ceiling on how much they can owe. Leave blank for no limit.") +
-      fld("Industry", '<input id="p-industry" value="' + esc(p.industry || "") + '" placeholder="e.g. Construction, Developer">', "Sector, for segmenting contacts.") +
+      fld("Industry", '<input id="p-industry" list="p-ind-dl" value="' + esc(p.industry || "") + '" placeholder="Pick or type"><datalist id="p-ind-dl">' + indNames.map(function (i) { return '<option>' + esc(i) + '</option>'; }).join("") + '</datalist>', "The sector this contact works in, used to group and filter contacts. Example: Construction, Property developer.") +
+      fld("Specialty", '<input id="p-specialty" value="' + esc(p.specialty || "") + '" placeholder="e.g. Structural glazing">', "A short note on what they are especially known for, under their industry.") +
       fld("Tags", '<input id="p-tags" value="' + esc(p.tags || "") + '" placeholder="comma-separated">', "Free tags, comma-separated.") +
       '</div><div>' +
       fld("Pricelist", '<select id="p-pl"><option value="">(default prices)</option>' + pricelists.map(function (x) { return '<option value="' + x.id + '"' + (p.pricelist_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>', "Pricelist applied to this customer's sales-order lines.") +
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
       '</div></div>' +
+      (showCaps ? capsBlock() : "") +
       customFieldsHTML("partner", p) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
       '</div>';
@@ -2707,13 +2728,29 @@
     wireBankDel();
     var ptEl = document.getElementById("p-payterms"); if (ptEl) ptEl.value = p.payment_days != null ? String(p.payment_days) : "";
     document.getElementById("pb-add").onclick = function () { document.getElementById("pb-lines").insertAdjacentHTML("beforeend", bankRow()); wireBankDel(); };
+    var capAdd = document.getElementById("cap-addbtn");
+    if (capAdd) {
+      function addCap() {
+        var v = (gv("cap-new") || "").trim(); if (!v) return;
+        var list = document.getElementById("cap-list");
+        var exists = [].some.call(list.querySelectorAll(".p-cap"), function (cb) { return cb.value.toLowerCase() === v.toLowerCase(); });
+        if (exists) { [].forEach.call(list.querySelectorAll(".p-cap"), function (cb) { if (cb.value.toLowerCase() === v.toLowerCase()) cb.checked = true; }); }
+        else { list.insertAdjacentHTML("beforeend", capBox(v, true)); sb.from("capabilities").insert({ org_id: S.company.org_id, name: v }); }
+        document.getElementById("cap-new").value = "";
+      }
+      capAdd.onclick = addCap;
+      document.getElementById("cap-new").onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); addCap(); } };
+    }
     document.getElementById("p-discard").onclick = function () { go(backAction); };
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
       if (!name) { toast("Name is required"); return; }
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
-      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      if (showCaps) { var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; }); row.capabilities = selCaps.length ? selCaps : null; }
+      var indv = gv("p-industry");
+      if (indv && !indNames.some(function (n) { return n.toLowerCase() === indv.toLowerCase(); })) { await sb.from("industries").insert({ org_id: S.company.org_id, name: indv }); }
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
       row.custom = collectCustom("partner");
       var r, sid = id;
@@ -3562,12 +3599,12 @@
     return {
       title: "Contacts", pageSize: 80,
       fetch: function () { return sb.from("partners").select("*").order("name").then(function (r) { return r.data || []; }); },
-      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.industry || ""); },
+      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
         { label: "Type", get: function (p) { var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
         { label: "Industry", get: function (p) { return esc(p.industry || ""); } },
-        { label: "Email", get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
+        { label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } },
         { label: "City", get: function (p) { return esc(p.city || ""); } }
       ],
       filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }],
