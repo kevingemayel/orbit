@@ -410,6 +410,7 @@
         { label: "Document Numbering", action: "settings.numbering" },
         { label: "Import Data", action: "settings.import" },
         { label: "Custom Fields", action: "settings.customfields" },
+        { label: "Classification", action: "settings.classification" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
         { label: "Period Lock", action: "settings.lock" },
@@ -436,7 +437,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -1496,6 +1497,7 @@
       case "settings.setup": return renderSetup();
       case "settings.import": return renderImport();
       case "settings.customfields": return renderCustomFieldsAdmin();
+      case "settings.classification": return renderClassification();
       case "settings.terminology": return renderTerminologyAdmin();
       case "settings.automations": return renderAutomations();
       case "platform.pending": return renderPendingSignups();
@@ -1884,7 +1886,7 @@
     return {
       title: "Products", pageSize: 80,
       fetch: function () { return sb.from("products").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
-      searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
+      searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
         { label: "Reference", get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
@@ -2863,26 +2865,39 @@
   var MATERIAL_FORMS = [["generic", "General item"], ["bar", "Bar / profile"], ["sheet", "Sheet / plate"], ["liquid", "Liquid (paint, sealant)"], ["roll", "Roll / coil"]];
   function matFormLabel(f) { if (!f || f === "generic") return ""; var m = {}; MATERIAL_FORMS.forEach(function (x) { m[x[0]] = x[1]; }); return m[f] || f; }
   var MATERIAL_DENSITY = { "Aluminium": 2700, "Steel": 7850, "Stainless steel": 8000, "Glass": 2500, "Copper": 8960, "Brass": 8500, "Bronze": 8800, "Zinc": 7140, "Lead": 11340, "PVC": 1400, "Polycarbonate": 1200, "Acrylic": 1180, "Wood": 700, "MDF": 750, "Concrete": 2400, "Rubber": 1500, "Other": 0 };
+  // --- classification tree helpers (product form cascading dropdowns + auto item code) ---
+  var _prCodeAuto = false;   // while true, the Reference/item code is auto-built from the tree
+  function nodePath(nodes, leafId) { var byId = {}; (nodes || []).forEach(function (n) { byId[n.id] = n; }); var path = [], cur = byId[leafId]; var guard = 0; while (cur && guard++ < 10) { path.unshift(cur); cur = cur.parent_id ? byId[cur.parent_id] : null; } return path; }
+  function treeChildren(nodes, tree, pid) { return (nodes || []).filter(function (n) { return n.tree === tree && (n.parent_id || null) === (pid || null); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0) || (a.name > b.name ? 1 : -1); }); }
+  function treeOptsHtml(opts, sel) { return '<option value="">(none)</option>' + opts.map(function (o) { return '<option value="' + o.id + '"' + (sel === o.id ? " selected" : "") + '>' + esc(o.name) + (o.code ? " (" + esc(o.code) + ")" : "") + '</option>'; }).join(""); }
+  function treeSelects(nodes, tree, leafId, pfx, labels) {
+    var path = nodePath(nodes, leafId), l0 = path[0] ? path[0].id : "", l1 = path[1] ? path[1].id : "", l2 = path[2] ? path[2].id : "";
+    function f(id, opts, sel, label) { return '<div class="ms-f"><label>' + label + '</label><select id="' + id + '">' + treeOptsHtml(opts, sel) + '</select></div>'; }
+    return f(pfx + "0", treeChildren(nodes, tree, null), l0, labels[0]) + f(pfx + "1", treeChildren(nodes, tree, l0), l1, labels[1]) + f(pfx + "2", treeChildren(nodes, tree, l1), l2, labels[2]);
+  }
+  function fillSelect(sel, opts) { if (!sel) return; sel.innerHTML = treeOptsHtml(opts, ""); }
+  function deepestSel(pfx) { var s2 = document.getElementById(pfx + "2"), s1 = document.getElementById(pfx + "1"), s0 = document.getElementById(pfx + "0"); return (s2 && s2.value) || (s1 && s1.value) || (s0 && s0.value) || ""; }
+  function rebuildItemCode(nodes) {
+    var el = document.getElementById("pr-code"); if (!el || !_prCodeAuto) return;
+    var codes = [];
+    ["fam", "typ"].forEach(function (pfx) { var leaf = deepestSel(pfx); if (leaf) nodePath(nodes, leaf).forEach(function (n) { if (n.code) codes.push(n.code); }); });
+    el.value = codes.join("-");
+  }
   function msNum(id) { var e = document.getElementById(id); return e ? (parseFloat(e.value) || 0) : 0; }
   function msVal(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function msFmt(x, dp) { if (!isFinite(x)) return "-"; var f = dp == null ? 2 : dp; return (Math.round(x * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString("en-US", { minimumFractionDigits: (f === 2 ? 2 : 0), maximumFractionDigits: f }); }
-  function materialSpecHTML(p) {
+  function materialSpecHTML(p, nodes) {
+    nodes = nodes || [];
     var sp = (p && p.spec) || {}, form = p.material_form || "generic";
-    function ti(id, val, ph) { return '<input id="' + id + '" value="' + esc(val || "") + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : "") + '>'; }
     var matOpts = '<option value="">(none)</option>' + Object.keys(MATERIAL_DENSITY).map(function (m) { return '<option' + (sp.material === m ? " selected" : "") + '>' + m + '</option>'; }).join("");
     var formSel = '<select id="ms-form">' + MATERIAL_FORMS.map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
-    return '<div class="o-matspec"><div class="o-cf-head">Material specification</div>' +
+    var noTree = !nodes.length ? '<div class="sub" style="margin:2px 0 10px">No classification tree yet. Build it in <b>Settings &rsaquo; Classification</b>, then choose from it here.</div>' : "";
+    return '<div class="o-matspec"><div class="o-cf-head">Classification</div>' + noTree +
+      '<div class="ms-grid">' + treeSelects(nodes, "family", p.family_node_id, "fam", ["Family", "Subfamily", "Sub-subfamily"]) + '</div>' +
+      '<div class="ms-grid" style="margin-top:10px">' + treeSelects(nodes, "type", p.type_node_id, "typ", ["Type", "Subtype", "Sub-subtype"]) + '</div>' +
+      '<div class="o-cf-head" style="margin-top:16px">Material &amp; attributes</div>' +
       '<div class="o-groups"><div>' +
-      fld("Family", sug("ms-family", p.family, "family", "e.g. Aluminium"), "The top level of the material tree - the broadest group.") +
-      fld("Subfamily", sug("ms-subfamily", sp.subfamily, "subfamily", "e.g. Extrusion"), "") +
-      fld("Sub-subfamily", sug("ms-subsubfamily", sp.subsubfamily, "subsubfamily"), "") +
-      '</div><div>' +
-      fld("Type", sug("ms-type", sp.type, "mtype", "e.g. Mullion"), "") +
-      fld("Subtype", sug("ms-subtype", sp.subtype, "msubtype"), "") +
-      fld("Sub-subtype", sug("ms-subsubtype", sp.subsubtype, "msubsubtype"), "") +
-      '</div></div>' +
-      '<div class="o-groups"><div>' +
-      fld("Material", '<select id="ms-material">' + matOpts + '</select>', "Sets the density used to work out weight automatically.") +
+      fld("Material", '<select id="ms-material">' + matOpts + '</select>', "The substance it is made of; sets the density used to work out weight.") +
       fld("Colour", sug("ms-color", sp.color, "color", "e.g. RAL 9016"), "") +
       '</div><div>' +
       fld("Brand", sug("ms-brand", sp.brand, "brand"), "") +
@@ -2944,18 +2959,27 @@
     out.innerHTML = html;
     if (cost != null && isFinite(cost) && cost > 0) { var c = document.getElementById("pr-cost"); if (c) c.value = Math.round(cost * 10000) / 10000; }
   }
-  function wireMatSpec(p) {
+  function wireMatSpec(p, nodes) {
+    nodes = nodes || [];
     var fe = document.getElementById("ms-form"); if (!fe) return;
     var dims = document.getElementById("ms-dims");
     function render() { dims.innerHTML = matDimsHTML(fe.value, (p && p.spec) || {}); dims.querySelectorAll("input,select").forEach(function (el) { el.oninput = matCompute; el.onchange = matCompute; }); matCompute(); }
     fe.onchange = render;
     var mat = document.getElementById("ms-material");
     if (mat) mat.onchange = function () { var dn = MATERIAL_DENSITY[mat.value]; var de = document.getElementById("ms-density"); if (de && dn) { de.value = dn; matCompute(); } };
+    // cascading classification dropdowns + live item-code rebuild
+    [["fam", "family"], ["typ", "type"]].forEach(function (t) {
+      var pfx = t[0], tree = t[1], s0 = document.getElementById(pfx + "0"), s1 = document.getElementById(pfx + "1"), s2 = document.getElementById(pfx + "2");
+      if (!s0) return;
+      s0.onchange = function () { fillSelect(s1, treeChildren(nodes, tree, s0.value)); fillSelect(s2, []); rebuildItemCode(nodes); };
+      s1.onchange = function () { fillSelect(s2, treeChildren(nodes, tree, s1.value)); rebuildItemCode(nodes); };
+      s2.onchange = function () { rebuildItemCode(nodes); };
+    });
     render();
   }
   function collectMatSpec() {
-    var fe = document.getElementById("ms-form"); if (!fe) return { material_form: null, family: null, spec: {} };
-    var spec = { subfamily: msVal("ms-subfamily"), subsubfamily: msVal("ms-subsubfamily"), type: msVal("ms-type"), subtype: msVal("ms-subtype"), subsubtype: msVal("ms-subsubtype"), material: msVal("ms-material"), color: msVal("ms-color"), brand: msVal("ms-brand"), supplier: msVal("ms-supplier") };
+    var fe = document.getElementById("ms-form"); if (!fe) return { material_form: null, family_node_id: null, type_node_id: null, spec: {} };
+    var spec = { material: msVal("ms-material"), color: msVal("ms-color"), brand: msVal("ms-brand"), supplier: msVal("ms-supplier") };
     var dims = {};
     ["len", "wpm", "w", "h", "t", "density", "vol", "batch", "rlen", "rwt"].forEach(function (k) { var e = document.getElementById("ms-" + k); if (e && e.value !== "") dims[k] = parseFloat(e.value); });
     var vu = document.getElementById("ms-volunit"); if (vu) dims.volunit = vu.value;
@@ -2963,7 +2987,7 @@
     var pv = document.getElementById("ms-pval"); if (pv && pv.value !== "") spec.pval = parseFloat(pv.value);
     spec.dims = dims;
     var o = document.getElementById("ms-out"); if (o) spec.summary = o.textContent;
-    return { material_form: fe.value, family: msVal("ms-family"), spec: spec };
+    return { material_form: fe.value, family_node_id: deepestSel("fam") || null, type_node_id: deepestSel("typ") || null, spec: spec };
   }
   async function renderProductForm(id) {
     var parent = { action: "products", title: "Products" };
@@ -2972,6 +2996,8 @@
     wireBc();
     var p = id === "new" ? { type: "service", is_active: true } : (await sb.from("products").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromProducts();
+    var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    _prCodeAuto = (id === "new" && !p.default_code);   // auto-build the item code from the tree until the user edits it
     var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var inc = accs.filter(function (a) { return (a.type_code || "").indexOf("income") === 0; });
     var exp = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
@@ -2989,7 +3015,8 @@
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + prSmart + '<div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
       '<div class="o-groups"><div>' +
-      fld("Reference", '<input id="pr-code" value="' + esc(p.default_code || "") + '">') +
+      fld("Item code", '<input id="pr-code" value="' + esc(p.default_code || "") + '" placeholder="auto from classification">', "Your code for this item. Built automatically from the classification tree (e.g. AL-EXT-MUL-001); edit it if you want your own.") +
+      fld("Supplier code", '<input id="pr-suppcode" value="' + esc(p.supplier_code || "") + '" placeholder="the supplier\'s own code">', "The supplier's own reference for this item, different from yours. You can search products by it too.") +
       fld("Category", '<select id="pr-cat"><option value="">(none)</option>' + cats.map(function (c) { return '<option value="' + c.id + '"' + (p.category_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "Group this material, e.g. Aluminium, Glass, Hardware, Sealants, Steel.") +
       fld("Type", typeSel) +
       fld("Unit of Measure", '<select id="pr-uom"><option value="">(none)</option>' + uoms.map(function (u) { return '<option value="' + esc(u.name) + '"' + (p.uom === u.name ? " selected" : "") + '>' + esc(u.name) + '</option>'; }).join("") + '</select>', "How it is measured & stocked, e.g. m2, kg, tube, box.") +
@@ -3001,9 +3028,10 @@
       fld("Expense Account", sel("pr-exp", exp, p.expense_account_id, "Default")) +
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
-      '</div></div>' + materialSpecHTML(p) + customFieldsHTML("product", p) + '</div>';
+      '</div></div>' + materialSpecHTML(p, clsNodes) + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
-    wireMatSpec(p);
+    wireMatSpec(p, clsNodes);
+    var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
       var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
@@ -3018,8 +3046,20 @@
       var cerrPr = customError("product"); if (cerrPr) { toast(cerrPr); return; }
       row.custom = collectCustom("product");
       row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
-      var msp = collectMatSpec(); row.material_form = msp.material_form; row.family = msp.family; row.spec = msp.spec;
-      var _sp = msp.spec || {}; sugRemember("family", msp.family); sugRemember("subfamily", _sp.subfamily); sugRemember("subsubfamily", _sp.subsubfamily); sugRemember("mtype", _sp.type); sugRemember("msubtype", _sp.subtype); sugRemember("msubsubtype", _sp.subsubtype); sugRemember("color", _sp.color); sugRemember("brand", _sp.brand); sugRemember("supplier", _sp.supplier);
+      row.supplier_code = gv("pr-suppcode") || null;
+      var msp = collectMatSpec(); row.material_form = msp.material_form; row.spec = msp.spec;
+      row.family_node_id = msp.family_node_id; row.type_node_id = msp.type_node_id;
+      // denormalise the classification names onto the row/spec (so lists & reports need no join)
+      var fp = nodePath(clsNodes, msp.family_node_id), tp = nodePath(clsNodes, msp.type_node_id);
+      row.family = fp[0] ? fp[0].name : null;
+      row.spec.family = fp[0] ? fp[0].name : ""; row.spec.subfamily = fp[1] ? fp[1].name : ""; row.spec.subsubfamily = fp[2] ? fp[2].name : "";
+      row.spec.type = tp[0] ? tp[0].name : ""; row.spec.subtype = tp[1] ? tp[1].name : ""; row.spec.subsubtype = tp[2] ? tp[2].name : "";
+      // if the code was auto-built (never edited), append a running number within this prefix
+      if (_prCodeAuto) {
+        var prefix = gv("pr-code");
+        if (prefix) { var cnt = (await sb.from("products").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).ilike("default_code", prefix + "-%")).count || 0; row.default_code = prefix + "-" + ("00" + (cnt + 1)).slice(-3); }
+      }
+      var _sp = msp.spec || {}; sugRemember("color", _sp.color); sugRemember("brand", _sp.brand); sugRemember("supplier", _sp.supplier);
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
@@ -6179,6 +6219,56 @@
       if (ups.length) { var r = await sb.from("term_overrides").upsert(ups, { onConflict: "company_id,term_key" }); if (r.error) { toast("Save failed: " + errMsg(r.error)); return; } }
       await loadTenantConfig(); toast("Terminology saved"); renderShell(); go("settings.terminology");
     };
+  }
+  // ORB material classification: two managed 3-level trees (Family, Type). Products pick a
+  // leaf in each; item codes are built from the node codes. This is the tree-view manager.
+  async function renderClassification() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Classification") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var canEdit = !!(S.role && (S.role.full_access || canManage("settings") || canManage("inventory")));
+    var nodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    function kids(tree, pid) { return nodes.filter(function (n) { return n.tree === tree && (n.parent_id || null) === (pid || null); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0) || (a.name > b.name ? 1 : -1); }); }
+    function row(n, depth) {
+      var ch = kids(n.tree, n.id), canChild = depth < 2;
+      return '<div class="cls-node" style="padding-left:' + (depth * 22) + 'px">' +
+        '<span class="cls-name">' + esc(n.name) + '</span>' + (n.code ? '<span class="cls-code">' + esc(n.code) + '</span>' : '<span class="cls-code muted">-</span>') +
+        (canEdit ? '<span class="cls-acts">' + (canChild ? '<button class="lnk cls-add" data-parent="' + n.id + '" data-tree="' + n.tree + '" data-depth="' + (depth + 1) + '">+ sub</button>' : '') + '<button class="lnk cls-edit" data-id="' + n.id + '">Edit</button><button class="lnk cls-del" data-id="' + n.id + '" style="color:var(--bad)">Delete</button></span>' : '') +
+        '</div>' + ch.map(function (k) { return row(k, depth + 1); }).join("");
+    }
+    function treeBox(tree, title) {
+      var roots = kids(tree, null);
+      return '<div class="card" style="max-width:640px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">' + title + '</h3>' + (canEdit ? '<button class="o-filtbtn cls-addroot" data-tree="' + tree + '" style="margin-left:auto">+ Add ' + (tree === "family" ? "family" : "type") + '</button>' : '') + '</div>' +
+        (roots.length ? '<div class="cls-tree">' + roots.map(function (r) { return row(r, 0); }).join("") + '</div>' : '<div class="muted" style="padding:12px 0">Nothing here yet. Add the first ' + (tree === "family" ? "family" : "type") + '.</div>') + '</div>';
+    }
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px">' +
+      '<div class="sub" style="max-width:64ch;margin-bottom:14px">Two trees describe every product. The <b>Family</b> tree is what a thing is made of or belongs to (Aluminium &rsaquo; Extrusion &rsaquo; Mullion); the <b>Type</b> tree is a second axis you define. Give each node a short <b>code</b> - a product picks a leaf in each tree, and its item code is built from those codes. Products can then only choose from this tree, keeping everything tidy for reporting.</div>' +
+      treeBox("family", "Family tree") + '<div style="height:14px"></div>' + treeBox("type", "Type tree") + '</div>';
+    function reload() { renderClassification(); }
+    document.querySelectorAll(".cls-addroot").forEach(function (b) { b.onclick = function () { openNodeModal(null, b.dataset.tree, null, 0, reload); }; });
+    document.querySelectorAll(".cls-add").forEach(function (b) { b.onclick = function () { openNodeModal(null, b.dataset.tree, b.dataset.parent, parseInt(b.dataset.depth, 10), reload); }; });
+    document.querySelectorAll(".cls-edit").forEach(function (b) { b.onclick = function () { openNodeModal(nodes.filter(function (n) { return n.id === b.dataset.id; })[0], null, null, 0, reload); }; });
+    document.querySelectorAll(".cls-del").forEach(function (b) { b.onclick = function () { var n = nodes.filter(function (x) { return x.id === b.dataset.id; })[0]; confirmModal("Delete this node?", "Its children are removed too. Products pointing at it lose that classification (they are not deleted).", "Delete", async function () { var r = await sb.from("classification_nodes").delete().eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); } else { toast("Deleted"); reload(); } }); }; });
+  }
+  function openNodeModal(node, tree, parentId, depth, onDone) {
+    var isNew = !node;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "New node" : "Edit node") + '</h3><div class="form">' +
+      '<div><label>Name</label><input id="cn-name" value="' + esc(node ? node.name : "") + '" placeholder="e.g. Aluminium"></div>' +
+      '<div><label>Short code</label>' + fhint("__cn", "A few letters used to build item codes. Example: AL for Aluminium, EXT for Extrusion.") + '<input id="cn-code" value="' + esc(node ? node.code : "") + '" placeholder="e.g. AL" style="text-transform:uppercase;max-width:140px"></div>' +
+      '</div><div class="foot"><button class="btn" id="cn-cancel">Cancel</button><button class="btn pri" id="cn-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("cn-cancel").onclick = function () { m.remove(); };
+    document.getElementById("cn-save").onclick = async function () {
+      var name = gv("cn-name"); if (!name) { toast("Name is required"); return; }
+      var code = (gv("cn-code") || "").toUpperCase();
+      var r;
+      if (isNew) { r = await sb.from("classification_nodes").insert({ org_id: S.company.org_id, tree: tree, parent_id: parentId || null, name: name, code: code, sort: Math.round(Date.now() / 1000) % 100000 }); }
+      else { r = await sb.from("classification_nodes").update({ name: name, code: code }).eq("id", node.id); }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); if (onDone) onDone();
+    };
+    document.getElementById("cn-name").focus();
   }
   function isOverdue(dateStr) { var d = parseD(dateStr); var t0 = new Date(); t0.setHours(0, 0, 0, 0); return d && d < t0; }
 
