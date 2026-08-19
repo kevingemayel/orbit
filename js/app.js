@@ -307,7 +307,7 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"]] },
+        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"]] },
         { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
@@ -317,6 +317,7 @@
       menus: [
         { label: "Projects", action: "proj.list" },
         { label: "Tasks", action: "task.list" },
+        { label: "Materials & Remnants", action: "proj.materials" },
         { label: "Execution", action: "proj.board" },
         { label: "My Work", action: "proj.mywork" },
         { label: "Programme", action: "proj.schedule" },
@@ -329,7 +330,9 @@
       name: "Manufacturing", icon: "⚒", color: "#0d9488", color2: "#0f766e", home: "mfg.wo",
       menus: [
         { label: "Work Orders", action: "mfg.wo" },
+        { label: "Production Runs", action: "mfg.runs" },
         { label: "Bills of Materials", action: "mfg.boms" },
+        { label: "Delivery Notes", action: "dn.list" },
         { label: "Products", action: "products" }
       ]
     },
@@ -349,6 +352,7 @@
         { label: "Snagging", action: "site.snags" },
         { label: "Inspections", action: "site.insp" },
         { label: "Plant & Equipment", action: "site.plant" },
+        { label: "Tools & Equipment", action: "tools.list" },
         { label: "Site Diary", action: "site.diary" },
         { label: "Incidents", action: "site.incidents" }
       ]
@@ -451,7 +455,8 @@
     contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
-    "dash.home": "insights"
+    "dash.home": "insights",
+    "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // ============================ PERMISSIONS (RBAC) ============================
@@ -652,6 +657,7 @@
     renderHome();
     maybeWelcome();
     runAutomations();   // best-effort, once/day/company; drops alerts into the bell
+    handleScanParam();  // /?scan=CODE deep-link from a QR label -> open that tool / item
   }
   // Onboarding safety net: a newly created/approved company starts with an empty
   // accounting shell (apply_for_company doesn't seed one), so nothing can post. If the
@@ -1543,6 +1549,10 @@
       case "site.snags": return renderList(cfgSnags());
       case "site.insp": return renderList(cfgInspections());
       case "site.plant": return renderList(cfgPlant());
+      case "tools.list": return renderList(cfgTools());
+      case "proj.materials": return renderList(cfgProjectItems());
+      case "mfg.runs": return renderList(cfgRuns());
+      case "dn.list": return renderList(cfgDeliveryNotes());
       case "site.diary": return renderList(cfgSiteDiary());
       case "crm.pipe": return renderPipeline();
       case "crm.leads": return renderList(cfgLeads());
@@ -1829,7 +1839,10 @@
         { label: "Currency", get: function (c) { return esc(c.currency_code); } },
         { label: "Country", get: function (c) { return '<span class="muted">' + esc(c.country || "") + '</span>'; } },
         { label: "Role", get: function (c) { return '<span class="muted">' + (c.parent_company_id ? "Subsidiary" : "Parent / standalone") + '</span>'; } }
-      ]
+      ],
+      onOpen: function (c) { openCompanyModal(c.id); },
+      onNew: function () { openCompanyModal(null); },
+      emptyHint: "Add another company to run several businesses in one place. Each keeps its own books; link one under another to model a group."
     };
   }
   function cfgTaxes() {
@@ -2714,6 +2727,7 @@
   var INDUSTRY_SEED = ["Construction", "General contractor", "Subcontractor", "Property developer", "Consultant / engineering", "Architecture", "Facade / cladding", "Fit-out / interiors", "Glass / glazing", "Aluminium / metalwork", "Steel fabrication", "Manufacturing", "Supplier / trading", "Real estate", "Hospitality", "Retail", "Government / public", "Education", "Healthcare", "Other"];
   var CAP_SEED = ["Aluminium profiles", "Glass", "Sealants & adhesives", "Hardware & accessories", "Steel & metalwork", "Fabrication", "Powder coating / anodising", "Gaskets & rubber", "Fasteners", "Installation / labour", "Transport / logistics", "Composite panels"];
   async function renderPartnerForm(id, kind) {
+    mediaClearStage();
     var isCust = kind === "customer", isContact = kind === "contact";
     var parent = isContact ? { action: "contacts", title: "Contacts" } : { action: isCust ? "cust" : "vend", title: isCust ? "Customers" : "Vendors" };
     var backAction = isContact ? "contacts" : (isCust ? "cust" : "vend");
@@ -2747,7 +2761,7 @@
       '<div class="o-groups"><div>' +
       fld("Contact person", '<input id="p-contact" value="' + esc(p.contact_person || "") + '" placeholder="Who you deal with">', "The person you actually talk to at this company.") +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
-      fld("Phone", '<input id="p-phone" value="' + esc(p.phone || "") + '">') +
+      fld("Phone", phoneFieldHTML("p-phone", p), "Dialing code, area code and the number in separate boxes, so numbers stay tidy and consistent.") +
       fld("Mobile", '<input id="p-mobile" value="' + esc(p.mobile || "") + '">') +
       fld("Tax / VAT no.", '<input id="p-vat" value="' + esc(p.vat || "") + '">') +
       '</div><div>' +
@@ -2769,6 +2783,7 @@
       '</div></div>' +
       (showCaps ? capsBlock() : "") +
       customFieldsHTML("partner", p) +
+      attachBlockHTML("partner", id === "new" ? "" : id, { label: "Documents & photos (trade licence, supplier papers, logo)", accept: "image/*,application/pdf" }) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
       '</div>';
     if (id !== "new") {
@@ -2777,6 +2792,7 @@
     }
     function wireBankDel() { document.querySelectorAll("#pb-lines .pb-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
     wireBankDel();
+    wireAttach("partner");
     var ptEl = document.getElementById("p-payterms"); if (ptEl) ptEl.value = p.payment_days != null ? String(p.payment_days) : "";
     document.getElementById("pb-add").onclick = function () { document.getElementById("pb-lines").insertAdjacentHTML("beforeend", bankRow()); wireBankDel(); };
     var capAdd = document.getElementById("cap-addbtn");
@@ -2798,7 +2814,8 @@
       if (!name) { toast("Name is required"); return; }
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
-      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var _pn = collectPhone("p-phone");
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.phone, phone_cc: _pn.phone_cc, phone_area: _pn.phone_area, phone_num: _pn.phone_num, mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       if (showCaps) {
         var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; });
         row.capabilities = selCaps.length ? selCaps : null;
@@ -2811,7 +2828,7 @@
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
       row.custom = collectCustom("partner");
       var r, sid = id;
-      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; }
+      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; await mediaFlush("partner", sid); }
       else { var gu = await guardedUpdate("partners", row, id, p && p.updated_at); if (gu.conflict) { conflictToast(isContact ? "contact" : (isCust ? "customer" : "vendor")); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
@@ -2990,6 +3007,7 @@
     return { material_form: fe.value, family_node_id: deepestSel("fam") || null, type_node_id: deepestSel("typ") || null, spec: spec };
   }
   async function renderProductForm(id) {
+    mediaClearStage();
     var parent = { action: "products", title: "Products" };
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
@@ -3028,9 +3046,11 @@
       fld("Expense Account", sel("pr-exp", exp, p.expense_account_id, "Default")) +
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
-      '</div></div>' + materialSpecHTML(p, clsNodes) + customFieldsHTML("product", p) + '</div>';
+      fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
+      '</div></div>' + materialSpecHTML(p, clsNodes) + attachBlockHTML("product", id === "new" ? "" : id, { label: "Photos & documents" }) + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     wireMatSpec(p, clsNodes);
+    wireAttach("product");
     var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
@@ -3047,6 +3067,7 @@
       row.custom = collectCustom("product");
       row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
       row.supplier_code = gv("pr-suppcode") || null;
+      row.shelf_location = gv("pr-shelf") || null;
       var msp = collectMatSpec(); row.material_form = msp.material_form; row.spec = msp.spec;
       row.family_node_id = msp.family_node_id; row.type_node_id = msp.type_node_id;
       // denormalise the classification names onto the row/spec (so lists & reports need no join)
@@ -3061,9 +3082,551 @@
       }
       var _sp = msp.spec || {}; sugRemember("color", _sp.color); sugRemember("brand", _sp.brand); sugRemember("supplier", _sp.supplier);
       var r;
-      if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      if (id === "new") { row.company_id = S.company.id; var _pins = await sb.from("products").insert(row).select("id").single(); if (_pins.error) { toast("Could not save: " + errMsg(_pins.error)); return; } await mediaFlush("product", _pins.data.id); }
       else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       toast("Saved"); go("products");
+    };
+  }
+
+  // ============================ MEDIA / ATTACHMENTS ============================
+  // One private Supabase bucket ("attachments") holds every uploaded image and
+  // document, keyed by  {org}/{entity}/{entity_id}/{uuid.ext}. Images are shrunk
+  // to <=1600px JPEG in the browser before upload; PDFs pass through untouched.
+  var MEDIA_BUCKET = "attachments";
+  var _mediaStage = [];   // files chosen on a not-yet-saved record; flushed to storage on save
+  function uuid4() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0, v = c === "x" ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
+  function tcap(s) { s = s || ""; return s.charAt(0).toUpperCase() + s.slice(1); }
+  function mediaExt(file) { var n = (file.name || "").toLowerCase(), m = n.match(/\.([a-z0-9]+)$/); if (m) return m[1]; if (/pdf/.test(file.type || "")) return "pdf"; return "bin"; }
+  function isImageFile(f) { return /^image\//.test(f.type || "") && !/gif|svg/.test(f.type || ""); }
+  function compressImage(file, maxEdge, quality) {
+    return new Promise(function (resolve) {
+      if (!isImageFile(file)) return resolve({ blob: file, w: null, h: null });
+      var img = new Image(), url = URL.createObjectURL(file);
+      img.onload = function () {
+        var w = img.naturalWidth, h = img.naturalHeight, scale = Math.min(1, maxEdge / Math.max(w, h));
+        var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+        var cv = document.createElement("canvas"); cv.width = cw; cv.height = ch;
+        cv.getContext("2d").drawImage(img, 0, 0, cw, ch);
+        URL.revokeObjectURL(url);
+        cv.toBlob(function (b) { resolve({ blob: b || file, w: cw, h: ch }); }, "image/jpeg", quality || 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); resolve({ blob: file, w: null, h: null }); };
+      img.src = url;
+    });
+  }
+  async function mediaUpload(entity, entityId, file) {
+    var isImg = isImageFile(file), isPdf = /pdf/.test(file.type || "") || /\.pdf$/i.test(file.name || "");
+    var comp = isImg ? await compressImage(file, 1600, 0.82) : { blob: file, w: null, h: null };
+    var ext = isImg ? "jpg" : mediaExt(file), org = S.company.org_id;
+    var path = org + "/" + entity + "/" + (entityId || ("draft-" + uuid4())) + "/" + uuid4() + "." + ext;
+    var up = await sb.storage.from(MEDIA_BUCKET).upload(path, comp.blob, { contentType: isImg ? "image/jpeg" : (file.type || "application/octet-stream"), upsert: false });
+    if (up.error) throw up.error;
+    var row = { org_id: org, company_id: (S.company ? S.company.id : null), entity: entity, entity_id: entityId || null, path: path, kind: isImg ? "image" : (isPdf ? "pdf" : "file"), mime: (isImg ? "image/jpeg" : (file.type || null)), bytes: comp.blob.size, w: comp.w, h: comp.h, caption: (file.name || "") };
+    var ins = await sb.from("media").insert(row).select("*").single();
+    if (ins.error) throw ins.error;
+    return ins.data;
+  }
+  async function mediaList(entity, entityId) { if (!entityId) return []; var r = await sb.from("media").select("*").eq("entity", entity).eq("entity_id", entityId).order("created_at"); return r.data || []; }
+  async function mediaSignedUrl(path) { try { var r = await sb.storage.from(MEDIA_BUCKET).createSignedUrl(path, 3600); return (r.data && r.data.signedUrl) || ""; } catch (e) { return ""; } }
+  async function mediaDelete(m) { try { await sb.storage.from(MEDIA_BUCKET).remove([m.path]); } catch (e) { } await sb.from("media").delete().eq("id", m.id); }
+  async function mediaFirstImage(entity, entityId) { var l = await mediaList(entity, entityId); var im = l.filter(function (x) { return x.kind === "image"; })[0]; return im ? await mediaSignedUrl(im.path) : ""; }
+  // reusable attachments panel. entity is a short key ("product","tool","partner"...);
+  // on a new record leave entityId empty and call mediaFlush(entity,newId) after insert.
+  function attachBlockHTML(entity, entityId, opts) {
+    opts = opts || {};
+    return '<div class="o-att" data-entity="' + entity + '" data-id="' + (entityId || "") + '">' +
+      '<div class="o-cf-head">' + esc(opts.label || "Photos & documents") + '</div>' +
+      '<div class="o-att-grid" id="att-grid-' + entity + '"><div class="muted" style="font-size:12px">Loading...</div></div>' +
+      '<label class="o-att-add"><input type="file" accept="' + (opts.accept || "image/*,application/pdf") + '" multiple id="att-input-' + entity + '"><span>+ Add photo / file</span></label>' +
+      '<div class="muted o-att-note">Images are compressed automatically. PDFs are kept as-is. Files are private to your company.</div>' +
+      '</div>';
+  }
+  function mediaThumbHTML(m, url) {
+    if (m.kind === "image" && url) return '<div class="o-att-thumb"><img src="' + url + '" data-open="' + m.id + '"><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
+    return '<div class="o-att-thumb doc" data-open="' + m.id + '"><div class="o-att-doc">' + (m.kind === "pdf" ? "PDF" : "FILE") + '</div><div class="o-att-cap">' + esc((m.caption || "").slice(0, 22)) + '</div><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
+  }
+  async function renderAttachGrid(entity) {
+    var grid = document.getElementById("att-grid-" + entity); if (!grid) return;
+    var wrap = document.querySelector('.o-att[data-entity="' + entity + '"]'), eid = wrap ? wrap.dataset.id : "";
+    var existing = eid ? await mediaList(entity, eid) : [], html = "";
+    for (var i = 0; i < existing.length; i++) { var m = existing[i], u = m.kind === "image" ? await mediaSignedUrl(m.path) : ""; html += mediaThumbHTML(m, u); }
+    _mediaStage.filter(function (s) { return s.entity === entity; }).forEach(function (s) {
+      html += '<div class="o-att-thumb' + (s.kind === "image" ? "" : " doc") + '">' + (s.kind === "image" ? '<img src="' + s.url + '">' : '<div class="o-att-doc">FILE</div><div class="o-att-cap">' + esc((s.file.name || "").slice(0, 22)) + '</div>') + '<button class="o-att-x" data-stage="' + s.uid + '" title="Remove">&times;</button></div>';
+    });
+    if (!document.getElementById("att-grid-" + entity)) return;
+    grid.innerHTML = html || '<div class="muted" style="font-size:12px">No photos or files yet.</div>';
+    grid.querySelectorAll("[data-mid]").forEach(function (b) { b.onclick = async function (ev) { ev.stopPropagation(); if (!confirm("Remove this file? This cannot be undone.")) return; var m = existing.filter(function (x) { return x.id === b.dataset.mid; })[0]; if (m) { await mediaDelete(m); } renderAttachGrid(entity); }; });
+    grid.querySelectorAll("[data-stage]").forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); _mediaStage = _mediaStage.filter(function (s) { return s.uid !== b.dataset.stage; }); renderAttachGrid(entity); }; });
+    grid.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = async function () { var m = existing.filter(function (x) { return x.id === b.dataset.open; })[0]; if (!m) return; var u = await mediaSignedUrl(m.path); if (u) window.open(u, "_blank"); }; });
+  }
+  function wireAttach(entity) {
+    renderAttachGrid(entity);
+    var inp = document.getElementById("att-input-" + entity); if (!inp) return;
+    inp.onchange = async function () {
+      var wrap = document.querySelector('.o-att[data-entity="' + entity + '"]'), eid = wrap ? wrap.dataset.id : "";
+      var files = Array.prototype.slice.call(inp.files || []); inp.value = "";
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        if (eid) { try { await mediaUpload(entity, eid, f); } catch (e) { toast("Upload failed: " + errMsg(e)); } }
+        else { _mediaStage.push({ uid: uuid4(), entity: entity, file: f, kind: isImageFile(f) ? "image" : "file", url: URL.createObjectURL(f) }); }
+      }
+      if (eid) toast(files.length + " file" + (files.length === 1 ? "" : "s") + " uploaded");
+      renderAttachGrid(entity);
+    };
+  }
+  async function mediaFlush(entity, newId) {
+    var st = _mediaStage.filter(function (s) { return s.entity === entity; });
+    _mediaStage = _mediaStage.filter(function (s) { return s.entity !== entity; });
+    for (var i = 0; i < st.length; i++) { try { await mediaUpload(entity, newId, st[i].file); } catch (e) { } }
+  }
+  function mediaClearStage() { _mediaStage = []; }
+
+  // ============================ QR LABELS (lazy CDN, like supabase-js) =========
+  var _qrLoad = null;
+  function loadQR() { if (_qrLoad) return _qrLoad; _qrLoad = new Promise(function (res, rej) { if (window.qrcode) return res(window.qrcode); var s = document.createElement("script"); s.src = "https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"; s.onload = function () { res(window.qrcode); }; s.onerror = function () { rej(new Error("QR library failed to load")); }; document.head.appendChild(s); }); return _qrLoad; }
+  function scanLink(code) { return location.origin + "/?scan=" + encodeURIComponent(code); }
+  async function openQRModal(title, code, sub) {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "qrmodal";
+    m.innerHTML = '<div class="sheet" style="max-width:380px"><h3>QR label</h3><div class="form" style="padding:18px;display:grid;gap:10px;justify-items:center">' +
+      '<div id="qr-box" style="width:220px;height:220px;display:flex;align-items:center;justify-content:center">Loading QR...</div>' +
+      '<div style="text-align:center"><div style="font-weight:700">' + esc(title) + '</div><div class="muted" style="font-size:12.5px">' + esc(sub || code) + '</div></div>' +
+      '<div class="muted" style="font-size:11.5px;text-align:center">Print and stick it on the item. Scanning it with a phone opens this record.</div>' +
+      '</div><div class="foot"><button class="btn" id="qr-close">Close</button><button class="btn pri" id="qr-print" style="background:var(--app);border-color:var(--app)">Print label</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qr-close").onclick = function () { m.remove(); };
+    var svg = "";
+    try { var qrcode = await loadQR(); var qr = qrcode(0, "M"); qr.addData(scanLink(code)); qr.make(); svg = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true }); document.getElementById("qr-box").innerHTML = svg; }
+    catch (e) { document.getElementById("qr-box").innerHTML = '<span class="muted" style="font-size:12px">Could not load the QR generator (offline?).</span>'; }
+    document.getElementById("qr-print").onclick = function () {
+      var w = window.open("", "_blank", "width=420,height=520"); if (!w) { toast("Allow pop-ups to print the label"); return; }
+      w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Arial,sans-serif;text-align:center;padding:24px}svg{width:260px;height:260px}h2{margin:8px 0 2px;font-size:18px}p{margin:0;color:#555;font-size:13px}</style></head><body>' + svg + '<h2>' + esc(title) + '</h2><p>' + esc(sub || code) + '</p><scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+      w.document.close();
+    };
+  }
+  // deep link: /?scan=CODE opens the matching tool (or stock item by item/supplier code)
+  async function handleScanParam() {
+    try {
+      var q = new URLSearchParams(location.search), code = q.get("scan"); if (!code) return;
+      history.replaceState({}, "", location.pathname);
+      var t = (await sb.from("tools").select("id").eq("company_id", S.company.id).or("code.eq." + code + ",id.eq." + code).limit(1)).data;
+      if (t && t.length) { S.app = "site"; applyAppColor(); renderShell(); go("tools.list"); setTimeout(function () { renderToolForm(t[0].id); }, 60); return; }
+      var p = (await sb.from("products").select("id").eq("company_id", S.company.id).or("default_code.eq." + code + ",supplier_code.eq." + code).limit(1)).data;
+      if (p && p.length) { S.app = "sales"; applyAppColor(); renderShell(); go("products"); setTimeout(function () { renderProductForm(p[0].id); }, 60); return; }
+      toast("Scanned code not found: " + code);
+    } catch (e) { }
+  }
+
+  // ============================ PHONE (country code / area / number) ===========
+  var PHONE_CC = [["+961", "Lebanon"], ["+971", "UAE"], ["+966", "Saudi Arabia"], ["+974", "Qatar"], ["+973", "Bahrain"], ["+965", "Kuwait"], ["+968", "Oman"], ["+962", "Jordan"], ["+963", "Syria"], ["+964", "Iraq"], ["+20", "Egypt"], ["+212", "Morocco"], ["+216", "Tunisia"], ["+218", "Libya"], ["+90", "Turkey"], ["+98", "Iran"], ["+1", "US / Canada"], ["+44", "UK"], ["+33", "France"], ["+49", "Germany"], ["+39", "Italy"], ["+34", "Spain"], ["+31", "Netherlands"], ["+41", "Switzerland"], ["+32", "Belgium"], ["+351", "Portugal"], ["+30", "Greece"], ["+7", "Russia"], ["+380", "Ukraine"], ["+91", "India"], ["+92", "Pakistan"], ["+86", "China"], ["+81", "Japan"], ["+82", "South Korea"], ["+65", "Singapore"], ["+60", "Malaysia"], ["+62", "Indonesia"], ["+63", "Philippines"], ["+61", "Australia"], ["+64", "New Zealand"], ["+27", "South Africa"], ["+234", "Nigeria"], ["+254", "Kenya"], ["+55", "Brazil"], ["+52", "Mexico"], ["+54", "Argentina"]];
+  function phoneFieldHTML(pfx, rec) {
+    rec = rec || {}; var cc = rec.phone_cc || "", area = rec.phone_area || "", num = rec.phone_num || "";
+    if (!cc && !area && !num && rec.phone) { num = rec.phone; }   // legacy single-field value
+    var opts = '<option value="">Code</option>' + PHONE_CC.map(function (c) { return '<option value="' + c[0] + '"' + (cc === c[0] ? " selected" : "") + '>' + c[0] + " " + esc(c[1]) + '</option>'; }).join("");
+    return '<div class="o-phone"><select id="' + pfx + '-cc">' + opts + '</select>' +
+      '<input id="' + pfx + '-area" value="' + esc(area) + '" placeholder="Area" inputmode="tel">' +
+      '<input id="' + pfx + '-num" value="' + esc(num) + '" placeholder="Number" inputmode="tel"></div>';
+  }
+  function collectPhone(pfx) {
+    var cc = gv(pfx + "-cc"), area = gv(pfx + "-area"), num = gv(pfx + "-num");
+    var combined = [cc, area, num].filter(Boolean).join(" ").trim();
+    return { phone_cc: cc || null, phone_area: area || null, phone_num: num || null, phone: combined || null };
+  }
+
+  // ============================ TOOLS & EQUIPMENT ==============================
+  var TOOL_STATUS = [["in_stock", "Available"], ["issued", "Issued out"], ["repair", "In repair"], ["retired", "Retired"]];
+  var TOOL_COND = [["new", "New"], ["good", "Good"], ["fair", "Fair"], ["poor", "Poor"], ["broken", "Broken"]];
+  function toolStatusBadge(t) { var map = { in_stock: ["Available", "paid"], issued: ["Issued", "partial"], repair: ["In repair", "unpaid"], retired: ["Retired", "draft"] }, m = map[t.status] || ["", "draft"]; return '<span class="badge ' + m[1] + '">' + m[0] + '</span>'; }
+  function cfgTools() {
+    return {
+      title: "Tools & Equipment", pageSize: 80,
+      fetch: function () { return sb.from("tools").select("*, partners:holder_partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.name || "") + " " + (t.code || "") + " " + (t.category || "") + " " + (t.brand || "") + " " + (t.serial || "") + " " + (t.holder_name || "") + " " + (t.location || "") + " " + (t.shelf_location || ""); },
+      columns: [
+        { label: "Tool", get: function (t) { return '<b>' + esc(t.name) + '</b>' + (t.code ? ' <span class="muted">' + esc(t.code) + '</span>' : ""); } },
+        { label: "Category", get: function (t) { return esc(t.category || ""); } },
+        { label: "Status", get: function (t) { return toolStatusBadge(t); } },
+        { label: "Condition", get: function (t) { return '<span class="muted">' + esc(tcap(t.condition || "")) + '</span>'; } },
+        { label: "Held by", get: function (t) { return esc(t.holder_name || (t.partners ? t.partners.name : "") || (t.status === "in_stock" ? "Warehouse" : "")); } },
+        { label: "Location", get: function (t) { return '<span class="muted">' + esc(t.location || t.shelf_location || "") + '</span>'; } }
+      ],
+      filters: [
+        { label: "Available", test: function (t) { return t.status === "in_stock"; } },
+        { label: "Issued out", test: function (t) { return t.status === "issued"; } },
+        { label: "In repair", test: function (t) { return t.status === "repair"; } },
+        { label: "Needs attention", test: function (t) { return ["poor", "broken"].indexOf(t.condition) >= 0; } }
+      ],
+      groupBy: [{ label: "Status", get: function (t) { return tcap(t.status || ""); } }, { label: "Category", get: function (t) { return t.category || "None"; } }, { label: "Condition", get: function (t) { return tcap(t.condition || ""); } }, { label: "Held by", get: function (t) { return t.holder_name || (t.partners ? t.partners.name : "") || "Warehouse"; } }],
+      onOpen: function (t) { renderToolForm(t.id); },
+      onNew: function () { renderToolForm("new"); },
+      emptyHint: "Register drills, ladders, machines and equipment. Track who holds each one and its condition, and print a QR label for the warehouse."
+    };
+  }
+  async function renderToolForm(id) {
+    mediaClearStage();
+    var parent = { action: "tools.list", title: "Tools & Equipment" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? { status: "in_stock", condition: "good", holder_type: "none" } : (await sb.from("tools").select("*").eq("id", id).maybeSingle()).data || {};
+    await sugSeedFromPartners();
+    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var moves = id === "new" ? [] : ((await sb.from("tool_movements").select("*").eq("tool_id", id).order("at", { ascending: false }).limit(12)).data || []);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "");
+    function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
+    var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (t.holder_partner_id === v.id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var histHTML = moves.length ? '<div class="o-cf-head" style="margin-top:16px">History</div><table class="o-list o-toolhist"><thead><tr><th>When</th><th>Action</th><th>To / Location</th><th>Condition</th><th>Note</th></tr></thead><tbody>' + moves.map(function (m) { return '<tr><td class="muted">' + esc((m.at || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(tcap(m.action)) + '</td><td>' + esc(m.to_name || m.location || "") + '</td><td>' + esc(tcap(m.condition || "")) + '</td><td class="muted">' + esc(m.note || "") + '</td></tr>'; }).join("") + '</tbody></table>' : "";
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tl-save">Save</button><button id="tl-discard">Discard</button>' +
+      (id !== "new" ? '<button id="tl-issue">Issue / Return</button><button id="tl-qr">QR label</button>' : '') +
+      '</div><div>' + toolStatusBadge(t) + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="tl-name" value="' + esc(t.name || "") + '" placeholder="e.g. Hilti TE 30 hammer drill"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Asset code", '<input id="tl-code" value="' + esc(t.code || "") + '" placeholder="e.g. TL-0007">', "Your tag number for this tool. It is written into the QR label so a scan finds this exact item.") +
+      fld("Category", sug("tl-cat", t.category, "toolcat", "e.g. Power tool"), "Group similar tools: Power tool, Hand tool, Ladder, Machine, Safety gear.") +
+      fld("Brand", sug("tl-brand", t.brand, "brand"), "") +
+      fld("Serial number", '<input id="tl-serial" value="' + esc(t.serial || "") + '">', "The manufacturer's serial, useful for insurance and warranty claims.") +
+      fld("Condition", '<select id="tl-cond">' + osel(TOOL_COND, t.condition || "good") + '</select>', "The current physical state. Set it to Poor or Broken to flag it for repair or replacement.") +
+      '</div><div>' +
+      fld("Status", '<select id="tl-status">' + osel(TOOL_STATUS, t.status || "in_stock") + '</select>', "Available = in the warehouse. Issued out = a person has it. In repair / Retired take it out of circulation.") +
+      fld("Held by", '<input id="tl-holder" value="' + esc(t.holder_name || "") + '" placeholder="Foreman / worker name">', "Who physically has the tool right now. Leave blank when it is in the warehouse.") +
+      fld("On project", '<select id="tl-proj">' + projOpts + '</select>', "Which job the tool is being used on, if any.") +
+      fld("Supplier", '<select id="tl-vend">' + vendOpts + '</select>', "Where it was bought or is rented from.") +
+      fld("Warehouse location", sug("tl-loc", t.location, "toolloc", "e.g. Main store"), "Where it lives when not in use.") +
+      fld("Shelf / bin", '<input id="tl-shelf" value="' + esc(t.shelf_location || "") + '" placeholder="e.g. Rack B-3">', "The exact shelf or rack, so anyone can find or return it.") +
+      '</div></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Purchase date", '<input id="tl-pdate" type="date" value="' + esc(t.purchase_date || "") + '">', "") +
+      fld("Purchase cost", '<input id="tl-pcost" type="number" step="0.01" value="' + (t.purchase_cost != null ? t.purchase_cost : "") + '">', "") +
+      '</div><div>' +
+      fld("Notes", '<textarea id="tl-notes" rows="3">' + esc(t.notes || "") + '</textarea>', "") +
+      '</div></div>' +
+      attachBlockHTML("tool", id === "new" ? "" : id, { label: "Photos (condition / damage)" }) +
+      histHTML + '</div>';
+    document.getElementById("tl-discard").onclick = function () { go("tools.list"); };
+    wireAttach("tool");
+    var qb = document.getElementById("tl-qr"); if (qb) qb.onclick = function () { openQRModal(t.name || "Tool", t.code || t.id, t.code || ""); };
+    var ib = document.getElementById("tl-issue"); if (ib) ib.onclick = function () { openToolIssueModal(t); };
+    document.getElementById("tl-save").onclick = async function () {
+      var name = gv("tl-name"); if (!name) { toast("Name is required"); return; }
+      var row = {
+        name: name, code: gv("tl-code") || null, category: gv("tl-cat") || null, brand: gv("tl-brand") || null, serial: gv("tl-serial") || null,
+        condition: document.getElementById("tl-cond").value, status: document.getElementById("tl-status").value,
+        holder_name: gv("tl-holder") || null, project_id: document.getElementById("tl-proj").value || null, holder_partner_id: document.getElementById("tl-vend").value || null,
+        location: gv("tl-loc") || null, shelf_location: gv("tl-shelf") || null,
+        purchase_date: gv("tl-pdate") || null, purchase_cost: parseFloat(gv("tl-pcost")) || null, notes: gv("tl-notes") || null
+      };
+      row.holder_type = row.holder_name ? "employee" : (row.holder_partner_id ? "partner" : "none");
+      sugRemember("toolcat", row.category); sugRemember("brand", row.brand); sugRemember("toolloc", row.location);
+      var r;
+      if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("tools").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } await mediaFlush("tool", ins.data.id); }
+      else { r = await sb.from("tools").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      toast("Saved"); go("tools.list");
+    };
+  }
+  function openToolIssueModal(t) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Issue or return &middot; ' + esc(t.name || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Action</label><select id="ti-act"><option value="issued">Issue out (hand to someone)</option><option value="returned">Return to warehouse</option><option value="moved">Move / relocate</option><option value="repair">Send to repair</option></select></div>' +
+      '<div id="ti-torow"><label>Given to</label>' + fhint("Given to", "The person or crew taking the tool.") + '<input id="ti-to" placeholder="Foreman / worker name"></div>' +
+      '<div><label>Location</label>' + fhint("Location", "Where the tool is going: a site, a store, a vehicle.") + '<input id="ti-loc" placeholder="e.g. Marina site"></div>' +
+      '<div><label>Condition now</label><select id="ti-cond">' + TOOL_COND.map(function (c) { return '<option value="' + c[0] + '"' + ((t.condition || "good") === c[0] ? " selected" : "") + '>' + c[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Note</label><input id="ti-note" placeholder="Optional"></div>' +
+      '</div><div class="foot"><button class="btn" id="ti-cancel">Cancel</button><button class="btn pri" id="ti-save" style="background:var(--app);border-color:var(--app)">Record</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ti-cancel").onclick = function () { m.remove(); };
+    document.getElementById("ti-save").onclick = async function () {
+      var act = document.getElementById("ti-act").value, to = gv("ti-to"), loc = gv("ti-loc"), cond = document.getElementById("ti-cond").value, note = gv("ti-note");
+      var upd = { condition: cond };
+      if (act === "issued") { upd.status = "issued"; upd.holder_name = to || null; upd.holder_type = to ? "employee" : "none"; upd.location = loc || null; }
+      else if (act === "returned") { upd.status = "in_stock"; upd.holder_name = null; upd.holder_type = "none"; upd.location = loc || t.location; }
+      else if (act === "repair") { upd.status = "repair"; }
+      else { upd.location = loc || t.location; }
+      var r = await sb.from("tools").update(upd).eq("id", t.id); if (r.error) { toast("Could not record: " + errMsg(r.error)); return; }
+      await sb.from("tool_movements").insert({ org_id: S.company.org_id, tool_id: t.id, action: act, to_name: to || null, location: loc || null, condition: cond, note: note || null });
+      m.remove(); toast("Recorded"); renderToolForm(t.id);
+    };
+    document.getElementById("ti-act").onchange = function () { document.getElementById("ti-torow").style.display = this.value === "issued" ? "" : "none"; };
+  }
+
+  // ============================ PROJECT ITEMS & REMNANTS =======================
+  // Custom, project-specific materials (glass panels cut to size, bars that only
+  // vary in length...) that should NOT clutter the reusable product catalogue.
+  // Offcuts are recorded as remnants linked back to their source item.
+  var PITEM_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["in_stock", "In stock"], ["used", "Used"], ["scrapped", "Scrapped"]];
+  function pitemSize(it) { var d = (it.spec && it.spec.dims) || it.dims || {}; if (it.material_form === "sheet") return (d.w || "?") + "x" + (d.h || "?") + (d.t ? "x" + d.t : "") + " mm"; if (it.material_form === "bar") return (d.len || "?") + " m"; if (it.material_form === "roll") return (d.rlen || "?") + " m"; if (it.material_form === "liquid") return (d.vol || "?") + " " + (d.volunit || "L"); return ""; }
+  function cfgProjectItems() {
+    return {
+      title: "Project Materials", pageSize: 100,
+      fetch: function () { return sb.from("project_items").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (it) { var s = it.spec || {}; return (it.name || "") + " " + (it.projects ? it.projects.name : "") + " " + (s.material || "") + " " + (s.color || "") + " " + pitemSize(it); },
+      columns: [
+        { label: "Item", get: function (it) { return '<b>' + esc(it.name) + '</b>' + (it.is_remnant ? ' <span class="badge draft">Remnant</span>' : ""); } },
+        { label: "Project", get: function (it) { return esc(it.projects ? it.projects.name : ""); } },
+        { label: "Form", get: function (it) { return '<span class="muted">' + esc(matFormLabel(it.material_form) || "-") + '</span>'; } },
+        { label: "Size", get: function (it) { return '<span class="muted">' + esc(pitemSize(it)) + '</span>'; } },
+        { label: "Qty", num: true, get: function (it) { return (Number(it.qty) || 0) + " " + esc(it.unit || ""); } },
+        { label: "Used", num: true, get: function (it) { return (Number(it.used_qty) || 0) + ""; } },
+        { label: "Status", get: function (it) { return '<span class="muted">' + esc((PITEM_STATUS.filter(function (x) { return x[0] === it.status; })[0] || [, it.status])[1] || "") + '</span>'; } }
+      ],
+      filters: [
+        { label: "Remnants / offcuts", test: function (it) { return !!it.is_remnant; } },
+        { label: "Main items", test: function (it) { return !it.is_remnant; } },
+        { label: "In stock", test: function (it) { return it.status === "in_stock"; } },
+        { label: "Used up", test: function (it) { return it.status === "used"; } }
+      ],
+      groupBy: [{ label: "Project", get: function (it) { return it.projects ? it.projects.name : "None"; } }, { label: "Form", get: function (it) { return matFormLabel(it.material_form) || "Other"; } }, { label: "Status", get: function (it) { return it.status || "None"; } }],
+      onOpen: function (it) { renderProjectItemForm(it.id); },
+      onNew: function () { renderProjectItemForm("new"); },
+      emptyHint: "Add glass panels, cut bars and other made-to-size materials for a specific job. Record offcuts as remnants so nothing is lost. Export gives you a stock-usage CSV."
+    };
+  }
+  async function renderProjectItemForm(id, seed) {
+    mediaClearStage();
+    var parent = { action: "proj.materials", title: "Project Materials" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var it = id === "new" ? (seed || { unit: "pcs", status: "planned" }) : (await sb.from("project_items").select("*").eq("id", id).maybeSingle()).data || {};
+    await sugSeedFromProducts();
+    var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    _prCodeAuto = false;
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (it.name || "");
+    var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (it.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pi-save">Save</button><button id="pi-discard">Discard</button>' +
+      (id !== "new" && !it.is_remnant ? '<button id="pi-remnant">+ Add offcut</button>' : "") +
+      '</div><div>' + (it.is_remnant ? '<span class="badge draft">Remnant</span>' : "") + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="pi-name" value="' + esc(it.name || "") + '" placeholder="e.g. Glass panel - clear tempered 6mm"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Project", '<select id="pi-proj">' + projOpts + '</select>', "The job these materials belong to.") +
+      fld("Quantity", '<input id="pi-qty" type="number" step="any" value="' + (it.qty != null ? it.qty : "") + '">', "How many pieces / units for this job.") +
+      fld("Unit", sug("pi-unit", it.unit || "pcs", "unit", "e.g. pcs, m, m2"), "") +
+      '</div><div>' +
+      fld("Status", '<select id="pi-status">' + PITEM_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + ((it.status || "planned") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "Where this material is in its life: planned, ordered, in stock, used or scrapped.") +
+      fld("Used so far", '<input id="pi-used" type="number" step="any" value="' + (it.used_qty != null ? it.used_qty : "") + '">', "How much has been consumed on site so far.") +
+      '<label class="o-chkline"><input type="checkbox" id="pi-isrem"' + (it.is_remnant ? " checked" : "") + '> This is a leftover offcut (remnant)</label>' +
+      '</div></div>' + materialSpecHTML(it, clsNodes) +
+      fld("Notes", '<textarea id="pi-notes" rows="2">' + esc(it.notes || "") + '</textarea>', "") +
+      attachBlockHTML("project_item", id === "new" ? "" : id, { label: "Photos" }) + '</div>';
+    document.getElementById("pi-discard").onclick = function () { go("proj.materials"); };
+    wireMatSpec(it, clsNodes);
+    wireAttach("project_item");
+    var rb = document.getElementById("pi-remnant"); if (rb) rb.onclick = function () { var d = (it.spec && it.spec.dims) ? { material_form: it.material_form, spec: { material: (it.spec || {}).material, color: (it.spec || {}).color } } : {}; renderProjectItemForm("new", { name: (it.name || "") + " - offcut", project_id: it.project_id, unit: it.unit || "pcs", status: "in_stock", is_remnant: true, source_item_id: it.id, material_form: it.material_form, spec: { material: (it.spec || {}).material, color: (it.spec || {}).color } }); };
+    document.getElementById("pi-save").onclick = async function () {
+      var name = gv("pi-name"); if (!name) { toast("Name is required"); return; }
+      var msp = collectMatSpec();
+      var row = {
+        name: name, project_id: document.getElementById("pi-proj").value || null,
+        qty: parseFloat(gv("pi-qty")) || 0, used_qty: parseFloat(gv("pi-used")) || 0, unit: gv("pi-unit") || "pcs",
+        status: document.getElementById("pi-status").value, is_remnant: document.getElementById("pi-isrem").checked,
+        source_item_id: it.source_item_id || null, notes: gv("pi-notes") || null,
+        material_form: msp.material_form, family_node_id: msp.family_node_id, type_node_id: msp.type_node_id, spec: msp.spec
+      };
+      sugRemember("unit", row.unit);
+      if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("project_items").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } await mediaFlush("project_item", ins.data.id); }
+      else { var r = await sb.from("project_items").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      toast("Saved"); go("proj.materials");
+    };
+  }
+
+  // ============================ LINE EDITOR (runs / delivery notes) ============
+  function lineItemOptions(products, runs, pitems, sel) {
+    function grp(label, arr, kind) { if (!arr.length) return ""; return '<optgroup label="' + label + '">' + arr.map(function (x) { var v = kind + ":" + x.id; return '<option value="' + v + '"' + (sel === v ? " selected" : "") + '>' + esc(x.name || x.number || x.default_code || "item") + (x.default_code ? " (" + esc(x.default_code) + ")" : "") + '</option>'; }).join("") + '</optgroup>'; }
+    return '<option value="">(free text)</option>' + grp("Stock products", products, "product") + grp("Manufactured", runs, "run") + grp("Project materials", pitems, "pitem");
+  }
+  function addLineRow(tbodyId, opts, line) {
+    line = line || {};
+    var tb = document.getElementById(tbodyId); if (!tb) return;
+    var tr = document.createElement("tr"); tr.className = "ln-row";
+    var selVal = line.product_id ? "product:" + line.product_id : line.production_run_id ? "run:" + line.production_run_id : line.project_item_id ? "pitem:" + line.project_item_id : "";
+    tr.innerHTML = '<td><select class="ln-item">' + lineItemOptions(opts.products, opts.runs, opts.pitems, selVal) + '</select></td>' +
+      '<td><input class="ln-desc" value="' + esc(line.description || "") + '" placeholder="Description"></td>' +
+      '<td><input class="ln-qty" type="number" step="any" style="max-width:90px" value="' + (line.qty != null ? line.qty : "") + '"></td>' +
+      '<td><input class="ln-unit" style="max-width:70px" value="' + esc(line.unit || "pcs") + '"></td>' +
+      '<td><button class="ln-del" title="Remove">&times;</button></td>';
+    tb.appendChild(tr);
+    var itSel = tr.querySelector(".ln-item"), desc = tr.querySelector(".ln-desc");
+    itSel.onchange = function () { if (this.value && !desc.value) { desc.value = this.options[this.selectedIndex].text.replace(/\s*\(.*\)$/, ""); } };
+    tr.querySelector(".ln-del").onclick = function () { tr.remove(); };
+  }
+  function collectLines(tbodyId) {
+    var out = []; var tb = document.getElementById(tbodyId); if (!tb) return out;
+    Array.prototype.forEach.call(tb.querySelectorAll(".ln-row"), function (tr) {
+      var iv = tr.querySelector(".ln-item").value, desc = tr.querySelector(".ln-desc").value.trim(), qty = parseFloat(tr.querySelector(".ln-qty").value) || 0, unit = tr.querySelector(".ln-unit").value.trim() || "pcs";
+      if (!iv && !desc && !qty) return;
+      var kind = iv ? iv.split(":")[0] : "", rid = iv ? iv.split(":")[1] : "";
+      out.push({ kind: kind, rid: rid, description: desc, qty: qty, unit: unit });
+    });
+    return out;
+  }
+
+  // ============================ PRODUCTION RUNS (consumption) ===================
+  var RUN_STATUS = [["draft", "Draft"], ["in_progress", "In progress"], ["done", "Done"], ["cancelled", "Cancelled"]];
+  function cfgRuns() {
+    return {
+      title: "Production Runs", pageSize: 80,
+      fetch: function () { return sb.from("production_runs").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("run_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.name || "") + " " + (r.ref || "") + " " + (r.projects ? r.projects.name : ""); },
+      columns: [
+        { label: "Run", get: function (r) { return '<b>' + esc(r.name) + '</b>' + (r.ref ? ' <span class="muted">' + esc(r.ref) + '</span>' : ""); } },
+        { label: "Project", get: function (r) { return esc(r.projects ? r.projects.name : ""); } },
+        { label: "Output qty", num: true, get: function (r) { return Number(r.output_qty) || 0; } },
+        { label: "Date", get: function (r) { return '<span class="muted">' + esc(r.run_date || "") + '</span>'; } },
+        { label: "Status", get: function (r) { return '<span class="badge ' + (r.status === "done" ? "paid" : r.status === "in_progress" ? "partial" : r.status === "cancelled" ? "unpaid" : "draft") + '">' + esc((RUN_STATUS.filter(function (x) { return x[0] === r.status; })[0] || [, r.status])[1] || "") + '</span>'; } }
+      ],
+      groupBy: [{ label: "Status", get: function (r) { return r.status || "None"; } }, { label: "Project", get: function (r) { return r.projects ? r.projects.name : "None"; } }],
+      onOpen: function (r) { renderRunForm(r.id); },
+      onNew: function () { renderRunForm("new"); },
+      emptyHint: "Record what materials are consumed to produce a set (e.g. a batch of window frames), so stock usage and job cost stay accurate."
+    };
+  }
+  async function renderRunForm(id) {
+    var parent = { action: "mfg.runs", title: "Production Runs" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var r = id === "new" ? { status: "draft", output_qty: 1, run_date: today() } : (await sb.from("production_runs").select("*").eq("id", id).maybeSingle()).data || {};
+    var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).order("name")).data || [];
+    var pitems = (await sb.from("project_items").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var lines = id === "new" ? [] : ((await sb.from("production_consumption").select("*").eq("run_id", id)).data || []);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.name || "");
+    var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (r.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var outOpts = '<option value="">(none)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (r.output_product_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="rn-save">Save</button><button id="rn-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="rn-name" value="' + esc(r.name || "") + '" placeholder="e.g. Batch of 20 window frames"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Reference", '<input id="rn-ref" value="' + esc(r.ref || "") + '">', "Your own reference or work-order number.") +
+      fld("Project", '<select id="rn-proj">' + projOpts + '</select>', "The job this production is for.") +
+      fld("Output product", '<select id="rn-out">' + outOpts + '</select>', "The finished item produced, if it is a catalogue product.") +
+      '</div><div>' +
+      fld("Output quantity", '<input id="rn-oqty" type="number" step="any" value="' + (r.output_qty != null ? r.output_qty : 1) + '">', "How many finished units this run produces.") +
+      fld("Date", '<input id="rn-date" type="date" value="' + esc(r.run_date || today()) + '">', "") +
+      fld("Status", '<select id="rn-status">' + RUN_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + ((r.status || "draft") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "") +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:16px">Materials consumed</div>' +
+      '<table class="o-list o-lines"><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="rn-lines"></tbody></table>' +
+      '<button class="btn" id="rn-addline" style="margin-top:8px">+ Add material</button>' +
+      fld("Notes", '<textarea id="rn-notes" rows="2">' + esc(r.notes || "") + '</textarea>', "") + '</div>';
+    document.getElementById("rn-discard").onclick = function () { go("mfg.runs"); };
+    var opts = { products: products, runs: [], pitems: pitems };
+    lines.forEach(function (l) { addLineRow("rn-lines", opts, l); });
+    if (!lines.length) addLineRow("rn-lines", opts, {});
+    document.getElementById("rn-addline").onclick = function () { addLineRow("rn-lines", opts, {}); };
+    document.getElementById("rn-save").onclick = async function () {
+      var name = gv("rn-name"); if (!name) { toast("Name is required"); return; }
+      var row = { name: name, ref: gv("rn-ref") || null, project_id: document.getElementById("rn-proj").value || null, output_product_id: document.getElementById("rn-out").value || null, output_qty: parseFloat(gv("rn-oqty")) || 0, run_date: gv("rn-date") || today(), status: document.getElementById("rn-status").value, notes: gv("rn-notes") || null };
+      var runId = id;
+      if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("production_runs").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } runId = ins.data.id; }
+      else { var up = await sb.from("production_runs").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } await sb.from("production_consumption").delete().eq("run_id", id); }
+      var cl = collectLines("rn-lines").map(function (l) { return { org_id: S.company.org_id, run_id: runId, product_id: l.kind === "product" ? l.rid : null, project_item_id: l.kind === "pitem" ? l.rid : null, description: l.description || null, qty: l.qty, unit: l.unit }; });
+      if (cl.length) { var ci = await sb.from("production_consumption").insert(cl); if (ci.error) { toast("Saved, but lines failed: " + errMsg(ci.error)); go("mfg.runs"); return; } }
+      toast("Saved"); go("mfg.runs");
+    };
+  }
+
+  // ============================ DELIVERY NOTES =================================
+  var DN_STATUS = [["draft", "Draft"], ["issued", "Issued"], ["delivered", "Delivered"], ["cancelled", "Cancelled"]];
+  function cfgDeliveryNotes() {
+    return {
+      title: "Delivery Notes", pageSize: 80,
+      fetch: function () { return sb.from("delivery_notes").select("*, partners:partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("dn_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (d) { return (d.number || "") + " " + (d.partners ? d.partners.name : "") + " " + (d.projects ? d.projects.name : "") + " " + (d.ship_to || ""); },
+      columns: [
+        { label: "Number", get: function (d) { return '<b>' + esc(d.number || "Draft") + '</b>'; } },
+        { label: "To", get: function (d) { return esc(d.partners ? d.partners.name : (d.ship_to || "")); } },
+        { label: "Project", get: function (d) { return esc(d.projects ? d.projects.name : ""); } },
+        { label: "Date", get: function (d) { return '<span class="muted">' + esc(d.dn_date || "") + '</span>'; } },
+        { label: "Status", get: function (d) { return '<span class="badge ' + (d.status === "delivered" ? "paid" : d.status === "issued" ? "partial" : d.status === "cancelled" ? "unpaid" : "draft") + '">' + esc((DN_STATUS.filter(function (x) { return x[0] === d.status; })[0] || [, d.status])[1] || "") + '</span>'; } }
+      ],
+      groupBy: [{ label: "Status", get: function (d) { return d.status || "None"; } }, { label: "Customer", get: function (d) { return d.partners ? d.partners.name : "None"; } }],
+      onOpen: function (d) { renderDeliveryNoteForm(d.id); },
+      onNew: function () { renderDeliveryNoteForm("new"); },
+      emptyHint: "Issue delivery notes for goods leaving your store - stock products, manufactured items and made-to-size project materials, all on one note."
+    };
+  }
+  async function renderDeliveryNoteForm(id) {
+    var parent = { action: "dn.list", title: "Delivery Notes" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var d = id === "new" ? { status: "draft", dn_date: today() } : (await sb.from("delivery_notes").select("*").eq("id", id).maybeSingle()).data || {};
+    var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).order("name")).data || [];
+    var runs = (await sb.from("production_runs").select("id,name").eq("company_id", S.company.id).order("run_date", { ascending: false })).data || [];
+    var pitems = (await sb.from("project_items").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var lines = id === "new" ? [] : ((await sb.from("delivery_note_lines").select("*").eq("note_id", id)).data || []);
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || "New");
+    var custOpts = '<option value="">(none)</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (d.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dn-save">Save</button><button id="dn-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="dn-number" value="' + esc(d.number || "") + '" placeholder="auto (DN-0001)"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Deliver to (customer)", '<select id="dn-cust">' + custOpts + '</select>', "The customer receiving the goods.") +
+      fld("Project", '<select id="dn-proj">' + projOpts + '</select>', "The job the delivery is for.") +
+      fld("Ship to address", '<input id="dn-shipto" value="' + esc(d.ship_to || "") + '" placeholder="Site address">', "Where the goods are being delivered.") +
+      '</div><div>' +
+      fld("Date", '<input id="dn-date" type="date" value="' + esc(d.dn_date || today()) + '">', "") +
+      fld("Status", '<select id="dn-status">' + DN_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + ((d.status || "draft") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "") +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:16px">Items delivered</div>' +
+      '<table class="o-list o-lines"><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dn-lines"></tbody></table>' +
+      '<button class="btn" id="dn-addline" style="margin-top:8px">+ Add item</button>' +
+      fld("Notes", '<textarea id="dn-notes" rows="2">' + esc(d.notes || "") + '</textarea>', "") + '</div>';
+    document.getElementById("dn-discard").onclick = function () { go("dn.list"); };
+    var opts = { products: products, runs: runs, pitems: pitems };
+    lines.forEach(function (l) { addLineRow("dn-lines", opts, l); });
+    if (!lines.length) addLineRow("dn-lines", opts, {});
+    document.getElementById("dn-addline").onclick = function () { addLineRow("dn-lines", opts, {}); };
+    document.getElementById("dn-save").onclick = async function () {
+      var number = gv("dn-number");
+      if (!number && id === "new") { var cnt = (await sb.from("delivery_notes").select("id", { count: "exact", head: true }).eq("company_id", S.company.id)).count || 0; number = "DN-" + ("000" + (cnt + 1)).slice(-4); }
+      var row = { number: number || null, partner_id: document.getElementById("dn-cust").value || null, project_id: document.getElementById("dn-proj").value || null, ship_to: gv("dn-shipto") || null, dn_date: gv("dn-date") || today(), status: document.getElementById("dn-status").value, notes: gv("dn-notes") || null };
+      var dnId = id;
+      if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("delivery_notes").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } dnId = ins.data.id; }
+      else { var up = await sb.from("delivery_notes").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } await sb.from("delivery_note_lines").delete().eq("note_id", id); }
+      var dl = collectLines("dn-lines").map(function (l) { return { org_id: S.company.org_id, note_id: dnId, source: l.kind === "run" ? "manufactured" : l.kind === "pitem" ? "custom" : "stock", product_id: l.kind === "product" ? l.rid : null, production_run_id: l.kind === "run" ? l.rid : null, project_item_id: l.kind === "pitem" ? l.rid : null, description: l.description || null, qty: l.qty, unit: l.unit }; });
+      if (dl.length) { var di = await sb.from("delivery_note_lines").insert(dl); if (di.error) { toast("Saved, but lines failed: " + errMsg(di.error)); go("dn.list"); return; } }
+      toast("Saved"); go("dn.list");
+    };
+  }
+
+  // ============================ COMPANIES (create / subcompany) ================
+  async function openCompanyModal(id) {
+    var existing = (await sb.from("companies").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
+    var c = id ? (await sb.from("companies").select("*").eq("id", id).maybeSingle()).data || {} : { currency_code: (S.company && S.company.currency_code) || "USD" };
+    var others = existing.filter(function (x) { return x.id !== id; });
+    var countryOpts = '<option value="">(select country)</option>' + COUNTRIES.map(function (co) { return '<option' + (c.country === co ? " selected" : "") + '>' + esc(co) + '</option>'; }).join("");
+    var parentOpts = '<option value="">(none - top level)</option>' + others.map(function (o) { return '<option value="' + o.id + '"' + (c.parent_company_id === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "comodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (id ? "Edit company" : "New company") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Company name</label>' + fhint("Company name", "The trading name of this company.") + '<input id="co-name" value="' + esc(c.name || "") + '" placeholder="e.g. Skyline Glass SARL"></div>' +
+      '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label><input id="co-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase"></div></div>' +
+      '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
+      (id ? attachBlockHTML("company", id, { label: "Company logo & documents", accept: "image/*,application/pdf" }) : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
+      '</div><div class="foot"><button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
+    document.body.appendChild(m);
+    if (id) wireAttach("company");
+    document.getElementById("co-cancel").onclick = function () { m.remove(); };
+    document.getElementById("co-save").onclick = async function () {
+      var name = gv("co-name"); if (!name) { toast("Enter a company name"); return; }
+      var row = { name: name, legal_name: gv("co-legal") || null, currency_code: (gv("co-cur") || "USD").toUpperCase().slice(0, 3), country: document.getElementById("co-country").value || null, parent_company_id: document.getElementById("co-parent").value || null };
+      if (id) { var up = await sb.from("companies").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } m.remove(); toast("Saved"); renderView(); return; }
+      row.org_id = S.company.org_id;
+      var btn = document.getElementById("co-save"); btn.disabled = true; btn.textContent = "Creating...";
+      var ins = await sb.from("companies").insert(row).select("id").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); btn.disabled = false; btn.textContent = "Create company"; return; }
+      try { await sb.rpc("setup_company", { p_company: ins.data.id }); } catch (e) { }
+      m.remove(); toast("Company created. Its accounting has been set up.");
+      // refresh the in-memory company list so it is switchable right away
+      try { S.companies = (await sb.from("companies").select("*").order("name")).data || S.companies; } catch (e) { }
+      renderView();
     };
   }
 
