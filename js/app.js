@@ -1625,6 +1625,66 @@
     return img + '<div class="t">' + esc(title || "(untitled)") + '</div>' + rows;
   }
   function kanbanCardFor(cfg, r) { return cfg.kanbanCard ? cfg.kanbanCard(r) : defaultKanbanCard(cfg, r); }
+  // ---- column-grouped kanban board (pick the column field; drag to change it) ----
+  // A grouping option: {label, rawKey(r)->value, columns:[{value,label}]|null(auto), set(row,val)|null(draggable)}.
+  function normExplicitGroup(cfg, g) {
+    var table = g.table || cfg.table, field = g.field;
+    return {
+      label: g.label,
+      rawKey: function (r) { return g.get ? g.get(r) : (r[field] == null ? "" : String(r[field])); },
+      columns: g.options ? g.options.map(function (o) { return { value: String(o[0]), label: o[1] }; }) : null,
+      set: (field && table) ? function (row, val) { var u = {}; u[field] = (val === "" ? null : val); return sb.from(table).update(u).eq("id", row.id).then(function (r) { if (!r.error) row[field] = (val === "" ? null : val); return !r.error; }); } : null
+    };
+  }
+  function normGroupByGroup(g) { return { label: g.label, rawKey: function (r) { var v = g.get(r); return v == null ? "" : String(v); }, columns: null, set: null }; }
+  function kanbanGroupsFor(cfg) {
+    var out = [];
+    if (cfg.kanban && cfg.kanban.groups) cfg.kanban.groups.forEach(function (g) { out.push(normExplicitGroup(cfg, g)); });
+    if (cfg.groupBy) cfg.groupBy.forEach(function (g) { if (!out.some(function (o) { return o.label === g.label; })) out.push(normGroupByGroup(g)); });
+    return out;
+  }
+  function kanbanBoardHTML(cfg, rows, groups) {
+    var idx = L.kanbanGroupIdx || 0; if (idx >= groups.length) idx = 0; L.kanbanGroupIdx = idx;
+    var g = groups[idx];
+    function kf(r) { var v = g.rawKey(r); return v == null ? "" : String(v); }
+    var cols = [], known = {};
+    if (g.columns) { cols = g.columns.slice(); g.columns.forEach(function (c) { known[c.value] = 1; }); }
+    else { var seen = {}, order = []; rows.forEach(function (r) { var k = kf(r); if (!(k in seen)) { seen[k] = 1; order.push(k); } }); order.sort(function (a, b) { return a > b ? 1 : (a < b ? -1 : 0); }); cols = order.map(function (k) { return { value: k, label: k === "" ? "(none)" : k }; }); order.forEach(function (k) { known[k] = 1; }); }
+    if (rows.some(function (r) { return !known[kf(r)]; })) cols.push({ value: "", label: "(none)" });
+    var buckets = {}; cols.forEach(function (c) { if (!(c.value in buckets)) buckets[c.value] = []; });
+    rows.forEach(function (r) { var k = kf(r); if (!(k in buckets)) k = ""; (buckets[k] = buckets[k] || []).push(r); });
+    var drag = !!g.set;
+    var picker = '<div class="o-kbar"><label>Columns by</label><select id="o-kgrp">' + groups.map(function (gg, i) { return '<option value="' + i + '"' + (i === idx ? " selected" : "") + '>' + esc(gg.label) + '</option>'; }).join("") + '</select><span class="o-kbar-hint' + (drag ? "" : " muted") + '">' + (drag ? "Drag cards between columns to update" : "Grouping only for this field") + '</span></div>';
+    var done = {}, board = '<div class="o-kboard">';
+    cols.forEach(function (c) {
+      if (done[c.value]) return; done[c.value] = 1; var list = buckets[c.value] || [];
+      board += '<div class="o-kcol' + (drag ? " drop" : "") + '" data-col="' + esc(c.value) + '"><div class="o-kcol-h"><span class="lbl">' + esc(c.label) + '</span><span class="cnt">' + list.length + '</span></div><div class="o-kcol-b">' +
+        list.map(function (r) { return '<div class="o-card' + (drag ? " drag" : "") + '" data-id="' + r.id + '"' + (drag ? ' draggable="true"' : "") + '>' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div></div>';
+    });
+    return picker + board + '</div>';
+  }
+  function wireKanban(cfg, rows, groups) {
+    var sel = document.getElementById("o-kgrp");
+    if (sel) sel.onchange = function () { L.kanbanGroupIdx = +this.value; paintBody(); };
+    var g = groups[L.kanbanGroupIdx || 0]; if (!g || !g.set) return;
+    var dragId = null;
+    document.querySelectorAll("#o-body .o-card.drag").forEach(function (card) {
+      card.addEventListener("dragstart", function (e) { dragId = card.dataset.id; card.classList.add("dragging"); if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", dragId); } catch (_) { } } });
+      card.addEventListener("dragend", function () { card.classList.remove("dragging"); dragId = null; document.querySelectorAll("#o-body .o-kcol.over").forEach(function (c) { c.classList.remove("over"); }); });
+    });
+    document.querySelectorAll("#o-body .o-kcol.drop").forEach(function (col) {
+      col.addEventListener("dragover", function (e) { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = "move"; col.classList.add("over"); });
+      col.addEventListener("dragleave", function (e) { if (!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+      col.addEventListener("drop", async function (e) {
+        e.preventDefault(); col.classList.remove("over");
+        var id = dragId || (e.dataTransfer && e.dataTransfer.getData("text/plain")); if (!id) return;
+        var row = rows.filter(function (x) { return x.id === id; })[0]; if (!row) return;
+        var val = col.dataset.col; var cur = g.rawKey(row); if ((cur == null ? "" : String(cur)) === val) return;
+        var ok = await g.set(row, val); if (!ok) { toast("Could not move card"); return; }
+        toast("Updated"); paintBody();
+      });
+    });
+  }
   function renderList(cfg) {
     var main = document.getElementById("o-main");
     main.innerHTML =
@@ -1643,7 +1703,7 @@
       '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
       '</div>';
     wireBc();
-    L = { cfg: cfg, all: [], view: "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null };
+    L = { cfg: cfg, all: [], view: "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: 0 };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     document.getElementById("o-q").addEventListener("input", function () { L.query = this.value.toLowerCase(); L.page = 0; paintBody(); });
     document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
@@ -1734,7 +1794,11 @@
       }
       return;
     }
-    if (L.view === "kanban") { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>'; }
+    if (L.view === "kanban") {
+      var kg = kanbanGroupsFor(cfg);
+      if (kg.length) { if (L.kanbanGroupIdx == null || L.kanbanGroupIdx >= kg.length) L.kanbanGroupIdx = 0; body.innerHTML = kanbanBoardHTML(cfg, rows, kg); wireKanban(cfg, rows, kg); }
+      else { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>'; }
+    }
     else if (L.group != null) {
       var g = cfg.groupBy[L.group], groups = {};
       rows.forEach(function (r) { var k = g.get(r) || "None"; (groups[k] = groups[k] || []).push(r); });
@@ -3298,7 +3362,8 @@
   function toolStatusBadge(t) { var map = { in_stock: ["Available", "paid"], issued: ["Issued", "partial"], repair: ["In repair", "unpaid"], retired: ["Retired", "draft"] }, m = map[t.status] || ["", "draft"]; return '<span class="badge ' + m[1] + '">' + m[0] + '</span>'; }
   function cfgTools() {
     return {
-      title: "Tools & Equipment", pageSize: 80,
+      title: "Tools & Equipment", pageSize: 80, table: "tools",
+      kanban: { groups: [{ label: "Status", field: "status", options: TOOL_STATUS }, { label: "Condition", field: "condition", options: TOOL_COND }] },
       fetch: async function () { var rows = (await sb.from("tools").select("*, partners:holder_partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "tool"); return rows; },
       searchText: function (t) { return (t.name || "") + " " + (t.code || "") + " " + (t.category || "") + " " + (t.brand || "") + " " + (t.serial || "") + " " + (t.holder_name || "") + " " + (t.location || "") + " " + (t.shelf_location || ""); },
       columns: [
@@ -3418,7 +3483,8 @@
   function pitemSize(it) { var d = (it.spec && it.spec.dims) || it.dims || {}; if (it.material_form === "sheet") return (d.w || "?") + "x" + (d.h || "?") + (d.t ? "x" + d.t : "") + " mm"; if (it.material_form === "bar") return (d.len || "?") + " m"; if (it.material_form === "roll") return (d.rlen || "?") + " m"; if (it.material_form === "liquid") return (d.vol || "?") + " " + (d.volunit || "L"); return ""; }
   function cfgProjectItems() {
     return {
-      title: "Project Materials", pageSize: 100,
+      title: "Project Materials", pageSize: 100, table: "project_items",
+      kanban: { groups: [{ label: "Status", field: "status", options: PITEM_STATUS }] },
       fetch: async function () { var rows = (await sb.from("project_items").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || []; await attachThumbs(rows, "project_item"); return rows; },
       searchText: function (it) { var s = it.spec || {}; return (it.name || "") + " " + (it.projects ? it.projects.name : "") + " " + (s.material || "") + " " + (s.color || "") + " " + pitemSize(it); },
       columns: [
@@ -3528,7 +3594,8 @@
   var RUN_STATUS = [["draft", "Draft"], ["in_progress", "In progress"], ["done", "Done"], ["cancelled", "Cancelled"]];
   function cfgRuns() {
     return {
-      title: "Production Runs", pageSize: 80,
+      title: "Production Runs", pageSize: 80, table: "production_runs",
+      kanban: { groups: [{ label: "Status", field: "status", options: RUN_STATUS }] },
       fetch: function () { return sb.from("production_runs").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("run_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (r) { return (r.name || "") + " " + (r.ref || "") + " " + (r.projects ? r.projects.name : ""); },
       columns: [
@@ -3594,7 +3661,8 @@
   var DN_STATUS = [["draft", "Draft"], ["issued", "Issued"], ["delivered", "Delivered"], ["cancelled", "Cancelled"]];
   function cfgDeliveryNotes() {
     return {
-      title: "Delivery Notes", pageSize: 80,
+      title: "Delivery Notes", pageSize: 80, table: "delivery_notes",
+      kanban: { groups: [{ label: "Status", field: "status", options: DN_STATUS }] },
       fetch: function () { return sb.from("delivery_notes").select("*, partners:partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("dn_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (d) { return (d.number || "") + " " + (d.partners ? d.partners.name : "") + " " + (d.projects ? d.projects.name : "") + " " + (d.ship_to || ""); },
       columns: [
@@ -5203,7 +5271,8 @@
   function snagStatusBadge(s) { return (s === "closed" || s === "verified") ? '<span class="badge paid">' + esc(s.charAt(0).toUpperCase() + s.slice(1)) + '</span>' : s === "fixed" ? '<span class="badge partial">Fixed</span>' : s === "in_progress" ? '<span class="badge partial">In progress</span>' : '<span class="badge unpaid">Open</span>'; }
   function cfgSnags() {
     return {
-      title: "Snags", pageSize: 120,
+      title: "Snags", pageSize: 120, table: "snags",
+      kanban: { groups: [{ label: "Status", field: "status", options: [["open", "Open"], ["in_progress", "In progress"], ["fixed", "Fixed"], ["verified", "Verified"], ["closed", "Closed"]] }] },
       fetch: function () { return sb.from("snags").select("*, projects(name), hr_employees(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (s) { return (s.number || "") + " " + (s.description || "") + " " + (s.location || "") + " " + (s.trade || "") + " " + (s.projects ? s.projects.name : ""); },
       columns: [
