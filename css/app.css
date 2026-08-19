@@ -177,6 +177,28 @@ button{font-family:inherit}
 .au-rule{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:var(--panel2)}
 .au-on{display:flex;align-items:center;gap:7px;font-weight:600;font-size:13px;white-space:nowrap;color:var(--ink2)}
 .au-rule input[type=number]{border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);padding:4px 8px;font:inherit}
+/* dependency timeline view */
+.dep-wrap{padding:14px 16px}
+.dep-legend{display:flex;align-items:center;gap:14px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.dep-lg-warn{color:var(--bad);font-weight:600}
+.dep-lg-ok{color:var(--good);font-weight:600}
+.dep-lg-bot{color:var(--warn);font-weight:600}
+.dep-flow{display:flex;align-items:flex-start;gap:0;overflow-x:auto;padding-bottom:8px}
+.dep-col{flex:0 0 220px;min-width:220px;display:flex;flex-direction:column;gap:9px}
+.dep-col-h{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--ink3);padding:0 2px 2px}
+.dep-arrow{flex:0 0 34px;align-self:center;text-align:center;color:var(--ink3);font-size:20px;padding-top:22px}
+.dep-card{border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--panel2);cursor:pointer;transition:border-color .12s}
+.dep-card:hover,.dep-card:focus{border-color:var(--accent);outline:none}
+.dep-card.blocked{border-left:3px solid var(--bad)}
+.dep-card.done{opacity:.6}
+.dep-card-t{font-size:13.5px;font-weight:600;margin-bottom:6px}
+.dep-card-m{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.dep-stage{font-size:11px;color:var(--ink3);background:var(--panel);border:1px solid var(--line);border-radius:5px;padding:1px 6px}
+.dep-rel{font-size:11.5px;margin-top:6px}
+.dep-rel.wait{color:var(--bad);font-weight:600}
+.dep-rel.ok{color:var(--ink3)}
+.dep-rel.unblocks{color:var(--ink2)}
+.dep-bot{background:var(--warn-s);color:var(--warn);font-weight:700;border-radius:5px;padding:0 5px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
 .o-navbar .o-waffle{width:40px;height:46px;display:grid;place-items:center;cursor:pointer;color:#fff;opacity:.95;border:none;background:none}
 .o-navbar .o-waffle:hover{background:rgba(255,255,255,.12)}
 .o-navbar .o-brandmark{display:grid;place-items:center;width:28px;height:46px;flex:none;color:#fff}

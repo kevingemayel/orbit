@@ -4429,7 +4429,7 @@
 
   async function renderBoard(projectId) {
     if (projectId !== undefined) AGS.proj = projectId;
-    var vt = [["list", "List"], ["board", "Board"], ["sprints", "Sprints"]].map(function (v) { return '<button class="o-filtbtn ag-vt' + (AGS.view === v[0] ? " on" : "") + '" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join("");
+    var vt = [["list", "List"], ["board", "Board"], ["sprints", "Sprints"], ["deps", "Dependencies"]].map(function (v) { return '<button class="o-filtbtn ag-vt' + (AGS.view === v[0] ? " on" : "") + '" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join("");
     document.getElementById("o-main").innerHTML =
       '<div class="o-view"><div class="o-cp">' + bcHTML("Execution") + '<div class="gap"></div>' +
       '<select id="ab-proj" class="o-filtbtn"></select>' + vt +
@@ -4466,6 +4466,7 @@
     msel.onchange = function () { AGS.member = msel.value; renderBoard(); };
 
     if (AGS.view === "sprints") { renderSprintsView(body, tasks, sprints, ctx); return; }
+    if (AGS.view === "deps") { renderDepsView(body, tasks, ctx); return; }
     if (AGS.view === "list") { renderBoardList(body, tasks, ctx); return; }
 
     var shown = tasks.filter(function (t) { return !t.parent_task_id; });
@@ -4667,6 +4668,55 @@
     document.querySelectorAll(".ag-sp-open").forEach(function (b) { b.onclick = function () { AGS.sprint = b.dataset.id; AGS.view = "board"; renderBoard(); }; });
     document.querySelectorAll(".ag-sp-start").forEach(function (b) { b.onclick = async function () { await sb.from("sprints").update({ status: "active" }).eq("id", b.dataset.id); toast("Sprint started"); renderBoard(); }; });
     document.querySelectorAll(".ag-sp-done").forEach(function (b) { b.onclick = async function () { await sb.from("sprints").update({ status: "done" }).eq("id", b.dataset.id); toast("Sprint completed"); renderBoard(); }; });
+  }
+  // Dependency timeline: lay the work out left-to-right by how it unblocks, from
+  // blocked_by chains. Flags what's blocked right now and which tasks are bottlenecks.
+  function renderDepsView(body, tasks, ctx) {
+    var T = tasks.filter(function (t) { return !t.parent_task_id; });
+    var byId = {}; T.forEach(function (t) { byId[t.id] = t; });
+    var blocks = {}; // blockerId -> [tasks it blocks]
+    T.forEach(function (t) { if (t.blocked_by && byId[t.blocked_by]) (blocks[t.blocked_by] = blocks[t.blocked_by] || []).push(t); });
+    var part = T.filter(function (t) { return (t.blocked_by && byId[t.blocked_by]) || (blocks[t.id] && blocks[t.id].length); });
+    if (!part.length) {
+      body.innerHTML = '<div style="padding:16px"><div class="o-empty2"><div class="o-empty2-t">No dependencies mapped yet</div><div class="o-empty2-h">Open any task and set <b>Blocked by</b> to say what must finish first. This view then lays the work out as a timeline of what unblocks what, and flags the bottlenecks.</div></div></div>';
+      return;
+    }
+    var memo = {}, inProg = {};
+    function level(id) {
+      if (memo[id] != null) return memo[id];
+      var t = byId[id]; if (!t) return 0;
+      if (inProg[id]) return 0;                    // cycle guard
+      inProg[id] = 1;
+      var lv = (t.blocked_by && byId[t.blocked_by]) ? level(t.blocked_by) + 1 : 0;
+      inProg[id] = 0; memo[id] = lv; return lv;
+    }
+    var cols = {}, maxLv = 0;
+    part.forEach(function (t) { var lv = level(t.id); (cols[lv] = cols[lv] || []).push(t); if (lv > maxLv) maxLv = lv; });
+    var blockedNow = part.filter(function (t) { return t.blocked_by && byId[t.blocked_by] && byId[t.blocked_by].board_stage !== "done" && t.board_stage !== "done"; }).length;
+    var bottlenecks = Object.keys(blocks).filter(function (k) { return blocks[k].length >= 2; }).length;
+    function card(t) {
+      var emp = t.assignee_id ? ctx.empById[t.assignee_id] : null;
+      var blocker = t.blocked_by ? byId[t.blocked_by] : null;
+      var waiting = blocker && blocker.board_stage !== "done" && t.board_stage !== "done";
+      var unblocks = (blocks[t.id] || []).length, isBot = unblocks >= 2;
+      return '<div class="dep-card' + (waiting ? " blocked" : "") + (t.board_stage === "done" ? " done" : "") + '" data-id="' + t.id + '" tabindex="0">' +
+        '<div class="dep-card-t">' + esc(t.name) + '</div>' +
+        '<div class="dep-card-m"><span class="dep-stage">' + esc(agStageLabel(t.board_stage || "backlog")) + '</span>' + (Number(t.points) ? '<span class="ag-pts">' + Number(t.points) + '</span>' : "") + (emp ? agAvatar(emp, true) : "") + '</div>' +
+        (blocker ? '<div class="dep-rel' + (waiting ? " wait" : " ok") + '">' + (waiting ? "⚠ waiting on " : "✓ after ") + esc(blocker.name) + '</div>' : '') +
+        (unblocks ? '<div class="dep-rel unblocks">unblocks ' + unblocks + (isBot ? ' <span class="dep-bot">bottleneck</span>' : '') + '</div>' : '') +
+        '</div>';
+    }
+    var colsHtml = [];
+    for (var lv = 0; lv <= maxLv; lv++) {
+      var list = (cols[lv] || []).sort(function (a, b) { return (blocks[b.id] || []).length - (blocks[a.id] || []).length; });
+      colsHtml.push('<div class="dep-col"><div class="dep-col-h">' + (lv === 0 ? "Do first" : "Step " + (lv + 1)) + ' <span class="muted">(' + list.length + ')</span></div>' + list.map(card).join("") + '</div>');
+    }
+    body.innerHTML = '<div class="dep-wrap"><div class="dep-legend"><span><b>' + part.length + '</b> tasks &middot; ' + (maxLv + 1) + ' step' + (maxLv ? "s" : "") + '</span>' +
+      (blockedNow ? '<span class="dep-lg-warn">&#9888; ' + blockedNow + ' blocked now</span>' : '<span class="dep-lg-ok">&#10003; nothing blocked</span>') +
+      (bottlenecks ? '<span class="dep-lg-bot">' + bottlenecks + ' bottleneck' + (bottlenecks === 1 ? "" : "s") + '</span>' : "") +
+      '<span class="muted" style="margin-left:auto;font-size:11.5px">Left to right = order of work. Click a task to open it.</span></div>' +
+      '<div class="dep-flow">' + colsHtml.join('<div class="dep-arrow" aria-hidden="true">&#8594;</div>') + '</div></div>';
+    body.querySelectorAll(".dep-card").forEach(function (c) { c.onclick = function () { openTaskPanel(c.dataset.id, AGS.proj, function () { renderBoard(); }); }; c.onkeydown = function (e) { if (e.key === "Enter") c.click(); }; });
   }
   async function openSprintModal(s, projectId) {
     s = s || {};
