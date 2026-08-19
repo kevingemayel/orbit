@@ -1072,10 +1072,10 @@
     var nameVal = prof.full_name || prof.name || "";
     var m = document.createElement("div"); m.className = "modal on"; m.id = "profmodal";
     m.innerHTML = '<div class="sheet"><h3>My profile</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="pf-photo">' + attachBlockHTML("profile", S.user.id, { slot: true, accept: "image/*" }) + '<span class="muted" style="font-size:11.5px">Add a profile photo</span></div>' +
       '<div><label>Email</label><input value="' + esc(S.user.email) + '" disabled></div>' +
       (hasName ? '<div><label>Display name</label><input id="pf-name" value="' + esc(nameVal) + '"></div>' : "") +
       '<div><label>Phone</label>' + phoneFieldHTML("pf-phone", prof) + '</div>' +
-      attachBlockHTML("profile", S.user.id, { label: "Profile photo", accept: "image/*" }) +
       '</div><div class="foot"><button class="btn" id="pf-cancel">Close</button><button class="btn pri" id="pf-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     wireAttach("profile");
@@ -1614,6 +1614,17 @@
   }
 
   // ============================ LIST ENGINE ============================
+  // Any list without its own kanbanCard gets this generic card: the first column
+  // as the title, up to four more as key/value rows, and the row photo if present.
+  function defaultKanbanCard(cfg, r) {
+    var cols = cfg.columns.filter(function (c) { return c.cls !== "thumbcol"; });
+    var title = cols[0] ? htmlToText(cols[0].get(r)) : (r.name || r.number || r.id || "");
+    var img = r._thumb ? '<div class="o-card-img"><img src="' + r._thumb + '"></div>' : "";
+    var rows = "";
+    cols.slice(1, 5).forEach(function (c) { var v = c.get(r); if (htmlToText(v)) rows += '<div class="r"><span class="k">' + esc(c.label) + '</span><span>' + v + '</span></div>'; });
+    return img + '<div class="t">' + esc(title || "(untitled)") + '</div>' + rows;
+  }
+  function kanbanCardFor(cfg, r) { return cfg.kanbanCard ? cfg.kanbanCard(r) : defaultKanbanCard(cfg, r); }
   function renderList(cfg) {
     var main = document.getElementById("o-main");
     main.innerHTML =
@@ -1626,7 +1637,7 @@
       '<div class="gap"></div>' +
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
-      (cfg.kanbanCard ? '<button data-v="kanban" title="Kanban">&#9638;</button>' : '') + '</div>' +
+      '<button data-v="kanban" title="Cards / Kanban">&#9638;</button></div>' +
       '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
       '</div>' +
       '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
@@ -1723,7 +1734,7 @@
       }
       return;
     }
-    if (L.view === "kanban" && cfg.kanbanCard) { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + cfg.kanbanCard(r) + '</div>'; }).join("") + '</div>'; }
+    if (L.view === "kanban") { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>'; }
     else if (L.group != null) {
       var g = cfg.groupBy[L.group], groups = {};
       rows.forEach(function (r) { var k = g.get(r) || "None"; (groups[k] = groups[k] || []).push(r); });
@@ -1791,7 +1802,7 @@
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
       title: isCust ? "Customers" : "Vendors", pageSize: 80,
-      fetch: function () { return sb.from("partners").select("*").eq(flag, true).order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("partners").select("*").eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
@@ -1801,7 +1812,7 @@
         { label: "Country", get: function (p) { return '<span class="muted">' + esc(p.country || "") + '</span>'; } }
       ].concat(isCust ? [] : [{ label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } }]),
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
-      kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
       onOpen: function (p) { renderPartnerForm(p.id, kind); },
       onNew: function () { renderPartnerForm("new", kind); }
     };
@@ -1857,7 +1868,7 @@
   function cfgCompanies() {
     return {
       title: "Companies", pageSize: 50,
-      fetch: function () { return sb.from("companies").select("*").order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("companies").select("*").order("name")).data || []; await attachThumbs(rows, "company"); return rows; },
       searchText: function (c) { return (c.name || "") + " " + (c.legal_name || ""); },
       columns: [
         { label: "Name", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
@@ -1938,7 +1949,7 @@
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
       groupBy: [{ label: "Family", get: function (p) { return p.family || "Unclassified"; } }, { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } }, { label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
-      kanbanCard: function (p) { return '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
       onOpen: function (p) { renderProductForm(p.id); },
       onNew: function () { renderProductForm("new"); }
     };
@@ -2784,7 +2795,7 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + smart +
-      '<div class="o-title"><input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name"></div>' +
+      titleRowHTML('<input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name">', "partner", id) +
       '<div class="o-groups"><div>' +
       fld("Contact person", '<input id="p-contact" value="' + esc(p.contact_person || "") + '" placeholder="Who you deal with">', "The person you actually talk to at this company.") +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
@@ -2810,7 +2821,6 @@
       '</div></div>' +
       (showCaps ? capsBlock() : "") +
       customFieldsHTML("partner", p) +
-      attachBlockHTML("partner", id === "new" ? "" : id, { label: "Documents & photos (trade licence, supplier papers, logo)", accept: "image/*,application/pdf" }) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
       '</div>';
     if (id !== "new") {
@@ -3058,7 +3068,7 @@
     var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button></div><div></div></div>' +
-      '<div class="o-sheet">' + prSmart + '<div class="o-title"><input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name"></div>' +
+      '<div class="o-sheet">' + prSmart + titleRowHTML('<input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name">', "product", id) +
       '<div class="o-groups"><div>' +
       fld("Item code", '<input id="pr-code" value="' + esc(p.default_code || "") + '" placeholder="auto from classification">', "Your code for this item. Built automatically from the classification tree (e.g. AL-EXT-MUL-001); edit it if you want your own.") +
       fld("Supplier code", '<input id="pr-suppcode" value="' + esc(p.supplier_code || "") + '" placeholder="the supplier\'s own code">', "The supplier's own reference for this item, different from yours. You can search products by it too.") +
@@ -3074,7 +3084,7 @@
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
       fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
-      '</div></div>' + materialSpecHTML(p, clsNodes) + attachBlockHTML("product", id === "new" ? "" : id, { label: "Photos & documents" }) + customFieldsHTML("product", p) + '</div>';
+      '</div></div>' + materialSpecHTML(p, clsNodes) + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     wireMatSpec(p, clsNodes);
     wireAttach("product");
@@ -3174,14 +3184,20 @@
   function thumbCell(r) { return r._thumb ? '<span class="o-rowthumb"><img src="' + r._thumb + '"></span>' : '<span class="o-rowthumb none"></span>'; }
   // reusable attachments panel. entity is a short key ("product","tool","partner"...);
   // on a new record leave entityId empty and call mediaFlush(entity,newId) after insert.
+  var UPLOAD_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="m7 10 5-5 5 5"/><path d="M4 19h16"/></svg>';
   function attachBlockHTML(entity, entityId, opts) {
     opts = opts || {};
-    return '<div class="o-att" data-entity="' + entity + '" data-id="' + (entityId || "") + '">' +
-      '<div class="o-cf-head">' + esc(opts.label || "Photos & documents") + '</div>' +
-      '<div class="o-att-grid" id="att-grid-' + entity + '"><div class="muted" style="font-size:12px">Loading...</div></div>' +
-      '<label class="o-att-add"><input type="file" accept="' + (opts.accept || "image/*,application/pdf") + '" multiple id="att-input-' + entity + '"><span>+ Add photo / file</span></label>' +
-      '<div class="muted o-att-note">Images are compressed automatically. PDFs are kept as-is. Files are private to your company.</div>' +
+    var slot = !!opts.slot;
+    return '<div class="o-att' + (slot ? " slot" : "") + '" data-entity="' + entity + '" data-id="' + (entityId || "") + '" data-slot="' + (slot ? 1 : 0) + '">' +
+      (slot ? "" : '<div class="o-cf-head">' + esc(opts.label || "Photos & documents") + '</div>') +
+      '<div class="o-att-row"><div class="o-att-grid" id="att-grid-' + entity + '"></div>' +
+      '<label class="o-att-add" title="' + (slot ? "Add a photo" : "Add photo or file") + '"><input type="file" accept="' + (opts.accept || "image/*,application/pdf") + '" multiple id="att-input-' + entity + '">' + UPLOAD_SVG + '<span>' + (slot ? "Add photo" : "Add") + '</span></label></div>' +
+      (slot ? "" : '<div class="muted o-att-note">Images are compressed automatically. PDFs are kept as-is. Files are private to your company.</div>') +
       '</div>';
+  }
+  // put the name input on the left and a dotted photo-upload slot on the right of a form's title row
+  function titleRowHTML(titleInputHtml, entity, id) {
+    return '<div class="o-titlerow"><div class="o-title">' + titleInputHtml + '</div>' + attachBlockHTML(entity, id === "new" ? "" : id, { slot: true }) + '</div>';
   }
   function mediaThumbHTML(m, url) {
     if (m.kind === "image" && url) return '<div class="o-att-thumb"><img src="' + url + '" data-open="' + m.id + '"><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
@@ -3196,7 +3212,8 @@
       html += '<div class="o-att-thumb' + (s.kind === "image" ? "" : " doc") + '">' + (s.kind === "image" ? '<img src="' + s.url + '">' : '<div class="o-att-doc">FILE</div><div class="o-att-cap">' + esc((s.file.name || "").slice(0, 22)) + '</div>') + '<button class="o-att-x" data-stage="' + s.uid + '" title="Remove">&times;</button></div>';
     });
     if (!document.getElementById("att-grid-" + entity)) return;
-    grid.innerHTML = html || '<div class="muted" style="font-size:12px">No photos or files yet.</div>';
+    var isSlot = wrap && wrap.dataset.slot === "1";
+    grid.innerHTML = html || (isSlot ? "" : '<div class="muted" style="font-size:12px">No photos or files yet.</div>');
     grid.querySelectorAll("[data-mid]").forEach(function (b) { b.onclick = async function (ev) { ev.stopPropagation(); if (!confirm("Remove this file? This cannot be undone.")) return; var m = existing.filter(function (x) { return x.id === b.dataset.mid; })[0]; if (m) { await mediaDelete(m); } renderAttachGrid(entity); }; });
     grid.querySelectorAll("[data-stage]").forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); _mediaStage = _mediaStage.filter(function (s) { return s.uid !== b.dataset.stage; }); renderAttachGrid(entity); }; });
     grid.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = async function () { var m = existing.filter(function (x) { return x.id === b.dataset.open; })[0]; if (!m) return; var u = await mediaSignedUrl(m.path); if (u) window.open(u, "_blank"); }; });
@@ -3325,7 +3342,7 @@
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tl-save">Save</button><button id="tl-discard">Discard</button>' +
       (id !== "new" ? '<button id="tl-issue">Issue / Return</button><button id="tl-qr">QR label</button>' : '') +
       '</div><div>' + toolStatusBadge(t) + '</div></div>' +
-      '<div class="o-sheet"><div class="o-title"><input id="tl-name" value="' + esc(t.name || "") + '" placeholder="e.g. Hilti TE 30 hammer drill"></div>' +
+      '<div class="o-sheet">' + titleRowHTML('<input id="tl-name" value="' + esc(t.name || "") + '" placeholder="e.g. Hilti TE 30 hammer drill">', "tool", id) +
       '<div class="o-groups"><div>' +
       fld("Asset code", '<input id="tl-code" value="' + esc(t.code || "") + '" placeholder="e.g. TL-0007">', "Your tag number for this tool. It is written into the QR label so a scan finds this exact item.") +
       fld("Category", sug("tl-cat", t.category, "toolcat", "e.g. Power tool"), "Group similar tools: Power tool, Hand tool, Ladder, Machine, Safety gear.") +
@@ -3346,7 +3363,6 @@
       '</div><div>' +
       fld("Notes", '<textarea id="tl-notes" rows="3">' + esc(t.notes || "") + '</textarea>', "") +
       '</div></div>' +
-      attachBlockHTML("tool", id === "new" ? "" : id, { label: "Photos (condition / damage)" }) +
       histHTML + '</div>';
     document.getElementById("tl-discard").onclick = function () { go("tools.list"); };
     wireAttach("tool");
@@ -3444,7 +3460,7 @@
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pi-save">Save</button><button id="pi-discard">Discard</button>' +
       (id !== "new" && !it.is_remnant ? '<button id="pi-remnant">+ Add offcut</button>' : "") +
       '</div><div>' + (it.is_remnant ? '<span class="badge draft">Remnant</span>' : "") + '</div></div>' +
-      '<div class="o-sheet"><div class="o-title"><input id="pi-name" value="' + esc(it.name || "") + '" placeholder="e.g. Glass panel - clear tempered 6mm"></div>' +
+      '<div class="o-sheet">' + titleRowHTML('<input id="pi-name" value="' + esc(it.name || "") + '" placeholder="e.g. Glass panel - clear tempered 6mm">', "project_item", id) +
       '<div class="o-groups"><div>' +
       fld("Project", '<select id="pi-proj">' + projOpts + '</select>', "The job these materials belong to.") +
       fld("Quantity", '<input id="pi-qty" type="number" step="any" value="' + (it.qty != null ? it.qty : "") + '">', "How many pieces / units for this job.") +
@@ -3455,7 +3471,7 @@
       '<label class="o-chkline"><input type="checkbox" id="pi-isrem"' + (it.is_remnant ? " checked" : "") + '> This is a leftover offcut (remnant)</label>' +
       '</div></div>' + materialSpecHTML(it, clsNodes) +
       fld("Notes", '<textarea id="pi-notes" rows="2">' + esc(it.notes || "") + '</textarea>', "") +
-      attachBlockHTML("project_item", id === "new" ? "" : id, { label: "Photos" }) + '</div>';
+      '</div>';
     document.getElementById("pi-discard").onclick = function () { go("proj.materials"); };
     wireMatSpec(it, clsNodes);
     wireAttach("project_item");
@@ -3654,7 +3670,7 @@
       '<div><label>Company name</label>' + fhint("Company name", "The trading name of this company.") + '<input id="co-name" value="' + esc(c.name || "") + '" placeholder="e.g. Skyline Glass SARL"></div>' +
       '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label><input id="co-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase"></div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
-      (id ? attachBlockHTML("company", id, { label: "Company logo & documents", accept: "image/*,application/pdf" }) : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
+      (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
       '</div><div class="foot"><button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
     document.body.appendChild(m);
     if (id) wireAttach("company");
@@ -4303,7 +4319,7 @@
   function cfgContacts() {
     return {
       title: "Contacts", pageSize: 80,
-      fetch: function () { return sb.from("partners").select("*").order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("partners").select("*").order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
@@ -8071,7 +8087,7 @@
         return Promise.all([
           sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name"),
           sb.from("hr_employees").select("id,name").eq("company_id", S.company.id)
-        ]).then(function (res) { var mm = {}; (res[1].data || []).forEach(function (e) { mm[e.id] = e.name; }); return (res[0].data || []).map(function (e) { e._mgr = e.manager_id ? mm[e.manager_id] : ""; return e; }); });
+        ]).then(async function (res) { var mm = {}; (res[1].data || []).forEach(function (e) { mm[e.id] = e.name; }); var rows = (res[0].data || []).map(function (e) { e._mgr = e.manager_id ? mm[e.manager_id] : ""; return e; }); await attachThumbs(rows, "employee"); return rows; });
       },
       searchText: function (e) { return (e.name || "") + " " + (e.work_email || "") + " " + (e.hr_jobs ? e.hr_jobs.name : ""); },
       columns: [
@@ -8084,7 +8100,7 @@
       ],
       filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }],
       groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
-      kanbanCard: function (e) { return '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
+      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
       onOpen: function (e) { renderEmployeeForm(e.id); },
       onNew: function () { renderEmployeeForm("new"); }
     };
@@ -8104,7 +8120,7 @@
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="e-save">Save</button><button id="e-discard">Discard</button></div><div></div></div>' +
-      '<div class="o-sheet">' + smart + '<div class="o-title"><input id="e-name" value="' + esc(e.name || "") + '" placeholder="Employee name"></div>' +
+      '<div class="o-sheet">' + smart + titleRowHTML('<input id="e-name" value="' + esc(e.name || "") + '" placeholder="Employee name">', "employee", id) +
       '<div class="o-groups"><div>' +
       fld("Work Email", '<input id="e-email" value="' + esc(e.work_email || "") + '" placeholder="name@company.com">', "The employee's work email address.") +
       fld("Department", '<select id="e-dept">' + opts(depts, e.department_id, "None") + '</select>', "The department this employee belongs to.") +
@@ -8112,7 +8128,7 @@
       '</div><div>' +
       fld("Manager", '<select id="e-mgr">' + opts(emps.filter(function (x) { return x.id !== id; }), e.manager_id, "None") + '</select>', "Who this employee reports to.") +
       fld("Status", '<select id="e-active"><option value="1"' + (e.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!e.is_active ? " selected" : "") + '>Archived</option></select>', "Active employees appear in selections; archived ones are hidden.") +
-      '</div></div>' + attachBlockHTML("employee", id === "new" ? "" : id, { label: "Photo & documents (ID, contract...)", accept: "image/*,application/pdf" }) + '</div>';
+      '</div></div></div>';
     document.getElementById("e-discard").onclick = function () { go("hr.emp"); };
     wireAttach("employee");
     var _el = document.getElementById("e-sm-lv"); if (_el) _el.onclick = function () { go("hr.leaves"); };
