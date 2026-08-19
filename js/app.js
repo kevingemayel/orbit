@@ -430,6 +430,12 @@
         { label: "Dashboard", action: "dash.home" }
       ]
     },
+    events: {
+      name: "Events", icon: "♥", color: "#db2777", color2: "#9d174d", home: "events.list",
+      menus: [
+        { label: "Events", action: "events.list" }
+      ]
+    },
     help: {
       name: "Help", icon: "?", color: "#0e7490", color2: "#155e63", home: "help.overview",
       menus: HELP_MANUAL.map(function (s) { return { label: s.title, action: "help." + s.key }; })
@@ -456,7 +462,8 @@
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
-    "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory"
+    "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
+    "events.list": "events", "events.new": "events"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // ============================ PERMISSIONS (RBAC) ============================
@@ -483,6 +490,7 @@
     { key: "knowledge", label: "Knowledge", features: [] },
     { key: "employees", label: "Employees (HR)", features: [["payroll", "Payroll"]] },
     { key: "insights", label: "Insights", features: [] },
+    { key: "events", label: "Events", features: [] },
     { key: "settings", label: "Settings", features: [] }
   ];
   var MODULE_LABEL = {}; MODULE_CATALOG.forEach(function (m) { MODULE_LABEL[m.key] = m.label; });
@@ -1540,6 +1548,8 @@
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
+      case "events.list": return renderList(cfgEvents());
+      case "events.new": return renderEventForm("new");
       case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -3756,6 +3766,367 @@
       // refresh the in-memory company list so it is switchable right away
       try { S.companies = (await sb.from("companies").select("*").order("name")).data || S.companies; } catch (e) { }
       renderView();
+    };
+  }
+
+  // ============================ EVENTS APP ============================
+  // A full event / wedding management workspace. An event is opened into a
+  // tabbed workspace (Overview, Concept, Guests, Budget, Payments, ... growing).
+  var EV = { eventId: null, section: "overview", event: null };
+  var EVENT_TYPES = [["wedding", "Wedding"], ["corporate", "Corporate / company"], ["private", "Private party"], ["conference", "Conference"], ["other", "Other"]];
+  var EVENT_STATUS = [["planning", "Planning"], ["confirmed", "Confirmed"], ["in_progress", "In progress"], ["done", "Done"], ["cancelled", "Cancelled"]];
+  var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
+  var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
+  var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["budget", "Budget"], ["payments", "Payments"]];
+  function evLabel(list, k) { for (var i = 0; i < list.length; i++) if (list[i][0] === k) return list[i][1]; return k || ""; }
+  function evCur() { return (EV.event && EV.event.currency) || (S.company && S.company.currency_code) || "USD"; }
+  function evM(n) { return evCur() + " " + money(Number(n) || 0); }
+  function eventStatusBadge(s) { var map = { planning: "draft", confirmed: "partial", in_progress: "partial", done: "paid", cancelled: "unpaid" }; return '<span class="badge ' + (map[s] || "draft") + '">' + esc(evLabel(EVENT_STATUS, s)) + '</span>'; }
+
+  function cfgEvents() {
+    return {
+      title: "Events", pageSize: 60, table: "event_events",
+      kanban: { groups: [{ label: "Status", field: "status", options: EVENT_STATUS }, { label: "Type", field: "event_type", options: EVENT_TYPES }] },
+      emptyHint: "Create an event to plan guests, seating, suppliers, budget, payments and tasks in one place. Great for weddings, company events and organizers.",
+      fetch: async function () { var rows = (await sb.from("event_events").select("*").order("event_date", { ascending: false, nullsFirst: false })).data || []; await attachThumbs(rows, "event"); return rows; },
+      searchText: function (e) { return (e.name || "") + " " + (e.venue || "") + " " + (e.event_type || "") + " " + (e.location || ""); },
+      columns: [
+        { label: "", cls: "thumbcol", get: function (e) { return thumbCell(e); } },
+        { label: "Event", get: function (e) { return '<b>' + esc(e.name) + '</b>'; } },
+        { label: "Type", get: function (e) { return '<span class="muted">' + esc(evLabel(EVENT_TYPES, e.event_type)) + '</span>'; } },
+        { label: "Date", get: function (e) { return '<span class="muted">' + esc(e.event_date || "") + '</span>'; } },
+        { label: "Venue", get: function (e) { return '<span class="muted">' + esc(e.venue || "") + '</span>'; } },
+        { label: "Guests", num: true, get: function (e) { return e.guest_target || ""; } },
+        { label: "Status", get: function (e) { return eventStatusBadge(e.status); } }
+      ],
+      groupBy: [{ label: "Status", get: function (e) { return evLabel(EVENT_STATUS, e.status); } }, { label: "Type", get: function (e) { return evLabel(EVENT_TYPES, e.event_type); } }],
+      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.event_date || "") + (e.venue ? " &middot; " + esc(e.venue) : "") + '</div><div class="r"><span>' + esc(evLabel(EVENT_TYPES, e.event_type)) + '</span>' + eventStatusBadge(e.status) + '</div>'; },
+      onOpen: function (e) { renderEventWorkspace(e.id, "overview"); },
+      onNew: function () { renderEventForm("new"); }
+    };
+  }
+  async function renderEventForm(id) {
+    mediaClearStage();
+    var parent = { action: "events.list", title: "Events" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New event" : "Edit", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var e = id === "new" ? { status: "planning", event_type: "wedding", currency: (S.company && S.company.currency_code) || "USD" } : (await sb.from("event_events").select("*").eq("id", id).maybeSingle()).data || {};
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New event" : (e.name || "");
+    function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ev-save">Save</button><button id="ev-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-sheet">' + titleRowHTML('<input id="ev-name" value="' + esc(e.name || "") + '" placeholder="e.g. Kevin & Marianne Wedding">', "event", id) +
+      '<div class="o-groups"><div>' +
+      fld("Type", '<select id="ev-type">' + osel(EVENT_TYPES, e.event_type || "wedding") + '</select>', "The kind of event.") +
+      fld("Event date", '<input id="ev-date" type="date" value="' + esc(e.event_date || "") + '">', "The main day of the event.") +
+      fld("End date", '<input id="ev-enddate" type="date" value="' + esc(e.end_date || "") + '">', "For multi-day events; leave blank for a single day.") +
+      fld("Guest target / capacity", '<input id="ev-target" type="number" value="' + (e.guest_target != null ? e.guest_target : "") + '" placeholder="e.g. 320">', "The maximum headcount, used to warn you before you over-invite.") +
+      '</div><div>' +
+      fld("Venue", sug("ev-venue", e.venue, "venue", "Reception venue"), "Where it is held.") +
+      fld("Location / city", sug("ev-loc", e.location, "city", "Town / city"), "") +
+      fld("Currency", '<input id="ev-cur" value="' + esc(e.currency || "USD") + '" maxlength="3" style="text-transform:uppercase">', "The currency used for this event's budget.") +
+      fld("Status", '<select id="ev-status">' + osel(EVENT_STATUS, e.status || "planning") + '</select>', "The lifecycle stage of the event.") +
+      '</div></div>' +
+      fld("Notes", '<textarea id="ev-notes" rows="2">' + esc(e.notes || "") + '</textarea>', "") + '</div>';
+    document.getElementById("ev-discard").onclick = function () { id === "new" ? go("events.list") : renderEventWorkspace(id, "overview"); };
+    wireAttach("event");
+    document.getElementById("ev-save").onclick = async function () {
+      var name = gv("ev-name"); if (!name) { toast("Name is required"); return; }
+      var row = { name: name, event_type: document.getElementById("ev-type").value, event_date: gv("ev-date") || null, end_date: gv("ev-enddate") || null, guest_target: parseInt(gv("ev-target"), 10) || null, venue: gv("ev-venue") || null, location: gv("ev-loc") || null, currency: (gv("ev-cur") || "USD").toUpperCase().slice(0, 3), status: document.getElementById("ev-status").value, notes: gv("ev-notes") || null };
+      sugRemember("venue", row.venue); sugRemember("city", row.location);
+      if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("event_events").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } await mediaFlush("event", ins.data.id); toast("Event created"); renderEventWorkspace(ins.data.id, "overview"); }
+      else { var up = await sb.from("event_events").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } toast("Saved"); renderEventWorkspace(id, "overview"); }
+    };
+  }
+  async function renderEventWorkspace(eventId, section) {
+    section = section || "overview";
+    var ev = (await sb.from("event_events").select("*").eq("id", eventId).maybeSingle()).data;
+    if (!ev) { toast("Event not found"); go("events.list"); return; }
+    EV = { eventId: eventId, section: section, event: ev };
+    S.app = "events"; if (!document.getElementById("o-main")) renderShell(); applyAppColor();
+    var cover = await mediaFirstImage("event", eventId);
+    var main = document.getElementById("o-main");
+    var days = ev.event_date ? Math.ceil((new Date(ev.event_date) - new Date(today())) / 864e5) : null;
+    var tabs = EV_SECTIONS.map(function (s) { return '<button class="ev-tab' + (s[0] === section ? " on" : "") + '" data-sec="' + s[0] + '">' + esc(s[1]) + '</button>'; }).join("");
+    main.innerHTML =
+      '<div class="o-view"><div class="o-cp"><div class="o-bc"><span class="up" id="ev-home">Events</span><span class="sepc">/</span><span>' + esc(ev.name) + '</span></div>' +
+      '<div class="gap"></div><button class="o-filtbtn" id="ev-edit">Edit event</button></div>' +
+      '<div class="ev-wrap">' +
+      '<div class="ev-head">' +
+      '<div class="ev-cover">' + (cover ? '<img src="' + cover + '">' : '<span class="ev-cover-x">' + esc((ev.name || "?").slice(0, 1)) + '</span>') + '</div>' +
+      '<div class="ev-head-main"><div class="ev-title-row"><h1>' + esc(ev.name) + '</h1>' + eventStatusBadge(ev.status) + '</div>' +
+      '<div class="ev-meta">' + esc(evLabel(EVENT_TYPES, ev.event_type)) + (ev.event_date ? ' &middot; ' + esc(ev.event_date) : "") + (ev.venue ? ' &middot; ' + esc(ev.venue) : "") + (ev.location ? ", " + esc(ev.location) : "") + '</div>' +
+      '<div class="ev-stats" id="ev-stats">' + (days != null ? '<div class="ev-stat"><span class="v">' + (days >= 0 ? days : "-") + '</span><span class="k">' + (days >= 0 ? "days to go" : "past") + '</span></div>' : "") + '</div>' +
+      '</div></div>' +
+      '<div class="ev-tabs">' + tabs + '</div>' +
+      '<div class="ev-body" id="ev-body"><div class="o-empty">Loading...</div></div>' +
+      '</div></div>';
+    document.getElementById("ev-home").onclick = function () { go("events.list"); };
+    document.getElementById("ev-edit").onclick = function () { renderEventForm(eventId); };
+    main.querySelectorAll(".ev-tab").forEach(function (b) { b.onclick = function () { renderEventWorkspace(eventId, b.dataset.sec); }; });
+    evRouteSection(section);
+    // fill live stat chips
+    evOverviewStats();
+  }
+  function evRouteSection(section) {
+    var host = document.getElementById("ev-body"); if (!host) return;
+    if (section === "overview") return evOverview(host);
+    if (section === "concept") return evConcept(host);
+    if (section === "guests") return evGuests(host);
+    if (section === "budget") return evBudget(host);
+    if (section === "payments") return evPayments(host);
+    host.innerHTML = '<div class="o-empty">Coming next.</div>';
+  }
+  async function evOverviewStats() {
+    var g = (await sb.from("event_guests").select("invite_stage,plus_ones").eq("event_id", EV.eventId)).data || [];
+    var conf = g.filter(function (x) { return x.invite_stage === "confirmed"; }), inv = g.filter(function (x) { return ["invited", "confirmed"].indexOf(x.invite_stage) >= 0; });
+    var head = conf.reduce(function (a, x) { return a + 1 + (Number(x.plus_ones) || 0); }, 0);
+    var bud = (await sb.from("event_budget_lines").select("estimated,actual").eq("event_id", EV.eventId)).data || [];
+    var est = bud.reduce(function (a, x) { return a + (Number(x.estimated) || 0); }, 0), act = bud.reduce(function (a, x) { return a + (Number(x.actual) || 0); }, 0);
+    var el = document.getElementById("ev-stats"); if (!el) return;
+    var days = EV.event.event_date ? Math.ceil((new Date(EV.event.event_date) - new Date(today())) / 864e5) : null;
+    el.innerHTML =
+      (days != null ? '<div class="ev-stat"><span class="v">' + (days >= 0 ? days : "-") + '</span><span class="k">' + (days >= 0 ? "days to go" : "past") + '</span></div>' : "") +
+      '<div class="ev-stat"><span class="v">' + conf.length + (EV.event.guest_target ? " / " + EV.event.guest_target : "") + '</span><span class="k">confirmed</span></div>' +
+      '<div class="ev-stat"><span class="v">' + head + '</span><span class="k">total heads</span></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(est) + '</span><span class="k">budget</span></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(act) + '</span><span class="k">actual</span></div>';
+  }
+  async function evOverview(host) {
+    var g = (await sb.from("event_guests").select("invite_stage,rsvp,plus_ones,priority").eq("event_id", EV.eventId)).data || [];
+    function cnt(f) { return g.filter(f).length; }
+    var stageRows = GUEST_STAGE.map(function (s) { return '<div class="r"><span class="k">' + s[1] + '</span><b>' + cnt(function (x) { return x.invite_stage === s[0]; }) + '</b></div>'; }).join("");
+    var pay = (await sb.from("event_payments").select("amount,paid,due_date").eq("event_id", EV.eventId)).data || [];
+    var due = pay.filter(function (p) { return !p.paid; }).reduce(function (a, p) { return a + (Number(p.amount) || 0); }, 0);
+    var paid = pay.filter(function (p) { return p.paid; }).reduce(function (a, p) { return a + (Number(p.amount) || 0); }, 0);
+    var upcoming = pay.filter(function (p) { return !p.paid && p.due_date; }).sort(function (a, b) { return a.due_date < b.due_date ? -1 : 1; }).slice(0, 5);
+    host.innerHTML = '<div class="ev-grid2">' +
+      '<div class="card"><h3>Guests by stage</h3><div class="ev-kv">' + stageRows + '</div></div>' +
+      '<div class="card"><h3>Money</h3><div class="ev-kv"><div class="r"><span class="k">Paid</span><b>' + evM(paid) + '</b></div><div class="r"><span class="k">Outstanding</span><b>' + evM(due) + '</b></div></div>' +
+      (upcoming.length ? '<div class="sub" style="margin-top:8px">Upcoming payments</div><table class="o-list"><tbody>' + upcoming.map(function (p) { return '<tr><td>' + esc(p.due_date) + '</td><td class="num">' + evM(p.amount) + '</td></tr>'; }).join("") + '</tbody></table>' : '') + '</div>' +
+      (EV.event.notes ? '<div class="card" style="grid-column:1/-1"><h3>Notes</h3><div>' + esc(EV.event.notes).replace(/\n/g, "<br>") + '</div></div>' : "") +
+      '</div>';
+  }
+  async function evConcept(host) {
+    var c = EV.event.concept || {};
+    var FIELDS = [["feeling", "The feeling"], ["guiding", "Guiding line"], ["aesthetic", "Aesthetic"], ["ceremony", "Ceremony"], ["reception", "Reception"], ["signature", "Signature moments"], ["dessert", "Dessert philosophy"], ["avoid", "What to avoid"], ["hashtags", "Hashtags"]];
+    host.innerHTML = '<div class="card"><div class="o-sb-btns" style="margin-bottom:10px"><button class="pri" id="cc-save">Save concept</button></div>' +
+      FIELDS.map(function (f) { return '<div class="o-fld" style="margin-bottom:12px"><div class="lbl">' + f[1] + '</div><textarea id="cc-' + f[0] + '" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical">' + esc(c[f[0]] || "") + '</textarea></div>'; }).join("") + '</div>';
+    document.getElementById("cc-save").onclick = async function () {
+      var out = {}; FIELDS.forEach(function (f) { var v = gv("cc-" + f[0]); if (v) out[f[0]] = v; });
+      var r = await sb.from("event_events").update({ concept: out }).eq("id", EV.eventId); if (r.error) { toast(errMsg(r.error)); return; }
+      EV.event.concept = out; toast("Concept saved");
+    };
+  }
+  // ---- guests ----
+  async function evGuests(host) {
+    var rows = (await sb.from("event_guests").select("*, event_tables:table_id(name)").eq("event_id", EV.eventId).order("family_name")).data || [];
+    var target = EV.event.guest_target || 0;
+    var invited = rows.filter(function (r) { return ["invited", "confirmed"].indexOf(r.invite_stage) >= 0; }).length;
+    var confirmed = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).length;
+    var heads = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).reduce(function (a, r) { return a + 1 + (Number(r.plus_ones) || 0); }, 0);
+    var over = target && invited > target;
+    var pct = target ? Math.min(100, Math.round(invited / target * 100)) : 0;
+    var cap = '<div class="ev-cap"><div class="ev-cap-bar"><div class="ev-cap-fill' + (over ? " over" : "") + '" style="width:' + pct + '%"></div></div>' +
+      '<div class="ev-cap-txt"><b>' + invited + '</b> invited / confirmed' + (target ? ' of <b>' + target + '</b> target' : "") + (over ? ' <span class="badge unpaid">over by ' + (invited - target) + '</span>' : "") + ' &middot; ' + confirmed + ' confirmed &middot; ' + heads + ' heads (incl. +1s)</div></div>';
+    var view = EV._guestView || "board";
+    host.innerHTML = cap +
+      '<div class="ev-toolbar"><button class="pri" id="g-add">+ Add guest</button>' +
+      '<input id="g-q" class="ev-search" placeholder="Search guests...">' +
+      '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button></div>' +
+      '<button class="o-filtbtn" id="g-import">Import</button></div>' +
+      '<div id="g-body"></div>';
+    document.getElementById("g-add").onclick = function () { openGuestModal(null); };
+    document.getElementById("g-import").onclick = function () { openGuestImport(); };
+    document.getElementById("g-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._guestView = b.dataset.v; evGuests(host); }; });
+    var q = "";
+    function paint() {
+      var shown = rows.filter(function (r) { return !q || ((r.first_name || "") + " " + (r.family_name || "") + " " + (r.category || "") + " " + (r.side || "")).toLowerCase().indexOf(q) >= 0; });
+      var body = document.getElementById("g-body");
+      if (view === "board") {
+        evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
+      } else {
+        if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No guests yet</div><div class="o-empty2-h">Add your first guest, or Import a list.</div></div>'; return; }
+        body.innerHTML = '<table class="o-list"><thead><tr><th>Side</th><th>Name</th><th>Category</th><th>Priority</th><th>Stage</th><th>RSVP</th><th class="num">+1</th><th>Table</th></tr></thead><tbody>' +
+          shown.map(function (r) {
+            return '<tr data-id="' + r.id + '" style="cursor:pointer"><td>' + esc(r.side || "") + '</td><td><b>' + esc(((r.first_name || "") + " " + (r.family_name || "")).trim()) + '</b>' + (r.is_vip ? ' <span class="badge">VIP</span>' : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td>' + (r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : "") + '</td><td>' + '<span class="badge ' + guestStageCls(r.invite_stage) + '">' + esc(evLabel(GUEST_STAGE, r.invite_stage)) + '</span></td><td class="muted">' + esc(evLabel(RSVP_OPTS, r.rsvp)) + '</td><td class="num">' + (r.plus_ones || 0) + '</td><td class="muted">' + esc(r.event_tables ? r.event_tables.name : "") + '</td></tr>';
+          }).join("") + '</tbody></table>';
+        body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openGuestModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+      }
+    }
+    document.getElementById("g-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
+    paint();
+  }
+  function guestStageCls(s) { return s === "confirmed" ? "paid" : s === "invited" ? "partial" : s === "declined" ? "unpaid" : "draft"; }
+  function guestCardHTML(r) {
+    return '<div class="t">' + esc(((r.first_name || "") + " " + (r.family_name || "")).trim() || "Guest") + (r.is_vip ? ' <span class="badge">VIP</span>' : "") + '</div>' +
+      '<div class="muted">' + esc(r.category || r.side || "") + '</div>' +
+      '<div class="r">' + (r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : "<span></span>") + '<span>' + (r.plus_ones ? "+" + r.plus_ones : "") + ' ' + (r.rsvp && r.rsvp !== "pending" ? esc(evLabel(RSVP_OPTS, r.rsvp)) : "") + '</span></div>';
+  }
+  function openGuestModal(g) {
+    g = g || {};
+    var isNew = !g.id;
+    function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "guestmodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add guest" : "Edit guest") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>First name</label><input id="gm-first" value="' + esc(g.first_name || "") + '"></div><div><label>Family name</label><input id="gm-fam" value="' + esc(g.family_name || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Side</label>' + sug("gm-side", g.side, "guest_side", "e.g. Bride / Groom") + '</div><div><label>Category</label>' + sug("gm-cat", g.category, "guest_cat", "e.g. Family") + '</div></div>' +
+      '<div class="row2"><div><label>Priority</label><select id="gm-prio"><option value="">-</option>' + osel(GUEST_PRIO, g.priority) + '</select></div><div><label>Invite stage</label><select id="gm-stage">' + osel(GUEST_STAGE, g.invite_stage || "longlist") + '</select></div></div>' +
+      '<div class="row2"><div><label>RSVP</label><select id="gm-rsvp">' + osel(RSVP_OPTS, g.rsvp || "pending") + '</select></div><div><label>Plus ones</label><input id="gm-plus" type="number" min="0" value="' + (g.plus_ones || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Email</label><input id="gm-email" value="' + esc(g.email || "") + '"></div><div><label>Phone</label><input id="gm-phone" value="' + esc(g.phone || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Dietary / notes</label><input id="gm-diet" value="' + esc(g.dietary || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="gm-vip"' + (g.is_vip ? " checked" : "") + '> VIP</label></div></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="gm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="gm-cancel">Cancel</button><button class="btn pri" id="gm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("gm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("gm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this guest?")) return; await sb.from("event_guests").delete().eq("id", g.id); m.remove(); evRouteSection("guests"); };
+    document.getElementById("gm-save").onclick = async function () {
+      var row = { first_name: gv("gm-first") || null, family_name: gv("gm-fam") || null, side: gv("gm-side") || null, category: gv("gm-cat") || null, priority: document.getElementById("gm-prio").value || null, invite_stage: document.getElementById("gm-stage").value, rsvp: document.getElementById("gm-rsvp").value, plus_ones: parseInt(gv("gm-plus"), 10) || 0, email: gv("gm-email") || null, phone: gv("gm-phone") || null, dietary: gv("gm-diet") || null, is_vip: document.getElementById("gm-vip").checked };
+      if (!row.first_name && !row.family_name) { toast("Enter a name"); return; }
+      sugRemember("guest_side", row.side); sugRemember("guest_cat", row.category);
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_guests").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_guests").update(row).eq("id", g.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("guests"); evOverviewStats();
+    };
+  }
+  function openGuestImport() {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Import guests</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
+      '<div class="sub">Paste rows, one guest per line. Columns (tab or comma separated): <b>Side, Priority, Category, First name, Family name, Stage</b>. Only a name is required.</div>' +
+      '<textarea id="gi-txt" rows="10" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:13px monospace" placeholder="Groom&#9;A&#9;Family&#9;Maya&#9;Koussa&#9;confirmed"></textarea>' +
+      '</div><div class="foot"><button class="btn" id="gi-cancel">Cancel</button><button class="btn pri" id="gi-save" style="background:var(--app);border-color:var(--app)">Import</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("gi-cancel").onclick = function () { m.remove(); };
+    document.getElementById("gi-save").onclick = async function () {
+      var lines = (document.getElementById("gi-txt").value || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      if (!lines.length) { m.remove(); return; }
+      var stageKeys = GUEST_STAGE.map(function (s) { return s[0]; });
+      var rows = lines.map(function (l) {
+        var c = l.split(/\t|,/).map(function (x) { return x.trim(); });
+        var stage = (c[5] || "longlist").toLowerCase().replace(/\s+/g, ""); if (stageKeys.indexOf(stage) < 0) stage = "longlist";
+        return { event_id: EV.eventId, org_id: EV.event.org_id, side: c[0] || null, priority: (c[1] || "").toUpperCase().slice(0, 1) || null, category: c[2] || null, first_name: c[3] || null, family_name: c[4] || null, invite_stage: stage };
+      });
+      var r = await sb.from("event_guests").insert(rows); if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast(rows.length + " guests imported"); evRouteSection("guests"); evOverviewStats();
+    };
+  }
+  // ---- reusable workspace board (drag to change a field) ----
+  var _evBoardIdx = {};
+  function evBoard(host, cfg) {
+    var key = cfg.stateKey || "b";
+    var idx = _evBoardIdx[key] || 0; if (idx >= cfg.groups.length) idx = 0; _evBoardIdx[key] = idx;
+    var g = cfg.groups[idx];
+    function kf(r) { var v = r[g.field]; return v == null ? "" : String(v); }
+    var cols, known = {};
+    if (g.options) { cols = g.options.map(function (o) { known[String(o[0])] = 1; return { value: String(o[0]), label: o[1] }; }); }
+    else { var seen = {}, order = []; cfg.rows.forEach(function (r) { var k = kf(r); if (!(k in seen)) { seen[k] = 1; order.push(k); } }); order.sort(); cols = order.map(function (k) { known[k] = 1; return { value: k, label: k === "" ? "(none)" : k }; }); }
+    if (cfg.rows.some(function (r) { return !known[kf(r)]; })) cols.push({ value: "", label: "(none)" });
+    var buckets = {}; cols.forEach(function (c) { buckets[c.value] = buckets[c.value] || []; });
+    cfg.rows.forEach(function (r) { var k = kf(r); if (!(k in buckets)) k = ""; (buckets[k] = buckets[k] || []).push(r); });
+    var picker = '<div class="o-kbar"><label>Columns by</label><select id="evb-grp">' + cfg.groups.map(function (gg, i) { return '<option value="' + i + '"' + (i === idx ? " selected" : "") + '>' + esc(gg.label) + '</option>'; }).join("") + '</select><span class="o-kbar-hint">Drag cards between columns</span></div>';
+    var done = {}, board = '<div class="o-kboard">';
+    cols.forEach(function (c) {
+      if (done[c.value]) return; done[c.value] = 1; var list = buckets[c.value] || [];
+      board += '<div class="o-kcol drop" data-col="' + esc(c.value) + '"><div class="o-kcol-h"><span class="lbl">' + esc(c.label) + '</span><span class="cnt">' + list.length + '</span></div><div class="o-kcol-b">' +
+        list.map(function (r) { return '<div class="o-card drag" data-id="' + r.id + '" draggable="true">' + cfg.cardHTML(r) + '</div>'; }).join("") + '</div></div>';
+    });
+    host.innerHTML = picker + board + '</div>';
+    document.getElementById("evb-grp").onchange = function () { _evBoardIdx[key] = +this.value; evBoard(host, cfg); };
+    host.querySelectorAll(".o-card.drag").forEach(function (card) {
+      card.onclick = function () { if (card._dragging) return; var r = cfg.rows.filter(function (x) { return x.id === card.dataset.id; })[0]; if (r && cfg.onOpen) cfg.onOpen(r); };
+      card.addEventListener("dragstart", function (e) { card._dragging = true; host._dragId = card.dataset.id; if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", card.dataset.id); } catch (_) { } } });
+      card.addEventListener("dragend", function () { setTimeout(function () { card._dragging = false; }, 50); host._dragId = null; host.querySelectorAll(".o-kcol.over").forEach(function (c) { c.classList.remove("over"); }); });
+    });
+    host.querySelectorAll(".o-kcol.drop").forEach(function (col) {
+      col.addEventListener("dragover", function (e) { e.preventDefault(); col.classList.add("over"); });
+      col.addEventListener("dragleave", function (e) { if (!col.contains(e.relatedTarget)) col.classList.remove("over"); });
+      col.addEventListener("drop", async function (e) {
+        e.preventDefault(); col.classList.remove("over");
+        var id = host._dragId || (e.dataTransfer && e.dataTransfer.getData("text/plain")); if (!id) return;
+        var r = cfg.rows.filter(function (x) { return x.id === id; })[0]; if (!r) return;
+        var val = col.dataset.col; if (String(r[g.field] == null ? "" : r[g.field]) === val) return;
+        var u = {}; u[g.field] = val === "" ? null : val;
+        var res = await sb.from(cfg.table).update(u).eq("id", id); if (res.error) { toast(errMsg(res.error)); return; }
+        r[g.field] = val === "" ? null : val; toast("Updated"); if (cfg.refresh) cfg.refresh(); else evBoard(host, cfg); evOverviewStats();
+      });
+    });
+  }
+  // ---- budget ----
+  async function evBudget(host) {
+    var rows = (await sb.from("event_budget_lines").select("*").eq("event_id", EV.eventId).order("category").order("sort")).data || [];
+    var gc = EV.event.guest_target || 0;
+    function lineEst(r) { return r.cost_basis === "per_guest" ? (Number(r.rate_per_guest) || 0) * gc : (Number(r.estimated) || 0); }
+    var est = rows.reduce(function (a, r) { return a + lineEst(r); }, 0), act = rows.reduce(function (a, r) { return a + (Number(r.actual) || 0); }, 0);
+    var byCat = {}; rows.forEach(function (r) { var k = r.category || "Uncategorised"; (byCat[k] = byCat[k] || []).push(r); });
+    var tbl = Object.keys(byCat).sort().map(function (cat) {
+      var lines = byCat[cat], ce = lines.reduce(function (a, r) { return a + lineEst(r); }, 0), ca = lines.reduce(function (a, r) { return a + (Number(r.actual) || 0); }, 0);
+      return '<tr class="o-grp"><td colspan="6"><b>' + esc(cat) + '</b> <span class="muted">' + evM(ce) + (ca ? ' &middot; actual ' + evM(ca) : "") + '</span></td></tr>' +
+        lines.map(function (r) {
+          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td>' + esc(r.subcategory || "") + '</td><td>' + esc(r.item || "") + '</td><td class="muted">' + (r.cost_basis === "per_guest" ? "Per guest " + evM(r.rate_per_guest) : "Fixed") + '</td><td class="num">' + evM(lineEst(r)) + '</td><td class="num">' + (r.actual ? evM(r.actual) : "-") + '</td><td class="muted">' + esc(r.notes || "") + '</td></tr>';
+        }).join("");
+    }).join("");
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="b-add">+ Add line</button><div class="gap"></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(est) + '</span><span class="k">estimated' + (gc ? " &middot; " + evM(est / (gc || 1)) + "/guest" : "") + '</span></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(act) + '</span><span class="k">actual</span></div></div>' +
+      (rows.length ? '<table class="o-list"><thead><tr><th>Subcategory</th><th>Item</th><th>Basis</th><th class="num">Estimated</th><th class="num">Actual</th><th>Notes</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No budget lines</div><div class="o-empty2-h">Add your first budget line.</div></div>');
+    document.getElementById("b-add").onclick = function () { openBudgetModal(null); };
+    host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openBudgetModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+  }
+  function openBudgetModal(b) {
+    b = b || {}; var isNew = !b.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add budget line" : "Edit budget line") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Category</label>' + sug("bm-cat", b.category, "ev_bcat", "e.g. Catering") + '</div><div><label>Subcategory</label><input id="bm-sub" value="' + esc(b.subcategory || "") + '"></div></div>' +
+      '<div><label>Item / detail</label><input id="bm-item" value="' + esc(b.item || "") + '"></div>' +
+      '<div class="row2"><div><label>Cost basis</label><select id="bm-basis"><option value="fixed"' + (b.cost_basis !== "per_guest" ? " selected" : "") + '>Fixed</option><option value="per_guest"' + (b.cost_basis === "per_guest" ? " selected" : "") + '>Per guest</option></select></div><div><label>Rate / guest</label><input id="bm-rate" type="number" step="0.01" value="' + (b.rate_per_guest != null ? b.rate_per_guest : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Estimated (' + esc(evCur()) + ')</label><input id="bm-est" type="number" step="0.01" value="' + (b.estimated != null ? b.estimated : "") + '"></div><div><label>Actual (' + esc(evCur()) + ')</label><input id="bm-act" type="number" step="0.01" value="' + (b.actual != null ? b.actual : "") + '"></div></div>' +
+      '<div><label>Notes</label><input id="bm-notes" value="' + esc(b.notes || "") + '"></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="bm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="bm-cancel">Cancel</button><button class="btn pri" id="bm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("bm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("bm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this line?")) return; await sb.from("event_budget_lines").delete().eq("id", b.id); m.remove(); evRouteSection("budget"); evOverviewStats(); };
+    document.getElementById("bm-save").onclick = async function () {
+      var row = { category: gv("bm-cat") || null, subcategory: gv("bm-sub") || null, item: gv("bm-item") || null, cost_basis: document.getElementById("bm-basis").value, rate_per_guest: parseFloat(gv("bm-rate")) || null, estimated: parseFloat(gv("bm-est")) || 0, actual: parseFloat(gv("bm-act")) || 0, notes: gv("bm-notes") || null };
+      sugRemember("ev_bcat", row.category);
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_budget_lines").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_budget_lines").update(row).eq("id", b.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("budget"); evOverviewStats();
+    };
+  }
+  // ---- payments ----
+  async function evPayments(host) {
+    var rows = (await sb.from("event_payments").select("*").eq("event_id", EV.eventId).order("due_date", { nullsFirst: false })).data || [];
+    var total = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0), paid = rows.filter(function (r) { return r.paid; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="p-add">+ Add payment</button><div class="gap"></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(paid) + '</span><span class="k">paid</span></div><div class="ev-stat"><span class="v">' + evM(total - paid) + '</span><span class="k">outstanding</span></div></div>' +
+      (rows.length ? '<table class="o-list"><thead><tr><th>Due</th><th>Label</th><th>Kind</th><th class="num">Amount</th><th>Booking</th><th>Status</th></tr></thead><tbody>' +
+        rows.map(function (r) {
+          var overdue = !r.paid && r.due_date && r.due_date < today();
+          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.due_date || "") + (overdue ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><b>' + esc(r.label || "") + '</b></td><td class="muted">' + esc(r.kind || "") + '</td><td class="num">' + evM(r.amount) + '</td><td>' + (r.is_booking_confirmation ? '<span class="badge">Booking</span>' : "") + '</td><td>' + (r.paid ? '<span class="badge paid">Paid</span>' : '<span class="badge unpaid">Due</span>') + '</td></tr>';
+        }).join("") + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No payments scheduled</div><div class="o-empty2-h">Add deposits, balances and booking-confirmation milestones.</div></div>');
+    document.getElementById("p-add").onclick = function () { openEvPayModal(null); };
+    host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openEvPayModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+  }
+  function openEvPayModal(p) {
+    p = p || {}; var isNew = !p.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add payment" : "Edit payment") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Label</label><input id="pm-label" value="' + esc(p.label || "") + '" placeholder="e.g. Venue deposit"></div>' +
+      '<div class="row2"><div><label>Kind</label><select id="pm-kind"><option value="deposit"' + (p.kind === "deposit" || !p.kind ? " selected" : "") + '>Deposit</option><option value="balance"' + (p.kind === "balance" ? " selected" : "") + '>Balance</option><option value="installment"' + (p.kind === "installment" ? " selected" : "") + '>Installment</option></select></div><div><label>Amount (' + esc(evCur()) + ')</label><input id="pm-amt" type="number" step="0.01" value="' + (p.amount != null ? p.amount : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Due date</label><input id="pm-due" type="date" value="' + esc(p.due_date || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="pm-book"' + (p.is_booking_confirmation ? " checked" : "") + '> Booking confirmation</label></div></div>' +
+      '<div class="row2"><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="pm-paid"' + (p.paid ? " checked" : "") + '> Paid</label></div><div><label>Paid date</label><input id="pm-paiddate" type="date" value="' + esc(p.paid_date || "") + '"></div></div>' +
+      '<div><label>Reference / notes</label><input id="pm-notes" value="' + esc(p.notes || "") + '"></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="pm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="pm-cancel">Cancel</button><button class="btn pri" id="pm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("pm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this payment?")) return; await sb.from("event_payments").delete().eq("id", p.id); m.remove(); evRouteSection("payments"); evOverviewStats(); };
+    document.getElementById("pm-save").onclick = async function () {
+      var paidChk = document.getElementById("pm-paid").checked;
+      var row = { label: gv("pm-label") || null, kind: document.getElementById("pm-kind").value, amount: parseFloat(gv("pm-amt")) || 0, due_date: gv("pm-due") || null, is_booking_confirmation: document.getElementById("pm-book").checked, paid: paidChk, paid_date: gv("pm-paiddate") || (paidChk ? today() : null), notes: gv("pm-notes") || null };
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_payments").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_payments").update(row).eq("id", p.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("payments"); evOverviewStats();
     };
   }
 
