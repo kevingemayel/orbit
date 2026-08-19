@@ -36,11 +36,14 @@ create table if not exists public.org_invites (
 create unique index if not exists idx_org_invites_pending on public.org_invites(org_id, lower(email)) where status='pending';
 create index if not exists idx_org_invites_email on public.org_invites(lower(email)) where status='pending';
 alter table public.org_invites enable row level security;
--- admins of the org read its invites; the invitee can read their own pending invite
+-- admins of the org read its invites; the invitee can read their own pending invite.
+-- NOTE: the invitee-email check uses the JWT email claim, NOT a select on auth.users -
+-- the `authenticated` role can't read auth.users, and an OR-branch that touches it makes
+-- the WHOLE policy raise "permission denied for table users" even for admins.
 drop policy if exists oi_r on public.org_invites;
 create policy oi_r on public.org_invites for select using (
   public.is_org_admin(org_id)
-  or lower(email) = lower(coalesce((select u.email from auth.users u where u.id = auth.uid()), ''))
+  or lower(email) = lower(coalesce(nullif(current_setting('request.jwt.claims', true), '')::json->>'email',''))
 );
 -- all writes go through the definer rpcs below; no direct client writes
 drop policy if exists oi_w on public.org_invites;
