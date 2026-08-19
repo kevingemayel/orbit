@@ -171,7 +171,8 @@
         { label: "Snagging", action: "site.snags" },
         { label: "Inspections", action: "site.insp" },
         { label: "Plant & Equipment", action: "site.plant" },
-        { label: "Site Diary", action: "site.diary" }
+        { label: "Site Diary", action: "site.diary" },
+        { label: "Incidents", action: "site.incidents" }
       ]
     },
     contacts: {
@@ -220,6 +221,8 @@
       menus: [
         { label: "Getting started", action: "settings.setup" },
         { label: "Pending signups", action: "platform.pending" },
+        { label: "Tenants", action: "platform.tenants" },
+        { label: "Audit Log", action: "settings.audit" },
         { label: "Companies", action: "companies" },
         { label: "Users & Roles", action: "settings.users" },
         { label: "Roles & Permissions", action: "settings.roles" },
@@ -248,7 +251,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "platform.pending": "settings", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -1151,6 +1154,9 @@
       case "settings.setup": return renderSetup();
       case "settings.import": return renderImport();
       case "platform.pending": return renderPendingSignups();
+      case "platform.tenants": return renderTenants();
+      case "settings.audit": return renderList(cfgAuditLog());
+      case "site.incidents": return renderList(cfgIncidents());
       case "settings.numbering": return renderNumbering();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
@@ -4940,6 +4946,88 @@
     }
     document.querySelectorAll(".pa-appr").forEach(function (b) { b.onclick = function () { setStatus(b.dataset.id, "active", "Approved " + b.dataset.name); }; });
     document.querySelectorAll(".pa-rej").forEach(function (b) { b.onclick = function () { setStatus(b.dataset.id, "rejected", "Rejected"); }; });
+  }
+
+  // ============================ AUDIT LOG (ORB-18) ============================
+  function auditTableLabel(t) { return ({ invoices: "Invoice", projects: "Project", payments: "Payment", purchase_orders: "Purchase order" })[t] || (t || "Record"); }
+  function cfgAuditLog() {
+    return {
+      title: "Audit Log", pageSize: 100,
+      fetch: function () { return sb.from("audit_log").select("*").eq("company_id", S.company.id).order("at", { ascending: false }).limit(500).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.actor_email || "") + " " + (a.table_name || "") + " " + (a.action || ""); },
+      columns: [
+        { label: "When", get: function (a) { return esc((a.at || "").slice(0, 16).replace("T", " ")); } },
+        { label: "Who", get: function (a) { return esc(a.actor === S.user.id ? "You" : (a.actor_email || "—")); } },
+        { label: "Action", get: function (a) { var c = a.action === "DELETE" ? "--bad" : (a.action === "INSERT" ? "--good" : "--accent"); var t = ({ INSERT: "Created", UPDATE: "Updated", DELETE: "Deleted" })[a.action] || a.action; return '<span style="font-weight:600;color:var(' + c + ')">' + esc(t) + '</span>'; } },
+        { label: "Record", get: function (a) { return '<b>' + esc(auditTableLabel(a.table_name)) + '</b> <span class="muted" style="font-size:11px">' + esc((a.row_id || "").slice(0, 8)) + '</span>'; } }
+      ],
+      filters: [{ label: "Created", test: function (a) { return a.action === "INSERT"; } }, { label: "Updated", test: function (a) { return a.action === "UPDATE"; } }, { label: "Deleted", test: function (a) { return a.action === "DELETE"; } }],
+      groupBy: [{ label: "Record type", get: function (a) { return auditTableLabel(a.table_name); } }, { label: "Who", get: function (a) { return a.actor === S.user.id ? "You" : (a.actor_email || "—"); } }],
+      emptyHint: "Every create, update and delete on invoices, payments, projects and purchase orders is recorded here — who did it and when."
+    };
+  }
+
+  // ============================ SAFETY INCIDENTS (ORB-22) ============================
+  var INC_TYPES = { near_miss: "Near miss", first_aid: "First aid", injury: "Injury", property: "Property damage", environmental: "Environmental", dangerous_occurrence: "Dangerous occurrence" };
+  var INC_SEV = { low: "Low", medium: "Medium", high: "High", critical: "Critical" };
+  function cfgIncidents() {
+    return {
+      title: "Incidents", pageSize: 80,
+      fetch: function () { return sb.from("site_incidents").select("*, projects(name)").eq("company_id", S.company.id).order("incident_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (i) { return (i.description || "") + " " + (i.location || "") + " " + (i.reported_by || "") + " " + (i.projects ? i.projects.name : ""); },
+      columns: [
+        { label: "Date", get: function (i) { return esc(i.incident_date || ""); } },
+        { label: "Type", get: function (i) { return esc(INC_TYPES[i.incident_type] || i.incident_type); } },
+        { label: "Severity", get: function (i) { var c = ({ low: "--ink3", medium: "--warn", high: "--bad", critical: "--bad" })[i.severity] || "--ink3"; return '<span style="font-weight:700;color:var(' + c + ')">' + esc(INC_SEV[i.severity] || i.severity) + '</span>'; } },
+        { label: "What happened", get: function (i) { return esc((i.description || "").slice(0, 60)); } },
+        { label: "Project", get: function (i) { return '<span class="muted">' + esc(i.projects ? i.projects.name : "") + '</span>'; } },
+        { label: "Status", get: function (i) { var c = i.status === "closed" ? "--good" : (i.status === "investigating" ? "--warn" : "--accent"); return '<span style="font-weight:600;color:var(' + c + ')">' + esc(i.status === "investigating" ? "Investigating" : (i.status ? i.status.charAt(0).toUpperCase() + i.status.slice(1) : "Open")) + '</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (i) { return i.status !== "closed"; } }, { label: "High / Critical", test: function (i) { return ["high", "critical"].indexOf(i.severity) >= 0; } }],
+      groupBy: [{ label: "Type", get: function (i) { return INC_TYPES[i.incident_type] || i.incident_type; } }, { label: "Severity", get: function (i) { return INC_SEV[i.severity] || i.severity; } }, { label: "Status", get: function (i) { return i.status || "open"; } }],
+      emptyHint: "Log safety incidents and near-misses on site — type, severity, what happened and the action taken.",
+      onOpen: function (i) { openIncidentModal(i); }, onNew: function () { openIncidentModal(null); }
+    };
+  }
+  async function openIncidentModal(inc) {
+    inc = inc || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var typeOpts = Object.keys(INC_TYPES).map(function (k) { return '<option value="' + k + '"' + (inc.incident_type === k ? " selected" : "") + '>' + INC_TYPES[k] + '</option>'; }).join("");
+    var sevOpts = Object.keys(INC_SEV).map(function (k) { return '<option value="' + k + '"' + (inc.severity === k ? " selected" : "") + '>' + INC_SEV[k] + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (inc.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var statusOpts = [["open", "Open"], ["investigating", "Investigating"], ["closed", "Closed"]].map(function (s) { return '<option value="' + s[0] + '"' + (inc.status === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:560px"><h3>' + (inc.id ? "Edit" : "New") + ' incident</h3><div class="form">' +
+      '<div class="row2"><div><label for="in2-date">Date</label><input id="in2-date" type="date" value="' + (inc.incident_date || today()) + '"></div><div><label for="in2-proj">Project</label><select id="in2-proj">' + projOpts + '</select></div></div>' +
+      '<div class="row2"><div><label for="in2-type">Type</label><select id="in2-type">' + typeOpts + '</select></div><div><label for="in2-sev">Severity</label><select id="in2-sev">' + sevOpts + '</select></div></div>' +
+      '<div><label for="in2-loc">Location</label><input id="in2-loc" value="' + esc(inc.location || "") + '" placeholder="e.g. Level 3 west facade"></div>' +
+      '<div><label for="in2-desc">What happened</label><textarea id="in2-desc" rows="3">' + esc(inc.description || "") + '</textarea></div>' +
+      '<div><label for="in2-act">Action taken</label><textarea id="in2-act" rows="2">' + esc(inc.action_taken || "") + '</textarea></div>' +
+      '<div class="row2"><div><label for="in2-rep">Reported by</label><input id="in2-rep" value="' + esc(inc.reported_by || "") + '"></div><div><label for="in2-status">Status</label><select id="in2-status">' + statusOpts + '</select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="in2-cancel">Cancel</button>' + (inc.id ? '<button class="btn" id="in2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("in2-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("in2-del"); if (del) del.onclick = async function () { await sb.from("site_incidents").delete().eq("id", inc.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("in2-save").onclick = async function () {
+      var gv = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; };
+      var row = { incident_date: gv("in2-date") || today(), project_id: document.getElementById("in2-proj").value || null, incident_type: document.getElementById("in2-type").value, severity: document.getElementById("in2-sev").value, location: gv("in2-loc"), description: gv("in2-desc") || "Incident", action_taken: gv("in2-act"), reported_by: gv("in2-rep"), status: document.getElementById("in2-status").value };
+      var r; if (inc.id) r = await sb.from("site_incidents").update(row).eq("id", inc.id); else { row.company_id = S.company.id; r = await sb.from("site_incidents").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ============================ PLATFORM: TENANTS CONSOLE ============================
+  async function renderTenants() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Tenants") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body");
+    if (!S.isPlatformAdmin) { body.innerHTML = '<div style="padding:18px"><div class="o-empty">Platform admins only.</div></div>'; return; }
+    var rows = ((await sb.rpc("all_tenants")).data) || [];
+    function stBadge(s) { var c = ({ active: "--good", pending: "--warn", rejected: "--bad" })[s] || "--ink3"; return '<span style="font-size:11px;font-weight:700;color:var(' + c + ')">' + esc((s || "active").charAt(0).toUpperCase() + (s || "active").slice(1)) + '</span>'; }
+    var trs = rows.map(function (t) { return '<tr><td><b>' + esc(t.org_name) + '</b></td><td>' + stBadge(t.status) + '</td><td>' + esc(t.business_type || "") + '</td><td>' + esc(t.country || "") + '</td><td class="num">' + (t.companies || 0) + '</td><td class="num">' + (t.members || 0) + '</td><td>' + esc((t.applied_at || "").slice(0, 10)) + '</td></tr>'; }).join("");
+    body.innerHTML = '<div style="padding:16px"><div class="sub" style="margin:0 0 12px"><b>' + rows.length + '</b> tenant' + (rows.length === 1 ? "" : "s") + ' on the platform. Switch into any company from the top-bar company selector to support it — your access is logged.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Organisation</th><th>Status</th><th>Business</th><th>Country</th><th class="num">Companies</th><th class="num">Members</th><th>Applied</th></tr></thead><tbody>' + (trs || '<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">No tenants.</td></tr>') + '</tbody></table></div></div>';
   }
 
   // ============================ DATA IMPORT (ORB-15) ============================
