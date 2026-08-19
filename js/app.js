@@ -76,6 +76,97 @@
     if (/pgrst|constraint|relation .* does not exist|column .* does not exist|syntax error/.test(s)) return "Couldn’t save that — please check the fields and try again.";
     return m;
   }
+  // ORB-20: optimistic concurrency. Update a record's header guarded by the updated_at it
+  // carried when the form loaded, so a second person's silent overwrite is caught instead of
+  // clobbering the first. Returns {ok:true, ver:<new updated_at>} on success, {conflict:true}
+  // if the row moved on since load (or was deleted), or {error:<e>} on a genuine db error.
+  async function guardedUpdate(table, row, id, loadedVer) {
+    if (!loadedVer) { // no version captured (older row, before ORB-20) -> plain update
+      var r0 = await sb.from(table).update(row).eq("id", id).select("updated_at").maybeSingle();
+      return r0.error ? { error: r0.error } : { ok: true, ver: r0.data && r0.data.updated_at };
+    }
+    var r = await sb.from(table).update(row).eq("id", id).eq("updated_at", loadedVer).select("updated_at").maybeSingle();
+    if (r.error) return { error: r.error };
+    if (!r.data) { // nothing matched: the row changed under us, or was removed
+      var chk = await sb.from(table).select("updated_at").eq("id", id).maybeSingle();
+      if (chk.data) return { conflict: true };
+      return { error: { message: "This record no longer exists — it may have been deleted." } };
+    }
+    return { ok: true, ver: r.data.updated_at };
+  }
+  function conflictToast(noun) { toast("Someone else changed this " + (noun || "record") + " while you had it open. Your changes were not saved — reload the page to get the latest version, then re-enter them."); }
+  // ORB-06b: terminology. term() swaps a default label for the active company's override
+  // (keyed by the default English string), so the whole nav renames from one injection point.
+  function term(s) { return (S.termMap && S.termMap[s]) || s; }
+  // Load the two tenant-configurable layers for the active company: label overrides + the
+  // custom-field definitions grouped by entity. Called on boot and on company switch.
+  async function loadTenantConfig() {
+    S.termMap = {}; S.customDefs = {};
+    if (!S.company) return;
+    try {
+      var t = (await sb.from("term_overrides").select("term_key,label").eq("company_id", S.company.id)).data || [];
+      t.forEach(function (r) { if (r.label && String(r.label).trim()) S.termMap[r.term_key] = r.label; });
+      var d = (await sb.from("custom_field_defs").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
+      d.forEach(function (f) { (S.customDefs[f.entity] = S.customDefs[f.entity] || []).push(f); });
+    } catch (e) { }
+  }
+  // ORB-06b: custom fields. Render the admin-defined extra fields for an entity as a form
+  // block, pre-filled from the record's `custom` jsonb bag.
+  function customFieldsHTML(entity, rec) {
+    var defs = (S.customDefs && S.customDefs[entity]) || [];
+    if (!defs.length) return "";
+    var vals = (rec && rec.custom) || {};
+    var rows = defs.map(function (f) {
+      var v = vals[f.field_key]; if (v == null) v = "";
+      var eid = "cf-" + entity + "-" + f.field_key;
+      var star = f.required ? ' <span aria-hidden="true" style="color:var(--bad)">*</span>' : '';
+      var inp;
+      if (f.field_type === "select") {
+        var opts = (f.options || "").split(",").map(function (o) { return o.trim(); }).filter(Boolean);
+        inp = '<select id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="select"><option value="">Select...</option>' + opts.map(function (o) { return '<option' + (String(v) === o ? " selected" : "") + '>' + esc(o) + '</option>'; }).join("") + '</select>';
+      } else if (f.field_type === "checkbox") {
+        return '<div class="o-cf-row"><label for="' + eid + '">' + esc(f.label) + star + '</label><label style="font-weight:400;display:flex;align-items:center;gap:8px"><input type="checkbox" id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="checkbox"' + (v === true || v === "true" ? " checked" : "") + '> Yes</label></div>';
+      } else if (f.field_type === "number") {
+        inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="number" type="number" step="any" value="' + esc(String(v)) + '">';
+      } else if (f.field_type === "date") {
+        inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="date" type="date" value="' + esc(String(v)) + '">';
+      } else {
+        inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="text" type="text" value="' + esc(String(v)) + '">';
+      }
+      return '<div class="o-cf-row"><label for="' + eid + '">' + esc(f.label) + star + '</label>' + inp + '</div>';
+    }).join("");
+    return '<div class="o-cf-block"><div class="o-cf-head">' + esc(term("More details")) + '</div><div class="o-cf-grid">' + rows + '</div></div>';
+  }
+  // Read the custom-field inputs back into a plain object for the `custom` jsonb column.
+  function collectCustom(entity) {
+    var out = {};
+    document.querySelectorAll("#o-main .o-cf[data-key]").forEach(function (el) {
+      var k = el.dataset.key, t = el.dataset.type, v;
+      if (t === "checkbox") v = el.checked;
+      else if (t === "number") v = el.value === "" ? null : Number(el.value);
+      else v = el.value;
+      if (v !== "" && v != null) out[k] = v;
+    });
+    return out;
+  }
+  // Enforce required custom fields; returns a message if one is empty, else "".
+  function customError(entity) {
+    var defs = (S.customDefs && S.customDefs[entity]) || [];
+    for (var i = 0; i < defs.length; i++) {
+      var f = defs[i]; if (!f.required) continue;
+      var el = document.getElementById("cf-" + entity + "-" + f.field_key); if (!el) continue;
+      var val = f.field_type === "checkbox" ? el.checked : el.value;
+      if (val === "" || val === false || val == null) return f.label + " is required.";
+    }
+    return "";
+  }
+  var CF_ENTITIES = [["partner", "Contacts"], ["project", "Projects"], ["product", "Products"]];
+  var CF_TYPES = [["text", "Text"], ["number", "Number"], ["date", "Date"], ["select", "Dropdown"], ["checkbox", "Yes / No"]];
+  function entLabel(e) { var m = { partner: "Contact", project: "Project", product: "Product" }; return m[e] || e; }
+  // The full set of nav-visible labels term() can rewrite, harvested from APPS so every
+  // rename maps to something real. The Terminology screen offers a curated slice of these.
+  function termCatalog() { var seen = {}, out = []; function add(s) { if (s && !seen[s]) { seen[s] = 1; out.push(s); } } Object.keys(APPS).forEach(function (k) { var a = APPS[k]; add(a.name); a.menus.forEach(function (m) { add(m.label); if (m.items) m.items.forEach(function (it) { add(it[0]); }); }); }); return out; }
+  var TERM_CURATED = ["Accounting", "Sales", "Purchase", "Inventory", "Contacts", "Projects", "Customers", "Vendors", "Invoices", "Bills", "Credit Notes", "Payments", "Quotations", "Purchase Orders", "Products", "Tasks", "Employees", "Leads"];
   var SEARCH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
 
   // ======================= APP / MENU CONFIG =======================
@@ -231,6 +322,8 @@
         { label: "Portal Access", action: "portal.admin" },
         { label: "Document Numbering", action: "settings.numbering" },
         { label: "Import Data", action: "settings.import" },
+        { label: "Custom Fields", action: "settings.customfields" },
+        { label: "Terminology", action: "settings.terminology" },
         { label: "Period Lock", action: "settings.lock" },
         { label: "Appearance", action: "appearance" },
         { label: "Taxes", action: "taxes" },
@@ -251,7 +344,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.terminology": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -453,6 +546,7 @@
     if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
     if (S.org && (S.org.status === "pending" || S.org.status === "rejected") && !S.isPlatformAdmin) { renderPendingApproval(S.org.status); return; }
     S.role = await loadRole();
+    await loadTenantConfig();
     S.types = (await sb.from("account_types").select("*")).data || [];
     maybeLogSupport();
     renderHome();
@@ -544,7 +638,7 @@
     S.app = null; S.action = null;
     var tiles = Object.keys(APPS).filter(function (k) { return canViewApp(k); }).map(function (k) {
       var a = APPS[k];
-      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(a.name) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(a.name) + '</span></button>';
+      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>';
     }).join("");
     var soon = SOON.map(function (s) {
       return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>';
@@ -679,13 +773,14 @@
       usedSvg[s] = 1; return s;
     }
     function siItem(action, label, sub) {
-      return '<button class="o-si' + (sub ? " o-si-sub" : "") + '" data-go="' + action + '" aria-label="' + esc(label) + '" title="' + esc(label) + '"><span class="o-si-ic">' + pickIcon(label) + '</span><span class="o-si-l">' + esc(label) + '</span></button>';
+      var disp = term(label);
+      return '<button class="o-si' + (sub ? " o-si-sub" : "") + '" data-go="' + action + '" aria-label="' + esc(disp) + '" title="' + esc(disp) + '"><span class="o-si-ic">' + pickIcon(label) + '</span><span class="o-si-l">' + esc(disp) + '</span></button>';
     }
     var side = vmenus.map(function (m, i) {
       if (m.items) {
         var open = m.items.some(function (it) { return it[1] === S.action; });
         var subs = m.items.map(function (it) { return siItem(it[1], it[0], true); }).join("");
-        return '<div class="o-sgrp"><button class="o-si o-si-grp" data-grp="' + i + '" aria-expanded="' + (open ? "true" : "false") + '"><span class="o-si-l">' + esc(m.label) + '</span><span class="o-si-caret" aria-hidden="true">&#8250;</span></button><div class="o-sub" data-sub="' + i + '"' + (open ? "" : " hidden") + '>' + subs + '</div></div>';
+        return '<div class="o-sgrp"><button class="o-si o-si-grp" data-grp="' + i + '" aria-expanded="' + (open ? "true" : "false") + '"><span class="o-si-l">' + esc(term(m.label)) + '</span><span class="o-si-caret" aria-hidden="true">&#8250;</span></button><div class="o-sub" data-sub="' + i + '"' + (open ? "" : " hidden") + '>' + subs + '</div></div>';
       }
       return siItem(m.action, m.label, false);
     }).join("");
@@ -697,7 +792,7 @@
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="6" height="6" rx="1.4"/><rect x="9.5" y="2" width="6" height="6" rx="1.4"/><rect x="17" y="2" width="6" height="6" rx="1.4"/><rect x="2" y="9.5" width="6" height="6" rx="1.4"/><rect x="9.5" y="9.5" width="6" height="6" rx="1.4"/><rect x="17" y="9.5" width="6" height="6" rx="1.4"/><rect x="2" y="17" width="6" height="6" rx="1.4"/><rect x="9.5" y="17" width="6" height="6" rx="1.4"/><rect x="17" y="17" width="6" height="6" rx="1.4"/></svg>' +
       '</button>' +
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
-      '<span class="o-appname">' + esc(a.name) + '</span>' +
+      '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
       '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
@@ -774,6 +869,7 @@
       resetSeqCache();
       if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
       S.role = await loadRole();
+      await loadTenantConfig();
       maybeLogSupport();
       await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
       if (S.app && !canViewApp(S.app)) { renderHome(); return; }
@@ -1153,6 +1249,8 @@
       case "settings.roles": return renderRoles();
       case "settings.setup": return renderSetup();
       case "settings.import": return renderImport();
+      case "settings.customfields": return renderCustomFieldsAdmin();
+      case "settings.terminology": return renderTerminologyAdmin();
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
       case "settings.audit": return renderList(cfgAuditLog());
@@ -1221,9 +1319,9 @@
   }
   function bcHTML(title, parent) {
     var app = APPS[S.app];
-    var up = '<span class="up" id="bc-home">' + esc(app.name) + '</span><span class="sepc">/</span>';
-    if (parent) up += '<span class="up" data-go="' + parent.action + '">' + esc(parent.title) + '</span><span class="sepc">/</span>';
-    return '<div class="o-bc">' + up + '<span>' + esc(title) + '</span></div>';
+    var up = '<span class="up" id="bc-home">' + esc(term(app.name)) + '</span><span class="sepc">/</span>';
+    if (parent) up += '<span class="up" data-go="' + parent.action + '">' + esc(term(parent.title)) + '</span><span class="sepc">/</span>';
+    return '<div class="o-bc">' + up + '<span>' + esc(term(title)) + '</span></div>';
   }
   function wireBc() {
     var h = document.getElementById("bc-home"); if (h) h.onclick = function () { go(APPS[S.app].home); };
@@ -1803,7 +1901,8 @@
         if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; }
         invId = ins.data.id;
       } else {
-        var up = await sb.from("invoices").update(hdr).eq("id", id);
+        var up = await guardedUpdate("invoices", hdr, id, inv && inv.updated_at);
+        if (up.conflict) { conflictToast("invoice"); return null; }
         if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from("invoice_lines").delete().eq("invoice_id", id);
       }
@@ -2166,7 +2265,9 @@
         var ins = await sb.from(tbl).insert(hdr).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; } oid = ins.data.id;
       } else {
         if (confirmIt) hdr.state = isSale ? "sale" : "purchase";
-        var up = await sb.from(tbl).update(hdr).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
+        var up = await guardedUpdate(tbl, hdr, id, order && order.updated_at);
+        if (up.conflict) { conflictToast(isSale ? "quotation" : "purchase order"); return null; }
+        if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from(ltbl).delete().eq("order_id", id);
       }
       var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
@@ -2270,6 +2371,7 @@
       fld("Pricelist", '<select id="p-pl"><option value="">(default prices)</option>' + pricelists.map(function (x) { return '<option value="' + x.id + '"' + (p.pricelist_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>', "Pricelist applied to this customer's sales-order lines.") +
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
       '</div></div>' +
+      customFieldsHTML("partner", p) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
       '</div>';
     if (id !== "new") {
@@ -2287,9 +2389,11 @@
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
       var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
+      row.custom = collectCustom("partner");
       var r, sid = id;
       if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; }
-      else { r = await sb.from("partners").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      else { var gu = await guardedUpdate("partners", row, id, p && p.updated_at); if (gu.conflict) { conflictToast(isContact ? "contact" : (isCust ? "customer" : "vendor")); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
       if (bks.length) await sb.from("partner_bank_accounts").insert(bks);
@@ -2368,7 +2472,7 @@
       fld("Expense Account", sel("pr-exp", exp, p.expense_account_id, "Default")) +
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
-      '</div></div></div>';
+      '</div></div>' + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
@@ -2381,10 +2485,11 @@
         sale_tax_id: document.getElementById("pr-stax").value || null, purchase_tax_id: document.getElementById("pr-ptax").value || null,
         is_active: document.getElementById("pr-active").value === "1"
       };
+      var cerrPr = customError("product"); if (cerrPr) { toast(cerrPr); return; }
+      row.custom = collectCustom("product");
       var r;
-      if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); }
-      else r = await sb.from("products").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       toast("Saved"); go("products");
     };
   }
@@ -5298,6 +5403,82 @@
       toast("Numbering saved");
     };
   }
+  // ORB-06b: admin screen to define custom fields per master entity.
+  async function renderCustomFieldsAdmin(entity) {
+    entity = entity || "partner";
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Custom Fields") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var canEdit = canManage("settings");
+    var defs = (await sb.from("custom_field_defs").select("*").eq("company_id", S.company.id).eq("entity", entity).order("sort")).data || [];
+    var tabs = CF_ENTITIES.map(function (e) { return '<button class="o-seg' + (e[0] === entity ? " on" : "") + '" data-ent="' + e[0] + '">' + esc(e[1]) + '</button>'; }).join("");
+    var listRows = defs.length ? defs.map(function (f) {
+      var tl = (CF_TYPES.filter(function (t) { return t[0] === f.field_type; })[0] || ["", f.field_type])[1];
+      return '<tr><td><b>' + esc(f.label) + '</b><div class="muted" style="font-size:11px">' + esc(f.field_key) + '</div></td>' +
+        '<td>' + esc(tl) + '</td>' +
+        '<td class="muted">' + esc(f.options || "") + '</td>' +
+        '<td style="text-align:center">' + (f.required ? "Yes" : "") + '</td>' +
+        '<td style="text-align:right">' + (canEdit ? '<button class="lnk cf-del" data-id="' + f.id + '" style="color:var(--bad)">Remove</button>' : '') + '</td></tr>';
+    }).join("") : '<tr><td colspan="5" class="muted" style="padding:14px">No custom fields yet for ' + esc(entLabel(entity)) + '. Add one below.</td></tr>';
+    var addForm = canEdit ? '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">Add a field</h3>' +
+      '<div class="o-groups"><div>' +
+      fld("Label", '<input id="cf-label" placeholder="e.g. Site contact, License no.">', "What the field is called on the form.") +
+      fld("Type", '<select id="cf-type">' + CF_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join("") + '</select>') +
+      '</div><div>' +
+      fld("Choices", '<input id="cf-options" placeholder="comma-separated, e.g. Low, Medium, High">', "Only for a Dropdown. Separate the choices with commas.") +
+      '<label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="cf-required"> Make this field required</label>' +
+      '</div></div>' +
+      '<button class="pri" id="cf-add" style="margin-top:10px">Add field</button></div>' : '';
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px">' +
+      '<div class="sub" style="margin-bottom:10px">Add your own fields to a record. They show on the ' + esc(entLabel(entity)) + ' form and save with each record.</div>' +
+      '<div class="o-seg-row">' + tabs + '</div>' +
+      '<div class="card"><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Field</th><th>Type</th><th>Choices</th><th style="text-align:center">Required</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div></div>' +
+      addForm + '</div>';
+    document.querySelectorAll(".o-seg[data-ent]").forEach(function (b) { b.onclick = function () { renderCustomFieldsAdmin(b.dataset.ent); }; });
+    document.querySelectorAll(".cf-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this field? Values already saved on records stay in the database but are no longer shown.")) return; var r = await sb.from("custom_field_defs").delete().eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); return; } await loadTenantConfig(); toast("Field removed"); renderCustomFieldsAdmin(entity); }; });
+    var addBtn = document.getElementById("cf-add");
+    if (addBtn) addBtn.onclick = async function () {
+      var label = (gv("cf-label") || "").trim(); if (!label) { toast("Enter a label"); return; }
+      var type = document.getElementById("cf-type").value;
+      var key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
+      if (!key) { toast("Give the field a label that has letters or numbers"); return; }
+      var opts = (gv("cf-options") || "").trim();
+      if (type === "select" && !opts) { toast("A dropdown needs at least one choice"); return; }
+      var maxSort = defs.reduce(function (m, f) { return Math.max(m, f.sort || 0); }, 0);
+      var row = { company_id: S.company.id, entity: entity, field_key: key, label: label, field_type: type, options: type === "select" ? opts : "", required: document.getElementById("cf-required").checked, sort: maxSort + 10 };
+      var r = await sb.from("custom_field_defs").insert(row);
+      if (r.error) { toast(/duplicate|unique/i.test(r.error.message || "") ? "A field with that name already exists here." : errMsg(r.error)); return; }
+      await loadTenantConfig(); toast("Field added"); renderCustomFieldsAdmin(entity);
+    };
+  }
+  // ORB-06b: admin screen to rename the nouns the app shows (per active company).
+  async function renderTerminologyAdmin() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Terminology") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var canEdit = canManage("settings");
+    var cur = {}; ((await sb.from("term_overrides").select("term_key,label").eq("company_id", S.company.id)).data || []).forEach(function (r) { cur[r.term_key] = r.label; });
+    var cat = {}; termCatalog().forEach(function (s) { cat[s] = 1; });
+    var terms = TERM_CURATED.filter(function (t) { return cat[t]; });
+    var rows = terms.map(function (t) {
+      return '<tr><td style="width:44%"><b>' + esc(t) + '</b></td><td><input class="tm-in" data-key="' + esc(t) + '" value="' + esc(cur[t] || "") + '" placeholder="' + esc(t) + '"' + (canEdit ? '' : ' disabled') + '></td></tr>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card" style="max-width:680px">' +
+      '<div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Rename what you see</h3>' + (canEdit ? '<button class="pri" id="tm-save" style="margin-left:auto">Save</button>' : '') + '</div>' +
+      '<div class="sub" style="margin:6px 0 12px">Change the words the app shows across menus and screens. Leave a box blank to keep the default. Applies to <b>' + esc(S.company.name) + '</b> only.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Default</th><th>Show instead</th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+    var sv = document.getElementById("tm-save");
+    if (sv) sv.onclick = async function () {
+      var ups = [], dels = [];
+      document.querySelectorAll(".tm-in").forEach(function (el) {
+        var k = el.dataset.key, v = (el.value || "").trim();
+        if (v && v !== k) ups.push({ company_id: S.company.id, term_key: k, label: v }); else dels.push(k);
+      });
+      if (dels.length) await sb.from("term_overrides").delete().eq("company_id", S.company.id).in("term_key", dels);
+      if (ups.length) { var r = await sb.from("term_overrides").upsert(ups, { onConflict: "company_id,term_key" }); if (r.error) { toast("Save failed: " + errMsg(r.error)); return; } }
+      await loadTenantConfig(); toast("Terminology saved"); renderShell(); go("settings.terminology");
+    };
+  }
   function isOverdue(dateStr) { var d = parseD(dateStr); var t0 = new Date(); t0.setHours(0, 0, 0, 0); return d && d < t0; }
 
   function cfgSubmittals() {
@@ -6210,6 +6391,7 @@
       fld("Retention %", '<input id="pf-ret" type="number" step="0.1" value="' + (p.retention_pct || 0) + '">', "Percent held back on each progress certificate, e.g. 10.") +
       fld("Advance Payment", '<input id="pf-adv" type="number" step="0.01" value="' + (p.advance_amount || 0) + '">', "Advance / mobilisation paid up front, recovered across certificates.") +
       '</div></div>' +
+      customFieldsHTML("project", p) +
       (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
@@ -6217,8 +6399,10 @@
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
-      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("projects").insert(row); } else r = await sb.from("projects").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      var cerrPj = customError("project"); if (cerrPj) { toast(cerrPj); return; }
+      row.custom = collectCustom("project");
+      if (id === "new") { row.company_id = S.company.id; var r = await sb.from("projects").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      else { var gu = await guardedUpdate("projects", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("project"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       toast("Saved"); go("proj.list");
     };
     if (id !== "new") {
