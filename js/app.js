@@ -2340,7 +2340,9 @@
     var m = /\bid="([^"]+)"/.exec(valueHtml || "");
     var forAttr = m ? ' for="' + m[1] + '"' : "";
     var full = FIELD_HELP[label] || desc;
-    return '<div class="o-fld"><div class="lbl"><span class="lbl-row"><label' + forAttr + '>' + esc(label) + '</label>' + helpQ(full, label) + '</span>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
+    // hover the field name -> the full description (native tooltip); click the "?" -> the
+    // same full description in a popover; the inline text is kept but CSS-truncated to one line.
+    return '<div class="o-fld"><div class="lbl"><span class="lbl-row"><label' + forAttr + (full ? ' title="' + esc(full) + '"' : "") + '>' + esc(label) + '</label>' + helpQ(full, label) + '</span>' + (desc ? '<span class="d" title="' + esc(full) + '">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
   }
   function fhint(label, override) {
     var d = override || FIELD_DESC[label] || "";

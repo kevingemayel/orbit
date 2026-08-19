@@ -256,7 +256,8 @@ button{font-family:inherit}
 .o-menu .mi .car{font-size:9px;opacity:.8}
 .o-systray{display:flex;align-items:center;gap:6px;margin-left:auto;padding-right:4px}
 .o-systray .o-cosel{border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;border-radius:7px;padding:5px 8px;font:inherit;font-size:12.5px;max-width:200px}
-.o-systray .o-cosel option{color:var(--ink)}
+.o-systray .o-cosel option{color:var(--ink);background:var(--panel)}
+select option{background:var(--panel);color:var(--ink)}
 .o-ava{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;display:grid;place-items:center;font-weight:700;font-size:12px;cursor:pointer;border:1px solid rgba(255,255,255,.3)}
 
 /* dropdown menus (app menu + systray) */
@@ -281,7 +282,7 @@ button{font-family:inherit}
 .o-sgrp{display:flex;flex-direction:column}
 .o-si{display:flex;align-items:center;gap:11px;width:100%;min-height:40px;padding:8px 11px;border:none;background:none;color:var(--ink2);font:inherit;font-size:13.5px;border-radius:9px;cursor:pointer;text-align:left}
 .o-si:hover{background:var(--panel2);color:var(--ink)}
-.o-si.on{background:color-mix(in srgb,var(--app) 15%,transparent);color:var(--app);font-weight:600}
+.o-si.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
 .o-si-ic{display:grid;place-items:center;width:20px;flex:none;color:currentColor;opacity:.92}
 .o-si.on .o-si-ic{opacity:1}
 .o-si-l{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -413,7 +414,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-groups{display:grid;grid-template-columns:1fr 1fr;gap:10px 34px;margin-bottom:8px}
 .o-fld{display:grid;grid-template-columns:180px 1fr;align-items:start;gap:14px;padding:9px 0;border-bottom:1px dashed var(--line)}
 .o-fld .lbl label{font-size:12.5px;color:var(--ink2);font-weight:600;display:block}
-.o-fld .lbl .d{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;line-height:1.35}
+.o-fld .lbl .d{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
 .o-fld .lbl-row{display:flex;align-items:center;gap:6px}
 /* per-field help "?" button + popover (see helpQ/showFieldHelp) */
 .fld-q{width:15px;height:15px;flex:none;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--ink3);font-size:10px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;vertical-align:middle}
