@@ -199,6 +199,29 @@ button{font-family:inherit}
 .dep-rel.ok{color:var(--ink3)}
 .dep-rel.unblocks{color:var(--ink2)}
 .dep-bot{background:var(--warn-s);color:var(--warn);font-weight:700;border-radius:5px;padding:0 5px;font-size:10.5px;text-transform:uppercase;letter-spacing:.03em}
+/* full user manual (Help app) + link from the quick help panel */
+.help-manual{display:block;width:100%;text-align:left;border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:10px;padding:11px 14px;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;margin-bottom:14px}
+.help-manual:hover{background:color-mix(in srgb,var(--accent) 16%,var(--panel))}
+.man-wrap{max-width:760px;padding:16px 20px}
+.man-search{position:relative;margin-bottom:18px}
+.man-search input{width:100%;height:38px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);color:var(--ink);padding:0 14px;font:inherit;font-size:14px;outline:none}
+.man-search input:focus{border-color:var(--accent)}
+.man-results{display:none;position:absolute;top:42px;left:0;right:0;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.18);max-height:60vh;overflow:auto;z-index:30;padding:5px}
+.man-res{display:flex;flex-direction:column;gap:1px;width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:7px;cursor:pointer;font:inherit;color:var(--ink)}
+.man-res:hover{background:var(--panel2)}
+.man-res span{font-size:11.5px;color:var(--ink3)}
+.man-res-empty{padding:12px;color:var(--ink3);font-size:13px}
+.man-h{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
+.man-toc{display:flex;flex-direction:column;gap:3px;border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:0 0 20px}
+.man-toc a{color:var(--accent);font-size:13.5px;cursor:pointer;text-decoration:none}
+.man-toc a:hover{text-decoration:underline}
+.man-art{padding:16px 0;border-bottom:1px solid var(--line)}
+.man-art:last-child{border-bottom:none}
+.man-art h3{font-size:17px;font-weight:700;margin:0 0 8px}
+.man-art p,.man-art ol,.man-art ul{font-size:14px;line-height:1.6;color:var(--ink2);margin:0 0 10px}
+.man-art ol,.man-art ul{padding-left:22px}
+.man-art li{margin:4px 0}
+.man-art b{color:var(--ink)}
 .o-navbar .o-waffle{width:40px;height:46px;display:grid;place-items:center;cursor:pointer;color:#fff;opacity:.95;border:none;background:none}
 .o-navbar .o-waffle:hover{background:rgba(255,255,255,.12)}
 .o-navbar .o-brandmark{display:grid;place-items:center;width:28px;height:46px;flex:none;color:#fff}
@@ -368,6 +391,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-fld{display:grid;grid-template-columns:180px 1fr;align-items:start;gap:14px;padding:9px 0;border-bottom:1px dashed var(--line)}
 .o-fld .lbl label{font-size:12.5px;color:var(--ink2);font-weight:600;display:block}
 .o-fld .lbl .d{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;line-height:1.35}
+.o-fld .lbl-row{display:flex;align-items:center;gap:6px}
+/* per-field help "?" button + popover (see helpQ/showFieldHelp) */
+.fld-q{width:15px;height:15px;flex:none;border-radius:50%;border:1px solid var(--line);background:var(--panel2);color:var(--ink3);font-size:10px;font-weight:700;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;padding:0;vertical-align:middle}
+.fld-q:hover,.fld-q:focus{border-color:var(--accent);color:var(--accent);background:var(--accent-soft);outline:none}
+.form .fld-q{margin:0 0 4px}
+.fld-pop{position:fixed;z-index:95;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.22);padding:11px 13px;font-size:12.5px;line-height:1.5;color:var(--ink2);max-width:92vw}
 .o-fld .v{font-size:13.5px;padding-top:1px}
 .o-fld input,.o-fld select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px}
 .o-fld input:focus,.o-fld select:focus,.o-fld textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}

@@ -169,6 +169,73 @@
   var TERM_CURATED = ["Accounting", "Sales", "Purchase", "Inventory", "Contacts", "Projects", "Customers", "Vendors", "Invoices", "Bills", "Credit Notes", "Payments", "Quotations", "Purchase Orders", "Products", "Tasks", "Employees", "Leads"];
   var SEARCH_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
 
+  // ======================= USER MANUAL (the Help app) =======================
+  // The full manual, grouped into sections. Each section becomes a Help menu item;
+  // each article is a page. Written in plain English; extend freely.
+  var HELP_MANUAL = [
+    { key: "overview", title: "Overview", articles: [
+      { t: "What Orbit is", h: "<p>Orbit runs your whole business in one place: quotes and invoices, purchases, projects, stock, people and reports. Everything shares the same customers, products and accounts, so you enter things once and they flow through.</p><p>Work is grouped into <b>apps</b> (Accounting, Sales, Purchase, Projects, Inventory and more). Open the grid icon at the top-left to move between them. Each app has its own colour so you always know where you are.</p>" },
+      { t: "How to use this manual", h: "<p>Pick a section on the left to read its guides. Every screen also has a <b>?</b> button in the top bar for quick help and step-by-step tours, and most fields have a small <b>?</b> that explains them.</p><p>New to Orbit? Start with <b>Getting started</b>, then read the section for whatever you are doing that day.</p>" },
+      { t: "Take a guided tour", h: "<p>The fastest way to learn a task is to be shown. Open the <b>?</b> in the top bar and pick a guided tour: it walks you through the real screen, highlighting each button. Tours cover a first invoice and inviting a teammate, with more added over time.</p>" }
+    ] },
+    { key: "start", title: "Getting started", articles: [
+      { t: "Finding your way around", h: "<ol><li><b>Apps grid</b> (top-left): jump between apps.</li><li><b>Side menu</b>: everything inside the current app.</li><li><b>Search</b> (top bar): type a name to jump to any customer, invoice, project, order or product.</li><li><b>Company switcher</b>: change which company's books you are in, if you run more than one.</li><li><b>?</b> (top bar): help and guided tours.</li></ol>" },
+      { t: "Set up your company", h: "<p>Go to <b>Settings &rsaquo; Getting started</b> for a short checklist: company profile, document numbering, tax rates, your team, a first customer and a first project. Finish it and Orbit is ready to run real work. A new company is given a starter chart of accounts, journals and taxes automatically the first time you open it.</p>" },
+      { t: "Add your team", h: "<p><b>Settings &rsaquo; Users &amp; Roles &rsaquo; Invite teammate</b>. Enter their email, pick a role, and (if you have several companies) choose which they can see. They join the moment they sign in with that email, and also get an invitation email. You can change roles, limit companies, suspend or remove people any time.</p>" },
+      { t: "Roles &amp; permissions", h: "<p><b>Settings &rsaquo; Roles &amp; Permissions</b>. A role switches whole apps, and parts of apps, on or off, and can hide every money value from junior staff. Start from a template and <b>Customize</b> it, or build your own. You can only manage roles below your own rank, and the last owner is always protected.</p>" }
+    ] },
+    { key: "sales", title: "Sales & invoicing", articles: [
+      { t: "Create and send an invoice", h: "<ol><li>Accounting &rsaquo; <b>Invoices</b> &rsaquo; <b>New</b>.</li><li>Pick the <b>customer</b> and set the dates.</li><li>Add <b>lines</b>: description, quantity, price and tax.</li><li><b>Save</b> to keep a draft you can still edit, or <b>Post</b> to finalise it into your accounts.</li><li>On a posted invoice, use <b>Email</b> to send a PDF, or <b>Register payment</b> when they pay.</li></ol>" },
+      { t: "Credit notes", h: "<p>To refund or cancel a posted invoice, open it and use <b>Add credit note</b> - Orbit copies the lines to a draft credit note that reverses the original when posted. You can also raise one from Customers &rsaquo; Credit Notes.</p>" },
+      { t: "Record a customer payment", h: "<p>Open a <b>posted</b> invoice and click <b>Register payment</b>. Choose the date and the account the money landed in. Orbit posts the entry and updates what the customer still owes; partial payments are fine.</p>" },
+      { t: "Quotations &amp; sales orders", h: "<p>Sales &rsaquo; <b>Quotations</b> &rsaquo; New. Add product lines, then <b>Confirm</b> to turn it into a sales order, and <b>Create Invoice</b> when you are ready to bill. For a priced construction bid with a cost breakdown, use Estimation &rsaquo; Tenders instead and convert the won tender into a project.</p>" },
+      { t: "Add a customer", h: "<p>Accounting &rsaquo; <b>Customers</b> &rsaquo; New. A name is all you need to start; add contact details, payment terms and a credit limit when you have them. Customers are shared across all companies in your organisation.</p>" }
+    ] },
+    { key: "purchase", title: "Purchasing", articles: [
+      { t: "Raise a purchase order", h: "<ol><li>Purchase &rsaquo; <b>Purchase Orders</b> &rsaquo; New.</li><li>Pick the <b>supplier</b> and add lines (set a cost code to feed job costing).</li><li><b>Confirm</b> to send it, then <b>Create Bill</b> when the invoice arrives.</li></ol>" },
+      { t: "Compare quotes (RFQ)", h: "<p>Purchase &rsaquo; Procurement &rsaquo; <b>RFQ / Compare Quotes</b>. List the items, invite several suppliers, and enter each supplier's prices into the comparison grid - the cheapest per line is highlighted. <b>Award</b> the winner and Orbit creates a draft purchase order for them.</p>" },
+      { t: "Enter a vendor bill", h: "<p>Vendors &rsaquo; <b>Bills</b> &rsaquo; New. Pick the supplier, add the lines and <b>Post</b>. It appears in Aged Payable and the supplier's ledger so you always know what is due.</p>" }
+    ] },
+    { key: "accounting", title: "Accounting & reports", articles: [
+      { t: "Chart of accounts", h: "<p>Accounting &rsaquo; Configuration &rsaquo; <b>Chart of Accounts</b>. A new company starts with a ready-made chart you can rename, archive or extend. Every posting lands in one of these accounts; the account's type decides whether it shows on the Profit &amp; Loss or the Balance Sheet.</p>" },
+      { t: "Taxes &amp; VAT", h: "<p>Settings &rsaquo; <b>Taxes</b> define your rates (for example VAT 11%). Put the right sales and purchase tax on products so documents calculate automatically. The <b>VAT / Tax Report</b> under Reporting totals output tax on sales against input tax on purchases and shows the net payable or reclaimable.</p>" },
+      { t: "Bank statements &amp; reconciliation", h: "<p>Accounting &rsaquo; <b>Bank Statements</b>. Enter the statement lines, then reconcile each one by choosing the account it belongs to - Orbit posts the balanced entry and marks the line done. Reconciliation aims to match the statement's closing balance.</p>" },
+      { t: "The financial reports", h: "<p>Under <b>Reporting</b> you will find Profit &amp; Loss, Balance Sheet, Trial Balance, General Ledger, Partner Ledger, Aged Receivable and Payable, the VAT report, Cash Flow Forecast, and a Partner Statement. Each has a period filter and an <b>Export</b> to CSV. Numbers update live from posted entries.</p>" },
+      { t: "Consolidation across companies", h: "<p>Reporting &rsaquo; <b>Consolidation</b> adds up every company in the group, translating foreign-currency companies into the group currency using your exchange rates. Add a rate for any currency you use, or it is shown one-to-one with a warning.</p>" },
+      { t: "Lock a closed period", h: "<p>Settings &rsaquo; <b>Period Lock</b>. Set a lock date and Orbit blocks new or edited entries dated on or before it, so a signed-off month cannot change. Leave it blank to unlock.</p>" }
+    ] },
+    { key: "projects", title: "Projects & delivery", articles: [
+      { t: "Start a project", h: "<ol><li>Projects &rsaquo; New.</li><li>Set the customer, how it is billed, the contract value, retention and any advance.</li><li>Add tasks, then log time against them.</li><li>Use the Cost budget and job costing to track money as you go.</li></ol>" },
+      { t: "Bill of Quantities &amp; certificates", h: "<p>Build a <b>Bill of Quantities</b> on the project to set the contract value from priced items. As work is done, raise progress <b>Certificates</b> that apply retention and recover any advance, then turn a certified amount into an invoice.</p>" },
+      { t: "Job costing", h: "<p>Thread the same <b>cost code</b> through the project budget, purchase orders and bills. The job-costing view then compares, per code, your Budget against Committed (ordered) and Actual (invoiced) - so overspend shows early.</p>" },
+      { t: "The execution board", h: "<p>Projects &rsaquo; <b>Execution</b> is your team's internal workspace, separate from the client-facing delivery view. Switch between <b>List</b>, <b>Board</b> (drag tasks across stages), <b>Sprints</b> (timeboxes with points and progress) and <b>Dependencies</b> (what unblocks what, with bottlenecks flagged). Open a task for checklists, comments with @mentions, watchers and a blocked-by link.</p>" },
+      { t: "Timesheets", h: "<p>Log hours against a project and task from the project's <b>Log time</b> button. Hours roll up to the task and project, and unbilled time on a time-and-material project can be turned into an invoice.</p>" }
+    ] },
+    { key: "inventory", title: "Inventory", articles: [
+      { t: "Products", h: "<p>Create products under Sales/Purchase/Accounting configuration. A <b>Storable</b> product is tracked in stock (on-hand, value, reordering); Service and Consumable are not. Set its price, cost, and default taxes so documents fill in automatically.</p>" },
+      { t: "Receive, deliver, adjust", h: "<p>Inventory &rsaquo; Operations: <b>Receive</b> brings stock in from a supplier, <b>Deliver</b> sends it to a customer, <b>Adjust</b> corrects the count after a stock-take, and <b>Transfer</b> moves it between locations. If valuation is on, the accounting follows each move automatically.</p>" },
+      { t: "On-hand, lots &amp; reordering", h: "<p><b>On Hand</b> shows quantity, cost and value per product and location, with totals and low-stock and expiring flags. Track batches with optional lot and expiry on receipt. <b>Replenishment</b> lets you set a min and max per product and receive what is below minimum in one click.</p>" }
+    ] },
+    { key: "site", title: "Site & installation", articles: [
+      { t: "Snags &amp; inspections", h: "<p>Site &amp; Install: log <b>Snags</b> (defects) with a location, severity and status through to verified, and record <b>Inspections</b>. Both are numbered and searchable, and can be grouped by project or status.</p>" },
+      { t: "Safety incidents", h: "<p>Site &amp; Install &rsaquo; <b>Incidents</b>. Record a near-miss or injury with its type, severity, the action taken and its status, so nothing is lost and patterns are visible.</p>" },
+      { t: "Site diary &amp; plant", h: "<p>Keep a daily <b>Site Diary</b> of weather, labour and progress, and register <b>Plant &amp; Equipment</b> on site. These build the record you need for claims and reviews.</p>" }
+    ] },
+    { key: "hr", title: "People & HR", articles: [
+      { t: "Employees", h: "<p>HR &rsaquo; Employees holds each person's record - department, job, contract and skills. Employees are separate from app users (people you invite to sign in); one person can be both.</p>" },
+      { t: "Leave &amp; expenses", h: "<p>Staff request <b>Leave</b> and submit <b>Expenses</b>; a manager approves them. Approved expenses can be posted to the accounts, and leave balances track automatically.</p>" },
+      { t: "Payroll", h: "<p>Build salary structures and run a <b>Payslip Run</b> for a period; confirming it posts the payroll entry. Review each payslip before you confirm.</p>" }
+    ] },
+    { key: "settings", title: "Settings & admin", articles: [
+      { t: "Custom fields", h: "<p>Settings &rsaquo; <b>Custom Fields</b>. Add your own fields (text, number, date, dropdown, yes/no) to Contacts, Projects and Products. They appear on the form under &ldquo;More details&rdquo;, can be required, and save with each record.</p>" },
+      { t: "Terminology", h: "<p>Settings &rsaquo; <b>Terminology</b>. Rename the words the app shows you - for example &ldquo;Vendors&rdquo; to &ldquo;Suppliers&rdquo; - and the whole menu, breadcrumbs and app names follow, for your company only.</p>" },
+      { t: "Automations", h: "<p>Settings &rsaquo; <b>Automations</b>. Switch on rules that watch your data and drop a note in the bell: an overdue invoice, a bill due soon, a project deadline approaching, or a stale quotation. Each runs once a day and never repeats the same alert.</p>" },
+      { t: "Document numbering", h: "<p>Settings &rsaquo; <b>Document Numbering</b>. Choose the prefix, whether to include the year, and how many running digits each document type uses. Changes affect new documents only, per company.</p>" },
+      { t: "Import &amp; export", h: "<p>Settings &rsaquo; <b>Import Data</b> brings in customers, vendors, products, cost codes and projects from a spreadsheet - download the template, which stars the required columns, fill it and upload. Every list has an <b>Export</b> button, and every report exports to CSV, so you are never locked in.</p>" },
+      { t: "The audit log", h: "<p>Settings &rsaquo; <b>Audit Log</b> records who created, changed or deleted key records, and when. Posted invoices are also protected by a database lock so their amounts, party, date and number cannot be altered after the fact.</p>" }
+    ] }
+  ];
+
   // ======================= APP / MENU CONFIG =======================
   var APPS = {
     accounting: {
@@ -337,6 +404,10 @@
       menus: [
         { label: "Dashboard", action: "dash.home" }
       ]
+    },
+    help: {
+      name: "Help", icon: "?", color: "#0e7490", color2: "#155e63", home: "help.overview",
+      menus: HELP_MANUAL.map(function (s) { return { label: s.title, action: "help." + s.key }; })
     }
   };
   // which app owns an action (for breadcrumb when navigated directly)
@@ -361,6 +432,7 @@
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights"
   };
+  HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // ============================ PERMISSIONS (RBAC) ============================
   // S.role is the resolved role row (from public.roles). full_access => god.
   // permissions jsonb: { "*":{v,m}, "<module>":{v,m,f:{feature:bool}} }.
@@ -408,7 +480,7 @@
   }
   function canView(mod) { return permFor(mod).v; }
   function canManage(mod) { return permFor(mod).m; }
-  function canViewApp(appKey) { return canView(modKey(appKey)); }
+  function canViewApp(appKey) { return appKey === "help" ? true : canView(modKey(appKey)); }
   function canManageApp(appKey) { return canManage(modKey(appKey)); }
   function featureAllowed(action) {
     var fa = FEATURE_ACTIONS[action]; if (!fa) return true;
@@ -417,6 +489,7 @@
     return mp.f[fa[1]] !== false;                  // parts are opt-out: allowed unless explicitly off
   }
   function canGo(action) {
+    if (action.indexOf("help.") === 0) return true;   // help is available to everyone
     if (action.indexOf("platform.") === 0) return !!S.isPlatformAdmin;
     var mod = moduleForAction(action);
     if (mod && !canView(mod)) return false;
@@ -455,6 +528,7 @@
     inventory: '<svg viewBox="0 0 100 100"><rect x="22" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="55" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="22" y="55" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="60" y="60" width="15" height="15" fill="currentColor" transform="rotate(45 67.5 67.5)"/><circle cx="84" cy="51" r="7" fill="#2F6BFF"/></svg>',
     project: '<svg viewBox="0 0 100 100"><path d="M 71 40 L 81 50 L 50 81 L 19 50 L 50 19 L 59 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><rect x="43.5" y="43.5" width="13" height="13" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="67" cy="32" r="7" fill="#2F6BFF"/></svg>',
     hr: '<svg viewBox="0 0 100 100"><circle cx="50" cy="34" r="13" fill="none" stroke="currentColor" stroke-width="8"/><path d="M24 80 C24 62 76 62 76 80" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="66" cy="22" r="7" fill="#2F6BFF"/></svg>',
+    help: '<svg viewBox="0 0 100 100"><path d="M50 32 C42 25 26 25 20 29 V76 C26 72 42 72 50 79 C58 72 74 72 80 76 V29 C74 25 58 25 50 32 Z M50 32 V79" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="80" cy="24" r="7" fill="#2F6BFF"/></svg>',
     settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
     estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
     manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
@@ -1332,6 +1406,7 @@
     go(action);
   }
   function routeAction(action) {
+    if (action.indexOf("help.") === 0) return renderManual(action.slice(5));
     switch (action) {
       case "dashboard": return renderDashboard();
       case "inv.out": return renderList(cfgInvoices("out_invoice"));
@@ -2187,14 +2262,73 @@
     "Statement Date": "The closing date of this bank statement period.",
     "End Balance": "The closing balance printed on the statement. Reconciliation aims to match this."
   };
+  // Fuller, on-demand help shown by the "?" next to a field. Any label here overrides the
+  // brief inline text with a complete explanation; labels not listed fall back to their
+  // FIELD_DESC (still shown fully in the popover). Add entries as fields need more detail.
+  var FIELD_HELP = {
+    "Customer": "The client this document is billed to. Only contacts marked as customers appear here. Add a new one from Accounting > Customers if they are not in the list. The customer's payment terms and credit limit are pulled in automatically.",
+    "Vendor": "The supplier this bill or order is for. Only contacts marked as vendors appear. Add one from Vendors if missing.",
+    "Invoice Date": "The date the invoice is issued. This decides which accounting period and tax report it lands in, so it must sit inside an open (unlocked) period. It also starts the clock for the due date.",
+    "Due Date": "The date payment is expected. Overdue amounts are bucketed by this date in Aged Receivable and can trigger overdue alerts. It is filled automatically from the payment terms, but you can override it.",
+    "Payment terms (days)": "How long the customer has to pay. Choosing a term auto-fills the due date on their invoices (for example 30 days, or end of month). Leave blank if you set due dates by hand.",
+    "Credit limit": "A soft ceiling on how much this customer may owe you at once. When their open balance approaches it, Orbit warns you on new invoices. Leave blank for no limit; it never blocks a save on its own.",
+    "Cost code": "The job-cost bucket this line rolls up to (Labour, Materials, Subcontract, and so on). Threading the same cost code through budgets, purchase orders and invoices is what lets the job-costing report compare Budget vs Committed vs Actual.",
+    "Tax": "The tax applied to this line. The rate comes from the tax you pick; the amount is added on top of the line total. Sales taxes show on customer documents, purchase taxes on vendor ones.",
+    "Sales Tax": "The tax added by default when you sell this product. You can still change it on any individual line.",
+    "Purchase Tax": "The tax added by default when you buy this product.",
+    "Sales Price": "The default unit price when you sell this product. It pre-fills the line but you can override it per document, or use a pricelist to vary it by customer.",
+    "Cost": "What the item costs you. It drives the margin shown on sales and, for stocked items, the value posted when stock moves.",
+    "Income Account": "The revenue account credited when this product is sold. Leave blank to use the company default (7000). Change it only if this product's sales should report separately.",
+    "Expense Account": "The expense account debited when this product is bought. Leave blank to use the default (6000).",
+    "Type": "What kind of product this is. Service has no stock; Storable is tracked in inventory (on-hand, valuation, reordering); Consumable is bought and used but not stock-tracked.",
+    "Billing": "How this project is billed: Non-billable (internal), Fixed price (a set contract sum), Time & material (bill logged hours and costs), or Milestones (bill on certificates). It changes which billing tools appear on the project.",
+    "Contract Value": "The awarded contract sum for the project. If you build a Bill of Quantities, this is set from it automatically and grows as you approve variations.",
+    "Retention %": "The percentage held back on each progress certificate (commonly 5 or 10). It accumulates as a retention balance and is released later, per your contract.",
+    "Advance Payment": "Money paid up front (mobilisation), recovered gradually across later certificates rather than invoiced separately.",
+    "Reference": "Your own note or the other party's document number (their PO, a contract ref). It is optional and appears on the document for matching.",
+    "Currency": "The currency this document is written in. It defaults to the company currency; multi-currency reports translate everything back using your exchange rates.",
+    "Status": "Active records show in pickers and lists; archived ones are hidden but keep their history. Archiving is the safe alternative to deleting something you have used."
+  };
+  // A "?" help affordance next to a field. Clicking it opens a popover with the FULL
+  // description (fuller FIELD_HELP text where we have it, otherwise the field's own).
+  function helpQ(text, label) {
+    if (!text) return "";
+    return '<button type="button" class="fld-q" data-help="' + esc(text) + '" aria-label="' + esc("What is " + (label || "this field") + "?") + '" title="What is this?">?</button>';
+  }
   function fld(label, valueHtml, desc) {
     desc = desc || FIELD_DESC[label] || "";
     // associate the <label> with the field's control when the value markup carries an id (ORB-07)
     var m = /\bid="([^"]+)"/.exec(valueHtml || "");
     var forAttr = m ? ' for="' + m[1] + '"' : "";
-    return '<div class="o-fld"><div class="lbl"><label' + forAttr + '>' + esc(label) + '</label>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
+    var full = FIELD_HELP[label] || desc;
+    return '<div class="o-fld"><div class="lbl"><span class="lbl-row"><label' + forAttr + '>' + esc(label) + '</label>' + helpQ(full, label) + '</span>' + (desc ? '<span class="d">' + esc(desc) + '</span>' : "") + '</div><div class="v">' + valueHtml + '</div></div>';
   }
-  function fhint(label, override) { var d = override || FIELD_DESC[label] || ""; return d ? '<div class="fd">' + esc(d) + '</div>' : ""; }
+  function fhint(label, override) {
+    var d = override || FIELD_DESC[label] || "";
+    var full = override || FIELD_HELP[label] || FIELD_DESC[label] || "";
+    return (full ? helpQ(full, label) : "") + (d ? '<div class="fd">' + esc(d) + '</div>' : "");
+  }
+  // field-help popover (delegated; one handler for every "?" on the page)
+  function closeFieldHelp() { document.querySelectorAll("[data-fpop]").forEach(function (p) { p.remove(); }); }
+  function showFieldHelp(btn) {
+    var open = document.querySelector("[data-fpop]");
+    closeFieldHelp();
+    if (open && open.dataset.for === btn.dataset.help) return; // toggle off
+    var pop = document.createElement("div"); pop.className = "fld-pop"; pop.dataset.fpop = "1"; pop.dataset.for = btn.dataset.help || "";
+    pop.textContent = btn.getAttribute("data-help") || "";
+    document.body.appendChild(pop);
+    var r = btn.getBoundingClientRect(), pw = Math.min(300, window.innerWidth - 24);
+    pop.style.width = pw + "px";
+    var left = Math.min(Math.max(10, r.left - 6), window.innerWidth - pw - 10);
+    var top = r.bottom + 8; if (top + pop.offsetHeight > window.innerHeight - 10) top = r.top - pop.offsetHeight - 8;
+    pop.style.left = left + "px"; pop.style.top = Math.max(10, top) + "px";
+  }
+  document.addEventListener("click", function (e) {
+    var q = e.target.closest && e.target.closest(".fld-q");
+    if (q) { e.preventDefault(); e.stopPropagation(); showFieldHelp(q); return; }
+    if (!(e.target.closest && e.target.closest("[data-fpop]"))) closeFieldHelp();
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeFieldHelp(); });
   async function createCreditNote(inv, lines, isSale) {
     var moveType = isSale ? "out_refund" : "in_refund";
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
@@ -9203,8 +9337,10 @@
     var ctxHtml = contextual.length ? '<div class="help-sec">For this screen</div>' + contextual.map(card).join("") : "";
     var cats = {}; match.forEach(function (a) { (cats[a.cat] = cats[a.cat] || []).push(a); });
     var listHtml = Object.keys(cats).map(function (c) { return '<div class="help-sec">' + esc(c) + '</div>' + cats[c].map(card).join(""); }).join("") || '<div class="help-empty">No guides match "' + esc(q) + '".</div>';
-    body.innerHTML = '<div class="help-search"><input id="helpQ" type="text" placeholder="Search help..." value="' + esc(q) + '" autocomplete="off"></div>' + tourHtml + ctxHtml + listHtml;
+    var manualBtn = !q ? '<button class="help-manual" id="help-manual">&#128214; Open the full user manual</button>' : '';
+    body.innerHTML = '<div class="help-search"><input id="helpQ" type="text" placeholder="Search help..." value="' + esc(q) + '" autocomplete="off"></div>' + manualBtn + tourHtml + ctxHtml + listHtml;
     var qi = document.getElementById("helpQ"); qi.oninput = function () { helpList(this.value); };
+    var mb = document.getElementById("help-manual"); if (mb) mb.onclick = function () { closeHelp(); openApp("help"); };
     if (q) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
     body.querySelectorAll(".help-tour").forEach(function (b) { b.onclick = function () { startTour(b.dataset.tour); }; });
     body.querySelectorAll(".help-art").forEach(function (b) { b.onclick = function () { helpArticle(b.dataset.art); }; });
@@ -9215,6 +9351,34 @@
     body.innerHTML = '<button class="help-back" id="helpBack">&#8249; All guides</button><div class="help-article"><div class="help-cat">' + esc(a.cat) + '</div><h2>' + esc(a.title) + '</h2>' + a.html + (a.tour ? '<button class="btn pri help-starttour" data-tour="' + a.tour + '" style="background:var(--accent);border-color:var(--accent);margin-top:14px">&#9658; Show me - guided tour</button>' : '') + '</div>';
     document.getElementById("helpBack").onclick = function () { helpList(""); };
     var st = body.querySelector(".help-starttour"); if (st) st.onclick = function () { startTour(st.dataset.tour); };
+  }
+  // The full user manual, shown as a proper app (Help) from the main launcher.
+  function renderManual(key) {
+    key = key || "overview";
+    var sec = HELP_MANUAL.filter(function (s) { return s.key === key; })[0] || HELP_MANUAL[0];
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(sec.title) + '</div><div class="o-body" id="o-body"></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body");
+    var arts = sec.articles.map(function (a, i) { return '<article class="man-art" id="man-' + i + '"><h3>' + a.t + '</h3>' + a.h + '</article>'; }).join("");
+    var toc = sec.articles.length > 1 ? '<nav class="man-toc">' + sec.articles.map(function (a, i) { return '<a data-i="' + i + '">' + a.t + '</a>'; }).join("") + '</nav>' : "";
+    body.innerHTML = '<div class="man-wrap">' +
+      '<div class="man-search"><input id="man-q" type="text" placeholder="Search the whole manual..." autocomplete="off"><div class="man-results" id="man-results"></div></div>' +
+      '<h1 class="man-h">' + esc(sec.title) + '</h1>' + toc +
+      '<div class="man-body">' + arts + '</div></div>';
+    body.querySelectorAll(".man-toc a").forEach(function (a) { a.onclick = function () { var t = document.getElementById("man-" + a.dataset.i); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }; });
+    var q = document.getElementById("man-q"), res = document.getElementById("man-results");
+    q.oninput = function () {
+      var v = this.value.trim().toLowerCase();
+      if (v.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
+      var hits = [];
+      HELP_MANUAL.forEach(function (s) { s.articles.forEach(function (a, ai) { if ((a.t + " " + a.h + " " + s.title).toLowerCase().indexOf(v) >= 0) hits.push({ s: s, a: a, ai: ai }); }); });
+      if (!hits.length) { res.innerHTML = '<div class="man-res-empty">No matches for &ldquo;' + esc(v) + '&rdquo;</div>'; res.style.display = "block"; return; }
+      res.innerHTML = hits.slice(0, 24).map(function (h) { return '<button class="man-res" data-sec="' + h.s.key + '" data-ai="' + h.ai + '"><b>' + h.a.t + '</b><span>' + h.s.title + '</span></button>'; }).join("");
+      res.style.display = "block";
+      res.querySelectorAll(".man-res").forEach(function (b) { b.onclick = function () { var sk = b.dataset.sec, ai = b.dataset.ai; if (sk === key) { var t = document.getElementById("man-" + ai); if (t) t.scrollIntoView({ behavior: "smooth" }); res.style.display = "none"; q.value = ""; } else { go("help." + sk); setTimeout(function () { var t2 = document.getElementById("man-" + ai); if (t2) t2.scrollIntoView({ behavior: "smooth" }); }, 220); } }; });
+    };
+    q.onblur = function () { setTimeout(function () { if (res) res.style.display = "none"; }, 180); };
   }
 
   // ---- start ----
