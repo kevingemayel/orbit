@@ -2368,6 +2368,52 @@
     if (!(e.target.closest && e.target.closest("[data-fpop]"))) closeFieldHelp();
   });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeFieldHelp(); });
+
+  // ---- field suggestions (type-ahead): repetitive fields suggest values you have used
+  // before, so the same thing is entered the same way every time. Any text field opts in
+  // with sug(id, value, key, placeholder); values are learned per browser and merged with a
+  // small seed. Call sugRemember(key, value) when the form saves. To pre-fill from existing
+  // data on a form, call sugSeed*() before building the HTML. Reuse the key across every
+  // place the same kind of value is entered (e.g. "city" everywhere an address city is typed).
+  function sugSeedList(key) {
+    if (key === "material") return (typeof MATERIAL_DENSITY === "object") ? Object.keys(MATERIAL_DENSITY) : [];
+    if (key === "color") return ["RAL 9016", "RAL 9005", "RAL 7016", "RAL 9006", "Anodised silver", "Anodised bronze", "Clear", "Mill finish"];
+    return [];
+  }
+  function sugValues(key) {
+    var out = sugSeedList(key).slice();
+    try { (JSON.parse(localStorage.getItem("orbit_sug_" + key) || "[]") || []).forEach(function (v) { if (out.indexOf(v) < 0) out.push(v); }); } catch (e) { }
+    return out;
+  }
+  function sugRemember(key, value) {
+    value = (value || "").trim(); if (!value) return;
+    try {
+      var raw = JSON.parse(localStorage.getItem("orbit_sug_" + key) || "[]") || [];
+      if (!raw.some(function (v) { return String(v).toLowerCase() === value.toLowerCase(); })) { raw.unshift(value); localStorage.setItem("orbit_sug_" + key, JSON.stringify(raw.slice(0, 300))); }
+    } catch (e) { }
+  }
+  function sug(id, value, key, placeholder, extra) {
+    return '<input id="' + id + '" list="dl-' + key + '" autocomplete="off" value="' + esc(value || "") + '"' + (placeholder ? ' placeholder="' + esc(placeholder) + '"' : "") + (extra || "") + '><datalist id="dl-' + key + '">' + sugValues(key).map(function (v) { return '<option>' + esc(v) + '</option>'; }).join("") + '</datalist>';
+  }
+  // Pre-fill the learned lists from existing records so suggestions are useful immediately
+  // (not only from what THIS browser has typed). Cheap: one small query per form.
+  async function sugSeedFromProducts() {
+    try {
+      var rows = (await sb.from("products").select("family,spec").eq("company_id", S.company.id).limit(3000)).data || [];
+      rows.forEach(function (p) {
+        sugRemember("family", p.family); var s = p.spec || {};
+        sugRemember("subfamily", s.subfamily); sugRemember("subsubfamily", s.subsubfamily);
+        sugRemember("mtype", s.type); sugRemember("msubtype", s.subtype); sugRemember("msubsubtype", s.subsubtype);
+        sugRemember("color", s.color); sugRemember("brand", s.brand); sugRemember("supplier", s.supplier);
+      });
+    } catch (e) { }
+  }
+  async function sugSeedFromPartners() {
+    try {
+      var rows = (await sb.from("partners").select("city,street").limit(3000)).data || [];
+      rows.forEach(function (p) { sugRemember("city", p.city); sugRemember("street", p.street); });
+    } catch (e) { }
+  }
   async function createCreditNote(inv, lines, isSale) {
     var moveType = isSale ? "out_refund" : "in_refund";
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
@@ -2671,6 +2717,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
+    await sugSeedFromPartners();
     var pricelists = (await sb.from("pricelists").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
     var industries = (await sb.from("industries").select("name").eq("org_id", S.company.org_id).order("name")).data || [];
@@ -2703,7 +2750,7 @@
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '" placeholder="Street / area">') +
       fld("Building", '<input id="p-building" value="' + esc(p.building || "") + '" placeholder="Building / block">') +
       fld("Floor", '<input id="p-floor" value="' + esc(p.floor || "") + '" placeholder="Floor / unit">') +
-      fld("City", '<input id="p-city" value="' + esc(p.city || "") + '" placeholder="Town / city">') +
+      fld("City", sug("p-city", p.city, "city", "Town / city")) +
       fld("Country", '<select id="p-country">' + countryOpts() + '</select>') +
       '</div></div>' +
       '<div class="o-groups"><div>' +
@@ -2754,6 +2801,7 @@
         var newCaps = selCaps.filter(function (x) { return !capNames.some(function (n) { return n.toLowerCase() === x.toLowerCase(); }); });
         if (newCaps.length) { await sb.from("capabilities").insert(newCaps.map(function (x) { return { org_id: S.company.org_id, name: x }; })); }
       }
+      sugRemember("city", gv("p-city")); sugRemember("street", gv("p-street"));
       var indv = gv("p-industry");
       if (indv && !indNames.some(function (n) { return n.toLowerCase() === indv.toLowerCase(); })) { await sb.from("industries").insert({ org_id: S.company.org_id, name: indv }); }
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
@@ -2823,20 +2871,20 @@
     var formSel = '<select id="ms-form">' + MATERIAL_FORMS.map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
     return '<div class="o-matspec"><div class="o-cf-head">Material specification</div>' +
       '<div class="o-groups"><div>' +
-      fld("Family", ti("ms-family", p.family, "e.g. Aluminium"), "The top level of the material tree - the broadest group.") +
-      fld("Subfamily", ti("ms-subfamily", sp.subfamily, "e.g. Extrusion"), "") +
-      fld("Sub-subfamily", ti("ms-subsubfamily", sp.subsubfamily), "") +
+      fld("Family", sug("ms-family", p.family, "family", "e.g. Aluminium"), "The top level of the material tree - the broadest group.") +
+      fld("Subfamily", sug("ms-subfamily", sp.subfamily, "subfamily", "e.g. Extrusion"), "") +
+      fld("Sub-subfamily", sug("ms-subsubfamily", sp.subsubfamily, "subsubfamily"), "") +
       '</div><div>' +
-      fld("Type", ti("ms-type", sp.type, "e.g. Mullion"), "") +
-      fld("Subtype", ti("ms-subtype", sp.subtype), "") +
-      fld("Sub-subtype", ti("ms-subsubtype", sp.subsubtype), "") +
+      fld("Type", sug("ms-type", sp.type, "mtype", "e.g. Mullion"), "") +
+      fld("Subtype", sug("ms-subtype", sp.subtype, "msubtype"), "") +
+      fld("Sub-subtype", sug("ms-subsubtype", sp.subsubtype, "msubsubtype"), "") +
       '</div></div>' +
       '<div class="o-groups"><div>' +
       fld("Material", '<select id="ms-material">' + matOpts + '</select>', "Sets the density used to work out weight automatically.") +
-      fld("Colour", ti("ms-color", sp.color, "e.g. RAL 9016"), "") +
+      fld("Colour", sug("ms-color", sp.color, "color", "e.g. RAL 9016"), "") +
       '</div><div>' +
-      fld("Brand", ti("ms-brand", sp.brand), "") +
-      fld("Supplier", ti("ms-supplier", sp.supplier), "") +
+      fld("Brand", sug("ms-brand", sp.brand, "brand"), "") +
+      fld("Supplier", sug("ms-supplier", sp.supplier, "supplier"), "") +
       '</div></div>' +
       '<div class="ms-formrow"><label for="ms-form">Material form</label>' + formSel + '<span class="muted" style="font-size:12px">Pick the shape so the right measurements and price conversions appear.</span></div>' +
       '<div id="ms-dims"></div></div>';
@@ -2921,6 +2969,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? { type: "service", is_active: true } : (await sb.from("products").select("*").eq("id", id).maybeSingle()).data || {};
+    await sugSeedFromProducts();
     var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var inc = accs.filter(function (a) { return (a.type_code || "").indexOf("income") === 0; });
     var exp = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
@@ -2968,6 +3017,7 @@
       row.custom = collectCustom("product");
       row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
       var msp = collectMatSpec(); row.material_form = msp.material_form; row.family = msp.family; row.spec = msp.spec;
+      var _sp = msp.spec || {}; sugRemember("family", msp.family); sugRemember("subfamily", _sp.subfamily); sugRemember("subsubfamily", _sp.subsubfamily); sugRemember("mtype", _sp.type); sugRemember("msubtype", _sp.subtype); sugRemember("msubsubtype", _sp.subsubtype); sugRemember("color", _sp.color); sugRemember("brand", _sp.brand); sugRemember("supplier", _sp.supplier);
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("products").insert(row); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
@@ -4513,8 +4563,8 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Snag " + esc(s.number || "") : "New snag") + '</h3><div class="form">' +
       '<div><label>Description</label><input id="sn-desc" value="' + esc(s.description || "") + '" placeholder="What is the defect?"></div>' +
-      '<div class="row2"><div><label>Project / site</label><select id="sn-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Location</label><input id="sn-loc" value="' + esc(s.location || "") + '" placeholder="e.g. North elevation L5"></div></div>' +
-      '<div class="row2"><div><label>Severity</label><select id="sn-sev"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div><div><label>Trade</label><input id="sn-trade" value="' + esc(s.trade || "") + '" placeholder="e.g. Glazing, Sealant"></div></div>' +
+      '<div class="row2"><div><label>Project / site</label><select id="sn-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Location</label>' + sug("sn-loc", s.location, "site_location", "e.g. North elevation L5") + '</div></div>' +
+      '<div class="row2"><div><label>Severity</label><select id="sn-sev"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div><div><label>Trade</label>' + sug("sn-trade", s.trade, "trade", "e.g. Glazing, Sealant") + '</div></div>' +
       '<div class="row2"><div><label>Assigned to</label><select id="sn-emp"><option value="">(none)</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (s.assigned_to === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("") + '</select></div><div><label>Due date</label><input id="sn-due" type="date" value="' + (s.due_date || "") + '"></div></div>' +
       '<div class="row2"><div><label>Status</label><select id="sn-status"><option value="open">Open</option><option value="in_progress">In progress</option><option value="fixed">Fixed</option><option value="verified">Verified</option><option value="closed">Closed</option></select></div><div><label>Photo URL</label><input id="sn-photo" value="' + esc(s.photo_url || "") + '" placeholder="optional link"></div></div>' +
       '</div><div class="foot"><button class="btn" id="sn-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sn-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sn-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
@@ -4525,6 +4575,7 @@
     var del = document.getElementById("sn-del"); if (del) del.onclick = async function () { await sb.from("snags").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("sn-save").onclick = async function () {
       var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: document.getElementById("sn-status").value, photo_url: gv("sn-photo") };
+      sugRemember("site_location", row.location); sugRemember("trade", row.trade);
       var r; if (s.id) r = await sb.from("snags").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("snags", "SNAG"); r = await sb.from("snags").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
