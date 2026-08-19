@@ -1055,14 +1055,40 @@
     var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1";
     dd.style.right = (window.innerWidth - r.right) + "px"; dd.style.left = "auto";
     dd.innerHTML = '<div class="sec">' + esc(S.user.email) + '</div>' +
-      '<button class="it dis">Preferences</button>' +
+      '<button class="it" id="dd-profile">My profile</button>' +
       (S.app ? '<button class="it" id="dd-home">Apps</button>' : '') +
       '<button class="it" id="dd-help">Help &amp; guides</button>' +
       '<div class="sep"></div><button class="it" id="dd-out">Log out</button>';
     document.body.appendChild(dd);
+    var pf = document.getElementById("dd-profile"); if (pf) pf.onclick = function () { closeDropdowns(); openProfileModal(); };
     var h = document.getElementById("dd-home"); if (h) h.onclick = function () { closeDropdowns(); renderHome(); };
     var hp = document.getElementById("dd-help"); if (hp) hp.onclick = function () { closeDropdowns(); openHelp(); };
     document.getElementById("dd-out").onclick = signOut;
+  }
+  async function openProfileModal() {
+    mediaClearStage();
+    var prof = (await sb.from("profiles").select("*").eq("id", S.user.id).maybeSingle()).data || {};
+    var hasName = ("full_name" in prof) || ("name" in prof);
+    var nameVal = prof.full_name || prof.name || "";
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "profmodal";
+    m.innerHTML = '<div class="sheet"><h3>My profile</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Email</label><input value="' + esc(S.user.email) + '" disabled></div>' +
+      (hasName ? '<div><label>Display name</label><input id="pf-name" value="' + esc(nameVal) + '"></div>' : "") +
+      '<div><label>Phone</label>' + phoneFieldHTML("pf-phone", prof) + '</div>' +
+      attachBlockHTML("profile", S.user.id, { label: "Profile photo", accept: "image/*" }) +
+      '</div><div class="foot"><button class="btn" id="pf-cancel">Close</button><button class="btn pri" id="pf-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    wireAttach("profile");
+    document.getElementById("pf-cancel").onclick = function () { m.remove(); };
+    document.getElementById("pf-save").onclick = async function () {
+      var pn = collectPhone("pf-phone");
+      var upd = { phone: pn.phone, phone_cc: pn.phone_cc, phone_area: pn.phone_area, phone_num: pn.phone_num };
+      if (document.getElementById("pf-name")) { if ("full_name" in prof) upd.full_name = gv("pf-name"); else if ("name" in prof) upd.name = gv("pf-name"); }
+      var im = await mediaFirstImage("profile", S.user.id); if (im) { try { var lst = await mediaList("profile", S.user.id); var img = lst.filter(function (x) { return x.kind === "image"; }).slice(-1)[0]; if (img) upd.avatar_path = img.path; } catch (e) { } }
+      var r = await sb.from("profiles").update(upd).eq("id", S.user.id);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Profile saved");
+    };
   }
   function closeDropdowns() { document.querySelectorAll("[data-dd]").forEach(function (d) { d.remove(); }); }
   document.addEventListener("click", function (e) {
@@ -8045,6 +8071,7 @@
     };
   }
   async function renderEmployeeForm(id) {
+    mediaClearStage();
     var parent = { action: "hr.emp", title: "Employees" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
@@ -8066,14 +8093,14 @@
       '</div><div>' +
       fld("Manager", '<select id="e-mgr">' + opts(emps.filter(function (x) { return x.id !== id; }), e.manager_id, "None") + '</select>', "Who this employee reports to.") +
       fld("Status", '<select id="e-active"><option value="1"' + (e.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!e.is_active ? " selected" : "") + '>Archived</option></select>', "Active employees appear in selections; archived ones are hidden.") +
-      '</div></div></div>';
+      '</div></div>' + attachBlockHTML("employee", id === "new" ? "" : id, { label: "Photo & documents (ID, contract...)", accept: "image/*,application/pdf" }) + '</div>';
     document.getElementById("e-discard").onclick = function () { go("hr.emp"); };
+    wireAttach("employee");
     var _el = document.getElementById("e-sm-lv"); if (_el) _el.onclick = function () { go("hr.leaves"); };
     document.getElementById("e-save").onclick = async function () {
       var name = gv("e-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, work_email: gv("e-email"), department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null, manager_id: document.getElementById("e-mgr").value || null, is_active: document.getElementById("e-active").value === "1" };
-      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_employees").insert(row); } else r = await sb.from("hr_employees").update(row).eq("id", id);
-      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       toast("Saved"); go("hr.emp");
     };
   }
