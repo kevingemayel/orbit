@@ -548,9 +548,38 @@
     if (S.org && (S.org.status === "pending" || S.org.status === "rejected") && !S.isPlatformAdmin) { renderPendingApproval(S.org.status); return; }
     S.role = await loadRole();
     await loadTenantConfig();
+    await ensureCompanySetup();
     S.types = (await sb.from("account_types").select("*")).data || [];
     maybeLogSupport();
     renderHome();
+    maybeWelcome();
+  }
+  // Onboarding safety net: a newly created/approved company starts with an empty
+  // accounting shell (apply_for_company doesn't seed one), so nothing can post. If the
+  // active company has no chart of accounts and the user can write, seed it once from the
+  // template (chart + journals + taxes). setup_company's tax insert isn't idempotent, so
+  // we only ever call it when the company is genuinely empty.
+  async function ensureCompanySetup() {
+    try {
+      if (!S.company) return;
+      if (!(S.role && (S.role.full_access || canManage("accounting")))) return;
+      var n = (await sb.from("accounts").select("id", { count: "exact", head: true }).eq("company_id", S.company.id)).count || 0;
+      if (n > 0) return;
+      var r = await sb.rpc("setup_company", { p_company: S.company.id });
+      if (!r.error) toast("Your accounting is ready - chart of accounts, journals and taxes are set up.");
+    } catch (e) { /* best-effort */ }
+  }
+  // One-time welcome for a first-time user: offer the orientation tour.
+  function maybeWelcome() {
+    try {
+      if (localStorage.getItem("orbit_welcomed") === "1") return;
+      localStorage.setItem("orbit_welcomed", "1");
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet"><h3>Welcome to Orbit</h3><div class="form"><div class="sub">Orbit runs your quotes, invoices, purchases, projects and reports in one place. Would you like a quick look around first?</div></div><div class="foot"><button class="btn" id="wl-skip">I&rsquo;ll explore on my own</button><button class="btn pri" id="wl-tour" style="background:var(--accent);border-color:var(--accent)">Take the 60-second tour</button></div></div>';
+      document.body.appendChild(m);
+      document.getElementById("wl-skip").onclick = function () { m.remove(); };
+      document.getElementById("wl-tour").onclick = function () { m.remove(); startTour("orientation"); };
+    } catch (e) { }
   }
   // First-run for a brand-new signup with no company yet: let them create their company
   // right here (calls the create_org_for_me RPC = org + owner membership + company), then
@@ -1456,10 +1485,13 @@
       var noneAtAll = !(L.all && L.all.length);
       var titleWord = (cfg.title || "records").toLowerCase();
       if (noneAtAll) {
+        var hasGuide = HELP_ARTICLES.some(function (a) { return a.apps && a.apps.indexOf(S.app) >= 0; });
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No ' + esc(titleWord) + ' yet</div>' +
           '<div class="o-empty2-h">' + esc(cfg.emptyHint || ("Create your first " + titleWord.replace(/s$/, "") + " to get started.")) + '</div>' +
-          (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') + '</div>';
+          (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') +
+          (hasGuide ? '<div style="margin-top:12px"><a id="o-empty-help" style="cursor:pointer;color:var(--accent);font-size:13px">Show me how &rsaquo;</a></div>' : '') + '</div>';
         var eb = document.getElementById("o-empty-new"); if (eb) eb.onclick = cfg.onNew;
+        var eh = document.getElementById("o-empty-help"); if (eh) eh.onclick = function () { openHelp(); };
       } else {
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No matches</div><div class="o-empty2-h">Nothing matches your current search or filters. Clear them to see everything.</div></div>';
       }
