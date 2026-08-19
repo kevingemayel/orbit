@@ -1082,7 +1082,7 @@
     document.getElementById("pf-cancel").onclick = function () { m.remove(); };
     document.getElementById("pf-save").onclick = async function () {
       var pn = collectPhone("pf-phone");
-      var upd = { phone: pn.phone, phone_cc: pn.phone_cc, phone_area: pn.phone_area, phone_num: pn.phone_num };
+      var upd = { phone: pn.combined, phone_cc: pn.cc, phone_area: pn.area, phone_num: pn.num };
       if (document.getElementById("pf-name")) { if ("full_name" in prof) upd.full_name = gv("pf-name"); else if ("name" in prof) upd.name = gv("pf-name"); }
       var im = await mediaFirstImage("profile", S.user.id); if (im) { try { var lst = await mediaList("profile", S.user.id); var img = lst.filter(function (x) { return x.kind === "image"; }).slice(-1)[0]; if (img) upd.avatar_path = img.path; } catch (e) { } }
       var r = await sb.from("profiles").update(upd).eq("id", S.user.id);
@@ -1924,9 +1924,10 @@
   function cfgProducts() {
     return {
       title: "Products", pageSize: 80,
-      fetch: function () { return sb.from("products").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "product"); return rows; },
       searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
+        { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
         { label: "Reference", get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
         { label: "Family", get: function (p) { return esc(p.family || ""); } },
@@ -2788,7 +2789,7 @@
       fld("Contact person", '<input id="p-contact" value="' + esc(p.contact_person || "") + '" placeholder="Who you deal with">', "The person you actually talk to at this company.") +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
       fld("Phone", phoneFieldHTML("p-phone", p), "Dialing code, area code and the number in separate boxes, so numbers stay tidy and consistent.") +
-      fld("Mobile", '<input id="p-mobile" value="' + esc(p.mobile || "") + '">') +
+      fld("Mobile", phoneFieldHTML("p-mobile", p, { cc: "mobile_cc", area: "mobile_area", num: "mobile_num", combined: "mobile" }), "The mobile number in the same three boxes: dialing code, area code and number.") +
       fld("Tax / VAT no.", '<input id="p-vat" value="' + esc(p.vat || "") + '">') +
       '</div><div>' +
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '" placeholder="Street / area">') +
@@ -2840,8 +2841,8 @@
       if (!name) { toast("Name is required"); return; }
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
-      var _pn = collectPhone("p-phone");
-      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.phone, phone_cc: _pn.phone_cc, phone_area: _pn.phone_area, phone_num: _pn.phone_num, mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var _pn = collectPhone("p-phone"), _pm = collectPhone("p-mobile");
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       if (showCaps) {
         var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; });
         row.capabilities = selCaps.length ? selCaps : null;
@@ -3156,6 +3157,21 @@
   async function mediaSignedUrl(path) { try { var r = await sb.storage.from(MEDIA_BUCKET).createSignedUrl(path, 3600); return (r.data && r.data.signedUrl) || ""; } catch (e) { return ""; } }
   async function mediaDelete(m) { try { await sb.storage.from(MEDIA_BUCKET).remove([m.path]); } catch (e) { } await sb.from("media").delete().eq("id", m.id); }
   async function mediaFirstImage(entity, entityId) { var l = await mediaList(entity, entityId); var im = l.filter(function (x) { return x.kind === "image"; })[0]; return im ? await mediaSignedUrl(im.path) : ""; }
+  // list-row thumbnails: for a page of rows, batch-load each row's primary/first image
+  // and stash a signed URL on r._thumb so a column can render a tiny picture.
+  async function attachThumbs(rows, entity) {
+    if (!rows || !rows.length) return;
+    var ids = rows.map(function (r) { return r.id; }).filter(Boolean);
+    if (!ids.length) return;
+    var med = (await sb.from("media").select("entity_id,path,is_primary,created_at").eq("entity", entity).eq("kind", "image").in("entity_id", ids).order("is_primary", { ascending: false }).order("created_at")).data || [];
+    var byId = {}; med.forEach(function (m) { if (!byId[m.entity_id]) byId[m.entity_id] = m.path; });
+    var paths = Object.keys(byId).map(function (k) { return byId[k]; });
+    if (!paths.length) return;
+    var urlByPath = {};
+    try { var sg = await sb.storage.from(MEDIA_BUCKET).createSignedUrls(paths, 3600); (sg.data || []).forEach(function (s) { if (s.signedUrl) urlByPath[s.path] = s.signedUrl; }); } catch (e) { }
+    rows.forEach(function (r) { var p = byId[r.id]; if (p && urlByPath[p]) r._thumb = urlByPath[p]; });
+  }
+  function thumbCell(r) { return r._thumb ? '<span class="o-rowthumb"><img src="' + r._thumb + '"></span>' : '<span class="o-rowthumb none"></span>'; }
   // reusable attachments panel. entity is a short key ("product","tool","partner"...);
   // on a new record leave entityId empty and call mediaFlush(entity,newId) after insert.
   function attachBlockHTML(entity, entityId, opts) {
@@ -3244,9 +3260,10 @@
 
   // ============================ PHONE (country code / area / number) ===========
   var PHONE_CC = [["+961", "Lebanon"], ["+971", "UAE"], ["+966", "Saudi Arabia"], ["+974", "Qatar"], ["+973", "Bahrain"], ["+965", "Kuwait"], ["+968", "Oman"], ["+962", "Jordan"], ["+963", "Syria"], ["+964", "Iraq"], ["+20", "Egypt"], ["+212", "Morocco"], ["+216", "Tunisia"], ["+218", "Libya"], ["+90", "Turkey"], ["+98", "Iran"], ["+1", "US / Canada"], ["+44", "UK"], ["+33", "France"], ["+49", "Germany"], ["+39", "Italy"], ["+34", "Spain"], ["+31", "Netherlands"], ["+41", "Switzerland"], ["+32", "Belgium"], ["+351", "Portugal"], ["+30", "Greece"], ["+7", "Russia"], ["+380", "Ukraine"], ["+91", "India"], ["+92", "Pakistan"], ["+86", "China"], ["+81", "Japan"], ["+82", "South Korea"], ["+65", "Singapore"], ["+60", "Malaysia"], ["+62", "Indonesia"], ["+63", "Philippines"], ["+61", "Australia"], ["+64", "New Zealand"], ["+27", "South Africa"], ["+234", "Nigeria"], ["+254", "Kenya"], ["+55", "Brazil"], ["+52", "Mexico"], ["+54", "Argentina"]];
-  function phoneFieldHTML(pfx, rec) {
-    rec = rec || {}; var cc = rec.phone_cc || "", area = rec.phone_area || "", num = rec.phone_num || "";
-    if (!cc && !area && !num && rec.phone) { num = rec.phone; }   // legacy single-field value
+  function phoneFieldHTML(pfx, rec, fields) {
+    rec = rec || {}; fields = fields || { cc: "phone_cc", area: "phone_area", num: "phone_num", combined: "phone" };
+    var cc = rec[fields.cc] || "", area = rec[fields.area] || "", num = rec[fields.num] || "";
+    if (!cc && !area && !num && rec[fields.combined]) { num = rec[fields.combined]; }   // legacy single-field value
     var opts = '<option value="">Code</option>' + PHONE_CC.map(function (c) { return '<option value="' + c[0] + '"' + (cc === c[0] ? " selected" : "") + '>' + c[0] + " " + esc(c[1]) + '</option>'; }).join("");
     return '<div class="o-phone"><select id="' + pfx + '-cc">' + opts + '</select>' +
       '<input id="' + pfx + '-area" value="' + esc(area) + '" placeholder="Area" inputmode="tel">' +
@@ -3255,7 +3272,7 @@
   function collectPhone(pfx) {
     var cc = gv(pfx + "-cc"), area = gv(pfx + "-area"), num = gv(pfx + "-num");
     var combined = [cc, area, num].filter(Boolean).join(" ").trim();
-    return { phone_cc: cc || null, phone_area: area || null, phone_num: num || null, phone: combined || null };
+    return { cc: cc || null, area: area || null, num: num || null, combined: combined || null };
   }
 
   // ============================ TOOLS & EQUIPMENT ==============================
@@ -3265,9 +3282,10 @@
   function cfgTools() {
     return {
       title: "Tools & Equipment", pageSize: 80,
-      fetch: function () { return sb.from("tools").select("*, partners:holder_partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("tools").select("*, partners:holder_partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "tool"); return rows; },
       searchText: function (t) { return (t.name || "") + " " + (t.code || "") + " " + (t.category || "") + " " + (t.brand || "") + " " + (t.serial || "") + " " + (t.holder_name || "") + " " + (t.location || "") + " " + (t.shelf_location || ""); },
       columns: [
+        { label: "", cls: "thumbcol", get: function (t) { return thumbCell(t); } },
         { label: "Tool", get: function (t) { return '<b>' + esc(t.name) + '</b>' + (t.code ? ' <span class="muted">' + esc(t.code) + '</span>' : ""); } },
         { label: "Category", get: function (t) { return esc(t.category || ""); } },
         { label: "Status", get: function (t) { return toolStatusBadge(t); } },
@@ -3385,9 +3403,10 @@
   function cfgProjectItems() {
     return {
       title: "Project Materials", pageSize: 100,
-      fetch: function () { return sb.from("project_items").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("project_items").select("*, projects:project_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || []; await attachThumbs(rows, "project_item"); return rows; },
       searchText: function (it) { var s = it.spec || {}; return (it.name || "") + " " + (it.projects ? it.projects.name : "") + " " + (s.material || "") + " " + (s.color || "") + " " + pitemSize(it); },
       columns: [
+        { label: "", cls: "thumbcol", get: function (it) { return thumbCell(it); } },
         { label: "Item", get: function (it) { return '<b>' + esc(it.name) + '</b>' + (it.is_remnant ? ' <span class="badge draft">Remnant</span>' : ""); } },
         { label: "Project", get: function (it) { return esc(it.projects ? it.projects.name : ""); } },
         { label: "Form", get: function (it) { return '<span class="muted">' + esc(matFormLabel(it.material_form) || "-") + '</span>'; } },
