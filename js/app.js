@@ -3262,6 +3262,14 @@
     var ids = [].slice.call(document.querySelectorAll("." + pfx + "-co")).filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
     return ids.length ? ids : null;   // none picked = all
   }
+  async function sendInviteEmail(inviteId) {
+    try {
+      var sess = (await sb.auth.getSession()).data.session;
+      if (!sess) return { error: "Session expired" };
+      var r = await fetch("/api/send-invite", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ invite_id: inviteId }) });
+      return await r.json().catch(function () { return { error: "Email service did not respond" }; });
+    } catch (e) { return { error: String(e && e.message || e) }; }
+  }
   function openInviteModal(roleList) {
     var myRank = myRoleRank();
     var opts = roleList.filter(function (r) { return S.isPlatformAdmin || r.rank < myRank; })
@@ -3281,9 +3289,13 @@
       if (!email || email.indexOf("@") < 1) { toast("Enter a valid email address"); return; }
       var role = document.getElementById("iv-role").value;
       var cids = multiCompany ? readCompanyChecklist("iv") : null;
+      var send = document.getElementById("iv-send"); send.disabled = true; send.textContent = "Sending...";
       var r = await sb.rpc("invite_member", { p_org: S.company.org_id, p_email: email, p_role: role, p_company_ids: cids });
-      if (r.error) { toast(errMsg(r.error)); return; }
-      m.remove(); toast("Invitation created for " + email); renderUsers();
+      if (r.error) { toast(errMsg(r.error)); send.disabled = false; send.textContent = "Send invitation"; return; }
+      m.remove();
+      var er = await sendInviteEmail(r.data && r.data.id);
+      toast(er && er.ok ? ("Invitation emailed to " + email) : ("Invited " + email + " - email not sent (" + ((er && er.error) || "try Resend") + ")"));
+      renderUsers();
     };
   }
   function openMemberCompaniesModal(mem) {
@@ -3347,7 +3359,7 @@
     var inviteRows = invites.map(function (iv) {
       return '<tr><td><b>' + esc(iv.email) + '</b></td><td>' + esc(roleLabel[iv.role] || iv.role) + '</td>' +
         (multiCompany ? '<td class="muted" style="font-size:12.5px">' + esc(companyAccessLabel(iv.company_ids)) + '</td>' : '') +
-        '<td style="text-align:right">' + (canMng ? '<button class="o-filtbtn inv-revoke" data-id="' + iv.id + '" style="color:var(--bad)">Revoke</button>' : '') + '</td></tr>';
+        '<td style="text-align:right"><div class="um-acts">' + (canMng ? '<button class="o-filtbtn inv-resend" data-id="' + iv.id + '">Resend email</button><button class="o-filtbtn inv-revoke" data-id="' + iv.id + '" style="color:var(--bad)">Revoke</button>' : '') + '</div></td></tr>';
     }).join("");
     var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage">Manage roles &amp; permissions</button>' : '';
     var inviteBtn = canMng ? '<button class="o-new" id="ur-invite">+ Invite teammate</button>' : '';
@@ -3363,6 +3375,7 @@
     body.querySelectorAll(".um-act").forEach(function (b) { b.onclick = async function () { var r = await sb.rpc("set_member_status", { p_member: b.dataset.id, p_status: b.dataset.act === "suspend" ? "suspended" : "active" }); if (r.error) { toast(errMsg(r.error)); } else { toast(b.dataset.act === "suspend" ? "Access suspended" : "Access restored"); renderUsers(); } }; });
     body.querySelectorAll(".um-comp").forEach(function (b) { b.onclick = function () { openMemberCompaniesModal(team.filter(function (x) { return x.member_id === b.dataset.id; })[0]); }; });
     body.querySelectorAll(".um-remove").forEach(function (b) { b.onclick = function () { var mem = team.filter(function (x) { return x.member_id === b.dataset.id; })[0]; confirmModal("Remove from team?", "They lose access to <b>" + esc(S.org ? S.org.name : "this team") + "</b> immediately. Their work stays. You can invite them again later.", "Remove", async function () { var r = await sb.rpc("remove_member", { p_member: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Removed from team"); renderUsers(); } }); }; });
+    body.querySelectorAll(".inv-resend").forEach(function (b) { b.onclick = async function () { b.disabled = true; b.textContent = "Sending..."; var er = await sendInviteEmail(b.dataset.id); b.disabled = false; b.textContent = "Resend email"; toast(er && er.ok ? "Email sent" : ("Could not send: " + ((er && er.error) || "unknown"))); }; });
     body.querySelectorAll(".inv-revoke").forEach(function (b) { b.onclick = async function () { var r = await sb.rpc("revoke_invite", { p_invite: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Invitation revoked"); renderUsers(); } }; });
   }
 
