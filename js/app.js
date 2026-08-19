@@ -2735,7 +2735,7 @@
         var list = document.getElementById("cap-list");
         var exists = [].some.call(list.querySelectorAll(".p-cap"), function (cb) { return cb.value.toLowerCase() === v.toLowerCase(); });
         if (exists) { [].forEach.call(list.querySelectorAll(".p-cap"), function (cb) { if (cb.value.toLowerCase() === v.toLowerCase()) cb.checked = true; }); }
-        else { list.insertAdjacentHTML("beforeend", capBox(v, true)); sb.from("capabilities").insert({ org_id: S.company.org_id, name: v }); }
+        else { list.insertAdjacentHTML("beforeend", capBox(v, true)); }   // added to the master list on save
         document.getElementById("cap-new").value = "";
       }
       capAdd.onclick = addCap;
@@ -2748,7 +2748,12 @@
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
       var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: gv("p-phone"), mobile: gv("p-mobile"), vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
-      if (showCaps) { var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; }); row.capabilities = selCaps.length ? selCaps : null; }
+      if (showCaps) {
+        var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; });
+        row.capabilities = selCaps.length ? selCaps : null;
+        var newCaps = selCaps.filter(function (x) { return !capNames.some(function (n) { return n.toLowerCase() === x.toLowerCase(); }); });
+        if (newCaps.length) { await sb.from("capabilities").insert(newCaps.map(function (x) { return { org_id: S.company.org_id, name: x }; })); }
+      }
       var indv = gv("p-industry");
       if (indv && !indNames.some(function (n) { return n.toLowerCase() === indv.toLowerCase(); })) { await sb.from("industries").insert({ org_id: S.company.org_id, name: indv }); }
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
