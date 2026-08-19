@@ -124,6 +124,14 @@ button{font-family:inherit}
 .o-seg{border:1px solid var(--line);background:var(--panel);color:var(--ink2);border-radius:8px;padding:6px 14px;font:inherit;font-size:13px;font-weight:600;cursor:pointer}
 .o-seg:hover{background:var(--panel2)}
 .o-seg.on{background:var(--accent);border-color:var(--accent);color:#fff}
+/* user management: team roster + invites + company-access checklist */
+.um-acts{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.um-cco{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13.5px;cursor:pointer}
+.um-colist{display:flex;flex-direction:column;gap:2px;margin:4px 0 2px 18px;max-height:220px;overflow:auto}
+.inv-card{display:flex;align-items:center;gap:12px;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:10px}
+.inv-card>div{flex:1}
+.o-invbanner{margin:0 0 6px}
+.o-invb-row{display:flex;align-items:center;gap:12px;background:var(--accent-soft);border:1px solid color-mix(in srgb,var(--accent) 30%,var(--line));border-radius:10px;padding:10px 14px;margin-bottom:8px;font-size:13.5px}
 .o-navbar .o-waffle{width:40px;height:46px;display:grid;place-items:center;cursor:pointer;color:#fff;opacity:.95;border:none;background:none}
 .o-navbar .o-waffle:hover{background:rgba(255,255,255,.12)}
 .o-navbar .o-brandmark{display:grid;place-items:center;width:28px;height:46px;flex:none;color:#fff}

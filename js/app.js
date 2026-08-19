@@ -538,7 +538,8 @@
       var pa = await sb.rpc("is_platform_admin"); S.isPlatformAdmin = !!(pa && pa.data);
       S.homeOrgIds = S.isPlatformAdmin ? ((await sb.rpc("my_home_orgs")).data || []) : null;
     } catch (e) { S.isPlatformAdmin = false; S.homeOrgIds = null; }
-    if (!S.companies.length) { renderNoCompany(); return; }
+    try { S.pendingInvites = ((await sb.rpc("my_pending_invites")).data) || []; } catch (e) { S.pendingInvites = []; }
+    if (!S.companies.length) { if (S.pendingInvites.length) { renderInvites(); } else { renderNoCompany(); } return; }
     S.company = S.companies.filter(function (c) { return c.id === S.profile.active_company_id; })[0];
     // an operator with no active company set should land in one of their OWN orgs, not a tenant
     if (!S.company && S.isPlatformAdmin && S.homeOrgIds && S.homeOrgIds.length) S.company = S.companies.filter(function (c) { return S.homeOrgIds.indexOf(c.org_id) >= 0; })[0];
@@ -555,6 +556,20 @@
   // right here (calls the create_org_for_me RPC = org + owner membership + company), then
   // boot straight into the app (where the Getting-started checklist takes over).
   var TC_VERSION = "v1";
+  // An invited teammate lands here (no company of their own yet): accept -> join the org.
+  async function renderInvites() {
+    var invs = (S.pendingInvites && S.pendingInvites.length) ? S.pendingInvites : (((await sb.rpc("my_pending_invites")).data) || []);
+    if (!invs.length) { renderNoCompany(); return; }
+    root.innerHTML = '<div class="login"><div class="card" style="width:520px;max-width:100%;text-align:left">' +
+      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div><div class="byline">by Space Work</div></div>' +
+      '<h1>You’re invited</h1>' +
+      '<p class="sub">Welcome, ' + esc(S.user.email) + '. You have been invited to join ' + (invs.length > 1 ? "these teams" : "a team") + ' on Orbit.</p>' +
+      invs.map(function (iv) { return '<div class="inv-card"><div><b>' + esc(iv.org_name) + '</b><div class="muted" style="font-size:12.5px">Role: ' + esc(iv.role_label || iv.role) + '</div></div><button class="btn pri inv-accept" data-id="' + iv.id + '" style="background:var(--accent);border-color:var(--accent)">Join</button></div>'; }).join("") +
+      '<div class="sub" style="margin-top:14px">Not expecting this? You can <a id="inv-apply" style="cursor:pointer;color:var(--accent)">create your own company instead</a>.</div>' +
+      '</div></div>';
+    root.querySelectorAll(".inv-accept").forEach(function (b) { b.onclick = async function () { b.disabled = true; b.textContent = "Joining…"; var r = await sb.rpc("accept_invite", { p_invite: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); b.disabled = false; b.textContent = "Join"; return; } location.reload(); }; });
+    var ap = document.getElementById("inv-apply"); if (ap) ap.onclick = function () { renderNoCompany(); };
+  }
   // A brand-new signup applies for access: a few KYC questions + Terms acceptance.
   // apply_for_company creates a PENDING org; a Space Work admin approves within 6h.
   function renderNoCompany() {
@@ -655,6 +670,18 @@
     applyFontScale();
     homeDashInject();
     setupBannerInject();
+    invitesBannerInject();
+  }
+  // a teammate who already has a company but was invited to ANOTHER org sees a join banner
+  function invitesBannerInject() {
+    if (!S.pendingInvites || !S.pendingInvites.length) return;
+    var home = document.querySelector(".o-home"); if (!home) return;
+    var top = home.querySelector(".o-home-top");
+    var wrap = document.createElement("div"); wrap.className = "o-invbanner";
+    wrap.innerHTML = S.pendingInvites.map(function (iv) { return '<div class="o-invb-row"><span>You’ve been invited to join <b>' + esc(iv.org_name) + '</b> as ' + esc(iv.role_label || iv.role) + '.</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn pri invb-accept" data-id="' + iv.id + '" style="background:var(--accent);border-color:var(--accent)">Join</button><button class="btn invb-dismiss" data-id="' + iv.id + '">Not now</button></span></div>'; }).join("");
+    if (top && top.nextSibling) home.insertBefore(wrap, top.nextSibling); else home.insertBefore(wrap, home.firstChild);
+    wrap.querySelectorAll(".invb-accept").forEach(function (b) { b.onclick = async function () { b.disabled = true; var r = await sb.rpc("accept_invite", { p_invite: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); b.disabled = false; return; } location.reload(); }; });
+    wrap.querySelectorAll(".invb-dismiss").forEach(function (b) { b.onclick = function () { S.pendingInvites = (S.pendingInvites || []).filter(function (x) { return x.id !== b.dataset.id; }); var row = b.closest(".o-invb-row"); if (row) row.remove(); if (!wrap.children.length) wrap.remove(); }; });
   }
   // ORB-11: a compact owner/manager KPI strip on the home, above the app grid (money roles only)
   async function homeDashInject() {
@@ -3168,36 +3195,140 @@
     var bySlug = {}; roles.forEach(function (r) { if (!bySlug[r.slug] || r.org_id) bySlug[r.slug] = r; });   // org copy overrides global
     return Object.keys(bySlug).map(function (k) { return bySlug[k]; }).sort(function (a, b) { return b.rank - a.rank; });
   }
+  // client-side mirror of the DB can_manage_team() (owner-class or a can_manage_roles role)
+  function canManageTeam() { return !!(S.role && (S.role.full_access || S.role.can_manage_roles)) || !!S.isPlatformAdmin; }
+  function companyAccessLabel(cids) {
+    if (!cids || !cids.length) return "All companies";
+    var names = cids.map(function (id) { var c = S.companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : null; }).filter(Boolean);
+    if (!names.length) return cids.length + " companies";
+    return names.length <= 2 ? names.join(", ") : (names.length + " companies");
+  }
+  function confirmModal(title, msgHtml, okLabel, onOk) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + esc(title) + '</h3><div class="form"><div class="sub">' + msgHtml + '</div></div><div class="foot"><button class="btn" id="cm-c">Cancel</button><button class="btn pri" id="cm-y" style="background:var(--bad);border-color:var(--bad)">' + esc(okLabel || "Confirm") + '</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("cm-c").onclick = function () { m.remove(); };
+    document.getElementById("cm-y").onclick = function () { m.remove(); onOk(); };
+  }
+  // company-access checklist (used by invite + per-member editor). selected null/[] = all.
+  function companyChecklist(pfx, selected) {
+    var all = !selected || !selected.length;
+    var boxes = S.companies.map(function (c) {
+      return '<label class="um-cco"><input type="checkbox" class="' + pfx + '-co" value="' + c.id + '"' + ((all || selected.indexOf(c.id) >= 0) ? " checked" : "") + (all ? " disabled" : "") + '> ' + esc(c.name) + ' <span class="muted" style="font-size:11px">(' + esc(c.currency_code) + ')</span></label>';
+    }).join("");
+    return '<label class="um-cco" style="font-weight:600"><input type="checkbox" id="' + pfx + '-all"' + (all ? " checked" : "") + '> All companies</label><div class="um-colist">' + boxes + '</div>';
+  }
+  function wireCompanyChecklist(pfx) {
+    var all = document.getElementById(pfx + "-all"); if (!all) return;
+    all.onchange = function () { document.querySelectorAll("." + pfx + "-co").forEach(function (cb) { cb.disabled = all.checked; if (all.checked) cb.checked = true; }); };
+  }
+  function readCompanyChecklist(pfx) {
+    var all = document.getElementById(pfx + "-all"); if (all && all.checked) return null;
+    var ids = [].slice.call(document.querySelectorAll("." + pfx + "-co")).filter(function (cb) { return cb.checked; }).map(function (cb) { return cb.value; });
+    return ids.length ? ids : null;   // none picked = all
+  }
+  function openInviteModal(roleList) {
+    var myRank = myRoleRank();
+    var opts = roleList.filter(function (r) { return S.isPlatformAdmin || r.rank < myRank; })
+      .map(function (r) { return '<option value="' + r.slug + '"' + (r.slug === "junior_engineer" ? " selected" : "") + '>' + esc(r.label || r.slug) + '</option>'; }).join("");
+    var multiCompany = S.companies.length > 1;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Invite a teammate</h3><div class="form">' +
+      '<div><label>Email address</label>' + fhint("__iv", "We match this to their sign-in email. They join the moment they sign in - no link to click.") + '<input id="iv-email" type="email" placeholder="name@company.com" autocomplete="off"></div>' +
+      '<div><label>Role</label>' + fhint("__ivr", "What they can see and do. Manage this in Roles & Permissions.") + '<select id="iv-role">' + opts + '</select></div>' +
+      (multiCompany ? '<div><label>Company access</label>' + companyChecklist("iv", null) + '</div>' : '') +
+      '</div><div class="foot"><button class="btn" id="iv-cancel">Cancel</button><button class="btn pri" id="iv-send" style="background:var(--accent);border-color:var(--accent)">Send invitation</button></div></div>';
+    document.body.appendChild(m);
+    if (multiCompany) wireCompanyChecklist("iv");
+    document.getElementById("iv-cancel").onclick = function () { m.remove(); };
+    document.getElementById("iv-send").onclick = async function () {
+      var email = (gv("iv-email") || "").trim();
+      if (!email || email.indexOf("@") < 1) { toast("Enter a valid email address"); return; }
+      var role = document.getElementById("iv-role").value;
+      var cids = multiCompany ? readCompanyChecklist("iv") : null;
+      var r = await sb.rpc("invite_member", { p_org: S.company.org_id, p_email: email, p_role: role, p_company_ids: cids });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Invitation created for " + email); renderUsers();
+    };
+  }
+  function openMemberCompaniesModal(mem) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Company access</h3><div class="form">' +
+      '<div class="sub" style="margin-bottom:8px">Choose which companies <b>' + esc(mem.full_name || mem.email) + '</b> can see and work in. <b>All companies</b> includes every current and future company.</div>' +
+      companyChecklist("mc", mem.company_ids) +
+      '</div><div class="foot"><button class="btn" id="mc-cancel">Cancel</button><button class="btn pri" id="mc-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    wireCompanyChecklist("mc");
+    document.getElementById("mc-cancel").onclick = function () { m.remove(); };
+    document.getElementById("mc-save").onclick = async function () {
+      var cids = readCompanyChecklist("mc");
+      var r = await sb.rpc("set_member_companies", { p_member: mem.member_id, p_company_ids: cids });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Company access updated"); renderUsers();
+    };
+  }
   async function renderUsers() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Users & Roles") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var members = (await sb.from("org_members").select("*").eq("org_id", S.company.org_id)).data || [];
+    var oid = S.company.org_id;
+    var team = ((await sb.rpc("org_team", { p_org: oid })).data) || [];
+    var invites = ((await sb.from("org_invites").select("*").eq("org_id", oid).eq("status", "pending").order("invited_at", { ascending: false })).data) || [];
     var roleList = await rolesForOrg();
-    var ids = members.map(function (m) { return m.user_id; }).filter(Boolean);
-    var profs = ids.length ? ((await sb.from("profiles").select("*").in("id", ids)).data || []) : [];
-    var pmap = {}; profs.forEach(function (p) { pmap[p.id] = p; });
+    var roleLabel = {}, roleRank = {}; roleList.forEach(function (r) { roleLabel[r.slug] = r.label || r.slug; roleRank[r.slug] = r.rank; });
     var myRank = myRoleRank();
+    var canMng = canManageTeam();
+    var multiCompany = S.companies.length > 1;
     var body = document.getElementById("o-body");
-    var rows = members.map(function (mem) {
-      var mine = mem.user_id === (S.user && S.user.id);
-      var p = pmap[mem.user_id] || {};
-      var who = esc(p.full_name || p.email || ((mem.user_id || "").slice(0, 8) + "..."));
+    function editableMember(mem) { return canMng && !mem.is_me && (S.role.full_access || (roleRank[mem.role] || 0) < myRank); }
+    function roleCell(mem) {
+      if (!editableMember(mem)) return esc(roleLabel[mem.role] || mem.role);
       var known = roleList.some(function (r) { return r.slug === mem.role; });
       var opts = roleList.map(function (r) {
-        var dis = r.rank > myRank && r.slug !== mem.role;   // cannot assign a role above your own rank
+        var dis = r.rank >= myRank && !S.role.full_access;
         return '<option value="' + r.slug + '"' + (mem.role === r.slug ? " selected" : "") + (dis ? " disabled" : "") + '>' + esc(r.label || r.slug) + '</option>';
       }).join("") + (known ? "" : '<option selected>' + esc(mem.role || "(none)") + '</option>');
-      var sel = '<select class="um-role" data-id="' + mem.id + '"' + (mine ? " disabled" : "") + '>' + opts + '</select>';
-      return '<tr><td><b>' + who + '</b>' + (mine ? ' <span class="badge paid">you</span>' : '') + '</td><td>' + sel + '</td></tr>';
+      return '<select class="um-role" data-id="' + mem.member_id + '">' + opts + '</select>';
+    }
+    function memberActions(mem) {
+      if (mem.is_me) return '<span class="muted" style="font-size:11.5px">This is you</span>';
+      if (!editableMember(mem)) return canMng ? '<span class="muted" style="font-size:11.5px">Higher rank</span>' : '';
+      var a = (multiCompany ? '<button class="o-filtbtn um-comp" data-id="' + mem.member_id + '">Companies</button>' : '');
+      a += (mem.status === "suspended"
+        ? '<button class="o-filtbtn um-act" data-id="' + mem.member_id + '" data-act="reactivate">Reactivate</button>'
+        : '<button class="o-filtbtn um-act" data-id="' + mem.member_id + '" data-act="suspend">Suspend</button>');
+      a += '<button class="o-filtbtn um-remove" data-id="' + mem.member_id + '" style="color:var(--bad)">Remove</button>';
+      return a;
+    }
+    var rows = team.map(function (mem) {
+      var who = esc(mem.full_name || (mem.email ? mem.email.split("@")[0] : "User"));
+      var sub = mem.email ? '<div class="muted" style="font-size:11.5px">' + esc(mem.email) + '</div>' : '';
+      var badges = (mem.is_me ? ' <span class="badge paid">you</span>' : '') + (mem.status === "suspended" ? ' <span class="badge unpaid">Suspended</span>' : '');
+      return '<tr' + (mem.status === "suspended" ? ' style="opacity:.55"' : '') + '><td><b>' + who + '</b>' + badges + sub + '</td>' +
+        '<td>' + roleCell(mem) + '</td>' +
+        (multiCompany ? '<td class="muted" style="font-size:12.5px">' + esc(companyAccessLabel(mem.company_ids)) + '</td>' : '') +
+        '<td style="text-align:right"><div class="um-acts">' + memberActions(mem) + '</div></td></tr>';
     }).join("");
-    var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage" style="margin-left:auto">Manage roles &amp; permissions</button>' : '';
-    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Team members</h3>' + manageBtn + '</div>' +
-      '<div class="sub" style="margin:6px 0 12px">Each person\'s role controls which apps they see and what they can change. Define roles in Roles &amp; Permissions.</div>' +
-      '<table><thead><tr><th>User</th><th style="width:260px">Role</th></tr></thead><tbody>' + (rows || '<tr><td colspan="2" class="muted">No members.</td></tr>') + '</tbody></table>' +
-      '<div class="sub" style="margin-top:10px">To add a teammate: they sign up in the app, then set their role here. You cannot change your own role.</div></div></div>';
+    var inviteRows = invites.map(function (iv) {
+      return '<tr><td><b>' + esc(iv.email) + '</b></td><td>' + esc(roleLabel[iv.role] || iv.role) + '</td>' +
+        (multiCompany ? '<td class="muted" style="font-size:12.5px">' + esc(companyAccessLabel(iv.company_ids)) + '</td>' : '') +
+        '<td style="text-align:right">' + (canMng ? '<button class="o-filtbtn inv-revoke" data-id="' + iv.id + '" style="color:var(--bad)">Revoke</button>' : '') + '</td></tr>';
+    }).join("");
+    var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage">Manage roles &amp; permissions</button>' : '';
+    var inviteBtn = canMng ? '<button class="o-new" id="ur-invite">+ Invite teammate</button>' : '';
+    var colspan = multiCompany ? 4 : 3;
+    body.innerHTML = '<div style="padding:16px">' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px"><div><h3 style="margin:0">Team</h3><div class="sub" style="max-width:60ch">Invite people to ' + esc(S.org ? S.org.name : "your team") + ', set what each person can do, and ' + (multiCompany ? 'limit them to certain companies' : 'manage their access') + '.</div></div><div style="margin-left:auto;display:flex;gap:8px">' + manageBtn + inviteBtn + '</div></div>' +
+      '<div class="card"><table><thead><tr><th>Person</th><th style="width:200px">Role</th>' + (multiCompany ? '<th>Companies</th>' : '') + '<th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="' + colspan + '" class="muted">No members.</td></tr>') + '</tbody></table></div>' +
+      (invites.length ? '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Pending invitations</h3><div class="sub" style="margin-bottom:8px">Each person joins automatically the next time they sign in with this email. Until then they see the invitation on their home screen.</div><table><thead><tr><th>Email</th><th style="width:200px">Role</th>' + (multiCompany ? '<th>Companies</th>' : '') + '<th></th></tr></thead><tbody>' + inviteRows + '</tbody></table></div>' : '') +
+      '</div>';
     var mb = document.getElementById("ur-manage"); if (mb) mb.onclick = function () { go("settings.roles"); };
-    body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.from("org_members").update({ role: s.value }).eq("id", s.dataset.id); if (r.error) { toast(errMsg(r.error)); } else toast("Role updated"); }; });
+    var ib = document.getElementById("ur-invite"); if (ib) ib.onclick = function () { openInviteModal(roleList); };
+    body.querySelectorAll(".um-role").forEach(function (s) { s.onchange = async function () { var r = await sb.rpc("set_member_role", { p_member: s.dataset.id, p_role: s.value }); if (r.error) { toast(errMsg(r.error)); renderUsers(); } else toast("Role updated"); }; });
+    body.querySelectorAll(".um-act").forEach(function (b) { b.onclick = async function () { var r = await sb.rpc("set_member_status", { p_member: b.dataset.id, p_status: b.dataset.act === "suspend" ? "suspended" : "active" }); if (r.error) { toast(errMsg(r.error)); } else { toast(b.dataset.act === "suspend" ? "Access suspended" : "Access restored"); renderUsers(); } }; });
+    body.querySelectorAll(".um-comp").forEach(function (b) { b.onclick = function () { openMemberCompaniesModal(team.filter(function (x) { return x.member_id === b.dataset.id; })[0]); }; });
+    body.querySelectorAll(".um-remove").forEach(function (b) { b.onclick = function () { var mem = team.filter(function (x) { return x.member_id === b.dataset.id; })[0]; confirmModal("Remove from team?", "They lose access to <b>" + esc(S.org ? S.org.name : "this team") + "</b> immediately. Their work stays. You can invite them again later.", "Remove", async function () { var r = await sb.rpc("remove_member", { p_member: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Removed from team"); renderUsers(); } }); }; });
+    body.querySelectorAll(".inv-revoke").forEach(function (b) { b.onclick = async function () { var r = await sb.rpc("revoke_invite", { p_invite: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Invitation revoked"); renderUsers(); } }; });
   }
 
   // ============================ SETTINGS: ROLES & PERMISSIONS ============================
