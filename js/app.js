@@ -821,7 +821,7 @@
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
       '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
@@ -835,6 +835,7 @@
     var _gs = document.getElementById("o-gs-in");
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
+    var _hlp = document.getElementById("ohelp"); if (_hlp) _hlp.onclick = function () { openHelp(); };
     var _bell = document.getElementById("bell"); if (_bell) _bell.onclick = function (e) { openNotifPanel(e.currentTarget); };
     refreshBell();
     if (window._bellIv) clearInterval(window._bellIv);
@@ -921,9 +922,11 @@
     dd.innerHTML = '<div class="sec">' + esc(S.user.email) + '</div>' +
       '<button class="it dis">Preferences</button>' +
       (S.app ? '<button class="it" id="dd-home">Apps</button>' : '') +
+      '<button class="it" id="dd-help">Help &amp; guides</button>' +
       '<div class="sep"></div><button class="it" id="dd-out">Log out</button>';
     document.body.appendChild(dd);
     var h = document.getElementById("dd-home"); if (h) h.onclick = function () { closeDropdowns(); renderHome(); };
+    var hp = document.getElementById("dd-help"); if (hp) hp.onclick = function () { closeDropdowns(); openHelp(); };
     document.getElementById("dd-out").onclick = signOut;
   }
   function closeDropdowns() { document.querySelectorAll("[data-dd]").forEach(function (d) { d.remove(); }); }
@@ -8872,6 +8875,161 @@
       await sb.from("install_jobs").update({ installed_qty: Number(j.installed_qty || 0) + qty, labour_hours: Number(j.labour_hours || 0) + hours, labour_cost: Number(j.labour_cost || 0) + cost, status: j.status === "draft" ? "in_progress" : j.status }).eq("id", jobId);
       m.remove(); toast(cost > 0 ? ("Logged - " + cc + " " + money(cost) + " labour costed to the project") : "Logged"); renderInstallJobForm(jobId);
     };
+  }
+
+  // ============================ HELP & GUIDED TOURS ============================
+  // Product help that TEACHES: short plain-English lessons + interactive tours that
+  // spotlight the real buttons and walk you through a task. Content is authored here
+  // (product docs, not tenant data), so it ships and versions with the app.
+  function tick(ms) { return new Promise(function (r) { setTimeout(r, ms || 350); }); }
+  // ---- guided tours: each step can navigate (run) then spotlight a real element (sel)
+  var HELP_TOURS = {
+    orientation: {
+      title: "Take the tour", desc: "A 60-second look around Orbit.", mins: 1,
+      steps: [
+        { center: true, title: "Welcome to Orbit", body: "This quick tour points out the few things you use all the time. You can leave any time with Skip.", run: async function () { if (!document.getElementById("waffle")) { S.app = S.app || "accounting"; go(APPS[S.app].home); await tick(500); } } },
+        { sel: "#waffle", title: "All your apps", body: "Click the grid to move between apps - Accounting, Sales, Purchase, Projects and more." },
+        { sel: "#o-gs-in", title: "Search for anything", body: "Type a name here to jump straight to a customer, invoice, project, purchase order or product." },
+        { sel: "#cosel-bar", title: "Switch company", body: "If you run more than one company, switch which set of books you are working in here." },
+        { sel: ".o-side-items", title: "The app menu", body: "Everything inside the current app lives in this side menu. It changes colour per app so you always know where you are." },
+        { sel: "#ohelp", title: "Help is always one click away", body: "Open this ? at any time for these guides and step-by-step tours." },
+        { center: true, title: "That is the tour", body: "Explore at your own pace. Whenever you are unsure, open the ? and search - or start one of the task tours." }
+      ]
+    },
+    invoice: {
+      title: "Create your first invoice", desc: "From blank to sent, step by step.", mins: 2,
+      steps: [
+        { center: true, title: "Let's raise an invoice", body: "We'll open Accounting and walk through a new customer invoice together. Nothing is saved until you choose to.", run: async function () { S.app = "accounting"; applyAppColor(); go("inv.out"); await tick(550); } },
+        { sel: "#o-new", title: "Start a new invoice", body: "On any list, the New button (top-left) creates a fresh record. Here it starts a new customer invoice.", run: async function () { go("inv.out"); await tick(450); } },
+        { sel: "#f-partner", title: "Choose the customer", body: "Pick who the invoice is for. Don't have them yet? You can add a customer from the Customers screen first.", run: async function () { await renderInvoiceForm("new", "out_invoice"); await tick(450); } },
+        { sel: "#f-date", title: "Set the dates", body: "The invoice date drives your reports and the due date. Payment terms can fill the due date automatically." },
+        { sel: ".o-statusbar", title: "Save or post", body: "Save keeps it as a draft you can still edit. Post finalises it - that's when it hits your accounts and can be sent or paid." },
+        { center: true, title: "That's an invoice", body: "Add lines (description, amount, tax), pick the customer, then Save as draft or Post. You can email a posted invoice straight from Orbit." }
+      ]
+    },
+    team: {
+      title: "Invite a teammate", desc: "Add someone and set what they can do.", mins: 1,
+      steps: [
+        { center: true, title: "Bring in your team", body: "You can invite colleagues by email, choose their role, and limit them to certain companies.", run: async function () { S.app = "settings"; applyAppColor(); go("settings.users"); await tick(550); } },
+        { sel: "#ur-invite", title: "Invite by email", body: "Click here, enter their email and pick a role. They join automatically the next time they sign in - no link to click.", run: async function () { go("settings.users"); await tick(450); } },
+        { sel: "#ur-manage", title: "Roles decide what they see", body: "Each role switches apps and abilities on or off. Open Roles & Permissions to fine-tune or create your own." },
+        { center: true, title: "You're in control", body: "You can change anyone's role, limit them to specific companies, suspend access, or remove them - all from this screen." }
+      ]
+    }
+  };
+  // ---- help articles: short lessons, grouped by category, tagged to apps for context
+  var HELP_ARTICLES = [
+    { id: "welcome", cat: "Getting started", apps: [], title: "What Orbit is", teaser: "The big picture in 30 seconds.", html: "<p>Orbit is your business in one place: quotes and invoices, purchases, projects, stock, people and reports. Everything shares the same customers, products and accounts, so you enter things once.</p><p>Work is grouped into <b>apps</b> (Accounting, Sales, Purchase, Projects and more). Open the grid icon (top-left) to switch between them.</p>" },
+    { id: "navigate", cat: "Getting started", apps: [], title: "Finding your way around", teaser: "Apps, menus, search and switching company.", html: "<ol><li><b>Apps grid</b> (top-left): jump between apps.</li><li><b>Side menu</b>: everything inside the current app. It's colour-coded per app.</li><li><b>Search</b> (top bar): type a name to jump to any record.</li><li><b>Company switcher</b>: change which company's books you're in.</li><li><b>?</b> (top bar): help and guided tours, any time.</li></ol>", tour: "orientation" },
+    { id: "team", cat: "Getting started", apps: ["settings"], title: "Add your team", teaser: "Invite people and set their access.", html: "<p>Go to <b>Settings &rsaquo; Users &amp; Roles</b> and click <b>Invite teammate</b>. Enter their email, choose a role, and (if you have several companies) pick which ones they can see.</p><p>They join the moment they sign in with that email - no link to click. You can change roles, limit companies, suspend or remove people any time.</p>", tour: "team" },
+    { id: "inv-create", cat: "Money coming in", apps: ["accounting"], title: "Create and send an invoice", teaser: "Bill a customer and get paid.", html: "<ol><li>Accounting &rsaquo; <b>Invoices</b> &rsaquo; <b>New</b>.</li><li>Pick the <b>customer</b> and set the dates.</li><li>Add <b>lines</b>: description, quantity, price and tax.</li><li><b>Save</b> to keep a draft, or <b>Post</b> to finalise it.</li><li>On a posted invoice, use <b>Email</b> to send a PDF, or <b>Register payment</b> when they pay.</li></ol>", tour: "invoice" },
+    { id: "pay-in", cat: "Money coming in", apps: ["accounting"], title: "Record a customer payment", teaser: "Mark an invoice as paid.", html: "<p>Open a <b>posted</b> invoice and click <b>Register payment</b>. Choose the date and the account the money landed in. Orbit posts the entry and updates what the customer still owes.</p>" },
+    { id: "customer", cat: "Money coming in", apps: ["accounting", "contacts"], title: "Add a customer", teaser: "Set up someone you sell to.", html: "<p>Accounting &rsaquo; <b>Customers</b> &rsaquo; <b>New</b>. Name is all you need to start; add contact details, payment terms and a credit limit when you have them. Customers are shared across all your companies in the org.</p>" },
+    { id: "po", cat: "Money going out", apps: ["purchase"], title: "Raise a purchase order", teaser: "Order from a supplier.", html: "<ol><li>Purchase &rsaquo; <b>Purchase Orders</b> &rsaquo; <b>New</b>.</li><li>Pick the <b>supplier</b> and add lines.</li><li><b>Confirm</b> to send it, then <b>Create Bill</b> when the invoice arrives.</li></ol>" },
+    { id: "bill", cat: "Money going out", apps: ["purchase", "accounting"], title: "Enter a vendor bill", teaser: "Record what you owe.", html: "<p>Vendors &rsaquo; <b>Bills</b> &rsaquo; <b>New</b>. Pick the supplier, add the lines and <b>Post</b>. It appears in Aged Payable and the supplier's ledger so you always know what's due.</p>" },
+    { id: "project", cat: "Projects & delivery", apps: ["projects"], title: "Start a project", teaser: "Track work, time and cost.", html: "<ol><li>Projects &rsaquo; <b>New</b>.</li><li>Set the customer, contract value and how it's billed.</li><li>Add <b>tasks</b>, then <b>log time</b> against them.</li><li>Use the <b>Cost budget</b> and job-costing to compare budget vs committed vs actual.</li></ol>" },
+    { id: "stock", cat: "Stock", apps: ["inventory"], title: "Receive stock", teaser: "Bring items into a warehouse.", html: "<p>Inventory &rsaquo; <b>Operations</b> &rsaquo; <b>Receive</b>. Choose the products and quantities; on-hand goes up and, if valuation is on, the accounting follows automatically.</p>" },
+    { id: "custom", cat: "Your team & settings", apps: ["settings"], title: "Custom fields & renaming", teaser: "Make Orbit fit your words.", html: "<p><b>Settings &rsaquo; Custom Fields</b>: add your own fields to Contacts, Projects and Products. <b>Settings &rsaquo; Terminology</b>: rename the words the app shows - e.g. \"Vendors\" to \"Suppliers\" - for your company only.</p>" },
+    { id: "roles", cat: "Your team & settings", apps: ["settings"], title: "Roles & permissions", teaser: "Decide who can see and do what.", html: "<p><b>Settings &rsaquo; Roles &amp; Permissions</b>. Each role switches apps, and parts of apps, on or off, and can hide money values. Start from a template and <b>Customize</b> it, or build your own. People can only manage roles below their own rank.</p>" }
+  ];
+  // ---- tour engine ----
+  var TOUR = null;
+  function ensureTourDom() {
+    if (document.getElementById("tourCatch")) return;
+    var c = document.createElement("div"); c.id = "tourCatch"; c.className = "tour-catch";
+    var s = document.createElement("div"); s.id = "tourSpot"; s.className = "tour-spot";
+    var b = document.createElement("div"); b.id = "tourBubble"; b.className = "tour-bubble";
+    document.body.appendChild(c); document.body.appendChild(s); document.body.appendChild(b);
+    window.addEventListener("resize", tourReposition);
+    window.addEventListener("scroll", tourReposition, true);
+  }
+  function tourReposition() { if (TOUR) { var st = TOUR.steps[TOUR.i]; positionTour(st && st.sel ? document.querySelector(st.sel) : null); } }
+  function positionTour(target) {
+    var spot = document.getElementById("tourSpot"), bub = document.getElementById("tourBubble"), cat = document.getElementById("tourCatch");
+    if (!spot || !bub || !cat) return;
+    if (!target) { spot.style.display = "none"; cat.classList.add("dim"); bub.classList.add("center"); bub.style.left = ""; bub.style.top = ""; return; }
+    cat.classList.remove("dim"); bub.classList.remove("center"); spot.style.display = "block";
+    var r = target.getBoundingClientRect(), pad = 6;
+    spot.style.left = (r.left - pad) + "px"; spot.style.top = (r.top - pad) + "px";
+    spot.style.width = (r.width + pad * 2) + "px"; spot.style.height = (r.height + pad * 2) + "px";
+    var bw = 320, bh = bub.offsetHeight || 170;
+    var left = Math.min(Math.max(12, r.left), window.innerWidth - bw - 12);
+    var top = r.bottom + 12; if (top + bh > window.innerHeight - 12) top = r.top - bh - 12; if (top < 12) top = 12;
+    bub.style.left = left + "px"; bub.style.top = top + "px";
+  }
+  async function startTour(id) {
+    var t = HELP_TOURS[id]; if (!t) return;
+    closeHelp(); ensureTourDom();
+    TOUR = { id: id, i: 0, steps: t.steps, title: t.title };
+    await tourGoto(0);
+  }
+  async function tourGoto(i) {
+    if (!TOUR) return;
+    if (i >= TOUR.steps.length) { tourEnd(true); return; }
+    TOUR.i = Math.max(0, i);
+    var step = TOUR.steps[TOUR.i];
+    try { if (step.run) await step.run(); } catch (e) {}
+    await tick(step.wait || 250);
+    if (!TOUR) return;
+    var target = step.sel ? document.querySelector(step.sel) : null;
+    if (target && target.scrollIntoView) { try { target.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { } await tick(200); }
+    paintTourStep();
+  }
+  function paintTourStep() {
+    if (!TOUR) return;
+    var step = TOUR.steps[TOUR.i], bub = document.getElementById("tourBubble");
+    var target = step.sel ? document.querySelector(step.sel) : null;
+    var last = TOUR.i === TOUR.steps.length - 1;
+    bub.innerHTML = '<div class="tour-step">Step ' + (TOUR.i + 1) + ' of ' + TOUR.steps.length + ' &middot; ' + esc(TOUR.title) + '</div>' +
+      '<div class="tour-title">' + esc(step.title) + '</div>' +
+      '<div class="tour-body">' + step.body + '</div>' +
+      '<div class="tour-nav"><button class="tour-skip" id="tourSkip">Skip</button><div style="margin-left:auto;display:flex;gap:8px">' +
+      (TOUR.i > 0 ? '<button class="btn" id="tourBack">Back</button>' : '') +
+      '<button class="btn pri" id="tourNext" style="background:var(--accent);border-color:var(--accent)">' + (last ? "Done" : "Next") + '</button></div></div>';
+    positionTour(target);
+    document.getElementById("tourSkip").onclick = function () { tourEnd(false); };
+    var bk = document.getElementById("tourBack"); if (bk) bk.onclick = function () { tourGoto(TOUR.i - 1); };
+    document.getElementById("tourNext").onclick = function () { tourGoto(TOUR.i + 1); };
+  }
+  function tourEnd(completed) {
+    TOUR = null;
+    ["tourCatch", "tourSpot", "tourBubble"].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); });
+    window.removeEventListener("resize", tourReposition); window.removeEventListener("scroll", tourReposition, true);
+    if (completed) toast("Nicely done - that's the guide finished.");
+  }
+  // ---- help panel (slide-over) ----
+  function closeHelp() { var p = document.getElementById("helpWrap"); if (p) p.remove(); }
+  function openHelp(startId) {
+    closeHelp();
+    var wrap = document.createElement("div"); wrap.id = "helpWrap"; wrap.className = "help-wrap";
+    wrap.innerHTML = '<div class="help-backdrop" id="helpBackdrop"></div><aside class="help-panel" role="dialog" aria-label="Help"><div class="help-head"><b>Help &amp; guides</b><button class="help-x" id="helpX" aria-label="Close">&times;</button></div><div class="help-body" id="helpBody"></div></aside>';
+    document.body.appendChild(wrap);
+    document.getElementById("helpBackdrop").onclick = closeHelp;
+    document.getElementById("helpX").onclick = closeHelp;
+    if (startId) helpArticle(startId); else helpList("");
+  }
+  function helpList(q) {
+    var body = document.getElementById("helpBody"); if (!body) return;
+    q = (q || "").trim().toLowerCase();
+    var match = HELP_ARTICLES.filter(function (a) { return !q || (a.title + " " + a.teaser + " " + a.html + " " + a.cat).toLowerCase().indexOf(q) >= 0; });
+    var contextual = !q && S.app ? HELP_ARTICLES.filter(function (a) { return a.apps && a.apps.indexOf(S.app) >= 0; }) : [];
+    var tourHtml = !q ? '<div class="help-sec">Guided tours</div><div class="help-tours">' + Object.keys(HELP_TOURS).map(function (k) { var t = HELP_TOURS[k]; return '<button class="help-tour" data-tour="' + k + '"><span class="ht-play">&#9658;</span><span><b>' + esc(t.title) + '</b><span class="ht-desc">' + esc(t.desc) + ' &middot; ' + t.mins + ' min</span></span></button>'; }).join("") + '</div>' : '';
+    function card(a) { return '<button class="help-art" data-art="' + a.id + '"><b>' + esc(a.title) + '</b><span>' + esc(a.teaser) + '</span></button>'; }
+    var ctxHtml = contextual.length ? '<div class="help-sec">For this screen</div>' + contextual.map(card).join("") : "";
+    var cats = {}; match.forEach(function (a) { (cats[a.cat] = cats[a.cat] || []).push(a); });
+    var listHtml = Object.keys(cats).map(function (c) { return '<div class="help-sec">' + esc(c) + '</div>' + cats[c].map(card).join(""); }).join("") || '<div class="help-empty">No guides match "' + esc(q) + '".</div>';
+    body.innerHTML = '<div class="help-search"><input id="helpQ" type="text" placeholder="Search help..." value="' + esc(q) + '" autocomplete="off"></div>' + tourHtml + ctxHtml + listHtml;
+    var qi = document.getElementById("helpQ"); qi.oninput = function () { helpList(this.value); };
+    if (q) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
+    body.querySelectorAll(".help-tour").forEach(function (b) { b.onclick = function () { startTour(b.dataset.tour); }; });
+    body.querySelectorAll(".help-art").forEach(function (b) { b.onclick = function () { helpArticle(b.dataset.art); }; });
+  }
+  function helpArticle(id) {
+    var body = document.getElementById("helpBody"); if (!body) return;
+    var a = HELP_ARTICLES.filter(function (x) { return x.id === id; })[0]; if (!a) { helpList(""); return; }
+    body.innerHTML = '<button class="help-back" id="helpBack">&#8249; All guides</button><div class="help-article"><div class="help-cat">' + esc(a.cat) + '</div><h2>' + esc(a.title) + '</h2>' + a.html + (a.tour ? '<button class="btn pri help-starttour" data-tour="' + a.tour + '" style="background:var(--accent);border-color:var(--accent);margin-top:14px">&#9658; Show me - guided tour</button>' : '') + '</div>';
+    document.getElementById("helpBack").onclick = function () { helpList(""); };
+    var st = body.querySelector(".help-starttour"); if (st) st.onclick = function () { startTour(st.dataset.tour); };
   }
 
   // ---- start ----
