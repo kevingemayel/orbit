@@ -3778,7 +3778,10 @@
   var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
   var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
   var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
-  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["budget", "Budget"], ["payments", "Payments"]];
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"]];
+  var SUPPLIER_STATUS = [["to_contact", "To contact"], ["contacted", "Contacted"], ["quoted", "Quoted"], ["shortlisted", "Shortlisted"], ["booked", "Booked"], ["rejected", "Rejected"]];
+  var PROC_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["confirmed", "Confirmed"], ["delivered", "Delivered"]];
+  var EV_TASK_STATUS = [["not_started", "Not started"], ["in_progress", "In progress"], ["done", "Done"], ["blocked", "Blocked"]];
   function evLabel(list, k) { for (var i = 0; i < list.length; i++) if (list[i][0] === k) return list[i][1]; return k || ""; }
   function evCur() { return (EV.event && EV.event.currency) || (S.company && S.company.currency_code) || "USD"; }
   function evM(n) { return evCur() + " " + money(Number(n) || 0); }
@@ -3877,6 +3880,11 @@
     if (section === "guests") return evGuests(host);
     if (section === "budget") return evBudget(host);
     if (section === "payments") return evPayments(host);
+    if (section === "suppliers") return evSuppliers(host);
+    if (section === "procurement") return evProcurement(host);
+    if (section === "revenues") return evRevenues(host);
+    if (section === "tasks") return evTasks(host);
+    if (section === "bva") return evBva(host);
     host.innerHTML = '<div class="o-empty">Coming next.</div>';
   }
   async function evOverviewStats() {
@@ -4128,6 +4136,233 @@
       else { var u = await sb.from("event_payments").update(row).eq("id", p.id); if (u.error) { toast(errMsg(u.error)); return; } }
       m.remove(); toast("Saved"); evRouteSection("payments"); evOverviewStats();
     };
+  }
+
+  // ---- suppliers ----
+  function supStatusCls(s) { return s === "booked" ? "paid" : s === "shortlisted" || s === "quoted" ? "partial" : s === "rejected" ? "unpaid" : "draft"; }
+  async function evSuppliers(host) {
+    var rows = (await sb.from("event_suppliers").select("*").eq("event_id", EV.eventId).order("category").order("sort")).data || [];
+    var view = EV._supView || "table";
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="s-add">+ Add supplier</button><input id="s-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' +
+      '<div class="o-vs" id="s-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button></div></div><div id="s-body"></div>';
+    document.getElementById("s-add").onclick = function () { openSupplierModal(null); };
+    document.getElementById("s-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._supView = b.dataset.v; evSuppliers(host); }; });
+    var q = "";
+    function paint() {
+      var shown = rows.filter(function (r) { return !q || ((r.name || "") + " " + (r.category || "") + " " + (r.contact_name || "")).toLowerCase().indexOf(q) >= 0; });
+      var body = document.getElementById("s-body");
+      if (view === "board") { evBoard(body, { rows: shown, table: "event_suppliers", groups: [{ label: "Status", field: "status", options: SUPPLIER_STATUS }, { label: "Category", field: "category" }], stateKey: "sup", onOpen: function (r) { openSupplierModal(r); }, refresh: function () { evSuppliers(host); }, cardHTML: function (r) { return '<div class="t">' + (r.is_pick ? "&#9733; " : "") + esc(r.name) + '</div><div class="muted">' + esc(r.category || "") + '</div>' + (r.price_band ? '<div class="r"><span></span><span>' + esc(r.price_band) + '</span></div>' : ""); } }); return; }
+      if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No suppliers yet</div><div class="o-empty2-h">Add vendors/options per budget category.</div></div>'; return; }
+      var byCat = {}; shown.forEach(function (r) { (byCat[r.category || "Other"] = byCat[r.category || "Other"] || []).push(r); });
+      body.innerHTML = '<table class="o-list"><thead><tr><th>Supplier / option</th><th>Category</th><th>Price band</th><th>Contact</th><th>Status</th><th>Pick</th></tr></thead><tbody>' +
+        Object.keys(byCat).sort().map(function (cat) {
+          return '<tr class="o-grp"><td colspan="6"><b>' + esc(cat) + '</b></td></tr>' + byCat[cat].map(function (r) {
+            return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.name) + '</b>' + (r.why ? '<div class="muted" style="font-size:11px">' + esc(r.why.slice(0, 60)) + '</div>' : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td class="muted">' + esc(r.price_band || "") + '</td><td class="muted">' + esc(r.contact_name || r.phone || r.email || "") + '</td><td><span class="badge ' + supStatusCls(r.status) + '">' + esc(evLabel(SUPPLIER_STATUS, r.status)) + '</span></td><td>' + (r.is_pick ? "&#9733;" : "") + '</td></tr>';
+          }).join("");
+        }).join("") + '</tbody></table>';
+      body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openSupplierModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+    }
+    document.getElementById("s-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
+    paint();
+  }
+  function openSupplierModal(s) {
+    s = s || {}; var isNew = !s.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add supplier" : "Edit supplier") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Supplier / option</label><input id="sm-name" value="' + esc(s.name || "") + '"></div><div><label>Category</label>' + sug("sm-cat", s.category, "ev_bcat", "e.g. Reception Venue") + '</div></div>' +
+      '<div><label>Why (quality vs price)</label><input id="sm-why" value="' + esc(s.why || "") + '"></div>' +
+      '<div class="row2"><div><label>Price band</label><input id="sm-band" value="' + esc(s.price_band || "") + '" placeholder="$15,000-25,000"></div><div><label>Status</label><select id="sm-status">' + SUPPLIER_STATUS.map(function (o) { return '<option value="' + o[0] + '"' + ((s.status || "to_contact") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Contact person</label><input id="sm-contact" value="' + esc(s.contact_name || "") + '"></div><div><label>Phone / email</label><input id="sm-phone" value="' + esc(s.phone || s.email || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Where to find / source</label><input id="sm-source" value="' + esc(s.source || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="sm-pick"' + (s.is_pick ? " checked" : "") + '> Best-value pick</label></div></div>' +
+      '<div><label>Notes</label><input id="sm-notes" value="' + esc(s.notes || "") + '"></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="sm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="sm-cancel">Cancel</button><button class="btn pri" id="sm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("sm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this supplier?")) return; await sb.from("event_suppliers").delete().eq("id", s.id); m.remove(); evRouteSection("suppliers"); };
+    document.getElementById("sm-save").onclick = async function () {
+      var ph = gv("sm-phone"), row = { name: gv("sm-name") || "Supplier", category: gv("sm-cat") || null, why: gv("sm-why") || null, price_band: gv("sm-band") || null, status: document.getElementById("sm-status").value, contact_name: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), source: gv("sm-source") || null, is_pick: document.getElementById("sm-pick").checked, notes: gv("sm-notes") || null };
+      sugRemember("ev_bcat", row.category);
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_suppliers").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_suppliers").update(row).eq("id", s.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("suppliers");
+    };
+  }
+  // ---- procurement ----
+  async function evProcurement(host) {
+    var rows = (await sb.from("event_procurement").select("*, event_suppliers:supplier_id(name)").eq("event_id", EV.eventId).order("created_at")).data || [];
+    var view = EV._procView || "table";
+    var total = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="pr-add">+ Add item</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(total) + '</span><span class="k">procurement value</span></div>' +
+      '<div class="o-vs" id="pr-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button></div></div><div id="pr-body"></div>';
+    document.getElementById("pr-add").onclick = function () { openProcModal(null); };
+    document.getElementById("pr-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._procView = b.dataset.v; evProcurement(host); }; });
+    var body = document.getElementById("pr-body");
+    if (view === "board") { evBoard(body, { rows: rows, table: "event_procurement", groups: [{ label: "Status", field: "status", options: PROC_STATUS }], stateKey: "proc", onOpen: function (r) { openProcModal(r); }, refresh: function () { evProcurement(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.description || "Item") + '</div><div class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : (r.category || "")) + '</div><div class="r"><span>' + (r.qty || 0) + ' x</span><b>' + evM(r.amount) + '</b></div>'; } }); return; }
+    if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No procurement items</div><div class="o-empty2-h">Track what you order from suppliers for the event.</div></div>'; return; }
+    body.innerHTML = '<table class="o-list"><thead><tr><th>Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th><th>Needed by</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.description || "") + '</b></td><td class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : "") + '</td><td class="num">' + (r.qty || 0) + '</td><td class="num">' + evM(r.unit_price) + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.needed_by || "") + '</td><td><span class="badge ' + (r.status === "delivered" ? "paid" : r.status === "confirmed" || r.status === "ordered" ? "partial" : "draft") + '">' + esc(evLabel(PROC_STATUS, r.status)) + '</span></td></tr>'; }).join("") + '</tbody></table>';
+    body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openProcModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+  }
+  async function openProcModal(p) {
+    p = p || {}; var isNew = !p.id;
+    var sups = (await sb.from("event_suppliers").select("id,name").eq("event_id", EV.eventId).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add procurement item" : "Edit item") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Description</label><input id="qm-desc" value="' + esc(p.description || "") + '"></div>' +
+      '<div class="row2"><div><label>Supplier</label><select id="qm-sup"><option value="">(none)</option>' + sups.map(function (x) { return '<option value="' + x.id + '"' + (p.supplier_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div><div><label>Category</label>' + sug("qm-cat", p.category, "ev_bcat", "") + '</div></div>' +
+      '<div class="row2"><div><label>Qty</label><input id="qm-qty" type="number" step="any" value="' + (p.qty != null ? p.qty : 1) + '"></div><div><label>Unit price</label><input id="qm-price" type="number" step="0.01" value="' + (p.unit_price != null ? p.unit_price : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Needed by</label><input id="qm-need" type="date" value="' + esc(p.needed_by || "") + '"></div><div><label>Status</label><select id="qm-status">' + PROC_STATUS.map(function (o) { return '<option value="' + o[0] + '"' + ((p.status || "planned") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="qm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("qm-del"); if (del) del.onclick = async function () { if (!confirm("Delete?")) return; await sb.from("event_procurement").delete().eq("id", p.id); m.remove(); evRouteSection("procurement"); };
+    document.getElementById("qm-save").onclick = async function () {
+      var qty = parseFloat(gv("qm-qty")) || 0, price = parseFloat(gv("qm-price")) || 0;
+      var row = { description: gv("qm-desc") || null, supplier_id: document.getElementById("qm-sup").value || null, category: gv("qm-cat") || null, qty: qty, unit_price: price, amount: qty * price, needed_by: gv("qm-need") || null, status: document.getElementById("qm-status").value };
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_procurement").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_procurement").update(row).eq("id", p.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("procurement");
+    };
+  }
+  // ---- revenues ----
+  async function evRevenues(host) {
+    var rows = (await sb.from("event_revenues").select("*").eq("event_id", EV.eventId).order("expected_date", { nullsFirst: false })).data || [];
+    var exp = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0), rec = rows.filter(function (r) { return r.received; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="rv-add">+ Add revenue</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(exp) + '</span><span class="k">expected</span></div><div class="ev-stat"><span class="v">' + evM(rec) + '</span><span class="k">received</span></div></div>' +
+      (rows.length ? '<table class="o-list"><thead><tr><th>Source</th><th>Description</th><th class="num">Amount</th><th>Expected</th><th>Status</th></tr></thead><tbody>' +
+        rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.source || "") + '</b></td><td class="muted">' + esc(r.description || "") + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.expected_date || "") + '</td><td>' + (r.received ? '<span class="badge paid">Received</span>' : '<span class="badge draft">Expected</span>') + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No revenue yet</div><div class="o-empty2-h">Client fees, contributions, gifts or sponsorships.</div></div>');
+    document.getElementById("rv-add").onclick = function () { openRevModal(null); };
+    host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openRevModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+  }
+  function openRevModal(r) {
+    r = r || {}; var isNew = !r.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add revenue" : "Edit revenue") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Source</label>' + sug("rm-src", r.source, "ev_revsrc", "Client fee / Gift") + '</div><div><label>Amount (' + esc(evCur()) + ')</label><input id="rm-amt" type="number" step="0.01" value="' + (r.amount != null ? r.amount : "") + '"></div></div>' +
+      '<div><label>Description</label><input id="rm-desc" value="' + esc(r.description || "") + '"></div>' +
+      '<div class="row2"><div><label>Expected date</label><input id="rm-date" type="date" value="' + esc(r.expected_date || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="rm-recv"' + (r.received ? " checked" : "") + '> Received</label></div></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="rm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="rm-cancel">Cancel</button><button class="btn pri" id="rm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("rm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("rm-del"); if (del) del.onclick = async function () { if (!confirm("Delete?")) return; await sb.from("event_revenues").delete().eq("id", r.id); m.remove(); evRouteSection("revenues"); };
+    document.getElementById("rm-save").onclick = async function () {
+      var recv = document.getElementById("rm-recv").checked;
+      var row = { source: gv("rm-src") || null, amount: parseFloat(gv("rm-amt")) || 0, description: gv("rm-desc") || null, expected_date: gv("rm-date") || null, received: recv, received_date: recv ? (r.received_date || today()) : null };
+      sugRemember("ev_revsrc", row.source);
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var res = await sb.from("event_revenues").insert(row); if (res.error) { toast(errMsg(res.error)); return; } }
+      else { var u = await sb.from("event_revenues").update(row).eq("id", r.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("revenues");
+    };
+  }
+  // ---- tasks (table / board / gantt) ----
+  function evTaskStatusCls(s) { return s === "done" ? "paid" : s === "in_progress" ? "partial" : s === "blocked" ? "unpaid" : "draft"; }
+  async function evTasks(host) {
+    var rows = (await sb.from("event_tasks").select("*").eq("event_id", EV.eventId).order("sort").order("created_at")).data || [];
+    var view = EV._taskView || "table";
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="t-add">+ Add task</button><input id="t-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' +
+      '<div class="o-vs" id="t-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="gantt"' + (view === "gantt" ? ' class="on"' : "") + '>&#9636; Gantt</button></div></div><div id="t-body"></div>';
+    document.getElementById("t-add").onclick = function () { openEvTaskModal(null); };
+    document.getElementById("t-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._taskView = b.dataset.v; evTasks(host); }; });
+    var q = "";
+    function paint() {
+      var shown = rows.filter(function (r) { return !q || ((r.title || "") + " " + (r.phase || "") + " " + (r.category || "") + " " + (r.assignee || "")).toLowerCase().indexOf(q) >= 0; });
+      var body = document.getElementById("t-body");
+      if (view === "board") { evBoard(body, { rows: shown, table: "event_tasks", groups: [{ label: "Status", field: "status", options: EV_TASK_STATUS }, { label: "Phase", field: "phase" }, { label: "Category", field: "category" }], stateKey: "evtasks", onOpen: function (r) { openEvTaskModal(r); }, refresh: function () { evTasks(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.title) + '</div><div class="muted">' + esc(r.phase || r.category || "") + '</div><div class="r"><span>' + esc(r.due_date || "") + '</span><span>' + (r.assignee ? esc(r.assignee) : "") + (r.is_payment ? ' &#128176;' : "") + (r.is_booking ? ' &#128197;' : "") + '</span></div>'; } }); return; }
+      if (view === "gantt") { evGantt(body, shown); return; }
+      if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No tasks yet</div><div class="o-empty2-h">Add checklist items with phases, assignees and due dates.</div></div>'; return; }
+      var byPhase = {}, order = []; shown.forEach(function (r) { var k = r.phase || "General"; if (!byPhase[k]) { byPhase[k] = []; order.push(k); } byPhase[k].push(r); });
+      body.innerHTML = '<table class="o-list"><thead><tr><th></th><th>Task</th><th>Category</th><th>Assignee</th><th>Start</th><th>Due</th><th>Status</th></tr></thead><tbody>' +
+        order.map(function (ph) {
+          return '<tr class="o-grp"><td colspan="7"><b>' + esc(ph) + '</b></td></tr>' + byPhase[ph].map(function (r) {
+            var over = r.status !== "done" && r.due_date && r.due_date < today();
+            return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><input type="checkbox" class="t-done" data-id="' + r.id + '"' + (r.status === "done" ? " checked" : "") + '></td><td><b>' + esc(r.title) + '</b>' + (r.is_payment ? ' &#128176;' : "") + (r.is_booking ? ' &#128197;' : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td class="muted">' + esc(r.assignee || "") + '</td><td class="muted">' + esc(r.start_date || "") + '</td><td class="muted">' + esc(r.due_date || "") + (over ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><span class="badge ' + evTaskStatusCls(r.status) + '">' + esc(evLabel(EV_TASK_STATUS, r.status)) + '</span></td></tr>';
+          }).join("");
+        }).join("") + '</tbody></table>';
+      body.querySelectorAll(".t-done").forEach(function (cb) { cb.onclick = async function (e) { e.stopPropagation(); await sb.from("event_tasks").update({ status: cb.checked ? "done" : "not_started", completed_at: cb.checked ? new Date().toISOString() : null }).eq("id", cb.dataset.id); evRouteSection("tasks"); }; });
+      body.querySelectorAll("tr[data-id]").forEach(function (el) { el.onclick = function () { openEvTaskModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+    }
+    document.getElementById("t-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
+    paint();
+  }
+  function evGantt(body, tasks) {
+    var dated = tasks.filter(function (t) { return t.start_date || t.due_date; });
+    if (!dated.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No dates yet</div><div class="o-empty2-h">Add start and due dates to tasks to see the timeline.</div></div>'; return; }
+    var min = null, max = null;
+    dated.forEach(function (t) { var s = t.start_date || t.due_date, e = t.due_date || t.start_date; if (!min || s < min) min = s; if (!max || e > max) max = e; });
+    var minD = new Date(min + "T00:00:00"), maxD = new Date(max + "T00:00:00");
+    var totalDays = Math.max(1, Math.round((maxD - minD) / 864e5)) + 1;
+    var pxPerDay = Math.max(3, Math.min(14, Math.round(1000 / totalDays)));
+    var width = totalDays * pxPerDay;
+    function xOf(d) { return Math.round((new Date(d + "T00:00:00") - minD) / 864e5 * pxPerDay); }
+    // month ticks
+    var ticks = "", cur = new Date(minD.getFullYear(), minD.getMonth(), 1);
+    while (cur <= maxD) { var ds = cur.toISOString().slice(0, 10); if (cur >= minD) ticks += '<div class="gz-tick" style="left:' + xOf(ds) + 'px">' + AG_MONTHS[cur.getMonth()] + " '" + String(cur.getFullYear()).slice(2) + '</div>'; cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); }
+    var todayX = (today() >= min && today() <= max) ? xOf(today()) : -1;
+    var byPhase = {}, order = []; dated.forEach(function (t) { var k = t.phase || "General"; if (!byPhase[k]) { byPhase[k] = []; order.push(k); } byPhase[k].push(t); });
+    var rowsHtml = "";
+    order.forEach(function (ph) {
+      rowsHtml += '<div class="gz-row gz-phase"><div class="gz-lbl">' + esc(ph) + '</div><div class="gz-track"></div></div>';
+      byPhase[ph].forEach(function (t) {
+        var s = t.start_date || t.due_date, e = t.due_date || t.start_date;
+        var x = xOf(s), w = Math.max(pxPerDay, xOf(e) - x + pxPerDay);
+        var cls = t.status === "done" ? "done" : (t.status !== "done" && t.due_date && t.due_date < today() ? "over" : "");
+        rowsHtml += '<div class="gz-row" data-id="' + t.id + '"><div class="gz-lbl" title="' + esc(t.title) + '">' + esc(t.title) + '</div><div class="gz-track"><div class="gz-bar ' + cls + '" style="left:' + x + 'px;width:' + w + 'px" title="' + esc((t.start_date || "") + " -> " + (t.due_date || "")) + '"><span>' + esc(t.title) + '</span></div></div></div>';
+      });
+    });
+    body.innerHTML = '<div class="gz-wrap"><div class="gz-scroll" style="--gzw:' + width + 'px">' +
+      '<div class="gz-head"><div class="gz-lbl"></div><div class="gz-track" style="width:' + width + 'px">' + ticks + (todayX >= 0 ? '<div class="gz-today" style="left:' + todayX + 'px"></div>' : "") + '</div></div>' +
+      rowsHtml + '</div></div>';
+    body.querySelectorAll(".gz-row[data-id]").forEach(function (el) { el.onclick = function () { openEvTaskModal(tasks.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+  }
+  function openEvTaskModal(t) {
+    t = t || {}; var isNew = !t.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add task" : "Edit task") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Task</label><input id="tm-title" value="' + esc(t.title || "") + '"></div>' +
+      '<div class="row2"><div><label>Phase</label>' + sug("tm-phase", t.phase, "ev_phase", "e.g. 6 months before") + '</div><div><label>Category</label>' + sug("tm-cat", t.category, "ev_tcat", "e.g. Venue") + '</div></div>' +
+      '<div class="row2"><div><label>Assignee</label>' + sug("tm-assignee", t.assignee, "ev_assignee", "Name") + '</div><div><label>Status</label><select id="tm-status">' + EV_TASK_STATUS.map(function (o) { return '<option value="' + o[0] + '"' + ((t.status || "not_started") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Start date</label><input id="tm-start" type="date" value="' + esc(t.start_date || "") + '"></div><div><label>Due date</label><input id="tm-due" type="date" value="' + esc(t.due_date || "") + '"></div></div>' +
+      '<div class="row2"><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="tm-pay"' + (t.is_payment ? " checked" : "") + '> Payment task</label></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="tm-book"' + (t.is_booking ? " checked" : "") + '> Booking confirmation</label></div></div>' +
+      '<div><label>Notes</label><input id="tm-notes" value="' + esc(t.notes || "") + '"></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="tm-cancel">Cancel</button><button class="btn pri" id="tm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("tm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("tm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this task?")) return; await sb.from("event_tasks").delete().eq("id", t.id); m.remove(); evRouteSection("tasks"); };
+    document.getElementById("tm-save").onclick = async function () {
+      var title = gv("tm-title"); if (!title) { toast("Enter a task"); return; }
+      var st = document.getElementById("tm-status").value;
+      var row = { title: title, phase: gv("tm-phase") || null, category: gv("tm-cat") || null, assignee: gv("tm-assignee") || null, status: st, start_date: gv("tm-start") || null, due_date: gv("tm-due") || null, is_payment: document.getElementById("tm-pay").checked, is_booking: document.getElementById("tm-book").checked, notes: gv("tm-notes") || null, completed_at: st === "done" ? (t.completed_at || new Date().toISOString()) : null };
+      sugRemember("ev_phase", row.phase); sugRemember("ev_tcat", row.category); sugRemember("ev_assignee", row.assignee);
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_tasks").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_tasks").update(row).eq("id", t.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); toast("Saved"); evRouteSection("tasks");
+    };
+  }
+  // ---- budget vs actual ----
+  async function evBva(host) {
+    var gc = EV.event.guest_target || 0;
+    var lines = (await sb.from("event_budget_lines").select("*").eq("event_id", EV.eventId)).data || [];
+    var revs = (await sb.from("event_revenues").select("*").eq("event_id", EV.eventId)).data || [];
+    function lineEst(r) { return r.cost_basis === "per_guest" ? (Number(r.rate_per_guest) || 0) * gc : (Number(r.estimated) || 0); }
+    var byCat = {}; lines.forEach(function (r) { var k = r.category || "Uncategorised"; if (!byCat[k]) byCat[k] = { est: 0, act: 0 }; byCat[k].est += lineEst(r); byCat[k].act += Number(r.actual) || 0; });
+    var cats = Object.keys(byCat).sort();
+    var totEst = cats.reduce(function (a, k) { return a + byCat[k].est; }, 0), totAct = cats.reduce(function (a, k) { return a + byCat[k].act; }, 0);
+    var maxV = Math.max.apply(null, cats.map(function (k) { return Math.max(byCat[k].est, byCat[k].act); }).concat([1]));
+    var recv = revs.filter(function (r) { return r.received; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    var expRev = revs.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    var rowsHtml = cats.map(function (k) {
+      var e = byCat[k], v = e.est - e.act, ep = Math.round(e.est / maxV * 100), ap = Math.round(e.act / maxV * 100);
+      return '<tr><td><b>' + esc(k) + '</b><div class="bva-bars"><div class="bva-bar est" style="width:' + ep + '%"></div><div class="bva-bar act" style="width:' + ap + '%"></div></div></td><td class="num">' + evM(e.est) + '</td><td class="num">' + evM(e.act) + '</td><td class="num" style="color:' + (v < 0 ? "var(--bad,#dc2626)" : "var(--ink2)") + '">' + evM(v) + '</td></tr>';
+    }).join("");
+    host.innerHTML = '<div class="ev-toolbar"><div class="ev-stat"><span class="v">' + evM(totEst) + '</span><span class="k">estimated</span></div><div class="ev-stat"><span class="v">' + evM(totAct) + '</span><span class="k">actual</span></div><div class="ev-stat"><span class="v">' + evM(totEst - totAct) + '</span><span class="k">remaining vs estimate</span></div><div class="gap"></div><div class="bva-legend"><span class="bva-bar est"></span> Estimated <span class="bva-bar act"></span> Actual</div></div>' +
+      (cats.length ? '<table class="o-list bva"><thead><tr><th>Category</th><th class="num">Estimated</th><th class="num">Actual</th><th class="num">Variance</th></tr></thead><tbody>' + rowsHtml +
+        '<tr class="o-grp"><td><b>Total</b></td><td class="num"><b>' + evM(totEst) + '</b></td><td class="num"><b>' + evM(totAct) + '</b></td><td class="num"><b>' + evM(totEst - totAct) + '</b></td></tr></tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No budget yet</div><div class="o-empty2-h">Add budget lines to compare against actuals.</div></div>') +
+      '<div class="ev-grid2" style="margin-top:16px"><div class="card"><h3>Money in vs out</h3><div class="ev-kv">' +
+      '<div class="r"><span class="k">Revenue expected</span><b>' + evM(expRev) + '</b></div>' +
+      '<div class="r"><span class="k">Revenue received</span><b>' + evM(recv) + '</b></div>' +
+      '<div class="r"><span class="k">Actual spend</span><b>' + evM(totAct) + '</b></div>' +
+      '<div class="r"><span class="k">Net (received - actual)</span><b style="color:' + (recv - totAct < 0 ? "var(--bad,#dc2626)" : "inherit") + '">' + evM(recv - totAct) + '</b></div>' +
+      '</div></div></div>';
   }
 
   // ============================ PAYMENT MODAL ============================

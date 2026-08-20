@@ -1054,3 +1054,30 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .ev-cap-txt{font-size:13px;color:var(--ink2);margin-top:6px}
 .ev-prio{display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:6px;font-size:12px;font-weight:700;color:#fff}
 .ev-prio.pA{background:#dc2626}.ev-prio.pB{background:#ea580c}.ev-prio.pC{background:#0891b2}.ev-prio.pD{background:#64748b}
+
+/* ---- Events: Gantt ---- */
+.gz-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.gz-scroll{min-width:100%}
+.gz-row{display:flex;align-items:center;border-bottom:1px solid var(--line);min-height:34px}
+.gz-row:last-child{border-bottom:none}
+.gz-lbl{flex:0 0 220px;width:220px;padding:6px 12px;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:sticky;left:0;background:var(--panel);border-right:1px solid var(--line);z-index:2}
+.gz-track{position:relative;flex:1;height:34px}
+.gz-head{position:sticky;top:0;background:var(--panel);z-index:3;border-bottom:1px solid var(--line);height:26px}
+.gz-head .gz-track{height:26px}
+.gz-tick{position:absolute;top:5px;font-size:11px;color:var(--ink2);border-left:1px solid var(--line);padding-left:4px;height:16px}
+.gz-today{position:absolute;top:0;bottom:-2000px;width:2px;background:var(--accent);opacity:.5}
+.gz-bar{position:absolute;top:7px;height:20px;background:var(--accent);border-radius:5px;display:flex;align-items:center;padding:0 6px;cursor:pointer;min-width:6px}
+.gz-bar span{font-size:11px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gz-bar.done{background:#16a34a}
+.gz-bar.over{background:var(--bad,#dc2626)}
+.gz-phase{background:var(--panel2)}
+.gz-phase .gz-lbl{font-weight:700;background:var(--panel2)}
+.gz-row[data-id]:hover{background:var(--accent-soft)}
+/* ---- Events: budget vs actual ---- */
+.bva-bars{display:flex;flex-direction:column;gap:3px;margin-top:5px;max-width:320px}
+.bva-bar{height:7px;border-radius:4px;display:inline-block}
+.bva-bar.est{background:var(--accent);opacity:.45}
+.bva-bar.act{background:var(--accent)}
+.bva-legend{font-size:12px;color:var(--ink2);display:flex;align-items:center;gap:6px}
+.bva-legend .bva-bar{width:16px;height:9px}
+.o-list.bva td{vertical-align:top}
