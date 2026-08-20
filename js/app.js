@@ -3948,10 +3948,11 @@
       '<div class="ev-toolbar"><button class="pri" id="g-add">+ Add guest</button>' +
       '<input id="g-q" class="ev-search" placeholder="Search guests...">' +
       '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button></div>' +
-      '<button class="o-filtbtn" id="g-import">Import</button></div>' +
+      '<button class="o-filtbtn" id="g-import">Import</button><button class="o-filtbtn" id="g-reglink">Registration link</button></div>' +
       '<div id="g-body"></div>';
     document.getElementById("g-add").onclick = function () { openGuestModal(null); };
     document.getElementById("g-import").onclick = function () { openGuestImport(); };
+    document.getElementById("g-reglink").onclick = function () { openRegLinkModal(); };
     document.getElementById("g-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._guestView = b.dataset.v; evGuests(host); }; });
     var q = "";
     function paint() {
@@ -3989,9 +3990,11 @@
       '<div class="row2"><div><label>RSVP</label><select id="gm-rsvp">' + osel(RSVP_OPTS, g.rsvp || "pending") + '</select></div><div><label>Plus ones</label><input id="gm-plus" type="number" min="0" value="' + (g.plus_ones || 0) + '"></div></div>' +
       '<div class="row2"><div><label>Email</label><input id="gm-email" value="' + esc(g.email || "") + '"></div><div><label>Phone</label><input id="gm-phone" value="' + esc(g.phone || "") + '"></div></div>' +
       '<div class="row2"><div><label>Dietary / notes</label><input id="gm-diet" value="' + esc(g.dietary || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="gm-vip"' + (g.is_vip ? " checked" : "") + '> VIP</label></div></div>' +
+      (!isNew && g.rsvp_token ? '<div class="o-chkline" style="justify-content:space-between"><span>Personal RSVP link' + (g.responded_at ? ' &middot; <span class="muted">responded</span>' : "") + '</span><button type="button" class="btn sm" id="gm-rsvplink">Copy link</button></div>' : "") +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="gm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="gm-cancel">Cancel</button><button class="btn pri" id="gm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("gm-cancel").onclick = function () { m.remove(); };
+    var glink = document.getElementById("gm-rsvplink"); if (glink) glink.onclick = function () { evCopy(location.origin + "/rsvp.html?g=" + g.rsvp_token, "RSVP link copied"); };
     var del = document.getElementById("gm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this guest?")) return; await sb.from("event_guests").delete().eq("id", g.id); m.remove(); evRouteSection("guests"); };
     document.getElementById("gm-save").onclick = async function () {
       var row = { first_name: gv("gm-first") || null, family_name: gv("gm-fam") || null, side: gv("gm-side") || null, category: gv("gm-cat") || null, priority: document.getElementById("gm-prio").value || null, invite_stage: document.getElementById("gm-stage").value, rsvp: document.getElementById("gm-rsvp").value, plus_ones: parseInt(gv("gm-plus"), 10) || 0, email: gv("gm-email") || null, phone: gv("gm-phone") || null, dietary: gv("gm-diet") || null, is_vip: document.getElementById("gm-vip").checked };
@@ -4022,6 +4025,21 @@
       var r = await sb.from("event_guests").insert(rows); if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast(rows.length + " guests imported"); evRouteSection("guests"); evOverviewStats();
     };
+  }
+  function evCopy(link, okMsg) { try { navigator.clipboard.writeText(link).then(function () { toast(okMsg || "Link copied"); }, function () { prompt("Copy this link:", link); }); } catch (e) { prompt("Copy this link:", link); } }
+  function openRegLinkModal() {
+    var link = location.origin + "/register.html?e=" + (EV.event.public_token || "");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Public registration link</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="sub">Share this link so people can add themselves to your longlist. You still review and prioritise them before inviting.</div>' +
+      '<label class="o-chkline"><input type="checkbox" id="rl-open"' + (EV.event.registration_open ? " checked" : "") + '> Registration is open</label>' +
+      '<div style="display:flex;gap:8px"><input id="rl-link" value="' + esc(link) + '" readonly style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"><button class="btn pri" id="rl-copy" style="background:var(--app);border-color:var(--app)">Copy</button></div>' +
+      '<div class="muted" style="font-size:11.5px">When registration is closed, the link shows a friendly &ldquo;not open yet&rdquo; message.</div>' +
+      '</div><div class="foot"><button class="btn" id="rl-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("rl-close").onclick = function () { m.remove(); };
+    document.getElementById("rl-copy").onclick = function () { evCopy(link, "Registration link copied"); };
+    document.getElementById("rl-open").onchange = async function () { var v = this.checked; var r = await sb.from("event_events").update({ registration_open: v }).eq("id", EV.eventId); if (r.error) { toast(errMsg(r.error)); this.checked = !v; return; } EV.event.registration_open = v; toast(v ? "Registration opened" : "Registration closed"); };
   }
   // ---- reusable workspace board (drag to change a field) ----
   var _evBoardIdx = {};

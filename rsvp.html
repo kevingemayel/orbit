@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Confirm your attendance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--paper:#f6f4ef;--card:#fff;--ink:#181a1f;--ink2:#6b6b6b;--line:#e6e2d9;--accent:#2f6bff;--yes:#16a34a;--no:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Onest,system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;max-width:460px;width:100%;padding:34px;box-shadow:0 10px 40px rgba(0,0,0,.06)}
+.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:26px;margin:6px 0 2px;text-wrap:balance}
+.meta{color:var(--ink2);font-size:14px;margin-bottom:22px}
+.hi{font-size:16px;margin-bottom:6px}
+.choices{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:16px 0}
+.choice{padding:14px 6px;border:2px solid var(--line);border-radius:14px;background:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer;text-align:center}
+.choice.on[data-v=yes]{border-color:var(--yes);color:var(--yes);background:#f0fdf4}
+.choice.on[data-v=no]{border-color:var(--no);color:var(--no);background:#fef2f2}
+.choice.on[data-v=maybe]{border-color:var(--accent);color:var(--accent);background:#eff6ff}
+label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px}
+input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font:inherit;font-size:15px}
+button.go{width:100%;margin-top:20px;padding:13px;border:none;border-radius:12px;background:var(--ink);color:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+button.go:disabled{opacity:.5}
+.big{text-align:center;padding:14px 0}.big .em{font-size:44px}
+.brand{text-align:center;color:var(--ink2);font-size:12px;margin-top:20px}
+.err{color:#c0392b;font-size:13px;margin-top:8px}
+#extra{display:none}
+</style>
+</head>
+<body>
+<div class="card" id="card"><div class="big"><div class="em">&#9203;</div><p>Loading…</p></div></div>
+<script src="config.js"></script>
+<script>
+(function(){
+  var sb = window.supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_ANON_KEY);
+  var token = new URLSearchParams(location.search).get("g");
+  var card = document.getElementById("card");
+  var choice = null;
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function fail(msg){ card.innerHTML='<div class="big"><div class="em">&#128577;</div><h1>'+esc(msg)+'</h1></div><div class="brand">Powered by Orbit</div>'; }
+  if(!token){ fail("This link is missing its code."); return; }
+  sb.rpc("rsvp_lookup",{p_token:token}).then(function(r){
+    if(r.error || !r.data || !r.data.length){ fail("We couldn't find your invitation."); return; }
+    render(r.data[0]);
+  });
+  function render(g){
+    var meta=[g.event_date,g.venue].filter(Boolean).join(" &middot; ");
+    choice = (g.rsvp && g.rsvp!=="pending") ? g.rsvp : null;
+    card.innerHTML =
+      '<div class="eyebrow">You&rsquo;re invited</div>'+
+      '<h1>'+esc(g.event_name)+'</h1>'+
+      '<div class="meta">'+meta+'</div>'+
+      '<div class="hi">Hi <b>'+esc(g.guest_name||"there")+'</b> &mdash; will you join us?</div>'+
+      '<div class="choices">'+
+        '<button class="choice'+(choice==="yes"?" on":"")+'" data-v="yes">Yes</button>'+
+        '<button class="choice'+(choice==="no"?" on":"")+'" data-v="no">No</button>'+
+        '<button class="choice'+(choice==="maybe"?" on":"")+'" data-v="maybe">Maybe</button>'+
+      '</div>'+
+      '<div id="extra"'+(choice==="yes"?' style="display:block"':'')+'>'+
+        '<label>How many guests with you?</label><input id="r-plus" type="number" min="0" value="'+(g.plus_ones||0)+'">'+
+        '<label>Dietary needs / notes <span style="font-weight:400;color:var(--ink2)">(optional)</span></label><input id="r-diet">'+
+      '</div>'+
+      '<div class="err" id="r-err"></div>'+
+      '<button class="go" id="r-go">Send my answer</button>'+
+      '<div class="brand">Powered by Orbit</div>';
+    card.querySelectorAll(".choice").forEach(function(b){ b.onclick=function(){ choice=b.dataset.v; card.querySelectorAll(".choice").forEach(function(x){x.classList.toggle("on",x===b);}); document.getElementById("extra").style.display = choice==="yes"?"block":"none"; }; });
+    document.getElementById("r-go").onclick=submit;
+  }
+  function submit(){
+    if(!choice){ document.getElementById("r-err").textContent="Please pick Yes, No or Maybe."; return; }
+    var btn=document.getElementById("r-go"); btn.disabled=true; btn.textContent="Sending…";
+    var plusEl=document.getElementById("r-plus"), dietEl=document.getElementById("r-diet");
+    sb.rpc("rsvp_respond",{p_token:token,p_rsvp:choice,p_plus:plusEl?(parseInt(plusEl.value,10)||0):0,p_dietary:dietEl?dietEl.value.trim():""}).then(function(r){
+      if(r.error){ document.getElementById("r-err").textContent="Something went wrong: "+r.error.message; btn.disabled=false; btn.textContent="Send my answer"; return; }
+      var em = choice==="yes"?"&#127881;":choice==="no"?"&#128522;":"&#128075;";
+      var msg = choice==="yes"?"See you there!":choice==="no"?"We&rsquo;ll miss you.":"Thanks &mdash; let us know when you can.";
+      card.innerHTML='<div class="big"><div class="em">'+em+'</div><h1>'+msg+'</h1><p class="meta">Your response is saved. You can revisit this link to change it.</p></div><div class="brand">Powered by Orbit</div>';
+    });
+  }
+})();
+</script>
+</body>
+</html>
