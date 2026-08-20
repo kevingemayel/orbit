@@ -1140,3 +1140,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .seat-resize{position:absolute;right:2px;bottom:2px;width:12px;height:12px;cursor:nwse-resize;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);opacity:.55}
 .seat-listwrap{flex:1;min-height:200px;max-height:600px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:10px}
 .seat-table.listcard{position:static;width:100%!important;min-height:0!important;border-radius:10px;box-shadow:none}
+/* payment reminder chips (Events > Payments) */
+.rem-chips{display:inline-flex;gap:3px;flex-wrap:wrap}
+.rem-chip{display:inline-block;font-size:10px;font-weight:700;padding:1px 5px;border-radius:5px;line-height:1.5;letter-spacing:.02em}
+.rem-live{background:var(--app,#db2777);color:#fff}
+.rem-done{background:var(--line,#e6e7ea);color:var(--ink2,#8a8f98)}

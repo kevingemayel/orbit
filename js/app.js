@@ -4226,14 +4226,24 @@
   // ---- payments ----
   async function evPayments(host) {
     var rows = (await sb.from("event_payments").select("*").eq("event_id", EV.eventId).order("due_date", { nullsFirst: false })).data || [];
+    var rems = (await sb.from("event_payment_reminders").select("payment_id,offset_days,remind_on,sent").eq("event_id", EV.eventId)).data || [];
+    var remByPay = {}; rems.forEach(function (x) { (remByPay[x.payment_id] = remByPay[x.payment_id] || []).push(x); });
+    function remCell(pid) {
+      var list = (remByPay[pid] || []).slice().sort(function (a, b) { return b.offset_days - a.offset_days; });
+      if (!list.length) return '<span class="muted" style="font-size:11px">-</span>';
+      return '<span class="rem-chips">' + list.map(function (x) {
+        var lab = x.offset_days === 14 ? "2wk" : x.offset_days === 7 ? "1wk" : "due";
+        return '<span class="rem-chip ' + (x.sent ? "rem-done" : "rem-live") + '" title="' + esc((x.offset_days === 14 ? "2 weeks before" : x.offset_days === 7 ? "1 week before" : "On due date") + " - " + x.remind_on + (x.sent ? " (sent)" : " (pending)")) + '">' + lab + '</span>';
+      }).join("") + '</span>';
+    }
     var total = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0), paid = rows.filter(function (r) { return r.paid; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
     host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="p-add">+ Add payment</button><div class="gap"></div>' +
       '<div class="ev-stat"><span class="v">' + evM(paid) + '</span><span class="k">paid</span></div><div class="ev-stat"><span class="v">' + evM(total - paid) + '</span><span class="k">outstanding</span></div>' + evTools("pay") + '</div>' +
-      (rows.length ? '<table class="o-list" id="pay-lines"><thead><tr><th>Due</th><th>Label</th><th>Kind</th><th class="num">Amount</th><th>Booking</th><th>Status</th><th>Bill</th></tr></thead><tbody>' +
+      (rows.length ? '<table class="o-list" id="pay-lines"><thead><tr><th>Due</th><th>Label</th><th>Kind</th><th class="num">Amount</th><th>Booking</th><th>Reminders</th><th>Status</th><th>Bill</th></tr></thead><tbody>' +
         rows.map(function (r) {
           var overdue = !r.paid && r.due_date && r.due_date < today();
-          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.due_date || "") + (overdue ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><b>' + esc(r.label || "") + '</b></td><td class="muted">' + esc(r.kind || "") + '</td><td class="num">' + evM(r.amount) + '</td><td>' + (r.is_booking_confirmation ? '<span class="badge">Booking</span>' : "") + '</td><td>' + (r.paid ? '<span class="badge paid">Paid</span>' : '<span class="badge unpaid">Due</span>') + '</td><td><button class="btn sm ev-bill" data-pid="' + r.id + '">' + (r.bill_id ? "View bill" : "Bill") + '</button></td></tr>';
-        }).join("") + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No payments scheduled</div><div class="o-empty2-h">Add deposits, balances and booking-confirmation milestones.</div></div>');
+          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.due_date || "") + (overdue ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><b>' + esc(r.label || "") + '</b></td><td class="muted">' + esc(r.kind || "") + '</td><td class="num">' + evM(r.amount) + '</td><td>' + (r.is_booking_confirmation ? '<span class="badge">Booking</span>' : "") + '</td><td>' + (r.paid ? '<span class="muted" style="font-size:11px">paid</span>' : remCell(r.id)) + '</td><td>' + (r.paid ? '<span class="badge paid">Paid</span>' : '<span class="badge unpaid">Due</span>') + '</td><td><button class="btn sm ev-bill" data-pid="' + r.id + '">' + (r.bill_id ? "View bill" : "Bill") + '</button></td></tr>';
+        }).join("") + '</tbody></table><div class="sub" style="margin-top:8px">&#128276; Each payment is reminded automatically <b>2 weeks before</b>, <b>1 week before</b>, and <b>on the due date</b> - emailed to everyone involved in this event. Grey = already sent, coloured = still pending.</div>' : '<div class="o-empty2"><div class="o-empty2-t">No payments scheduled</div><div class="o-empty2-h">Add deposits, balances and booking-confirmation milestones.</div></div>');
     document.getElementById("p-add").onclick = function () { openEvPayModal(null); };
     evWireTools("pay", function () { return { name: "payments", title: "Payments - " + EV.event.name, headers: ["Due", "Label", "Kind", "Amount", "Booking", "Paid"], rows: rows.map(function (r) { return [r.due_date, r.label, r.kind, r.amount, r.is_booking_confirmation ? "Yes" : "", r.paid ? "Yes" : ""]; }), printSel: "#pay-lines" }; });
     host.querySelectorAll(".ev-bill").forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); var r = rows.filter(function (x) { return x.id === b.dataset.pid; })[0]; if (r) evCreateBillFromPayment(r); }; });
