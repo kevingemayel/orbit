@@ -5125,21 +5125,31 @@
   }
 
   // ============================ CASH FLOW FORECAST ============================
+  var CF_PRESETS = { "6w": { unit: "week", n: 6, label: "6 weeks" }, "13w": { unit: "week", n: 13, label: "13 weeks" }, "26w": { unit: "week", n: 26, label: "26 weeks" }, "6m": { unit: "month", n: 6, label: "6 months" }, "12m": { unit: "month", n: 12, label: "12 months" }, "18m": { unit: "month", n: 18, label: "18 months" } };
+  var CF_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   async function renderCashForecast() {
     var cc = S.company.currency_code;
+    var H = CF_PRESETS[S._cfHorizon] ? S._cfHorizon : "13w", P = CF_PRESETS[H];
+    var view = S._cfView === "table" ? "table" : "chart";
     document.getElementById("o-main").innerHTML = repChrome("Cash Flow Forecast", true);
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
-    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
     // opening cash = bank + cash GL balances (codes 51xx bank, 53xx cash)
     var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
     var opening = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) opening += Number(r.balance || 0); });
-    var WK = 13;
-    var start = new Date(); start.setHours(0, 0, 0, 0); start.setDate(start.getDate() - ((start.getDay() + 6) % 7)); // Monday of this week
-    var buckets = []; for (var w = 0; w < WK; w++) { var d = new Date(start); d.setDate(start.getDate() + w * 7); buckets.push({ start: d, inflow: 0, outflow: 0 }); }
-    function idxFor(dateStr) { var d = parseD(dateStr); if (!d) return 0; var diff = Math.floor((d - start) / 6048e5); if (diff < 0) return 0; if (diff >= WK) return -1; return diff; }
-    function addIn(dateStr, amt) { var i = idxFor(dateStr); if (i < 0) return; buckets[i].inflow += amt; }
-    function addOut(dateStr, amt) { var i = idxFor(dateStr); if (i < 0) return; buckets[i].outflow += amt; }
+    // build the period buckets (weekly for short horizons, monthly for long ones)
+    var buckets = [];
+    if (P.unit === "week") {
+      var wstart = new Date(); wstart.setHours(0, 0, 0, 0); wstart.setDate(wstart.getDate() - ((wstart.getDay() + 6) % 7)); // Monday of this week
+      for (var w = 0; w < P.n; w++) { var s = new Date(wstart); s.setDate(wstart.getDate() + w * 7); var e = new Date(s); e.setDate(s.getDate() + 7); buckets.push({ start: s, end: e, inflow: 0, outflow: 0, label: "Wk " + (w + 1) + " · " + fmtD(s), short: "W" + (w + 1) }); }
+    } else {
+      var now = new Date(), mstart = new Date(now.getFullYear(), now.getMonth(), 1);
+      for (var m = 0; m < P.n; m++) { var ms = new Date(mstart.getFullYear(), mstart.getMonth() + m, 1), me2 = new Date(mstart.getFullYear(), mstart.getMonth() + m + 1, 1); buckets.push({ start: ms, end: me2, inflow: 0, outflow: 0, label: CF_MON[ms.getMonth()] + " " + ms.getFullYear(), short: CF_MON[ms.getMonth()] + " " + String(ms.getFullYear()).slice(2) }); }
+    }
+    var firstStart = buckets[0].start;
+    function idxFor(dateStr) { var d = parseD(dateStr); if (!d) return 0; if (d < firstStart) return 0; for (var i = 0; i < buckets.length; i++) { if (d < buckets[i].end) return i; } return -1; }
+    function addIn(dateStr, amt) { var i = idxFor(dateStr); if (i < 0 || !(amt > 0.005)) return; buckets[i].inflow += amt; }
+    function addOut(dateStr, amt) { var i = idxFor(dateStr); if (i < 0 || !(amt > 0.005)) return; buckets[i].outflow += amt; }
     // AR / AP open documents by due date
     var docs = (await sb.from("invoices").select("move_type,due_date,amount_residual").eq("company_id", S.company.id).eq("state", "posted").gt("amount_residual", 0.005)).data || [];
     docs.forEach(function (d) {
@@ -5154,10 +5164,16 @@
     var poByOrder = {};
     poLines.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; if (!poByOrder[po.id]) poByOrder[po.id] = { date: po.date_planned, amt: 0 }; poByOrder[po.id].amt += v; });
     Object.keys(poByOrder).forEach(function (k) { if (poByOrder[k].amt > 0.005) addOut(poByOrder[k].date, poByOrder[k].amt); });
+    // scheduled EVENT payments (unpaid, not yet turned into a bill) as outflows by due date
+    var evPays = (await sb.from("event_payments").select("amount,due_date,bill_id, event_events!inner(company_id)").eq("event_events.company_id", S.company.id).eq("paid", false).is("bill_id", null).not("due_date", "is", null)).data || [];
+    evPays.forEach(function (p) { addOut(p.due_date, Number(p.amount || 0)); });
+    // expected EVENT revenues (tickets, sponsorship, gifts, contributions) not yet invoiced/received, as inflows
+    var evRevs = (await sb.from("event_revenues").select("amount,expected_date,invoice_id,received, event_events!inner(company_id)").eq("event_events.company_id", S.company.id).eq("received", false).is("invoice_id", null).not("expected_date", "is", null)).data || [];
+    evRevs.forEach(function (r) { addIn(r.expected_date, Number(r.amount || 0)); });
     // payroll estimate: running contracts monthly gross at each month-end within horizon
     var contracts = (await sb.from("hr_contracts").select("wage,state").eq("company_id", S.company.id).eq("state", "running")).data || [];
     var monthlyPayroll = contracts.reduce(function (s, c) { return s + Number(c.wage || 0); }, 0);
-    if (monthlyPayroll > 0) buckets.forEach(function (b) { var bs = b.start, be = new Date(bs); be.setDate(bs.getDate() + 6); var me = new Date(bs.getFullYear(), bs.getMonth() + 1, 0); if (me >= bs && me <= be) addOut(fmtD(me), monthlyPayroll); });
+    if (monthlyPayroll > 0) buckets.forEach(function (b) { var me = new Date(b.start.getFullYear(), b.start.getMonth() + 1, 0); if (me >= b.start && me < b.end) addOut(fmtD(me), monthlyPayroll); });
     // client retention expected release (projects with a retention_due_date)
     var projs = (await sb.from("projects").select("id,name,retention_due_date").eq("company_id", S.company.id).not("retention_due_date", "is", null)).data || [];
     if (projs.length) {
@@ -5168,18 +5184,51 @@
       var relBy = {}; rels.forEach(function (r) { if (r.project_id) relBy[r.project_id] = (relBy[r.project_id] || 0) + Number(r.amount || 0); });
       projs.forEach(function (p) { var out = (latestRet[p.id] || 0) - (relBy[p.id] || 0); if (out > 0.005) addIn(p.retention_due_date, out); });
     }
-    var run = opening, low = opening, rows = "";
+    // running totals
+    var run = opening, low = opening, net = [], running = [], rows = "";
     buckets.forEach(function (b, i) {
-      var net = b.inflow - b.outflow; run += net; if (run < low) low = run;
+      var n = b.inflow - b.outflow; run += n; if (run < low) low = run; net.push(n); running.push(run);
       var cls = run < 0 ? ' style="color:var(--bad);font-weight:700"' : '';
-      rows += '<tr><td class="muted">Wk ' + (i + 1) + ' &middot; ' + fmtD(b.start) + '</td><td class="num" style="color:var(--good)">' + money(b.inflow) + '</td><td class="num" style="color:var(--bad)">' + money(b.outflow) + '</td><td class="num"' + (net < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(net) + '</td><td class="num"' + cls + '>' + money(run) + '</td></tr>';
+      rows += '<tr><td class="muted">' + esc(b.label) + '</td><td class="num" style="color:var(--good)">' + money(b.inflow) + '</td><td class="num" style="color:var(--bad)">' + money(b.outflow) + '</td><td class="num"' + (n < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(n) + '</td><td class="num"' + cls + '>' + money(run) + '</td></tr>';
     });
+    // ---- chart (running-cash line + net inflow/outflow bars, shared money axis) ----
+    function cfChart() {
+      var n = buckets.length; if (!n) return "";
+      var W = Math.max(680, n * 46), Ht = 300, padL = 10, padR = 10, padT = 16, padB = 46, iw = W - padL - padR, ih = Ht - padT - padB;
+      var vals = [0, opening].concat(running).concat(net);
+      var mx = Math.max.apply(null, vals), mn = Math.min.apply(null, vals);
+      if (mx === mn) { mx += 1; mn -= 1; } var padv = (mx - mn) * 0.08 || 1; mx += padv; mn -= padv;
+      function Y(v) { return padT + ih - ((v - mn) / (mx - mn)) * ih; }
+      var bw = iw / n, barW = Math.min(24, bw * 0.5), y0 = Y(0);
+      var bars = net.map(function (v, i) { var cx = padL + bw * i + bw / 2, yv = Y(v), top = Math.min(yv, y0), h = Math.abs(yv - y0); return '<rect x="' + (cx - barW / 2).toFixed(1) + '" y="' + top.toFixed(1) + '" width="' + barW.toFixed(1) + '" height="' + Math.max(0.5, h).toFixed(1) + '" rx="3" fill="' + (v >= 0 ? "var(--good)" : "var(--bad)") + '" opacity="0.32"></rect>'; }).join("");
+      var pts = running.map(function (v, i) { return (padL + bw * i + bw / 2).toFixed(1) + "," + Y(v).toFixed(1); });
+      var area = '<polyline points="' + (padL + bw / 2).toFixed(1) + "," + y0.toFixed(1) + " " + pts.join(" ") + " " + (padL + bw * (n - 1) + bw / 2).toFixed(1) + "," + y0.toFixed(1) + '" fill="var(--app)" opacity="0.08"></polyline>';
+      var line = '<polyline points="' + pts.join(" ") + '" fill="none" stroke="var(--app)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>';
+      var dots = running.map(function (v, i) { return '<circle cx="' + (padL + bw * i + bw / 2).toFixed(1) + '" cy="' + Y(v).toFixed(1) + '" r="3.2" fill="' + (v < 0 ? "var(--bad)" : "var(--app)") + '"><title>' + esc(buckets[i].label) + ": " + cc + " " + money(v) + '</title></circle>'; }).join("");
+      var zero = (0 >= mn && 0 <= mx) ? '<line x1="' + padL + '" y1="' + y0.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + y0.toFixed(1) + '" stroke="var(--ink2)" stroke-dasharray="3 3" opacity="0.55"></line>' : "";
+      var oY = Y(opening), openLn = '<line x1="' + padL + '" y1="' + oY.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + oY.toFixed(1) + '" stroke="var(--line)"></line><text x="' + (W - padR) + '" y="' + (oY - 4).toFixed(1) + '" text-anchor="end" font-size="9" fill="var(--ink2)">opening ' + esc(money(opening)) + '</text>';
+      var labs = buckets.map(function (b, i) { return '<text x="' + (padL + bw * i + bw / 2).toFixed(1) + '" y="' + (Ht - padB + 16) + '" text-anchor="middle" font-size="10" fill="var(--ink2)">' + esc(b.short) + "</text>"; }).join("");
+      return '<div class="o-rt-wrap"><svg viewBox="0 0 ' + W + " " + Ht + '" preserveAspectRatio="xMinYMid meet" style="width:100%;min-width:' + Math.min(W, 900) + 'px;height:300px;font-family:inherit">' + openLn + zero + area + bars + line + dots + labs + "</svg></div>" +
+        '<div class="cf-legend"><span><i style="background:var(--app)"></i>Running cash</span><span><i style="background:var(--good);opacity:.5"></i>Net inflow</span><span><i style="background:var(--bad);opacity:.5"></i>Net outflow</span></div>';
+    }
+    // CSV export straight from the computed buckets (works in chart or table view)
+    function cfExportCsv() {
+      var out = ["Period,Inflows,Outflows,Net,Running cash"];
+      buckets.forEach(function (b, i) { out.push([b.label.replace(/·/g, "-"), b.inflow.toFixed(2), b.outflow.toFixed(2), net[i].toFixed(2), running[i].toFixed(2)].map(function (c) { return /[",]/.test(c) ? '"' + c.replace(/"/g, '""') + '"' : c; }).join(",")); });
+      downloadBlob("cash_flow_forecast_" + today() + ".csv", "﻿" + out.join("\r\n"));
+    }
     var kpi = function (l, v, col) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n"' + (col ? ' style="color:' + col + '"' : '') + '>' + cc + ' ' + money(v) + '</div></div>'; };
-    document.getElementById("rep").innerHTML = repHead("Cash Flow Forecast (13 weeks)", cc) +
-      '<div class="kpis" style="margin:14px 0 4px">' + kpi("Opening cash", opening) + kpi("Lowest projected", low, low < 0 ? 'var(--bad)' : '') + kpi("Projected in 13 weeks", run, run < 0 ? 'var(--bad)' : '') + '</div>' +
-      (low < 0 ? '<div class="ob-banner">! Cash is projected to go negative within 13 weeks (low ' + cc + ' ' + money(low) + '). Chase receivables or defer commitments.</div>' : '') +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Week</td><td class="num">Inflows</td><td class="num">Outflows</td><td class="num">Net</td><td class="num">Running cash</td></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:8px">Opening cash = bank + cash GL balances. Inflows = customer invoices due + expected retention releases (on a project\'s Retention due date). Outflows = vendor bills due, unbilled committed POs (by planned date), and estimated monthly payroll (running contracts). Overdue items sit in week 1. Anything due beyond 13 weeks is excluded.</div>';
+    var controls = '<div class="cf-ctrls"><label>Horizon <select id="cf-h">' + Object.keys(CF_PRESETS).map(function (k) { return '<option value="' + k + '"' + (k === H ? " selected" : "") + '>' + CF_PRESETS[k].label + "</option>"; }).join("") + '</select></label>' +
+      '<div class="o-vs" id="cf-vs"><button data-v="chart"' + (view === "chart" ? ' class="on"' : "") + '>&#9683; Chart</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9636; Table</button></div></div>';
+    document.getElementById("rep").innerHTML = repHead("Cash Flow Forecast (" + P.label + ")", cc) + controls +
+      '<div class="kpis" style="margin:12px 0 4px">' + kpi("Opening cash", opening) + kpi("Lowest projected", low, low < 0 ? 'var(--bad)' : '') + kpi("Projected end of " + P.label, run, run < 0 ? 'var(--bad)' : '') + '</div>' +
+      (low < 0 ? '<div class="ob-banner">! Cash is projected to go negative within ' + P.label + ' (low ' + cc + ' ' + money(low) + '). Chase receivables or defer commitments.</div>' : '') +
+      (view === "chart" ? cfChart() :
+        '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Period</td><td class="num">Inflows</td><td class="num">Outflows</td><td class="num">Net</td><td class="num">Running cash</td></tr></thead><tbody>' + rows + '</tbody></table></div>') +
+      '<div class="sub" style="margin-top:8px">Opening cash = bank + cash GL balances. Inflows = customer invoices due, expected event revenues, and retention releases. Outflows = vendor bills due, unbilled committed POs, scheduled event payments, and estimated monthly payroll. Overdue/past items sit in the first period; anything beyond the horizon is excluded. Pick a longer horizon to see payments further out.</div>';
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = cfExportCsv;
+    document.getElementById("cf-h").onchange = function () { S._cfHorizon = this.value; renderCashForecast(); };
+    document.getElementById("cf-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { S._cfView = b.dataset.v; renderCashForecast(); }; });
   }
 
   // ============================ COLLECTIONS (overdue AR follow-up) ============================
