@@ -3788,6 +3788,29 @@
   function evM(n) { return evCur() + " " + money(Number(n) || 0); }
   function eventStatusBadge(s) { var map = { planning: "draft", confirmed: "partial", in_progress: "partial", done: "paid", cancelled: "unpaid" }; return '<span class="badge ' + (map[s] || "draft") + '">' + esc(evLabel(EVENT_STATUS, s)) + '</span>'; }
 
+  // ---- accounting bridge: turn event money rows into real invoices / bills ----
+  async function evCreateInvoiceFromRevenue(r) {
+    if (r.invoice_id) { renderInvoiceForm(r.invoice_id, "out_invoice"); return; }
+    if (!EV.event.partner_id) { toast("Set a Client on the event first (Edit event), then raise the invoice."); return; }
+    var amt = Number(r.amount) || 0, num = await nextNumber("out_invoice");
+    var hdr = { partner_id: EV.event.partner_id, invoice_date: today(), due_date: r.expected_date || null, ref: "Event: " + EV.event.name, project_id: EV.event.project_id || null, amount_untaxed: amt, amount_total: amt, amount_residual: amt, company_id: S.company.id, move_type: "out_invoice", currency_code: S.company.currency_code, state: "draft", number: num };
+    var ins = await sb.from("invoices").insert(hdr).select("id").single(); if (ins.error) { toast("Could not create invoice: " + errMsg(ins.error)); return; }
+    await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: (r.source ? r.source + ": " : "") + (r.description || "Event revenue"), quantity: 1, unit_price: amt, price_subtotal: amt });
+    await sb.from("event_revenues").update({ invoice_id: ins.data.id }).eq("id", r.id);
+    toast("Draft invoice " + num + " created - review & post in Accounting"); renderInvoiceForm(ins.data.id, "out_invoice");
+  }
+  async function evCreateBillFromPayment(p) {
+    if (p.bill_id) { renderInvoiceForm(p.bill_id, "in_invoice"); return; }
+    var partnerId = null;
+    if (p.supplier_id) { var sup = (await sb.from("event_suppliers").select("partner_id").eq("id", p.supplier_id).maybeSingle()).data; partnerId = sup && sup.partner_id; }
+    if (!partnerId) { toast("Link this payment's supplier to a Contact first (Suppliers tab -> Linked contact), then create the bill."); return; }
+    var amt = Number(p.amount) || 0, num = await nextNumber("in_invoice");
+    var hdr = { partner_id: partnerId, invoice_date: today(), due_date: p.due_date || null, ref: (p.label || "Event payment") + " - " + EV.event.name, project_id: EV.event.project_id || null, amount_untaxed: amt, amount_total: amt, amount_residual: amt, company_id: S.company.id, move_type: "in_invoice", currency_code: S.company.currency_code, state: "draft", number: num };
+    var ins = await sb.from("invoices").insert(hdr).select("id").single(); if (ins.error) { toast("Could not create bill: " + errMsg(ins.error)); return; }
+    await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: (p.label || "Payment") + (p.kind ? " (" + p.kind + ")" : ""), quantity: 1, unit_price: amt, price_subtotal: amt });
+    await sb.from("event_payments").update({ bill_id: ins.data.id }).eq("id", p.id);
+    toast("Draft bill " + num + " created - review & post in Accounting"); renderInvoiceForm(ins.data.id, "in_invoice");
+  }
   // reusable Export (CSV) + Print for the event workspace sections
   function evExportCsv(name, headers, rows) {
     var out = [headers.map(csvCell).join(",")];
@@ -3835,6 +3858,8 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New event" : "Edit", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var e = id === "new" ? { status: "planning", event_type: "wedding", currency: (S.company && S.company.currency_code) || "USD" } : (await sb.from("event_events").select("*").eq("id", id).maybeSingle()).data || {};
+    var evCustomers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var evProjects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New event" : (e.name || "");
     function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
@@ -3851,12 +3876,17 @@
       fld("Currency", '<input id="ev-cur" value="' + esc(e.currency || "USD") + '" maxlength="3" style="text-transform:uppercase">', "The currency used for this event's budget.") +
       fld("Status", '<select id="ev-status">' + osel(EVENT_STATUS, e.status || "planning") + '</select>', "The lifecycle stage of the event.") +
       '</div></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Client / customer", '<select id="ev-client"><option value="">(none)</option>' + evCustomers.map(function (c) { return '<option value="' + c.id + '"' + (e.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "The customer this event is for. Links to your Contacts and lets you raise their invoices.") +
+      '</div><div>' +
+      fld("Project", '<select id="ev-project"><option value="">(none)</option>' + evProjects.map(function (p) { return '<option value="' + p.id + '"' + (e.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>', "Optionally link this event to a project for job costing.") +
+      '</div></div>' +
       fld("Notes", '<textarea id="ev-notes" rows="2">' + esc(e.notes || "") + '</textarea>', "") + '</div>';
     document.getElementById("ev-discard").onclick = function () { id === "new" ? go("events.list") : renderEventWorkspace(id, "overview"); };
     wireAttach("event");
     document.getElementById("ev-save").onclick = async function () {
       var name = gv("ev-name"); if (!name) { toast("Name is required"); return; }
-      var row = { name: name, event_type: document.getElementById("ev-type").value, event_date: gv("ev-date") || null, end_date: gv("ev-enddate") || null, guest_target: parseInt(gv("ev-target"), 10) || null, venue: gv("ev-venue") || null, location: gv("ev-loc") || null, currency: (gv("ev-cur") || "USD").toUpperCase().slice(0, 3), status: document.getElementById("ev-status").value, notes: gv("ev-notes") || null };
+      var row = { name: name, event_type: document.getElementById("ev-type").value, event_date: gv("ev-date") || null, end_date: gv("ev-enddate") || null, guest_target: parseInt(gv("ev-target"), 10) || null, venue: gv("ev-venue") || null, location: gv("ev-loc") || null, currency: (gv("ev-cur") || "USD").toUpperCase().slice(0, 3), status: document.getElementById("ev-status").value, partner_id: document.getElementById("ev-client").value || null, project_id: document.getElementById("ev-project").value || null, notes: gv("ev-notes") || null };
       sugRemember("venue", row.venue); sugRemember("city", row.location);
       if (id === "new") { row.company_id = S.company.id; row.org_id = S.company.org_id; var ins = await sb.from("event_events").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } await mediaFlush("event", ins.data.id); toast("Event created"); renderEventWorkspace(ins.data.id, "overview"); }
       else { var up = await sb.from("event_events").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } toast("Saved"); renderEventWorkspace(id, "overview"); }
@@ -3868,6 +3898,7 @@
     if (!ev) { toast("Event not found"); go("events.list"); return; }
     EV = { eventId: eventId, section: section, event: ev };
     S.app = "events"; if (!document.getElementById("o-main")) renderShell(); applyAppColor();
+    var evClient = ev.partner_id ? ((await sb.from("partners").select("name").eq("id", ev.partner_id).maybeSingle()).data || {}).name : "";
     var cover = await mediaFirstImage("event", eventId);
     var main = document.getElementById("o-main");
     var days = ev.event_date ? Math.ceil((new Date(ev.event_date) - new Date(today())) / 864e5) : null;
@@ -3879,7 +3910,7 @@
       '<div class="ev-head">' +
       '<div class="ev-cover">' + (cover ? '<img src="' + cover + '">' : '<span class="ev-cover-x">' + esc((ev.name || "?").slice(0, 1)) + '</span>') + '</div>' +
       '<div class="ev-head-main"><div class="ev-title-row"><h1>' + esc(ev.name) + '</h1>' + eventStatusBadge(ev.status) + '</div>' +
-      '<div class="ev-meta">' + esc(evLabel(EVENT_TYPES, ev.event_type)) + (ev.event_date ? ' &middot; ' + esc(ev.event_date) : "") + (ev.venue ? ' &middot; ' + esc(ev.venue) : "") + (ev.location ? ", " + esc(ev.location) : "") + '</div>' +
+      '<div class="ev-meta">' + esc(evLabel(EVENT_TYPES, ev.event_type)) + (ev.event_date ? ' &middot; ' + esc(ev.event_date) : "") + (ev.venue ? ' &middot; ' + esc(ev.venue) : "") + (ev.location ? ", " + esc(ev.location) : "") + (evClient ? ' &middot; <b>' + esc(evClient) + '</b>' : "") + '</div>' +
       '<div class="ev-stats" id="ev-stats">' + (days != null ? '<div class="ev-stat"><span class="v">' + (days >= 0 ? days : "-") + '</span><span class="k">' + (days >= 0 ? "days to go" : "past") + '</span></div>' : "") + '</div>' +
       '</div></div>' +
       '<div class="ev-tabs">' + tabs + '</div>' +
@@ -4197,23 +4228,27 @@
     var rows = (await sb.from("event_payments").select("*").eq("event_id", EV.eventId).order("due_date", { nullsFirst: false })).data || [];
     var total = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0), paid = rows.filter(function (r) { return r.paid; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
     host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="p-add">+ Add payment</button><div class="gap"></div>' +
-      '<div class="ev-stat"><span class="v">' + evM(paid) + '</span><span class="k">paid</span></div><div class="ev-stat"><span class="v">' + evM(total - paid) + '</span><span class="k">outstanding</span></div></div>' +
-      (rows.length ? '<table class="o-list"><thead><tr><th>Due</th><th>Label</th><th>Kind</th><th class="num">Amount</th><th>Booking</th><th>Status</th></tr></thead><tbody>' +
+      '<div class="ev-stat"><span class="v">' + evM(paid) + '</span><span class="k">paid</span></div><div class="ev-stat"><span class="v">' + evM(total - paid) + '</span><span class="k">outstanding</span></div>' + evTools("pay") + '</div>' +
+      (rows.length ? '<table class="o-list" id="pay-lines"><thead><tr><th>Due</th><th>Label</th><th>Kind</th><th class="num">Amount</th><th>Booking</th><th>Status</th><th>Bill</th></tr></thead><tbody>' +
         rows.map(function (r) {
           var overdue = !r.paid && r.due_date && r.due_date < today();
-          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.due_date || "") + (overdue ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><b>' + esc(r.label || "") + '</b></td><td class="muted">' + esc(r.kind || "") + '</td><td class="num">' + evM(r.amount) + '</td><td>' + (r.is_booking_confirmation ? '<span class="badge">Booking</span>' : "") + '</td><td>' + (r.paid ? '<span class="badge paid">Paid</span>' : '<span class="badge unpaid">Due</span>') + '</td></tr>';
+          return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.due_date || "") + (overdue ? ' <span class="ob-flag">overdue</span>' : "") + '</td><td><b>' + esc(r.label || "") + '</b></td><td class="muted">' + esc(r.kind || "") + '</td><td class="num">' + evM(r.amount) + '</td><td>' + (r.is_booking_confirmation ? '<span class="badge">Booking</span>' : "") + '</td><td>' + (r.paid ? '<span class="badge paid">Paid</span>' : '<span class="badge unpaid">Due</span>') + '</td><td><button class="btn sm ev-bill" data-pid="' + r.id + '">' + (r.bill_id ? "View bill" : "Bill") + '</button></td></tr>';
         }).join("") + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No payments scheduled</div><div class="o-empty2-h">Add deposits, balances and booking-confirmation milestones.</div></div>');
     document.getElementById("p-add").onclick = function () { openEvPayModal(null); };
-    host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openEvPayModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+    evWireTools("pay", function () { return { name: "payments", title: "Payments - " + EV.event.name, headers: ["Due", "Label", "Kind", "Amount", "Booking", "Paid"], rows: rows.map(function (r) { return [r.due_date, r.label, r.kind, r.amount, r.is_booking_confirmation ? "Yes" : "", r.paid ? "Yes" : ""]; }), printSel: "#pay-lines" }; });
+    host.querySelectorAll(".ev-bill").forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); var r = rows.filter(function (x) { return x.id === b.dataset.pid; })[0]; if (r) evCreateBillFromPayment(r); }; });
+    host.querySelectorAll("tr[data-id]").forEach(function (el) { el.onclick = function () { openEvPayModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
-  function openEvPayModal(p) {
+  async function openEvPayModal(p) {
     p = p || {}; var isNew = !p.id;
+    var paySups = (await sb.from("event_suppliers").select("id,name").eq("event_id", EV.eventId).order("name")).data || [];
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add payment" : "Edit payment") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div><label>Label</label><input id="pm-label" value="' + esc(p.label || "") + '" placeholder="e.g. Venue deposit"></div>' +
       '<div class="row2"><div><label>Kind</label><select id="pm-kind"><option value="deposit"' + (p.kind === "deposit" || !p.kind ? " selected" : "") + '>Deposit</option><option value="balance"' + (p.kind === "balance" ? " selected" : "") + '>Balance</option><option value="installment"' + (p.kind === "installment" ? " selected" : "") + '>Installment</option></select></div><div><label>Amount (' + esc(evCur()) + ')</label><input id="pm-amt" type="number" step="0.01" value="' + (p.amount != null ? p.amount : "") + '"></div></div>' +
       '<div class="row2"><div><label>Due date</label><input id="pm-due" type="date" value="' + esc(p.due_date || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="pm-book"' + (p.is_booking_confirmation ? " checked" : "") + '> Booking confirmation</label></div></div>' +
       '<div class="row2"><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="pm-paid"' + (p.paid ? " checked" : "") + '> Paid</label></div><div><label>Paid date</label><input id="pm-paiddate" type="date" value="' + esc(p.paid_date || "") + '"></div></div>' +
+      '<div><label>Supplier <span style="font-weight:400;color:var(--ink2)">(so you can raise a vendor bill)</span></label><select id="pm-supplier"><option value="">(none)</option>' + paySups.map(function (s) { return '<option value="' + s.id + '"' + (p.supplier_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Reference / notes</label><input id="pm-notes" value="' + esc(p.notes || "") + '"></div>' +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="pm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="pm-cancel">Cancel</button><button class="btn pri" id="pm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
@@ -4221,7 +4256,7 @@
     var del = document.getElementById("pm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this payment?")) return; await sb.from("event_payments").delete().eq("id", p.id); m.remove(); evRouteSection("payments"); evOverviewStats(); };
     document.getElementById("pm-save").onclick = async function () {
       var paidChk = document.getElementById("pm-paid").checked;
-      var row = { label: gv("pm-label") || null, kind: document.getElementById("pm-kind").value, amount: parseFloat(gv("pm-amt")) || 0, due_date: gv("pm-due") || null, is_booking_confirmation: document.getElementById("pm-book").checked, paid: paidChk, paid_date: gv("pm-paiddate") || (paidChk ? today() : null), notes: gv("pm-notes") || null };
+      var row = { label: gv("pm-label") || null, kind: document.getElementById("pm-kind").value, amount: parseFloat(gv("pm-amt")) || 0, due_date: gv("pm-due") || null, is_booking_confirmation: document.getElementById("pm-book").checked, paid: paidChk, paid_date: gv("pm-paiddate") || (paidChk ? today() : null), supplier_id: document.getElementById("pm-supplier").value || null, notes: gv("pm-notes") || null };
       if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_payments").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
       else { var u = await sb.from("event_payments").update(row).eq("id", p.id); if (u.error) { toast(errMsg(u.error)); return; } }
       m.remove(); toast("Saved"); evRouteSection("payments"); evOverviewStats();
@@ -4256,8 +4291,9 @@
     document.getElementById("s-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
     paint();
   }
-  function openSupplierModal(s) {
+  async function openSupplierModal(s) {
     s = s || {}; var isNew = !s.id;
+    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add supplier" : "Edit supplier") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div class="row2"><div><label>Supplier / option</label><input id="sm-name" value="' + esc(s.name || "") + '"></div><div><label>Category</label>' + sug("sm-cat", s.category, "ev_bcat", "e.g. Reception Venue") + '</div></div>' +
@@ -4266,12 +4302,21 @@
       '<div class="row2"><div><label>Contact person</label><input id="sm-contact" value="' + esc(s.contact_name || "") + '"></div><div><label>Phone / email</label><input id="sm-phone" value="' + esc(s.phone || s.email || "") + '"></div></div>' +
       '<div class="row2"><div><label>Where to find / source</label><input id="sm-source" value="' + esc(s.source || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="sm-pick"' + (s.is_pick ? " checked" : "") + '> Best-value pick</label></div></div>' +
       '<div><label>Notes</label><input id="sm-notes" value="' + esc(s.notes || "") + '"></div>' +
+      '<div><label>Linked contact <span style="font-weight:400;color:var(--ink2)">(reuse a vendor from your Contacts)</span></label><div style="display:flex;gap:8px"><select id="sm-partner" style="flex:1"><option value="">(not linked)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (s.partner_id === v.id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("") + '</select><button type="button" class="btn" id="sm-newcontact">＋ New contact</button></div></div>' +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="sm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="sm-cancel">Cancel</button><button class="btn pri" id="sm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
+    document.getElementById("sm-newcontact").onclick = async function () {
+      var nm = gv("sm-name"); if (!nm) { toast("Enter a supplier name first"); return; }
+      var ph = gv("sm-phone"), prow = { org_id: EV.event.org_id, name: nm, is_vendor: true, is_company: true, contact_person: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), industry: gv("sm-cat") || null };
+      var pins = await sb.from("partners").insert(prow).select("id,name").single();
+      if (pins.error) { toast("Could not create contact: " + errMsg(pins.error)); return; }
+      var sel = document.getElementById("sm-partner"); sel.insertAdjacentHTML("beforeend", '<option value="' + pins.data.id + '" selected>' + esc(pins.data.name) + '</option>'); sel.value = pins.data.id;
+      toast("Contact created in your Contacts");
+    };
     document.getElementById("sm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("sm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this supplier?")) return; await sb.from("event_suppliers").delete().eq("id", s.id); m.remove(); evRouteSection("suppliers"); };
     document.getElementById("sm-save").onclick = async function () {
-      var ph = gv("sm-phone"), row = { name: gv("sm-name") || "Supplier", category: gv("sm-cat") || null, why: gv("sm-why") || null, price_band: gv("sm-band") || null, status: document.getElementById("sm-status").value, contact_name: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), source: gv("sm-source") || null, is_pick: document.getElementById("sm-pick").checked, notes: gv("sm-notes") || null };
+      var ph = gv("sm-phone"), row = { name: gv("sm-name") || "Supplier", category: gv("sm-cat") || null, why: gv("sm-why") || null, price_band: gv("sm-band") || null, status: document.getElementById("sm-status").value, contact_name: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), source: gv("sm-source") || null, is_pick: document.getElementById("sm-pick").checked, partner_id: document.getElementById("sm-partner").value || null, notes: gv("sm-notes") || null };
       sugRemember("ev_bcat", row.category);
       if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_suppliers").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
       else { var u = await sb.from("event_suppliers").update(row).eq("id", s.id); if (u.error) { toast(errMsg(u.error)); return; } }
@@ -4328,14 +4373,15 @@
     order.sort();
     var tbl = order.map(function (k) {
       var lines = byType[k], sub = lines.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
-      return '<tr class="o-grp"><td colspan="4"><b>' + esc(k) + '</b> <span class="muted">' + evM(sub) + '</span></td></tr>' +
-        lines.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.description || "") + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.expected_date || "") + '</td><td>' + (r.received ? '<span class="badge paid">Received</span>' : '<span class="badge draft">Expected</span>') + '</td></tr>'; }).join("");
+      return '<tr class="o-grp"><td colspan="5"><b>' + esc(k) + '</b> <span class="muted">' + evM(sub) + '</span></td></tr>' +
+        lines.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.description || "") + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.expected_date || "") + '</td><td>' + (r.received ? '<span class="badge paid">Received</span>' : '<span class="badge draft">Expected</span>') + '</td><td><button class="btn sm ev-inv" data-rid="' + r.id + '">' + (r.invoice_id ? "View invoice" : "Invoice") + '</button></td></tr>'; }).join("");
     }).join("");
     host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="rv-add">+ Add revenue</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(exp) + '</span><span class="k">expected</span></div><div class="ev-stat"><span class="v">' + evM(rec) + '</span><span class="k">received</span></div><div class="ev-stat"><span class="v">' + evM(exp - rec) + '</span><span class="k">outstanding</span></div>' + evTools("rv") + '</div>' +
-      (rows.length ? '<table class="o-list" id="rv-lines"><thead><tr><th>Details / from whom</th><th class="num">Amount</th><th>Expected</th><th>Status</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No revenue yet</div><div class="o-empty2-h">Tickets, client fees, donations, sponsorships, gifts or a registry / gift list.</div></div>');
+      (rows.length ? '<table class="o-list" id="rv-lines"><thead><tr><th>Details / from whom</th><th class="num">Amount</th><th>Expected</th><th>Status</th><th>Invoice</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No revenue yet</div><div class="o-empty2-h">Tickets, client fees, donations, sponsorships, gifts or a registry / gift list.</div></div>');
     document.getElementById("rv-add").onclick = function () { openRevModal(null); };
     evWireTools("rv", function () { return { name: "revenues", title: "Revenues - " + EV.event.name, headers: ["Type", "Details", "Amount", "Expected", "Received"], rows: rows.map(function (r) { return [r.source, r.description, r.amount, r.expected_date, r.received ? "Yes" : "No"]; }), printSel: "#rv-lines" }; });
-    host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openRevModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+    host.querySelectorAll(".ev-inv").forEach(function (b) { b.onclick = function (ev) { ev.stopPropagation(); var r = rows.filter(function (x) { return x.id === b.dataset.rid; })[0]; if (r) evCreateInvoiceFromRevenue(r); }; });
+    host.querySelectorAll("tr[data-id]").forEach(function (el) { el.onclick = function () { openRevModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
   function openRevModal(r) {
     r = r || {}; var isNew = !r.id;
@@ -5847,10 +5893,10 @@
   }
 
   // ============================ CALENDAR & ACTIVITIES ============================
-  var CAT_COLOR = { meeting: "#2f6bff", site_visit: "#0d9488", milestone: "#7c3aed", reminder: "#c58217", deadline: "#c58217", other: "#55565c", submittal: "#0369a1", rfi: "#ea580c", cert: "#f4573d", invoice: "#0ea66f", planning: "#4f46e5", install: "#ea580c" };
+  var CAT_COLOR = { meeting: "#2f6bff", site_visit: "#0d9488", milestone: "#7c3aed", reminder: "#c58217", deadline: "#c58217", other: "#55565c", submittal: "#0369a1", rfi: "#ea580c", cert: "#f4573d", invoice: "#0ea66f", planning: "#4f46e5", install: "#ea580c", event: "#db2777" };
   async function collectCalendarItems(fromStr, toStr) {
     var cid = S.company.id, out = [];
-    function push(date, title, cat, action) { if (!date) return; var d = String(date).slice(0, 10); if (d < fromStr || d > toStr) return; out.push({ date: d, title: title, cat: cat, action: action }); }
+    function push(date, title, cat, action, evwork) { if (!date) return; var d = String(date).slice(0, 10); if (d < fromStr || d > toStr) return; out.push({ date: d, title: title, cat: cat, action: action, evwork: evwork || null }); }
     var ev = (await sb.from("calendar_events").select("*").eq("company_id", cid).gte("event_date", fromStr).lte("event_date", toStr)).data || [];
     ev.forEach(function (e) { out.push({ date: e.event_date, title: e.title, cat: e.category || "other", event: e }); });
     var subs = (await sb.from("submittals").select("number,title,due_date,status").eq("company_id", cid).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
@@ -5865,6 +5911,14 @@
     shifts.forEach(function (s) { push(s.shift_date, "Shift: " + (s.hr_employees ? s.hr_employees.name : "Open") + (s.role ? " (" + s.role + ")" : ""), "planning", "hr.planning"); });
     var jobs = (await sb.from("install_jobs").select("number,description,due_date,status").eq("company_id", cid).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
     jobs.forEach(function (j) { if (j.status !== "done") push(j.due_date, "Install due: " + (j.description || j.number), "install", "inst.jobs"); });
+    try {
+      var evEvents = (await sb.from("event_events").select("id,name,event_date").eq("company_id", cid).not("event_date", "is", null).gte("event_date", fromStr).lte("event_date", toStr)).data || [];
+      evEvents.forEach(function (e) { push(e.event_date, "Event: " + e.name, "event", null, e.id); });
+      var evTasks = (await sb.from("event_tasks").select("title,due_date,status, event_events!inner(id,name,company_id)").eq("event_events.company_id", cid).not("due_date", "is", null).neq("status", "done").gte("due_date", fromStr).lte("due_date", toStr)).data || [];
+      evTasks.forEach(function (t) { push(t.due_date, "Task: " + t.title + (t.event_events ? " (" + t.event_events.name + ")" : ""), "event", null, t.event_events ? t.event_events.id : null); });
+      var evPays = (await sb.from("event_payments").select("label,due_date,paid, event_events!inner(id,name,company_id)").eq("event_events.company_id", cid).eq("paid", false).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
+      evPays.forEach(function (p) { push(p.due_date, "Payment due: " + (p.label || "") + (p.event_events ? " (" + p.event_events.name + ")" : ""), "event", null, p.event_events ? p.event_events.id : null); });
+    } catch (e) { }
     return out;
   }
   var CALV = null;
@@ -5891,14 +5945,14 @@
       for (var dd = 0; dd < 7; dd++) {
         var cur = new Date(gridStart); cur.setDate(gridStart.getDate() + w * 7 + dd);
         var ds = fmtD(cur), inMonth = cur.getMonth() === mo, dayItems = byDay[ds] || [];
-        var chips = dayItems.slice(0, 4).map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="cal-chip" data-date="' + ds + '"' + (it.event ? ' data-ev="' + it.event.id + '"' : (it.action ? ' data-go="' + it.action + '"' : '')) + ' style="background:' + col + '22;color:' + col + ';border-left:3px solid ' + col + '" title="' + esc(it.title) + '">' + esc(it.title) + '</div>'; }).join("");
+        var chips = dayItems.slice(0, 4).map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="cal-chip" data-date="' + ds + '"' + (it.evwork ? ' data-evwork="' + it.evwork + '"' : (it.event ? ' data-ev="' + it.event.id + '"' : (it.action ? ' data-go="' + it.action + '"' : ''))) + ' style="background:' + col + '22;color:' + col + ';border-left:3px solid ' + col + '" title="' + esc(it.title) + '">' + esc(it.title) + '</div>'; }).join("");
         if (dayItems.length > 4) chips += '<div class="cal-more">+' + (dayItems.length - 4) + ' more</div>';
         cells += '<td class="cal-cell' + (inMonth ? "" : " off") + (ds === todayStr ? " today" : "") + '" data-date="' + ds + '"><div class="cal-dnum">' + cur.getDate() + '</div>' + chips + '</td>';
       }
       cells += '</tr>';
     }
     document.getElementById("o-body").innerHTML = '<div style="padding:14px 16px"><h2 style="margin:0 0 10px;font-size:18px">' + monthName + ' ' + y + '</h2><div class="o-rt-wrap"><table class="cal-grid"><thead>' + head + '</thead><tbody>' + cells + '</tbody></table></div><div class="sub" style="margin-top:8px">Click a day to add an event. Coloured items are pulled automatically from submittals, RFIs, certifications, invoices due, planning and installation.</div></div>';
-    document.querySelectorAll(".cal-chip").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); if (c.dataset.ev) { openEventModal(null, c.dataset.ev); } else if (c.dataset.go) { go(c.dataset.go); } }; });
+    document.querySelectorAll(".cal-chip").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); if (c.dataset.evwork) { S.app = "events"; applyAppColor(); renderEventWorkspace(c.dataset.evwork, "overview"); } else if (c.dataset.ev) { openEventModal(null, c.dataset.ev); } else if (c.dataset.go) { go(c.dataset.go); } }; });
     document.querySelectorAll(".cal-cell").forEach(function (c) { c.onclick = function () { openEventModal(c.dataset.date); }; });
   }
   async function renderAgenda() {
@@ -5911,12 +5965,12 @@
     var byDay = {}; items.forEach(function (it) { (byDay[it.date] = byDay[it.date] || []).push(it); });
     var days = Object.keys(byDay).sort();
     var html = days.map(function (d) {
-      var rows = byDay[d].map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="ag-item" ' + (it.event ? 'data-ev="' + it.event.id + '"' : (it.action ? 'data-go="' + it.action + '"' : '')) + ' style="cursor:pointer"><span class="ag-dot" style="background:' + col + '"></span>' + esc(it.title) + '<span class="ag-cat">' + esc(it.cat.replace("_", " ")) + '</span></div>'; }).join("");
+      var rows = byDay[d].map(function (it) { var col = CAT_COLOR[it.cat] || "#55565c"; return '<div class="ag-item" ' + (it.evwork ? 'data-evwork="' + it.evwork + '"' : (it.event ? 'data-ev="' + it.event.id + '"' : (it.action ? 'data-go="' + it.action + '"' : ''))) + ' style="cursor:pointer"><span class="ag-dot" style="background:' + col + '"></span>' + esc(it.title) + '<span class="ag-cat">' + esc(it.cat.replace("_", " ")) + '</span></div>'; }).join("");
       var dt = parseD(d), lbl = dt.toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long" });
       return '<div class="ag-day"><div class="ag-date">' + lbl + (d === fmtD(now) ? ' &middot; today' : '') + '</div>' + rows + '</div>';
     }).join("");
     document.getElementById("o-body").innerHTML = '<div style="padding:14px 16px;max-width:760px"><h2 style="margin:0 0 10px;font-size:18px">Next 3 months</h2>' + (html || '<div class="o-empty">Nothing scheduled. Add events in the Calendar.</div>') + '</div>';
-    document.querySelectorAll(".ag-item").forEach(function (c) { c.onclick = function () { if (c.dataset.ev) openEventModal(null, c.dataset.ev); else if (c.dataset.go) go(c.dataset.go); }; });
+    document.querySelectorAll(".ag-item").forEach(function (c) { c.onclick = function () { if (c.dataset.evwork) { S.app = "events"; applyAppColor(); renderEventWorkspace(c.dataset.evwork, "overview"); } else if (c.dataset.ev) openEventModal(null, c.dataset.ev); else if (c.dataset.go) go(c.dataset.go); }; });
   }
   async function openEventModal(dateStr, eventId) {
     var e = eventId ? (await sb.from("calendar_events").select("*").eq("id", eventId).maybeSingle()).data || {} : { event_date: dateStr || today(), category: "meeting", all_day: true };
@@ -8957,6 +9011,7 @@
     var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>';
     if (id !== "new" && !l.partner_id) btns += '<button id="ld-tocust">Create Customer</button>';
     if (id !== "new") btns += '<button id="ld-tender">Create Tender</button><button id="ld-quote">Create Quotation</button>';
+    if (id !== "new") btns += (l.event_id ? '<button id="ld-openevent">Open Event</button>' : '<button id="ld-event">Create Event</button>');
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stageBar + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="ld-name" value="' + esc(l.name || "") + '" placeholder="Opportunity name"></div>' +
@@ -8986,6 +9041,14 @@
       await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
       toast("Customer created & linked"); renderLeadForm(id);
     };
+    var evb = document.getElementById("ld-event"); if (evb) evb.onclick = async function () {
+      var erow = { company_id: S.company.id, org_id: S.company.org_id, name: l.name || "Event", event_type: "corporate", status: "planning", currency: S.company.currency_code, partner_id: l.partner_id || null, source_lead_id: id };
+      var eins = await sb.from("event_events").insert(erow).select("id").single();
+      if (eins.error) { toast("Could not create event: " + errMsg(eins.error)); return; }
+      await sb.from("crm_leads").update({ event_id: eins.data.id }).eq("id", id);
+      toast("Event created from this opportunity"); S.app = "events"; applyAppColor(); renderEventWorkspace(eins.data.id, "overview");
+    };
+    var oeb = document.getElementById("ld-openevent"); if (oeb) oeb.onclick = function () { S.app = "events"; applyAppColor(); renderEventWorkspace(l.event_id, "overview"); };
     var tndb = document.getElementById("ld-tender"); if (tndb) tndb.onclick = async function () {
       if (!l.partner_id) { toast("Link or create a customer first (use Create Customer)."); return; }
       var num = await nextTenderNumber();
