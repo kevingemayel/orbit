@@ -3778,7 +3778,7 @@
   var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
   var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
   var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
-  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"]];
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"]];
   var SUPPLIER_STATUS = [["to_contact", "To contact"], ["contacted", "Contacted"], ["quoted", "Quoted"], ["shortlisted", "Shortlisted"], ["booked", "Booked"], ["rejected", "Rejected"]];
   var PROC_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["confirmed", "Confirmed"], ["delivered", "Delivered"]];
   var EV_TASK_STATUS = [["not_started", "Not started"], ["in_progress", "In progress"], ["done", "Done"], ["blocked", "Blocked"]];
@@ -3878,6 +3878,7 @@
     if (section === "overview") return evOverview(host);
     if (section === "concept") return evConcept(host);
     if (section === "guests") return evGuests(host);
+    if (section === "seating") return evSeating(host);
     if (section === "budget") return evBudget(host);
     if (section === "payments") return evPayments(host);
     if (section === "suppliers") return evSuppliers(host);
@@ -4363,6 +4364,92 @@
       '<div class="r"><span class="k">Actual spend</span><b>' + evM(totAct) + '</b></div>' +
       '<div class="r"><span class="k">Net (received - actual)</span><b style="color:' + (recv - totAct < 0 ? "var(--bad,#dc2626)" : "inherit") + '">' + evM(recv - totAct) + '</b></div>' +
       '</div></div></div>';
+  }
+
+  // ---- seating (visual floor plan) ----
+  async function evSeating(host) {
+    var zones = (await sb.from("event_zones").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
+    var tables = (await sb.from("event_tables").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
+    var guests = (await sb.from("event_guests").select("id,first_name,family_name,table_id,plus_ones,priority,invite_stage").eq("event_id", EV.eventId).in("invite_stage", ["confirmed", "invited", "maybe"]).order("family_name")).data || [];
+    var zoneById = {}; zones.forEach(function (z) { zoneById[z.id] = z; });
+    var seatedBy = {}; tables.forEach(function (t) { seatedBy[t.id] = []; });
+    var unassigned = [];
+    guests.forEach(function (g) { if (g.table_id && seatedBy[g.table_id]) seatedBy[g.table_id].push(g); else unassigned.push(g); });
+    function heads(list) { return list.reduce(function (a, g) { return a + 1 + (Number(g.plus_ones) || 0); }, 0); }
+    var totalSeats = tables.reduce(function (a, t) { return a + (Number(t.capacity) || 0); }, 0);
+    var seatedHeads = guests.filter(function (g) { return g.table_id; }).reduce(function (a, g) { return a + 1 + (Number(g.plus_ones) || 0); }, 0);
+    function chip(g) { return '<span class="seat-chip" draggable="true" data-guest="' + g.id + '">' + (g.priority ? '<b class="ev-prio p' + esc(g.priority) + '" style="width:15px;height:15px;line-height:15px;font-size:9px">' + esc(g.priority) + '</b> ' : "") + esc(((g.first_name || "") + " " + (g.family_name || "")).trim() || "Guest") + (g.plus_ones ? " +" + g.plus_ones : "") + '</span>'; }
+    var tablesHtml = tables.map(function (t) {
+      var seated = seatedBy[t.id] || [], h = heads(seated), over = t.capacity && h > t.capacity, z = zoneById[t.zone_id];
+      return '<div class="seat-table shape-' + (t.shape || "round") + (over ? " over" : "") + '" data-id="' + t.id + '" style="left:' + (t.x || 40) + 'px;top:' + (t.y || 40) + 'px;width:' + (t.w || 110) + 'px;min-height:' + (t.h || 100) + 'px;' + (z ? "border-color:" + z.color : "") + '">' +
+        '<div class="seat-th"><span class="seat-move" title="Drag to move">&#9782;</span><span class="seat-name">' + esc(t.name) + '</span><span class="seat-cap' + (over ? " over" : "") + '">' + h + "/" + (t.capacity || 0) + '</span></div>' +
+        '<div class="seat-guests">' + seated.map(chip).join("") + '</div></div>';
+    }).join("");
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="se-tbl">+ Add table</button><button class="o-filtbtn" id="se-zone">Zones</button><div class="gap"></div>' +
+      '<div class="ev-stat"><span class="v">' + seatedHeads + " / " + totalSeats + '</span><span class="k">seated / seats</span></div><div class="ev-stat"><span class="v">' + unassigned.length + '</span><span class="k">to seat</span></div></div>' +
+      (zones.length ? '<div class="seat-legend">' + zones.map(function (z) { return '<span><i style="background:' + esc(z.color) + '"></i>' + esc(z.name) + '</span>'; }).join("") + '</div>' : "") +
+      '<div class="seat-wrap"><div class="seat-plan" id="seat-plan">' + (tables.length ? tablesHtml : '<div class="seat-empty">Add tables, then drag guests onto them. Drag the &#9782; handle to move a table.</div>') + '</div>' +
+      '<div class="seat-side"><div class="seat-side-h">Unassigned (' + unassigned.length + ')</div><div class="seat-unassigned" id="seat-unassigned">' + (unassigned.length ? unassigned.map(chip).join("") : '<div class="muted" style="font-size:12px;padding:8px">Everyone is seated.</div>') + '</div></div></div>';
+    document.getElementById("se-tbl").onclick = function () { openTableModal(null, zones, tables.length); };
+    document.getElementById("se-zone").onclick = function () { openZoneMgr(); };
+    var plan = document.getElementById("seat-plan");
+    async function assign(guestId, tableId) { var r = await sb.from("event_guests").update({ table_id: tableId }).eq("id", guestId); if (r.error) { toast(errMsg(r.error)); return; } evSeating(host); }
+    host.querySelectorAll(".seat-chip").forEach(function (ch) {
+      ch.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", ch.dataset.guest); e.dataTransfer.effectAllowed = "move"; ch.classList.add("dragging"); });
+      ch.addEventListener("dragend", function () { ch.classList.remove("dragging"); });
+    });
+    host.querySelectorAll(".seat-table").forEach(function (tb) {
+      tb.addEventListener("dragover", function (e) { if (!tb._moving) { e.preventDefault(); tb.classList.add("drop-over"); } });
+      tb.addEventListener("dragleave", function () { tb.classList.remove("drop-over"); });
+      tb.addEventListener("drop", function (e) { e.preventDefault(); tb.classList.remove("drop-over"); var gid = e.dataTransfer.getData("text/plain"); if (gid) assign(gid, tb.dataset.id); });
+      tb.addEventListener("dblclick", function () { openTableModal(tables.filter(function (x) { return x.id === tb.dataset.id; })[0], zones); });
+      var handle = tb.querySelector(".seat-move");
+      handle.addEventListener("mousedown", function (e) {
+        e.preventDefault(); tb._moving = true; var startX = e.clientX, startY = e.clientY, ox = parseFloat(tb.style.left) || 0, oy = parseFloat(tb.style.top) || 0;
+        function mm(ev) { tb.style.left = Math.max(0, ox + (ev.clientX - startX)) + "px"; tb.style.top = Math.max(0, oy + (ev.clientY - startY)) + "px"; }
+        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ x: parseFloat(tb.style.left) || 0, y: parseFloat(tb.style.top) || 0 }).eq("id", tb.dataset.id); }
+        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+      });
+    });
+    var un = document.getElementById("seat-unassigned");
+    un.addEventListener("dragover", function (e) { e.preventDefault(); un.classList.add("drop-over"); });
+    un.addEventListener("dragleave", function () { un.classList.remove("drop-over"); });
+    un.addEventListener("drop", function (e) { e.preventDefault(); un.classList.remove("drop-over"); var gid = e.dataTransfer.getData("text/plain"); if (gid) assign(gid, null); });
+  }
+  function openTableModal(t, zones, count) {
+    t = t || {}; var isNew = !t.id;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add table" : "Edit table") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Name</label><input id="tbm-name" value="' + esc(t.name || (isNew ? "Table " + ((count || 0) + 1) : "")) + '"></div><div><label>Capacity</label><input id="tbm-cap" type="number" value="' + (t.capacity != null ? t.capacity : 10) + '"></div></div>' +
+      '<div class="row2"><div><label>Shape</label><select id="tbm-shape"><option value="round"' + (t.shape !== "rect" ? " selected" : "") + '>Round</option><option value="rect"' + (t.shape === "rect" ? " selected" : "") + '>Rectangle</option></select></div><div><label>Zone</label><select id="tbm-zone"><option value="">(none)</option>' + (zones || []).map(function (z) { return '<option value="' + z.id + '"' + (t.zone_id === z.id ? " selected" : "") + '>' + esc(z.name) + '</option>'; }).join("") + '</select></div></div>' +
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tbm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="tbm-cancel">Cancel</button><button class="btn pri" id="tbm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("tbm-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("tbm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this table? Guests seated here become unassigned.")) return; await sb.from("event_tables").delete().eq("id", t.id); m.remove(); evRouteSection("seating"); };
+    document.getElementById("tbm-save").onclick = async function () {
+      var shape = document.getElementById("tbm-shape").value;
+      var row = { name: gv("tbm-name") || "Table", capacity: parseInt(gv("tbm-cap"), 10) || 0, shape: shape, zone_id: document.getElementById("tbm-zone").value || null, w: shape === "rect" ? 150 : 110, h: shape === "rect" ? 90 : 100 };
+      if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; row.x = 30 + ((count || 0) % 6) * 130; row.y = 30 + Math.floor((count || 0) / 6) * 130; var r = await sb.from("event_tables").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
+      else { var u = await sb.from("event_tables").update(row).eq("id", t.id); if (u.error) { toast(errMsg(u.error)); return; } }
+      m.remove(); evRouteSection("seating");
+    };
+  }
+  async function openZoneMgr() {
+    var zones = (await sb.from("event_zones").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Zones</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
+      '<div id="zm-list">' + zones.map(function (z) { return '<div class="zm-row" data-id="' + z.id + '"><input type="color" class="zm-color" value="' + esc(z.color || "#0ea5e9") + '"><input class="zm-name" value="' + esc(z.name) + '"><button class="btn zm-del" style="color:var(--bad)">&times;</button></div>'; }).join("") + '</div>' +
+      '<div class="zm-row"><input type="color" id="zm-newcolor" value="#0ea5e9"><input id="zm-newname" placeholder="New zone name"><button class="btn pri" id="zm-add" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
+      '</div><div class="foot"><button class="btn pri" id="zm-close" style="background:var(--app);border-color:var(--app)">Done</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("zm-close").onclick = function () { m.remove(); evRouteSection("seating"); };
+    document.getElementById("zm-add").onclick = async function () { var n = gv("zm-newname"); if (!n) return; await sb.from("event_zones").insert({ event_id: EV.eventId, org_id: EV.event.org_id, name: n, color: document.getElementById("zm-newcolor").value }); m.remove(); openZoneMgr(); };
+    m.querySelectorAll(".zm-del").forEach(function (b) { b.onclick = async function () { await sb.from("event_zones").delete().eq("id", b.closest(".zm-row").dataset.id); m.remove(); openZoneMgr(); }; });
+    m.querySelectorAll(".zm-row[data-id]").forEach(function (row) {
+      var id = row.dataset.id;
+      function save() { sb.from("event_zones").update({ name: row.querySelector(".zm-name").value, color: row.querySelector(".zm-color").value }).eq("id", id); }
+      row.querySelector(".zm-name").addEventListener("change", save); row.querySelector(".zm-color").addEventListener("change", save);
+    });
   }
 
   // ============================ PAYMENT MODAL ============================
