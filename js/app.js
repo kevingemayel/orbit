@@ -666,6 +666,7 @@
     maybeWelcome();
     runAutomations();   // best-effort, once/day/company; drops alerts into the bell
     handleScanParam();  // /?scan=CODE deep-link from a QR label -> open that tool / item
+    handleEvInvite();   // /?evinvite=TOKEN -> accept an event-collaboration invite
   }
   // Onboarding safety net: a newly created/approved company starts with an empty
   // accounting shell (apply_for_company doesn't seed one), so nothing can post. If the
@@ -3778,7 +3779,7 @@
   var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
   var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
   var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
-  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"]];
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"], ["contracts", "Contracts"], ["team", "Team"]];
   var SUPPLIER_STATUS = [["to_contact", "To contact"], ["contacted", "Contacted"], ["quoted", "Quoted"], ["shortlisted", "Shortlisted"], ["booked", "Booked"], ["rejected", "Rejected"]];
   var PROC_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["confirmed", "Confirmed"], ["delivered", "Delivered"]];
   var EV_TASK_STATUS = [["not_started", "Not started"], ["in_progress", "In progress"], ["done", "Done"], ["blocked", "Blocked"]];
@@ -3886,6 +3887,8 @@
     if (section === "revenues") return evRevenues(host);
     if (section === "tasks") return evTasks(host);
     if (section === "bva") return evBva(host);
+    if (section === "contracts") return evContracts(host);
+    if (section === "team") return evTeam(host);
     host.innerHTML = '<div class="o-empty">Coming next.</div>';
   }
   async function evOverviewStats() {
@@ -4364,6 +4367,46 @@
       '<div class="r"><span class="k">Actual spend</span><b>' + evM(totAct) + '</b></div>' +
       '<div class="r"><span class="k">Net (received - actual)</span><b style="color:' + (recv - totAct < 0 ? "var(--bad,#dc2626)" : "inherit") + '">' + evM(recv - totAct) + '</b></div>' +
       '</div></div></div>';
+  }
+
+  // ---- contracts (documents via the private media system) ----
+  function evContracts(host) {
+    mediaClearStage();
+    host.innerHTML = '<div class="sub" style="margin-bottom:12px">Signed contracts, quotes and important documents for this event. Images and PDFs, private to your company (and any company you share this event with).</div>' +
+      attachBlockHTML("event_contract", EV.eventId, { label: "Signed contracts & documents", accept: "image/*,application/pdf" });
+    wireAttach("event_contract");
+  }
+  // ---- team / cross-company collaboration ----
+  async function evTeam(host) {
+    var collabs = (await sb.from("event_collaborators").select("*").eq("event_id", EV.eventId).order("created_at")).data || [];
+    var isOwner = collabs.length ? true : true; // owner sees their own event; collaborators may also open Team
+    host.innerHTML = '<div class="ev-grid2"><div class="card"><h3>Invite a company to collaborate</h3>' +
+      '<div class="sub" style="margin:-2px 0 10px">They accept a link and can then see and edit <b>this event only</b>. Their other data stays private, and yours stays private to them.</div>' +
+      '<div class="row2" style="display:flex;gap:8px"><input id="tm-email" placeholder="their email" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><select id="tm-role" style="padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink)"><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn pri" id="tm-invite" style="background:var(--app);border-color:var(--app)">Invite</button></div></div>' +
+      '<div class="card"><h3>Collaborators</h3>' + (collabs.length ? '<div class="ev-kv">' + collabs.map(function (cc) {
+        return '<div class="r" style="align-items:center"><span class="k">' + esc(cc.invited_email || "invited") + '<div class="muted" style="font-size:11px">' + esc(cc.role) + ' &middot; ' + esc(cc.status) + '</div></span><span style="display:flex;gap:6px">' + (cc.status === "pending" ? '<button class="btn sm tm-copy" data-token="' + cc.token + '">Copy link</button>' : "") + '<button class="btn sm tm-rem" data-id="' + cc.id + '" style="color:var(--bad)">Remove</button></span></div>';
+      }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No collaborators yet.</div>') + '</div></div>';
+    document.getElementById("tm-invite").onclick = async function () {
+      var email = gv("tm-email"); if (!email) { toast("Enter an email"); return; }
+      var ins = await sb.from("event_collaborators").insert({ event_id: EV.eventId, owner_org_id: EV.event.org_id, invited_email: email, role: document.getElementById("tm-role").value, status: "pending" }).select("token").single();
+      if (ins.error) { toast("Could not invite: " + errMsg(ins.error)); return; }
+      var link = location.origin + "/?evinvite=" + ins.data.token;
+      try { await navigator.clipboard.writeText(link); toast("Invite created - link copied to clipboard"); } catch (e) { toast("Invite created"); }
+      evRouteSection("team");
+    };
+    host.querySelectorAll(".tm-copy").forEach(function (b) { b.onclick = async function () { var link = location.origin + "/?evinvite=" + b.dataset.token; try { await navigator.clipboard.writeText(link); toast("Link copied"); } catch (e) { prompt("Copy this invite link:", link); } }; });
+    host.querySelectorAll(".tm-rem").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this collaborator?")) return; await sb.from("event_collaborators").delete().eq("id", b.dataset.id); evRouteSection("team"); }; });
+  }
+  // deep link: /?evinvite=TOKEN accepts an event-collaboration invite for the logged-in user
+  async function handleEvInvite() {
+    try {
+      var q = new URLSearchParams(location.search), tok = q.get("evinvite"); if (!tok) return;
+      history.replaceState({}, "", location.pathname);
+      var r = await sb.rpc("accept_event_collab", { p_token: tok });
+      if (r.error) { toast("Could not accept invite: " + errMsg(r.error)); return; }
+      toast("You now have access to this event");
+      if (r.data) renderEventWorkspace(r.data, "overview");
+    } catch (e) { }
   }
 
   // ---- seating (visual floor plan) ----
