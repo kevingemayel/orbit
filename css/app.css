@@ -1024,7 +1024,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-card.dragging{opacity:.45}
 
 /* ---- Events workspace ---- */
-.ev-wrap{padding:18px;max-width:1200px}
+.ev-wrap{padding:18px;max-width:1200px;overflow-y:auto;min-height:0;height:100%;box-sizing:border-box}
 .ev-head{display:flex;gap:18px;align-items:flex-start;margin-bottom:16px}
 .ev-cover{flex:0 0 120px;width:120px;height:120px;border-radius:14px;overflow:hidden;background:var(--panel2);border:1px solid var(--line);display:flex;align-items:center;justify-content:center}
 .ev-cover img{width:100%;height:100%;object-fit:cover}
@@ -1109,3 +1109,34 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .zm-row{display:flex;gap:8px;align-items:center}
 .zm-row input.zm-name,.zm-row input#zm-newname{flex:1}
 .zm-row input[type=color]{width:38px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--panel2)}
+
+/* ---- Events: mobile ---- */
+@media(max-width:760px){
+  .ev-wrap{padding:12px}
+  .ev-head{flex-direction:column;gap:12px}
+  .ev-cover{flex-basis:84px;width:84px;height:84px}
+  .ev-title-row h1{font-size:20px}
+  .ev-stats{gap:16px}
+  .ev-grid2{grid-template-columns:1fr}
+  .ev-tabs{gap:0;flex-wrap:nowrap}
+  .ev-tab{padding:9px 11px;font-size:13px}
+  .ev-toolbar{gap:8px}
+  .ev-search{min-width:0;flex:1}
+  .seat-wrap{flex-direction:column}
+  .seat-side{flex-basis:auto;width:100%;max-height:260px}
+  .seat-plan{min-height:420px;height:420px}
+  .o-kcol{flex-basis:220px;width:220px}
+}
+
+/* ---- Events: concept brief editor ---- */
+.cc-sec{margin-bottom:14px;border-bottom:1px solid var(--line);padding-bottom:12px}
+.cc-sec:last-child{border-bottom:none}
+.cc-h{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.cc-title{flex:1;padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-weight:700;font-size:14px}
+.cc-del{border:none;background:none;color:var(--bad,#dc2626);font-size:20px;cursor:pointer;line-height:1;padding:0 6px}
+.cc-body{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical}
+/* ---- Events: seating extras ---- */
+.seat-plan.hasfp{background-color:var(--panel)}
+.seat-resize{position:absolute;right:2px;bottom:2px;width:12px;height:12px;cursor:nwse-resize;border-right:2px solid var(--ink2);border-bottom:2px solid var(--ink2);opacity:.55}
+.seat-listwrap{flex:1;min-height:200px;max-height:600px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--panel);padding:10px;display:flex;flex-direction:column;gap:10px}
+.seat-table.listcard{position:static;width:100%!important;min-height:0!important;border-radius:10px;box-shadow:none}

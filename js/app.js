@@ -3779,7 +3779,7 @@
   var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
   var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
   var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
-  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["bva", "Budget vs Actual"], ["contracts", "Contracts"], ["team", "Team"]];
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["contracts", "Contracts"], ["team", "Team"]];
   var SUPPLIER_STATUS = [["to_contact", "To contact"], ["contacted", "Contacted"], ["quoted", "Quoted"], ["shortlisted", "Shortlisted"], ["booked", "Booked"], ["rejected", "Rejected"]];
   var PROC_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["confirmed", "Confirmed"], ["delivered", "Delivered"]];
   var EV_TASK_STATUS = [["not_started", "Not started"], ["in_progress", "In progress"], ["done", "Done"], ["blocked", "Blocked"]];
@@ -3788,6 +3788,24 @@
   function evM(n) { return evCur() + " " + money(Number(n) || 0); }
   function eventStatusBadge(s) { var map = { planning: "draft", confirmed: "partial", in_progress: "partial", done: "paid", cancelled: "unpaid" }; return '<span class="badge ' + (map[s] || "draft") + '">' + esc(evLabel(EVENT_STATUS, s)) + '</span>'; }
 
+  // reusable Export (CSV) + Print for the event workspace sections
+  function evExportCsv(name, headers, rows) {
+    var out = [headers.map(csvCell).join(",")];
+    rows.forEach(function (r) { out.push(r.map(function (c) { return csvCell(c == null ? "" : String(c)); }).join(",")); });
+    var csv = "﻿" + out.join("\r\n"), blob = new Blob([csv], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob);
+    var a = document.createElement("a"); a.href = url; a.download = (name || "export").replace(/[^\w]+/g, "_").toLowerCase() + "_" + today() + ".csv"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000); toast(rows.length + " rows exported");
+  }
+  function evPrint(title, innerHtml) {
+    var w = window.open("", "_blank", "width=940,height=720"); if (!w) { toast("Allow pop-ups to print"); return; }
+    w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:26px;color:#111}h1{font-size:20px;margin:0 0 12px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #dcdcdc;padding:6px 9px;text-align:left;vertical-align:top}th{background:#f3f3f3}.num{text-align:right}.o-grp td{background:#fafafa;font-weight:700}.badge,.ev-prio,.bva-bars{all:unset}</style></head><body><h1>' + esc(title) + '</h1>' + innerHtml + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},200);}</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+  function evTools(pfx) { return '<button class="o-filtbtn" id="' + pfx + '-export" title="Download as CSV (Excel)">Export</button><button class="o-filtbtn" id="' + pfx + '-print" title="Print / save as PDF">Print</button>'; }
+  function evWireTools(pfx, dataFn) {
+    var ex = document.getElementById(pfx + "-export"); if (ex) ex.onclick = function () { var d = dataFn(); evExportCsv(d.name, d.headers, d.rows); };
+    var pr = document.getElementById(pfx + "-print"); if (pr) pr.onclick = function () { var d = dataFn(); var el = d.printSel ? document.querySelector(d.printSel) : null; evPrint(d.title, el ? el.outerHTML : (d.printHtml || "")); };
+  }
   function cfgEvents() {
     return {
       title: "Events", pageSize: 60, table: "event_events",
@@ -3921,16 +3939,30 @@
       (EV.event.notes ? '<div class="card" style="grid-column:1/-1"><h3>Notes</h3><div>' + esc(EV.event.notes).replace(/\n/g, "<br>") + '</div></div>' : "") +
       '</div>';
   }
-  async function evConcept(host) {
-    var c = EV.event.concept || {};
-    var FIELDS = [["feeling", "The feeling"], ["guiding", "Guiding line"], ["aesthetic", "Aesthetic"], ["ceremony", "Ceremony"], ["reception", "Reception"], ["signature", "Signature moments"], ["dessert", "Dessert philosophy"], ["avoid", "What to avoid"], ["hashtags", "Hashtags"]];
-    host.innerHTML = '<div class="card"><div class="o-sb-btns" style="margin-bottom:10px"><button class="pri" id="cc-save">Save concept</button></div>' +
-      FIELDS.map(function (f) { return '<div class="o-fld" style="margin-bottom:12px"><div class="lbl">' + f[1] + '</div><textarea id="cc-' + f[0] + '" rows="2" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical">' + esc(c[f[0]] || "") + '</textarea></div>'; }).join("") + '</div>';
+  var CONCEPT_LABELS = { feeling: "The feeling", guiding: "Guiding line", aesthetic: "Aesthetic", ceremony: "Ceremony", reception: "Reception", signature: "Signature moments", dessert: "Dessert philosophy", avoid: "What to avoid", hashtags: "Hashtags" };
+  function conceptSections(c) {
+    c = c || {};
+    if (Array.isArray(c.sections)) return c.sections.slice();
+    var order = ["feeling", "guiding", "aesthetic", "ceremony", "reception", "signature", "dessert", "avoid", "hashtags"], out = [];
+    order.forEach(function (k) { if (c[k]) out.push({ title: CONCEPT_LABELS[k] || k, body: c[k] }); });
+    Object.keys(c).forEach(function (k) { if (k !== "sections" && order.indexOf(k) < 0 && typeof c[k] === "string") out.push({ title: CONCEPT_LABELS[k] || k, body: c[k] }); });
+    if (!out.length) out = [{ title: "The feeling", body: "" }, { title: "Aesthetic", body: "" }, { title: "Signature moments", body: "" }];
+    return out;
+  }
+  function evConcept(host) {
+    var secs = conceptSections(EV.event.concept);
+    function rowHtml(s) { return '<div class="cc-sec"><div class="cc-h"><input class="cc-title" value="' + esc(s.title || "") + '" placeholder="Section title"><button class="cc-del" title="Remove section">&times;</button></div><textarea class="cc-body" rows="3" placeholder="Write here...">' + esc(s.body || "") + '</textarea></div>'; }
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="cc-save">Save brief</button><button class="o-filtbtn" id="cc-add">+ Add section</button><div class="sub" style="margin-left:6px">Titles are editable &mdash; rename or add your own.</div><div class="gap"></div>' + evTools("cc") + '</div>' +
+      '<div class="card" id="cc-list">' + secs.map(rowHtml).join("") + '</div>';
+    function wireDel() { host.querySelectorAll(".cc-del").forEach(function (b) { b.onclick = function () { b.closest(".cc-sec").remove(); }; }); }
+    wireDel();
+    document.getElementById("cc-add").onclick = function () { var d = document.createElement("div"); d.innerHTML = rowHtml({ title: "", body: "" }); document.getElementById("cc-list").appendChild(d.firstChild); wireDel(); };
     document.getElementById("cc-save").onclick = async function () {
-      var out = {}; FIELDS.forEach(function (f) { var v = gv("cc-" + f[0]); if (v) out[f[0]] = v; });
-      var r = await sb.from("event_events").update({ concept: out }).eq("id", EV.eventId); if (r.error) { toast(errMsg(r.error)); return; }
-      EV.event.concept = out; toast("Concept saved");
+      var sections = []; host.querySelectorAll(".cc-sec").forEach(function (el) { var t = el.querySelector(".cc-title").value.trim(), b = el.querySelector(".cc-body").value.trim(); if (t || b) sections.push({ title: t, body: b }); });
+      var r = await sb.from("event_events").update({ concept: { sections: sections } }).eq("id", EV.eventId); if (r.error) { toast(errMsg(r.error)); return; }
+      EV.event.concept = { sections: sections }; toast("Brief saved");
     };
+    evWireTools("cc", function () { var rows = []; host.querySelectorAll(".cc-sec").forEach(function (el) { rows.push([el.querySelector(".cc-title").value.trim(), el.querySelector(".cc-body").value.trim()]); }); return { name: "brief", title: "Concept & Brief - " + EV.event.name, headers: ["Section", "Content"], rows: rows, printSel: "#cc-list" }; });
   }
   // ---- guests ----
   async function evGuests(host) {
@@ -3947,17 +3979,19 @@
     host.innerHTML = cap +
       '<div class="ev-toolbar"><button class="pri" id="g-add">+ Add guest</button>' +
       '<input id="g-q" class="ev-search" placeholder="Search guests...">' +
-      '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button></div>' +
-      '<button class="o-filtbtn" id="g-import">Import</button><button class="o-filtbtn" id="g-reglink">Registration link</button></div>' +
+      '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="pivot"' + (view === "pivot" ? ' class="on"' : "") + '>&#9783; Pivot</button></div>' +
+      evTools("g") + '<button class="o-filtbtn" id="g-import">Import</button><button class="o-filtbtn" id="g-reglink">Registration link</button></div>' +
       '<div id="g-body"></div>';
     document.getElementById("g-add").onclick = function () { openGuestModal(null); };
     document.getElementById("g-import").onclick = function () { openGuestImport(); };
     document.getElementById("g-reglink").onclick = function () { openRegLinkModal(); };
     document.getElementById("g-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._guestView = b.dataset.v; evGuests(host); }; });
+    evWireTools("g", function () { return { name: "guests", title: "Guests - " + EV.event.name, headers: ["Side", "First name", "Family name", "Category", "Priority", "Invite stage", "RSVP", "Plus ones", "Email", "Phone", "Table"], rows: rows.map(function (r) { return [r.side, r.first_name, r.family_name, r.category, r.priority, evLabel(GUEST_STAGE, r.invite_stage), evLabel(RSVP_OPTS, r.rsvp), r.plus_ones, r.email, r.phone, r.event_tables ? r.event_tables.name : ""]; }), printSel: "#g-body table" }; });
     var q = "";
     function paint() {
       var shown = rows.filter(function (r) { return !q || ((r.first_name || "") + " " + (r.family_name || "") + " " + (r.category || "") + " " + (r.side || "")).toLowerCase().indexOf(q) >= 0; });
       var body = document.getElementById("g-body");
+      if (view === "pivot") { return evGuestPivot(body, shown); }
       if (view === "board") {
         evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
       } else {
@@ -3977,6 +4011,27 @@
     return '<div class="t">' + esc(((r.first_name || "") + " " + (r.family_name || "")).trim() || "Guest") + (r.is_vip ? ' <span class="badge">VIP</span>' : "") + '</div>' +
       '<div class="muted">' + esc(r.category || r.side || "") + '</div>' +
       '<div class="r">' + (r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : "<span></span>") + '<span>' + (r.plus_ones ? "+" + r.plus_ones : "") + ' ' + (r.rsvp && r.rsvp !== "pending" ? esc(evLabel(RSVP_OPTS, r.rsvp)) : "") + '</span></div>';
+  }
+  function evGuestPivot(body, rows) {
+    var DIMS = [["side", "Side"], ["category", "Category"], ["priority", "Priority"], ["invite_stage", "Invite stage"], ["rsvp", "RSVP"]];
+    var rby = EV._pivR || "category", cby = EV._pivC || "invite_stage";
+    function labelOf(field, val) { if (!val) return "—"; if (field === "invite_stage") return evLabel(GUEST_STAGE, val); if (field === "rsvp") return evLabel(RSVP_OPTS, val); return String(val); }
+    var rowKeys = [], colKeys = [], seenR = {}, seenC = {}, cells = {}, rowTot = {}, colTot = {}, grand = 0;
+    rows.forEach(function (r) {
+      var rk = r[rby] || "", ck = r[cby] || "";
+      if (!(rk in seenR)) { seenR[rk] = 1; rowKeys.push(rk); }
+      if (!(ck in seenC)) { seenC[ck] = 1; colKeys.push(ck); }
+      cells[rk + "||" + ck] = (cells[rk + "||" + ck] || 0) + 1; rowTot[rk] = (rowTot[rk] || 0) + 1; colTot[ck] = (colTot[ck] || 0) + 1; grand++;
+    });
+    rowKeys.sort(); colKeys.sort();
+    function selHtml(id, cur) { return '<select id="' + id + '">' + DIMS.map(function (d) { return '<option value="' + d[0] + '"' + (cur === d[0] ? " selected" : "") + '>' + d[1] + '</option>'; }).join("") + '</select>'; }
+    var head = '<tr><th></th>' + colKeys.map(function (ck) { return '<th class="num">' + esc(labelOf(cby, ck)) + '</th>'; }).join("") + '<th class="num">Total</th></tr>';
+    var bodyRows = rowKeys.map(function (rk) { return '<tr><td><b>' + esc(labelOf(rby, rk)) + '</b></td>' + colKeys.map(function (ck) { var v = cells[rk + "||" + ck] || 0; return '<td class="num' + (v ? "" : " muted") + '">' + (v || "") + '</td>'; }).join("") + '<td class="num"><b>' + (rowTot[rk] || 0) + '</b></td></tr>'; }).join("");
+    var totRow = '<tr class="o-grp"><td><b>Total</b></td>' + colKeys.map(function (ck) { return '<td class="num"><b>' + (colTot[ck] || 0) + '</b></td>'; }).join("") + '<td class="num"><b>' + grand + '</b></td></tr>';
+    body.innerHTML = '<div class="ev-toolbar" style="margin-bottom:10px"><label>Rows</label>' + selHtml("piv-r", rby) + '<label>Columns</label>' + selHtml("piv-c", cby) + '<div class="muted" style="margin-left:8px">' + grand + ' guests</div></div>' +
+      '<div style="overflow-x:auto"><table class="o-list" id="g-pivot"><thead>' + head + '</thead><tbody>' + bodyRows + totRow + '</tbody></table></div>';
+    document.getElementById("piv-r").onchange = function () { EV._pivR = this.value; evRouteSection("guests"); };
+    document.getElementById("piv-c").onchange = function () { EV._pivC = this.value; evRouteSection("guests"); };
   }
   function openGuestModal(g) {
     g = g || {};
@@ -4085,22 +4140,35 @@
   // ---- budget ----
   async function evBudget(host) {
     var rows = (await sb.from("event_budget_lines").select("*").eq("event_id", EV.eventId).order("category").order("sort")).data || [];
+    var revs = (await sb.from("event_revenues").select("amount,received").eq("event_id", EV.eventId)).data || [];
     var gc = EV.event.guest_target || 0;
     function lineEst(r) { return r.cost_basis === "per_guest" ? (Number(r.rate_per_guest) || 0) * gc : (Number(r.estimated) || 0); }
     var est = rows.reduce(function (a, r) { return a + lineEst(r); }, 0), act = rows.reduce(function (a, r) { return a + (Number(r.actual) || 0); }, 0);
-    var byCat = {}; rows.forEach(function (r) { var k = r.category || "Uncategorised"; (byCat[k] = byCat[k] || []).push(r); });
-    var tbl = Object.keys(byCat).sort().map(function (cat) {
-      var lines = byCat[cat], ce = lines.reduce(function (a, r) { return a + lineEst(r); }, 0), ca = lines.reduce(function (a, r) { return a + (Number(r.actual) || 0); }, 0);
-      return '<tr class="o-grp"><td colspan="6"><b>' + esc(cat) + '</b> <span class="muted">' + evM(ce) + (ca ? ' &middot; actual ' + evM(ca) : "") + '</span></td></tr>' +
-        lines.map(function (r) {
+    var byCat = {}, catOrder = []; rows.forEach(function (r) { var k = r.category || "Uncategorised"; if (!byCat[k]) { byCat[k] = { lines: [], est: 0, act: 0 }; catOrder.push(k); } byCat[k].lines.push(r); byCat[k].est += lineEst(r); byCat[k].act += Number(r.actual) || 0; });
+    catOrder.sort();
+    var recv = revs.filter(function (r) { return r.received; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    var expRev = revs.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    var maxV = Math.max.apply(null, catOrder.map(function (k) { return Math.max(byCat[k].est, byCat[k].act); }).concat([1]));
+    var tbl = catOrder.map(function (cat) {
+      var e = byCat[cat];
+      return '<tr class="o-grp"><td colspan="6"><b>' + esc(cat) + '</b> <span class="muted">' + evM(e.est) + (e.act ? ' &middot; actual ' + evM(e.act) : "") + '</span></td></tr>' +
+        e.lines.map(function (r) {
           return '<tr data-id="' + r.id + '" style="cursor:pointer"><td>' + esc(r.subcategory || "") + '</td><td>' + esc(r.item || "") + '</td><td class="muted">' + (r.cost_basis === "per_guest" ? "Per guest " + evM(r.rate_per_guest) : "Fixed") + '</td><td class="num">' + evM(lineEst(r)) + '</td><td class="num">' + (r.actual ? evM(r.actual) : "-") + '</td><td class="muted">' + esc(r.notes || "") + '</td></tr>';
         }).join("");
     }).join("");
+    var cmp = catOrder.map(function (k) { var e = byCat[k], v = e.est - e.act, ep = Math.round(e.est / maxV * 100), ap = Math.round(e.act / maxV * 100); return '<tr><td><b>' + esc(k) + '</b><div class="bva-bars"><div class="bva-bar est" style="width:' + ep + '%"></div><div class="bva-bar act" style="width:' + ap + '%"></div></div></td><td class="num">' + evM(e.est) + '</td><td class="num">' + evM(e.act) + '</td><td class="num" style="color:' + (v < 0 ? "var(--bad,#dc2626)" : "var(--ink2)") + '">' + evM(v) + '</td></tr>'; }).join("");
     host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="b-add">+ Add line</button><div class="gap"></div>' +
       '<div class="ev-stat"><span class="v">' + evM(est) + '</span><span class="k">estimated' + (gc ? " &middot; " + evM(est / (gc || 1)) + "/guest" : "") + '</span></div>' +
-      '<div class="ev-stat"><span class="v">' + evM(act) + '</span><span class="k">actual</span></div></div>' +
-      (rows.length ? '<table class="o-list"><thead><tr><th>Subcategory</th><th>Item</th><th>Basis</th><th class="num">Estimated</th><th class="num">Actual</th><th>Notes</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No budget lines</div><div class="o-empty2-h">Add your first budget line.</div></div>');
+      '<div class="ev-stat"><span class="v">' + evM(act) + '</span><span class="k">actual</span></div>' +
+      '<div class="ev-stat"><span class="v">' + evM(est - act) + '</span><span class="k">remaining</span></div>' + evTools("b") + '</div>' +
+      (rows.length ? '<table class="o-list" id="b-lines"><thead><tr><th>Subcategory</th><th>Item</th><th>Basis</th><th class="num">Estimated</th><th class="num">Actual</th><th>Notes</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No budget lines</div><div class="o-empty2-h">Add your first budget line.</div></div>') +
+      (catOrder.length ? '<div class="o-cf-head" style="margin:22px 0 8px">Budget vs actual</div><div class="bva-legend" style="margin-bottom:8px"><span class="bva-bar est"></span> Estimated <span class="bva-bar act"></span> Actual</div><table class="o-list bva"><thead><tr><th>Category</th><th class="num">Estimated</th><th class="num">Actual</th><th class="num">Variance</th></tr></thead><tbody>' + cmp + '<tr class="o-grp"><td><b>Total</b></td><td class="num"><b>' + evM(est) + '</b></td><td class="num"><b>' + evM(act) + '</b></td><td class="num"><b>' + evM(est - act) + '</b></td></tr></tbody></table>' : "") +
+      '<div class="ev-grid2" style="margin-top:16px"><div class="card"><h3>Money in vs out</h3><div class="ev-kv">' +
+      '<div class="r"><span class="k">Revenue expected</span><b>' + evM(expRev) + '</b></div><div class="r"><span class="k">Revenue received</span><b>' + evM(recv) + '</b></div>' +
+      '<div class="r"><span class="k">Actual spend</span><b>' + evM(act) + '</b></div><div class="r"><span class="k">Net (received - actual)</span><b style="color:' + (recv - act < 0 ? "var(--bad,#dc2626)" : "inherit") + '">' + evM(recv - act) + '</b></div>' +
+      '</div></div></div>';
     document.getElementById("b-add").onclick = function () { openBudgetModal(null); };
+    evWireTools("b", function () { return { name: "budget", title: "Budget - " + EV.event.name, headers: ["Category", "Subcategory", "Item", "Basis", "Estimated", "Actual", "Notes"], rows: rows.map(function (r) { return [r.category, r.subcategory, r.item, (r.cost_basis === "per_guest" ? "Per guest" : "Fixed"), lineEst(r), r.actual, r.notes]; }), printSel: "#b-lines" }; });
     host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openBudgetModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
   function openBudgetModal(b) {
@@ -4165,8 +4233,9 @@
   async function evSuppliers(host) {
     var rows = (await sb.from("event_suppliers").select("*").eq("event_id", EV.eventId).order("category").order("sort")).data || [];
     var view = EV._supView || "table";
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="s-add">+ Add supplier</button><input id="s-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' +
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="s-add">+ Add supplier</button><input id="s-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' + evTools("s") +
       '<div class="o-vs" id="s-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button></div></div><div id="s-body"></div>';
+    evWireTools("s", function () { return { name: "suppliers", title: "Suppliers - " + EV.event.name, headers: ["Category", "Supplier", "Why", "Price band", "Contact", "Phone/email", "Best pick", "Status", "Notes"], rows: rows.map(function (r) { return [r.category, r.name, r.why, r.price_band, r.contact_name, r.phone || r.email, r.is_pick ? "Yes" : "", evLabel(SUPPLIER_STATUS, r.status), r.notes]; }), printSel: "#s-body table" }; });
     document.getElementById("s-add").onclick = function () { openSupplierModal(null); };
     document.getElementById("s-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._supView = b.dataset.v; evSuppliers(host); }; });
     var q = "";
@@ -4214,15 +4283,17 @@
     var rows = (await sb.from("event_procurement").select("*, event_suppliers:supplier_id(name)").eq("event_id", EV.eventId).order("created_at")).data || [];
     var view = EV._procView || "table";
     var total = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="pr-add">+ Add item</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(total) + '</span><span class="k">procurement value</span></div>' +
+    var deliv = rows.filter(function (r) { return r.status === "delivered"; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="pr-add">+ Add item</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(total) + '</span><span class="k">procurement value</span></div><div class="ev-stat"><span class="v">' + evM(deliv) + '</span><span class="k">delivered</span></div>' + evTools("prc") +
       '<div class="o-vs" id="pr-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button></div></div><div id="pr-body"></div>';
+    evWireTools("prc", function () { return { name: "procurement", title: "Procurement - " + EV.event.name, headers: ["Item", "Supplier", "Category", "Qty", "Unit", "Amount", "Needed by", "Status", "Notes"], rows: rows.map(function (r) { return [r.description, r.event_suppliers ? r.event_suppliers.name : "", r.category, r.qty, r.unit_price, r.amount, r.needed_by, evLabel(PROC_STATUS, r.status), r.notes]; }), printSel: "#pr-body table" }; });
     document.getElementById("pr-add").onclick = function () { openProcModal(null); };
     document.getElementById("pr-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._procView = b.dataset.v; evProcurement(host); }; });
     var body = document.getElementById("pr-body");
     if (view === "board") { evBoard(body, { rows: rows, table: "event_procurement", groups: [{ label: "Status", field: "status", options: PROC_STATUS }], stateKey: "proc", onOpen: function (r) { openProcModal(r); }, refresh: function () { evProcurement(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.description || "Item") + '</div><div class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : (r.category || "")) + '</div><div class="r"><span>' + (r.qty || 0) + ' x</span><b>' + evM(r.amount) + '</b></div>'; } }); return; }
     if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No procurement items</div><div class="o-empty2-h">Track what you order from suppliers for the event.</div></div>'; return; }
-    body.innerHTML = '<table class="o-list"><thead><tr><th>Item</th><th>Supplier</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th><th>Needed by</th><th>Status</th></tr></thead><tbody>' +
-      rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.description || "") + '</b></td><td class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : "") + '</td><td class="num">' + (r.qty || 0) + '</td><td class="num">' + evM(r.unit_price) + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.needed_by || "") + '</td><td><span class="badge ' + (r.status === "delivered" ? "paid" : r.status === "confirmed" || r.status === "ordered" ? "partial" : "draft") + '">' + esc(evLabel(PROC_STATUS, r.status)) + '</span></td></tr>'; }).join("") + '</tbody></table>';
+    body.innerHTML = '<table class="o-list"><thead><tr><th>Item</th><th>Supplier</th><th>Category</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th><th>Needed by</th><th>Status</th></tr></thead><tbody>' +
+      rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.description || "") + '</b>' + (r.notes ? '<div class="muted" style="font-size:11px">' + esc(r.notes) + '</div>' : "") + '</td><td class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td class="num">' + (r.qty || 0) + '</td><td class="num">' + evM(r.unit_price) + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.needed_by || "") + '</td><td><span class="badge ' + (r.status === "delivered" ? "paid" : r.status === "confirmed" || r.status === "ordered" ? "partial" : "draft") + '">' + esc(evLabel(PROC_STATUS, r.status)) + '</span></td></tr>'; }).join("") + '</tbody></table>';
     body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openProcModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
   async function openProcModal(p) {
@@ -4234,34 +4305,44 @@
       '<div class="row2"><div><label>Supplier</label><select id="qm-sup"><option value="">(none)</option>' + sups.map(function (x) { return '<option value="' + x.id + '"' + (p.supplier_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div><div><label>Category</label>' + sug("qm-cat", p.category, "ev_bcat", "") + '</div></div>' +
       '<div class="row2"><div><label>Qty</label><input id="qm-qty" type="number" step="any" value="' + (p.qty != null ? p.qty : 1) + '"></div><div><label>Unit price</label><input id="qm-price" type="number" step="0.01" value="' + (p.unit_price != null ? p.unit_price : "") + '"></div></div>' +
       '<div class="row2"><div><label>Needed by</label><input id="qm-need" type="date" value="' + esc(p.needed_by || "") + '"></div><div><label>Status</label><select id="qm-status">' + PROC_STATUS.map(function (o) { return '<option value="' + o[0] + '"' + ((p.status || "planned") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Amount (' + esc(evCur()) + ') <span style="font-weight:400;color:var(--ink2)">auto = qty x price; override if needed</span></label><input id="qm-amount" type="number" step="0.01" value="' + (p.amount != null ? p.amount : "") + '"></div><div></div></div>' +
+      '<div><label>Notes</label><input id="qm-notes" value="' + esc(p.notes || "") + '"></div>' +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="qm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("qm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("qm-del"); if (del) del.onclick = async function () { if (!confirm("Delete?")) return; await sb.from("event_procurement").delete().eq("id", p.id); m.remove(); evRouteSection("procurement"); };
     document.getElementById("qm-save").onclick = async function () {
-      var qty = parseFloat(gv("qm-qty")) || 0, price = parseFloat(gv("qm-price")) || 0;
-      var row = { description: gv("qm-desc") || null, supplier_id: document.getElementById("qm-sup").value || null, category: gv("qm-cat") || null, qty: qty, unit_price: price, amount: qty * price, needed_by: gv("qm-need") || null, status: document.getElementById("qm-status").value };
+      var qty = parseFloat(gv("qm-qty")) || 0, price = parseFloat(gv("qm-price")) || 0, ov = gv("qm-amount");
+      var row = { description: gv("qm-desc") || null, supplier_id: document.getElementById("qm-sup").value || null, category: gv("qm-cat") || null, qty: qty, unit_price: price, amount: (ov !== "" ? (parseFloat(ov) || 0) : qty * price), needed_by: gv("qm-need") || null, status: document.getElementById("qm-status").value, notes: gv("qm-notes") || null };
       if (isNew) { row.event_id = EV.eventId; row.org_id = EV.event.org_id; var r = await sb.from("event_procurement").insert(row); if (r.error) { toast(errMsg(r.error)); return; } }
       else { var u = await sb.from("event_procurement").update(row).eq("id", p.id); if (u.error) { toast(errMsg(u.error)); return; } }
       m.remove(); toast("Saved"); evRouteSection("procurement");
     };
   }
-  // ---- revenues ----
+  // ---- revenues (money in: tickets, donations, sponsorship, gifts, registry...) ----
+  var REV_TYPES = ["Ticket sales", "Client fee", "Donation", "Sponsorship", "Gift", "Wedding registry / gift list", "Contribution", "Grant", "Other"];
   async function evRevenues(host) {
-    var rows = (await sb.from("event_revenues").select("*").eq("event_id", EV.eventId).order("expected_date", { nullsFirst: false })).data || [];
+    var rows = (await sb.from("event_revenues").select("*").eq("event_id", EV.eventId).order("source")).data || [];
     var exp = rows.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0), rec = rows.filter(function (r) { return r.received; }).reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="rv-add">+ Add revenue</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(exp) + '</span><span class="k">expected</span></div><div class="ev-stat"><span class="v">' + evM(rec) + '</span><span class="k">received</span></div></div>' +
-      (rows.length ? '<table class="o-list"><thead><tr><th>Source</th><th>Description</th><th class="num">Amount</th><th>Expected</th><th>Status</th></tr></thead><tbody>' +
-        rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.source || "") + '</b></td><td class="muted">' + esc(r.description || "") + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.expected_date || "") + '</td><td>' + (r.received ? '<span class="badge paid">Received</span>' : '<span class="badge draft">Expected</span>') + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No revenue yet</div><div class="o-empty2-h">Client fees, contributions, gifts or sponsorships.</div></div>');
+    var byType = {}, order = []; rows.forEach(function (r) { var k = r.source || "Other"; if (!byType[k]) { byType[k] = []; order.push(k); } byType[k].push(r); });
+    order.sort();
+    var tbl = order.map(function (k) {
+      var lines = byType[k], sub = lines.reduce(function (a, r) { return a + (Number(r.amount) || 0); }, 0);
+      return '<tr class="o-grp"><td colspan="4"><b>' + esc(k) + '</b> <span class="muted">' + evM(sub) + '</span></td></tr>' +
+        lines.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td class="muted">' + esc(r.description || "") + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.expected_date || "") + '</td><td>' + (r.received ? '<span class="badge paid">Received</span>' : '<span class="badge draft">Expected</span>') + '</td></tr>'; }).join("");
+    }).join("");
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="rv-add">+ Add revenue</button><div class="gap"></div><div class="ev-stat"><span class="v">' + evM(exp) + '</span><span class="k">expected</span></div><div class="ev-stat"><span class="v">' + evM(rec) + '</span><span class="k">received</span></div><div class="ev-stat"><span class="v">' + evM(exp - rec) + '</span><span class="k">outstanding</span></div>' + evTools("rv") + '</div>' +
+      (rows.length ? '<table class="o-list" id="rv-lines"><thead><tr><th>Details / from whom</th><th class="num">Amount</th><th>Expected</th><th>Status</th></tr></thead><tbody>' + tbl + '</tbody></table>' : '<div class="o-empty2"><div class="o-empty2-t">No revenue yet</div><div class="o-empty2-h">Tickets, client fees, donations, sponsorships, gifts or a registry / gift list.</div></div>');
     document.getElementById("rv-add").onclick = function () { openRevModal(null); };
+    evWireTools("rv", function () { return { name: "revenues", title: "Revenues - " + EV.event.name, headers: ["Type", "Details", "Amount", "Expected", "Received"], rows: rows.map(function (r) { return [r.source, r.description, r.amount, r.expected_date, r.received ? "Yes" : "No"]; }), printSel: "#rv-lines" }; });
     host.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openRevModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
   function openRevModal(r) {
     r = r || {}; var isNew = !r.id;
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add revenue" : "Edit revenue") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-      '<div class="row2"><div><label>Source</label>' + sug("rm-src", r.source, "ev_revsrc", "Client fee / Gift") + '</div><div><label>Amount (' + esc(evCur()) + ')</label><input id="rm-amt" type="number" step="0.01" value="' + (r.amount != null ? r.amount : "") + '"></div></div>' +
-      '<div><label>Description</label><input id="rm-desc" value="' + esc(r.description || "") + '"></div>' +
+      '<div class="row2"><div><label>Type</label><input id="rm-src" list="rm-src-dl" value="' + esc(r.source || "") + '" placeholder="Pick or type"><datalist id="rm-src-dl">' + REV_TYPES.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join("") + '</datalist></div><div><label>Amount (' + esc(evCur()) + ')</label><input id="rm-amt" type="number" step="0.01" value="' + (r.amount != null ? r.amount : "") + '"></div></div>' +
+      '<div><label>Details / from whom</label><input id="rm-desc" value="' + esc(r.description || "") + '" placeholder="e.g. sponsor name, gift giver, notes"></div>' +
       '<div class="row2"><div><label>Expected date</label><input id="rm-date" type="date" value="' + esc(r.expected_date || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="rm-recv"' + (r.received ? " checked" : "") + '> Received</label></div></div>' +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="rm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="rm-cancel">Cancel</button><button class="btn pri" id="rm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
@@ -4281,8 +4362,9 @@
   async function evTasks(host) {
     var rows = (await sb.from("event_tasks").select("*").eq("event_id", EV.eventId).order("sort").order("created_at")).data || [];
     var view = EV._taskView || "table";
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="t-add">+ Add task</button><input id="t-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' +
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="t-add">+ Add task</button><input id="t-q" class="ev-search" placeholder="Search..."><div class="gap"></div>' + evTools("t") +
       '<div class="o-vs" id="t-vs"><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="gantt"' + (view === "gantt" ? ' class="on"' : "") + '>&#9636; Gantt</button></div></div><div id="t-body"></div>';
+    evWireTools("t", function () { return { name: "tasks", title: "Tasks - " + EV.event.name, headers: ["Phase", "Category", "Task", "Status", "Assignee", "Start", "Due", "Notes"], rows: rows.map(function (r) { return [r.phase, r.category, r.title, evLabel(EV_TASK_STATUS, r.status), r.assignee, r.start_date, r.due_date, r.notes]; }), printSel: "#t-body table" }; });
     document.getElementById("t-add").onclick = function () { openEvTaskModal(null); };
     document.getElementById("t-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._taskView = b.dataset.v; evTasks(host); }; });
     var q = "";
@@ -4336,7 +4418,7 @@
       rowsHtml + '</div></div>';
     body.querySelectorAll(".gz-row[data-id]").forEach(function (el) { el.onclick = function () { openEvTaskModal(tasks.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
   }
-  function openEvTaskModal(t) {
+  async function openEvTaskModal(t) {
     t = t || {}; var isNew = !t.id;
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add task" : "Edit task") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
@@ -4348,6 +4430,16 @@
       '<div><label>Notes</label><input id="tm-notes" value="' + esc(t.notes || "") + '"></div>' +
       '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="tm-cancel">Cancel</button><button class="btn pri" id="tm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
+    // seed assignee suggestions with people already on the event + suppliers
+    try {
+      var _ai = document.getElementById("tm-assignee"), _dlid = _ai ? _ai.getAttribute("list") : null, _dl = _dlid ? document.getElementById(_dlid) : null;
+      if (_dl) {
+        var _asg = (await sb.from("event_tasks").select("assignee").eq("event_id", EV.eventId)).data || [];
+        var _seen = {}; _asg.forEach(function (a) { if (a.assignee && !_seen[a.assignee]) { _seen[a.assignee] = 1; _dl.insertAdjacentHTML("beforeend", '<option>' + esc(a.assignee) + '</option>'); } });
+        var _sups = (await sb.from("event_suppliers").select("name").eq("event_id", EV.eventId).order("name")).data || [];
+        _sups.forEach(function (s) { if (s.name) _dl.insertAdjacentHTML("beforeend", '<option>' + esc(s.name) + ' (supplier)</option>'); });
+      }
+    } catch (e) { }
     document.getElementById("tm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("tm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this task?")) return; await sb.from("event_tasks").delete().eq("id", t.id); m.remove(); evRouteSection("tasks"); };
     document.getElementById("tm-save").onclick = async function () {
@@ -4397,13 +4489,17 @@
   // ---- team / cross-company collaboration ----
   async function evTeam(host) {
     var collabs = (await sb.from("event_collaborators").select("*").eq("event_id", EV.eventId).order("created_at")).data || [];
-    var isOwner = collabs.length ? true : true; // owner sees their own event; collaborators may also open Team
+    var tks = (await sb.from("event_tasks").select("assignee,status").eq("event_id", EV.eventId)).data || [];
+    var people = {}; tks.forEach(function (t) { if (t.assignee) { if (!people[t.assignee]) people[t.assignee] = { total: 0, done: 0 }; people[t.assignee].total++; if (t.status === "done") people[t.assignee].done++; } });
+    var pnames = Object.keys(people).sort();
+    var peopleCard = '<div class="card" style="margin-top:16px"><h3>People on this event</h3><div class="sub" style="margin:-2px 0 10px">Everyone assigned to a task appears here automatically. Assign someone in <b>Tasks</b> (start typing to pick an existing person or supplier, or type a new name).</div>' +
+      (pnames.length ? '<div class="ev-kv">' + pnames.map(function (n) { var p = people[n]; return '<div class="r"><span class="k">' + esc(n) + '</span><b>' + p.done + ' / ' + p.total + ' tasks done</b></div>'; }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No one assigned yet.</div>') + '</div>';
     host.innerHTML = '<div class="ev-grid2"><div class="card"><h3>Invite a company to collaborate</h3>' +
       '<div class="sub" style="margin:-2px 0 10px">They accept a link and can then see and edit <b>this event only</b>. Their other data stays private, and yours stays private to them.</div>' +
       '<div class="row2" style="display:flex;gap:8px"><input id="tm-email" placeholder="their email" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><select id="tm-role" style="padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink)"><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn pri" id="tm-invite" style="background:var(--app);border-color:var(--app)">Invite</button></div></div>' +
       '<div class="card"><h3>Collaborators</h3>' + (collabs.length ? '<div class="ev-kv">' + collabs.map(function (cc) {
         return '<div class="r" style="align-items:center"><span class="k">' + esc(cc.invited_email || "invited") + '<div class="muted" style="font-size:11px">' + esc(cc.role) + ' &middot; ' + esc(cc.status) + '</div></span><span style="display:flex;gap:6px">' + (cc.status === "pending" ? '<button class="btn sm tm-copy" data-token="' + cc.token + '">Copy link</button>' : "") + '<button class="btn sm tm-rem" data-id="' + cc.id + '" style="color:var(--bad)">Remove</button></span></div>';
-      }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No collaborators yet.</div>') + '</div></div>';
+      }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No collaborators yet.</div>') + '</div></div>' + peopleCard;
     document.getElementById("tm-invite").onclick = async function () {
       var email = gv("tm-email"); if (!email) { toast("Enter an email"); return; }
       var ins = await sb.from("event_collaborators").insert({ event_id: EV.eventId, owner_org_id: EV.event.org_id, invited_email: email, role: document.getElementById("tm-role").value, status: "pending" }).select("token").single();
@@ -4432,6 +4528,8 @@
     var zones = (await sb.from("event_zones").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
     var tables = (await sb.from("event_tables").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
     var guests = (await sb.from("event_guests").select("id,first_name,family_name,table_id,plus_ones,priority,invite_stage").eq("event_id", EV.eventId).in("invite_stage", ["confirmed", "invited", "maybe"]).order("family_name")).data || [];
+    var fpList = await mediaList("event_floorplan", EV.eventId); var fp = fpList.filter(function (x) { return x.kind === "image"; }).slice(-1)[0];
+    var fpUrl = fp ? await mediaSignedUrl(fp.path) : "";
     var zoneById = {}; zones.forEach(function (z) { zoneById[z.id] = z; });
     var seatedBy = {}; tables.forEach(function (t) { seatedBy[t.id] = []; });
     var unassigned = [];
@@ -4439,21 +4537,32 @@
     function heads(list) { return list.reduce(function (a, g) { return a + 1 + (Number(g.plus_ones) || 0); }, 0); }
     var totalSeats = tables.reduce(function (a, t) { return a + (Number(t.capacity) || 0); }, 0);
     var seatedHeads = guests.filter(function (g) { return g.table_id; }).reduce(function (a, g) { return a + 1 + (Number(g.plus_ones) || 0); }, 0);
+    var view = EV._seatView || "plan";
     function chip(g) { return '<span class="seat-chip" draggable="true" data-guest="' + g.id + '">' + (g.priority ? '<b class="ev-prio p' + esc(g.priority) + '" style="width:15px;height:15px;line-height:15px;font-size:9px">' + esc(g.priority) + '</b> ' : "") + esc(((g.first_name || "") + " " + (g.family_name || "")).trim() || "Guest") + (g.plus_ones ? " +" + g.plus_ones : "") + '</span>'; }
-    var tablesHtml = tables.map(function (t) {
+    function tableHtml(t, positioned) {
       var seated = seatedBy[t.id] || [], h = heads(seated), over = t.capacity && h > t.capacity, z = zoneById[t.zone_id];
-      return '<div class="seat-table shape-' + (t.shape || "round") + (over ? " over" : "") + '" data-id="' + t.id + '" style="left:' + (t.x || 40) + 'px;top:' + (t.y || 40) + 'px;width:' + (t.w || 110) + 'px;min-height:' + (t.h || 100) + 'px;' + (z ? "border-color:" + z.color : "") + '">' +
-        '<div class="seat-th"><span class="seat-move" title="Drag to move">&#9782;</span><span class="seat-name">' + esc(t.name) + '</span><span class="seat-cap' + (over ? " over" : "") + '">' + h + "/" + (t.capacity || 0) + '</span></div>' +
-        '<div class="seat-guests">' + seated.map(chip).join("") + '</div></div>';
-    }).join("");
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="se-tbl">+ Add table</button><button class="o-filtbtn" id="se-zone">Zones</button><div class="gap"></div>' +
-      '<div class="ev-stat"><span class="v">' + seatedHeads + " / " + totalSeats + '</span><span class="k">seated / seats</span></div><div class="ev-stat"><span class="v">' + unassigned.length + '</span><span class="k">to seat</span></div></div>' +
+      var posStyle = positioned ? ('left:' + (t.x || 40) + 'px;top:' + (t.y || 40) + 'px;width:' + (t.w || 110) + 'px;min-height:' + (t.h || 100) + 'px;') : "";
+      return '<div class="seat-table' + (positioned ? ' shape-' + (t.shape || "round") : ' listcard') + (over ? " over" : "") + '" data-id="' + t.id + '" style="' + posStyle + (z ? "border-color:" + z.color : "") + '">' +
+        '<div class="seat-th">' + (positioned ? '<span class="seat-move" title="Drag to move">&#9782;</span>' : "") + '<span class="seat-name">' + esc(t.name) + (z ? ' <span class="muted" style="font-weight:400">&middot; ' + esc(z.name) + '</span>' : "") + '</span><span class="seat-cap' + (over ? " over" : "") + '">' + h + "/" + (t.capacity || 0) + '</span></div>' +
+        '<div class="seat-guests">' + seated.map(chip).join("") + '</div>' + (positioned ? '<span class="seat-resize" title="Drag to resize"></span>' : "") + '</div>';
+    }
+    var planInner = tables.length ? tables.map(function (t) { return tableHtml(t, true); }).join("") : '<div class="seat-empty">Add tables, then drag guests onto them. Drag &#9782; to move, the corner to resize. Upload a floor-plan photo to lay tables over your real venue.</div>';
+    var listInner = tables.length ? tables.map(function (t) { return tableHtml(t, false); }).join("") : '<div class="muted" style="padding:12px">No tables yet.</div>';
+    var planStyle = (view === "plan" && fpUrl) ? ('background-image:url("' + fpUrl.replace(/"/g, "&quot;") + '");background-size:100% 100%;background-repeat:no-repeat;' + ((fp.w && fp.h) ? ('aspect-ratio:' + fp.w + '/' + fp.h + ';height:auto;') : "")) : "";
+    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="se-tbl">+ Add table</button><button class="o-filtbtn" id="se-zone">Zones</button>' +
+      '<label class="o-filtbtn" style="cursor:pointer">' + (fpUrl ? "Change floor plan" : "Upload floor plan") + '<input type="file" accept="image/*" id="se-fp" style="display:none"></label>' + (fpUrl ? '<button class="o-filtbtn" id="se-fprm">Remove plan</button>' : "") +
+      '<div class="gap"></div>' +
+      '<div class="ev-stat"><span class="v">' + seatedHeads + " / " + totalSeats + '</span><span class="k">seated / seats</span></div><div class="ev-stat"><span class="v">' + unassigned.length + '</span><span class="k">to seat</span></div>' +
+      '<div class="o-vs" id="se-vs"><button data-v="plan"' + (view === "plan" ? ' class="on"' : "") + '>&#9638; Plan</button><button data-v="list"' + (view === "list" ? ' class="on"' : "") + '>&#9776; List</button></div></div>' +
       (zones.length ? '<div class="seat-legend">' + zones.map(function (z) { return '<span><i style="background:' + esc(z.color) + '"></i>' + esc(z.name) + '</span>'; }).join("") + '</div>' : "") +
-      '<div class="seat-wrap"><div class="seat-plan" id="seat-plan">' + (tables.length ? tablesHtml : '<div class="seat-empty">Add tables, then drag guests onto them. Drag the &#9782; handle to move a table.</div>') + '</div>' +
+      '<div class="seat-wrap">' +
+      (view === "list" ? '<div class="seat-listwrap" id="seat-plan">' + listInner + '</div>' : '<div class="seat-plan' + (fpUrl ? " hasfp" : "") + '" id="seat-plan" style="' + planStyle + '">' + planInner + '</div>') +
       '<div class="seat-side"><div class="seat-side-h">Unassigned (' + unassigned.length + ')</div><div class="seat-unassigned" id="seat-unassigned">' + (unassigned.length ? unassigned.map(chip).join("") : '<div class="muted" style="font-size:12px;padding:8px">Everyone is seated.</div>') + '</div></div></div>';
     document.getElementById("se-tbl").onclick = function () { openTableModal(null, zones, tables.length); };
     document.getElementById("se-zone").onclick = function () { openZoneMgr(); };
-    var plan = document.getElementById("seat-plan");
+    document.getElementById("se-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._seatView = b.dataset.v; evSeating(host); }; });
+    var fpi = document.getElementById("se-fp"); if (fpi) fpi.onchange = async function () { var f = fpi.files[0]; if (!f) return; try { toast("Uploading floor plan..."); await mediaUpload("event_floorplan", EV.eventId, f); evSeating(host); } catch (e) { toast("Upload failed: " + errMsg(e)); } };
+    var fprm = document.getElementById("se-fprm"); if (fprm) fprm.onclick = async function () { if (!confirm("Remove the floor-plan image?")) return; try { await mediaDelete(fp); } catch (e) { } evSeating(host); };
     async function assign(guestId, tableId) { var r = await sb.from("event_guests").update({ table_id: tableId }).eq("id", guestId); if (r.error) { toast(errMsg(r.error)); return; } evSeating(host); }
     host.querySelectorAll(".seat-chip").forEach(function (ch) {
       ch.addEventListener("dragstart", function (e) { e.dataTransfer.setData("text/plain", ch.dataset.guest); e.dataTransfer.effectAllowed = "move"; ch.classList.add("dragging"); });
@@ -4465,10 +4574,17 @@
       tb.addEventListener("drop", function (e) { e.preventDefault(); tb.classList.remove("drop-over"); var gid = e.dataTransfer.getData("text/plain"); if (gid) assign(gid, tb.dataset.id); });
       tb.addEventListener("dblclick", function () { openTableModal(tables.filter(function (x) { return x.id === tb.dataset.id; })[0], zones); });
       var handle = tb.querySelector(".seat-move");
-      handle.addEventListener("mousedown", function (e) {
-        e.preventDefault(); tb._moving = true; var startX = e.clientX, startY = e.clientY, ox = parseFloat(tb.style.left) || 0, oy = parseFloat(tb.style.top) || 0;
-        function mm(ev) { tb.style.left = Math.max(0, ox + (ev.clientX - startX)) + "px"; tb.style.top = Math.max(0, oy + (ev.clientY - startY)) + "px"; }
+      if (handle) handle.addEventListener("mousedown", function (e) {
+        e.preventDefault(); tb._moving = true; var sx = e.clientX, sy = e.clientY, ox = parseFloat(tb.style.left) || 0, oy = parseFloat(tb.style.top) || 0;
+        function mm(ev) { tb.style.left = Math.max(0, ox + (ev.clientX - sx)) + "px"; tb.style.top = Math.max(0, oy + (ev.clientY - sy)) + "px"; }
         function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ x: parseFloat(tb.style.left) || 0, y: parseFloat(tb.style.top) || 0 }).eq("id", tb.dataset.id); }
+        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+      });
+      var rz = tb.querySelector(".seat-resize");
+      if (rz) rz.addEventListener("mousedown", function (e) {
+        e.preventDefault(); e.stopPropagation(); tb._moving = true; var sx = e.clientX, sy = e.clientY, ow = tb.offsetWidth, oh = tb.offsetHeight;
+        function mm(ev) { tb.style.width = Math.max(70, ow + (ev.clientX - sx)) + "px"; tb.style.minHeight = Math.max(70, oh + (ev.clientY - sy)) + "px"; }
+        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ w: parseFloat(tb.style.width) || 110, h: parseFloat(tb.style.minHeight) || 100 }).eq("id", tb.dataset.id); }
         document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
       });
     });
