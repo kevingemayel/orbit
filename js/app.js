@@ -2940,7 +2940,7 @@
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
       row.custom = collectCustom("partner");
       var r, sid = id;
-      if (id === "new") { row.org_id = S.company.org_id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; await mediaFlush("partner", sid); }
+      if (id === "new") { row.org_id = S.company.org_id; row.company_id = S.company.id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; await mediaFlush("partner", sid); }
       else { var gu = await guardedUpdate("partners", row, id, p && p.updated_at); if (gu.conflict) { conflictToast(isContact ? "contact" : (isCust ? "customer" : "vendor")); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
@@ -4307,7 +4307,7 @@
     document.body.appendChild(m);
     document.getElementById("sm-newcontact").onclick = async function () {
       var nm = gv("sm-name"); if (!nm) { toast("Enter a supplier name first"); return; }
-      var ph = gv("sm-phone"), prow = { org_id: EV.event.org_id, name: nm, is_vendor: true, is_company: true, contact_person: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), industry: gv("sm-cat") || null };
+      var ph = gv("sm-phone"), prow = { org_id: S.company.org_id, company_id: S.company.id, name: nm, is_vendor: true, is_company: true, contact_person: gv("sm-contact") || null, phone: (/@/.test(ph) ? null : ph) || null, email: (/@/.test(ph) ? ph : null), industry: gv("sm-cat") || null };
       var pins = await sb.from("partners").insert(prow).select("id,name").single();
       if (pins.error) { toast("Could not create contact: " + errMsg(pins.error)); return; }
       var sel = document.getElementById("sm-partner"); sel.insertAdjacentHTML("beforeend", '<option value="' + pins.data.id + '" selected>' + esc(pins.data.name) + '</option>'); sel.value = pins.data.id;
@@ -7582,6 +7582,7 @@
         var payload = data.filter(function (d) { return !d.__err.length; }).map(function (d) {
           var row = {}; for (var kk in spec.extra) row[kk] = spec.extra[kk];
           row[spec.scope === "org" ? "org_id" : "company_id"] = spec.scope === "org" ? S.company.org_id : S.company.id;
+          if (spec.table === "partners") row.company_id = S.company.id;   // contacts are now company-scoped
           spec.fields.forEach(function (f) { var v = d[f[0]]; if (v === "" || v == null) return; row[f[0]] = f[3] === "num" ? (Number(v) || 0) : v; });
           return row;
         });
@@ -9036,7 +9037,7 @@
     };
     var cb = document.getElementById("ld-tocust"); if (cb) cb.onclick = async function () {
       var cname = gv("ld-contact") || gv("ld-name");
-      var pr = await sb.from("partners").insert({ org_id: S.company.org_id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: gv("ld-phone") || null }).select("id").single();
+      var pr = await sb.from("partners").insert({ org_id: S.company.org_id, company_id: S.company.id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: gv("ld-phone") || null }).select("id").single();
       if (pr.error) { toast("Could not create: " + errMsg(pr.error)); return; }
       await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
       toast("Customer created & linked"); renderLeadForm(id);
