@@ -1152,3 +1152,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .cf-legend{display:flex;gap:16px;flex-wrap:wrap;margin:6px 2px 0;font-size:12px;color:var(--ink2)}
 .cf-legend span{display:inline-flex;align-items:center;gap:6px}
 .cf-legend i{width:11px;height:11px;border-radius:3px;display:inline-block}
+/* searchable product picker (RFQ + PO lines) */
+.o-combo{position:relative}
+.o-combo-in{width:100%}
+.o-combo-menu{position:absolute;z-index:60;left:0;right:0;top:100%;margin-top:3px;background:var(--panel);border:1px solid var(--line);border-radius:9px;box-shadow:0 10px 28px rgba(0,0,0,.16);max-height:270px;overflow:auto;min-width:280px}
+.o-combo-opt{padding:7px 11px;cursor:pointer;display:flex;justify-content:space-between;gap:12px;align-items:center;border-bottom:1px solid var(--line)}
+.o-combo-opt:last-child{border-bottom:0}
+.o-combo-opt:hover{background:var(--panel2)}
+.oc-name{font-weight:600;font-size:13px;color:var(--ink)}
+.oc-sub{color:var(--ink2);font-size:11.5px;white-space:nowrap}
+.o-combo-empty{padding:9px 11px;color:var(--ink2);font-size:12px}
+.l-acts{white-space:nowrap;display:flex;gap:5px;align-items:center}
+.l-addsize{font-size:11px;padding:2px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink2);cursor:pointer;font-weight:600}
+.l-addsize:hover{color:var(--app,var(--accent));border-color:var(--app,var(--accent))}

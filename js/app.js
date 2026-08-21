@@ -2643,6 +2643,28 @@
   }
 
   // ============================ SALES / PURCHASE ORDER FORM ============================
+  // ---- searchable product picker (finds items by name, code, supplier code, classification, spec) ----
+  function prodLabel(p) { return (p && p.default_code ? "[" + p.default_code + "] " : "") + (p ? p.name : ""); }
+  function prodSearchText(p) { var s = p.spec || {}; return [p.name, p.default_code, p.supplier_code, p.family, s.material, s.color, s.type, s.subtype, s.subfamily, s.brand, s.supplier].filter(Boolean).join(" ").toLowerCase(); }
+  function prodComboHTML(cls, selected) {
+    return '<div class="o-combo"><input class="o-combo-in" autocomplete="off" placeholder="Search item..." value="' + esc(selected ? prodLabel(selected) : "") + '"><input type="hidden" class="' + cls + '" value="' + (selected ? selected.id : "") + '"><div class="o-combo-menu" hidden></div></div>';
+  }
+  function wireProdCombo(scope, products, onPick) {
+    var inp = scope.querySelector(".o-combo-in"), hid = scope.querySelector("input[type=hidden]"), menu = scope.querySelector(".o-combo-menu");
+    if (!inp || !menu) return;
+    var idx = products.map(function (p) { return { p: p, t: prodSearchText(p) }; });
+    function render(q) {
+      var terms = (q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+      var m = (!terms.length ? idx : idx.filter(function (o) { return terms.every(function (t) { return o.t.indexOf(t) >= 0; }); })).slice(0, 25);
+      if (!m.length) menu.innerHTML = '<div class="o-combo-empty">No catalog match - you can still type a free description.</div>';
+      else menu.innerHTML = m.map(function (o) { var p = o.p, sub = [(p.spec || {}).material, (p.spec || {}).color, p.family].filter(Boolean).join(" &middot; "); return '<div class="o-combo-opt" data-id="' + p.id + '"><span class="oc-name">' + esc(prodLabel(p)) + '</span>' + (sub ? '<span class="oc-sub">' + esc(sub) + '</span>' : "") + '</div>'; }).join("");
+      menu.querySelectorAll(".o-combo-opt").forEach(function (el) { el.addEventListener("mousedown", function (e) { e.preventDefault(); var p = products.filter(function (x) { return x.id === el.dataset.id; })[0]; if (!p) return; hid.value = p.id; inp.value = prodLabel(p); menu.hidden = true; if (onPick) onPick(p); }); });
+      menu.hidden = false;
+    }
+    inp.addEventListener("focus", function () { render(hid.value ? "" : inp.value); });
+    inp.addEventListener("input", function () { hid.value = ""; render(inp.value); });
+    inp.addEventListener("blur", function () { setTimeout(function () { menu.hidden = true; }, 160); });
+  }
   async function renderOrderForm(id, kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
@@ -2658,7 +2680,7 @@
     var editable = !order || order.state === "draft" || order.state === "sent";
     var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
     var partners = (await sb.from("partners").select("id,name,pricelist_id").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
-    var products = ((await sb.from("products").select("id,name,default_code,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,uom,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var plItemsCache = {};
     async function pricelistPriceFor(productId) {
       if (!isSale) return null;
@@ -2706,11 +2728,11 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, size: l.size, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function recalc() { var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0; lb.querySelectorAll("tr").forEach(function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ln = q * p; var ts = tr.querySelector(".l-tax"); var amt = ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0; sub += ln; tax += ln * amt / 100; tr.querySelector(".l-sub").textContent = money(ln); }); setTot(sub, tax); }
-    function currentLines() { var lb = document.getElementById("lnbody"); if (!lb) return linesState; return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ps = tr.querySelector(".l-prod"); return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, product_id: ps ? (ps.value || null) : null }; }); }
+    function currentLines() { var lb = document.getElementById("lnbody"); if (!lb) return linesState; return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ps = tr.querySelector(".l-prod"), sz = tr.querySelector(".l-size"); return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, product_id: ps ? (ps.value || null) : null, size: sz ? (sz.value.trim() || null) : null }; }); }
     function renderLines() {
       var pg = document.getElementById("nbpg");
       if (!editable) {
@@ -2723,30 +2745,49 @@
             var badge = (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>'));
             matchCells = '<td class="num">' + rec + '</td><td class="num">' + bil + '</td><td>' + badge + '</td>';
           }
-          return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          return '<tr><td>' + esc(l.name) + '</td>' + (showMatch ? '<td class="muted">' + esc(l.size || "") + '</td>' : "") + '<td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
         var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
-      var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
-      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:170px">Product</th>' : "") + '<th>Description</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>' + totHTML();
+      var showSize = !isSale;
+      pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:210px">Product</th><th>Description</th>' + (showSize ? '<th style="width:110px">Size</th>' : "") + '<th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Tip: pick an item, then <b>+size</b> to add another size of the same item without retyping.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
-      function addRow(l) {
+      function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
+      function addRow(l, afterTr) {
         var tr = document.createElement("tr");
-        tr.innerHTML = (products.length ? '<td><select class="l-prod">' + prodOpts + '</select></td>' : "") + '<td><input class="l-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td><td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="l-price num" type="number" step="0.01" value="' + (l ? l.unit_price : 0) + '"></td><td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td><td><button class="del">&times;</button></td>';
-        lb.appendChild(tr);
+        var sel = l && l.product_id ? pById(l.product_id) : null;
+        tr.innerHTML = '<td>' + prodComboHTML("l-prod", sel) + '</td>' +
+          '<td><input class="l-name" value="' + esc(l ? (l.name || "") : "") + '" placeholder="Description"></td>' +
+          (showSize ? '<td><input class="l-size" value="' + esc(l ? (l.size || "") : "") + '" placeholder="e.g. 1200x800"></td>' : "") +
+          '<td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td>' +
+          '<td><input class="l-price num" type="number" step="0.01" value="' + (l ? l.unit_price : 0) + '"></td>' +
+          '<td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td>' +
+          '<td class="l-acts">' + (showSize ? '<button class="l-addsize" type="button" title="Add another size of this item">+size</button>' : "") + '<button class="del" type="button" title="Remove line">&times;</button></td>';
+        if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
         if (l && l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
-        if (l && l.product_id && tr.querySelector(".l-prod")) tr.querySelector(".l-prod").value = l.product_id;
-        var ps = tr.querySelector(".l-prod");
-        if (ps) ps.addEventListener("change", async function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".l-name").value = pr.name; var price = isSale ? pr.list_price : pr.cost_price; if (isSale) { var plp = await pricelistPriceFor(pr.id); if (plp != null) price = plp; } tr.querySelector(".l-price").value = price; var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx; recalc(); });
+        wireProdCombo(tr, products, function (pr) {
+          tr.querySelector(".l-name").value = pr.name;
+          tr.querySelector(".l-price").value = (isSale ? pr.list_price : pr.cost_price) || 0;
+          var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx;
+          if (isSale) pricelistPriceFor(pr.id).then(function (plp) { if (plp != null) { tr.querySelector(".l-price").value = plp; recalc(); } });
+          recalc();
+        });
+        var asz = tr.querySelector(".l-addsize");
+        if (asz) asz.onclick = function () {
+          var hid = tr.querySelector(".l-prod");
+          addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, unit_price: parseFloat(tr.querySelector(".l-price").value) || 0, tax_id: tr.querySelector(".l-tax").value || null, quantity: 1, size: "" }, tr);
+          recalc();
+          var newTr = tr.nextSibling; if (newTr) { var sz = newTr.querySelector(".l-size"); if (sz) sz.focus(); }
+        };
         tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
         tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); });
         recalc();
       }
       document.getElementById("addln").onclick = function () { addRow(null); };
-      if (linesState.length) linesState.forEach(addRow); else addRow(null);
+      if (linesState.length) linesState.forEach(function (l) { addRow(l); }); else addRow(null);
       recalc();
     }
     renderLines();
@@ -2771,7 +2812,7 @@
         if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from(ltbl).delete().eq("order_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
@@ -2804,7 +2845,7 @@
       if (l.id) await sb.from("purchase_order_lines").update({ qty_received: ord }).eq("id", l.id);
       var pr = l.product_id ? prodBy[l.product_id] : null;
       if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
-        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: toRecv, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: toRecv, size: l.size || null, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
         if (!r.error) { await postStockValue("receive", pr, toRecv, r.data && r.data.id); got++; }
       }
     }
@@ -7684,20 +7725,21 @@
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
     var vendorParts = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var kc = 1, L = [], V = [], B = {};
     if (!isNew) {
       var lrows = (await sb.from("rfq_lines").select("*").eq("rfq_id", id).order("sequence")).data || [];
       var idToK = {};
-      L = lrows.map(function (l) { var k = kc++; idToK[l.id] = k; return { k: k, description: l.description, unit: l.unit, quantity: l.quantity }; });
+      L = lrows.map(function (l) { var k = kc++; idToK[l.id] = k; return { k: k, product_id: l.product_id, description: l.description, size: l.size, unit: l.unit, quantity: l.quantity }; });
       V = ((await sb.from("rfq_vendors").select("*").eq("rfq_id", id)).data || []).map(function (v) { return { partner_id: v.partner_id }; });
       ((await sb.from("rfq_bids").select("*").eq("rfq_id", id)).data || []).forEach(function (b) { var k = idToK[b.rfq_line_id]; if (k != null) B[k + "|" + b.partner_id] = b.unit_price; });
     }
-    if (!L.length) L = [{ k: kc++, description: "", unit: "", quantity: 1 }];
+    if (!L.length) L = [{ k: kc++, product_id: null, description: "", size: "", unit: "", quantity: 1 }];
     var awarded = rfq.status === "awarded";
     function vname(pid) { var p = vendorParts.filter(function (x) { return x.id === pid; })[0]; return p ? p.name : "Vendor"; }
     function syncFromDom() {
       var lb = document.getElementById("rl-body");
-      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { return { k: Number(tr.dataset.k), description: tr.querySelector(".rl-desc").value.trim(), unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0 }; });
+      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var ph = tr.querySelector(".rl-prod"), sz = tr.querySelector(".rl-size"); return { k: Number(tr.dataset.k), product_id: ph ? (ph.value || null) : null, description: tr.querySelector(".rl-desc").value.trim(), size: sz ? sz.value.trim() : "", unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0 }; });
       document.querySelectorAll(".rfq-bid").forEach(function (inp) { var key = inp.dataset.k + "|" + inp.dataset.partner; if (inp.value !== "") B[key] = Number(inp.value); else delete B[key]; });
       rfq.title = (document.getElementById("rfq-title") || {}).value || rfq.title;
       rfq.project_id = (document.getElementById("rfq-proj") || {}).value || null;
@@ -7716,11 +7758,11 @@
         if (r.error) { toast(errMsg(r.error)); return false; }
         id = r.data.id; isNew = false; rfq.number = r.data.number; rfq.status = r.data.status;
       } else { await sb.from("rfqs").update(hdr).eq("id", id); }
-      var Lf = L.filter(function (l) { return l.description; });
+      var Lf = L.filter(function (l) { return l.description || l.product_id; });
       await sb.from("rfq_lines").delete().eq("rfq_id", id);
       var kToId = {};
       if (Lf.length) {
-        var ins = await sb.from("rfq_lines").insert(Lf.map(function (l, i) { return { company_id: S.company.id, rfq_id: id, description: l.description, unit: l.unit || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; })).select("id,sequence");
+        var ins = await sb.from("rfq_lines").insert(Lf.map(function (l, i) { return { company_id: S.company.id, rfq_id: id, product_id: l.product_id || null, description: l.description, size: l.size || null, unit: l.unit || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; })).select("id,sequence");
         if (ins.error) { toast(errMsg(ins.error)); return false; }
         var sorted = (ins.data || []).slice().sort(function (a, b) { return a.sequence - b.sequence; });
         sorted.forEach(function (row, i) { if (Lf[i]) kToId[Lf[i].k] = row.id; });
@@ -7741,7 +7783,7 @@
       var untax = lns.reduce(function (s, l) { return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0); }, 0);
       var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: await nextOrderNumber("purchase"), partner_id: partnerId, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: rfq.project_id || null, cost_code_id: rfq.cost_code_id || null, amount_untaxed: untax, amount_total: untax, note: "Awarded from " + (rfq.number || "RFQ") }).select("id,number").single();
       if (po.error) { toast(errMsg(po.error)); return; }
-      var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, name: l.description, quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
+      var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
       if (poLines.length) await sb.from("purchase_order_lines").insert(poLines);
       await sb.from("rfqs").update({ status: "awarded", awarded_partner_id: partnerId }).eq("id", id);
       toast("Awarded to " + vname(partnerId) + " — draft " + po.data.number + " created"); renderRFQForm(id);
@@ -7756,21 +7798,21 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { return '<tr data-k="' + l.k + '"><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:64px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:84px"></td><td><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Description</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:24px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button>';
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td><input class="rl-size" value="' + esc(l.size || "") + '" style="width:96px" placeholder="e.g. 1200x800"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:64px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:84px"></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><table class="o-lines"><thead><tr><th style="width:210px">Product</th><th>Description</th><th>Size</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; pick an item, then <b>+size</b> for more sizes.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div style="margin-top:8px"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
       var matrix = "";
-      if (V.length && L.some(function (l) { return l.description; })) {
-        var Lf = L.filter(function (l) { return l.description; });
+      if (V.length && L.some(function (l) { return l.description || l.product_id; })) {
+        var Lf = L.filter(function (l) { return l.description || l.product_id; });
         var vt = {}; V.forEach(function (v) { vt[v.partner_id] = 0; });
         var headRow = '<th>Item</th><th class="num">Qty</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '</th>'; }).join("");
         var mrows = Lf.map(function (l) {
           var totals = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? Number(p) * (Number(l.quantity) || 0) : null; });
           var valid = totals.filter(function (x) { return x != null; }); var best = valid.length ? Math.min.apply(null, valid) : null;
           var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="0.01" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '"></td>'; }).join("");
-          return '<tr><td>' + esc(l.description) + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
+          return '<tr><td>' + esc(l.description || "") + (l.size ? ' <span class="muted">(' + esc(l.size) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
         }).join("");
         var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
         var totRow = '<td><b>Total</b></td><td></td>' + V.map(function (v) { return '<td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
@@ -7779,8 +7821,10 @@
       }
       var btns = awarded ? '<button id="rfq-reopen">Reopen</button>' : '<button class="pri" id="rfq-save">Save</button>';
       document.querySelector(".o-form").innerHTML = '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div></div><div class="o-sheet"><div class="o-title">' + esc(rfq.number || rfq.title || "New RFQ") + '</div>' + header + linesTbl + vendorsSec + matrix + '</div>';
-      var addL = document.getElementById("rl-add"); if (addL) addL.onclick = function () { syncFromDom(); L.push({ k: kc++, description: "", unit: "", quantity: 1 }); draw(); };
-      document.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = function () { syncFromDom(); L.splice(Number(b.dataset.i), 1); if (!L.length) L = [{ k: kc++, description: "", unit: "", quantity: 1 }]; draw(); }; });
+      var addL = document.getElementById("rl-add"); if (addL) addL.onclick = function () { syncFromDom(); L.push({ k: kc++, product_id: null, description: "", size: "", unit: "", quantity: 1 }); draw(); };
+      document.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = function () { syncFromDom(); L.splice(Number(b.dataset.i), 1); if (!L.length) L = [{ k: kc++, product_id: null, description: "", size: "", unit: "", quantity: 1 }]; draw(); }; });
+      document.querySelectorAll("#rl-body tr").forEach(function (tr) { wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) uu.value = pr.uom; }); });
+      document.querySelectorAll(".rl-addsize").forEach(function (b) { b.onclick = function () { syncFromDom(); var tr = b.closest("tr"); var k = Number(tr.dataset.k); var src = L.filter(function (x) { return x.k === k; })[0] || {}; var idx = L.indexOf(src); L.splice(idx + 1, 0, { k: kc++, product_id: src.product_id || null, description: src.description || "", size: "", unit: src.unit || "", quantity: 1 }); draw(); }; });
       var addV = document.getElementById("rfq-addv"); if (addV) addV.onchange = function () { if (!this.value) return; syncFromDom(); V.push({ partner_id: this.value }); draw(); };
       document.querySelectorAll(".rfq-vdel").forEach(function (b) { b.onclick = function () { syncFromDom(); V.splice(Number(b.dataset.i), 1); draw(); }; });
       document.querySelectorAll(".rfq-bid").forEach(function (inp) { inp.addEventListener("change", function () { syncFromDom(); draw(); }); });
