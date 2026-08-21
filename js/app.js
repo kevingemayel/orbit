@@ -2666,23 +2666,36 @@
     inp.addEventListener("input", function () { hid.value = ""; render(inp.value); });
     inp.addEventListener("blur", function () { setTimeout(function () { menu.hidden = true; }, 160); });
   }
-  // ---- material maths: reuse the product sheet calculator on a purchase line ----
+  // ---- material maths: reuse the product calculator (all forms) on a purchase line ----
+  var LINE_BASIS = { sheet: [["sheet", "per sheet"], ["m2", "per m2"], ["kg", "per kg"]], bar: [["bar", "per bar"], ["m", "per metre"], ["kg", "per kg"]], liquid: [["container", "per container"], ["L", "per litre"]], roll: [["roll", "per roll"], ["lm", "per linear m"], ["kg", "per kg"]], generic: [["each", "each"]] };
+  function lineDefaultBasis(form) { return ({ sheet: "sheet", bar: "bar", liquid: "container", roll: "roll" })[form] || "each"; }
   function prodMat(product) {
-    if (!product) return { isSheet: false, kgm2: 0, basis: "each" };
-    var sp = product.spec || {}, d = sp.dims || {};
+    if (!product) return { form: "generic", basis: "each" };
+    var sp = product.spec || {}, d = sp.dims || {}, form = product.material_form || "generic";
     var dens = (d.density != null && d.density !== "") ? Number(d.density) : (MATERIAL_DENSITY[sp.material] || 0);
-    var t = Number(d.t || 0);
-    return { isSheet: product.material_form === "sheet", t: t, density: dens, kgm2: (t / 1000) * dens, basis: sp.basis || "sheet", pval: sp.pval };
+    var t = Number(d.t || 0), u = d.volunit || "L", factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1);
+    return { form: form, isSheet: form === "sheet", kgm2: (t / 1000) * dens, wpm: Number(d.wpm || 0), liters: (Number(d.vol) || 0) * factor, rlen: Number(d.rlen || 0), rwt: Number(d.rwt || 0), basis: sp.basis || lineDefaultBasis(form), pval: sp.pval };
   }
-  // per-sheet price + conversions from a line's width/height (mm) and a price entered in `basis`
-  function sheetCalc(w, h, priceVal, basis, kgm2) {
-    var area = (Number(w) || 0) * (Number(h) || 0) / 1e6, weight = area * (Number(kgm2) || 0);
-    priceVal = Number(priceVal) || 0; var perKg = 0, perM2 = 0, perSheet = 0;
-    if (basis === "kg") { perKg = priceVal; perSheet = priceVal * weight; perM2 = priceVal * kgm2; }
-    else if (basis === "m2") { perM2 = priceVal; perSheet = priceVal * area; perKg = weight ? perSheet / weight : 0; }
-    else { perSheet = priceVal; perM2 = area ? perSheet / area : 0; perKg = weight ? perSheet / weight : 0; }
-    return { area: area, weight: weight, kgm2: Number(kgm2) || 0, perKg: perKg, perM2: perM2, perSheet: perSheet };
+  // canonical per-unit price (sheet/bar/container/roll/each) + a derived conversion readout, per material form
+  function lineCalc(info, d1, d2, priceVal, basis, cc) {
+    cc = cc || S.company.currency_code; var pv = Number(priceVal) || 0, f = info.form;
+    if (f === "sheet") { var w = Number(d1) || 0, h = Number(d2) || 0, area = w * h / 1e6, kgm2 = info.kgm2, weight = area * kgm2, pk, pm, ps; if (basis === "kg") { pk = pv; ps = pv * weight; pm = pv * kgm2; } else if (basis === "m2") { pm = pv; ps = pv * area; pk = weight ? ps / weight : 0; } else { ps = pv; pm = area ? ps / area : 0; pk = weight ? ps / weight : 0; } return { unit: ps, measure: (w && h) ? msFmt(area, 3) + " m2" : "", derived: [["kg/m&sup2;", kgm2], ["wt/sheet", weight, "kg"], [cc + "/sheet", ps], [cc + "/m&sup2;", pm], [cc + "/kg", pk]] }; }
+    if (f === "bar") { var L = Number(d1) || 0, wpm = info.wpm, wpb = wpm * L, bk, bm, bb; if (basis === "kg") { bk = pv; bb = pv * wpb; bm = pv * wpm; } else if (basis === "m") { bm = pv; bb = pv * L; bk = wpm ? pv / wpm : 0; } else { bb = pv; bm = L ? pv / L : 0; bk = wpb ? pv / wpb : 0; } return { unit: bb, measure: L ? msFmt(wpb) + " kg/bar" : "", derived: [["wt/bar", wpb, "kg"], [cc + "/bar", bb], [cc + "/m", bm], [cc + "/kg", bk]] }; }
+    if (f === "liquid") { var liters = info.liters, lc, ll; if (basis === "L") { ll = pv; lc = pv * liters; } else { lc = pv; ll = liters ? pv / liters : 0; } return { unit: lc, measure: "", derived: [["L/container", liters, "L"], [cc + "/container", lc], [cc + "/L", ll]] }; }
+    if (f === "roll") { var rlen = info.rlen, rwt = info.rwt, rk, rlm, rr; if (basis === "kg") { rk = pv; rr = pv * rwt; rlm = rlen ? pv * rwt / rlen : 0; } else if (basis === "lm") { rlm = pv; rr = pv * rlen; rk = rwt ? pv * rlen / rwt : 0; } else { rr = pv; rk = rwt ? pv / rwt : 0; rlm = rlen ? pv / rlen : 0; } return { unit: rr, measure: "", derived: [["roll", rlen, "m"], ["wt", rwt, "kg"], [cc + "/roll", rr], [cc + "/lm", rlm], [cc + "/kg", rk]] }; }
+    return { unit: pv, measure: "", derived: [] };
   }
+  function lineMeasureHTML(info, d1, d2) {
+    var f = info.form;
+    if (f === "sheet") return '<span class="l-meas"><input class="l-d1 num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="W mm"><span class="mx">&times;</span><input class="l-d2 num" type="number" step="any" value="' + (d2 != null ? d2 : "") + '" placeholder="H mm"><span class="l-area muted"></span></span>';
+    if (f === "bar") return '<span class="l-meas"><input class="l-d1 num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="Length m"><span class="l-area muted"></span></span>';
+    if (f === "liquid") return '<span class="l-meas muted">container' + (info.liters ? " " + msFmt(info.liters, 3) + " L" : "") + '</span>';
+    if (f === "roll") return '<span class="l-meas muted">roll' + (info.rlen ? " " + msFmt(info.rlen) + " m" : "") + (info.rwt ? " / " + msFmt(info.rwt) + " kg" : "") + '</span>';
+    return '<span class="l-meas muted">-</span>';
+  }
+  function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
+  function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
+  function lineSizeStr(form, d1, d2) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2; if (form === "bar" && d1) return d1 + "m"; return null; }
   async function renderOrderForm(id, kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
@@ -2754,13 +2767,13 @@
       var pid = (tr.querySelector(".l-prod") || {}).value || "";
       var info = prodMat(pById(pid));
       var priceVal = parseFloat((tr.querySelector(".l-price") || {}).value) || 0;
-      var basisEl = tr.querySelector(".l-basis"); var basis = basisEl ? basisEl.value : "each";
-      if (!isSale && info.isSheet) {
-        var w = parseFloat((tr.querySelector(".l-w") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-h") || {}).value) || 0;
-        var cc = sheetCalc(w, h, priceVal, basis, info.kgm2);
-        return { unit: cc.perSheet, sheet: true, w: w, h: h, basis: basis, calc: cc };
+      var basisEl = tr.querySelector(".l-basis"); var basis = basisEl ? basisEl.value : (info.form ? info.basis : "each");
+      if (!isSale && info.form && info.form !== "generic") {
+        var d1 = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, d2 = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0;
+        var c = lineCalc(info, d1, d2, priceVal, basis);
+        return { unit: c.unit, d1: d1, d2: d2, basis: basis, form: info.form, calc: c };
       }
-      return { unit: priceVal, sheet: false, basis: basis };
+      return { unit: priceVal, d1: 0, d2: 0, basis: basis, form: "generic", calc: null };
     }
     function recalc() {
       var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0, cc0 = S.company.currency_code;
@@ -2771,9 +2784,9 @@
         var ts = tr.querySelector(".l-tax"); var amt = ts && ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0;
         sub += ln; tax += ln * amt / 100;
         var subEl = tr.querySelector(".l-sub"); if (subEl) subEl.textContent = money(ln);
-        var areaEl = tr.querySelector(".l-area"); if (areaEl) areaEl.textContent = ru.sheet ? msFmt(ru.calc.area, 3) : "-";
+        var areaEl = tr.querySelector(".l-area"); if (areaEl) areaEl.textContent = (ru.calc && ru.calc.measure) ? ("= " + ru.calc.measure) : "";
         var dEl = tr.querySelector(".l-derived");
-        if (dEl) { if (ru.sheet && (ru.w || ru.h)) { var c = ru.calc; dEl.innerHTML = "kg/m&sup2; " + msFmt(c.kgm2) + " &middot; wt " + msFmt(c.weight) + " kg &middot; " + cc0 + "/sheet " + msFmt(c.perSheet) + " &middot; " + cc0 + "/m&sup2; " + msFmt(c.perM2) + " &middot; " + cc0 + "/kg " + msFmt(c.perKg); } else dEl.innerHTML = ""; }
+        if (dEl) { var showD = ru.calc && ru.calc.derived.length && (ru.d1 || ru.d2 || ru.form === "liquid" || ru.form === "roll"); dEl.innerHTML = showD ? lineDerivedHTML(ru.calc.derived) : ""; }
       });
       setTot(sub, tax);
     }
@@ -2782,7 +2795,7 @@
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod");
-        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, width: ru.sheet ? (ru.w || null) : null, height: ru.sheet ? (ru.h || null) : null, price_basis: ru.basis, size: (ru.sheet && ru.w && ru.h) ? (ru.w + "x" + ru.h) : null };
+        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2) };
       });
     }
     function renderLines() {
@@ -2806,43 +2819,48 @@
         setTot(sub0, tax0); return;
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
-      var basisOpts = '<option value="each">each</option><option value="sheet">per sheet</option><option value="m2">per m&sup2;</option><option value="kg">per kg</option>';
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:64px">W mm</th><th style="width:64px">H mm</th><th style="width:58px;text-align:right">m&sup2;</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:86px">Basis</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material, enter W and H (mm) - Area, weight and price per m&sup2;/kg compute automatically. <b>+size</b> adds another size of the same item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="min-width:150px">Measure</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
-        var basis = l.price_basis || (info.isSheet ? info.basis : "each");
-        if (!info.isSheet || basis === "each" || basis === "sheet") return l.unit_price || 0;
-        var area = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6, weight = area * info.kgm2;
-        if (basis === "m2") return area ? (l.unit_price / area) : 0;
-        if (basis === "kg") return weight ? (l.unit_price / weight) : 0;
-        return l.unit_price || 0;
+        var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
+        if (f === "sheet") { var area = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6, weight = area * info.kgm2; if (basis === "m2") return area ? unit / area : 0; if (basis === "kg") return weight ? unit / weight : 0; return unit; }
+        if (f === "bar") { var L = Number(l.width) || 0, wpb = info.wpm * L; if (basis === "m") return L ? unit / L : 0; if (basis === "kg") return wpb ? unit / wpb : 0; return unit; }
+        if (f === "liquid") { if (basis === "L") return info.liters ? unit / info.liters : 0; return unit; }
+        if (f === "roll") { if (basis === "lm") return info.rlen ? unit / info.rlen : 0; if (basis === "kg") return info.rwt ? unit / info.rwt : 0; return unit; }
+        return unit;
       }
       function addRow(l, afterTr) {
         l = l || {};
         var tr = document.createElement("tr"); tr.className = "l-row";
         var sel = l.product_id ? pById(l.product_id) : null;
         var info = prodMat(sel);
-        var basis = l.price_basis || (info.isSheet ? info.basis : "each");
+        var basis = l.price_basis || (info.form ? info.basis : "each");
         var priceValue = ("priceValue" in l) ? l.priceValue : priceValueFor(l, info);
         tr.innerHTML = '<td>' + prodComboHTML("l-prod", sel) + '</td>' +
           '<td><input class="l-name" value="' + esc(l.name || "") + '" placeholder="Description"><div class="l-derived"></div></td>' +
-          (showSize ? '<td><input class="l-w num" type="number" step="any" value="' + (l.width != null ? l.width : "") + '" placeholder="W"></td><td><input class="l-h num" type="number" step="any" value="' + (l.height != null ? l.height : "") + '" placeholder="H"></td><td class="num l-area">-</td>' : "") +
+          (showSize ? '<td class="l-meas-cell"></td>' : "") +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '"></td>' +
           '<td><input class="l-price num" type="number" step="any" value="' + (priceValue || 0) + '"></td>' +
-          (showSize ? '<td><select class="l-basis">' + basisOpts + '</select></td>' : "") +
+          (showSize ? '<td class="l-basis-cell"></td>' : "") +
           '<td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td>' +
           '<td class="l-acts">' + (showSize ? '<button class="l-addsize" type="button" title="Add another size of this item">+size</button>' : "") + '<button class="del" type="button" title="Remove line">&times;</button></td>';
         if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
         if (l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
-        if (showSize) tr.querySelector(".l-basis").value = basis;
+        function applyForm(inf, d1, d2, basisCur) {
+          if (!showSize) return;
+          tr.querySelector(".l-meas-cell").innerHTML = lineMeasureHTML(inf, d1, d2);
+          tr.querySelector(".l-basis-cell").innerHTML = '<select class="l-basis">' + lineBasisHTML(inf.form, basisCur) + '</select>';
+          tr.querySelectorAll(".l-d1,.l-d2,.l-basis").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
+        }
+        applyForm(info, l.width, l.height, basis);
         wireProdCombo(tr, products, function (pr) {
           tr.querySelector(".l-name").value = pr.name;
           var pinfo = prodMat(pr);
-          if (showSize) tr.querySelector(".l-basis").value = pinfo.isSheet ? pinfo.basis : "each";
-          var startPrice = (pinfo.isSheet && pinfo.pval != null && pinfo.pval !== "") ? pinfo.pval : ((isSale ? pr.list_price : pr.cost_price) || 0);
+          var startPrice = (pinfo.pval != null && pinfo.pval !== "") ? pinfo.pval : ((isSale ? pr.list_price : pr.cost_price) || 0);
           tr.querySelector(".l-price").value = startPrice;
           var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx;
+          applyForm(pinfo, null, null, pinfo.basis);
           if (isSale) pricelistPriceFor(pr.id).then(function (plp) { if (plp != null) { tr.querySelector(".l-price").value = plp; recalc(); } });
           recalc();
         });
@@ -2851,7 +2869,7 @@
           var hid = tr.querySelector(".l-prod");
           addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, priceValue: parseFloat(tr.querySelector(".l-price").value) || 0, price_basis: tr.querySelector(".l-basis") ? tr.querySelector(".l-basis").value : "each", tax_id: tr.querySelector(".l-tax").value || null, quantity: 1 }, tr);
           recalc();
-          var newTr = tr.nextSibling; if (newTr) { var wv = newTr.querySelector(".l-w"); if (wv) wv.focus(); }
+          var newTr = tr.nextSibling; if (newTr) { var d1 = newTr.querySelector(".l-d1"); if (d1) d1.focus(); }
         };
         tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
         tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
@@ -7810,7 +7828,7 @@
     function vname(pid) { var p = vendorParts.filter(function (x) { return x.id === pid; })[0]; return p ? p.name : "Vendor"; }
     function syncFromDom() {
       var lb = document.getElementById("rl-body");
-      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var ph = tr.querySelector(".rl-prod"), wv = tr.querySelector(".rl-w"), hv = tr.querySelector(".rl-h"); var w = wv ? (parseFloat(wv.value) || null) : null, h = hv ? (parseFloat(hv.value) || null) : null; return { k: Number(tr.dataset.k), product_id: ph ? (ph.value || null) : null, description: tr.querySelector(".rl-desc").value.trim(), width: w, height: h, size: (w && h) ? (w + "x" + h) : "", unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0 }; });
+      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var ph = tr.querySelector(".rl-prod"), wv = tr.querySelector(".l-d1"), hv = tr.querySelector(".l-d2"); var w = wv ? (parseFloat(wv.value) || null) : null, h = hv ? (parseFloat(hv.value) || null) : null; var pid = ph ? (ph.value || null) : null; var form = prodMat(products.filter(function (x) { return x.id === pid; })[0]).form; return { k: Number(tr.dataset.k), product_id: pid, description: tr.querySelector(".rl-desc").value.trim(), width: w, height: h, size: lineSizeStr(form, w, h) || "", unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0 }; });
       document.querySelectorAll(".rfq-bid").forEach(function (inp) { var key = inp.dataset.k + "|" + inp.dataset.partner; if (inp.value !== "") B[key] = Number(inp.value); else delete B[key]; });
       rfq.title = (document.getElementById("rfq-title") || {}).value || rfq.title;
       rfq.project_id = (document.getElementById("rfq-proj") || {}).value || null;
@@ -7869,8 +7887,8 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; var area = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td><input class="rl-w num" type="number" step="any" value="' + (l.width != null ? l.width : "") + '" style="width:58px" placeholder="W"></td><td><input class="rl-h num" type="number" step="any" value="' + (l.height != null ? l.height : "") + '" style="width:58px" placeholder="H"></td><td class="num rl-area muted" style="width:56px">' + (area ? msFmt(area, 3) : "-") + '</td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:56px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><table class="o-lines"><thead><tr><th style="width:210px">Product</th><th>Description</th><th>W mm</th><th>H mm</th><th style="text-align:right">m&sup2;</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; enter W and H (mm), and +size for more sizes of the same item.</span>';
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:56px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div style="margin-top:8px"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
@@ -7896,9 +7914,15 @@
       var addL = document.getElementById("rl-add"); if (addL) addL.onclick = function () { syncFromDom(); L.push({ k: kc++, product_id: null, description: "", size: "", width: null, height: null, unit: "", quantity: 1 }); draw(); };
       document.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = function () { syncFromDom(); L.splice(Number(b.dataset.i), 1); if (!L.length) L = [{ k: kc++, product_id: null, description: "", size: "", width: null, height: null, unit: "", quantity: 1 }]; draw(); }; });
       document.querySelectorAll("#rl-body tr").forEach(function (tr) {
-        wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) uu.value = pr.uom; });
-        function updArea() { var w = parseFloat((tr.querySelector(".rl-w") || {}).value) || 0, h = parseFloat((tr.querySelector(".rl-h") || {}).value) || 0, a = w * h / 1e6; var ae = tr.querySelector(".rl-area"); if (ae) ae.textContent = a ? msFmt(a, 3) : "-"; }
-        var wv = tr.querySelector(".rl-w"), hv = tr.querySelector(".rl-h"); if (wv) wv.addEventListener("input", updArea); if (hv) hv.addEventListener("input", updArea);
+        var lrec = L.filter(function (x) { return x.k === Number(tr.dataset.k); })[0] || {};
+        function applyRfqForm(inf, d1, d2) {
+          var cell = tr.querySelector(".rl-meas-cell"); if (!cell) return; cell.innerHTML = lineMeasureHTML(inf, d1, d2);
+          function updArea() { var a = tr.querySelector(".l-area"); if (!a) return; var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0; var c = lineCalc(inf, w, h, 0, inf.basis); a.textContent = c.measure ? ("= " + c.measure) : ""; }
+          tr.querySelectorAll(".l-d1,.l-d2").forEach(function (el) { el.addEventListener("input", updArea); }); updArea();
+        }
+        var prod0 = products.filter(function (x) { return x.id === lrec.product_id; })[0];
+        applyRfqForm(prodMat(prod0), lrec.width, lrec.height);
+        wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) uu.value = pr.uom; applyRfqForm(prodMat(pr), null, null); });
       });
       document.querySelectorAll(".rl-addsize").forEach(function (b) { b.onclick = function () { syncFromDom(); var tr = b.closest("tr"); var k = Number(tr.dataset.k); var src = L.filter(function (x) { return x.k === k; })[0] || {}; var idx = L.indexOf(src); L.splice(idx + 1, 0, { k: kc++, product_id: src.product_id || null, description: src.description || "", size: "", width: null, height: null, unit: src.unit || "", quantity: 1 }); draw(); }; });
       var addV = document.getElementById("rfq-addv"); if (addV) addV.onchange = function () { if (!this.value) return; syncFromDom(); V.push({ partner_id: this.value }); draw(); };

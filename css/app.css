@@ -1172,3 +1172,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-lines-mat input:not([type=checkbox]),.o-lines-mat select{width:100%;box-sizing:border-box}
 .o-lines-mat .l-area{color:var(--ink2);white-space:nowrap;padding-top:11px}
 .l-derived{font-size:11px;color:var(--ink2);margin-top:3px;line-height:1.35}
+/* form-aware measure cell (sheet WxH, bar length, container, roll) */
+.l-meas{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.o-lines-mat .l-meas input{width:62px}
+.l-meas .mx{color:var(--ink2)}
+.l-meas .l-area{color:var(--ink2);font-size:11px;white-space:nowrap;padding-top:0}
+.l-meas-cell,.rl-meas-cell{min-width:150px}
