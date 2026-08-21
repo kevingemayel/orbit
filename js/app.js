@@ -2893,12 +2893,14 @@
       var oid = id;
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.currency_code = S.company.currency_code; hdr.state = confirmIt ? (isSale ? "sale" : "purchase") : "draft"; hdr.number = await nextOrderNumber(kind);
-        var ins = await sb.from(tbl).insert(hdr).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; } oid = ins.data.id;
+        var ins = await sb.from(tbl).insert(hdr).select("id,updated_at").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; } oid = ins.data.id;
+        id = oid; order = order || {}; order.updated_at = ins.data.updated_at;   // a follow-up save (e.g. Confirm) must UPDATE this row, not insert a duplicate
       } else {
         if (confirmIt) hdr.state = isSale ? "sale" : "purchase";
         var up = await guardedUpdate(tbl, hdr, id, order && order.updated_at);
         if (up.conflict) { conflictToast(isSale ? "quotation" : "purchase order"); return null; }
         if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
+        if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
         await sb.from(ltbl).delete().eq("order_id", id);
       }
       var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
