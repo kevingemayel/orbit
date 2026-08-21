@@ -1165,3 +1165,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .l-acts{white-space:nowrap;display:flex;gap:5px;align-items:center}
 .l-addsize{font-size:11px;padding:2px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink2);cursor:pointer;font-weight:600}
 .l-addsize:hover{color:var(--app,var(--accent));border-color:var(--app,var(--accent))}
+/* material purchase line grid (W x H, area, weight, price conversions) */
+.o-lines-wrap{overflow-x:auto;overflow-y:visible}
+.o-lines-mat{min-width:820px}
+.o-lines-mat th,.o-lines-mat td{padding:5px 6px;vertical-align:top}
+.o-lines-mat input:not([type=checkbox]),.o-lines-mat select{width:100%;box-sizing:border-box}
+.o-lines-mat .l-area{color:var(--ink2);white-space:nowrap;padding-top:11px}
+.l-derived{font-size:11px;color:var(--ink2);margin-top:3px;line-height:1.35}
