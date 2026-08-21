@@ -2919,29 +2919,43 @@
       };
     } else if (confirmed) {
       document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
-      var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { receivePOGoods(order, linesState); };
+      var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { openReceiveModal(order, linesState); };
     }
   }
-  // Goods receipt against a confirmed PO: mark lines received and pull storable products into stock.
-  async function receivePOGoods(order, lines) {
-    var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
-    var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
-    var inv = await ensureInventory();
-    var got = 0, receivedAny = false;
-    for (var i = 0; i < lines.length; i++) {
-      var l = lines[i];
-      var ord = Number(l.quantity || 0), already = Number(l.qty_received || 0);
-      if (already >= ord - 0.001) continue;                 // already received - don't double-receive
-      var toRecv = ord - already; receivedAny = true;
-      if (l.id) await sb.from("purchase_order_lines").update({ qty_received: ord }).eq("id", l.id);
-      var pr = l.product_id ? prodBy[l.product_id] : null;
-      if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
-        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: toRecv, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
-        if (!r.error) { await postStockValue("receive", pr, toRecv, r.data && r.data.id); got++; }
+  // Goods receipt against a confirmed PO: let the user enter how much of each line
+  // actually arrived (partial deliveries), then pull storable/consumable products into
+  // stock - tagged to the order's project and valued at the PO purchase price - and
+  // advance the 3-way match.
+  async function openReceiveModal(order, lines) {
+    var outstanding = lines.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0); return { l: l, ord: ord, rec: rec, out: Math.max(0, ord - rec) }; }).filter(function (x) { return x.out > 0.0001; });
+    if (!outstanding.length) { toast("Everything on this order is already received"); return; }
+    var m = document.createElement("div"); m.className = "modal on";
+    var rowsHTML = outstanding.map(function (x, i) {
+      var l = x.l, dim = (l.width && l.height) ? (l.width + "x" + l.height) : (l.size || "");
+      return '<tr><td><b>' + esc(l.name || "") + '</b>' + (dim ? ' <span class="muted">(' + esc(dim) + ')</span>' : "") + '</td><td class="num">' + x.ord + '</td><td class="num">' + x.rec + '</td><td><input class="rcv-q num" data-i="' + i + '" type="number" step="any" min="0" max="' + x.out + '" value="' + x.out + '" style="width:90px"></td></tr>';
+    }).join("");
+    m.innerHTML = '<div class="sheet"><h3>Receive goods</h3><div class="form" style="padding:14px 18px"><div class="sub" style="margin-bottom:8px">Enter how much arrived (defaults to the full outstanding quantity). Received goods enter inventory, tagged to this order\'s project and valued at the PO price, and advance the 3-way match.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Already</th><th class="num">Receive now</th></tr></thead><tbody>' + rowsHTML + '</tbody></table></div></div><div class="foot"><button class="btn" id="rcv-cancel">Cancel</button><button class="btn pri" id="rcv-do" style="background:var(--app);border-color:var(--app)">Receive</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("rcv-cancel").onclick = function () { m.remove(); };
+    document.getElementById("rcv-do").onclick = async function () {
+      var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
+      var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
+      var inv = await ensureInventory(), qs = {};
+      m.querySelectorAll(".rcv-q").forEach(function (inp) { qs[inp.dataset.i] = parseFloat(inp.value) || 0; });
+      var got = 0, any = false;
+      for (var i = 0; i < outstanding.length; i++) {
+        var x = outstanding[i], l = x.l, take = Math.min(x.out, qs[i] || 0); if (take <= 0.0001) continue; any = true;
+        if (l.id) await sb.from("purchase_order_lines").update({ qty_received: x.rec + take }).eq("id", l.id);
+        var pr = l.product_id ? prodBy[l.product_id] : null;
+        if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
+          var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+          if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
+        }
       }
-    }
-    if (!receivedAny) { toast("Already fully received"); return; }
-    toast(got ? ("Goods received - " + got + " stock item(s) added to inventory") : "Goods received"); renderOrderForm(order.id, "purchase");
+      m.remove();
+      if (!any) { toast("Enter a quantity to receive"); return; }
+      toast(got ? ("Received - " + got + " item(s) added to inventory") : "Received"); renderOrderForm(order.id, "purchase");
+    };
   }
   async function nextOrderNumber(kind) {
     var tbl = kind === "sale" ? "sale_orders" : "purchase_orders";
@@ -2951,13 +2965,19 @@
   }
   async function createInvoiceFromOrder(order, lines, kind) {
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
+    var pids = lines.map(function (l) { return l.product_id; }).filter(Boolean);
+    var prods = pids.length ? ((await sb.from("products").select("id,income_account_id,expense_account_id").in("id", pids)).data || []) : [];
+    var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
+    var taxes = (await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || [];
+    var taxAmt = {}; taxes.forEach(function (t) { taxAmt[t.id] = Number(t.amount) || 0; });
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (taxAmt[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
-    var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+    var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var acc = p ? (isSale ? p.income_account_id : p.expense_account_id) : null; return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Invoice lines failed: " + errMsg(lr.error)); return; }
     if (!isSale) { for (var i = 0; i < lines.length; i++) { if (lines[i].id) await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id); } }
@@ -7816,7 +7836,8 @@
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
     var vendorParts = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
-    var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    var rfqTaxes = ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data) || [];
     var kc = 1, L = [], V = [], B = {};
     if (!isNew) {
       var lrows = (await sb.from("rfq_lines").select("*").eq("rfq_id", id).order("sequence")).data || [];
@@ -7871,10 +7892,14 @@
       if (!(await persist())) return;
       var lns = (await sb.from("rfq_lines").select("*").eq("rfq_id", id).order("sequence")).data || [];
       var pb = {}; ((await sb.from("rfq_bids").select("*").eq("rfq_id", id).eq("partner_id", partnerId)).data || []).forEach(function (b) { pb[b.rfq_line_id] = b.unit_price; });
+      var prodTax = {}; products.forEach(function (p) { prodTax[p.id] = p.purchase_tax_id || null; });
+      var taxAmt = {}; rfqTaxes.forEach(function (t) { taxAmt[t.id] = Number(t.amount) || 0; });
+      function lineTaxId(l) { return l.product_id ? (prodTax[l.product_id] || null) : null; }
       var untax = lns.reduce(function (s, l) { return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0); }, 0);
-      var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: await nextOrderNumber("purchase"), partner_id: partnerId, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: rfq.project_id || null, cost_code_id: rfq.cost_code_id || null, amount_untaxed: untax, amount_total: untax, note: "Awarded from " + (rfq.number || "RFQ") }).select("id,number").single();
+      var tax = lns.reduce(function (s, l) { var t = lineTaxId(l), a = t ? (taxAmt[t] || 0) : 0; return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0) * a / 100; }, 0);
+      var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: await nextOrderNumber("purchase"), partner_id: partnerId, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: rfq.project_id || null, cost_code_id: rfq.cost_code_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, note: "Awarded from " + (rfq.number || "RFQ") }).select("id,number").single();
       if (po.error) { toast(errMsg(po.error)); return; }
-      var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: (l.width && l.height) ? "sheet" : "each", quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
+      var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: (l.width && l.height) ? "sheet" : "each", tax_id: lineTaxId(l), quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
       if (poLines.length) await sb.from("purchase_order_lines").insert(poLines);
       await sb.from("rfqs").update({ status: "awarded", awarded_partner_id: partnerId }).eq("id", id);
       toast("Awarded to " + vname(partnerId) + " — draft " + po.data.number + " created"); renderRFQForm(id);
@@ -8650,8 +8675,8 @@
   // Perpetual-inventory GL posting for a stock move (value = qty x product cost).
   //  receive: Dr 3100 Inventory / Cr 4700 Interim ; deliver: Dr 6000 COGS / Cr 3100
   //  adjust up: Dr 3100 / Cr 6500 ; adjust down: Dr 6500 / Cr 3100
-  async function postStockValue(kind, product, qty, moveId, projId) {
-    var cost = Number(product.cost_price || 0), value = qty * cost;
+  async function postStockValue(kind, product, qty, moveId, projId, unitCost) {
+    var cost = (unitCost != null && unitCost !== "" && Number(unitCost) > 0) ? Number(unitCost) : Number(product.cost_price || 0), value = qty * cost;
     if (value <= 0) return;
     var a = await invAccounts();
     if (!a.journal || !a.inv) return;
