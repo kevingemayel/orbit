@@ -964,6 +964,7 @@
       '</button>' +
       '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
+      (APP_FLOW[S.app] ? '<button class="o-howto" id="ohowto" title="How ' + esc(term(a.name)) + ' works" aria-label="How ' + esc(term(a.name)) + ' works"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h7.6"/><path d="M13 9l3 3-3 3"/></svg><span>How this works</span></button>' : '') +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
       '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
@@ -980,6 +981,7 @@
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     var _hlp = document.getElementById("ohelp"); if (_hlp) _hlp.onclick = function () { openHelp(); };
+    var _how = document.getElementById("ohowto"); if (_how) _how.onclick = function () { openFlowModal(S.app); };
     var _bell = document.getElementById("bell"); if (_bell) _bell.onclick = function (e) { openNotifPanel(e.currentTarget); };
     refreshBell();
     if (window._bellIv) clearInterval(window._bellIv);
@@ -11853,6 +11855,29 @@
       ]
     }
   };
+  // Which manual chapter's workflow map explains a given app (for the in-app
+  // "How this works" button). Only apps with a genuine document flow appear.
+  var APP_FLOW = { accounting: 'accounting', sales: 'sales', purchase: 'purchase', inventory: 'inventory', project: 'projects', site: 'site', hr: 'hr', crm: 'overview', estimation: 'overview' };
+  function flowEsc(e) { if (e.key === "Escape") closeFlowModal(); }
+  function closeFlowModal() { var p = document.getElementById("flowWrap"); if (p) p.remove(); document.removeEventListener("keydown", flowEsc); }
+  // Show the current app's workflow map in a modal, without leaving the screen.
+  function openFlowModal(appKey) {
+    var fk = APP_FLOW[appKey]; var f = fk && HELP_FLOWS[fk]; if (!f) return;
+    closeFlowModal();
+    var appName = (APPS[appKey] && term(APPS[appKey].name)) || "this app";
+    var w = document.createElement("div"); w.id = "flowWrap"; w.className = "flow-wrap";
+    w.innerHTML = '<div class="flow-backdrop" id="flowBackdrop"></div>' +
+      '<div class="flow-modal" role="dialog" aria-modal="true" aria-label="How ' + esc(appName) + ' works">' +
+      '<div class="flow-head"><b>How ' + esc(appName) + ' works</b><button class="help-x" id="flowX" aria-label="Close">&times;</button></div>' +
+      '<div class="flow-body">' + mfPanel(f) + '</div>' +
+      '<div class="flow-foot"><button class="btn pri" id="flowFull" style="background:var(--accent);border-color:var(--accent)">Open the full guide &rsaquo;</button></div>' +
+      '</div>';
+    document.body.appendChild(w);
+    document.getElementById("flowBackdrop").onclick = closeFlowModal;
+    document.getElementById("flowX").onclick = closeFlowModal;
+    document.getElementById("flowFull").onclick = function () { closeFlowModal(); go("help." + fk); };
+    document.addEventListener("keydown", flowEsc);
+  }
   // The full user manual, shown as a proper app (Help) from the main launcher.
   function renderManual(key) {
     key = key || "overview";
