@@ -2704,6 +2704,13 @@
   function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
   function lineSizeStr(form, d1, d2) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2; if (form === "bar" && d1) return d1 + "m"; return null; }
+  // Where a purchased line is needed. Drives how a goods receipt is routed:
+  // warehouse -> into stock (asset), factory -> WIP location, site -> straight to
+  // the job as a cost (never stocked). null is treated as warehouse everywhere.
+  var DEST_OPTS = [["warehouse", "Warehouse"], ["factory", "Factory"], ["site", "Site"]];
+  function destOptsHTML(cur) { cur = cur || "warehouse"; return DEST_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
+  function destLabel(d) { d = d || "warehouse"; var o = DEST_OPTS.filter(function (x) { return x[0] === d; })[0]; return o ? o[1] : "Warehouse"; }
+  function destChip(d) { d = d || "warehouse"; var cls = d === "site" ? "warn" : (d === "factory" ? "partial" : "draft"); return '<span class="badge ' + cls + '">' + destLabel(d) + '</span>'; }
   async function renderOrderForm(id, kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
@@ -2767,7 +2774,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, size: l.size, width: l.width, height: l.height, price_basis: l.price_basis, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, size: l.size, width: l.width, height: l.height, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -2802,8 +2809,8 @@
       var lb = document.getElementById("lnbody"); if (!lb) return linesState;
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
-        var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod");
-        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2) };
+        var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod"); var de = tr.querySelector(".l-dest");
+        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2), destination: (!isSale && de) ? (de.value || null) : null };
       });
     }
     function renderLines() {
@@ -2818,17 +2825,17 @@
             var badge = (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>'));
             matchCells = '<td class="num">' + rec + '</td><td class="num">' + bil + '</td><td>' + badge + '</td>';
           }
-          var dimCell = "";
-          if (showMatch) { var aa = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; dimCell = '<td class="muted">' + (l.width && l.height ? esc(l.width + "x" + l.height) + (aa ? ' <span style="opacity:.7">(' + msFmt(aa, 3) + ' m&sup2;)</span>' : "") : esc(l.size || "")) + '</td>'; }
-          return '<tr><td>' + esc(l.name) + '</td>' + dimCell + '<td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          var dimCell = "", destCell = "";
+          if (showMatch) { var aa = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; dimCell = '<td class="muted">' + (l.width && l.height ? esc(l.width + "x" + l.height) + (aa ? ' <span style="opacity:.7">(' + msFmt(aa, 3) + ' m&sup2;)</span>' : "") : esc(l.size || "")) + '</td>'; destCell = '<td>' + destChip(l.destination) + '</td>'; }
+          return '<tr><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size / area</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
         var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="min-width:150px">Measure</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>+size</b> repeats the item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="min-width:150px">Measure</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
         var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
@@ -2851,6 +2858,7 @@
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '"></td>' +
           '<td><input class="l-price num" type="number" step="any" value="' + (priceValue || 0) + '"></td>' +
           (showSize ? '<td class="l-basis-cell"></td>' : "") +
+          (showSize ? '<td><select class="l-dest">' + destOptsHTML(l.destination) + '</select></td>' : "") +
           '<td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td>' +
           '<td class="l-acts">' + (showSize ? '<button class="l-addsize" type="button" title="Add another size of this item">+size</button>' : "") + '<button class="del" type="button" title="Remove line">&times;</button></td>';
         if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
@@ -2875,7 +2883,7 @@
         var asz = tr.querySelector(".l-addsize");
         if (asz) asz.onclick = function () {
           var hid = tr.querySelector(".l-prod");
-          addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, priceValue: parseFloat(tr.querySelector(".l-price").value) || 0, price_basis: tr.querySelector(".l-basis") ? tr.querySelector(".l-basis").value : "each", tax_id: tr.querySelector(".l-tax").value || null, quantity: 1 }, tr);
+          addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, priceValue: parseFloat(tr.querySelector(".l-price").value) || 0, price_basis: tr.querySelector(".l-basis") ? tr.querySelector(".l-basis").value : "each", destination: (tr.querySelector(".l-dest") || {}).value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: 1 }, tr);
           recalc();
           var newTr = tr.nextSibling; if (newTr) { var d1 = newTr.querySelector(".l-d1"); if (d1) d1.focus(); }
         };
@@ -2911,7 +2919,7 @@
         if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
         await sb.from(ltbl).delete().eq("order_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, destination: (isSale ? null : (l.destination || null)), quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
@@ -2940,9 +2948,9 @@
     var m = document.createElement("div"); m.className = "modal on";
     var rowsHTML = outstanding.map(function (x, i) {
       var l = x.l, dim = (l.width && l.height) ? (l.width + "x" + l.height) : (l.size || "");
-      return '<tr><td><b>' + esc(l.name || "") + '</b>' + (dim ? ' <span class="muted">(' + esc(dim) + ')</span>' : "") + '</td><td class="num">' + x.ord + '</td><td class="num">' + x.rec + '</td><td><input class="rcv-q num" data-i="' + i + '" type="number" step="any" min="0" max="' + x.out + '" value="' + x.out + '" style="width:90px"></td></tr>';
+      return '<tr><td><b>' + esc(l.name || "") + '</b>' + (dim ? ' <span class="muted">(' + esc(dim) + ')</span>' : "") + '</td><td>' + destChip(l.destination) + '</td><td class="num">' + x.ord + '</td><td class="num">' + x.rec + '</td><td><input class="rcv-q num" data-i="' + i + '" type="number" step="any" min="0" max="' + x.out + '" value="' + x.out + '" style="width:90px"></td></tr>';
     }).join("");
-    m.innerHTML = '<div class="sheet"><h3>Receive goods</h3><div class="form" style="padding:14px 18px"><div class="sub" style="margin-bottom:8px">Enter how much arrived (defaults to the full outstanding quantity). Received goods enter inventory, tagged to this order\'s project and valued at the PO price, and advance the 3-way match.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Item</th><th class="num">Ordered</th><th class="num">Already</th><th class="num">Receive now</th></tr></thead><tbody>' + rowsHTML + '</tbody></table></div></div><div class="foot"><button class="btn" id="rcv-cancel">Cancel</button><button class="btn pri" id="rcv-do" style="background:var(--app);border-color:var(--app)">Receive</button></div></div>';
+    m.innerHTML = '<div class="sheet"><h3>Receive goods</h3><div class="form" style="padding:14px 18px"><div class="sub" style="margin-bottom:8px">Enter how much arrived (defaults to the full outstanding quantity). Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). All are tagged to the project, valued at the PO price, and advance the 3-way match.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Item</th><th>Goes to</th><th class="num">Ordered</th><th class="num">Already</th><th class="num">Receive now</th></tr></thead><tbody>' + rowsHTML + '</tbody></table></div></div><div class="foot"><button class="btn" id="rcv-cancel">Cancel</button><button class="btn pri" id="rcv-do" style="background:var(--app);border-color:var(--app)">Receive</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("rcv-cancel").onclick = function () { m.remove(); };
     document.getElementById("rcv-do").onclick = async function () {
@@ -2955,9 +2963,16 @@
         var x = outstanding[i], l = x.l, take = Math.min(x.out, qs[i] || 0); if (take <= 0.0001) continue; any = true;
         if (l.id) await sb.from("purchase_order_lines").update({ qty_received: x.rec + take }).eq("id", l.id);
         var pr = l.product_id ? prodBy[l.product_id] : null;
-        if (pr && (pr.type === "storable" || pr.type === "consumable") && inv && inv.stock) {
-          var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: inv.stock, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
-          if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
+        var dest = l.destination || "warehouse";
+        // Site material is delivered straight to the job - never stocked; its cost
+        // lands on the vendor bill. So we only advance the match (done above) and
+        // move nothing. Warehouse -> stock, Factory -> the WIP location.
+        if (dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
+          var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
+          if (destLoc) {
+            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+            if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
+          }
         }
       }
       m.remove();
@@ -8614,8 +8629,15 @@
     var supplier = await ensureLoc("supplier", "Vendors", null);
     var customer = await ensureLoc("customer", "Customers", null);
     var adjust = await ensureLoc("inventory", "Inventory Adjustment", null);
+    // Factory (WIP): material routed to fabrication lands here - a real internal
+    // location, so it shows as on-hand at the factory until a production run
+    // consumes it. Matched by name (ensureLoc matches usage only, which would
+    // return the warehouse stock location instead).
+    var factory = locs.filter(function (x) { return x.usage === "internal" && /factory/i.test(x.name); })[0];
+    if (!factory) { var fr = await sb.from("stock_locations").insert({ company_id: S.company.id, warehouse_id: whs[0].id, name: "Factory (WIP)", usage: "internal" }).select("id,name,usage,warehouse_id").single(); if (fr.data) { factory = fr.data; locs.push(fr.data); } }
     var internal = locs.filter(function (x) { return x.usage === "internal"; });
-    INV = { company: S.company.id, warehouses: whs, internal: internal, supplier: supplier.id, customer: customer.id, adjust: adjust.id, stock: internal[0] ? internal[0].id : null };
+    var stockLoc = internal.filter(function (x) { return !/factory/i.test(x.name); })[0] || internal[0];
+    INV = { company: S.company.id, warehouses: whs, internal: internal, supplier: supplier.id, customer: customer.id, adjust: adjust.id, stock: stockLoc ? stockLoc.id : null, factory: factory ? factory.id : null };
     return INV;
   }
   async function onHandMap() {
