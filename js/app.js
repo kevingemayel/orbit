@@ -11204,8 +11204,8 @@
     var funnel = '<div class="ps-funnel">' +
       bar("Needed", needV, "need", needLines.length + " item" + (needLines.length !== 1 ? "s" : "")) +
       bar("Quoted", quoteV, "quote", quoteLines.length ? "out for quote" : "") +
-      bar("Ordered", ordV, "ord", ordPct + "% of needed") +
-      bar("Received", recvV, "recv", recvPct + "% of ordered") +
+      bar("Ordered", ordV, "ord", needV ? (ordPct + "% of needed") : "committed") +
+      bar("Received", recvV, "recv", ordV ? (recvPct + "% of ordered") : "") +
       (budget ? bar("Cost budget", budget, "bud", ordPct !== null ? (budPct + "% committed") : "") : "") +
       '</div>';
     var overBudget = budget && ordV > budget;
