@@ -2736,6 +2736,24 @@
     var m = {}; lines.forEach(function (r) { if (r.product_id && !m[r.product_id]) m[r.product_id] = { unit_price: Number(r.unit_price) || 0, width: r.width, height: r.height, basis: r.price_basis, date: poDate[r.order_id] }; });
     return m;
   }
+  // The company/org's people, for "requested by / approved by / received by" style
+  // fields. Cached per org for the session.
+  var _teamCache = null, _teamCacheOrg = null;
+  async function companyUsers() {
+    var oid = S.company.org_id;
+    if (_teamCache && _teamCacheOrg === oid) return _teamCache;
+    var team = ((await sb.rpc("org_team", { p_org: oid })).data) || [];
+    var seen = {}, out = [];
+    team.forEach(function (mm) { var n = mm.full_name || (mm.email ? mm.email.split("@")[0] : ""); if (n && !seen[n]) { seen[n] = 1; out.push({ name: n, email: mm.email || "" }); } });
+    _teamCache = out; _teamCacheOrg = oid; return out;
+  }
+  // A dropdown of those people. Stores the chosen name (these columns are free text),
+  // and keeps any existing value even if that person is no longer on the team.
+  function userSelectHTML(id, current, users, placeholder, disabled) {
+    var uniq = users.map(function (u) { return u.name; });
+    var hasCur = current && uniq.indexOf(current) < 0;
+    return '<select id="' + id + '"' + (disabled ? " disabled" : "") + '><option value="">' + esc(placeholder || "(select)") + '</option>' + (hasCur ? '<option selected>' + esc(current) + '</option>' : "") + uniq.map(function (n) { return '<option' + (current === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>';
+  }
   async function renderOrderForm(id, kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
@@ -8039,7 +8057,7 @@
           // the bid is in curBasis; the compared total is qty * the canonical per-item price
           var totals = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? lineCalc(info, l.width, l.height, Number(p), curBasis).unit * (Number(l.quantity) || 0) : null; });
           var valid = totals.filter(function (x) { return x != null; }); var best = valid.length ? Math.min.apply(null, valid) : null;
-          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="any" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '"></td>'; }).join("");
+          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="any" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '">' + (t != null ? '<div class="rfq-sub">= ' + money(t) + '</div>' : '') + '</td>'; }).join("");
           var basisSel = '<td><select class="rl-mbasis" data-k="' + l.k + '">' + lineBasisHTML(info.form, curBasis) + '</select></td>';
           var lp = l.product_id ? lastPx[l.product_id] : null;
           var lastVal = lp ? basisFromCanonical(lp.unit_price, lp.width, lp.height, info, curBasis) : null;
@@ -11032,6 +11050,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var lastPx = await loadLastPrices();
+    var teamUsers = await companyUsers();
     var ordered = req.state === "ordered";
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Take-off");
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -11046,7 +11065,7 @@
       fld("Number", '<input id="mr-num" value="' + esc(req.number || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="auto">', "Your take-off reference. Left blank, we number it for you.") +
       fld("Project / site", '<select id="mr-proj"' + (ordered ? " disabled" : "") + '><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (req.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>', "Which project/site needs the material.") +
       '</div><div>' +
-      fld("Requested by", '<input id="mr-by" value="' + esc(req.requested_by || "") + '"' + (ordered ? " disabled" : "") + '>', "Who raised it, e.g. the site engineer.") +
+      fld("Requested by", userSelectHTML("mr-by", req.requested_by, teamUsers, "(select person)", ordered), "Who raised it - pick from your team.") +
       fld("Date", '<input id="mr-date" type="date" value="' + (req.req_date || today()) + '"' + (ordered ? " disabled" : "") + '>', "When the material is needed.") +
       '</div></div>' +
       fld("Note", '<input id="mr-note" value="' + esc(req.note || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="optional">', "Any instructions for procurement.") +

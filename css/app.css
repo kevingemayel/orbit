@@ -266,6 +266,16 @@ button{font-family:inherit}
 .ps-row-v{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
 .ps-alert{border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:12px}
 .ps-alert.bad{background:var(--bad-s);color:var(--bad);border:1px solid var(--bad)}
+/* number inputs: drop the spinner arrows - people type the value (RFQ, PO, all forms) */
+input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+input[type=number]{-moz-appearance:textfield;appearance:textfield}
+/* RFQ compare: the computed line subtotal under each supplier's price */
+.rfq-sub{font-size:11px;color:var(--ink3);text-align:right;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+/* grid lines: data + money tables get light vertical borders too, not just rows */
+.o-list th,.o-list td{border-right:1px solid var(--line)}
+.o-list th:last-child,.o-list td:last-child{border-right:none}
+.o-lines th,.o-lines td{border-right:1px solid var(--line)}
+.o-lines th:last-child,.o-lines td:last-child{border-right:none}
 /* "How this works" chip in the top bar + the flow-map modal it opens */
 .o-howto{display:inline-flex;align-items:center;gap:6px;margin-left:6px;padding:5px 10px;border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:8px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;flex:none}
 .o-howto:hover{border-color:var(--accent);color:var(--accent)}
