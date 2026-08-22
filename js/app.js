@@ -2711,6 +2711,30 @@
   function destOptsHTML(cur) { cur = cur || "warehouse"; return DEST_OPTS.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function destLabel(d) { d = d || "warehouse"; var o = DEST_OPTS.filter(function (x) { return x[0] === d; })[0]; return o ? o[1] : "Warehouse"; }
   function destChip(d) { d = d || "warehouse"; var cls = d === "site" ? "warn" : (d === "factory" ? "partial" : "draft"); return '<span class="badge ' + cls + '">' + destLabel(d) + '</span>'; }
+  // Convert a canonical per-item price (per sheet / bar / container / roll / each)
+  // into a chosen basis (kg / m2 / lm / m / L), using the material form + size.
+  // The inverse of lineCalc's unit; used to show a "last price paid" in the
+  // buyer's own unit for reference while quoting.
+  function basisFromCanonical(unit, width, height, info, basis) {
+    unit = Number(unit) || 0; var f = info.form;
+    if (f === "sheet") { var area = (Number(width) || 0) * (Number(height) || 0) / 1e6, weight = area * info.kgm2; if (basis === "m2") return area ? unit / area : 0; if (basis === "kg") return weight ? unit / weight : 0; return unit; }
+    if (f === "bar") { var L = Number(width) || 0, wpb = info.wpm * L; if (basis === "m") return L ? unit / L : 0; if (basis === "kg") return wpb ? unit / wpb : 0; return unit; }
+    if (f === "liquid") { if (basis === "L") return info.liters ? unit / info.liters : 0; return unit; }
+    if (f === "roll") { if (basis === "lm") return info.rlen ? unit / info.rlen : 0; if (basis === "kg") return info.rwt ? unit / info.rwt : 0; return unit; }
+    return unit;
+  }
+  // Most recent price actually paid per product, from confirmed purchase orders,
+  // as a canonical per-item price + the size it was bought at (so it can be shown
+  // back in any basis). Used for the RFQ / take-off "last price" reference.
+  async function loadLastPrices() {
+    var pos = (await sb.from("purchase_orders").select("id,date_order").eq("company_id", S.company.id).in("state", ["purchase", "done"]).order("date_order", { ascending: false })).data || [];
+    if (!pos.length) return {};
+    var poDate = {}; var poIds = pos.map(function (p) { poDate[p.id] = p.date_order || ""; return p.id; });
+    var lines = (await sb.from("purchase_order_lines").select("product_id,unit_price,width,height,price_basis,order_id").in("order_id", poIds).not("product_id", "is", null)).data || [];
+    lines.sort(function (a, b) { return (poDate[b.order_id] || "").localeCompare(poDate[a.order_id] || ""); });
+    var m = {}; lines.forEach(function (r) { if (r.product_id && !m[r.product_id]) m[r.product_id] = { unit_price: Number(r.unit_price) || 0, width: r.width, height: r.height, basis: r.price_basis, date: poDate[r.order_id] }; });
+    return m;
+  }
   async function renderOrderForm(id, kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
@@ -7914,11 +7938,12 @@
     var vendorParts = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var rfqTaxes = ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data) || [];
+    var lastPx = await loadLastPrices();
     var kc = 1, L = [], V = [], B = {};
     if (!isNew) {
       var lrows = (await sb.from("rfq_lines").select("*").eq("rfq_id", id).order("sequence")).data || [];
       var idToK = {};
-      L = lrows.map(function (l) { var k = kc++; idToK[l.id] = k; return { k: k, product_id: l.product_id, description: l.description, size: l.size, width: l.width, height: l.height, unit: l.unit, quantity: l.quantity }; });
+      L = lrows.map(function (l) { var k = kc++; idToK[l.id] = k; return { k: k, product_id: l.product_id, description: l.description, size: l.size, width: l.width, height: l.height, unit: l.unit, quantity: l.quantity, basis: l.price_basis, destination: l.destination }; });
       V = ((await sb.from("rfq_vendors").select("*").eq("rfq_id", id)).data || []).map(function (v) { return { partner_id: v.partner_id }; });
       ((await sb.from("rfq_bids").select("*").eq("rfq_id", id)).data || []).forEach(function (b) { var k = idToK[b.rfq_line_id]; if (k != null) B[k + "|" + b.partner_id] = b.unit_price; });
     }
@@ -7927,7 +7952,9 @@
     function vname(pid) { var p = vendorParts.filter(function (x) { return x.id === pid; })[0]; return p ? p.name : "Vendor"; }
     function syncFromDom() {
       var lb = document.getElementById("rl-body");
-      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var ph = tr.querySelector(".rl-prod"), wv = tr.querySelector(".l-d1"), hv = tr.querySelector(".l-d2"); var w = wv ? (parseFloat(wv.value) || null) : null, h = hv ? (parseFloat(hv.value) || null) : null; var pid = ph ? (ph.value || null) : null; var form = prodMat(products.filter(function (x) { return x.id === pid; })[0]).form; return { k: Number(tr.dataset.k), product_id: pid, description: tr.querySelector(".rl-desc").value.trim(), width: w, height: h, size: lineSizeStr(form, w, h) || "", unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0 }; });
+      var oldByK = {}; L.forEach(function (x) { oldByK[x.k] = x; });
+      if (lb) L = Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) { var ph = tr.querySelector(".rl-prod"), wv = tr.querySelector(".l-d1"), hv = tr.querySelector(".l-d2"), de = tr.querySelector(".rl-dest"); var w = wv ? (parseFloat(wv.value) || null) : null, h = hv ? (parseFloat(hv.value) || null) : null; var pid = ph ? (ph.value || null) : null; var form = prodMat(products.filter(function (x) { return x.id === pid; })[0]).form; var k = Number(tr.dataset.k), old = oldByK[k] || {}; return { k: k, product_id: pid, description: tr.querySelector(".rl-desc").value.trim(), width: w, height: h, size: lineSizeStr(form, w, h) || "", unit: tr.querySelector(".rl-unit").value.trim(), quantity: parseFloat(tr.querySelector(".rl-qty").value) || 0, destination: de ? (de.value || null) : (old.destination || null), basis: old.basis }; });
+      document.querySelectorAll(".rl-mbasis").forEach(function (sel) { var k = Number(sel.dataset.k); var rec = L.filter(function (x) { return x.k === k; })[0]; if (rec) rec.basis = sel.value; });
       document.querySelectorAll(".rfq-bid").forEach(function (inp) { var key = inp.dataset.k + "|" + inp.dataset.partner; if (inp.value !== "") B[key] = Number(inp.value); else delete B[key]; });
       rfq.title = (document.getElementById("rfq-title") || {}).value || rfq.title;
       rfq.project_id = (document.getElementById("rfq-proj") || {}).value || null;
@@ -7950,7 +7977,7 @@
       await sb.from("rfq_lines").delete().eq("rfq_id", id);
       var kToId = {};
       if (Lf.length) {
-        var ins = await sb.from("rfq_lines").insert(Lf.map(function (l, i) { return { company_id: S.company.id, rfq_id: id, product_id: l.product_id || null, description: l.description, size: l.size || null, width: l.width || null, height: l.height || null, unit: l.unit || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; })).select("id,sequence");
+        var ins = await sb.from("rfq_lines").insert(Lf.map(function (l, i) { return { company_id: S.company.id, rfq_id: id, product_id: l.product_id || null, description: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.basis || null, destination: l.destination || null, unit: l.unit || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; })).select("id,sequence");
         if (ins.error) { toast(errMsg(ins.error)); return false; }
         var sorted = (ins.data || []).slice().sort(function (a, b) { return a.sequence - b.sequence; });
         sorted.forEach(function (row, i) { if (Lf[i]) kToId[Lf[i].k] = row.id; });
@@ -7971,11 +7998,15 @@
       var prodTax = {}; products.forEach(function (p) { prodTax[p.id] = p.purchase_tax_id || null; });
       var taxAmt = {}; rfqTaxes.forEach(function (t) { taxAmt[t.id] = Number(t.amount) || 0; });
       function lineTaxId(l) { return l.product_id ? (prodTax[l.product_id] || null) : null; }
-      var untax = lns.reduce(function (s, l) { return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0); }, 0);
-      var tax = lns.reduce(function (s, l) { var t = lineTaxId(l), a = t ? (taxAmt[t] || 0) : 0; return s + (Number(pb[l.id]) || 0) * (Number(l.quantity) || 0) * a / 100; }, 0);
+      function prodOf(pid) { return products.filter(function (x) { return x.id === pid; })[0]; }
+      // the winning bid is in the line's basis (per kg / m2 / lm / ...); convert to
+      // the canonical per-item price so PO totals + accounting stay unit-agnostic.
+      function canonUnit(l) { var info = prodMat(prodOf(l.product_id)); var basis = l.price_basis || info.basis || "each"; return lineCalc(info, l.width, l.height, Number(pb[l.id]) || 0, basis).unit; }
+      var untax = lns.reduce(function (s, l) { return s + canonUnit(l) * (Number(l.quantity) || 0); }, 0);
+      var tax = lns.reduce(function (s, l) { var t = lineTaxId(l), a = t ? (taxAmt[t] || 0) : 0; return s + canonUnit(l) * (Number(l.quantity) || 0) * a / 100; }, 0);
       var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: await nextOrderNumber("purchase"), partner_id: partnerId, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: rfq.project_id || null, cost_code_id: rfq.cost_code_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, note: "Awarded from " + (rfq.number || "RFQ") }).select("id,number").single();
       if (po.error) { toast(errMsg(po.error)); return; }
-      var poLines = lns.map(function (l) { var up = Number(pb[l.id]) || 0; return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: (l.width && l.height) ? "sheet" : "each", tax_id: lineTaxId(l), quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
+      var poLines = lns.map(function (l) { var info = prodMat(prodOf(l.product_id)); var up = canonUnit(l); return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || (info.form ? info.basis : "each"), destination: l.destination || null, tax_id: lineTaxId(l), quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
       if (poLines.length) await sb.from("purchase_order_lines").insert(poLines);
       await sb.from("rfqs").update({ status: "awarded", awarded_partner_id: partnerId }).eq("id", id);
       toast("Awarded to " + vname(partnerId) + " — draft " + po.data.number + " created"); renderRFQForm(id);
@@ -7990,8 +8021,8 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:56px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. +size adds another size.</span>';
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:56px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div style="margin-top:8px"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
@@ -7999,18 +8030,26 @@
       if (V.length && L.some(function (l) { return l.description || l.product_id; })) {
         var Lf = L.filter(function (l) { return l.description || l.product_id; });
         var vt = {}; V.forEach(function (v) { vt[v.partner_id] = 0; });
-        var headRow = '<th>Item</th><th class="num">Qty</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '</th>'; }).join("");
+        var headRow = '<th>Item</th><th class="num">Qty</th><th>Basis</th><th class="num">Last price</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '</th>'; }).join("");
         var mrows = Lf.map(function (l) {
-          var totals = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? Number(p) * (Number(l.quantity) || 0) : null; });
+          var prod = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null;
+          var info = prodMat(prod);
+          var curBasis = l.basis || info.basis || "each";
+          // the bid is in curBasis; the compared total is qty * the canonical per-item price
+          var totals = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? lineCalc(info, l.width, l.height, Number(p), curBasis).unit * (Number(l.quantity) || 0) : null; });
           var valid = totals.filter(function (x) { return x != null; }); var best = valid.length ? Math.min.apply(null, valid) : null;
-          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="0.01" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '"></td>'; }).join("");
+          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="any" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '"></td>'; }).join("");
+          var basisSel = '<td><select class="rl-mbasis" data-k="' + l.k + '">' + lineBasisHTML(info.form, curBasis) + '</select></td>';
+          var lp = l.product_id ? lastPx[l.product_id] : null;
+          var lastVal = lp ? basisFromCanonical(lp.unit_price, lp.width, lp.height, info, curBasis) : null;
+          var lastCell = '<td class="num muted" title="' + (lp ? "Last bought " + esc(lp.date || "") : "No prior purchase on record") + '">' + (lastVal ? "~" + money(lastVal) : "-") + '</td>';
           var _a = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; var dimTxt = (l.width && l.height) ? (l.width + "x" + l.height + (_a ? " - " + msFmt(_a, 3) + " m2" : "")) : (l.size || "");
-          return '<tr><td>' + esc(l.description || "") + (dimTxt ? ' <span class="muted">(' + esc(dimTxt) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
+          return '<tr><td>' + esc(l.description || "") + (dimTxt ? ' <span class="muted">(' + esc(dimTxt) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + basisSel + lastCell + cells + '</tr>';
         }).join("");
         var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
-        var totRow = '<td><b>Total</b></td><td></td>' + V.map(function (v) { return '<td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
-        var awRow = '<td></td><td></td>' + V.map(function (v) { return '<td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
-        matrix = '<h3 style="margin:20px 0 6px">Compare quotes</h3><div class="sub" style="margin:0 0 8px">Enter each supplier\'s unit price. The lowest price per line is highlighted; the cheapest supplier overall has the emphasised Award button. Awarding creates a draft PO to that supplier (tagged to this project + cost code).</div><div class="o-rt-wrap"><table class="o-list"><thead><tr>' + headRow + '</tr></thead><tbody>' + mrows + '</tbody><tfoot><tr style="border-top:2px solid var(--line)">' + totRow + '</tr><tr>' + awRow + '</tr></tfoot></table></div>';
+        var totRow = '<td><b>Total</b></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
+        var awRow = '<td></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
+        matrix = '<h3 style="margin:20px 0 6px">Compare quotes</h3><div class="sub" style="margin:0 0 8px">Set each item\'s <b>basis</b> (per kg / m&sup2; / lm / sheet...), then enter each supplier\'s price <b>in that unit</b>. The <b>Last price</b> column shows what you last paid, in the same unit, for reference. Quotes are compared like-for-like: the lowest total per line is highlighted and the cheapest supplier overall gets the emphasised Award button. Awarding creates a draft PO with prices converted to the per-item price, tagged to this project + cost code.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr>' + headRow + '</tr></thead><tbody>' + mrows + '</tbody><tfoot><tr style="border-top:2px solid var(--line)">' + totRow + '</tr><tr>' + awRow + '</tr></tfoot></table></div>';
       }
       var btns = awarded ? '<button id="rfq-reopen">Reopen</button>' : '<button class="pri" id="rfq-save">Save</button>';
       document.querySelector(".o-form").innerHTML = '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div></div><div class="o-sheet"><div class="o-title">' + esc(rfq.number || rfq.title || "New RFQ") + '</div>' + header + linesTbl + vendorsSec + matrix + '</div>';
@@ -8027,10 +8066,11 @@
         applyRfqForm(prodMat(prod0), lrec.width, lrec.height);
         wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) uu.value = pr.uom; applyRfqForm(prodMat(pr), null, null); });
       });
-      document.querySelectorAll(".rl-addsize").forEach(function (b) { b.onclick = function () { syncFromDom(); var tr = b.closest("tr"); var k = Number(tr.dataset.k); var src = L.filter(function (x) { return x.k === k; })[0] || {}; var idx = L.indexOf(src); L.splice(idx + 1, 0, { k: kc++, product_id: src.product_id || null, description: src.description || "", size: "", width: null, height: null, unit: src.unit || "", quantity: 1 }); draw(); }; });
+      document.querySelectorAll(".rl-addsize").forEach(function (b) { b.onclick = function () { syncFromDom(); var tr = b.closest("tr"); var k = Number(tr.dataset.k); var src = L.filter(function (x) { return x.k === k; })[0] || {}; var idx = L.indexOf(src); L.splice(idx + 1, 0, { k: kc++, product_id: src.product_id || null, description: src.description || "", size: "", width: null, height: null, unit: src.unit || "", quantity: 1, basis: src.basis, destination: src.destination }); draw(); }; });
       var addV = document.getElementById("rfq-addv"); if (addV) addV.onchange = function () { if (!this.value) return; syncFromDom(); V.push({ partner_id: this.value }); draw(); };
       document.querySelectorAll(".rfq-vdel").forEach(function (b) { b.onclick = function () { syncFromDom(); V.splice(Number(b.dataset.i), 1); draw(); }; });
       document.querySelectorAll(".rfq-bid").forEach(function (inp) { inp.addEventListener("change", function () { syncFromDom(); draw(); }); });
+      document.querySelectorAll(".rl-mbasis").forEach(function (sel) { sel.addEventListener("change", function () { syncFromDom(); draw(); }); });
       var sv = document.getElementById("rfq-save"); if (sv) sv.onclick = async function () { syncFromDom(); if (await persist()) { toast("Saved"); renderRFQForm(id); } };
       document.querySelectorAll(".rfq-award").forEach(function (b) { b.onclick = function () { award(b.dataset.partner); }; });
       var ro = document.getElementById("rfq-reopen"); if (ro) ro.onclick = async function () { await sb.from("rfqs").update({ status: "sent", awarded_partner_id: null }).eq("id", id); renderRFQForm(id); };
