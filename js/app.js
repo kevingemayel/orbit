@@ -2263,6 +2263,8 @@
       var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name; });
       if (!lns.length) { toast("Add at least one line"); return null; }
       var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+      var _taxMap = {}; taxes.forEach(function (t) { _taxMap[t.id] = Number(t.amount) || 0; });
+      var taxTot = lns.reduce(function (s, l) { var a = l.tax_id ? (_taxMap[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
       if (alsoPost && !(untax > 0.005)) { toast("Cannot post an invoice with a zero total. Add amounts to the lines first."); return null; }
       if (isLocked(document.getElementById("f-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return null; }
       var hdr = {
@@ -2270,7 +2272,7 @@
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
         project_id: document.getElementById("f-proj") ? (document.getElementById("f-proj").value || null) : null,
         cost_code_id: document.getElementById("f-costcode") ? (document.getElementById("f-costcode").value || null) : null,
-        amount_untaxed: untax, amount_total: untax, amount_residual: untax
+        amount_untaxed: untax, amount_tax: taxTot, amount_total: untax + taxTot, amount_residual: untax + taxTot
       };
       var invId = id;
       if (id === "new") {
@@ -2546,8 +2548,11 @@
   }
   async function createCreditNote(inv, lines, isSale) {
     var moveType = isSale ? "out_refund" : "in_refund";
+    var cnTaxes = (await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || [];
+    var cnTaxMap = {}; cnTaxes.forEach(function (t) { cnTaxMap[t.id] = Number(t.amount) || 0; });
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: inv.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: today(), currency_code: inv.currency_code || S.company.currency_code, state: "draft", ref: "Credit note for " + (inv.number || ""), amount_untaxed: untax, amount_total: untax, amount_residual: untax };
+    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (cnTaxMap[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+    var hdr = { company_id: S.company.id, move_type: moveType, partner_id: inv.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: today(), currency_code: inv.currency_code || S.company.currency_code, state: "draft", ref: "Credit note for " + (inv.number || ""), amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
