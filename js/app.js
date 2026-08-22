@@ -283,7 +283,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
-        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Procurement Status", "pur.procstatus"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
       ]
@@ -449,7 +449,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
+    "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -1570,6 +1570,7 @@
       case "lots": return renderLots();
       case "rfq.list": return renderList(cfgRFQs());
       case "pur.req": return renderList(cfgRequisitions());
+      case "pur.procstatus": return renderProcurementStatus();
       case "pur.sccert": return renderList(cfgSubcontractCerts());
       case "pur.match": return renderMatch();
       case "proj.list": return renderList(cfgProjects());
@@ -11006,6 +11007,17 @@
   }
   var TAKEOFF_CATS = ["Bars", "Sheets", "Paint", "Sealant", "Screws", "Misc"];
   function catFromForm(form) { return ({ sheet: "Sheets", bar: "Bars", liquid: "Paint", roll: "Misc", generic: "Misc" })[form] || "Misc"; }
+  // A better default take-off category: the material form gives the broad kind, but
+  // liquids split into Paint vs Sealant and hardware into Screws by name/family.
+  function catFromProduct(pr, info) {
+    var f = (info || prodMat(pr)).form;
+    var n = ((((pr || {}).name || "") + " " + ((pr || {}).family || "") + " " + (((pr || {}).spec || {}).material || "")).toLowerCase());
+    if (f === "sheet") return "Sheets";
+    if (f === "bar") return "Bars";
+    if (f === "liquid") return /seal|silicone|adhesive|mastic|gasket/.test(n) ? "Sealant" : "Paint";
+    if (/screw|bolt|fasten|anchor|rivet|washer|\bnut|dowel/.test(n)) return "Screws";
+    return "Misc";
+  }
   function catOptsHTML(cur) { return '<option value="">-</option>' + TAKEOFF_CATS.map(function (c) { return '<option' + (cur === c ? " selected" : "") + '>' + c + '</option>'; }).join(""); }
   // The material take-off: a per-project list of what a job needs (bars, sheets,
   // paint, sealant, screws, misc), each line routed to a destination and using the
@@ -11079,8 +11091,8 @@
       function applyMeas(inf, d1, d2) { tr.querySelector(".mr-meas-cell").innerHTML = lineMeasureHTML(inf, d1, d2); tr.querySelectorAll(".l-d1,.l-d2").forEach(function (el) { el.addEventListener("input", function () { updMeas(inf); updateSummary(); }); }); updMeas(inf); }
       function setLast(pr) { var lp = pr ? lastPx[pr.id] : null; tr.querySelector(".mr-last").textContent = lp ? money(lp.unit_price) : "-"; }
       applyMeas(info, l.width, l.height); setLast(sel);
-      if (!l.category && sel) tr.querySelector(".mr-cat").value = catFromForm(info.form);
-      wireProdCombo(tr, products, function (pr) { tr.querySelector(".mr-name").value = pr.name; var pinfo = prodMat(pr); applyMeas(pinfo, null, null); tr.querySelector(".mr-cat").value = catFromForm(pinfo.form); var uu = tr.querySelector(".mr-uom"); if (pr.uom && !uu.value) uu.value = pr.uom; setLast(pr); updateSummary(); });
+      if (!l.category && sel) tr.querySelector(".mr-cat").value = catFromProduct(sel, info);
+      wireProdCombo(tr, products, function (pr) { tr.querySelector(".mr-name").value = pr.name; var pinfo = prodMat(pr); applyMeas(pinfo, null, null); tr.querySelector(".mr-cat").value = catFromProduct(pr, pinfo); var uu = tr.querySelector(".mr-uom"); if (pr.uom && !uu.value) uu.value = pr.uom; setLast(pr); updateSummary(); });
       var asz = tr.querySelector(".mr-addsize"); if (asz) asz.onclick = function () { var hid = tr.querySelector(".mr-prod"); addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".mr-name").value, category: tr.querySelector(".mr-cat").value, uom: tr.querySelector(".mr-uom").value, destination: tr.querySelector(".mr-dest").value }); updateSummary(); };
       tr.querySelector(".del").onclick = function () { tr.remove(); updateSummary(); };
       tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("change", updateSummary); });
@@ -11135,6 +11147,79 @@
     var py = "MR/" + new Date().getFullYear() + "/";
     var rows = (await sb.from("material_requisitions").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
     return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+
+  // ---- Procurement Status: per-project funnel of needed -> quoted -> ordered ->
+  // received, vs the cost budget. Ties the take-off, RFQs and POs back to the job.
+  async function renderProcurementStatus() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Procurement Status") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
+    var sel = (S.procProj && projs.some(function (p) { return p.id === S.procProj; })) ? S.procProj : projs[0].id;
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Procurement Status</h3><select id="ps-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">How this job&rsquo;s material is progressing: what the take-off says it <b>needs</b>, what is out for <b>quote</b>, what is <b>ordered</b> (committed on POs) and what has been <b>received</b> - against the project&rsquo;s cost budget.</div><div id="ps-body"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("ps-proj").onchange = function () { procStatusBody(this.value); };
+    procStatusBody(sel);
+  }
+  async function procStatusBody(projectId) {
+    S.procProj = projectId;
+    var el = document.getElementById("ps-body"); if (!el) return;
+    var products = (await sb.from("products").select("id,name,material_form,spec,family,cost_price").eq("company_id", S.company.id)).data || [];
+    var pById = {}; products.forEach(function (p) { pById[p.id] = p; });
+    var lastPx = await loadLastPrices();
+    function refPrice(pid) { var lp = lastPx[pid]; return lp ? lp.unit_price : (pById[pid] ? Number(pById[pid].cost_price || 0) : 0); }
+    function catOf(pid) { var pr = pById[pid]; return pr ? catFromProduct(pr, prodMat(pr)) : "Misc"; }
+    // Needed - take-off lines for this project
+    var reqs = (await sb.from("material_requisitions").select("id").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var reqIds = reqs.map(function (r) { return r.id; });
+    var needLines = reqIds.length ? ((await sb.from("material_requisition_lines").select("product_id,name,quantity,category,destination").in("requisition_id", reqIds)).data || []) : [];
+    // Quoted - lines on open (not-yet-awarded) RFQs for this project
+    var rfqs = (await sb.from("rfqs").select("id,status").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var openRfqIds = rfqs.filter(function (r) { return r.status !== "awarded"; }).map(function (r) { return r.id; });
+    var quoteLines = openRfqIds.length ? ((await sb.from("rfq_lines").select("product_id,quantity").in("rfq_id", openRfqIds)).data || []) : [];
+    // Ordered + received - lines on confirmed POs for this project
+    var pos = (await sb.from("purchase_orders").select("id,state").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var poIds = pos.filter(function (p) { return ["sent", "purchase", "done"].indexOf(p.state) >= 0; }).map(function (p) { return p.id; });
+    var poLines = poIds.length ? ((await sb.from("purchase_order_lines").select("product_id,name,quantity,unit_price,qty_received,destination").in("order_id", poIds)).data || []) : [];
+    // Budget - the project cost budget total
+    var buds = (await sb.from("project_budgets").select("amount").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    var budget = buds.reduce(function (s, b) { return s + (Number(b.amount) || 0); }, 0);
+    var cc = S.company.currency_code;
+    var needV = needLines.reduce(function (s, l) { return s + (Number(l.quantity) || 0) * refPrice(l.product_id); }, 0);
+    var quoteV = quoteLines.reduce(function (s, l) { return s + (Number(l.quantity) || 0) * refPrice(l.product_id); }, 0);
+    var ordV = poLines.reduce(function (s, l) { return s + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0); }, 0);
+    var recvV = poLines.reduce(function (s, l) { return s + (Number(l.qty_received) || 0) * (Number(l.unit_price) || 0); }, 0);
+    if (!needLines.length && !poLines.length && !quoteLines.length) { el.innerHTML = '<div class="o-empty">Nothing procured for this project yet. Build a Material Take-off, then raise an RFQ or PO.</div>'; return; }
+    // category breakdown
+    var cats = {}; function cbucket(c) { c = c || "Misc"; if (!cats[c]) cats[c] = { need: 0, ord: 0, recv: 0 }; return cats[c]; }
+    needLines.forEach(function (l) { cbucket(l.category || catOf(l.product_id)).need += (Number(l.quantity) || 0) * refPrice(l.product_id); });
+    poLines.forEach(function (l) { var b = cbucket(catOf(l.product_id)); b.ord += (Number(l.quantity) || 0) * (Number(l.unit_price) || 0); b.recv += (Number(l.qty_received) || 0) * (Number(l.unit_price) || 0); });
+    // destination split of what is needed
+    var dests = { warehouse: 0, factory: 0, site: 0 }; needLines.forEach(function (l) { var d = l.destination || "warehouse"; dests[d] = (dests[d] || 0) + (Number(l.quantity) || 0) * refPrice(l.product_id); });
+    // funnel
+    var scale = Math.max(needV, ordV, recvV, quoteV, budget, 1);
+    function bar(label, val, kind, note) { var w = Math.max(0, Math.min(100, val / scale * 100)); return '<div class="ps-row"><span class="ps-row-l">' + label + '</span><div class="ps-track"><div class="ps-fill ps-' + kind + '" style="width:' + w.toFixed(1) + '%"></div></div><span class="ps-row-v">' + cc + ' ' + money(val) + (note ? ' <span class="muted">' + note + '</span>' : "") + '</span></div>'; }
+    var ordPct = needV ? Math.round(ordV / needV * 100) : 0, recvPct = ordV ? Math.round(recvV / ordV * 100) : 0, budPct = budget ? Math.round(ordV / budget * 100) : 0;
+    var funnel = '<div class="ps-funnel">' +
+      bar("Needed", needV, "need", needLines.length + " item" + (needLines.length !== 1 ? "s" : "")) +
+      bar("Quoted", quoteV, "quote", quoteLines.length ? "out for quote" : "") +
+      bar("Ordered", ordV, "ord", ordPct + "% of needed") +
+      bar("Received", recvV, "recv", recvPct + "% of ordered") +
+      (budget ? bar("Cost budget", budget, "bud", ordPct !== null ? (budPct + "% committed") : "") : "") +
+      '</div>';
+    var overBudget = budget && ordV > budget;
+    var banner = overBudget ? '<div class="ps-alert bad">Ordered material (' + cc + ' ' + money(ordV) + ') is over the project cost budget (' + cc + ' ' + money(budget) + ').</div>' : "";
+    // cards
+    function card(k, v, kind) { return '<div class="ps-card ps-c-' + kind + '"><span class="ps-card-v">' + cc + ' ' + money(v) + '</span><span class="ps-card-k">' + k + '</span></div>'; }
+    var cards = '<div class="ps-cards">' + card("Needed", needV, "need") + card("Quoted", quoteV, "quote") + card("Ordered", ordV, "ord") + card("Received", recvV, "recv") + (budget ? card("Cost budget", budget, "bud") : "") + '</div>';
+    // category table
+    var catOrder = TAKEOFF_CATS.filter(function (c) { return cats[c]; }); Object.keys(cats).forEach(function (c) { if (catOrder.indexOf(c) < 0) catOrder.push(c); });
+    var catRows = catOrder.map(function (c) { var m = cats[c]; return '<tr><td>' + esc(c) + '</td><td class="num">' + money(m.need) + '</td><td class="num">' + money(m.ord) + '</td><td class="num">' + money(m.recv) + '</td></tr>'; }).join("");
+    var catTable = catRows ? '<h4 style="margin:20px 0 6px">By category</h4><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Category</th><th class="num">Needed</th><th class="num">Ordered</th><th class="num">Received</th></tr></thead><tbody>' + catRows + '</tbody></table></div>' : "";
+    var destChips = DEST_OPTS.map(function (o) { return dests[o[0]] ? ('<span class="mr-sum-seg"><b>' + cc + ' ' + money(dests[o[0]]) + '</b> ' + o[1].toLowerCase() + '</span>') : null; }).filter(Boolean).join("");
+    var destStrip = destChips ? '<h4 style="margin:20px 0 6px">Needed, by destination</h4><div class="mr-summary" style="margin:0">' + destChips + '</div>' : "";
+    el.innerHTML = banner + cards + '<h4 style="margin:18px 0 8px">Procurement funnel</h4>' + funnel + destStrip + catTable;
   }
 
   // ============================ SUBCONTRACT CERTIFICATES (payables IPC) ============================
