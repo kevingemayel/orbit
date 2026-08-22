@@ -3822,7 +3822,19 @@
       else { var up = await sb.from("production_runs").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } await sb.from("production_consumption").delete().eq("run_id", id); }
       var cl = collectLines("rn-lines").map(function (l) { return { org_id: S.company.org_id, run_id: runId, product_id: l.kind === "product" ? l.rid : null, project_item_id: l.kind === "pitem" ? l.rid : null, description: l.description || null, qty: l.qty, unit: l.unit }; });
       if (cl.length) { var ci = await sb.from("production_consumption").insert(cl); if (ci.error) { toast("Saved, but lines failed: " + errMsg(ci.error)); go("mfg.runs"); return; } }
-      toast("Saved"); go("mfg.runs");
+      // Completing a run moves stock: consume the input materials out of on-hand, put
+      // the output in (quantity only - materials are already expensed on the vendor bill).
+      var movedStock = false;
+      if (row.status === "done" && !r.stock_posted) {
+        var invp = await ensureInventory();
+        if (invp && invp.stock) {
+          var pmoves = [];
+          cl.forEach(function (l) { if (l.product_id && (Number(l.qty) || 0) > 0) pmoves.push({ company_id: S.company.id, product_id: l.product_id, quantity: Number(l.qty), size: null, location_id: invp.stock, location_dest_id: invp.customer, project_id: row.project_id || null, state: "done", date: (row.run_date || today()) + "T10:00:00Z" }); });
+          if (row.output_product_id && (Number(row.output_qty) || 0) > 0) pmoves.push({ company_id: S.company.id, product_id: row.output_product_id, quantity: Number(row.output_qty), size: null, location_id: invp.supplier, location_dest_id: invp.stock, project_id: row.project_id || null, state: "done", date: (row.run_date || today()) + "T10:05:00Z" });
+          if (pmoves.length) { var mv = await sb.from("stock_moves").insert(pmoves); if (!mv.error) { await sb.from("production_runs").update({ stock_posted: true }).eq("id", runId); movedStock = true; } }
+        }
+      }
+      toast(movedStock ? "Done - materials consumed and output added to stock" : "Saved"); go("mfg.runs");
     };
   }
 
