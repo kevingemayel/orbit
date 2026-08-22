@@ -283,7 +283,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
-        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Requisitions", "pur.req"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
       ]
@@ -10981,7 +10981,7 @@
   // ============================ MATERIAL REQUISITIONS ============================
   function cfgRequisitions() {
     return {
-      title: "Material Requisitions", pageSize: 80,
+      title: "Material Take-off", pageSize: 80,
       fetch: function () {
         return sb.from("material_requisitions").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (rows) {
           rows = rows.data || []; if (!rows.length) return rows;
@@ -11004,52 +11004,96 @@
       onOpen: function (r) { renderRequisitionForm(r.id); }, onNew: function () { renderRequisitionForm("new"); }
     };
   }
+  var TAKEOFF_CATS = ["Bars", "Sheets", "Paint", "Sealant", "Screws", "Misc"];
+  function catFromForm(form) { return ({ sheet: "Sheets", bar: "Bars", liquid: "Paint", roll: "Misc", generic: "Misc" })[form] || "Misc"; }
+  function catOptsHTML(cur) { return '<option value="">-</option>' + TAKEOFF_CATS.map(function (c) { return '<option' + (cur === c ? " selected" : "") + '>' + c + '</option>'; }).join(""); }
+  // The material take-off: a per-project list of what a job needs (bars, sheets,
+  // paint, sealant, screws, misc), each line routed to a destination and using the
+  // same product picker + size calculator as the PO/RFQ. It feeds RFQs and POs but
+  // stays its own document. (Table + backend are still "material_requisitions".)
   async function renderRequisitionForm(id) {
-    var parent = { action: "pur.req", title: "Material Requisitions" };
+    var parent = { action: "pur.req", title: "Material Take-off" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var req = id === "new" ? { state: "draft", req_date: today() } : (await sb.from("material_requisitions").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("material_requisition_lines").select("*").eq("requisition_id", id).order("sequence")).data || [];
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var products = (await sb.from("products").select("id,name,default_code,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var lastPx = await loadLastPrices();
     var ordered = req.state === "ordered";
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Requisition");
-    var uomOpts = '<option value="">-</option>' + uoms.map(function (u) { return '<option value="' + esc(u.name) + '">' + esc(u.name) + '</option>'; }).join("");
-    var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Take-off");
+    function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
+    var btns = ordered ? '<button id="mr-discard">Back</button>' :
+      ('<button class="pri" id="mr-save">Save</button>' + (id !== "new" ? '<button id="mr-rfq">Create RFQ</button><button id="mr-po">Create Purchase Order</button>' : "") + '<button id="mr-discard">Discard</button>');
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns">' + (ordered ? "" : '<button class="pri" id="mr-save">Save</button>') + '<button id="mr-discard">Discard</button>' + (id !== "new" && !ordered ? '<button id="mr-po">Create Purchase Order</button>' : "") + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' +
       '<div class="o-stages"><span class="st ' + (!ordered ? "on" : "done") + '">Draft</span><span class="st ' + (req.state === "approved" ? "on" : ordered ? "done" : "") + '">Approved</span><span class="st ' + (ordered ? "on" : "") + '">Ordered</span></div></div>' +
-      '<div class="o-sheet"><div class="o-title">Material Requisition</div>' +
+      '<div class="o-sheet"><div class="o-title">Material Take-off</div>' +
+      '<div class="sub" style="margin:-6px 0 12px">What this job needs. Search your catalog, set each item&rsquo;s size, category and where it is delivered (warehouse / factory / site), then feed it into an RFQ (to price it) or straight to a PO.</div>' +
       '<div class="o-groups"><div>' +
-      fld("Number", '<input id="mr-num" value="' + esc(req.number || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="auto">', "Your requisition reference. Left blank, we number it for you.") +
-      fld("Project / site", '<select id="mr-proj"' + (ordered ? " disabled" : "") + '><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (req.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>', "Which site needs the material.") +
+      fld("Number", '<input id="mr-num" value="' + esc(req.number || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="auto">', "Your take-off reference. Left blank, we number it for you.") +
+      fld("Project / site", '<select id="mr-proj"' + (ordered ? " disabled" : "") + '><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (req.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>', "Which project/site needs the material.") +
       '</div><div>' +
-      fld("Requested by", '<input id="mr-by" value="' + esc(req.requested_by || "") + '"' + (ordered ? " disabled" : "") + '>', "Who raised the request, e.g. the site engineer.") +
+      fld("Requested by", '<input id="mr-by" value="' + esc(req.requested_by || "") + '"' + (ordered ? " disabled" : "") + '>', "Who raised it, e.g. the site engineer.") +
       fld("Date", '<input id="mr-date" type="date" value="' + (req.req_date || today()) + '"' + (ordered ? " disabled" : "") + '>', "When the material is needed.") +
       '</div></div>' +
       fld("Note", '<input id="mr-note" value="' + esc(req.note || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="optional">', "Any instructions for procurement.") +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Requested items</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:200px">Product</th><th>Description</th><th style="width:80px;text-align:right">Qty</th><th style="width:110px">Unit</th>' + (ordered ? "" : '<th style="width:24px"></th>') + '</tr></thead><tbody id="mrbody"></tbody></table>' + (ordered ? "" : '<button class="o-addln" id="mr-addln">+ Add a line</button>') + '</div></div>' +
+      '<div id="mr-summary" class="mr-summary"></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Take-off items</div></div><div class="o-nb-pg">' +
+      '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th><th style="width:104px">Category</th><th style="min-width:140px">Measure</th><th style="width:56px;text-align:right">Qty</th><th style="width:64px">Unit</th><th style="width:112px">Destination</th><th style="width:80px;text-align:right">Last ~</th>' + (ordered ? "" : '<th style="width:56px"></th>') + '</tr></thead><tbody id="mrbody"></tbody></table></div>' + (ordered ? "" : '<button class="o-addln" id="mr-addln">+ Add a line</button>') + '</div></div>' +
       '</div>';
     document.getElementById("mr-discard").onclick = function () { go("pur.req"); };
     var lb = document.getElementById("mrbody");
+    function updateSummary() {
+      var el = document.getElementById("mr-summary"); if (!el) return;
+      var lns = currentLines();
+      if (!lns.length) { el.innerHTML = ""; return; }
+      var byDest = {}, byCat = {};
+      lns.forEach(function (l) { var d = l.destination || "warehouse"; byDest[d] = (byDest[d] || 0) + 1; var c = l.category || "Misc"; byCat[c] = (byCat[c] || 0) + 1; });
+      var destTxt = DEST_OPTS.map(function (o) { return byDest[o[0]] ? ('<b>' + byDest[o[0]] + '</b> ' + o[1].toLowerCase()) : null; }).filter(Boolean).join(" &middot; ");
+      var catTxt = TAKEOFF_CATS.map(function (c) { return byCat[c] ? (byCat[c] + " " + c.toLowerCase()) : null; }).filter(Boolean).join(", ");
+      el.innerHTML = '<span class="mr-sum-n">' + lns.length + ' item' + (lns.length !== 1 ? "s" : "") + '</span>' + (destTxt ? '<span class="mr-sum-seg">' + destTxt + '</span>' : "") + (catTxt ? '<span class="mr-sum-seg">' + catTxt + '</span>' : "");
+    }
+    function roLine(l) {
+      var pr = pById(l.product_id), info = prodMat(pr);
+      var meas = l.width && l.height ? (l.width + "x" + l.height) : (l.size || "");
+      return '<tr><td><b>' + esc((pr || {}).name || l.name || "") + '</b></td><td>' + esc(l.name || "") + '</td><td>' + esc(l.category || "") + '</td><td class="muted">' + esc(meas) + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td>' + destChip(l.destination) + '</td><td></td></tr>';
+    }
     function addRow(l) {
-      var tr = document.createElement("tr");
-      if (ordered) { tr.innerHTML = '<td>' + esc(l ? (products.filter(function (p) { return p.id === l.product_id; })[0] || {}).name || "" : "") + '</td><td>' + esc(l ? l.name : "") + '</td><td class="num">' + Number(l ? l.quantity : 0) + '</td><td>' + esc(l ? l.uom : "") + '</td>'; lb.appendChild(tr); return; }
-      tr.innerHTML = '<td><select class="mr-prod">' + prodOpts + '</select></td><td><input class="mr-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td><td><input class="mr-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><select class="mr-uom">' + uomOpts + '</select></td><td><button class="del">&times;</button></td>';
+      l = l || {};
+      if (ordered) { lb.insertAdjacentHTML("beforeend", roLine(l)); return; }
+      var tr = document.createElement("tr"); tr.className = "mr-row";
+      var sel = l.product_id ? pById(l.product_id) : null, info = prodMat(sel);
+      tr.innerHTML =
+        '<td>' + prodComboHTML("mr-prod", sel) + '</td>' +
+        '<td><input class="mr-name" value="' + esc(l.name || "") + '" placeholder="Description"></td>' +
+        '<td><select class="mr-cat">' + catOptsHTML(l.category) + '</select></td>' +
+        '<td class="mr-meas-cell"></td>' +
+        '<td><input class="mr-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '"></td>' +
+        '<td><input class="mr-uom" value="' + esc(l.uom || "") + '" style="width:56px" placeholder="unit"></td>' +
+        '<td><select class="mr-dest">' + destOptsHTML(l.destination) + '</select></td>' +
+        '<td class="num muted mr-last"></td>' +
+        '<td class="l-acts"><button class="mr-addsize" type="button" title="Add another size of this item">+size</button><button class="del" type="button" title="Remove line">&times;</button></td>';
       lb.appendChild(tr);
-      if (l && l.product_id) tr.querySelector(".mr-prod").value = l.product_id;
-      if (l && l.uom) tr.querySelector(".mr-uom").value = l.uom;
-      var ps = tr.querySelector(".mr-prod");
-      ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (!pr) return; tr.querySelector(".mr-name").value = pr.name; if (pr.uom) tr.querySelector(".mr-uom").value = pr.uom; });
-      tr.querySelector(".del").onclick = function () { tr.remove(); };
+      function updMeas(inf) { var a = tr.querySelector(".l-area"); if (!a) return; var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0; var c = lineCalc(inf, w, h, 0, inf.basis); a.textContent = c.measure ? ("= " + c.measure) : ""; }
+      function applyMeas(inf, d1, d2) { tr.querySelector(".mr-meas-cell").innerHTML = lineMeasureHTML(inf, d1, d2); tr.querySelectorAll(".l-d1,.l-d2").forEach(function (el) { el.addEventListener("input", function () { updMeas(inf); updateSummary(); }); }); updMeas(inf); }
+      function setLast(pr) { var lp = pr ? lastPx[pr.id] : null; tr.querySelector(".mr-last").textContent = lp ? money(lp.unit_price) : "-"; }
+      applyMeas(info, l.width, l.height); setLast(sel);
+      if (!l.category && sel) tr.querySelector(".mr-cat").value = catFromForm(info.form);
+      wireProdCombo(tr, products, function (pr) { tr.querySelector(".mr-name").value = pr.name; var pinfo = prodMat(pr); applyMeas(pinfo, null, null); tr.querySelector(".mr-cat").value = catFromForm(pinfo.form); var uu = tr.querySelector(".mr-uom"); if (pr.uom && !uu.value) uu.value = pr.uom; setLast(pr); updateSummary(); });
+      var asz = tr.querySelector(".mr-addsize"); if (asz) asz.onclick = function () { var hid = tr.querySelector(".mr-prod"); addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".mr-name").value, category: tr.querySelector(".mr-cat").value, uom: tr.querySelector(".mr-uom").value, destination: tr.querySelector(".mr-dest").value }); updateSummary(); };
+      tr.querySelector(".del").onclick = function () { tr.remove(); updateSummary(); };
+      tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("change", updateSummary); });
     }
     if (lines.length) lines.forEach(addRow); else if (!ordered) addRow(null);
     var addb = document.getElementById("mr-addln"); if (addb) addb.onclick = function () { addRow(null); };
+    updateSummary();
     function currentLines() {
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var ps = tr.querySelector(".mr-prod"); if (!ps) return null;
-        return { product_id: ps.value || null, name: (tr.querySelector(".mr-name").value || "").trim(), quantity: parseFloat(tr.querySelector(".mr-qty").value) || 0, uom: tr.querySelector(".mr-uom").value || "" };
+        var pid = ps.value || null, info = prodMat(pById(pid));
+        var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || null, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || null;
+        return { product_id: pid, name: (tr.querySelector(".mr-name").value || "").trim(), quantity: parseFloat(tr.querySelector(".mr-qty").value) || 0, uom: tr.querySelector(".mr-uom").value || "", category: tr.querySelector(".mr-cat").value || null, destination: tr.querySelector(".mr-dest").value || null, width: w, height: h, size: lineSizeStr(info.form, w, h) };
       }).filter(function (l) { return l && (l.product_id || l.name); });
     }
     async function persist() {
@@ -11059,18 +11103,30 @@
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("material_requisitions").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("material_requisitions").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("material_requisition_lines").delete().eq("requisition_id", id); }
-      if (lns.length) { var lr = await sb.from("material_requisition_lines").insert(lns.map(function (l, i) { return { company_id: S.company.id, requisition_id: sid, product_id: l.product_id, name: l.name, quantity: l.quantity, uom: l.uom, sequence: (i + 1) * 10 }; })); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; } }
+      if (lns.length) { var lr = await sb.from("material_requisition_lines").insert(lns.map(function (l, i) { return { company_id: S.company.id, requisition_id: sid, product_id: l.product_id, name: l.name, quantity: l.quantity, uom: l.uom, category: l.category || null, destination: l.destination || null, width: l.width || null, height: l.height || null, size: l.size || null, sequence: (i + 1) * 10 }; })); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; } }
       return sid;
     }
     var sv = document.getElementById("mr-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderRequisitionForm(sid); } };
+    var rfqb = document.getElementById("mr-rfq"); if (rfqb) rfqb.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var lns = currentLines(); if (!lns.length) { toast("Add at least one item first"); return; }
+      var yr = new Date().getFullYear(), py = "RFQ/" + yr + "/";
+      var ex = (await sb.from("rfqs").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+      var num = py + ("000" + (maxSeq(ex, py) + 1)).slice(-4);
+      var r = await sb.from("rfqs").insert({ company_id: S.company.id, number: num, status: "sent", title: "From take-off " + (gv("mr-num") || ""), project_id: document.getElementById("mr-proj").value || null, note: "From take-off " + (gv("mr-num") || "") }).select("id").single();
+      if (r.error) { toast("Could not create RFQ: " + errMsg(r.error)); return; }
+      var rl = await sb.from("rfq_lines").insert(lns.map(function (l, i) { var inf = prodMat(pById(l.product_id)); return { company_id: S.company.id, rfq_id: r.data.id, product_id: l.product_id || null, description: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: (inf.form ? inf.basis : "each"), destination: l.destination || null, unit: l.uom || "", quantity: l.quantity || 0, sequence: (i + 1) * 10 }; }));
+      if (rl.error) { toast("RFQ lines failed: " + errMsg(rl.error)); return; }
+      toast("RFQ " + num + " created from the take-off - add suppliers and enter their quotes"); renderRFQForm(r.data.id);
+    };
     var pob = document.getElementById("mr-po"); if (pob) pob.onclick = async function () {
       var sid = await persist(); if (!sid) return;
       var lns = currentLines(); if (!lns.length) { toast("Add at least one item first"); return; }
       var poNum = await nextOrderNumber("purchase");
-      var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: poNum, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: document.getElementById("mr-proj").value || null, note: "From requisition " + (gv("mr-num") || "") }).select("id").single();
+      var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: poNum, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: document.getElementById("mr-proj").value || null, note: "From take-off " + (gv("mr-num") || "") }).select("id").single();
       if (ins.error) { toast("Could not create PO: " + errMsg(ins.error)); return; }
-      var prMap = {}; products.forEach(function (p) { prMap[p.id] = p; });
-      await sb.from("purchase_order_lines").insert(lns.map(function (l, i) { var pr = l.product_id ? prMap[l.product_id] : null, price = pr ? Number(pr.cost_price || 0) : 0; return { company_id: S.company.id, order_id: ins.data.id, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name + (l.uom ? " (" + l.uom + ")" : ""), quantity: l.quantity, unit_price: price, price_subtotal: l.quantity * price }; }));
+      var lr = await sb.from("purchase_order_lines").insert(lns.map(function (l, i) { var pr = l.product_id ? pById(l.product_id) : null, lp = l.product_id ? lastPx[l.product_id] : null, info = prodMat(pr); var price = lp ? lp.unit_price : (pr ? Number(pr.cost_price || 0) : 0); var basis = (lp && lp.basis) || (info.form ? info.basis : "each"); return { company_id: S.company.id, order_id: ins.data.id, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: basis, destination: l.destination || null, quantity: l.quantity, unit_price: price, price_subtotal: l.quantity * price }; }));
+      if (lr.error) { toast("PO lines failed: " + errMsg(lr.error)); return; }
       await sb.from("material_requisitions").update({ state: "ordered" }).eq("id", sid);
       toast("Draft purchase order created - pick the vendor and confirm"); renderOrderForm(ins.data.id, "purchase");
     };
