@@ -266,7 +266,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
         { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"], ["Follow-up Levels", "fu.levels"]] }
       ]
     },
@@ -450,7 +450,7 @@
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project",
@@ -1507,6 +1507,7 @@
       case "rep.stmt": return renderStatement(null);
       case "rep.cons": return renderConsolidation();
       case "rep.cashfwd": return renderCashForecast();
+      case "rep.health": return renderDataHealth();
       case "rep.collections": return renderCollections();
       case "cockpit": return renderCockpit();
       case "assets.list": return renderList(cfgAssets());
@@ -5386,6 +5387,47 @@
     var ex = document.getElementById("rp-export"); if (ex) ex.onclick = cfExportCsv;
     document.getElementById("cf-h").onchange = function () { S._cfHorizon = this.value; renderCashForecast(); };
     document.getElementById("cf-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { S._cfView = b.dataset.v; renderCashForecast(); }; });
+  }
+
+  // ============================ DATA HEALTH CHECK ============================
+  // Automated integrity checks on the active company's books, so bad data is
+  // caught here instead of downstream. Same checks as the smoke script.
+  async function renderDataHealth() {
+    var cc = S.company.currency_code;
+    document.getElementById("o-main").innerHTML = repChrome("Data Health Check", true);
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    var rep = document.getElementById("rep");
+    rep.innerHTML = repHead("Data Health Check", cc) + '<div class="sub" style="margin:6px 0 12px">Automated integrity checks on this company\'s books. Green means the data is internally consistent - run it any time, especially after a big import or month-end.</div><div id="dh-body"><div class="o-empty">Running checks...</div></div>';
+    var checks = [], r2 = function (x) { return Math.round(x * 100) / 100; };
+    function add(name, ok, detail) { checks.push({ name: name, ok: ok, detail: detail }); }
+    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var dr = 0, cr = 0; tb.forEach(function (r) { dr += Number(r.debit) || 0; cr += Number(r.credit) || 0; });
+    add("Trial balance balances", Math.abs(dr - cr) < 0.01, "Debits " + cc + " " + money(dr) + " vs credits " + cc + " " + money(cr));
+    function acc(code) { var x = tb.filter(function (t) { return t.code === code; })[0]; return x ? Number(x.balance) : 0; }
+    var byType = {}; tb.forEach(function (r) { var t = (r.type_code || "").split("_")[0]; byType[t] = (byType[t] || 0) + (Number(r.balance) || 0); });
+    var assets = byType.asset || 0, liab = -(byType.liability || 0), equity = -(byType.equity || 0), result = -((byType.income || 0) + (byType.expense || 0));
+    add("Balance Sheet balances", Math.abs(assets - liab - equity - result) < 0.5, "Assets " + money(assets) + " = Liabilities " + money(liab) + " + Equity " + money(equity) + " + Result " + money(result));
+    var inv = (await sb.from("invoices").select("id,number,move_type,state,amount_residual,journal_entry_id").eq("company_id", S.company.id)).data || [];
+    var posted = inv.filter(function (i) { return i.state === "posted"; });
+    var ar = r2(posted.filter(function (i) { return i.move_type === "out_invoice"; }).reduce(function (s, i) { return s + (Number(i.amount_residual) || 0); }, 0));
+    var ap = r2(posted.filter(function (i) { return i.move_type === "in_invoice"; }).reduce(function (s, i) { return s + (Number(i.amount_residual) || 0); }, 0));
+    add("Receivables (4100) tie to open invoices", Math.abs(acc("4100") - ar) < 0.5, "Ledger " + money(acc("4100")) + " vs open invoices " + money(ar));
+    add("Payables (4000) tie to open bills", Math.abs(Math.abs(acc("4000")) - ap) < 0.5, "Ledger " + money(Math.abs(acc("4000"))) + " vs open bills " + money(ap));
+    var noJE = posted.filter(function (i) { return !i.journal_entry_id; });
+    add("Every posted document has a journal entry", noJE.length === 0, noJE.length ? noJE.length + " posted without a journal entry: " + noJE.slice(0, 5).map(function (i) { return i.number; }).join(", ") : "all " + posted.length + " journalled");
+    var locs = (await sb.from("stock_locations").select("id,usage").eq("company_id", S.company.id)).data || [];
+    var internal = {}; locs.forEach(function (l) { if (l.usage === "internal") internal[l.id] = 1; });
+    var moves = (await sb.from("stock_moves").select("product_id,quantity,location_id,location_dest_id").eq("company_id", S.company.id)).data || [];
+    var oh = {}; moves.forEach(function (m) { var q = Number(m.quantity) || 0; if (internal[m.location_dest_id]) oh[m.product_id] = (oh[m.product_id] || 0) + q; if (internal[m.location_id]) oh[m.product_id] = (oh[m.product_id] || 0) - q; });
+    var neg = Object.keys(oh).filter(function (k) { return oh[k] < -0.001; });
+    add("No negative stock on hand", neg.length === 0, neg.length ? neg.length + " product(s) below zero" : "all on-hand >= 0");
+    var allOk = checks.every(function (c) { return c.ok; });
+    var banner = '<div class="ob-banner" style="margin:0 0 12px;background:' + (allOk ? "var(--good-s,#e7f6ec)" : "var(--bad-s,#fdeaea)") + ';color:' + (allOk ? "var(--good,#127a2e)" : "var(--bad,#b3261e)") + '">' + (allOk ? "&#10003; All checks passed - the books are internally consistent." : "&#9888; Some checks need attention - see below.") + '</div>';
+    var table = '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Check</td><td>Result</td><td>Detail</td></tr></thead><tbody>' +
+      checks.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td><span class="badge ' + (c.ok ? "paid" : "unpaid") + '">' + (c.ok ? "PASS" : "FAIL") + '</span></td><td class="muted">' + esc(c.detail) + '</td></tr>'; }).join("") + '</tbody></table></div>';
+    document.getElementById("dh-body").innerHTML = banner + table;
   }
 
   // ============================ COLLECTIONS (overdue AR follow-up) ============================
@@ -9580,6 +9622,25 @@
       onNew: function () { openExpenseModal(); }
     };
   }
+  // Post an approved staff expense into the accounts: Dr an expense account / Cr
+  // Accounts Payable, so it becomes a payable to reimburse. Balanced by post_entry.
+  async function postExpenseEntry(exp) {
+    var amt = Number(exp.amount) || 0; if (!(amt > 0.005)) { toast("The expense amount is zero."); return false; }
+    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var expAcc = (accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0 && /travel|expense|sundry|misc|admin|staff/i.test(a.name); })[0] || accs.filter(function (a) { return a.code === "6500"; })[0] || accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; })[0] || {}).id;
+    var ap = (accs.filter(function (a) { return a.code === "4000"; })[0] || accs.filter(function (a) { return (a.type_code || "").indexOf("liability") === 0; })[0] || {}).id;
+    if (!expAcc || !ap) { toast("Need an expense account and a payable (4000) in the chart of accounts."); return false; }
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    if (!jr) { toast("No MISC journal to post to."); return false; }
+    var narr = "Staff expense: " + (exp.name || "");
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: exp.expense_date || today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "expense", source_id: String(exp.id) }).select("id").single();
+    if (e.error) { toast("Could not post: " + errMsg(e.error)); return false; }
+    var lr = await sb.from("journal_lines").insert([{ entry_id: e.data.id, company_id: S.company.id, account_id: expAcc, label: narr, debit: amt, credit: 0 }, { entry_id: e.data.id, company_id: S.company.id, account_id: ap, label: narr, debit: 0, credit: amt }]);
+    if (lr.error) { toast("Could not post lines: " + errMsg(lr.error)); return false; }
+    var pr = await sb.rpc("post_entry", { p_entry: e.data.id }); if (pr.error) { toast("Post failed: " + errMsg(pr.error)); return false; }
+    await sb.from("hr_expenses").update({ state: "posted", entry_id: e.data.id }).eq("id", exp.id);
+    return true;
+  }
   async function openExpenseModal(exp) {
     exp = exp || {};
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -9590,7 +9651,7 @@
       '<div class="row2"><div><label>Employee</label>' + fhint("__exemp", "Who paid the expense.") + '<select id="ex-emp">' + emps.map(function (x) { return '<option value="' + x.id + '"' + (exp.employee_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Amount (' + esc(S.company.currency_code) + ')</label>' + fhint("__examt", "The total amount spent.") + '<input id="ex-amt" type="number" step="0.01" value="' + (exp.amount || 0) + '"></div></div>' +
       '<div><label>Date</label>' + fhint("__exdate", "When the expense was incurred.") + '<input id="ex-date" type="date" value="' + (exp.expense_date || today()) + '"></div>' +
-      '</div><div class="foot"><button class="btn" id="ex-cancel">Cancel</button>' + (exp.id && exp.state !== "approved" ? '<button class="btn" id="ex-approve">Approve</button>' : "") + '<button class="btn pri" id="ex-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ex-cancel">Cancel</button>' + (exp.id && exp.state !== "approved" && exp.state !== "posted" ? '<button class="btn" id="ex-approve">Approve</button>' : "") + (exp.id && exp.state === "approved" && !exp.entry_id ? '<button class="btn" id="ex-post">Post to accounts</button>' : "") + (exp.state === "posted" ? '<span class="badge paid" style="align-self:center">Posted</span>' : "") + '<button class="btn pri" id="ex-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ex-cancel").onclick = function () { m.remove(); };
     function collect() { return { name: gv("ex-name"), employee_id: document.getElementById("ex-emp").value, amount: parseFloat(gv("ex-amt")) || 0, expense_date: document.getElementById("ex-date").value, currency_code: S.company.currency_code }; }
@@ -9605,6 +9666,9 @@
       var r = await sb.from("hr_expenses").update({ state: "approved" }).eq("id", exp.id);
       if (r.error) { toast("Could not approve: " + errMsg(r.error)); return; }
       m.remove(); toast("Approved"); renderView();
+    };
+    var pb = document.getElementById("ex-post"); if (pb) pb.onclick = async function () {
+      if (await postExpenseEntry(exp)) { m.remove(); toast("Posted to accounts - now a payable to reimburse"); renderView(); }
     };
   }
 
@@ -10425,6 +10489,8 @@
     var cc = S.company.currency_code, posted = cert.state === "certified" || cert.state === "invoiced";
     var boq = (await sb.from("project_boq").select("*").eq("project_id", cert.project_id).order("sequence")).data || [];
     var certLines = id === "new" ? [] : (await sb.from("project_certificate_lines").select("*").eq("certificate_id", id).order("sequence")).data || [];
+    var certTaxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "sale"; });
+    var certDefTax = (cert.tax_id != null) ? cert.tax_id : (((certTaxes.filter(function (t) { return Number(t.amount) > 0; })[0]) || {}).id || "");
     // previous certificate (most recent non-draft for this project, excluding self)
     var prevCerts = (await sb.from("project_certificates").select("*").eq("company_id", S.company.id).eq("project_id", cert.project_id).neq("id", id === "new" ? "00000000-0000-0000-0000-000000000000" : id).in("state", ["certified", "invoiced"]).order("date_to", { ascending: false })).data || [];
     var prevCert = prevCerts[0];
@@ -10449,6 +10515,7 @@
       fld("Date", '<input id="pc-date" type="date" value="' + (cert.date_to || today()) + '"' + (posted ? " disabled" : "") + '>', "Valuation date / period end.") +
       fld("Materials on site", '<input id="pc-mat" type="number" step="0.01" value="' + (cert.materials_on_site || 0) + '"' + (posted ? " disabled" : "") + '>', "Value of materials delivered but not yet built in.") +
       fld("Advance recovery", '<input id="pc-adv" type="number" step="0.01" value="' + (cert.advance_recovery || 0) + '"' + (posted ? " disabled" : "") + '>', "Advance payment recovered on this certificate.") +
+      fld("VAT", '<select id="pc-tax"' + (posted ? " disabled" : "") + '><option value="">No VAT</option>' + certTaxes.map(function (t) { return '<option value="' + t.id + '"' + (certDefTax === t.id ? " selected" : "") + '>' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("") + '</select>', "VAT applied to the amount invoiced on this certificate.") +
       '</div></div>' +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Schedule of values</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Code</td><td>Description</td><td class="num">Contract</td><td class="num">Prev %</td><td class="num">Cum %</td><td class="num">This period</td></tr></thead><tbody>' + (lineRows || '<tr><td colspan="6" class="muted">No schedule of values. Add one on the project (Schedule of Values).</td></tr>') + '</tbody></table></div><div class="o-tot" id="pc-sum" style="margin-top:12px"></div></div></div>' +
       '</div>';
@@ -10487,7 +10554,7 @@
     async function persist() {
       var projId = id === "new" ? (document.getElementById("pc-proj") ? document.getElementById("pc-proj").value : cert.project_id) : cert.project_id;
       var s = computeSummary();
-      var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current };
+      var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current, tax_id: (document.getElementById("pc-tax") ? (document.getElementById("pc-tax").value || null) : (cert.tax_id || null)) };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("project_certificates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("project_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -10507,11 +10574,13 @@
       if (!proj.partner_id) { toast("Set a Customer on the project first."); return; }
       var amt = Number(cert.current_certified) || 0;
       if (!(amt > 0.005)) { toast("This certificate has nothing to invoice - the current amount is zero."); return; }
+      var certTaxId = cert.tax_id || null, certTaxRate = certTaxId ? Number((certTaxes.filter(function (t) { return t.id === certTaxId; })[0] || {}).amount || 0) : 0;
+      var certTax = amt * certTaxRate / 100;
       var num = await nextNumber("out_invoice");
-      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || ""), amount_untaxed: amt, amount_total: amt, amount_residual: amt }).select("id").single();
+      var ins = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: proj.partner_id, number: num, invoice_date: cert.date_to || today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: cert.project_id, ref: "Progress cert " + (cert.number || ""), amount_untaxed: amt, amount_tax: certTax, amount_total: amt + certTax, amount_residual: amt + certTax }).select("id").single();
       if (ins.error) { toast("Invoice failed: " + errMsg(ins.error)); return; }
       var incAcc = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("code", "7000").maybeSingle()).data;
-      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, quantity: 1, unit_price: Number(cert.current_certified) || 0, price_subtotal: Number(cert.current_certified) || 0 });
+      await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, name: "Progress certificate " + (cert.number || "") + " - " + (proj.name || ""), account_id: incAcc ? incAcc.id : null, tax_id: certTaxId, quantity: 1, unit_price: amt, price_subtotal: amt });
       // book the retention held by the client as a receivable (revenue recognised on gross work)
       var prevRet = prevCert ? Number(prevCert.retention_amount || 0) : 0;
       await postRetentionEntry("4110", "7000", Number(cert.retention_amount || 0) - prevRet, "Retention receivable " + (cert.number || "") + " - " + (proj.name || ""), ins.data.id);
