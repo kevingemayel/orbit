@@ -11644,6 +11644,215 @@
     document.getElementById("helpBack").onclick = function () { helpList(""); };
     var st = body.querySelector(".help-starttour"); if (st) st.onclick = function () { startTour(st.dataset.tour); };
   }
+  // ---- workflow maps ---------------------------------------------------------
+  // A tiny node+arrow diagram builder, themed entirely through the app's CSS
+  // variables so it follows every colour theme automatically. HELP_FLOWS holds
+  // one map per manual chapter; renderManual paints it above the prose so people
+  // see how documents flow and connect, not just which fields to fill.
+  var MF_PAL = { d: ['var(--panel2)', 'var(--line)'], accent: ['var(--accent-soft)', 'var(--accent)'], good: ['var(--good-s)', 'var(--good)'], warn: ['var(--warn-s)', 'var(--warn)'], bad: ['var(--bad-s)', 'var(--bad)'], plain: ['var(--panel)', 'var(--line)'] };
+  var MF_EC = { d: 'var(--ink3)', a: 'var(--accent)', g: 'var(--good)', w: 'var(--warn)', b: 'var(--bad)' };
+  function mfPt(n, s) { var x = n.x, y = n.y, w = n.w, h = n.h; switch (s) { case 'r': return [x + w, y + h / 2]; case 'l': return [x, y + h / 2]; case 't': return [x + w / 2, y]; case 'b': return [x + w / 2, y + h]; case 'tr': return [x + w, y]; case 'br': return [x + w, y + h]; case 'tl': return [x, y]; case 'bl': return [x, y + h]; default: return [x + w / 2, y + h / 2]; } }
+  function mfBox(n) {
+    var pal = MF_PAL[n.k || 'd'], cx = n.x + n.w / 2;
+    var s = '<rect x="' + n.x + '" y="' + n.y + '" width="' + n.w + '" height="' + n.h + '" rx="11" fill="' + pal[0] + '" stroke="' + pal[1] + '" stroke-width="1.3"/>';
+    var subs = n.sub ? (Array.isArray(n.sub) ? n.sub : [n.sub]) : [];
+    if (subs.length) {
+      var ty = n.y + n.h / 2 - (subs.length * 6) + 2;
+      s += '<text x="' + cx + '" y="' + ty + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">' + esc(n.t) + '</text>';
+      subs.forEach(function (su, i) { s += '<text x="' + cx + '" y="' + (ty + 15 + i * 13) + '" text-anchor="middle" font-size="10.5" fill="var(--ink2)">' + esc(su) + '</text>'; });
+    } else {
+      s += '<text x="' + cx + '" y="' + (n.y + n.h / 2 + 4.5) + '" text-anchor="middle" font-size="13" font-weight="700" fill="var(--ink)">' + esc(n.t) + '</text>';
+    }
+    return s;
+  }
+  function mfEdge(N, e) {
+    var a = mfPt(N[e.f], e.fs || 'r'), b = mfPt(N[e.t], e.ts || 'l'), c = MF_EC[e.c || 'd'];
+    var dash = e.dash ? ' stroke-dasharray="5 4"' : '';
+    var s = '<line x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '" stroke="' + c + '" stroke-width="1.5"' + dash + ' marker-end="url(#mfar-' + (e.c || 'd') + ')"/>';
+    if (e.l) { var mx = e.lx != null ? e.lx : (a[0] + b[0]) / 2, my = e.ly != null ? e.ly : (a[1] + b[1]) / 2 - 6; s += '<text x="' + mx + '" y="' + my + '" text-anchor="middle" font-size="10.5" font-weight="600" fill="var(--ink2)">' + esc(e.l) + '</text>'; }
+    return s;
+  }
+  function mfSvg(f) {
+    var defs = '<defs>' + ['d', 'a', 'g', 'w', 'b'].map(function (k) { return '<marker id="mfar-' + k + '" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0.5,0.5 L9.5,5 L0.5,9.5 Z" fill="' + MF_EC[k] + '"/></marker>'; }).join('') + '</defs>';
+    var edges = (f.edges || []).map(function (e) { return mfEdge(f.nodes, e); }).join('');
+    var boxes = Object.keys(f.nodes).map(function (id) { return mfBox(f.nodes[id]); }).join('');
+    return '<svg viewBox="0 0 ' + f.w + ' ' + f.h + '" role="img" aria-label="' + esc(f.aria || '') + '">' + defs + edges + (f.extra || '') + boxes + '</svg>';
+  }
+  function mfPanel(f) {
+    return '<section class="man-flow"><div class="mf-lead"><span class="mf-eyebrow">The big picture</span><p>' + f.lead + '</p></div>' +
+      '<figure class="mf-fig"><div class="mf-svg">' + mfSvg(f) + '</div>' + (f.caption ? '<figcaption>' + f.caption + '</figcaption>' : '') + '</figure></section>';
+  }
+  var HELP_FLOWS = {
+    overview: { w: 900, h: 300,
+      lead: "Orbit is one connected system, not separate apps. You <b>win</b> work, set it up as a <b>project</b>, <b>deliver</b> it (buying, stocking, installing, logging hours), then <b>bill</b> it. Every action that touches money quietly posts into the accounting ledger, and the reports simply read that ledger. Enter something once and it flows everywhere.",
+      caption: "Follow the top row left to right: win the work, run it as a project, deliver it, bill it. The dashed lines show the point most people miss - <b>every step posts into the one ledger underneath</b>, which is what keeps the reports always up to date.",
+      aria: "Winning work sets up a project; delivering and billing it all post into the accounting ledger, which the reports read.",
+      nodes: {
+        win: { x: 24, y: 54, w: 170, h: 60, t: "Win the work", sub: ["CRM lead → tender"] },
+        proj: { x: 244, y: 54, w: 150, h: 60, k: 'accent', t: "The project", sub: ["the job hub"] },
+        deliver: { x: 444, y: 54, w: 200, h: 60, t: "Deliver", sub: ["buy · stock · install", "log the hours"] },
+        bill: { x: 694, y: 54, w: 182, h: 60, t: "Bill the customer", sub: ["invoices & certificates"] },
+        ledger: { x: 244, y: 210, w: 400, h: 60, k: 'accent', t: "Accounting - the ledger", sub: ["every posted move, both halves"] },
+        reports: { x: 684, y: 210, w: 192, h: 60, t: "Reports", sub: ["P&L · balance sheet", "aged · VAT"] }
+      },
+      edges: [
+        { f: 'win', t: 'proj', l: "set up" },
+        { f: 'proj', t: 'deliver' },
+        { f: 'deliver', t: 'bill', l: "progress" },
+        { f: 'proj', fs: 'b', t: 'ledger', ts: 't', c: 'd', dash: true },
+        { f: 'deliver', fs: 'b', t: 'ledger', ts: 't', c: 'd', dash: true, l: "everything posts here", lx: 520, ly: 150 },
+        { f: 'bill', fs: 'b', t: 'ledger', ts: 't', c: 'd', dash: true },
+        { f: 'ledger', t: 'reports', l: "read" }
+      ]
+    },
+    sales: { w: 780, h: 220,
+      lead: "Selling runs in one line: a <b>quotation</b> is a price offer, a <b>sales order</b> is that offer accepted, an <b>invoice</b> is the bill, and a <b>payment</b> settles it. If you need to undo a posted invoice you never delete it - you raise a <b>credit note</b> that reverses it.",
+      caption: "An invoice is a <b>draft</b> you can change until you <b>post</b> it, which locks it and records what the customer owes. To cancel or refund a posted invoice, reverse it with a credit note.",
+      aria: "Quotation becomes a sales order, then an invoice, then a payment; a credit note reverses a posted invoice.",
+      nodes: {
+        q: { x: 24, y: 74, w: 150, h: 58, t: "Quotation", sub: "a price offer" },
+        so: { x: 230, y: 74, w: 150, h: 58, t: "Sales order", sub: "offer accepted" },
+        inv: { x: 436, y: 74, w: 150, h: 58, k: 'accent', t: "Invoice", sub: "the bill" },
+        paid: { x: 642, y: 74, w: 114, h: 58, k: 'good', t: "Paid", sub: "money in" },
+        cn: { x: 436, y: 158, w: 150, h: 48, k: 'bad', t: "Credit note", sub: "refund / cancel" }
+      },
+      edges: [
+        { f: 'q', t: 'so', l: "confirm" },
+        { f: 'so', t: 'inv', l: "create invoice" },
+        { f: 'inv', t: 'paid', l: "register payment" },
+        { f: 'inv', fs: 'b', t: 'cn', ts: 't', c: 'b', dash: true, l: "reverse" }
+      ]
+    },
+    purchase: { w: 900, h: 230,
+      lead: "Buying starts from what a job actually needs. A <b>requisition</b> (take-off) lists it, an <b>RFQ</b> compares suppliers, and the winner becomes a <b>purchase order</b>. When goods arrive you <b>receive</b> them into stock; when the supplier's <b>bill</b> comes you record it and pay.",
+      caption: "The purchase order is the hub: it turns into a <b>goods receipt</b> (stock goes up) and into a <b>vendor bill</b> (what you owe). Orbit builds the bill from the order so you never retype it.",
+      aria: "Requisition feeds an RFQ, which is awarded to a purchase order; the order becomes a goods receipt into stock and a vendor bill that is paid.",
+      nodes: {
+        req: { x: 20, y: 96, w: 150, h: 58, t: "Requisition", sub: "what the job needs" },
+        rfq: { x: 206, y: 96, w: 150, h: 58, t: "RFQ", sub: "compare suppliers" },
+        po: { x: 392, y: 96, w: 150, h: 58, k: 'accent', t: "Purchase order", sub: "the order" },
+        recv: { x: 392, y: 20, w: 150, h: 48, k: 'good', t: "Receive → stock", sub: "into inventory" },
+        bill: { x: 600, y: 96, w: 150, h: 58, t: "Vendor bill", sub: "what you owe" },
+        paid: { x: 786, y: 96, w: 96, h: 58, k: 'good', t: "Paid", sub: "money out" }
+      },
+      edges: [
+        { f: 'req', t: 'rfq', l: "feeds" },
+        { f: 'rfq', t: 'po', l: "award" },
+        { f: 'po', fs: 't', t: 'recv', ts: 'b', c: 'g', l: "goods in" },
+        { f: 'po', t: 'bill', l: "create bill" },
+        { f: 'bill', t: 'paid', l: "pay" }
+      ]
+    },
+    accounting: { w: 840, h: 270,
+      lead: "You never do bookkeeping by hand. You work the <b>everyday screens</b> - invoices, bills, payments, payslips - and when you post one, Orbit writes it into the <b>ledger</b> as the two balancing halves (double-entry). The <b>reports</b> are just different views of that same ledger.",
+      caption: "Everything funnels into one ledger and every report reads back out of it. That is why posting a single invoice instantly updates the P&L, the balance sheet, the aged lists and the VAT return together.",
+      aria: "Everyday documents post into the journal and ledger as balanced halves; the reports read from the ledger.",
+      nodes: {
+        inv: { x: 24, y: 44, w: 150, h: 40, t: "Invoice" },
+        bill: { x: 24, y: 96, w: 150, h: 40, t: "Bill" },
+        pay: { x: 24, y: 148, w: 150, h: 40, t: "Payment" },
+        slip: { x: 24, y: 200, w: 150, h: 40, t: "Payslip" },
+        ledger: { x: 322, y: 96, w: 196, h: 92, k: 'accent', t: "Journal & ledger", sub: ["every move written", "as two halves"] },
+        r1: { x: 666, y: 44, w: 150, h: 40, t: "Profit & Loss" },
+        r2: { x: 666, y: 96, w: 150, h: 40, t: "Balance sheet" },
+        r3: { x: 666, y: 148, w: 150, h: 40, t: "Aged lists" },
+        r4: { x: 666, y: 200, w: 150, h: 40, t: "VAT report" }
+      },
+      edges: [
+        { f: 'inv', t: 'ledger', c: 'd' }, { f: 'bill', t: 'ledger', c: 'd' },
+        { f: 'pay', t: 'ledger', c: 'd' }, { f: 'slip', t: 'ledger', c: 'd' },
+        { f: 'ledger', t: 'r1', c: 'a' }, { f: 'ledger', t: 'r2', c: 'a' },
+        { f: 'ledger', t: 'r3', c: 'a' }, { f: 'ledger', t: 'r4', c: 'a' }
+      ],
+      extra: '<text x="248" y="30" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--ink3)" letter-spacing="0.5">POST - BOTH HALVES</text>' +
+        '<text x="592" y="30" text-anchor="middle" font-size="10.5" font-weight="700" fill="var(--ink3)" letter-spacing="0.5">REPORTS READ IT</text>'
+    },
+    projects: { w: 880, h: 320,
+      lead: "A <b>project</b> is the folder every part of one job hangs off. Two things roll up from it. Costs - your <b>budget</b>, the <b>hours</b> logged, and what you <b>order</b> - meet in the <b>job-cost</b> view so you see plan versus reality. Separately, you bill progress with <b>certificates</b> that become invoices.",
+      caption: "The trick is the <b>cost code</b>: put the same label on the budget, the purchase orders and the bills, and Orbit lines them up as <b>budget vs committed vs actual</b> - so overspend shows early, not at the end.",
+      aria: "A project feeds budget, timesheets and purchases into a job-cost view, and feeds certificates into invoices.",
+      nodes: {
+        proj: { x: 24, y: 120, w: 160, h: 76, k: 'accent', t: "The project", sub: ["contract value", "tasks & budget"] },
+        plan: { x: 310, y: 26, w: 170, h: 46, t: "Budget / BOQ", sub: "planned cost" },
+        work: { x: 310, y: 88, w: 170, h: 46, t: "Tasks & time", sub: "labour cost" },
+        buy: { x: 310, y: 150, w: 170, h: 46, t: "POs → bills", sub: "real cost" },
+        jobcost: { x: 562, y: 80, w: 180, h: 66, k: 'warn', t: "Job cost", sub: ["plan vs actual"] },
+        cert: { x: 310, y: 244, w: 170, h: 46, t: "Certificates", sub: "claim progress" },
+        pinv: { x: 562, y: 244, w: 180, h: 46, k: 'good', t: "Invoice", sub: "bill the customer" }
+      },
+      edges: [
+        { f: 'proj', fs: 'tr', t: 'plan', c: 'd' },
+        { f: 'proj', fs: 'r', t: 'work', c: 'd' },
+        { f: 'proj', fs: 'r', t: 'buy', c: 'd' },
+        { f: 'plan', t: 'jobcost', c: 'w' },
+        { f: 'work', t: 'jobcost', c: 'w' },
+        { f: 'buy', t: 'jobcost', c: 'w' },
+        { f: 'proj', fs: 'br', t: 'cert', c: 'd' },
+        { f: 'cert', t: 'pinv', c: 'g', l: "invoice" }
+      ]
+    },
+    inventory: { w: 800, h: 250,
+      lead: "Stock is simply a running count of what you have, where. A <b>product</b> is defined once; then every <b>move</b> changes the count - goods <b>received</b> push it up, <b>deliveries</b> pull it down, and <b>adjustments</b> or <b>transfers</b> correct or relocate it. If valuation is on, each move posts its value to accounting automatically.",
+      caption: "Everything revolves around <b>on-hand</b>: quantity and value, per product and per location. You rarely edit it directly - you record the move, and the count follows.",
+      aria: "Receiving increases on-hand, delivering decreases it, adjustments and transfers correct it, and valuation posts to accounting.",
+      nodes: {
+        recv: { x: 40, y: 100, w: 150, h: 58, k: 'good', t: "Receive", sub: "from supplier" },
+        onhand: { x: 300, y: 92, w: 200, h: 74, k: 'accent', t: "On-hand & value", sub: ["per product", "per location"] },
+        deliver: { x: 610, y: 100, w: 150, h: 58, k: 'warn', t: "Deliver", sub: "to customer" },
+        adj: { x: 300, y: 20, w: 200, h: 46, t: "Adjust / transfer", sub: "count · move location" },
+        acct: { x: 300, y: 190, w: 200, h: 44, t: "Accounting", sub: "valuation posts here" }
+      },
+      edges: [
+        { f: 'recv', t: 'onhand', c: 'g', l: "stock in" },
+        { f: 'onhand', t: 'deliver', c: 'w', l: "stock out" },
+        { f: 'adj', fs: 'b', t: 'onhand', ts: 't', c: 'd' },
+        { f: 'onhand', fs: 'b', t: 'acct', ts: 't', c: 'd', dash: true, l: "value" }
+      ]
+    },
+    hr: { w: 840, h: 250,
+      lead: "Everything in HR hangs off the <b>employee</b> record. Their <b>attendance</b>, <b>leave</b> and <b>salary</b> feed a <b>payslip run</b> you review and confirm - and confirming posts the pay into the accounts. <b>Expenses</b> staff paid out of pocket go straight to accounting to be reimbursed.",
+      caption: "Confirming a payslip run is the moment pay becomes real in the books - so always review each payslip first. Nothing posts until you confirm.",
+      aria: "The employee record feeds attendance, leave, expenses and salary; a payslip run is confirmed and posts to accounting.",
+      nodes: {
+        emp: { x: 24, y: 92, w: 150, h: 64, k: 'accent', t: "Employee", sub: "the record" },
+        att: { x: 250, y: 30, w: 170, h: 42, t: "Attendance & time" },
+        leave: { x: 250, y: 82, w: 170, h: 42, t: "Leave" },
+        sal: { x: 250, y: 134, w: 170, h: 42, t: "Salary structure" },
+        exp: { x: 250, y: 186, w: 170, h: 42, t: "Expenses" },
+        run: { x: 500, y: 52, w: 160, h: 64, k: 'accent', t: "Payslip run", sub: ["review → confirm"] },
+        acct: { x: 720, y: 150, w: 96, h: 58, k: 'good', t: "Accounting", sub: "posts" }
+      },
+      edges: [
+        { f: 'emp', fs: 'tr', t: 'att', c: 'd' },
+        { f: 'emp', t: 'leave', c: 'd' },
+        { f: 'emp', t: 'sal', c: 'd' },
+        { f: 'emp', fs: 'br', t: 'exp', c: 'd' },
+        { f: 'att', t: 'run', c: 'd' },
+        { f: 'leave', t: 'run', c: 'd' },
+        { f: 'sal', t: 'run', c: 'd' },
+        { f: 'run', fs: 'b', t: 'acct', ts: 't', c: 'g', l: "confirm posts pay" },
+        { f: 'exp', t: 'acct', c: 'd', dash: true, l: "reimburse" }
+      ]
+    },
+    site: { w: 780, h: 230,
+      lead: "The site apps are your <b>evidence trail</b>. Install jobs, snags, inspections, incidents and the daily diary are each logged against the <b>project</b> as they happen - so when there is a review, a claim or a dispute, you have a dated record instead of memory.",
+      caption: "Everything you record on site attaches to the job. Logged at the time (contemporaneously), it becomes the record that protects you later.",
+      aria: "Install jobs, snags, inspections, incidents and the site diary all attach to the project record as an evidence trail.",
+      nodes: {
+        ij: { x: 40, y: 24, w: 180, h: 42, t: "Install jobs" },
+        snag: { x: 40, y: 76, w: 180, h: 42, k: 'warn', t: "Snags" },
+        insp: { x: 40, y: 128, w: 180, h: 42, t: "Inspections" },
+        inc: { x: 40, y: 180, w: 180, h: 42, k: 'bad', t: "Incidents & diary" },
+        proj: { x: 440, y: 78, w: 200, h: 76, k: 'accent', t: "Project record", sub: ["the evidence trail", "for reviews & claims"] }
+      },
+      edges: [
+        { f: 'ij', t: 'proj', c: 'd' },
+        { f: 'snag', t: 'proj', c: 'w' },
+        { f: 'insp', t: 'proj', c: 'd' },
+        { f: 'inc', t: 'proj', c: 'b' }
+      ]
+    }
+  };
   // The full user manual, shown as a proper app (Help) from the main launcher.
   function renderManual(key) {
     key = key || "overview";
@@ -11654,9 +11863,10 @@
     var body = document.getElementById("o-body");
     var arts = sec.articles.map(function (a, i) { return '<article class="man-art" id="man-' + i + '"><h3>' + a.t + '</h3>' + a.h + '</article>'; }).join("");
     var toc = sec.articles.length > 1 ? '<nav class="man-toc">' + sec.articles.map(function (a, i) { return '<a data-i="' + i + '">' + a.t + '</a>'; }).join("") + '</nav>' : "";
+    var flow = HELP_FLOWS[key]; var flowHtml = flow ? mfPanel(flow) : "";
     body.innerHTML = '<div class="man-wrap">' +
       '<div class="man-search"><input id="man-q" type="text" placeholder="Search the whole manual..." autocomplete="off"><div class="man-results" id="man-results"></div></div>' +
-      '<h1 class="man-h">' + esc(sec.title) + '</h1>' + toc +
+      '<h1 class="man-h">' + esc(sec.title) + '</h1>' + flowHtml + toc +
       '<div class="man-body">' + arts + '</div></div>';
     body.querySelectorAll(".man-toc a").forEach(function (a) { a.onclick = function () { var t = document.getElementById("man-" + a.dataset.i); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }; });
     var q = document.getElementById("man-q"), res = document.getElementById("man-results");

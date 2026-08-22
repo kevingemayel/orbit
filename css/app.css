@@ -226,6 +226,17 @@ button{font-family:inherit}
 .man-art ol,.man-art ul{padding-left:22px}
 .man-art li{margin:4px 0}
 .man-art b{color:var(--ink)}
+/* workflow maps (visual "how this department flows", shown atop a manual chapter) */
+.man-flow{margin:0 0 26px}
+.mf-lead{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+.mf-eyebrow{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+.mf-lead p{font-size:14.5px;line-height:1.55;color:var(--ink2);margin:0;max-width:64ch}
+.mf-lead p b{color:var(--ink);font-weight:600}
+.mf-fig{margin:0;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:0 1px 2px rgba(20,22,28,.04),0 8px 22px rgba(20,22,28,.05)}
+.mf-svg{overflow-x:auto}
+.mf-svg svg{display:block;width:100%;min-width:600px;height:auto}
+.mf-fig figcaption{margin-top:10px;font-size:12.5px;line-height:1.5;color:var(--ink3);max-width:72ch}
+.mf-fig figcaption b{color:var(--ink2);font-weight:600}
 /* material specification (product form) */
 .o-matspec{margin-top:14px;border:1px solid var(--line);border-radius:12px;padding:12px 14px 16px;background:var(--panel2)}
 .ms-formrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:10px 0 12px}
