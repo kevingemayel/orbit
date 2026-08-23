@@ -276,7 +276,7 @@
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
-        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Products", "products"], ["Exchange Rates", "rates"], ["Follow-up Levels", "fu.levels"]] }
+        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Products", "products"], ["Exchange Rates", "rates"], ["Follow-up Levels", "fu.levels"]] }
       ]
     },
     sales: {
@@ -332,7 +332,8 @@
         { label: "Programme", action: "proj.schedule" },
         { label: "Timesheets", action: "ts.list" },
         { label: "Billing", items: [["Progress Certificates", "pc.list"], ["Variations", "var.list"], ["WIP Schedule", "proj.wip"]] },
-        { label: "Costs", items: [["Job Cost", "proj.jobcost"], ["Cost Codes", "cost.codes"], ["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] }
+        { label: "Costs", items: [["Job Cost", "proj.jobcost"], ["Cost Codes", "cost.codes"], ["Subcontracts", "sc.list"], ["Project P&L", "proj.pnl"], ["Retention", "proj.retention"]] },
+        { label: "Configuration", items: [["Task Labels", "proj.labels"], ["Cost Codes", "cost.codes"]] }
       ]
     },
     manufacturing: {
@@ -462,7 +463,7 @@
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
-    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
@@ -1581,6 +1582,8 @@
       case "inv.issues": return renderList(cfgMaterialIssues());
       case "inv.cats": return renderList(cfgProductCategories());
       case "inv.uoms": return renderList(cfgUoms());
+      case "acc.payterms": return renderPaymentTerms();
+      case "proj.labels": return renderTaskLabels();
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
@@ -3087,6 +3090,7 @@
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromPartners();
     var pricelists = (await sb.from("pricelists").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var pterms = await loadPaymentTerms();
     var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
     var industries = (await sb.from("industries").select("name").eq("org_id", S.company.org_id).order("name")).data || [];
     var caps = (await sb.from("capabilities").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
@@ -3122,7 +3126,7 @@
       fld("Country", '<select id="p-country">' + countryOpts() + '</select>') +
       '</div></div>' +
       '<div class="o-groups"><div>' +
-      fld("Payment terms (days)", '<select id="p-payterms"><option value="">(none)</option><option value="0">Due on receipt</option><option value="15">15 days</option><option value="30">30 days</option><option value="45">45 days</option><option value="60">60 days</option><option value="90">90 days</option></select>', "Default number of days to pay. Pre-fills the due date on their invoices.") +
+      fld("Payment terms", '<select id="p-payterms"><option value="">(none)</option>' + pterms.map(function (t) { return '<option value="' + t.days + '"' + (String(p.payment_days) === String(t.days) ? " selected" : "") + '>' + esc(t.label || (t.days + " days")) + '</option>'; }).join("") + ((p.payment_days != null && !pterms.some(function (t) { return String(t.days) === String(p.payment_days); })) ? '<option value="' + p.payment_days + '" selected>' + esc(p.payment_days + " days") + '</option>' : "") + '</select>', "How long this customer gets to pay - pre-fills the due date on invoices. Manage the options in Accounting &rsaquo; Configuration &rsaquo; Payment Terms.") +
       fld("Credit limit", '<input id="p-credit" type="number" step="0.01" value="' + (p.credit_limit != null ? p.credit_limit : "") + '" placeholder="0 = no limit">', "A soft ceiling on how much they can owe. Leave blank for no limit.") +
       fld("Industry", '<select id="p-industry"><option value="">(none)</option>' + indNames.map(function (i) { return '<option' + (p.industry === i ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") + '<option value="__add">+ Add a new industry...</option></select>', "The sector this contact works in, used to group and filter contacts. Pick from the list, or add a new one.") +
       fld("Specialty", '<input id="p-specialty" value="' + esc(p.specialty || "") + '" placeholder="e.g. Structural glazing">', "A short note on what they are especially known for, under their industry.") +
@@ -7234,6 +7238,8 @@
     // attachments on individual comments (entity "taskcmt")
     var cmtMedia = {}, cmtStage = [];
     if (comments.length) { var _cm = (await sb.from("media").select("*").eq("entity", "taskcmt").in("entity_id", comments.map(function (c) { return c.id; }))).data || []; _cm.forEach(function (m) { (cmtMedia[m.entity_id] = cmtMedia[m.entity_id] || []).push(m); }); }
+    var taskLabels = await loadTaskLabels();
+    var selLabels = (t.labels || []).slice();
 
     var bg = document.createElement("div"); bg.className = "ag-panel-bg";
     function close() { bg.remove(); document.removeEventListener("keydown", onKey); if (onClose) onClose(); else renderBoard(); }
@@ -7270,10 +7276,17 @@
       '<div class="ag-sf"><label>Sprint</label><select id="tp-sprint">' + sprintOpts + '</select></div>' +
       '<div class="ag-sf-2"><div class="ag-sf"><label>Start</label><input id="tp-start" type="date" value="' + (t.date_start || "") + '"></div><div class="ag-sf"><label>Due</label><input id="tp-due" type="date" value="' + (t.date_deadline || "") + '"></div></div>' +
       '<div class="ag-sf"><label>Blocked by</label><select id="tp-block">' + blockOpts + '</select></div>' +
-      '<div class="ag-sf"><label>Labels (comma separated)</label><input id="tp-labels" value="' + esc((t.labels || []).join(", ")) + '" placeholder="e.g. fabrication, urgent"></div>' +
+      '<div class="ag-sf"><label>Labels</label><div id="tp-labels" class="ag-labels"></div></div>' +
       '</div></div></div>';
     document.body.appendChild(bg);
     wireAttach("task");
+    function paintLabels() {
+      var host = document.getElementById("tp-labels"); if (!host) return;
+      host.innerHTML = taskLabels.map(function (l) { var on = selLabels.indexOf(l.name) >= 0; var col = l.color || "#64748b"; return '<button type="button" class="ag-lbl' + (on ? " on" : "") + '" data-lbl="' + esc(l.name) + '"' + (on ? ' style="background:' + col + '22;border-color:' + col + ';color:' + col + '"' : '') + '>' + esc(l.name) + '</button>'; }).join("") + '<button type="button" class="ag-lbl ag-lbl-add" id="tp-lbl-add">+ Add</button>';
+      host.querySelectorAll(".ag-lbl[data-lbl]").forEach(function (b) { b.onclick = function () { var n = b.dataset.lbl, i = selLabels.indexOf(n); if (i >= 0) selLabels.splice(i, 1); else selLabels.push(n); paintLabels(); }; });
+      var add = document.getElementById("tp-lbl-add"); if (add) add.onclick = async function () { var nm = (window.prompt("New label name:") || "").trim(); if (!nm) return; if (!taskLabels.some(function (x) { return x.name === nm; })) { var ins = await sb.from("task_labels").insert({ company_id: S.company.id, name: nm, color: LABEL_COLORS[taskLabels.length % LABEL_COLORS.length], sort: (taskLabels.length + 1) * 10 }).select("id,name,color").single(); if (ins.error) { toast(errMsg(ins.error)); return; } taskLabels.push(ins.data); } if (selLabels.indexOf(nm) < 0) selLabels.push(nm); paintLabels(); };
+    }
+    paintLabels();
     (function () {
       var asel = document.getElementById("tp-assignee"); if (!asel) return;
       var prevA = t.assignee_id || "";
@@ -7330,7 +7343,7 @@
     document.querySelector(".ag-tp-save").onclick = async function () {
       var name = gv("tp-name"); if (!name) { toast("Task name required"); return; }
       var newStage = document.getElementById("tp-stage").value, newAssignee = document.getElementById("tp-assignee").value || null, newPrio = document.getElementById("tp-prio").value;
-      var row = { name: name, description: document.getElementById("tp-desc").value, board_stage: newStage, assignee_id: newAssignee, priority: newPrio, points: parseFloat(gv("tp-points")) || 0, sprint_id: document.getElementById("tp-sprint").value || null, date_start: gv("tp-start") || null, date_deadline: gv("tp-due") || null, blocked_by: document.getElementById("tp-block").value || null, labels: gv("tp-labels").split(",").map(function (s) { return s.trim(); }).filter(Boolean), is_agile: true, completed_at: newStage === "done" ? (t.completed_at || new Date().toISOString()) : null };
+      var row = { name: name, description: document.getElementById("tp-desc").value, board_stage: newStage, assignee_id: newAssignee, priority: newPrio, points: parseFloat(gv("tp-points")) || 0, sprint_id: document.getElementById("tp-sprint").value || null, date_start: gv("tp-start") || null, date_deadline: gv("tp-due") || null, blocked_by: document.getElementById("tp-block").value || null, labels: selLabels, is_agile: true, completed_at: newStage === "done" ? (t.completed_at || new Date().toISOString()) : null };
       if (isNew) {
         row.company_id = S.company.id; row.project_id = projectId;
         var ins = await sb.from("project_tasks").insert(row).select("id").single();
@@ -8099,6 +8112,7 @@
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var rfqTaxes = ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data) || [];
     var lastPx = await loadLastPrices();
+    var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var kc = 1, L = [], V = [], B = {};
     if (!isNew) {
       var lrows = (await sb.from("rfq_lines").select("*").eq("rfq_id", id).order("sequence")).data || [];
@@ -8181,7 +8195,7 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td><input class="rl-unit" value="' + esc(l.unit || "") + '" style="width:56px" placeholder="unit"></td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
       var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
@@ -8224,7 +8238,8 @@
         }
         var prod0 = products.filter(function (x) { return x.id === lrec.product_id; })[0];
         applyRfqForm(prodMat(prod0), lrec.width, lrec.height);
-        wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) uu.value = pr.uom; applyRfqForm(prodMat(pr), null, null); });
+        wireUnitAdd(tr.querySelector(".rl-unit"), uoms);
+        wireProdCombo(tr, products, function (pr) { tr.querySelector(".rl-desc").value = pr.name; var uu = tr.querySelector(".rl-unit"); if (pr.uom && !uu.value) setUnitSelect(uu, pr.uom); applyRfqForm(prodMat(pr), null, null); });
       });
       document.querySelectorAll(".rl-addsize").forEach(function (b) { b.onclick = function () { syncFromDom(); var tr = b.closest("tr"); var k = Number(tr.dataset.k); var src = L.filter(function (x) { return x.k === k; })[0] || {}; var idx = L.indexOf(src); L.splice(idx + 1, 0, { k: kc++, product_id: src.product_id || null, description: src.description || "", size: "", width: null, height: null, unit: src.unit || "", quantity: 1, basis: src.basis, destination: src.destination }); draw(); }; });
       var addV = document.getElementById("rfq-addv"); if (addV) addV.onchange = function () { if (!this.value) return; syncFromDom(); V.push({ partner_id: this.value }); draw(); };
@@ -8266,6 +8281,54 @@
       resetSeqCache();
       if (r.error) { toast("Save failed: " + errMsg(r.error)); return; }
       toast("Numbering saved");
+    };
+  }
+  // ---- Payment terms: an editable list of options offered on a customer -------
+  var PAYTERM_DEFAULTS = [{ days: 0, label: "Due on receipt" }, { days: 15, label: "15 days" }, { days: 30, label: "30 days" }, { days: 45, label: "45 days" }, { days: 60, label: "60 days" }, { days: 90, label: "90 days" }];
+  async function loadPaymentTerms() { var rows = (await sb.from("payment_terms").select("id,days,label,sort").eq("company_id", S.company.id).order("sort").order("days")).data || []; return rows.length ? rows : PAYTERM_DEFAULTS.map(function (d, i) { return { days: d.days, label: d.label, sort: (i + 1) * 10 }; }); }
+  async function renderPaymentTerms() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Payment Terms") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var rows = await loadPaymentTerms();
+    function rowHtml(r) { return '<tr><td><input class="ptt-days num" type="number" step="1" value="' + (r.days != null ? r.days : 0) + '" style="width:90px"></td><td><input class="ptt-label" value="' + esc(r.label || "") + '" placeholder="e.g. 30 days"></td><td><button class="del" type="button" title="Remove">&times;</button></td></tr>'; }
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Payment Terms</h3><button class="pri" id="ptt-save" style="margin-left:auto">Save</button></div>' +
+      '<div class="sub" style="margin:6px 0 12px">The payment-term options offered when you set up a customer. <b>Days</b> is how long they get to pay - it pre-fills the due date on their invoices. Add special terms for particular contracts here.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:110px">Days</th><th>Label</th><th style="width:40px"></th></tr></thead><tbody id="ptt-body">' + rows.map(rowHtml).join("") + '</tbody></table></div>' +
+      '<button class="o-addln" id="ptt-add">+ Add a term</button></div></div>';
+    var body = document.getElementById("ptt-body");
+    function wireDel() { body.querySelectorAll(".del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("ptt-add").onclick = function () { body.insertAdjacentHTML("beforeend", rowHtml({ days: 30, label: "" })); wireDel(); };
+    document.getElementById("ptt-save").onclick = async function () {
+      var ups = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr, i) { var d = parseInt(tr.querySelector(".ptt-days").value, 10) || 0; return { company_id: S.company.id, days: d, label: (tr.querySelector(".ptt-label").value || "").trim() || (d + " days"), sort: (i + 1) * 10 }; });
+      await sb.from("payment_terms").delete().eq("company_id", S.company.id);
+      if (ups.length) { var r = await sb.from("payment_terms").insert(ups); if (r.error) { toast("Save failed: " + errMsg(r.error)); return; } }
+      toast("Payment terms saved");
+    };
+  }
+  // ---- Task labels: a predefined set of labels for execution tasks ------------
+  async function loadTaskLabels() { return (await sb.from("task_labels").select("id,name,color,sort").eq("company_id", S.company.id).order("sort").order("name")).data || []; }
+  var LABEL_COLORS = ["#2563eb", "#0ea66f", "#c58217", "#e11d48", "#7c3aed", "#0891b2", "#64748b"];
+  async function renderTaskLabels() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Task Labels") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var rows = await loadTaskLabels();
+    function rowHtml(r) { var col = r.color || LABEL_COLORS[0]; return '<tr><td><input class="tlx-name" value="' + esc(r.name || "") + '" placeholder="e.g. Fabrication"></td><td><input class="tlx-color" type="color" value="' + esc(col) + '" style="width:52px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)"></td><td><button class="del" type="button" title="Remove">&times;</button></td></tr>'; }
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Task Labels</h3><button class="pri" id="tlx-save" style="margin-left:auto">Save</button></div>' +
+      '<div class="sub" style="margin:6px 0 12px">The labels people can put on an execution task (Projects &rsaquo; Execution). Define them here so everyone uses the same set.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Label</th><th style="width:70px">Colour</th><th style="width:40px"></th></tr></thead><tbody id="tlx-body">' + (rows.length ? rows.map(rowHtml).join("") : rowHtml({})) + '</tbody></table></div>' +
+      '<button class="o-addln" id="tlx-add">+ Add a label</button></div></div>';
+    var body = document.getElementById("tlx-body");
+    function wireDel() { body.querySelectorAll(".del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("tlx-add").onclick = function () { body.insertAdjacentHTML("beforeend", rowHtml({ color: LABEL_COLORS[body.querySelectorAll("tr").length % LABEL_COLORS.length] })); wireDel(); };
+    document.getElementById("tlx-save").onclick = async function () {
+      var ups = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr, i) { return { company_id: S.company.id, name: (tr.querySelector(".tlx-name").value || "").trim(), color: tr.querySelector(".tlx-color").value, sort: (i + 1) * 10 }; }).filter(function (x) { return x.name; });
+      await sb.from("task_labels").delete().eq("company_id", S.company.id);
+      if (ups.length) { var r = await sb.from("task_labels").insert(ups); if (r.error) { toast("Save failed: " + errMsg(r.error)); return; } }
+      toast("Labels saved");
     };
   }
   // ORB-06b: admin screen to define custom fields per master entity.
@@ -9080,6 +9143,7 @@
       columns: [
         { label: "Unit", get: function (u) { return '<b>' + esc(u.name) + '</b>'; } },
         { label: "Type", get: function (u) { return esc(u.category || "unit"); } },
+        { label: "Converts", get: function (u) { return (u.factor && u.base_uom) ? '<span class="muted">1 = ' + esc(String(u.factor)) + ' ' + esc(u.base_uom) + '</span>' : '<span class="muted">-</span>'; } },
         { label: "Status", get: function (u) { return u.is_active === false ? '<span class="badge">Archived</span>' : '<span class="badge paid">Active</span>'; } }
       ],
       groupBy: [{ label: "Type", get: function (u) { return u.category || "unit"; } }],
@@ -9092,17 +9156,52 @@
     m.innerHTML = '<div class="sheet"><h3>' + (u.id ? "Edit unit" : "New unit") + '</h3><div class="form">' +
       '<div class="row2"><div><label>Name</label>' + fhint("__un", "Short symbol, e.g. m2, kg, tube, box, sheet.") + '<input id="u-name" value="' + esc(u.name || "") + '"></div>' +
       '<div><label>Type</label>' + fhint("__uc", "What it measures. Groups similar units together.") + '<select id="u-cat">' + UOM_CATS.map(function (c) { return '<option value="' + c + '"' + ((u.category || "unit") === c ? " selected" : "") + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Converts to (base unit)</label>' + fhint("__ub", "Link this unit to a base unit so quantities can convert. E.g. base m, this km.") + '<input id="u-base" value="' + esc(u.base_uom || "") + '" placeholder="e.g. m"></div><div><label>1 ' + esc(u.name || "unit") + ' = ? base</label>' + fhint("__uf", "How many base units are in one of this unit. E.g. 1 km = 1000 m.") + '<input id="u-factor" type="number" step="any" value="' + (u.factor != null ? u.factor : "") + '" placeholder="factor"></div></div>' +
       '<div><label>Status</label>' + fhint("__us", "Archived units stay on history but are hidden from new pickers.") + '<select id="u-active"><option value="1"' + (u.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (u.is_active === false ? " selected" : "") + '>Archived</option></select></div>' +
       '</div><div class="foot"><button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("u-cancel").onclick = function () { m.remove(); };
     document.getElementById("u-save").onclick = async function () {
       var name = gv("u-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, category: document.getElementById("u-cat").value, is_active: document.getElementById("u-active").value === "1" };
+      var row = { name: name, category: document.getElementById("u-cat").value, is_active: document.getElementById("u-active").value === "1", base_uom: gv("u-base") || null, factor: parseFloat(gv("u-factor")) || null };
       var r; if (u.id) r = await sb.from("uoms").update(row).eq("id", u.id); else { row.company_id = S.company.id; r = await sb.from("uoms").insert(row); }
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     };
+  }
+  // ---- reusable unit picker: a dropdown from the company's units with a
+  // "+ Add a unit..." row that quick-creates one (name, type, optional conversion).
+  function unitSelectHTML(cls, current, uoms) {
+    var names = uoms.map(function (u) { return u.name; });
+    var hasCur = current && names.indexOf(current) < 0;
+    return '<select class="' + cls + '"><option value="">-</option>' + (hasCur ? '<option selected>' + esc(current) + '</option>' : "") + uoms.map(function (u) { return '<option' + (current === u.name ? " selected" : "") + '>' + esc(u.name) + '</option>'; }).join("") + '<option value="__addu">+ Add a unit...</option></select>';
+  }
+  async function openQuickUom(onDone) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New unit</h3><div class="form">' +
+      '<div class="row2"><div><label>Name / symbol</label><input id="qu-name" placeholder="e.g. m2, kg, tube, box"></div><div><label>Type</label><select id="qu-cat">' + UOM_CATS.map(function (c) { return '<option value="' + c + '">' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Converts to (base, optional)</label><input id="qu-base" placeholder="e.g. m"></div><div><label>= how many base</label><input id="qu-factor" type="number" step="any" placeholder="factor"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="qu-cancel">Cancel</button><button class="btn pri" id="qu-save" style="background:var(--accent);border-color:var(--accent)">Create</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qu-cancel").onclick = function () { m.remove(); if (onDone) onDone(null); };
+    var qn = document.getElementById("qu-name"); if (qn) qn.focus();
+    document.getElementById("qu-save").onclick = async function () {
+      var name = gv("qu-name"); if (!name) { toast("Name required"); return; }
+      var ins = await sb.from("uoms").insert({ company_id: S.company.id, name: name, category: document.getElementById("qu-cat").value, is_active: true, base_uom: gv("qu-base") || null, factor: parseFloat(gv("qu-factor")) || null }).select("id,name").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+      m.remove(); toast("Unit created"); if (onDone) onDone(ins.data);
+    };
+  }
+  function setUnitSelect(sel, val) { if (!sel || !val) return; if (!Array.prototype.some.call(sel.options, function (o) { return o.text === val; })) { var o = document.createElement("option"); o.text = val; var add = sel.querySelector('option[value="__addu"]'); if (add) sel.insertBefore(o, add); else sel.appendChild(o); } sel.value = val; }
+  function wireUnitAdd(sel, uoms) {
+    if (!sel) return;
+    var prev = sel.value;
+    sel.addEventListener("change", function () {
+      if (sel.value === "__addu") {
+        sel.value = prev;
+        openQuickUom(function (u) { if (u) { var o = document.createElement("option"); o.text = u.name; sel.insertBefore(o, sel.querySelector('option[value="__addu"]')); sel.value = u.name; prev = u.name; if (uoms) uoms.push({ name: u.name }); } });
+      } else { prev = sel.value; }
+    });
   }
   function cfgWarehouses() {
     return {
@@ -11195,6 +11294,7 @@
     var products = (await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var lastPx = await loadLastPrices();
     var teamUsers = await companyUsers();
+    var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var ordered = req.state === "ordered";
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Take-off");
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -11245,7 +11345,7 @@
         '<td><select class="mr-cat">' + catOptsHTML(l.category) + '</select></td>' +
         '<td class="mr-meas-cell"></td>' +
         '<td><input class="mr-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '"></td>' +
-        '<td><input class="mr-uom" value="' + esc(l.uom || "") + '" style="width:56px" placeholder="unit"></td>' +
+        '<td>' + unitSelectHTML("mr-uom", l.uom, uoms) + '</td>' +
         '<td><select class="mr-dest">' + destOptsHTML(l.destination) + '</select></td>' +
         '<td class="num muted mr-last"></td>' +
         '<td class="l-acts"><button class="mr-addsize" type="button" title="Add another size of this item">+size</button><button class="del" type="button" title="Remove line">&times;</button></td>';
@@ -11253,9 +11353,9 @@
       function updMeas(inf) { var a = tr.querySelector(".l-area"); if (!a) return; var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0; var c = lineCalc(inf, w, h, 0, inf.basis); a.textContent = c.measure ? ("= " + c.measure) : ""; }
       function applyMeas(inf, d1, d2) { tr.querySelector(".mr-meas-cell").innerHTML = lineMeasureHTML(inf, d1, d2); tr.querySelectorAll(".l-d1,.l-d2").forEach(function (el) { el.addEventListener("input", function () { updMeas(inf); updateSummary(); }); }); updMeas(inf); }
       function setLast(pr) { var lp = pr ? lastPx[pr.id] : null; tr.querySelector(".mr-last").textContent = lp ? money(lp.unit_price) : "-"; }
-      applyMeas(info, l.width, l.height); setLast(sel);
+      applyMeas(info, l.width, l.height); setLast(sel); wireUnitAdd(tr.querySelector(".mr-uom"), uoms);
       if (!l.category && sel) tr.querySelector(".mr-cat").value = catFromProduct(sel, info);
-      wireProdCombo(tr, products, function (pr) { tr.querySelector(".mr-name").value = pr.name; var pinfo = prodMat(pr); applyMeas(pinfo, null, null); tr.querySelector(".mr-cat").value = catFromProduct(pr, pinfo); var uu = tr.querySelector(".mr-uom"); if (pr.uom && !uu.value) uu.value = pr.uom; setLast(pr); updateSummary(); });
+      wireProdCombo(tr, products, function (pr) { tr.querySelector(".mr-name").value = pr.name; var pinfo = prodMat(pr); applyMeas(pinfo, null, null); tr.querySelector(".mr-cat").value = catFromProduct(pr, pinfo); var uu = tr.querySelector(".mr-uom"); if (pr.uom && !uu.value) setUnitSelect(uu, pr.uom); setLast(pr); updateSummary(); });
       var asz = tr.querySelector(".mr-addsize"); if (asz) asz.onclick = function () { var hid = tr.querySelector(".mr-prod"); addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".mr-name").value, category: tr.querySelector(".mr-cat").value, uom: tr.querySelector(".mr-uom").value, destination: tr.querySelector(".mr-dest").value }); updateSummary(); };
       tr.querySelector(".del").onclick = function () { tr.remove(); updateSummary(); };
       tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("change", updateSummary); });
