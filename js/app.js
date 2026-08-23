@@ -3116,9 +3116,8 @@
       '<div class="o-groups"><div>' +
       fld("Payment terms (days)", '<select id="p-payterms"><option value="">(none)</option><option value="0">Due on receipt</option><option value="15">15 days</option><option value="30">30 days</option><option value="45">45 days</option><option value="60">60 days</option><option value="90">90 days</option></select>', "Default number of days to pay. Pre-fills the due date on their invoices.") +
       fld("Credit limit", '<input id="p-credit" type="number" step="0.01" value="' + (p.credit_limit != null ? p.credit_limit : "") + '" placeholder="0 = no limit">', "A soft ceiling on how much they can owe. Leave blank for no limit.") +
-      fld("Industry", '<input id="p-industry" list="p-ind-dl" value="' + esc(p.industry || "") + '" placeholder="Pick or type"><datalist id="p-ind-dl">' + indNames.map(function (i) { return '<option>' + esc(i) + '</option>'; }).join("") + '</datalist>', "The sector this contact works in, used to group and filter contacts. Example: Construction, Property developer.") +
+      fld("Industry", '<select id="p-industry"><option value="">(none)</option>' + indNames.map(function (i) { return '<option' + (p.industry === i ? " selected" : "") + '>' + esc(i) + '</option>'; }).join("") + '<option value="__add">+ Add a new industry...</option></select>', "The sector this contact works in, used to group and filter contacts. Pick from the list, or add a new one.") +
       fld("Specialty", '<input id="p-specialty" value="' + esc(p.specialty || "") + '" placeholder="e.g. Structural glazing">', "A short note on what they are especially known for, under their industry.") +
-      fld("Tags", '<input id="p-tags" value="' + esc(p.tags || "") + '" placeholder="comma-separated">', "Free tags, comma-separated.") +
       '</div><div>' +
       fld("Pricelist", '<select id="p-pl"><option value="">(default prices)</option>' + pricelists.map(function (x) { return '<option value="' + x.id + '"' + (p.pricelist_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>', "Pricelist applied to this customer's sales-order lines.") +
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
@@ -3150,13 +3149,25 @@
       document.getElementById("cap-new").onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); addCap(); } };
     }
     document.getElementById("p-discard").onclick = function () { go(backAction); };
+    (function () {
+      var isel = document.getElementById("p-industry");
+      if (!isel) return;
+      isel.addEventListener("change", function () {
+        if (isel.value !== "__add") return;
+        var name = (window.prompt("New industry name:") || "").trim();
+        if (!name) { isel.value = p.industry || ""; return; }
+        var exists = Array.prototype.some.call(isel.options, function (o) { return o.text === name; });
+        if (!exists) { var o = document.createElement("option"); o.text = name; isel.insertBefore(o, isel.querySelector('option[value="__add"]')); }
+        isel.value = name;
+      });
+    })();
     document.getElementById("p-save").onclick = async function () {
       var name = document.getElementById("p-name").value.trim();
       if (!name) { toast("Name is required"); return; }
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
       var _pn = collectPhone("p-phone"), _pm = collectPhone("p-mobile");
-      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: gv("p-tags"), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: (p.tags || null), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       if (showCaps) {
         var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; });
         row.capabilities = selCaps.length ? selCaps : null;
@@ -3594,6 +3605,40 @@
     var cc = gv(pfx + "-cc"), area = gv(pfx + "-area"), num = gv(pfx + "-num");
     var combined = [cc, area, num].filter(Boolean).join(" ").trim();
     return { cc: cc || null, area: area || null, num: num || null, combined: combined || null };
+  }
+  // Quick-add a customer without leaving the form you are on: a small modal that
+  // creates the customer and hands it back so the dropdown can select it in place
+  // (keeps your half-filled form intact - better than a separate tab).
+  async function openQuickCustomer(onDone) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>New customer</h3><div class="form">' +
+      '<div><label>Name</label><input id="qc-name" placeholder="Customer name"></div>' +
+      '<div><label>Email</label><input id="qc-email" placeholder="name@company.com"></div>' +
+      '<div><label>Phone</label>' + phoneFieldHTML("qc-ph", {}) + '</div>' +
+      '</div><div class="foot"><button class="btn" id="qc-cancel">Cancel</button><button class="btn pri" id="qc-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; select</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qc-cancel").onclick = function () { m.remove(); if (onDone) onDone(null); };
+    var qn = document.getElementById("qc-name"); if (qn) qn.focus();
+    document.getElementById("qc-save").onclick = async function () {
+      var name = gv("qc-name"); if (!name) { toast("Name is required"); return; }
+      var ph = collectPhone("qc-ph");
+      var ins = await sb.from("partners").insert({ org_id: S.company.org_id, company_id: S.company.id, name: name, is_company: true, is_customer: true, email: gv("qc-email") || null, phone: ph.combined, phone_cc: ph.cc, phone_area: ph.area, phone_num: ph.num }).select("id,name").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+      m.remove(); toast("Customer created"); if (onDone) onDone(ins.data);
+    };
+  }
+  // Give a customer <select> a "+ Add a new customer..." row that opens the
+  // quick-add modal and selects the newly created customer. Reusable on any form.
+  function custPickerAdd(selectId) {
+    var sel = document.getElementById(selectId); if (!sel) return;
+    if (!sel.querySelector('option[value="__add"]')) { var o = document.createElement("option"); o.value = "__add"; o.textContent = "+ Add a new customer..."; sel.appendChild(o); }
+    var prev = sel.value;
+    sel.addEventListener("change", function () {
+      if (sel.value === "__add") {
+        sel.value = prev;
+        openQuickCustomer(function (c) { if (c) { var o = document.createElement("option"); o.value = c.id; o.textContent = c.name; sel.insertBefore(o, sel.querySelector('option[value="__add"]')); sel.value = c.id; prev = c.id; sel.dispatchEvent(new Event("change")); } });
+      } else { prev = sel.value; }
+    });
   }
 
   // ============================ TOOLS & EQUIPMENT ==============================
@@ -9196,6 +9241,7 @@
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
     wireAttach("project");
+    custPickerAdd("pf-cust");
     var pft = document.getElementById("pf-fromtender"); if (pft) pft.onclick = function () { renderTenderForm(srcTender.id); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
@@ -9405,7 +9451,7 @@
       fld("Customer", '<select id="ld-cust">' + custOpts + '</select>', "Link to an existing customer, or fill the contact fields and convert later.") +
       fld("Contact name", '<input id="ld-contact" value="' + esc(l.contact_name || "") + '">', "The person's name, if not yet a saved customer.") +
       fld("Email", '<input id="ld-email" value="' + esc(l.email || "") + '">', "Contact email address.") +
-      fld("Phone", '<input id="ld-phone" value="' + esc(l.phone || "") + '">', "Contact phone number.") +
+      fld("Phone", phoneFieldHTML("ld-phone", l, { cc: "phone_cc", area: "phone_area", num: "phone_num", combined: "phone" }), "Contact phone number - dialing code, area code and number.") +
       '</div><div>' +
       fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
       fld("Probability", '<input id="ld-prob" type="number" step="1" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent.") +
@@ -9413,16 +9459,18 @@
       '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + '</div>';
     document.querySelectorAll(".o-stages .st[data-stage]").forEach(function (x) { x.onclick = async function () { l.stage_id = x.dataset.stage; document.querySelectorAll(".o-stages .st").forEach(function (y) { y.classList.toggle("on", y === x); }); if (id !== "new") { await sb.from("crm_leads").update({ stage_id: l.stage_id }).eq("id", id); toast("Stage updated"); } }; });
     document.getElementById("ld-discard").onclick = function () { go("crm.pipe"); };
+    custPickerAdd("ld-cust");
     document.getElementById("ld-save").onclick = async function () {
       var name = gv("ld-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, partner_id: document.getElementById("ld-cust").value || null, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: gv("ld-phone"), expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: parseFloat(gv("ld-prob")) || 0, source: gv("ld-src"), stage_id: l.stage_id };
+      var lph = collectPhone("ld-phone");
+      var row = { name: name, partner_id: document.getElementById("ld-cust").value || null, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: lph.combined, phone_cc: lph.cc, phone_area: lph.area, phone_num: lph.num, expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: parseFloat(gv("ld-prob")) || 0, source: gv("ld-src"), stage_id: l.stage_id };
       var r; if (id === "new") { row.company_id = S.company.id; row.is_active = true; r = await sb.from("crm_leads").insert(row); } else r = await sb.from("crm_leads").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("crm.pipe");
     };
     var cb = document.getElementById("ld-tocust"); if (cb) cb.onclick = async function () {
       var cname = gv("ld-contact") || gv("ld-name");
-      var pr = await sb.from("partners").insert({ org_id: S.company.org_id, company_id: S.company.id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: gv("ld-phone") || null }).select("id").single();
+      var pr = await sb.from("partners").insert({ org_id: S.company.org_id, company_id: S.company.id, name: cname, is_company: true, is_customer: true, email: gv("ld-email") || null, phone: collectPhone("ld-phone").combined }).select("id").single();
       if (pr.error) { toast("Could not create: " + errMsg(pr.error)); return; }
       await sb.from("crm_leads").update({ partner_id: pr.data.id }).eq("id", id);
       toast("Customer created & linked"); renderLeadForm(id);
