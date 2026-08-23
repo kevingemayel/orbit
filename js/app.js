@@ -10945,15 +10945,15 @@
     document.getElementById("pc-discard").onclick = function () { go("pc.list"); };
     if (id === "new") { var ps = document.getElementById("pc-proj"); if (ps) ps.onchange = function () { renderCertificateForm("new", ps.value); }; }
     var retPct = Number(proj.retention_pct) || 0;
-    var ipcGrid = renderSheetGrid(document.getElementById("pc-grid"), claimSheet, { readOnly: posted, onChange: function () { paintSummary(); } });
+    var ipcGrid = renderSheetGrid(document.getElementById("pc-grid"), claimSheet, { readOnly: posted, onChange: function (sh, tot) { paintSummary(tot); } });
     function summaryFrom(tot) {
       var work = Number(tot.todate || 0), mat = parseFloat(gv("pc-mat")) || 0, adv = parseFloat(gv("pc-adv")) || 0;
       var gross = work + mat, retention = gross * retPct / 100, net = gross - retention - adv;
       var prevNet = prevCert ? Number(prevCert.net_to_date) : 0, current = net - prevNet;
       return { work: work, mat: mat, gross: gross, retention: retention, adv: adv, net: net, prevNet: prevNet, current: current, period: Number(tot.period || 0) };
     }
-    function paintSummary() {
-      var s = summaryFrom(ipcGrid.totals());
+    function paintSummary(tot) {
+      var s = summaryFrom(tot || ipcGrid.totals());
       document.getElementById("pc-sum").innerHTML =
         '<div class="r"><span class="k">Work done to date</span><span>' + cc + " " + money(s.work) + '</span></div>' +
         '<div class="r"><span class="k">Certified this period (from breakdown)</span><span>' + cc + " " + money(s.period) + '</span></div>' +
