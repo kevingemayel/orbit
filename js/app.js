@@ -74,15 +74,15 @@
     var m = (e && (e.message || e.msg)) || (typeof e === "string" ? e : "") || "Something went wrong.";
     var s = String(m).toLowerCase();
     if (/posted invoice|locked|greater than zero|non-zero/.test(s)) return m;            // our own friendly raises
-    if (/duplicate key|already exists|unique constraint/.test(s)) return "That already exists — a record with the same code or number is already saved.";
+    if (/duplicate key|already exists|unique constraint/.test(s)) return "That already exists - a record with the same code or number is already saved.";
     if (/foreign key/.test(s)) return "This record is linked to others, so it can’t be changed or removed that way.";
     if (/not-null|null value in column/.test(s)) return "A required field is missing.";
     if (/permission denied|row-level security|row level security|not allowed/.test(s)) return "You don’t have permission to do that.";
     if (/check constraint|violates check/.test(s)) return "That value isn’t allowed here.";
-    if (/jwt|token is expired|not authenticated/.test(s)) return "Your session expired — please sign in again.";
-    if (/failed to fetch|networkerror|network request/.test(s)) return "Network problem — check your connection and try again.";
+    if (/jwt|token is expired|not authenticated/.test(s)) return "Your session expired - please sign in again.";
+    if (/failed to fetch|networkerror|network request/.test(s)) return "Network problem - check your connection and try again.";
     if (/invalid input syntax|invalid text representation|invalid input/.test(s)) return "One of the values is in the wrong format.";
-    if (/pgrst|constraint|relation .* does not exist|column .* does not exist|syntax error/.test(s)) return "Couldn’t save that — please check the fields and try again.";
+    if (/pgrst|constraint|relation .* does not exist|column .* does not exist|syntax error/.test(s)) return "Couldn’t save that - please check the fields and try again.";
     return m;
   }
   // ORB-20: optimistic concurrency. Update a record's header guarded by the updated_at it
@@ -99,11 +99,11 @@
     if (!r.data) { // nothing matched: the row changed under us, or was removed
       var chk = await sb.from(table).select("updated_at").eq("id", id).maybeSingle();
       if (chk.data) return { conflict: true };
-      return { error: { message: "This record no longer exists — it may have been deleted." } };
+      return { error: { message: "This record no longer exists - it may have been deleted." } };
     }
     return { ok: true, ver: r.data.updated_at };
   }
-  function conflictToast(noun) { toast("Someone else changed this " + (noun || "record") + " while you had it open. Your changes were not saved — reload the page to get the latest version, then re-enter them."); }
+  function conflictToast(noun) { toast("Someone else changed this " + (noun || "record") + " while you had it open. Your changes were not saved - reload the page to get the latest version, then re-enter them."); }
   // ORB-06b: terminology. term() swaps a default label for the active company's override
   // (keyed by the default English string), so the whole nav renames from one injection point.
   function term(s) { return (S.termMap && S.termMap[s]) || s; }
@@ -2157,7 +2157,7 @@
       (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
       fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>', "When payment is expected. Set automatically from the payment terms; you can override it.") +
       fld("Project", editable ? '<select id="f-proj"><option value="">(none)</option>' + projects.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((projects.filter(function (pr) { return inv && pr.id === inv.project_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a project/site so its cost and revenue roll up in the Project P&L.") +
-      (isSale ? "" : fld("Cost Code", editable ? '<select id="f-costcode"><option value="">(none)</option>' + invCosts.map(function (c) { return '<option value="' + c.id + '"' + ((inv && inv.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((invCosts.filter(function (c) { return inv && c.id === inv.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing — this bill rolls up under this code in the Job Cost report.")) +
+      (isSale ? "" : fld("Cost Code", editable ? '<select id="f-costcode"><option value="">(none)</option>' + invCosts.map(function (c) { return '<option value="' + c.id + '"' + ((inv && inv.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((invCosts.filter(function (c) { return inv && c.id === inv.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing - this bill rolls up under this code in the Job Cost report.")) +
       '</div></div>';
 
     // notebook
@@ -2813,7 +2813,7 @@
     var groups = '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Project", editable ? '<select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0] || {}).name || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L.") +
-      (isSale ? "" : fld("Cost Code", editable ? '<select id="o-costcode"><option value="">(none)</option>' + orderCosts.map(function (c) { return '<option value="' + c.id + '"' + ((order && order.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderCosts.filter(function (c) { return order && c.id === order.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing — this PO rolls up under this code in the Job Cost report.")) +
+      (isSale ? "" : fld("Cost Code", editable ? '<select id="o-costcode"><option value="">(none)</option>' + orderCosts.map(function (c) { return '<option value="' + c.id + '"' + ((order && order.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderCosts.filter(function (c) { return order && c.id === order.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing - this PO rolls up under this code in the Job Cost report.")) +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div><div>' +
       fld("Order Date", editable ? '<input id="o-date" type="date" value="' + (order ? order.date_order || today() : today()) + '">' : '<span class="v">' + esc(order.date_order || "") + '</span>') +
@@ -2997,18 +2997,20 @@
   async function openReceiveModal(order, lines) {
     var outstanding = lines.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0); return { l: l, ord: ord, rec: rec, out: Math.max(0, ord - rec) }; }).filter(function (x) { return x.out > 0.0001; });
     if (!outstanding.length) { toast("Everything on this order is already received"); return; }
+    var recvUsers = await companyUsers();
     var m = document.createElement("div"); m.className = "modal on";
     var rowsHTML = outstanding.map(function (x, i) {
       var l = x.l, dim = (l.width && l.height) ? (l.width + "x" + l.height) : (l.size || "");
       return '<tr><td><b>' + esc(l.name || "") + '</b>' + (dim ? ' <span class="muted">(' + esc(dim) + ')</span>' : "") + '</td><td>' + destChip(l.destination) + '</td><td class="num">' + x.ord + '</td><td class="num">' + x.rec + '</td><td><input class="rcv-q num" data-i="' + i + '" type="number" step="any" min="0" max="' + x.out + '" value="' + x.out + '" style="width:90px"></td></tr>';
     }).join("");
-    m.innerHTML = '<div class="sheet"><h3>Receive goods</h3><div class="form" style="padding:14px 18px"><div class="sub" style="margin-bottom:8px">Enter how much arrived (defaults to the full outstanding quantity). Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). All are tagged to the project, valued at the PO price, and advance the 3-way match.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Item</th><th>Goes to</th><th class="num">Ordered</th><th class="num">Already</th><th class="num">Receive now</th></tr></thead><tbody>' + rowsHTML + '</tbody></table></div></div><div class="foot"><button class="btn" id="rcv-cancel">Cancel</button><button class="btn pri" id="rcv-do" style="background:var(--app);border-color:var(--app)">Receive</button></div></div>';
+    m.innerHTML = '<div class="sheet"><h3>Receive goods</h3><div class="form" style="padding:14px 18px"><div class="sub" style="margin-bottom:8px">Enter how much arrived (defaults to the full outstanding quantity). Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). All are tagged to the project, valued at the PO price, and advance the 3-way match.</div><div style="margin:2px 0 12px;max-width:260px"><label style="font-size:12px;color:var(--ink2);font-weight:600;display:block;margin-bottom:4px">Received by</label>' + userSelectHTML("rcv-by", "", recvUsers, "(select person)") + '</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Item</th><th>Goes to</th><th class="num">Ordered</th><th class="num">Already</th><th class="num">Receive now</th></tr></thead><tbody>' + rowsHTML + '</tbody></table></div></div><div class="foot"><button class="btn" id="rcv-cancel">Cancel</button><button class="btn pri" id="rcv-do" style="background:var(--app);border-color:var(--app)">Receive</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("rcv-cancel").onclick = function () { m.remove(); };
     document.getElementById("rcv-do").onclick = async function () {
       var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
       var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
       var inv = await ensureInventory(), qs = {};
+      var recvBy = (document.getElementById("rcv-by") || {}).value || null;
       m.querySelectorAll(".rcv-q").forEach(function (inp) { qs[inp.dataset.i] = parseFloat(inp.value) || 0; });
       var got = 0, any = false;
       for (var i = 0; i < outstanding.length; i++) {
@@ -3022,7 +3024,7 @@
         if (dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
           if (destLoc) {
-            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: order.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
+            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: order.project_id || null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
             if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
           }
         }
@@ -4285,7 +4287,7 @@
   function evGuestPivot(body, rows) {
     var DIMS = [["side", "Side"], ["category", "Category"], ["priority", "Priority"], ["invite_stage", "Invite stage"], ["rsvp", "RSVP"]];
     var rby = EV._pivR || "category", cby = EV._pivC || "invite_stage";
-    function labelOf(field, val) { if (!val) return "—"; if (field === "invite_stage") return evLabel(GUEST_STAGE, val); if (field === "rsvp") return evLabel(RSVP_OPTS, val); return String(val); }
+    function labelOf(field, val) { if (!val) return "-"; if (field === "invite_stage") return evLabel(GUEST_STAGE, val); if (field === "rsvp") return evLabel(RSVP_OPTS, val); return String(val); }
     var rowKeys = [], colKeys = [], seenR = {}, seenC = {}, cells = {}, rowTot = {}, colTot = {}, grand = 0;
     rows.forEach(function (r) {
       var rk = r[rby] || "", ck = r[cby] || "";
@@ -6599,11 +6601,12 @@
   async function openInspectionModal(i) {
     i = i || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var users = await companyUsers();
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (i.id ? "Inspection " + esc(i.number || "") : "New inspection") + '</h3><div class="form">' +
       '<div class="row2"><div><label>Type</label><select id="in-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option><option value="snag">Snag</option></select></div><div><label>Date</label><input id="in-date" type="date" value="' + (i.insp_date || today()) + '"></div></div>' +
       '<div class="row2"><div><label>Project</label><select id="in-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (i.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Area</label><input id="in-area" value="' + esc(i.area || "") + '"></div></div>' +
-      '<div class="row2"><div><label>Inspector</label><input id="in-insp" value="' + esc(i.inspector || "") + '"></div><div><label>Score (%)</label><input id="in-score" type="number" min="0" max="100" value="' + (i.score || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Inspector</label>' + userSelectHTML("in-insp", i.inspector, users, "(select person)") + '</div><div><label>Score (%)</label><input id="in-score" type="number" min="0" max="100" value="' + (i.score || 0) + '"></div></div>' +
       '<div><label>Notes</label><textarea id="in-notes" rows="2">' + esc(i.notes || "") + '</textarea></div>' +
       '<div><label>Status</label><select id="in-status"><option value="open">Open</option><option value="closed">Closed</option></select></div>' +
       '</div><div class="foot"><button class="btn" id="in-cancel">Cancel</button>' + (i.id ? '<button class="btn" id="in-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
@@ -7759,13 +7762,13 @@
       searchText: function (a) { return (a.actor_email || "") + " " + (a.table_name || "") + " " + (a.action || ""); },
       columns: [
         { label: "When", get: function (a) { return esc((a.at || "").slice(0, 16).replace("T", " ")); } },
-        { label: "Who", get: function (a) { return esc(a.actor === S.user.id ? "You" : (a.actor_email || "—")); } },
+        { label: "Who", get: function (a) { return esc(a.actor === S.user.id ? "You" : (a.actor_email || "-")); } },
         { label: "Action", get: function (a) { var c = a.action === "DELETE" ? "--bad" : (a.action === "INSERT" ? "--good" : "--accent"); var t = ({ INSERT: "Created", UPDATE: "Updated", DELETE: "Deleted" })[a.action] || a.action; return '<span style="font-weight:600;color:var(' + c + ')">' + esc(t) + '</span>'; } },
         { label: "Record", get: function (a) { return '<b>' + esc(auditTableLabel(a.table_name)) + '</b> <span class="muted" style="font-size:11px">' + esc((a.row_id || "").slice(0, 8)) + '</span>'; } }
       ],
       filters: [{ label: "Created", test: function (a) { return a.action === "INSERT"; } }, { label: "Updated", test: function (a) { return a.action === "UPDATE"; } }, { label: "Deleted", test: function (a) { return a.action === "DELETE"; } }],
-      groupBy: [{ label: "Record type", get: function (a) { return auditTableLabel(a.table_name); } }, { label: "Who", get: function (a) { return a.actor === S.user.id ? "You" : (a.actor_email || "—"); } }],
-      emptyHint: "Every create, update and delete on invoices, payments, projects and purchase orders is recorded here — who did it and when."
+      groupBy: [{ label: "Record type", get: function (a) { return auditTableLabel(a.table_name); } }, { label: "Who", get: function (a) { return a.actor === S.user.id ? "You" : (a.actor_email || "-"); } }],
+      emptyHint: "Every create, update and delete on invoices, payments, projects and purchase orders is recorded here - who did it and when."
     };
   }
 
@@ -7787,13 +7790,14 @@
       ],
       filters: [{ label: "Open", test: function (i) { return i.status !== "closed"; } }, { label: "High / Critical", test: function (i) { return ["high", "critical"].indexOf(i.severity) >= 0; } }],
       groupBy: [{ label: "Type", get: function (i) { return INC_TYPES[i.incident_type] || i.incident_type; } }, { label: "Severity", get: function (i) { return INC_SEV[i.severity] || i.severity; } }, { label: "Status", get: function (i) { return i.status || "open"; } }],
-      emptyHint: "Log safety incidents and near-misses on site — type, severity, what happened and the action taken.",
+      emptyHint: "Log safety incidents and near-misses on site - type, severity, what happened and the action taken.",
       onOpen: function (i) { openIncidentModal(i); }, onNew: function () { openIncidentModal(null); }
     };
   }
   async function openIncidentModal(inc) {
     inc = inc || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var users = await companyUsers();
     var typeOpts = Object.keys(INC_TYPES).map(function (k) { return '<option value="' + k + '"' + (inc.incident_type === k ? " selected" : "") + '>' + INC_TYPES[k] + '</option>'; }).join("");
     var sevOpts = Object.keys(INC_SEV).map(function (k) { return '<option value="' + k + '"' + (inc.severity === k ? " selected" : "") + '>' + INC_SEV[k] + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (inc.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
@@ -7805,7 +7809,7 @@
       '<div><label for="in2-loc">Location</label><input id="in2-loc" value="' + esc(inc.location || "") + '" placeholder="e.g. Level 3 west facade"></div>' +
       '<div><label for="in2-desc">What happened</label><textarea id="in2-desc" rows="3">' + esc(inc.description || "") + '</textarea></div>' +
       '<div><label for="in2-act">Action taken</label><textarea id="in2-act" rows="2">' + esc(inc.action_taken || "") + '</textarea></div>' +
-      '<div class="row2"><div><label for="in2-rep">Reported by</label><input id="in2-rep" value="' + esc(inc.reported_by || "") + '"></div><div><label for="in2-status">Status</label><select id="in2-status">' + statusOpts + '</select></div></div>' +
+      '<div class="row2"><div><label for="in2-rep">Reported by</label>' + userSelectHTML("in2-rep", inc.reported_by, users, "(select person)") + '</div><div><label for="in2-status">Status</label><select id="in2-status">' + statusOpts + '</select></div></div>' +
       '</div><div class="foot"><button class="btn" id="in2-cancel">Cancel</button>' + (inc.id ? '<button class="btn" id="in2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("in2-cancel").onclick = function () { m.remove(); };
@@ -7829,7 +7833,7 @@
     var rows = ((await sb.rpc("all_tenants")).data) || [];
     function stBadge(s) { var c = ({ active: "--good", pending: "--warn", rejected: "--bad" })[s] || "--ink3"; return '<span style="font-size:11px;font-weight:700;color:var(' + c + ')">' + esc((s || "active").charAt(0).toUpperCase() + (s || "active").slice(1)) + '</span>'; }
     var trs = rows.map(function (t) { return '<tr><td><b>' + esc(t.org_name) + '</b></td><td>' + stBadge(t.status) + '</td><td>' + esc(t.business_type || "") + '</td><td>' + esc(t.country || "") + '</td><td class="num">' + (t.companies || 0) + '</td><td class="num">' + (t.members || 0) + '</td><td>' + esc((t.applied_at || "").slice(0, 10)) + '</td></tr>'; }).join("");
-    body.innerHTML = '<div style="padding:16px"><div class="sub" style="margin:0 0 12px"><b>' + rows.length + '</b> tenant' + (rows.length === 1 ? "" : "s") + ' on the platform. Switch into any company from the top-bar company selector to support it — your access is logged.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Organisation</th><th>Status</th><th>Business</th><th>Country</th><th class="num">Companies</th><th class="num">Members</th><th>Applied</th></tr></thead><tbody>' + (trs || '<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">No tenants.</td></tr>') + '</tbody></table></div></div>';
+    body.innerHTML = '<div style="padding:16px"><div class="sub" style="margin:0 0 12px"><b>' + rows.length + '</b> tenant' + (rows.length === 1 ? "" : "s") + ' on the platform. Switch into any company from the top-bar company selector to support it - your access is logged.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Organisation</th><th>Status</th><th>Business</th><th>Country</th><th class="num">Companies</th><th class="num">Members</th><th>Applied</th></tr></thead><tbody>' + (trs || '<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">No tenants.</td></tr>') + '</tbody></table></div></div>';
   }
 
   // ============================ DATA IMPORT (ORB-15) ============================
@@ -7951,7 +7955,7 @@
         { label: "Status", get: function (r) { return rfqBadge(r.status); } }
       ],
       filters: [{ label: "Open", test: function (r) { return ["draft", "sent", "closed"].indexOf(r.status) >= 0; } }, { label: "Awarded", test: function (r) { return r.status === "awarded"; } }],
-      emptyHint: "An RFQ lets you ask several suppliers to quote the same items, compare their prices side by side, and award the best one — which creates a draft PO (your committed cost).",
+      emptyHint: "An RFQ lets you ask several suppliers to quote the same items, compare their prices side by side, and award the best one - which creates a draft PO (your committed cost).",
       onOpen: function (r) { renderRFQForm(r.id); }, onNew: function () { renderRFQForm("new"); }
     };
   }
@@ -8037,7 +8041,7 @@
       var poLines = lns.map(function (l) { var info = prodMat(prodOf(l.product_id)); var up = canonUnit(l); return { company_id: S.company.id, order_id: po.data.id, product_id: l.product_id || null, name: l.description, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || (info.form ? info.basis : "each"), destination: l.destination || null, tax_id: lineTaxId(l), quantity: l.quantity, unit_price: up, price_subtotal: up * (Number(l.quantity) || 0), cost_code_id: rfq.cost_code_id || null }; });
       if (poLines.length) await sb.from("purchase_order_lines").insert(poLines);
       await sb.from("rfqs").update({ status: "awarded", awarded_partner_id: partnerId }).eq("id", id);
-      toast("Awarded to " + vname(partnerId) + " — draft " + po.data.number + " created"); renderRFQForm(id);
+      toast("Awarded to " + vname(partnerId) + " - draft " + po.data.number + " created"); renderRFQForm(id);
     }
     function draw() {
       var header = '<div class="o-groups"><div>' +
