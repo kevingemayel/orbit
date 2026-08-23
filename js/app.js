@@ -819,9 +819,10 @@
     root.innerHTML =
       '<div class="o-home">' + supportBarHTML() +
       '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
-      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
+      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<button class="o-theme-tog" id="home-theme" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle><path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g><path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button><div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
       '<div class="o-grid">' + tiles + soon + '</div></div>';
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
+    var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); toast(S.ui.theme === "dark" ? "Dark appearance" : "Colourful appearance"); };
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
@@ -1733,6 +1734,7 @@
       '<div class="gap"></div>' +
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
+      '<button data-v="thumb" title="Thumbnails" aria-label="Thumbnail view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.6"></circle><path d="M21 15l-5-4L5 20"></path></svg></button>' +
       '<button data-v="kanban" title="Cards / Kanban">&#9638;</button></div>' +
       '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
       '</div>' +
@@ -1835,6 +1837,10 @@
       if (kg.length) { if (L.kanbanGroupIdx == null || L.kanbanGroupIdx >= kg.length) L.kanbanGroupIdx = 0; body.innerHTML = kanbanBoardHTML(cfg, rows, kg); wireKanban(cfg, rows, kg); }
       else { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>'; }
     }
+    else if (L.view === "thumb") {
+      var tpage = rows.slice(L.page * L.size, (L.page + 1) * L.size);
+      body.innerHTML = '<div class="o-thumbs">' + tpage.map(function (r) { return thumbTileHTML(cfg, r); }).join("") + '</div>';
+    }
     else if (L.group != null) {
       var g = cfg.groupBy[L.group], groups = {};
       rows.forEach(function (r) { var k = g.get(r) || "None"; (groups[k] = groups[k] || []).push(r); });
@@ -1852,6 +1858,16 @@
   }
   function headRow(cfg) { return '<tr>' + cfg.columns.map(function (c) { return '<th class="' + (c.num ? "num" : "") + '">' + esc(c.label) + '</th>'; }).join("") + '</tr>'; }
   function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
+  // A gallery tile for the thumbnail view: the row photo (where a list attaches one)
+  // over the first column as a title and the second as a subtitle; a lettered
+  // placeholder when there is no image, so every table has a usable thumbnail view.
+  function thumbTileHTML(cfg, r) {
+    var cols = cfg.columns.filter(function (c) { return c.cls !== "thumbcol"; });
+    var title = cols[0] ? htmlToText(cols[0].get(r)) : (r.name || r.number || "");
+    var sub = cols[1] ? htmlToText(cols[1].get(r)) : "";
+    var img = r._thumb ? '<div class="o-th-img"><img src="' + r._thumb + '" alt=""></div>' : '<div class="o-th-img o-th-ph">' + esc((title || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "•") + '</div>';
+    return '<div class="o-th-tile" data-id="' + r.id + '">' + img + '<div class="o-th-cap"><div class="o-th-t">' + esc(title) + '</div>' + (sub ? '<div class="o-th-s">' + esc(sub) + '</div>' : "") + '</div></div>';
+  }
 
   // ============================ LIST CONFIGS ============================
   function stBadge(i) {
