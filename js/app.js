@@ -426,7 +426,8 @@
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
-        { label: "Appearance", action: "appearance" }
+        { label: "Appearance", action: "appearance" },
+        { label: "Print Template", action: "settings.print" }
       ]
     },
     insights: {
@@ -463,7 +464,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
@@ -974,11 +975,11 @@
       '<button class="o-waffle" id="waffle" title="All apps" aria-label="All apps">' +
       '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><rect x="2" y="2" width="6" height="6" rx="1.4"/><rect x="9.5" y="2" width="6" height="6" rx="1.4"/><rect x="17" y="2" width="6" height="6" rx="1.4"/><rect x="2" y="9.5" width="6" height="6" rx="1.4"/><rect x="9.5" y="9.5" width="6" height="6" rx="1.4"/><rect x="17" y="9.5" width="6" height="6" rx="1.4"/><rect x="2" y="17" width="6" height="6" rx="1.4"/><rect x="9.5" y="17" width="6" height="6" rx="1.4"/><rect x="17" y="17" width="6" height="6" rx="1.4"/></svg>' +
       '</button>' +
-      '<span class="o-brandmark" title="Orbit">' + orbitMark() + '</span>' +
+      '<span class="o-brandmark" id="obrand" title="Home - all apps">' + orbitMark() + '</span>' +
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       (APP_FLOW[S.app] ? '<button class="o-howto" id="ohowto" title="How ' + esc(term(a.name)) + ' works" aria-label="How ' + esc(term(a.name)) + ' works"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h7.6"/><path d="M13 9l3 3-3 3"/></svg><span>How this works</span></button>' : '') +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
       '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
@@ -989,6 +990,8 @@
       '</div>' +
       '</div>';
     document.getElementById("waffle").onclick = renderHome;
+    var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = renderHome;
+    var _op = document.getElementById("oprint"); if (_op) _op.onclick = printCurrentPage;
     var _gs = document.getElementById("o-gs-in");
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
@@ -1579,6 +1582,7 @@
       case "inv.uoms": return renderList(cfgUoms());
       case "acc.payterms": return renderPaymentTerms();
       case "proj.labels": return renderTaskLabels();
+      case "settings.print": return renderPrintTemplate();
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
@@ -1634,11 +1638,13 @@
   }
   function bcHTML(title, parent) {
     var app = APPS[S.app];
-    var up = '<span class="up" id="bc-home">' + esc(term(app.name)) + '</span><span class="sepc">/</span>';
+    var up = '<span class="up bc-grid" id="bc-grid" title="Back to all apps"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</span><span class="sepc">/</span>';
+    up += '<span class="up" id="bc-home">' + esc(term(app.name)) + '</span><span class="sepc">/</span>';
     if (parent) up += '<span class="up" data-go="' + parent.action + '">' + esc(term(parent.title)) + '</span><span class="sepc">/</span>';
     return '<div class="o-bc">' + up + '<span>' + esc(term(title)) + '</span></div>';
   }
   function wireBc() {
+    var g = document.getElementById("bc-grid"); if (g) g.onclick = renderHome;
     var h = document.getElementById("bc-home"); if (h) h.onclick = function () { go(APPS[S.app].home); };
     document.querySelectorAll(".o-bc [data-go]").forEach(function (e) { e.onclick = function () { go(e.dataset.go); }; });
   }
@@ -8324,6 +8330,60 @@
       await sb.from("task_labels").delete().eq("company_id", S.company.id);
       if (ups.length) { var r = await sb.from("task_labels").insert(ups); if (r.error) { toast("Save failed: " + errMsg(r.error)); return; } }
       toast("Labels saved");
+    };
+  }
+  // ---- Print: a global Print button + an editable branded print template -------
+  var _printTpl = null;
+  function imgFileToDataUrl(file, maxW) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () { var img = new Image(); img.onload = function () { var scale = Math.min(1, maxW / img.width); var w = Math.round(img.width * scale), h = Math.round(img.height * scale); var cv = document.createElement("canvas"); cv.width = w; cv.height = h; cv.getContext("2d").drawImage(img, 0, 0, w, h); res(cv.toDataURL("image/png")); }; img.onerror = rej; img.src = fr.result; };
+      fr.onerror = rej; fr.readAsDataURL(file);
+    });
+  }
+  function ensurePrintFrame() {
+    if (!document.getElementById("print-header")) { var h = document.createElement("div"); h.id = "print-header"; h.className = "print-only"; document.body.insertBefore(h, document.body.firstChild); }
+    if (!document.getElementById("print-footer")) { var f = document.createElement("div"); f.id = "print-footer"; f.className = "print-only"; document.body.appendChild(f); }
+  }
+  async function printCurrentPage() {
+    if (!_printTpl || _printTpl._co !== S.company.id) { var c = (await sb.from("companies").select("name, print_settings").eq("id", S.company.id).maybeSingle()).data || {}; _printTpl = Object.assign({ _co: S.company.id, _name: c.name }, (c.print_settings || {})); }
+    var t = _printTpl;
+    var bcEl = document.querySelector(".o-bc"), titleEl = bcEl ? bcEl.querySelector("span:last-child") : null;
+    var pageTitle = titleEl ? titleEl.textContent.trim() : ((document.querySelector(".o-title") || {}).textContent || "").trim();
+    ensurePrintFrame();
+    document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff");
+    document.getElementById("print-header").innerHTML = '<div class="ph-row">' + ((t.logo && t.show_logo !== false) ? '<img class="ph-logo" src="' + t.logo + '">' : '') + '<div class="ph-co"><div class="ph-name">' + esc(t.company_line || t._name || S.company.name || "") + '</div><div class="ph-addr">' + esc(t.address || "").replace(/\n/g, "<br>") + '</div></div><div class="ph-meta"><div class="ph-title">' + esc(pageTitle) + '</div><div class="ph-date">' + esc(new Date().toLocaleDateString()) + '</div></div></div>';
+    document.getElementById("print-footer").innerHTML = esc(t.footer || "");
+    window.print();
+  }
+  async function renderPrintTemplate() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Print Template") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var c = (await sb.from("companies").select("name, print_settings").eq("id", S.company.id).maybeSingle()).data || {};
+    var t = c.print_settings || {};
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card">' +
+      '<div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Print Template</h3><button class="pri" id="pt-save" style="margin-left:auto">Save</button></div>' +
+      '<div class="sub" style="margin:6px 0 14px">The branding printed on every page and report. Set your logo, company details and footer once - it applies everywhere you use the <b>Print</b> button (top bar).</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Logo", '<div id="pt-logo-wrap"></div>', "A PNG or JPG. Shown top-left of every printout.") +
+      fld("Show logo", '<select id="pt-showlogo"><option value="1">Yes</option><option value="0">No</option></select>') +
+      fld("Accent colour", '<input id="pt-accent" type="color" value="' + esc(t.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)">', "The line colour under the header.") +
+      '</div><div>' +
+      fld("Company name (header)", '<input id="pt-name" value="' + esc(t.company_line || c.name || "") + '">') +
+      fld("Address / contact (header)", '<textarea id="pt-addr" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical">' + esc(t.address || "") + '</textarea>', "Address, phone, VAT no. - one per line.") +
+      fld("Footer text", '<input id="pt-footer" value="' + esc(t.footer || "") + '" placeholder="e.g. Thank you for your business">') +
+      '</div></div></div></div>';
+    var logoData = t.logo || "";
+    function wireLogo() { var inp = document.getElementById("pt-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("pt-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); }; }
+    function paintLogo() { document.getElementById("pt-logo-wrap").innerHTML = (logoData ? '<img src="' + logoData + '" style="max-height:56px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : '') + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="pt-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="pt-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
+    paintLogo();
+    if (t.show_logo === false) document.getElementById("pt-showlogo").value = "0";
+    document.getElementById("pt-save").onclick = async function () {
+      var ps = { logo: logoData || null, show_logo: document.getElementById("pt-showlogo").value === "1", accent: document.getElementById("pt-accent").value, company_line: gv("pt-name"), address: (document.getElementById("pt-addr").value || ""), footer: gv("pt-footer") };
+      var r = await sb.from("companies").update({ print_settings: ps }).eq("id", S.company.id);
+      if (r.error) { toast("Save failed: " + errMsg(r.error)); return; }
+      _printTpl = null; toast("Print template saved");
     };
   }
   // ORB-06b: admin screen to define custom fields per master entity.

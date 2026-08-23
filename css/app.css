@@ -274,6 +274,27 @@ button{font-family:inherit}
 .ag-cmt-tools{display:flex;align-items:center;gap:8px;margin-top:6px}
 /* activity log app badge */
 .act-appb{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid;white-space:nowrap}
+/* clickable home affordances for easy navigation */
+.o-brandmark{cursor:pointer}
+.bc-grid{cursor:pointer}
+/* printing: a branded header/footer + hide the app chrome */
+.print-only{display:none}
+@media print{
+  .o-navbar,.o-side,.o-side-toggle,.o-support,.o-statusbar,.o-cp,.o-skip,.o-addln,.o-new,.modal,.help-wrap,.flow-wrap,.ag-panel-bg{display:none !important}
+  .o-app,.o-shell,#o-main,.o-view,.o-body,.o-form,.o-form-bg,.o-sheet,.o-report{display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
+  html,body,.o-app{background:#fff !important}
+  .print-only{display:block !important}
+  #print-header{padding:0 0 10px;margin:0 0 16px;border-bottom:2px solid var(--print-accent,#2f6bff)}
+  #print-header .ph-row{display:flex;align-items:flex-start;gap:16px}
+  #print-header .ph-logo{max-height:56px;max-width:190px;object-fit:contain}
+  #print-header .ph-co{flex:1}
+  #print-header .ph-name{font-weight:700;font-size:15px;color:#111}
+  #print-header .ph-addr{font-size:11px;color:#444;line-height:1.4;margin-top:2px}
+  #print-header .ph-meta{text-align:right;margin-left:auto}
+  #print-header .ph-title{font-weight:700;font-size:14px;color:#111}
+  #print-header .ph-date{font-size:11px;color:#666}
+  #print-footer{margin-top:18px;padding-top:6px;border-top:1px solid #ccc;font-size:10px;color:#666;text-align:center}
+}
 /* predefined task-label chips in the execution task panel */
 .ag-labels{display:flex;flex-wrap:wrap;gap:6px}
 .ag-lbl{font-size:12px;border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:14px;padding:3px 10px;cursor:pointer}
