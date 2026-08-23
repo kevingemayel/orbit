@@ -11819,6 +11819,7 @@
     }
     function rawAt(r, c) { var v = sheet.rows[r].cells[c]; return v == null ? "" : String(v); }
     function build() {
+      comp = sgCompute(sheet); // always render from a compute that matches the current rows/cols
       var C = sheet.cols.length;
       var colg = '<colgroup><col style="width:34px">' + sheet.cols.map(function (col) { return '<col style="width:' + (col.w || 90) + 'px">'; }).join("") + (ro ? "" : '<col style="width:26px">') + '</colgroup>';
       var head = '<tr><th class="sg-cnr"></th>' + sheet.cols.map(function (col, c) {
@@ -11837,7 +11838,7 @@
         return '<tr class="' + (isG ? "sg-grow" : "") + '">' + gut + tds + (ro ? "" : '<td class="sg-pad"></td>') + '</tr>';
       }).join("");
       var totRow = '<tr class="sg-foot"><td class="sg-gut"></td>' + sheet.cols.map(function (col, c) { if (c === 0) return '<td class="sg-tl">Total</td>'; if (col.kind !== "money") return '<td></td>'; var s = 0; for (var r = 0; r < sheet.rows.length; r++) if ((sheet.rows[r].lvl | 0) === 0) { var v = comp.vals[r][c]; if (typeof v === "number") s += v; } return '<td class="sg-tv">' + money(s) + '</td>'; }).join("") + (ro ? "" : '<td></td>') + '</tr>';
-      var tbl = '<div class="sg-scroll"><table class="sg"><thead>' + colg + head + '</thead><tbody>' + body + totRow + '</tbody></table></div>';
+      var tbl = '<div class="sg-scroll"><table class="sg">' + colg + '<thead>' + head + '</thead><tbody>' + body + totRow + '</tbody></table></div>';
       var tools = ro ? "" : '<div class="sg-tools"><button id="sg-addrow">+ Row</button><button id="sg-addsub">+ Sub-item</button><span class="sg-hint">Type <b>=</b> for a formula. Use <b>@D</b> for this row (e.g. <b>=@D*@E</b>) or <b>A1</b> style for any cell. Functions: SUM, AVG, MIN, MAX. Indent (&#9656;) to nest under the row above; parents total their children.</span></div>';
       mount.innerHTML = tbl + tools;
       wire();
