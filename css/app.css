@@ -293,9 +293,12 @@ button{font-family:inherit}
 /* printing: a branded header/footer + hide the app chrome */
 .print-only{display:none}
 @media print{
+  /* force the light palette on paper whatever theme is active on screen (dark theme was
+     printing reports as a dark box with near-invisible text) */
+  :root{--bg:#fff !important;--panel:#fff !important;--panel2:#f5f5f3 !important;--ink:#16171c !important;--ink2:#55565c !important;--ink3:#676d79 !important;--muted:#676d79 !important;--line:#e0ddd6 !important;--accent:#2f6bff !important;--accent2:#1f4fd6 !important;--accent-soft:#e9eeff !important}
   .o-navbar,.o-side,.o-side-toggle,.o-support,.o-statusbar,.o-cp,.o-skip,.o-addln,.o-new,.modal,.help-wrap,.flow-wrap,.ag-panel-bg{display:none !important}
   .o-app,.o-shell,#o-main,.o-view,.o-body,.o-form,.o-form-bg,.o-sheet,.o-report{display:block !important;overflow:visible !important;height:auto !important;max-height:none !important}
-  html,body,.o-app{background:#fff !important}
+  html,body,.o-app,#o-main,.o-view,.o-body,.o-form-bg,.o-report{background:#fff !important}
   .print-only{display:block !important}
   #print-header{margin:0 0 14px}
   #print-footer{margin-top:18px}
