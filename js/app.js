@@ -523,7 +523,7 @@
   }
   function canView(mod) { return permFor(mod).v; }
   function canManage(mod) { return permFor(mod).m; }
-  function canViewApp(appKey) { return appKey === "help" ? true : canView(modKey(appKey)); }
+  function canViewApp(appKey) { return (appKey === "help" || appKey === "activity") ? true : canView(modKey(appKey)); }
   function canManageApp(appKey) { return canManage(modKey(appKey)); }
   function featureAllowed(action) {
     var fa = FEATURE_ACTIONS[action]; if (!fa) return true;
@@ -533,6 +533,7 @@
   }
   function canGo(action) {
     if (action.indexOf("help.") === 0) return true;   // help is available to everyone
+    if (action === "act.all") return true;             // the combined activity app
     if (action.indexOf("platform.") === 0) return !!S.isPlatformAdmin;
     var mod = moduleForAction(action);
     if (mod && !canView(mod)) return false;
@@ -588,6 +589,12 @@
     "Website": '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="8"/><ellipse cx="50" cy="50" rx="14" ry="32" fill="none" stroke="currentColor" stroke-width="8"/><path d="M18 50 H82" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
     "Point of Sale": '<svg viewBox="0 0 100 100"><path d="M30 18 H70 V74 L62 68 L54 74 L46 68 L38 74 L30 68 Z M40 36 H60 M40 48 H52" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="60" cy="48" r="5" fill="#2F6BFF"/></svg>'
   };
+  // Activity log: an "Activity" screen inside each app (who did what in that app) plus
+  // a combined "Activity" app across all apps. Both read the audit trail (audit_log).
+  APP_ICONS.activity = '<svg viewBox="0 0 100 100"><path d="M12 54 H32 L42 26 L58 76 L66 54 H88" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="round" stroke-linecap="round"/><circle cx="82" cy="26" r="7" fill="#2F6BFF"/></svg>';
+  ["accounting", "sales", "purchase", "crm", "estimation", "inventory", "project", "manufacturing", "site", "hr", "events", "contacts"].forEach(function (k) { if (APPS[k]) { APPS[k].menus.push({ label: "Activity", action: "act." + k }); ACTION_APP["act." + k] = k; } });
+  APPS.activity = { name: "Activity", icon: "≡", color: "#0f766e", color2: "#0b544b", home: "act.all", menus: [{ label: "All activity", action: "act.all" }] };
+  ACTION_APP["act.all"] = "activity";
 
   // ============================ AUTH ============================
   // ORB-09 sign-in bot protection: dormant until a Cloudflare Turnstile SITE key is
@@ -1483,6 +1490,7 @@
   }
   function routeAction(action) {
     if (action.indexOf("help.") === 0) return renderManual(action.slice(5));
+    if (action.indexOf("act.") === 0) return renderList(cfgActivity(action === "act.all" ? null : action.slice(4)));
     switch (action) {
       case "dashboard": return renderDashboard();
       case "inv.out": return renderList(cfgInvoices("out_invoice"));
@@ -7843,6 +7851,52 @@
       filters: [{ label: "Created", test: function (a) { return a.action === "INSERT"; } }, { label: "Updated", test: function (a) { return a.action === "UPDATE"; } }, { label: "Deleted", test: function (a) { return a.action === "DELETE"; } }],
       groupBy: [{ label: "Record type", get: function (a) { return auditTableLabel(a.table_name); } }, { label: "Who", get: function (a) { return a.actor === S.user.id ? "You" : (a.actor_email || "-"); } }],
       emptyHint: "Every create, update and delete on invoices, payments, projects and purchase orders is recorded here - who did it and when."
+    };
+  }
+  // Which app each audited table belongs to, for the Activity log.
+  var AUDIT_TABLES = {
+    partners: { app: "contacts", label: "Contact" }, crm_leads: { app: "crm", label: "Opportunity" },
+    tenders: { app: "estimation", label: "Tender" }, sale_orders: { app: "sales", label: "Sales order" },
+    invoices: { app: "accounting", label: "Invoice / bill" }, payments: { app: "accounting", label: "Payment" },
+    purchase_orders: { app: "purchase", label: "Purchase order" }, rfqs: { app: "purchase", label: "RFQ" },
+    material_requisitions: { app: "purchase", label: "Material take-off" }, subcontract_certificates: { app: "purchase", label: "Subcontract certificate" },
+    subcontracts: { app: "project", label: "Subcontract" }, projects: { app: "project", label: "Project" },
+    project_tasks: { app: "project", label: "Task" }, project_certificates: { app: "project", label: "Progress certificate" },
+    project_variations: { app: "project", label: "Variation" }, timesheets: { app: "project", label: "Timesheet" },
+    project_items: { app: "project", label: "Project material" }, stock_moves: { app: "inventory", label: "Stock move" },
+    products: { app: "inventory", label: "Product" }, production_runs: { app: "manufacturing", label: "Production run" },
+    work_orders: { app: "manufacturing", label: "Work order" }, inspections: { app: "site", label: "Inspection" },
+    site_incidents: { app: "site", label: "Incident" }, site_diaries: { app: "site", label: "Site diary" },
+    site_snags: { app: "site", label: "Snag" }, install_jobs: { app: "site", label: "Install job" },
+    tools: { app: "site", label: "Tool / equipment" }, hr_employees: { app: "hr", label: "Employee" },
+    hr_expenses: { app: "hr", label: "Expense" }, hr_leaves: { app: "hr", label: "Leave" },
+    event_events: { app: "events", label: "Event" }
+  };
+  function auditApp(a) { var m = AUDIT_TABLES[a.table_name]; return m ? m.app : null; }
+  function auditRecordLabel(a) { var m = AUDIT_TABLES[a.table_name]; return m ? m.label : auditTableLabel(a.table_name); }
+  function actAppBadge(appKey) { var ap = APPS[appKey]; if (!ap) return '<span class="act-appb" style="background:var(--panel2);color:var(--ink3);border-color:var(--line)">Other</span>'; return '<span class="act-appb" style="background:' + ap.color + '22;color:' + ap.color + ';border-color:' + ap.color + '66">' + esc(ap.name) + '</span>'; }
+  // Activity log: who created / updated / deleted what. appKey null = combined (all apps).
+  function cfgActivity(appKey) {
+    return {
+      title: appKey ? ((APPS[appKey] ? APPS[appKey].name : "") + " activity") : "All activity",
+      pageSize: 100,
+      fetch: function () {
+        return sb.from("audit_log").select("*").eq("company_id", S.company.id).order("at", { ascending: false }).limit(1000).then(function (r) {
+          var rows = r.data || [];
+          if (appKey) rows = rows.filter(function (a) { return auditApp(a) === appKey; });
+          return rows;
+        });
+      },
+      searchText: function (a) { return (a.actor_email || "") + " " + auditRecordLabel(a) + " " + (a.action || "") + " " + (APPS[auditApp(a)] ? APPS[auditApp(a)].name : ""); },
+      columns: [
+        { label: "When", get: function (a) { return '<span class="muted">' + esc((a.at || "").slice(0, 16).replace("T", " ")) + '</span>'; } },
+        { label: "Who", get: function (a) { return esc(a.actor === S.user.id ? "You" : (a.actor_email || "-")); } },
+        { label: "Action", get: function (a) { var c = a.action === "DELETE" ? "--bad" : (a.action === "INSERT" ? "--good" : "--accent"); var t = ({ INSERT: "Created", UPDATE: "Updated", DELETE: "Deleted" })[a.action] || a.action; return '<span style="font-weight:600;color:var(' + c + ')">' + esc(t) + '</span>'; } },
+        { label: "Record", get: function (a) { return '<b>' + esc(auditRecordLabel(a)) + '</b>'; } }
+      ].concat(appKey ? [] : [{ label: "App", get: function (a) { return actAppBadge(auditApp(a)); } }]),
+      filters: [{ label: "Created", test: function (a) { return a.action === "INSERT"; } }, { label: "Updated", test: function (a) { return a.action === "UPDATE"; } }, { label: "Deleted", test: function (a) { return a.action === "DELETE"; } }],
+      groupBy: (appKey ? [] : [{ label: "App", get: function (a) { return APPS[auditApp(a)] ? APPS[auditApp(a)].name : "Other"; } }]).concat([{ label: "Who", get: function (a) { return a.actor === S.user.id ? "You" : (a.actor_email || "-"); } }, { label: "Record type", get: function (a) { return auditRecordLabel(a); } }, { label: "Day", get: function (a) { return (a.at || "").slice(0, 10); } }]),
+      emptyHint: appKey ? ("Every create, update and delete in " + (APPS[appKey] ? APPS[appKey].name : "this app") + " is recorded here - who did it and when.") : "Who did what across every app - creates, updates and deletes, newest first. Group or filter by app."
     };
   }
 

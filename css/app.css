@@ -272,6 +272,8 @@ button{font-family:inherit}
 .ag-cmt-att{font-size:11.5px;border:1px solid var(--line);background:var(--panel2);border-radius:6px;padding:3px 8px;cursor:pointer;color:var(--ink2)}
 .ag-cmt-att:hover{border-color:var(--accent);color:var(--accent)}
 .ag-cmt-tools{display:flex;align-items:center;gap:8px;margin-top:6px}
+/* activity log app badge */
+.act-appb{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;border:1px solid;white-space:nowrap}
 /* number inputs: drop the spinner arrows - people type the value (RFQ, PO, all forms) */
 input[type=number]::-webkit-outer-spin-button,input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
 input[type=number]{-moz-appearance:textfield;appearance:textfield}
