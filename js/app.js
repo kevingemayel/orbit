@@ -7223,6 +7223,9 @@
     var emps = pre[0].data || [], sprints = pre[1].data || [], siblings = (pre[2].data || []).filter(function (x) { return x.id !== taskId; });
     var checklist = pre[3].data || [], subtasks = pre[4].data || [], comments = pre[5].data || [], watchers = pre[6].data || [], activity = pre[7].data || [];
     var empById = {}; emps.forEach(function (e) { empById[e.id] = e; });
+    // attachments on individual comments (entity "taskcmt")
+    var cmtMedia = {}, cmtStage = [];
+    if (comments.length) { var _cm = (await sb.from("media").select("*").eq("entity", "taskcmt").in("entity_id", comments.map(function (c) { return c.id; }))).data || []; _cm.forEach(function (m) { (cmtMedia[m.entity_id] = cmtMedia[m.entity_id] || []).push(m); }); }
 
     var bg = document.createElement("div"); bg.className = "ag-panel-bg";
     function close() { bg.remove(); document.removeEventListener("keydown", onKey); if (onClose) onClose(); else renderBoard(); }
@@ -7230,7 +7233,16 @@
     document.addEventListener("keydown", onKey);
     bg.addEventListener("mousedown", function (e) { if (e.target === bg) close(); });
 
-    var empOpts = function (sel) { return '<option value="">Unassigned</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (e.id === sel ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join(""); };
+    var empOpts = function (sel) { return '<option value="">Unassigned</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (e.id === sel ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("") + '<option value="__addp">+ Add a person...</option>'; };
+    // add a new person (hr employee) on the fly, defaulting to the signed-in user
+    // so you can assign yourself even if you are not yet in the employee list.
+    async function addPersonInline() {
+      var nm = (window.prompt("Person's name:", (S.profile && S.profile.full_name) || "") || "").trim();
+      if (!nm) return null;
+      var ins = await sb.from("hr_employees").insert({ company_id: S.company.id, name: nm }).select("id,name").single();
+      if (ins.error) { toast(errMsg(ins.error)); return null; }
+      emps.push(ins.data); empById[ins.data.id] = ins.data; return ins.data;
+    }
     var stageOpts = BOARD_STAGES.map(function (st) { return '<option value="' + st.key + '"' + ((t.board_stage || "backlog") === st.key ? " selected" : "") + '>' + st.label + '</option>'; }).join("");
     var prioOpts = Object.keys(TASK_PRIO).map(function (k) { return '<option value="' + k + '"' + ((t.priority || "medium") === k ? " selected" : "") + '>' + TASK_PRIO[k].label + '</option>'; }).join("");
     var sprintOpts = '<option value="">Backlog (no sprint)</option>' + sprints.map(function (s) { return '<option value="' + s.id + '"' + (t.sprint_id === s.id ? " selected" : "") + '>' + esc(s.name) + (s.status === "active" ? " (active)" : "") + '</option>'; }).join("");
@@ -7241,6 +7253,7 @@
       '<div class="ag-panel-title"><input id="tp-name" value="' + esc(t.name || "") + '" placeholder="Task name"></div>' +
       '<div class="ag-panel-body"><div class="ag-panel-main">' +
       '<div class="ag-fieldlabel">Description</div><textarea id="tp-desc" class="ag-desc" placeholder="What needs to be done, acceptance criteria, links...">' + esc(t.description || "") + '</textarea>' +
+      '<div class="ag-att-wrap">' + attachBlockHTML("task", isNew ? "" : taskId, { label: "Attachments" }) + '</div>' +
       '<div id="tp-collab"></div></div>' +
       '<div class="ag-panel-side">' +
       '<div class="ag-sf"><label>Status</label><select id="tp-stage">' + stageOpts + '</select></div>' +
@@ -7252,6 +7265,17 @@
       '<div class="ag-sf"><label>Labels (comma separated)</label><input id="tp-labels" value="' + esc((t.labels || []).join(", ")) + '" placeholder="e.g. fabrication, urgent"></div>' +
       '</div></div></div>';
     document.body.appendChild(bg);
+    wireAttach("task");
+    (function () {
+      var asel = document.getElementById("tp-assignee"); if (!asel) return;
+      var prevA = t.assignee_id || "";
+      asel.addEventListener("change", async function () {
+        if (asel.value !== "__addp") { prevA = asel.value; return; }
+        asel.value = prevA;
+        var np = await addPersonInline(); if (!np) return;
+        var o = document.createElement("option"); o.value = np.id; o.textContent = np.name; asel.insertBefore(o, asel.querySelector('option[value="__addp"]')); asel.value = np.id; prevA = np.id;
+      });
+    })();
 
     function paintCollab() {
       var host = document.getElementById("tp-collab");
@@ -7265,12 +7289,13 @@
         subtasks.map(function (s) { var e = s.assignee_id ? empById[s.assignee_id] : null; return '<div class="ag-sub tp-sub-open" data-id="' + s.id + '"><span class="ag-sub-dot' + (s.board_stage === "done" ? " done" : "") + '"></span><span class="ag-sub-t">' + esc(s.name) + '</span>' + (e ? agAvatar(e, true) : '') + '</div>'; }).join("") +
         '<div class="ag-add-row"><input id="tp-sub-new" class="ag-add-in" placeholder="+ Add subtask"></div></div>';
       var wTags = watchers.map(function (w) { var e = empById[w.employee_id]; return e ? '<span class="ag-wtag">' + esc(e.name) + '<button class="ag-x tp-w-del" data-id="' + w.employee_id + '">&times;</button></span>' : ""; }).join("");
-      var wAdd = '<select id="tp-w-add" class="ag-add-in"><option value="">+ Add watcher</option>' + emps.filter(function (e) { return !watchers.some(function (w) { return w.employee_id === e.id; }); }).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>';
+      var wAdd = '<select id="tp-w-add" class="ag-add-in"><option value="">+ Add watcher</option>' + emps.filter(function (e) { return !watchers.some(function (w) { return w.employee_id === e.id; }); }).map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '<option value="__addp">+ Add a person...</option></select>';
       var wHtml = '<div class="ag-sec"><div class="ag-sec-h">Watchers</div><div class="ag-wtags">' + (wTags || '<span class="muted" style="font-size:12.5px">No one is following this task yet.</span>') + '</div>' + wAdd + '</div>';
       var mchips = emps.slice(0, 10).map(function (e) { return '<button class="ag-mchip" data-name="' + esc(e.name) + '">@' + esc(e.name.split(/\s+/)[0]) + '</button>'; }).join("");
+      function cmtAttHtml(cid) { var arr = cmtMedia[cid] || []; if (!arr.length) return ""; return '<div class="ag-cmt-atts">' + arr.map(function (m) { return '<button class="ag-cmt-att" type="button" data-mopen="' + m.id + '">' + (m.kind === "image" ? "&#128247; " : "&#128206; ") + esc((m.caption || (m.path || "").split("/").pop() || "file").slice(0, 26)) + '</button>'; }).join("") + '</div>'; }
       var cHtml = '<div class="ag-sec"><div class="ag-sec-h">Comments</div>' +
-        (comments.length ? comments.map(function (c) { return '<div class="ag-comment"><div class="ag-comment-h"><b>' + esc(c.author_name || "Team") + '</b> <span class="muted">' + agWhen(c.created_at) + '</span></div><div class="ag-comment-b">' + agBody(c.body) + '</div></div>'; }).join("") : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">No comments yet.</div>') +
-        '<div class="ag-comment-new"><textarea id="tp-comment" placeholder="Write a comment. Use @ to mention a teammate."></textarea>' + (mchips ? '<div class="ag-mchips">' + mchips + '</div>' : '') + '<button class="o-filtbtn pri" id="tp-comment-post">Comment</button></div></div>';
+        (comments.length ? comments.map(function (c) { return '<div class="ag-comment"><div class="ag-comment-h"><b>' + esc(c.author_name || "Team") + '</b> <span class="muted">' + agWhen(c.created_at) + '</span></div><div class="ag-comment-b">' + agBody(c.body) + '</div>' + cmtAttHtml(c.id) + '</div>'; }).join("") : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">No comments yet.</div>') +
+        '<div class="ag-comment-new"><textarea id="tp-comment" placeholder="Write a comment. Use @ to mention a teammate."></textarea>' + (mchips ? '<div class="ag-mchips">' + mchips + '</div>' : '') + '<div class="ag-cmt-tools"><input type="file" id="tp-cmt-file" accept="image/*,application/pdf" multiple style="display:none"><button class="o-filtbtn" type="button" id="tp-cmt-attach">&#128206; Attach</button><span id="tp-cmt-staged" class="muted" style="font-size:12px"></span><button class="o-filtbtn pri" id="tp-comment-post" style="margin-left:auto">Comment</button></div></div></div>';
       var aHtml = activity.length ? '<div class="ag-sec"><div class="ag-sec-h">Activity</div>' + activity.map(function (a) { return '<div class="ag-act"><span class="ag-act-dot"></span><span>' + esc(a.actor_name || "Team") + ' <b>' + esc(a.verb) + '</b> ' + esc(a.detail || "") + ' <span class="muted">&middot; ' + agWhen(a.created_at) + '</span></span></div>'; }).join("") + '</div>' : "";
       host.innerHTML = clHtml + subHtml + wHtml + cHtml + aHtml;
       wireCollab();
@@ -7283,9 +7308,12 @@
       var subn = document.getElementById("tp-sub-new"); if (subn) subn.onkeydown = async function (e) { if (e.key !== "Enter") return; var v = subn.value.trim(); if (!v) return; subn.value = ""; var ins = await sb.from("project_tasks").insert({ company_id: S.company.id, project_id: projectId, name: v, parent_task_id: taskId, is_agile: true, board_stage: "backlog", priority: "medium" }).select("id,name,board_stage,assignee_id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } subtasks.push(ins.data); logTaskActivity(taskId, projectId, "added subtask", v); paintCollab(); document.getElementById("tp-sub-new").focus(); };
       document.querySelectorAll(".tp-sub-open").forEach(function (r) { r.onclick = function () { close(); setTimeout(function () { openTaskPanel(r.dataset.id, projectId); }, 60); }; });
       document.querySelectorAll(".tp-w-del").forEach(function (x) { x.onclick = async function () { await sb.from("task_watchers").delete().eq("task_id", taskId).eq("employee_id", x.dataset.id); watchers = watchers.filter(function (w) { return w.employee_id !== x.dataset.id; }); paintCollab(); }; });
-      var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(errMsg(ins.error)); return; } watchers.push({ employee_id: eid }); paintCollab(); };
+      var wadd = document.getElementById("tp-w-add"); if (wadd) wadd.onchange = async function () { if (!wadd.value) return; var eid = wadd.value; if (eid === "__addp") { var np = await addPersonInline(); if (!np) { wadd.value = ""; return; } eid = np.id; } var ins = await sb.from("task_watchers").insert({ company_id: S.company.id, task_id: taskId, employee_id: eid }); if (ins.error) { toast(errMsg(ins.error)); return; } watchers.push({ employee_id: eid }); paintCollab(); };
       document.querySelectorAll(".ag-mchip").forEach(function (b) { b.onclick = function () { var ta = document.getElementById("tp-comment"); ta.value = (ta.value + (ta.value && !/\s$/.test(ta.value) ? " " : "") + "@" + b.dataset.name.split(/\s+/)[0] + " ").replace(/^\s+/, ""); ta.focus(); }; });
-      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v) return; cp.disabled = true; var mids = agResolveMentions(v, emps); var who = await agActor(); var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v, author_name: who, mentions: mids }).select("*").single(); cp.disabled = false; if (ins.error) { toast(errMsg(ins.error)); return; } comments.push(ins.data); mids.forEach(function (mid) { notify({ kind: "mention", employee_id: mid, title: who + " mentioned you", body: v.slice(0, 120), link_action: "task", link_id: taskId }); }); paintCollab(); };
+      var cp = document.getElementById("tp-comment-post"); if (cp) cp.onclick = async function () { var ta = document.getElementById("tp-comment"); var v = ta.value.trim(); if (!v && !cmtStage.length) return; cp.disabled = true; var mids = agResolveMentions(v, emps); var who = await agActor(); var ins = await sb.from("task_comments").insert({ company_id: S.company.id, task_id: taskId, project_id: projectId, body: v || "(attachment)", author_name: who, mentions: mids }).select("*").single(); if (ins.error) { cp.disabled = false; toast(errMsg(ins.error)); return; } for (var i = 0; i < cmtStage.length; i++) { try { var mu = await mediaUpload("taskcmt", ins.data.id, cmtStage[i]); if (mu) (cmtMedia[ins.data.id] = cmtMedia[ins.data.id] || []).push(mu); } catch (e) { } } cmtStage = []; cp.disabled = false; comments.push(ins.data); mids.forEach(function (mid) { notify({ kind: "mention", employee_id: mid, title: who + " mentioned you", body: (v || "").slice(0, 120), link_action: "task", link_id: taskId }); }); paintCollab(); };
+      var catt = document.getElementById("tp-cmt-attach"); if (catt) catt.onclick = function () { var f = document.getElementById("tp-cmt-file"); if (f) f.click(); };
+      var cfile = document.getElementById("tp-cmt-file"); if (cfile) cfile.onchange = function () { Array.prototype.slice.call(cfile.files || []).forEach(function (f) { cmtStage.push(f); }); cfile.value = ""; var s = document.getElementById("tp-cmt-staged"); if (s) s.textContent = cmtStage.length ? (cmtStage.length + " file" + (cmtStage.length === 1 ? "" : "s") + " ready") : ""; };
+      document.querySelectorAll(".ag-cmt-att[data-mopen]").forEach(function (b) { b.onclick = async function () { var all = []; Object.keys(cmtMedia).forEach(function (k) { all = all.concat(cmtMedia[k]); }); var m = all.filter(function (x) { return x && x.id === b.dataset.mopen; })[0]; if (!m) return; var u = await mediaSignedUrl(m.path); if (u) window.open(u, "_blank"); }; });
     }
     paintCollab();
 
@@ -7299,6 +7327,7 @@
         row.company_id = S.company.id; row.project_id = projectId;
         var ins = await sb.from("project_tasks").insert(row).select("id").single();
         if (ins.error) { toast(errMsg(ins.error)); return; }
+        await mediaFlush("task", ins.data.id);
         logTaskActivity(ins.data.id, projectId, "created", name);
         if (newAssignee) notify({ kind: "assignment", employee_id: newAssignee, title: "You were assigned a task", body: name, link_action: "task", link_id: ins.data.id });
         toast("Task created"); bg.remove(); document.removeEventListener("keydown", onKey); openTaskPanel(ins.data.id, projectId, onClose); return;
