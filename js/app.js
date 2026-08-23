@@ -8405,8 +8405,9 @@
     if (__printObs) { try { __printObs.disconnect(); } catch (e) {} __printObs = null; }
     var target = document.getElementById("o-main"); if (!target) return;
     injectPrintButtons();
-    var pending = false;
-    __printObs = new MutationObserver(function () { if (pending) return; pending = true; requestAnimationFrame(function () { pending = false; injectPrintButtons(); }); });
+    // call injectPrintButtons directly (idempotent, so the button it inserts does not
+    // loop) - no requestAnimationFrame, which is paused when the tab is in the background.
+    __printObs = new MutationObserver(function () { injectPrintButtons(); });
     __printObs.observe(target, { childList: true, subtree: true });
   }
 
