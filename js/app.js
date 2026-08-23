@@ -2853,6 +2853,7 @@
     var btns = "";
     if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
     else if (confirmed) { if (!isSale) btns += '<button id="o-receive">Receive goods</button>'; btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>'; }
+    if (order) btns += '<button id="o-print">Print</button>';
     var st = order ? order.state : "draft", atFirst = (st === "draft" || st === "sent");
     var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "RFQ") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
 
@@ -3036,6 +3037,27 @@
       document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
       var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { openReceiveModal(order, linesState); };
     }
+    function printOrder() {
+      var lns = currentLines(), cc = S.company.currency_code;
+      var ps = document.getElementById("o-partner");
+      var partnerName = (ps && ps.value) ? ((partners.filter(function (p) { return p.id === ps.value; })[0] || {}).name || "") : (order && order.partners ? order.partners.name : "");
+      var dateV = (document.getElementById("o-date") || {}).value || (order && order.date_order) || "";
+      var refV = (document.getElementById("o-ref") || {}).value || (order && order.note) || "";
+      var sub = 0, tax = 0;
+      var body = lns.map(function (l) {
+        var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
+        var ls = Number(l.quantity || 0) * Number(l.unit_price || 0); sub += ls; tax += ls * amt / 100;
+        return '<tr><td>' + esc(l.name || "") + (l.size ? ' <span style="color:#888">(' + esc(l.size) + ')</span>' : "") + '</td><td class="r">' + Number(l.quantity || 0) + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+      }).join("");
+      var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
+        '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl" style="margin-top:8px">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + '</div></div>' +
+        '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div><div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(sub + tax) + '</span></div></div>' +
+        pdocFoot() + '</div>';
+      pdocPrint(html);
+    }
+    var _oprintb = document.getElementById("o-print"); if (_oprintb) _oprintb.onclick = printOrder;
   }
   // Goods receipt against a confirmed PO: let the user enter how much of each line
   // actually arrived (partial deliveries), then pull storable/consumable products into
@@ -11043,7 +11065,7 @@
     }
     var claimSheet = ipcSeedSheet();
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pc-save">Save</button><button id="pc-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="pc-compute">Compute</button><button id="pc-certify">Certify</button>' : "") + (cert.state === "certified" ? '<button id="pc-invoice">Create client invoice</button>' : "") + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pc-save">Save</button><button id="pc-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="pc-compute">Compute</button><button id="pc-certify">Certify</button>' : "") + (cert.state === "certified" ? '<button id="pc-invoice">Create client invoice</button>' : "") + (id !== "new" ? '<button id="pc-print">Print</button>' : "") + '</div>' +
       '<div class="o-stages"><span class="st ' + (!posted ? "on" : "done") + '">Draft</span><span class="st ' + (cert.state === "certified" ? "on" : cert.state === "invoiced" ? "done" : "") + '">Certified</span><span class="st ' + (cert.state === "invoiced" ? "on" : "") + '">Invoiced</span></div></div>' +
       '<div class="o-sheet"><div class="o-title">Interim Payment Certificate</div>' +
       '<div class="o-groups"><div>' +
@@ -11094,6 +11116,34 @@
     }
     document.getElementById("pc-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderCertificateForm(sid); } };
     var cbtn = document.getElementById("pc-compute"); if (cbtn) cbtn.onclick = paintSummary;
+    function printCertificate() {
+      var sh = ipcGrid.getSheet(), comp = ipcGrid.compute(), s = summaryFrom(ipcGrid.totals()), cc2 = S.company.currency_code;
+      var cCode = sgColByKey(sh, "code"), cDesc = sgColByKey(sh, "desc"), cContract = sgColByKey(sh, "contract"), cDone = sgColByKey(sh, "donepct"), cTodate = sgColByKey(sh, "todate"), cPeriod = sgColByKey(sh, "period");
+      function cell(r, ci) { return ci < 0 ? "" : esc(String(sh.rows[r].cells[ci] == null ? "" : sh.rows[r].cells[ci])); }
+      function val(r, ci) { return ci < 0 ? 0 : (typeof comp.vals[r][ci] === "number" ? comp.vals[r][ci] : 0); }
+      var body = sh.rows.map(function (r, ri) {
+        var isG = comp.grp[ri], lvl = r.lvl | 0, pad = 8 + lvl * 14;
+        var contract = val(ri, cContract), done = val(ri, cDone), todate = val(ri, cTodate), period = val(ri, cPeriod);
+        if (isG) return '<tr><td colspan="2" style="padding-left:' + pad + 'px;font-weight:700">' + (cell(ri, cDesc) || cell(ri, cCode)) + '</td><td class="r" style="font-weight:700">' + money(contract) + '</td><td class="r"></td><td class="r" style="font-weight:700">' + money(todate) + '</td><td class="r" style="font-weight:700">' + money(period) + '</td></tr>';
+        if (!cell(ri, cDesc) && !contract && !todate && !cell(ri, cCode)) return "";
+        return '<tr><td style="padding-left:' + pad + 'px">' + cell(ri, cCode) + '</td><td>' + cell(ri, cDesc) + '</td><td class="r">' + money(contract) + '</td><td class="r">' + (Math.round(done * 100) / 100) + '%</td><td class="r">' + money(todate) + '</td><td class="r">' + money(period) + '</td></tr>';
+      }).join("");
+      var summaryRows = '<div class="pr"><span>Work done to date</span><span>' + cc2 + " " + money(s.work) + '</span></div>' +
+        '<div class="pr"><span>Materials on site</span><span>' + cc2 + " " + money(s.mat) + '</span></div>' +
+        '<div class="pr"><span>Gross value to date</span><span>' + cc2 + " " + money(s.gross) + '</span></div>' +
+        '<div class="pr"><span>Less retention (' + retPct + '%)</span><span>-' + cc2 + " " + money(s.retention) + '</span></div>' +
+        '<div class="pr"><span>Less advance recovery</span><span>-' + cc2 + " " + money(s.adv) + '</span></div>' +
+        '<div class="pr"><span>Net to date</span><span>' + cc2 + " " + money(s.net) + '</span></div>' +
+        '<div class="pr"><span>Less previously certified</span><span>-' + cc2 + " " + money(s.prevNet) + '</span></div>' +
+        '<div class="pr ptt"><span>Amount due this certificate</span><span>' + cc2 + " " + money(s.current) + '</span></div>';
+      var html = '<div class="pinv">' + pdocHead("Interim Payment Certificate", cert.number || "Draft") +
+        '<div class="pmeta"><div><div class="pl">Project</div><div class="pv">' + esc((proj && proj.name) || "") + '</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(gv("pc-date") || cert.date_to || "") + '</div></div></div>' +
+        '<table class="ptab"><thead><tr><th>Ref</th><th>Description</th><th class="r">Contract</th><th class="r">Complete</th><th class="r">To date</th><th class="r">This period</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        '<div class="psum">' + summaryRows + '</div>' + pdocFoot() + '</div>';
+      pdocPrint(html);
+    }
+    var _pcp = document.getElementById("pc-print"); if (_pcp) _pcp.onclick = printCertificate;
     var cert2 = document.getElementById("pc-certify"); if (cert2) cert2.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("project_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderCertificateForm(sid); };
     var inv = document.getElementById("pc-invoice"); if (inv) inv.onclick = async function () {
       if (!proj.partner_id) { toast("Set a Customer on the project first."); return; }
@@ -12030,7 +12080,7 @@
     var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || t.name || "Tender");
     function num(v) { return parseFloat(v) || 0; }
-    var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button>';
+    var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button><button id="tn-print">Print</button>';
     if (id !== "new" && t.status === "draft") btns += '<button id="tn-submit">Mark Submitted</button>';
     if (id !== "new" && (t.status === "draft" || t.status === "submitted")) btns += '<button id="tn-won">Mark Won</button><button id="tn-lost">Mark Lost</button>';
     if (t.status === "won" && t.project_id) btns += '<button id="tn-goproj">Open project</button>';
@@ -12078,6 +12128,30 @@
     var lostb = document.getElementById("tn-lost"); if (lostb) lostb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("tenders").update({ status: "lost" }).eq("id", sid); toast("Marked lost"); renderTenderForm(sid); };
     var wonb = document.getElementById("tn-won"); if (wonb) wonb.onclick = async function () { var sid = await persist(); if (!sid) return; await convertTenderToProject(sid); };
     var gpb = document.getElementById("tn-goproj"); if (gpb) gpb.onclick = function () { renderProjectForm(t.project_id); };
+    function printTender() {
+      var sh = grid.getSheet(), comp = grid.compute(), cc = S.company.currency_code;
+      var cCode = sgColByKey(sh, "code"), cDesc = sgColByKey(sh, "desc"), cUnit = sgColByKey(sh, "unit"), cQty = sgColByKey(sh, "qty"), cSell = sgColByKey(sh, "sell");
+      function cell(r, ci) { return ci < 0 ? "" : esc(String(sh.rows[r].cells[ci] == null ? "" : sh.rows[r].cells[ci])); }
+      function val(r, ci) { return ci < 0 ? 0 : (typeof comp.vals[r][ci] === "number" ? comp.vals[r][ci] : 0); }
+      var body = sh.rows.map(function (r, ri) {
+        var isG = comp.grp[ri], lvl = r.lvl | 0, pad = 8 + lvl * 14, sell = val(ri, cSell);
+        if (isG) return '<tr><td colspan="5" style="padding-left:' + pad + 'px;font-weight:700">' + (cell(ri, cDesc) || cell(ri, cCode)) + '</td><td class="r" style="font-weight:700">' + money(sell) + '</td></tr>';
+        var q = val(ri, cQty), rate = q ? sell / q : sell;
+        if (!cell(ri, cDesc) && !q && !sell && !cell(ri, cCode)) return "";
+        return '<tr><td style="padding-left:' + pad + 'px">' + cell(ri, cCode) + '</td><td>' + cell(ri, cDesc) + '</td><td class="r">' + (q ? (Math.round(q * 1e4) / 1e4) : "") + '</td><td>' + cell(ri, cUnit) + '</td><td class="r">' + money(rate) + '</td><td class="r">' + money(sell) + '</td></tr>';
+      }).join("");
+      var clientName = "", cs = document.getElementById("tn-client");
+      if (cs && cs.value) clientName = (partners.filter(function (p) { return p.id === cs.value; })[0] || {}).name || "";
+      var total = Number(grid.totals().sell || 0);
+      var html = '<div class="pinv">' + pdocHead("Estimate", gv("tn-num") || t.number || "Draft") +
+        '<div class="pmeta"><div><div class="pl">Client</div><div class="pv">' + esc(clientName) + '</div><div class="pl" style="margin-top:8px">Project</div><div class="pv">' + esc(gv("tn-name") || t.name || "") + '</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(gv("tn-date") || "") + '</div>' + (gv("tn-valid") ? '<div class="pl" style="margin-top:8px">Valid until</div><div class="pv">' + esc(gv("tn-valid")) + '</div>' : "") + '</div></div>' +
+        '<table class="ptab"><thead><tr><th>Code</th><th>Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        '<div class="psum"><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(total) + '</span></div></div>' +
+        pdocFoot() + '</div>';
+      pdocPrint(html);
+    }
+    var _tnp = document.getElementById("tn-print"); if (_tnp) _tnp.onclick = printTender;
   }
   async function convertTenderToProject(tenderId) {
     var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
