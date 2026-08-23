@@ -594,23 +594,27 @@
   ACTION_APP["act.all"] = "activity";
 
   // ============================ AUTH ============================
-  // ORB-09 sign-in bot protection: dormant until a Cloudflare Turnstile SITE key is
-  // present (set below or via window.APP_CONFIG.TURNSTILE_SITE_KEY). When set, the
-  // login + signup render the widget and pass its token to Supabase; when empty,
-  // auth behaves exactly as before (no widget, no token).
-  var TURNSTILE_SITE_KEY = (window.APP_CONFIG && window.APP_CONFIG.TURNSTILE_SITE_KEY) || "0x4AAAAAAEUjGpVLqP-zNy-m";
-  function mountTurnstile() {
-    if (!TURNSTILE_SITE_KEY) return;
-    window.__cfToken = "";
+  // ORB-09 sign-in bot protection: hCaptcha. The shared Supabase project's Auth captcha
+  // provider is set to hCaptcha (same as the customer /app), so the login must send an
+  // hCaptcha token - a Cloudflare Turnstile token would be rejected. Dormant until a site
+  // key is present (config or fallback). When set, login + signup render the widget and
+  // pass its token to Supabase; when empty, no widget and no token.
+  var HCAPTCHA_SITE_KEY = (window.APP_CONFIG && window.APP_CONFIG.HCAPTCHA_SITE_KEY) || "0f5403a8-f876-4bb0-a52c-5f38615e25ee";
+  var _hcaptchaId = null;
+  function mountHcaptcha() {
+    if (!HCAPTCHA_SITE_KEY) return;
+    window.__cfToken = ""; _hcaptchaId = null;
     var el = document.getElementById("cf-widget"); if (!el) return;
-    function render() { try { window.turnstile.render(el, { sitekey: TURNSTILE_SITE_KEY, callback: function (t) { window.__cfToken = t; } }); } catch (e) {} }
-    if (window.turnstile && window.turnstile.render) { render(); return; }
-    if (!document.getElementById("cf-turnstile-js")) {
-      window.__cfOnload = render;
-      var s = document.createElement("script"); s.id = "cf-turnstile-js"; s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=__cfOnload"; s.async = true; s.defer = true; document.head.appendChild(s);
-    } else {
-      var n = 0, iv = setInterval(function () { if (window.turnstile && window.turnstile.render) { clearInterval(iv); render(); } else if (++n > 50) clearInterval(iv); }, 100);
+    function render() {
+      if (!window.hcaptcha || typeof window.hcaptcha.render !== "function") return false;
+      if (el.childNodes.length) return true; // already rendered
+      try { _hcaptchaId = window.hcaptcha.render(el, { sitekey: HCAPTCHA_SITE_KEY, callback: function (t) { window.__cfToken = t; }, "expired-callback": function () { window.__cfToken = ""; }, "error-callback": function () { window.__cfToken = ""; } }); return true; } catch (e) { return false; }
     }
+    if (render()) return;
+    if (!document.getElementById("hcaptcha-js")) {
+      var s = document.createElement("script"); s.id = "hcaptcha-js"; s.src = "https://js.hcaptcha.com/1/api.js?render=explicit"; s.async = true; s.defer = true; document.head.appendChild(s);
+    }
+    var n = 0, iv = setInterval(function () { if (render() || ++n > 80) clearInterval(iv); }, 100);
   }
   function renderLogin(mode) {
     mode = mode || "in";
@@ -621,7 +625,7 @@
       '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
       '<label>Password</label><input id="pw" type="password" autocomplete="current-password" placeholder="........">' +
-      (TURNSTILE_SITE_KEY ? '<div id="cf-widget" style="margin-top:14px"></div>' : '') +
+      (HCAPTCHA_SITE_KEY ? '<div id="cf-widget" style="margin-top:14px"></div>' : '') +
       (mode === "in" ? '<label class="rememberrow"><input type="checkbox" id="remember"' + (_remember ? " checked" : "") + '> Keep me signed in on this device</label>' : '') +
       '<div class="err" id="err"></div>' +
       '<button class="btn pri" id="go" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">' + (mode === "in" ? "Sign in" : "Sign up") + "</button>" +
@@ -630,7 +634,7 @@
     document.getElementById("sw").onclick = function () { renderLogin(mode === "in" ? "up" : "in"); };
     document.getElementById("go").onclick = doAuth.bind(null, mode);
     document.getElementById("pw").onkeydown = function (e) { if (e.key === "Enter") doAuth(mode); };
-    mountTurnstile();
+    mountHcaptcha();
   }
   async function doAuth(mode) {
     var email = document.getElementById("email").value.trim();
@@ -639,12 +643,12 @@
     if (!email || !pw) { err.textContent = "Enter your email and password."; return; }
     var rm = document.getElementById("remember"); if (rm) { _remember = rm.checked; localStorage.setItem(REMEMBER_KEY, _remember ? "1" : "0"); }
     var creds = { email: email, password: pw };
-    if (TURNSTILE_SITE_KEY) {
+    if (HCAPTCHA_SITE_KEY) {
       if (!window.__cfToken) { err.textContent = "Please complete the verification below."; return; }
       creds.options = { captchaToken: window.__cfToken };
     }
     var res = mode === "in" ? await sb.auth.signInWithPassword(creds) : await sb.auth.signUp(creds);
-    if (res.error) { err.textContent = res.error.message; if (TURNSTILE_SITE_KEY && window.turnstile) { try { window.turnstile.reset(); } catch (e) {} window.__cfToken = ""; } return; }
+    if (res.error) { err.textContent = res.error.message; if (HCAPTCHA_SITE_KEY && window.hcaptcha) { try { window.hcaptcha.reset(_hcaptchaId); } catch (e) {} window.__cfToken = ""; } return; }
     if (mode === "up" && !res.data.session) { err.textContent = "Check your email to confirm, then sign in."; return; }
     boot();
   }
