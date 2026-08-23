@@ -682,9 +682,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 /* print / pdf invoice */
 .o-print{display:none}
 .pinv{max-width:720px;margin:0 auto;color:#111;background:#fff;padding:30px;font-size:13px;font-family:var(--ui)}
-.pinv .phead{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111;padding-bottom:14px}
-.pinv .pname{font-size:20px;font-weight:800}
-.pinv .pmuted{color:#555;font-size:12px;margin-top:4px}
+.pinv .phead{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;border-bottom:2px solid var(--print-accent,#111);padding-bottom:14px}
+.pinv .pfrom{display:flex;align-items:flex-start;gap:14px}
+.pinv .plogo{max-height:64px;max-width:220px;object-fit:contain}
+.pinv .pname{font-size:20px;font-weight:800;line-height:1.15}
+.pinv .pmuted{color:#555;font-size:12px;margin-top:4px;line-height:1.45}
+.pinv .pdoc{text-align:right;white-space:nowrap}
 .pinv .pdoc{text-align:right}
 .pinv .pdt{font-size:22px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#333}
 .pinv .pnum{color:#555;margin-top:4px}
