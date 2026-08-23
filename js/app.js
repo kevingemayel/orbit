@@ -276,7 +276,7 @@
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
-        { label: "Configuration", items: [["Companies", "companies"], ["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Products", "products"], ["Exchange Rates", "rates"], ["Follow-up Levels", "fu.levels"]] }
+        { label: "Configuration", items: [["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
     },
     sales: {
@@ -318,7 +318,7 @@
         { label: "Overview", action: "inv.onhand" },
         { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"]] },
         { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
-        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
+        { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Classification", "settings.classification"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
     },
     project: {
@@ -424,14 +424,9 @@
         { label: "Document Numbering", action: "settings.numbering" },
         { label: "Import Data", action: "settings.import" },
         { label: "Custom Fields", action: "settings.customfields" },
-        { label: "Classification", action: "settings.classification" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
-        { label: "Period Lock", action: "settings.lock" },
-        { label: "Appearance", action: "appearance" },
-        { label: "Taxes", action: "taxes" },
-        { label: "Exchange Rates", action: "rates" },
-        { label: "Chart of Accounts", action: "accounts" }
+        { label: "Appearance", action: "appearance" }
       ]
     },
     insights: {
@@ -457,10 +452,10 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "settings", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "settings", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "settings", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project", "proj.labels": "project", "acc.payterms": "accounting",
@@ -468,7 +463,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.lock": "settings", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
@@ -11614,6 +11609,7 @@
     var t = id === "new" ? { status: "draft", tender_date: today(), margin_pct: 15 } : (await sb.from("tenders").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("tender_lines").select("*").eq("tender_id", id).order("sequence")).data || [];
     var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var tuoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var srcLead = t.source_lead_id ? (await sb.from("crm_leads").select("id,name").eq("id", t.source_lead_id).maybeSingle()).data : null;
     var locked = t.status === "won";
     var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
@@ -11660,9 +11656,10 @@
         tr.innerHTML = '<td>' + esc(l.code || "") + '</td><td>' + esc(l.description || "") + '</td><td>' + esc(l.unit || "") + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td class="num">' + money(l.material_cost) + '</td><td class="num">' + money(l.labour_cost) + '</td><td class="num">' + money(l.subcontract_cost) + '</td><td class="num">' + money(l.other_cost) + '</td><td class="num">' + Number(l.margin_pct || 0) + '%</td><td class="num">' + money(l.sell_rate) + '</td><td class="num">' + money(l.line_total) + '</td>';
         lb.appendChild(tr); return;
       }
-      tr.innerHTML = '<td><input class="tl-code" value="' + esc(l ? l.code : "") + '"></td><td><input class="tl-desc" value="' + esc(l ? l.description : "") + '" placeholder="Description"></td><td><input class="tl-unit" value="' + esc(l ? l.unit : "") + '"></td><td><input class="tl-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="tl-mat num" type="number" step="0.01" value="' + (l ? l.material_cost : 0) + '"></td><td><input class="tl-lab num" type="number" step="0.01" value="' + (l ? l.labour_cost : 0) + '"></td><td><input class="tl-sub num" type="number" step="0.01" value="' + (l ? l.subcontract_cost : 0) + '"></td><td><input class="tl-oth num" type="number" step="0.01" value="' + (l ? l.other_cost : 0) + '"></td><td><input class="tl-margin num" type="number" step="0.1" value="' + (l ? l.margin_pct : defMargin) + '"></td><td class="num tl-rate">0.00</td><td class="num tl-total">0.00</td><td><button class="del">&times;</button></td>';
+      tr.innerHTML = '<td><input class="tl-code" value="' + esc(l ? l.code : "") + '"></td><td><input class="tl-desc" value="' + esc(l ? l.description : "") + '" placeholder="Description"></td><td>' + unitSelectHTML("tl-unit", l ? l.unit : "", tuoms) + '</td><td><input class="tl-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="tl-mat num" type="number" step="0.01" value="' + (l ? l.material_cost : 0) + '"></td><td><input class="tl-lab num" type="number" step="0.01" value="' + (l ? l.labour_cost : 0) + '"></td><td><input class="tl-sub num" type="number" step="0.01" value="' + (l ? l.subcontract_cost : 0) + '"></td><td><input class="tl-oth num" type="number" step="0.01" value="' + (l ? l.other_cost : 0) + '"></td><td><input class="tl-margin num" type="number" step="0.1" value="' + (l ? l.margin_pct : defMargin) + '"></td><td class="num tl-rate">0.00</td><td class="num tl-total">0.00</td><td><button class="del">&times;</button></td>';
       lb.appendChild(tr);
       tr.querySelectorAll("input").forEach(function (el) { el.addEventListener("input", recalc); });
+      wireUnitAdd(tr.querySelector(".tl-unit"), tuoms);
       tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
     }
     if (lines.length) lines.forEach(addRow); else if (!locked) addRow(null);
