@@ -8382,7 +8382,9 @@
   }
   function printCurrentPage() { applyPrintFrame(currentPrintTitle()); window.print(); }
   // any print path (our Print buttons OR the browser's Ctrl+P) gets the branded header/footer
-  if (!window.__orbitPrintHook) { window.__orbitPrintHook = true; window.addEventListener("beforeprint", function () { try { applyPrintFrame(currentPrintTitle()); } catch (e) {} }); }
+  // Brand raw page/report prints with the header/footer frame - but NOT the purpose-built
+  // documents (printInvoice/printPayslip use body.printing and draw their own branded head).
+  if (!window.__orbitPrintHook) { window.__orbitPrintHook = true; window.addEventListener("beforeprint", function () { if (document.body.classList.contains("printing")) return; try { applyPrintFrame(currentPrintTitle()); } catch (e) {} }); }
   function printerSvg() { return '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>'; }
   // Put a Print button beside every form Save button (the .o-sb-btns status-bar row).
   function injectPrintButtons() {
@@ -8390,6 +8392,12 @@
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i];
       if (row.querySelector(".o-inl-print")) continue;
+      // do NOT add a second Print button where the form already has its own (e.g. invoice
+      // f-print -> printInvoice, payslip ps-print -> printPayslip). Those print a proper
+      // branded document; ours would duplicate the button and print the raw page instead.
+      var existingPrint = row.querySelector('[id$="-print"]');
+      if (!existingPrint) { var pb2 = row.querySelectorAll("button"); for (var k = 0; k < pb2.length; k++) { if (pb2[k].textContent.trim().toLowerCase() === "print") { existingPrint = pb2[k]; break; } } }
+      if (existingPrint) continue;
       var saveBtn = row.querySelector('[id$="-save"]');
       if (!saveBtn) { var bs = row.querySelectorAll("button"); for (var j = 0; j < bs.length; j++) { if (bs[j].textContent.trim().toLowerCase() === "save") { saveBtn = bs[j]; break; } } }
       if (!saveBtn) continue;

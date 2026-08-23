@@ -704,6 +704,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
   body.printing > #root{display:none !important}
   body.printing .o-print{display:block !important}
   body.printing .toast{display:none !important}
+  /* a purpose-built document draws its own branded header; never also show the page frame */
+  body.printing #print-header,body.printing #print-footer{display:none !important}
 }
 
 /* modal / sheet dialogs (email compose, register payment, exchange rate) */
