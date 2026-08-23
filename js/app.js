@@ -10908,11 +10908,25 @@
     var savedByBoq = {}; certLines.forEach(function (l) { savedByBoq[l.boq_id] = l; });
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (cert.number || "Certificate");
     var projField = (id === "new") ? '<select id="pc-proj">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (cert.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(proj.name || "") + '</span>';
-    var lineRows = boq.map(function (b) {
-      var sv = savedByBoq[b.id], pv = prevByBoq[b.id];
-      var prevPct = pv ? Number(pv.cum_pct) : 0, curPct = sv ? Number(sv.cum_pct) : prevPct;
-      return '<tr data-boq="' + b.id + '" data-amt="' + b.amount + '" data-prev="' + (pv ? pv.cum_amount : 0) + '"><td>' + esc(b.code || "") + '</td><td>' + esc(b.description) + '</td><td class="num">' + money(b.amount) + '</td><td class="num muted">' + prevPct.toFixed(1) + '%</td><td><input class="pc-pct num" type="number" step="0.1" value="' + curPct + '"' + (posted ? " disabled" : "") + ' style="width:70px"></td><td class="num pc-cur">0.00</td></tr>';
-    }).join("");
+    // The IPC claim is an independent spreadsheet (client valuation), NOT tied to our costs.
+    // Seed order: this cert's own saved sheet -> roll the previous cert's sheet forward
+    // (its Complete % becomes this cert's Prev %) -> build fresh from the contract BOQ.
+    function ipcSeedSheet() {
+      if (cert.claim_sheet && cert.claim_sheet.cols && cert.claim_sheet.cols.length) return cert.claim_sheet;
+      if (prevCert && prevCert.claim_sheet && prevCert.claim_sheet.cols && prevCert.claim_sheet.cols.length) {
+        var sh = JSON.parse(JSON.stringify(prevCert.claim_sheet)); var comp = sgCompute(sh);
+        var cP = sgColByKey(sh, "prevpct"), cT = sgColByKey(sh, "thispct"), cD = sgColByKey(sh, "donepct");
+        sh.rows.forEach(function (r, ri) { if (!comp.grp[ri]) { var done = cD >= 0 ? comp.vals[ri][cD] : 0; if (cP >= 0) r.cells[cP] = sgNum(Number(done) || 0); if (cT >= 0) r.cells[cT] = "0"; } });
+        return sh;
+      }
+      if (boq.length) {
+        var sh2 = sgDefaultSheet("ipc");
+        sh2.rows = boq.map(function (b) { var pv = prevByBoq[b.id]; var pp = pv ? Number(pv.cum_pct) : 0; return { lvl: 0, cells: [String(b.code || ""), String(b.description || ""), sgNum(Number(b.amount || 0)), sgNum(pp), "0", "=@D+@E", "=@C*@F/100", "=@C*@E/100"] }; });
+        return sh2;
+      }
+      return sgDefaultSheet("ipc");
+    }
+    var claimSheet = ipcSeedSheet();
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pc-save">Save</button><button id="pc-discard">Discard</button>' + (id !== "new" && !posted ? '<button id="pc-compute">Compute</button><button id="pc-certify">Certify</button>' : "") + (cert.state === "certified" ? '<button id="pc-invoice">Create client invoice</button>' : "") + '</div>' +
       '<div class="o-stages"><span class="st ' + (!posted ? "on" : "done") + '">Draft</span><span class="st ' + (cert.state === "certified" ? "on" : cert.state === "invoiced" ? "done" : "") + '">Certified</span><span class="st ' + (cert.state === "invoiced" ? "on" : "") + '">Invoiced</span></div></div>' +
@@ -10926,58 +10940,45 @@
       fld("Advance recovery", '<input id="pc-adv" type="number" step="0.01" value="' + (cert.advance_recovery || 0) + '"' + (posted ? " disabled" : "") + '>', "Advance payment recovered on this certificate.") +
       fld("VAT", '<select id="pc-tax"' + (posted ? " disabled" : "") + '><option value="">No VAT</option>' + certTaxes.map(function (t) { return '<option value="' + t.id + '"' + (certDefTax === t.id ? " selected" : "") + '>' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("") + '</select>', "VAT applied to the amount invoiced on this certificate.") +
       '</div></div>' +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Schedule of values</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Code</td><td>Description</td><td class="num">Contract</td><td class="num">Prev %</td><td class="num">Cum %</td><td class="num">This period</td></tr></thead><tbody>' + (lineRows || '<tr><td colspan="6" class="muted">No schedule of values. Add one on the project (Schedule of Values).</td></tr>') + '</tbody></table></div><div class="o-tot" id="pc-sum" style="margin-top:12px"></div></div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Claim breakdown &middot; valuation</div></div><div class="o-nb-pg"><div id="pc-grid" class="sg-host"></div><div class="o-tot" id="pc-sum" style="margin-top:12px"></div></div></div>' +
       '</div>';
     document.getElementById("pc-discard").onclick = function () { go("pc.list"); };
     if (id === "new") { var ps = document.getElementById("pc-proj"); if (ps) ps.onchange = function () { renderCertificateForm("new", ps.value); }; }
     var retPct = Number(proj.retention_pct) || 0;
-    function computeSummary() {
-      var work = 0;
-      document.querySelectorAll("#o-main tr[data-boq]").forEach(function (tr) {
-        var amt = Number(tr.dataset.amt) || 0, prevAmt = Number(tr.dataset.prev) || 0;
-        var pct = parseFloat(tr.querySelector(".pc-pct").value) || 0;
-        var cum = amt * pct / 100; work += cum;
-        tr.querySelector(".pc-cur").textContent = money(cum - prevAmt);
-      });
-      var mat = parseFloat(gv("pc-mat")) || 0, adv = parseFloat(gv("pc-adv")) || 0;
-      var variations = 0; // approved variations already fold into contract; kept 0 here to avoid double count
-      var gross = work + mat + variations;
-      var retention = gross * retPct / 100;
-      var net = gross - retention - adv;
-      var prevNet = prevCert ? Number(prevCert.net_to_date) : 0;
-      var current = net - prevNet;
-      document.getElementById("pc-sum").innerHTML =
-        '<div class="r"><span class="k">Work done to date</span><span>' + cc + " " + money(work) + '</span></div>' +
-        '<div class="r"><span class="k">Materials on site</span><span>' + cc + " " + money(mat) + '</span></div>' +
-        '<div class="r"><span class="k">Gross value to date</span><span>' + cc + " " + money(gross) + '</span></div>' +
-        '<div class="r"><span class="k">Less retention (' + retPct + '%)</span><span>-' + cc + " " + money(retention) + '</span></div>' +
-        '<div class="r"><span class="k">Less advance recovery</span><span>-' + cc + " " + money(adv) + '</span></div>' +
-        '<div class="r"><span class="k">Net to date</span><span>' + cc + " " + money(net) + '</span></div>' +
-        '<div class="r"><span class="k">Less previously certified</span><span>-' + cc + " " + money(prevNet) + '</span></div>' +
-        '<div class="r tt"><span class="k">Amount due this certificate</span><span>' + cc + " " + money(current) + '</span></div>';
-      return { work: work, mat: mat, gross: gross, retention: retention, adv: adv, net: net, prevNet: prevNet, current: current };
+    var ipcGrid = renderSheetGrid(document.getElementById("pc-grid"), claimSheet, { readOnly: posted, onChange: function () { paintSummary(); } });
+    function summaryFrom(tot) {
+      var work = Number(tot.todate || 0), mat = parseFloat(gv("pc-mat")) || 0, adv = parseFloat(gv("pc-adv")) || 0;
+      var gross = work + mat, retention = gross * retPct / 100, net = gross - retention - adv;
+      var prevNet = prevCert ? Number(prevCert.net_to_date) : 0, current = net - prevNet;
+      return { work: work, mat: mat, gross: gross, retention: retention, adv: adv, net: net, prevNet: prevNet, current: current, period: Number(tot.period || 0) };
     }
-    document.querySelectorAll(".pc-pct").forEach(function (i) { i.addEventListener("input", computeSummary); });
-    var mi = document.getElementById("pc-mat"), ai = document.getElementById("pc-adv"); if (mi) mi.addEventListener("input", computeSummary); if (ai) ai.addEventListener("input", computeSummary);
-    computeSummary();
+    function paintSummary() {
+      var s = summaryFrom(ipcGrid.totals());
+      document.getElementById("pc-sum").innerHTML =
+        '<div class="r"><span class="k">Work done to date</span><span>' + cc + " " + money(s.work) + '</span></div>' +
+        '<div class="r"><span class="k">Certified this period (from breakdown)</span><span>' + cc + " " + money(s.period) + '</span></div>' +
+        '<div class="r"><span class="k">Materials on site</span><span>' + cc + " " + money(s.mat) + '</span></div>' +
+        '<div class="r"><span class="k">Gross value to date</span><span>' + cc + " " + money(s.gross) + '</span></div>' +
+        '<div class="r"><span class="k">Less retention (' + retPct + '%)</span><span>-' + cc + " " + money(s.retention) + '</span></div>' +
+        '<div class="r"><span class="k">Less advance recovery</span><span>-' + cc + " " + money(s.adv) + '</span></div>' +
+        '<div class="r"><span class="k">Net to date</span><span>' + cc + " " + money(s.net) + '</span></div>' +
+        '<div class="r"><span class="k">Less previously certified</span><span>-' + cc + " " + money(s.prevNet) + '</span></div>' +
+        '<div class="r tt"><span class="k">Amount due this certificate</span><span>' + cc + " " + money(s.current) + '</span></div>';
+    }
+    var mi = document.getElementById("pc-mat"), ai = document.getElementById("pc-adv"); if (mi) mi.addEventListener("input", paintSummary); if (ai) ai.addEventListener("input", paintSummary);
+    paintSummary();
     async function persist() {
       var projId = id === "new" ? (document.getElementById("pc-proj") ? document.getElementById("pc-proj").value : cert.project_id) : cert.project_id;
-      var s = computeSummary();
-      var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current, tax_id: (document.getElementById("pc-tax") ? (document.getElementById("pc-tax").value || null) : (cert.tax_id || null)) };
+      var s = summaryFrom(ipcGrid.totals());
+      var row = { project_id: projId, number: gv("pc-num"), date_to: gv("pc-date"), work_done: s.work, materials_on_site: s.mat, variations_done: 0, gross_to_date: s.gross, retention_pct: retPct, retention_amount: s.retention, advance_recovery: s.adv, net_to_date: s.net, previous_certified: s.prevNet, current_certified: s.current, claim_sheet: ipcGrid.getSheet(), tax_id: (document.getElementById("pc-tax") ? (document.getElementById("pc-tax").value || null) : (cert.tax_id || null)) };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.state = "draft"; var ins = await sb.from("project_certificates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("project_certificates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
-      await sb.from("project_certificate_lines").delete().eq("certificate_id", sid);
-      var lrows = [];
-      document.querySelectorAll("#o-main tr[data-boq]").forEach(function (tr, i) {
-        var amt = Number(tr.dataset.amt) || 0, prevAmt = Number(tr.dataset.prev) || 0, pct = parseFloat(tr.querySelector(".pc-pct").value) || 0, cum = amt * pct / 100;
-        lrows.push({ company_id: S.company.id, certificate_id: sid, boq_id: tr.dataset.boq, description: "", contract_amount: amt, prev_pct: 0, cum_pct: pct, cum_amount: cum, prev_amount: prevAmt, current_amount: cum - prevAmt, sequence: (i + 1) * 10 });
-      });
-      if (lrows.length) await sb.from("project_certificate_lines").insert(lrows);
+      await sb.from("project_certificate_lines").delete().eq("certificate_id", sid); // legacy per-BOQ lines superseded by claim_sheet
       return sid;
     }
     document.getElementById("pc-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderCertificateForm(sid); } };
-    var cbtn = document.getElementById("pc-compute"); if (cbtn) cbtn.onclick = computeSummary;
+    var cbtn = document.getElementById("pc-compute"); if (cbtn) cbtn.onclick = paintSummary;
     var cert2 = document.getElementById("pc-certify"); if (cert2) cert2.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("project_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderCertificateForm(sid); };
     var inv = document.getElementById("pc-invoice"); if (inv) inv.onclick = async function () {
       if (!proj.partner_id) { toast("Set a Customer on the project first."); return; }
@@ -11678,6 +11679,228 @@
     var rows = (await sb.from("tenders").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
     return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
+  // ======================= SPREADSHEET ENGINE (Excel-like grid) =======================
+  // A "sheet" = { cols:[{label,kind,key,w}], rows:[{lvl, cells:[raw,...]}] }.
+  //   kind: "text" | "num" | "money".  money columns roll up (auto-sum children) on
+  //   parent/section rows; text/num do not.  A cell holds a literal or an "=formula".
+  //   Formulas: A1 cell refs, @D for "this row's column D", SUM/AVG/MIN/MAX/COUNT/
+  //   ROUND/ABS with ranges (A1:B3), + - * / ( ) and %.  key gives a column its
+  //   meaning (code/desc/unit/qty/cost/sell/margin) so totals & BOQ can be derived.
+  function sgColLetter(i) { var s = "", n = i + 1; while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+  function sgColIdx(letters) { var n = 0, u = String(letters).toUpperCase(); for (var i = 0; i < u.length; i++) { var c = u.charCodeAt(i) - 64; if (c < 1 || c > 26) return -1; n = n * 26 + c; } return n - 1; }
+  function sgNum(v) { if (typeof v !== "number" || !isFinite(v)) return ""; var r = Math.round(v * 1e6) / 1e6; return String(r); }
+  function sgNormalize(sheet) {
+    if (!sheet || !sheet.cols) return sgDefaultSheet("tender");
+    sheet.rows = sheet.rows || [];
+    sheet.rows.forEach(function (r) { r.lvl = Math.max(0, r.lvl | 0); r.cells = r.cells || []; while (r.cells.length < sheet.cols.length) r.cells.push(""); r.cells.length = sheet.cols.length; });
+    return sheet;
+  }
+  function sgDefaultSheet(kind, defMargin) {
+    if (kind === "ipc") {
+      return { cols: [
+        { label: "Ref", kind: "text", key: "code", w: 60 },
+        { label: "Description", kind: "text", key: "desc", w: 260 },
+        { label: "Contract value", kind: "money", key: "contract", w: 120 },
+        { label: "Prev %", kind: "num", key: "prevpct", w: 70 },
+        { label: "This %", kind: "num", key: "thispct", w: 70 },
+        { label: "Complete %", kind: "num", key: "donepct", w: 84 },
+        { label: "Value to date", kind: "money", key: "todate", w: 120 },
+        { label: "This period", kind: "money", key: "period", w: 120 }
+      ], rows: [{ lvl: 0, cells: ["", "", "0", "0", "0", "=@D+@E", "=@C*@F/100", "=@C*@E/100"] }] };
+    }
+    var m = defMargin != null ? defMargin : 15;
+    return { cols: [
+      { label: "Code", kind: "text", key: "code", w: 62 },
+      { label: "Description", kind: "text", key: "desc", w: 250 },
+      { label: "Unit", kind: "text", key: "unit", w: 54 },
+      { label: "Qty", kind: "num", key: "qty", w: 66 },
+      { label: "Unit cost", kind: "num", key: "ucost", w: 88 },
+      { label: "Cost", kind: "money", key: "cost", w: 100 },
+      { label: "Margin %", kind: "num", key: "margin", w: 78 },
+      { label: "Sell", kind: "money", key: "sell", w: 108 }
+    ], rows: [{ lvl: 0, cells: ["", "", "", "1", "0", "=@D*@E", String(m), "=@F*(1+@G/100)"] }] };
+  }
+  function sgFromTenderLines(lines, defMargin) {
+    var sh = sgDefaultSheet("tender", defMargin);
+    if (!lines || !lines.length) return sh;
+    sh.rows = lines.map(function (l) {
+      var uc = Number(l.material_cost || 0) + Number(l.labour_cost || 0) + Number(l.subcontract_cost || 0) + Number(l.other_cost || 0);
+      return { lvl: 0, cells: [ String(l.code || ""), String(l.description || ""), String(l.unit || ""), sgNum(Number(l.quantity || 0)), sgNum(uc), "=@D*@E", sgNum(Number(l.margin_pct || 0)), "=@F*(1+@G/100)" ] };
+    });
+    return sh;
+  }
+  function sgEval(expr, at, curRow) {
+    function cellNum(col, row) { var ci = sgColIdx(col); return ci < 0 ? 0 : at(ci, (parseInt(row, 10) || 0) - 1); }
+    var e = String(expr);
+    // functions with ranges / arg lists
+    e = e.replace(/\b(SUM|AVG|AVERAGE|MIN|MAX|COUNT|ROUND|ABS)\s*\(([^()]*)\)/gi, function (m, fn, args) {
+      fn = fn.toUpperCase(); var nums = [];
+      args.split(",").forEach(function (part) {
+        part = part.trim(); if (part === "") return;
+        var rg = part.match(/^@?([A-Za-z]+)(\d*):@?([A-Za-z]+)(\d*)$/);
+        var rf = part.match(/^([A-Za-z]+)(\d+)$/);
+        var at1 = part.match(/^@([A-Za-z]+)$/);
+        if (rg && rg[2] && rg[4]) { var c1 = sgColIdx(rg[1]), r1 = parseInt(rg[2], 10) - 1, c2 = sgColIdx(rg[3]), r2 = parseInt(rg[4], 10) - 1; var ca = Math.min(c1, c2), cb = Math.max(c1, c2), ra = Math.min(r1, r2), rb = Math.max(r1, r2); for (var rr = ra; rr <= rb; rr++) for (var cc = ca; cc <= cb; cc++) nums.push(at(cc, rr)); }
+        else if (at1) { nums.push(at(sgColIdx(at1[1]), curRow)); }
+        else if (rf) { nums.push(cellNum(rf[1], rf[2])); }
+        else { var nn = parseFloat(part); nums.push(isNaN(nn) ? 0 : nn); }
+      });
+      var sum = nums.reduce(function (a, b) { return a + b; }, 0);
+      if (fn === "SUM") return "(" + sum + ")";
+      if (fn === "AVG" || fn === "AVERAGE") return "(" + (nums.length ? sum / nums.length : 0) + ")";
+      if (fn === "MIN") return "(" + (nums.length ? Math.min.apply(null, nums) : 0) + ")";
+      if (fn === "MAX") return "(" + (nums.length ? Math.max.apply(null, nums) : 0) + ")";
+      if (fn === "COUNT") return "(" + nums.length + ")";
+      if (fn === "ROUND") { var f = Math.pow(10, nums[1] || 0); return "(" + (Math.round((nums[0] || 0) * f) / f) + ")"; }
+      if (fn === "ABS") return "(" + Math.abs(nums[0] || 0) + ")";
+      return "(0)";
+    });
+    e = e.replace(/@([A-Za-z]+)/g, function (m, col) { var ci = sgColIdx(col); return "(" + (ci < 0 ? 0 : at(ci, curRow)) + ")"; });
+    e = e.replace(/\b([A-Za-z]+)(\d+)\b/g, function (m, col, row) { return "(" + cellNum(col, row) + ")"; });
+    e = e.replace(/%/g, "/100");
+    if (!/^[-+*/().,0-9eE\s]*$/.test(e)) return 0;
+    try { var v = Function('"use strict";return (' + (e.trim() || "0") + ')')(); return (typeof v === "number" && isFinite(v)) ? v : 0; } catch (_) { return 0; }
+  }
+  function sgCompute(sheet) {
+    sgNormalize(sheet);
+    var rows = sheet.rows, cols = sheet.cols, R = rows.length, C = cols.length;
+    var vals = [], grp = [];
+    for (var i = 0; i < R; i++) { var a = []; for (var k = 0; k < C; k++) a.push(0); vals.push(a); grp.push(i + 1 < R && (rows[i + 1].lvl | 0) > (rows[i].lvl | 0)); }
+    function kids(i) { var lvl = rows[i].lvl | 0, o = []; for (var j = i + 1; j < R; j++) { var lj = rows[j].lvl | 0; if (lj <= lvl) break; if (lj === lvl + 1) o.push(j); } return o; }
+    function raw(r, c) { var ce = rows[r].cells; var v = ce ? ce[c] : ""; return v == null ? "" : String(v); }
+    function at(c0, r0) { if (r0 < 0 || r0 >= R || c0 < 0 || c0 >= C) return 0; var v = vals[r0][c0]; return typeof v === "number" ? v : (parseFloat(v) || 0); }
+    var passes = Math.min(80, R * 2 + 8);
+    for (var p = 0; p < passes; p++) {
+      var changed = false;
+      for (var r = 0; r < R; r++) for (var c = 0; c < C; c++) {
+        var kind = cols[c].kind || "num", nv;
+        if (grp[r] && kind === "money") { var s = 0; kids(r).forEach(function (ci) { var v = vals[ci][c]; if (typeof v === "number") s += v; }); nv = s; }
+        else { var rw = raw(r, c).trim();
+          if (rw.charAt(0) === "=") nv = sgEval(rw.slice(1), at, r);
+          else if (kind === "text") nv = rw;
+          else if (rw === "") nv = 0;
+          else { var n = parseFloat(rw.replace(/%/g, "").replace(/,/g, "")); nv = isNaN(n) ? 0 : n; }
+        }
+        if (vals[r][c] !== nv) { vals[r][c] = nv; changed = true; }
+      }
+      if (!changed) break;
+    }
+    return { vals: vals, grp: grp, kids: kids };
+  }
+  function sgTotals(sheet, comp) {
+    var out = {}, cols = sheet.cols, rows = sheet.rows;
+    cols.forEach(function (col, c) { if (!col.key) return; var s = 0; for (var r = 0; r < rows.length; r++) if ((rows[r].lvl | 0) === 0 && col.kind === "money") { var v = comp.vals[r][c]; if (typeof v === "number") s += v; } if (col.kind === "money") out[col.key] = s; });
+    return out;
+  }
+  function sgColByKey(sheet, key) { for (var c = 0; c < sheet.cols.length; c++) if (sheet.cols[c].key === key) return c; return -1; }
+  function sgLeafRows(sheet, comp) {
+    var out = [], rows = sheet.rows;
+    var cCode = sgColByKey(sheet, "code"), cDesc = sgColByKey(sheet, "desc"), cUnit = sgColByKey(sheet, "unit"), cQty = sgColByKey(sheet, "qty"), cCost = sgColByKey(sheet, "cost"), cSell = sgColByKey(sheet, "sell");
+    for (var r = 0; r < rows.length; r++) {
+      if (comp.grp[r]) continue; // sections are roll-ups, not lines
+      function txt(ci) { return ci < 0 ? "" : String(rows[r].cells[ci] == null ? "" : rows[r].cells[ci]).trim(); }
+      function nv(ci) { return ci < 0 ? 0 : (typeof comp.vals[r][ci] === "number" ? comp.vals[r][ci] : 0); }
+      var desc = txt(cDesc);
+      if (!desc && !nv(cCost) && !nv(cSell) && !txt(cCode)) continue; // skip empty rows
+      out.push({ code: txt(cCode), description: desc || "Item", unit: txt(cUnit), quantity: nv(cQty) || 0, cost: nv(cCost), sell: nv(cSell) });
+    }
+    return out;
+  }
+  // ---- interactive grid renderer ----
+  function renderSheetGrid(mount, sheet, opts) {
+    opts = opts || {}; sgNormalize(sheet);
+    var ro = !!opts.readOnly, cur = opts.currency || (S.company && S.company.currency_code) || "";
+    var comp = sgCompute(sheet);
+    function disp(r, c) {
+      var col = sheet.cols[c], v = comp.vals[r][c];
+      if (col.kind === "money") return (typeof v === "number" ? money(v) : "");
+      if (col.kind === "num") return (typeof v === "number" ? sgNum(v) : (v || ""));
+      return (v == null ? "" : String(v));
+    }
+    function rawAt(r, c) { var v = sheet.rows[r].cells[c]; return v == null ? "" : String(v); }
+    function build() {
+      var C = sheet.cols.length;
+      var colg = '<colgroup><col style="width:34px">' + sheet.cols.map(function (col) { return '<col style="width:' + (col.w || 90) + 'px">'; }).join("") + (ro ? "" : '<col style="width:26px">') + '</colgroup>';
+      var head = '<tr><th class="sg-cnr"></th>' + sheet.cols.map(function (col, c) {
+        return '<th class="sg-h ' + (col.kind === "text" ? "" : "sg-hn") + '" data-c="' + c + '"><span class="sg-hl">' + sgColLetter(c) + '</span>' + (ro ? '<span class="sg-hlbl">' + esc(col.label) + '</span>' : '<input class="sg-hin" data-c="' + c + '" value="' + esc(col.label) + '"><button class="sg-kind" data-c="' + c + '" title="Column type">' + (col.kind === "money" ? "$" : col.kind === "num" ? "#" : "T") + '</button><button class="sg-cdel" data-c="' + c + '" title="Delete column">&times;</button>') + '</th>';
+      }).join("") + (ro ? "" : '<th class="sg-addc"><button id="sg-addcol" title="Add column">+</button></th>') + '</tr>';
+      var body = sheet.rows.map(function (row, r) {
+        var isG = comp.grp[r], lvl = row.lvl | 0;
+        var tds = sheet.cols.map(function (col, c) {
+          var auto = isG && col.kind === "money";
+          var pad = (c === 1 ? 'style="padding-left:' + (6 + lvl * 16) + 'px"' : "");
+          var cls = "sg-td " + (col.kind === "text" ? "sg-t" : "sg-n") + (auto ? " sg-auto" : "") + (isG ? " sg-g" : "");
+          if (ro || auto) return '<td class="' + cls + '" ' + pad + '>' + esc(disp(r, c)) + '</td>';
+          return '<td class="' + cls + '" ' + pad + '><input class="sg-in" data-r="' + r + '" data-c="' + c + '" value="' + esc(disp(r, c)) + '"></td>';
+        }).join("");
+        var gut = ro ? ('<td class="sg-gut">' + (r + 1) + '</td>') : ('<td class="sg-gut"><span class="sg-rn">' + (r + 1) + '</span><span class="sg-rt"><button data-act="out" data-r="' + r + '" title="Outdent">&#9666;</button><button data-act="in" data-r="' + r + '" title="Indent (nest)">&#9656;</button><button data-act="del" data-r="' + r + '" title="Delete row">&times;</button></span></td>');
+        return '<tr class="' + (isG ? "sg-grow" : "") + '">' + gut + tds + (ro ? "" : '<td class="sg-pad"></td>') + '</tr>';
+      }).join("");
+      var totRow = '<tr class="sg-foot"><td class="sg-gut"></td>' + sheet.cols.map(function (col, c) { if (c === 0) return '<td class="sg-tl">Total</td>'; if (col.kind !== "money") return '<td></td>'; var s = 0; for (var r = 0; r < sheet.rows.length; r++) if ((sheet.rows[r].lvl | 0) === 0) { var v = comp.vals[r][c]; if (typeof v === "number") s += v; } return '<td class="sg-tv">' + money(s) + '</td>'; }).join("") + (ro ? "" : '<td></td>') + '</tr>';
+      var tbl = '<div class="sg-scroll"><table class="sg"><thead>' + colg + head + '</thead><tbody>' + body + totRow + '</tbody></table></div>';
+      var tools = ro ? "" : '<div class="sg-tools"><button id="sg-addrow">+ Row</button><button id="sg-addsub">+ Sub-item</button><span class="sg-hint">Type <b>=</b> for a formula. Use <b>@D</b> for this row (e.g. <b>=@D*@E</b>) or <b>A1</b> style for any cell. Functions: SUM, AVG, MIN, MAX. Indent (&#9656;) to nest under the row above; parents total their children.</span></div>';
+      mount.innerHTML = tbl + tools;
+      wire();
+    }
+    function recompute() {
+      comp = sgCompute(sheet);
+      mount.querySelectorAll(".sg-in").forEach(function (inp) { if (inp === document.activeElement) return; var r = +inp.dataset.r, c = +inp.dataset.c; inp.value = disp(r, c); });
+      refreshStatics();
+      if (opts.onChange) opts.onChange(sheet, sgTotals(sheet, comp), comp);
+    }
+    function refreshStatics() {
+      mount.querySelectorAll("td.sg-auto").forEach(function (td) { var r = +td.dataset.r, c = +td.dataset.c; if (!isNaN(r) && !isNaN(c)) td.textContent = disp(r, c); });
+      mount.querySelectorAll("td.sg-tv").forEach(function (td) { var c = +td.dataset.c; if (isNaN(c)) return; var s = 0; for (var r = 0; r < sheet.rows.length; r++) if ((sheet.rows[r].lvl | 0) === 0) { var v = comp.vals[r][c]; if (typeof v === "number") s += v; } td.textContent = money(s); });
+    }
+    function wire() {
+      if (ro) return;
+      // annotate auto + total cells with indices for cheap refresh
+      var trs = mount.querySelectorAll("table.sg tbody tr");
+      var ri = 0;
+      trs.forEach(function (tr) {
+        if (tr.classList.contains("sg-foot")) { var tds = tr.children; for (var c = 0; c < sheet.cols.length; c++) { var td = tds[c + 1]; if (td && sheet.cols[c].kind === "money") { td.classList.add("sg-tv"); td.dataset.c = c; } } return; }
+        var tds2 = tr.children; for (var c2 = 0; c2 < sheet.cols.length; c2++) { var td2 = tds2[c2 + 1]; if (td2 && td2.classList.contains("sg-auto")) { td2.dataset.r = ri; td2.dataset.c = c2; } }
+        ri++;
+      });
+      mount.addEventListener("focusin", onFocusIn);
+      mount.addEventListener("focusout", onFocusOut);
+      mount.addEventListener("keydown", onKey);
+      mount.querySelectorAll(".sg-rt button").forEach(function (b) { b.onclick = function () { rowAct(b.dataset.act, +b.dataset.r); }; });
+      mount.querySelectorAll(".sg-hin").forEach(function (h) { h.onchange = function () { sheet.cols[+h.dataset.c].label = h.value; if (opts.onChange) opts.onChange(sheet, sgTotals(sheet, comp), comp); }; });
+      mount.querySelectorAll(".sg-kind").forEach(function (k) { k.onclick = function () { var c = +k.dataset.c, order = ["text", "num", "money"], col = sheet.cols[c]; col.kind = order[(order.indexOf(col.kind || "num") + 1) % 3]; col.key = col.key && ["code", "desc", "unit"].indexOf(col.key) >= 0 && col.kind !== "text" ? null : col.key; build(); recompute(); }; });
+      mount.querySelectorAll(".sg-cdel").forEach(function (d) { d.onclick = function () { var c = +d.dataset.c; if (sheet.cols.length <= 1) return; sheet.cols.splice(c, 1); sheet.rows.forEach(function (r) { r.cells.splice(c, 1); }); build(); recompute(); }; });
+      var ac = mount.querySelector("#sg-addcol"); if (ac) ac.onclick = function () { sheet.cols.push({ label: "New", kind: "num", w: 90 }); sheet.rows.forEach(function (r) { r.cells.push(""); }); build(); recompute(); };
+      var ar = mount.querySelector("#sg-addrow"); if (ar) ar.onclick = function () { var last = sheet.rows[sheet.rows.length - 1]; sheet.rows.push(blankRow(last ? (last.lvl | 0) : 0)); build(); recompute(); };
+      var asb = mount.querySelector("#sg-addsub"); if (asb) asb.onclick = function () { var last = sheet.rows[sheet.rows.length - 1]; sheet.rows.push(blankRow(last ? (last.lvl | 0) + 1 : 0)); build(); recompute(); };
+      refreshStatics();
+    }
+    function blankRow(lvl) {
+      var cells = sheet.cols.map(function (col) {
+        if (col.key === "qty") return "1"; if (col.key === "ucost") return "0"; if (col.key === "cost") return "=@" + sgColLetter(sgColByKey(sheet, "qty")) + "*@" + sgColLetter(sgColByKey(sheet, "ucost"));
+        if (col.key === "margin") return String(opts.defMargin != null ? opts.defMargin : 15);
+        if (col.key === "sell") return "=@" + sgColLetter(sgColByKey(sheet, "cost")) + "*(1+@" + sgColLetter(sgColByKey(sheet, "margin")) + "/100)";
+        if (col.key === "donepct") return "=@" + sgColLetter(sgColByKey(sheet, "prevpct")) + "+@" + sgColLetter(sgColByKey(sheet, "thispct"));
+        if (col.key === "todate") return "=@" + sgColLetter(sgColByKey(sheet, "contract")) + "*@" + sgColLetter(sgColByKey(sheet, "donepct")) + "/100";
+        if (col.key === "period") return "=@" + sgColLetter(sgColByKey(sheet, "contract")) + "*@" + sgColLetter(sgColByKey(sheet, "thispct")) + "/100";
+        if (col.key === "prevpct" || col.key === "thispct" || col.key === "contract") return "0";
+        return "";
+      });
+      return { lvl: lvl, cells: cells };
+    }
+    function rowAct(act, r) {
+      if (act === "del") { sheet.rows.splice(r, 1); if (!sheet.rows.length) sheet.rows.push(blankRow(0)); }
+      else if (act === "in") { var prev = sheet.rows[r - 1]; var max = prev ? (prev.lvl | 0) + 1 : 0; sheet.rows[r].lvl = Math.min(max, (sheet.rows[r].lvl | 0) + 1); }
+      else if (act === "out") { sheet.rows[r].lvl = Math.max(0, (sheet.rows[r].lvl | 0) - 1); }
+      build(); recompute();
+    }
+    function onFocusIn(e) { var inp = e.target; if (!inp.classList || !inp.classList.contains("sg-in")) return; inp.value = rawAt(+inp.dataset.r, +inp.dataset.c); setTimeout(function () { try { inp.select(); } catch (_) {} }, 0); }
+    function onFocusOut(e) { var inp = e.target; if (!inp.classList || !inp.classList.contains("sg-in")) return; var r = +inp.dataset.r, c = +inp.dataset.c; sheet.rows[r].cells[c] = inp.value.trim(); recompute(); }
+    function onKey(e) { var inp = e.target; if (!inp.classList || !inp.classList.contains("sg-in")) return; if (e.key === "Enter") { e.preventDefault(); var r = +inp.dataset.r, c = +inp.dataset.c; var next = mount.querySelector('.sg-in[data-r="' + (r + 1) + '"][data-c="' + c + '"]'); inp.blur(); if (next) next.focus(); } }
+    build();
+    if (opts.onChange) opts.onChange(sheet, sgTotals(sheet, comp), comp);
+    return { getSheet: function () { return sheet; }, totals: function () { return sgTotals(sheet, sgCompute(sheet)); }, leafRows: function () { var cc = sgCompute(sheet); return sgLeafRows(sheet, cc); }, compute: function () { return sgCompute(sheet); } };
+  }
+
   async function renderTenderForm(id) {
     var parent = { action: "est.list", title: "Tenders" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
@@ -11709,55 +11932,29 @@
       fld("Tender date", '<input id="tn-date" type="date" value="' + (t.tender_date || today()) + '"' + (locked ? " disabled" : "") + '>', "When you price / submit the bid.") +
       fld("Valid until", '<input id="tn-valid" type="date" value="' + (t.valid_until || "") + '"' + (locked ? " disabled" : "") + '>', "Bid validity date.") +
       '</div></div>' +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Priced BOQ &middot; cost buildup</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-lines" style="min-width:920px"><thead><tr><th style="width:56px">Code</th><th>Description</th><th style="width:54px">Unit</th><th style="width:60px;text-align:right">Qty</th><th style="width:72px;text-align:right">Material</th><th style="width:72px;text-align:right">Labour</th><th style="width:72px;text-align:right">Subcont</th><th style="width:66px;text-align:right">Other</th><th style="width:62px;text-align:right">Margin%</th><th style="width:78px;text-align:right">Rate</th><th style="width:86px;text-align:right">Total</th>' + (locked ? "" : '<th style="width:20px"></th>') + '</tr></thead><tbody id="tlbody"></tbody></table></div>' + (locked ? "" : '<button class="o-addln" id="tn-addln">+ Add a line</button>') + '<div class="o-tot" id="tn-tot" style="margin-top:12px"></div></div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Cost estimate &middot; spreadsheet</div></div><div class="o-nb-pg"><div id="tn-grid" class="sg-host"></div><div class="o-tot" id="tn-tot" style="margin-top:12px"></div></div></div>' +
       '</div>';
     document.getElementById("tn-discard").onclick = function () { go("est.list"); };
     var tfl = document.getElementById("tn-fromlead"); if (tfl) tfl.onclick = function () { renderLeadForm(srcLead.id); };
-    var lb = document.getElementById("tlbody");
-    function recalc() {
-      var tc = 0, ts = 0;
-      lb.querySelectorAll("tr").forEach(function (tr) {
-        var qi = tr.querySelector(".tl-qty"); if (!qi) return;
-        var q = num(qi.value), uc = num(tr.querySelector(".tl-mat").value) + num(tr.querySelector(".tl-lab").value) + num(tr.querySelector(".tl-sub").value) + num(tr.querySelector(".tl-oth").value);
-        var mg = num(tr.querySelector(".tl-margin").value), rate = uc * (1 + mg / 100), total = rate * q;
-        tr.querySelector(".tl-rate").textContent = money(rate); tr.querySelector(".tl-total").textContent = money(total);
-        tc += uc * q; ts += total;
-      });
-      var el = document.getElementById("tn-tot"); if (el) el.innerHTML = '<div class="r"><span class="k">Total cost</span><span>' + S.company.currency_code + " " + money(tc) + '</span></div><div class="r"><span class="k">Total value (sell)</span><span>' + S.company.currency_code + " " + money(ts) + '</span></div><div class="r tt"><span class="k">Margin</span><span>' + S.company.currency_code + " " + money(ts - tc) + " (" + (ts ? ((ts - tc) / ts * 100).toFixed(1) : "0") + '%)</span></div>';
-      return { cost: tc, sell: ts };
+    var sheet = (t.cost_sheet && t.cost_sheet.cols && t.cost_sheet.cols.length) ? t.cost_sheet : (lines.length ? sgFromTenderLines(lines, defMargin) : sgDefaultSheet("tender", defMargin));
+    function paintTot(tot) {
+      var el = document.getElementById("tn-tot"); if (!el) return;
+      var tc = Number(tot.cost || 0), ts = Number(tot.sell || 0);
+      el.innerHTML = '<div class="r"><span class="k">Total cost</span><span>' + S.company.currency_code + " " + money(tc) + '</span></div><div class="r"><span class="k">Total value (sell)</span><span>' + S.company.currency_code + " " + money(ts) + '</span></div><div class="r tt"><span class="k">Margin</span><span>' + S.company.currency_code + " " + money(ts - tc) + " (" + (ts ? ((ts - tc) / ts * 100).toFixed(1) : "0") + '%)</span></div>';
     }
-    function addRow(l) {
-      var tr = document.createElement("tr");
-      if (locked) {
-        tr.innerHTML = '<td>' + esc(l.code || "") + '</td><td>' + esc(l.description || "") + '</td><td>' + esc(l.unit || "") + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td class="num">' + money(l.material_cost) + '</td><td class="num">' + money(l.labour_cost) + '</td><td class="num">' + money(l.subcontract_cost) + '</td><td class="num">' + money(l.other_cost) + '</td><td class="num">' + Number(l.margin_pct || 0) + '%</td><td class="num">' + money(l.sell_rate) + '</td><td class="num">' + money(l.line_total) + '</td>';
-        lb.appendChild(tr); return;
-      }
-      tr.innerHTML = '<td><input class="tl-code" value="' + esc(l ? l.code : "") + '"></td><td><input class="tl-desc" value="' + esc(l ? l.description : "") + '" placeholder="Description"></td><td>' + unitSelectHTML("tl-unit", l ? l.unit : "", tuoms) + '</td><td><input class="tl-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td><td><input class="tl-mat num" type="number" step="0.01" value="' + (l ? l.material_cost : 0) + '"></td><td><input class="tl-lab num" type="number" step="0.01" value="' + (l ? l.labour_cost : 0) + '"></td><td><input class="tl-sub num" type="number" step="0.01" value="' + (l ? l.subcontract_cost : 0) + '"></td><td><input class="tl-oth num" type="number" step="0.01" value="' + (l ? l.other_cost : 0) + '"></td><td><input class="tl-margin num" type="number" step="0.1" value="' + (l ? l.margin_pct : defMargin) + '"></td><td class="num tl-rate">0.00</td><td class="num tl-total">0.00</td><td><button class="del">&times;</button></td>';
-      lb.appendChild(tr);
-      tr.querySelectorAll("input").forEach(function (el) { el.addEventListener("input", recalc); });
-      wireUnitAdd(tr.querySelector(".tl-unit"), tuoms);
-      tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
-    }
-    if (lines.length) lines.forEach(addRow); else if (!locked) addRow(null);
-    var addb = document.getElementById("tn-addln"); if (addb) addb.onclick = function () { addRow(null); recalc(); };
-    recalc();
-    function currentLines() {
-      return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
-        var qi = tr.querySelector(".tl-qty"); if (!qi) return null;
-        var q = num(qi.value), mat = num(tr.querySelector(".tl-mat").value), lab = num(tr.querySelector(".tl-lab").value), sub = num(tr.querySelector(".tl-sub").value), oth = num(tr.querySelector(".tl-oth").value), mg = num(tr.querySelector(".tl-margin").value);
-        var uc = mat + lab + sub + oth, rate = uc * (1 + mg / 100);
-        return { code: tr.querySelector(".tl-code").value.trim(), description: tr.querySelector(".tl-desc").value.trim() || "Item", unit: tr.querySelector(".tl-unit").value.trim(), quantity: q, material_cost: mat, labour_cost: lab, subcontract_cost: sub, other_cost: oth, margin_pct: mg, sell_rate: rate, line_total: rate * q };
-      }).filter(Boolean);
-    }
+    var grid = renderSheetGrid(document.getElementById("tn-grid"), sheet, { readOnly: locked, defMargin: defMargin, onChange: function (sh, tot) { paintTot(tot); } });
     async function persist() {
-      var tot = recalc();
+      var tot = grid.totals();
       var n = gv("tn-num") || (t.number || (await nextTenderNumber()));
-      var row = { number: n, name: gv("tn-name") || "Tender", partner_id: document.getElementById("tn-client").value || null, tender_date: gv("tn-date"), valid_until: gv("tn-valid") || null, margin_pct: num(gv("tn-margin")), total_cost: tot.cost, total_sell: tot.sell };
+      var row = { number: n, name: gv("tn-name") || "Tender", partner_id: document.getElementById("tn-client").value || null, tender_date: gv("tn-date"), valid_until: gv("tn-valid") || null, margin_pct: num(gv("tn-margin")), total_cost: Number(tot.cost || 0), total_sell: Number(tot.sell || 0), cost_sheet: grid.getSheet() };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.status = "draft"; var ins = await sb.from("tenders").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("tenders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("tender_lines").delete().eq("tender_id", id); }
-      var lns = currentLines();
-      if (lns.length) { var lr = await sb.from("tender_lines").insert(lns.map(function (l, i) { return Object.assign({ company_id: S.company.id, tender_id: sid, sequence: (i + 1) * 10 }, l); })); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; } }
+      var leaves = grid.leafRows();
+      if (leaves.length) {
+        var lns = leaves.map(function (l, i) { var q = Number(l.quantity || 0); return { company_id: S.company.id, tender_id: sid, sequence: (i + 1) * 10, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: q, material_cost: (q ? l.cost / q : l.cost), labour_cost: 0, subcontract_cost: 0, other_cost: 0, margin_pct: (l.cost ? (l.sell - l.cost) / l.cost * 100 : 0), sell_rate: (q ? l.sell / q : l.sell), line_total: l.sell }; });
+        var lr = await sb.from("tender_lines").insert(lns); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
+      }
       return sid;
     }
     var sv = document.getElementById("tn-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderTenderForm(sid); } };
@@ -11769,19 +11966,29 @@
   async function convertTenderToProject(tenderId) {
     var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
     if (!t) { toast("Tender not found"); return; }
-    var lines = (await sb.from("tender_lines").select("*").eq("tender_id", tenderId).order("sequence")).data || [];
     var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
     if (proj.error) { toast("Could not create project: " + errMsg(proj.error)); return; }
     var pid = proj.data.id;
-    var mat = 0, lab = 0, sub = 0, oth = 0;
-    lines.forEach(function (l) { var q = Number(l.quantity || 0); mat += Number(l.material_cost || 0) * q; lab += Number(l.labour_cost || 0) * q; sub += Number(l.subcontract_cost || 0) * q; oth += Number(l.other_cost || 0) * q; });
-    var buds = [];
-    if (mat > 0) buds.push({ category: "Material", amount: mat });
-    if (lab > 0) buds.push({ category: "Labour", amount: lab });
-    if (sub > 0) buds.push({ category: "Subcontract", amount: sub });
-    if (oth > 0) buds.push({ category: "Overhead / other", amount: oth });
-    if (buds.length) await sb.from("project_budgets").insert(buds.map(function (b) { return { company_id: S.company.id, project_id: pid, category: b.category, description: "From tender " + (t.number || ""), amount: b.amount }; }));
-    if (lines.length) await sb.from("project_boq").insert(lines.map(function (l, i) { return { company_id: S.company.id, project_id: pid, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: Number(l.quantity || 0), rate: Number(l.sell_rate || 0), amount: Number(l.line_total || 0), sequence: (i + 1) * 10 }; }));
+    var boq = [], buds = [];
+    if (t.cost_sheet && t.cost_sheet.cols && t.cost_sheet.cols.length) {
+      // spreadsheet estimate: schedule of values from leaf rows, cost budget from the sheet total
+      var comp = sgCompute(t.cost_sheet), leaves = sgLeafRows(t.cost_sheet, comp);
+      boq = leaves.map(function (l, i) { var q = Number(l.quantity || 0); return { company_id: S.company.id, project_id: pid, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: q, rate: (q ? Number(l.sell || 0) / q : Number(l.sell || 0)), amount: Number(l.sell || 0), sequence: (i + 1) * 10 }; });
+      var totCost = Number(t.total_cost || 0); if (totCost > 0) buds.push({ company_id: S.company.id, project_id: pid, category: "Estimate cost", description: "From tender " + (t.number || ""), amount: totCost });
+    } else {
+      // legacy flat lines
+      var lines = (await sb.from("tender_lines").select("*").eq("tender_id", tenderId).order("sequence")).data || [];
+      var mat = 0, lab = 0, sub = 0, oth = 0;
+      lines.forEach(function (l) { var q = Number(l.quantity || 0); mat += Number(l.material_cost || 0) * q; lab += Number(l.labour_cost || 0) * q; sub += Number(l.subcontract_cost || 0) * q; oth += Number(l.other_cost || 0) * q; });
+      if (mat > 0) buds.push({ category: "Material", amount: mat });
+      if (lab > 0) buds.push({ category: "Labour", amount: lab });
+      if (sub > 0) buds.push({ category: "Subcontract", amount: sub });
+      if (oth > 0) buds.push({ category: "Overhead / other", amount: oth });
+      buds = buds.map(function (b) { return { company_id: S.company.id, project_id: pid, category: b.category, description: "From tender " + (t.number || ""), amount: b.amount }; });
+      boq = lines.map(function (l, i) { return { company_id: S.company.id, project_id: pid, code: l.code || "", description: l.description || "Item", unit: l.unit || "", quantity: Number(l.quantity || 0), rate: Number(l.sell_rate || 0), amount: Number(l.line_total || 0), sequence: (i + 1) * 10 }; });
+    }
+    if (buds.length) await sb.from("project_budgets").insert(buds);
+    if (boq.length) await sb.from("project_boq").insert(boq);
     await sb.from("tenders").update({ status: "won", project_id: pid }).eq("id", tenderId);
     toast("Tender won - project created with cost budget & schedule of values"); renderProjectForm(pid);
   }
