@@ -412,6 +412,7 @@
       name: "Settings", icon: "⚙", color: "#475569", color2: "#334155", home: "companies",
       menus: [
         { label: "Getting started", action: "settings.setup" },
+        { label: "Company Profile", action: "settings.profile" },
         { label: "Pending signups", action: "platform.pending" },
         { label: "Tenants", action: "platform.tenants" },
         { label: "Audit Log", action: "settings.audit" },
@@ -426,8 +427,7 @@
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
-        { label: "Appearance", action: "appearance" },
-        { label: "Print Template", action: "settings.print" }
+        { label: "Appearance", action: "appearance" }
       ]
     },
     insights: {
@@ -464,7 +464,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
@@ -997,6 +997,7 @@
     document.getElementById("waffle").onclick = renderHome;
     var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = renderHome;
     var _op = document.getElementById("oprint"); if (_op) _op.onclick = printCurrentPage;
+    installFormPrintButtons();
     var _gs = document.getElementById("o-gs-in");
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
@@ -1587,7 +1588,8 @@
       case "inv.uoms": return renderList(cfgUoms());
       case "acc.payterms": return renderPaymentTerms();
       case "proj.labels": return renderTaskLabels();
-      case "settings.print": return renderPrintTemplate();
+      case "settings.print": return renderCompanyProfile();
+      case "settings.profile": return renderCompanyProfile();
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
       case "loc": return renderList(cfgLocations());
@@ -7740,7 +7742,7 @@
   function suCheck() { return '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>'; }
   // the checklist model: what each step is, why it matters, and where it takes you.
   var SETUP_STEPS = [
-    { key: "profile", n: "Company profile", why: "Your legal name, country and currency stamp every invoice, quote and report.", cta: "Save profile" },
+    { key: "profile", n: "Company profile", why: "Your legal name, country, currency, logo and contact details stamp every invoice, quote and report. Enter them once here.", cta: "Open company profile", go: "settings.profile" },
     { key: "numbering", n: "Document numbering", why: "Choose how invoices, POs, tenders and certificates are numbered (prefix, year, running digits).", cta: "Set numbering", go: "settings.numbering" },
     { key: "taxes", n: "Tax rates", why: "Add your VAT / sales-tax rates so quotes and invoices calculate the right totals.", cta: "Add tax rates", go: "taxes" },
     { key: "team", n: "Your team", why: "Add the people who work with you, so you can assign tasks and run payroll.", cta: "Add people", go: "hr.emp" },
@@ -7774,20 +7776,8 @@
       var numHtml = done ? suCheck() : String(i + 1);
       var pill = done ? '<span class="su-pill done">Done</span>' : '<span class="su-pill">To do</span>';
       var info = '<div class="su-info"><div class="su-step-t">' + esc(m.n) + ' ' + pill + '</div><div class="su-step-w">' + esc(m.why) + '</div></div>';
-      var right, extra = "";
-      if (m.key === "profile") {
-        right = '<div class="su-cta-slot"></div>';
-        extra = '<div class="su-profile">' +
-          '<div class="su-fg"><label for="su-name">Company name</label><input id="su-name" value="' + esc(co.name || "") + '"></div>' +
-          '<div class="su-fg"><label for="su-legal">Legal name</label><input id="su-legal" value="' + esc(co.legal_name || "") + '" placeholder="Registered name"></div>' +
-          '<div class="su-fg"><label for="su-country">Country</label><input id="su-country" value="' + esc(co.country || "") + '" placeholder="e.g. Lebanon"></div>' +
-          '<div class="su-fg"><label for="su-cur">Currency</label><input id="su-cur" value="' + esc(co.currency_code || "") + '" placeholder="e.g. USD" style="text-transform:uppercase"></div>' +
-          '<div class="su-profile-save"><button class="pri" id="su-save">' + esc(m.cta) + '</button></div>' +
-          '</div>';
-      } else {
-        right = '<div class="su-cta"><button class="' + (done ? "" : "pri") + '" data-go="' + m.go + '">' + (done ? "Review" : esc(m.cta)) + '</button></div>';
-      }
-      return '<div class="su-step' + (done ? " done" : "") + '"><div class="su-step-h"><span class="su-num' + (done ? " done" : "") + '">' + numHtml + '</span>' + info + right + '</div>' + extra + '</div>';
+      var right = '<div class="su-cta"><button class="' + (done ? "" : "pri") + '" data-go="' + m.go + '">' + (done ? "Review" : esc(m.cta)) + '</button></div>';
+      return '<div class="su-step' + (done ? " done" : "") + '"><div class="su-step-h"><span class="su-num' + (done ? " done" : "") + '">' + numHtml + '</span>' + info + right + '</div></div>';
     }).join("");
     var allset = doneN >= tot
       ? '<div class="card su-allset"><span class="su-allset-ic">' + suCheck() + '</span><div><b>You are all set up.</b> Orbit has the basics it needs to run real projects. You can revisit this checklist any time from Settings &rsaquo; Getting started.</div></div>'
@@ -7796,20 +7786,6 @@
       '<div class="su-head"><div><h2 style="margin:0 0 3px">Getting started</h2><div class="sub" style="margin:0">A short checklist to get <b>' + esc(co.name) + '</b> ready. Finish these and Orbit is ready to run real projects.</div></div>' +
       '<div class="su-prog"><div class="su-prog-n">' + doneN + ' / ' + tot + '</div><div class="su-bar"><span style="width:' + pct + '%"></span></div></div></div>' +
       allset + '<div class="su-steps">' + cards + '</div></div>';
-    var sv = document.getElementById("su-save");
-    if (sv) sv.onclick = async function () {
-      var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
-      var upd = { name: g("su-name"), legal_name: g("su-legal"), country: g("su-country"), currency_code: (g("su-cur") || "USD").toUpperCase() };
-      if (!upd.name) { toast("Company name is required"); return; }
-      sv.disabled = true;
-      var res = await sb.from("companies").update(upd).eq("id", S.company.id);
-      sv.disabled = false;
-      if (res.error) { toast("Save failed: " + errMsg(res.error)); return; }
-      Object.assign(S.company, upd);
-      var ci = S.companies.filter(function (c) { return c.id === S.company.id; })[0]; if (ci) Object.assign(ci, upd);
-      toast("Company profile saved");
-      renderSetup();
-    };
     document.querySelectorAll("#o-body .su-cta [data-go]").forEach(function (b) { b.onclick = function () { goApp(b.dataset.go); }; });
   }
   // Home-screen nudge: a compact progress card above the app grid, for admins, until dismissed.
@@ -8352,8 +8328,7 @@
       toast("Labels saved");
     };
   }
-  // ---- Print: a global Print button + an editable branded print template -------
-  var _printTpl = null;
+  // ---- Print: a global Print button + branded print templates from Company Profile ----
   function imgFileToDataUrl(file, maxW) {
     return new Promise(function (res, rej) {
       var fr = new FileReader();
@@ -8365,45 +8340,159 @@
     if (!document.getElementById("print-header")) { var h = document.createElement("div"); h.id = "print-header"; h.className = "print-only"; document.body.insertBefore(h, document.body.firstChild); }
     if (!document.getElementById("print-footer")) { var f = document.createElement("div"); f.id = "print-footer"; f.className = "print-only"; document.body.appendChild(f); }
   }
-  async function printCurrentPage() {
-    if (!_printTpl || _printTpl._co !== S.company.id) { var c = (await sb.from("companies").select("name, print_settings").eq("id", S.company.id).maybeSingle()).data || {}; _printTpl = Object.assign({ _co: S.company.id, _name: c.name }, (c.print_settings || {})); }
-    var t = _printTpl;
-    var bcEl = document.querySelector(".o-bc"), titleEl = bcEl ? bcEl.querySelector("span:last-child") : null;
-    var pageTitle = titleEl ? titleEl.textContent.trim() : ((document.querySelector(".o-title") || {}).textContent || "").trim();
-    ensurePrintFrame();
-    document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff");
-    document.getElementById("print-header").innerHTML = '<div class="ph-row">' + ((t.logo && t.show_logo !== false) ? '<img class="ph-logo" src="' + t.logo + '">' : '') + '<div class="ph-co"><div class="ph-name">' + esc(t.company_line || t._name || S.company.name || "") + '</div><div class="ph-addr">' + esc(t.address || "").replace(/\n/g, "<br>") + '</div></div><div class="ph-meta"><div class="ph-title">' + esc(pageTitle) + '</div><div class="ph-date">' + esc(new Date().toLocaleDateString()) + '</div></div></div>';
-    document.getElementById("print-footer").innerHTML = esc(t.footer || "");
-    window.print();
+  // ---- print branding built from the Company Profile (single source of truth) ----
+  // Reads straight off S.company (loaded via select * on boot), so no query is needed
+  // and a plain Ctrl+P (via the beforeprint hook) is branded too.
+  function printTplData(over) {
+    var c = S.company || {}, p = c.profile || {}, ps = c.print_settings || {};
+    var d = {
+      name: c.name || "", legal_name: c.legal_name || "", vat: c.tax_id || "", country: c.country || "",
+      address: p.address || "", city: p.city || "", phone: p.phone || "", phone2: p.phone2 || "",
+      email: p.email || "", website: p.website || "", logo: (p.logo != null ? p.logo : (ps.logo || "")) || "",
+      template: Number(ps.template || 1), accent: ps.accent || "#2f6bff", footer: ps.footer || (ps.footer === "" ? "" : ""), show_logo: ps.show_logo !== false
+    };
+    if (over) for (var k in over) d[k] = over[k];
+    return d;
   }
-  async function renderPrintTemplate() {
+  function pfDisplayName(t) { return t.legal_name || t.name || (S.company && S.company.name) || ""; }
+  function pfContact(t) { var a = []; if (t.phone) a.push("Tel " + t.phone + (t.phone2 ? " / " + t.phone2 : "")); if (t.email) a.push(t.email); if (t.website) a.push(t.website); return a.map(esc).join(" &middot; "); }
+  function pfAddr(t) { var a = []; if (t.address) a.push(esc(t.address).replace(/\n/g, "<br>")); var cc = [t.city, t.country].filter(Boolean).map(esc).join(", "); if (cc) a.push(cc); return a.join("<br>"); }
+  function buildPrintHeader(t, title) {
+    var logo = (t.show_logo && t.logo) ? '<img class="ph-logo" src="' + t.logo + '">' : "";
+    var nm = esc(pfDisplayName(t)), date = esc(new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
+    var addrContact = [addr, contact].filter(Boolean).join(" &middot; ");
+    var tmpl = t.template || 1;
+    if (tmpl === 2) return '<div class="ph ph-t2">' + logo + '<div class="ph-name">' + nm + '</div>' + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '<div class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></div></div>';
+    if (tmpl === 3) return '<div class="ph ph-t3"><div class="ph-band"><div class="ph-band-l">' + logo + '<span class="ph-name">' + nm + '</span></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>' + (addrContact ? '<div class="ph-subline">' + addrContact + '</div>' : "") + '</div>';
+    if (tmpl === 4) return '<div class="ph ph-t4">' + logo + '<span class="ph-name">' + nm + '</span><span class="ph-meta"><span class="ph-title">' + ttl + '</span> &mdash; <span class="ph-date">' + date + '</span></span></div>';
+    if (tmpl === 5) return '<div class="ph ph-t5"><span class="ph-rule"></span>' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
+    return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
+  }
+  function buildPrintFooter(t) {
+    var co = [esc(pfDisplayName(t)), (t.vat ? "VAT " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
+    return '<div class="pf"><div class="pf-txt">' + esc(t.footer || "") + '</div><div class="pf-co">' + co + '</div></div>';
+  }
+  function currentPrintTitle() { var bcEl = document.querySelector(".o-bc"), titleEl = bcEl ? bcEl.querySelector("span:last-child") : null; return titleEl ? titleEl.textContent.trim() : ((document.querySelector(".o-title") || {}).textContent || "").trim(); }
+  function applyPrintFrame(title) {
+    ensurePrintFrame();
+    var t = printTplData();
+    document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff");
+    document.getElementById("print-header").innerHTML = buildPrintHeader(t, title || currentPrintTitle());
+    document.getElementById("print-footer").innerHTML = buildPrintFooter(t);
+  }
+  function printCurrentPage() { applyPrintFrame(currentPrintTitle()); window.print(); }
+  // any print path (our Print buttons OR the browser's Ctrl+P) gets the branded header/footer
+  if (!window.__orbitPrintHook) { window.__orbitPrintHook = true; window.addEventListener("beforeprint", function () { try { applyPrintFrame(currentPrintTitle()); } catch (e) {} }); }
+  function printerSvg() { return '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>'; }
+  // Put a Print button beside every form Save button (the .o-sb-btns status-bar row).
+  function injectPrintButtons() {
+    var rows = document.querySelectorAll(".o-sb-btns");
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (row.querySelector(".o-inl-print")) continue;
+      var saveBtn = row.querySelector('[id$="-save"]');
+      if (!saveBtn) { var bs = row.querySelectorAll("button"); for (var j = 0; j < bs.length; j++) { if (bs[j].textContent.trim().toLowerCase() === "save") { saveBtn = bs[j]; break; } } }
+      if (!saveBtn) continue;
+      var pb = document.createElement("button");
+      pb.className = "o-inl-print"; pb.type = "button"; pb.title = "Print / save as PDF";
+      pb.innerHTML = printerSvg() + "<span>Print</span>";
+      pb.onclick = function () { printCurrentPage(); };
+      saveBtn.insertAdjacentElement("afterend", pb);
+    }
+  }
+  var __printObs = null;
+  function installFormPrintButtons() {
+    if (__printObs) { try { __printObs.disconnect(); } catch (e) {} __printObs = null; }
+    var target = document.getElementById("o-main"); if (!target) return;
+    injectPrintButtons();
+    var pending = false;
+    __printObs = new MutationObserver(function () { if (pending) return; pending = true; requestAnimationFrame(function () { pending = false; injectPrintButtons(); }); });
+    __printObs.observe(target, { childList: true, subtree: true });
+  }
+
+  var PRINT_TEMPLATES = [
+    { id: 1, name: "Classic", desc: "Logo + details left, document title right, accent underline." },
+    { id: 2, name: "Centered", desc: "Logo and company centered, title beneath. Formal look." },
+    { id: 3, name: "Accent band", desc: "Coloured band across the top with the logo and name." },
+    { id: 4, name: "Minimal", desc: "One compact line: logo, name and title. Understated." },
+    { id: 5, name: "Side rule", desc: "A coloured bar down the left with the logo and details." }
+  ];
+  async function renderCompanyProfile() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Print Template") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Company Profile") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var c = (await sb.from("companies").select("name, print_settings").eq("id", S.company.id).maybeSingle()).data || {};
-    var t = c.print_settings || {};
-    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card">' +
-      '<div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Print Template</h3><button class="pri" id="pt-save" style="margin-left:auto">Save</button></div>' +
-      '<div class="sub" style="margin:6px 0 14px">The branding printed on every page and report. Set your logo, company details and footer once - it applies everywhere you use the <b>Print</b> button (top bar).</div>' +
-      '<div class="o-groups"><div>' +
-      fld("Logo", '<div id="pt-logo-wrap"></div>', "A PNG or JPG. Shown top-left of every printout.") +
-      fld("Show logo", '<select id="pt-showlogo"><option value="1">Yes</option><option value="0">No</option></select>') +
-      fld("Accent colour", '<input id="pt-accent" type="color" value="' + esc(t.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)">', "The line colour under the header.") +
+    var c = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
+    var p = c.profile || {}, ps = c.print_settings || {}, soc = p.social || {};
+    var ta = 'style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical"';
+    var tmplCards = PRINT_TEMPLATES.map(function (m) {
+      return '<label class="cp-tpl" data-tpl="' + m.id + '"><input type="radio" name="cp-tpl" value="' + m.id + '"' + ((Number(ps.template || 1)) === m.id ? " checked" : "") + '><div class="cp-tpl-card"><div class="cp-tpl-mini cp-mini-' + m.id + '"><span class="cm-logo"></span><span class="cm-lines"><span></span><span></span></span></div><div class="cp-tpl-name">' + esc(m.name) + '</div><div class="cp-tpl-desc">' + esc(m.desc) + '</div></div></label>';
+    }).join("");
+    document.getElementById("o-body").innerHTML = '<div class="cp-wrap">' +
+      '<div class="cp-head"><div><h2 style="margin:0 0 3px">Company Profile</h2><div class="sub" style="margin:0">Enter your company details once. They stamp every quote, invoice, PO, certificate and report you print.</div></div><button class="pri" id="cp-save">Save</button></div>' +
+      '<div class="card"><h3 class="cp-sec">Identity</h3><div class="o-groups"><div>' +
+      fld("Company name", '<input id="cp-name" value="' + esc(c.name || "") + '">', "The short name used across the app.") +
+      fld("Legal / registered name", '<input id="cp-legal" value="' + esc(c.legal_name || "") + '" placeholder="e.g. Skyline Facades SARL">', "Printed on official documents.") +
+      fld("VAT / Tax number", '<input id="cp-vat" value="' + esc(c.tax_id || "") + '">') +
       '</div><div>' +
-      fld("Company name (header)", '<input id="pt-name" value="' + esc(t.company_line || c.name || "") + '">') +
-      fld("Address / contact (header)", '<textarea id="pt-addr" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical">' + esc(t.address || "") + '</textarea>', "Address, phone, VAT no. - one per line.") +
-      fld("Footer text", '<input id="pt-footer" value="' + esc(t.footer || "") + '" placeholder="e.g. Thank you for your business">') +
-      '</div></div></div></div>';
-    var logoData = t.logo || "";
-    function wireLogo() { var inp = document.getElementById("pt-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("pt-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); }; }
-    function paintLogo() { document.getElementById("pt-logo-wrap").innerHTML = (logoData ? '<img src="' + logoData + '" style="max-height:56px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : '') + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="pt-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="pt-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
-    paintLogo();
-    if (t.show_logo === false) document.getElementById("pt-showlogo").value = "0";
-    document.getElementById("pt-save").onclick = async function () {
-      var ps = { logo: logoData || null, show_logo: document.getElementById("pt-showlogo").value === "1", accent: document.getElementById("pt-accent").value, company_line: gv("pt-name"), address: (document.getElementById("pt-addr").value || ""), footer: gv("pt-footer") };
-      var r = await sb.from("companies").update({ print_settings: ps }).eq("id", S.company.id);
+      fld("Country", '<input id="cp-country" value="' + esc(c.country || "") + '" placeholder="e.g. Lebanon">') +
+      fld("Currency", '<input id="cp-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase">', "The ledger currency for this company.") +
+      '</div></div></div>' +
+      '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
+      fld("Address", '<textarea id="cp-addr" rows="3" ' + ta + ' placeholder="Street, building...">' + esc(p.address || "") + '</textarea>') +
+      fld("City", '<input id="cp-city" value="' + esc(p.city || "") + '">') +
+      fld("Website", '<input id="cp-web" value="' + esc(p.website || "") + '" placeholder="www.example.com">') +
+      '</div><div>' +
+      fld("Phone", '<input id="cp-phone" value="' + esc(p.phone || "") + '" placeholder="+961 ...">') +
+      fld("Phone 2", '<input id="cp-phone2" value="' + esc(p.phone2 || "") + '" placeholder="optional">') +
+      fld("Email", '<input id="cp-email" type="email" value="' + esc(p.email || "") + '">') +
+      '</div></div></div>' +
+      '<div class="card"><h3 class="cp-sec">Social links</h3><div class="o-groups"><div>' +
+      fld("LinkedIn", '<input id="cp-linkedin" value="' + esc(soc.linkedin || "") + '">') +
+      fld("Instagram", '<input id="cp-instagram" value="' + esc(soc.instagram || "") + '">') +
+      fld("Facebook", '<input id="cp-facebook" value="' + esc(soc.facebook || "") + '">') +
+      '</div><div>' +
+      fld("X (Twitter)", '<input id="cp-x" value="' + esc(soc.x || "") + '">') +
+      fld("YouTube", '<input id="cp-youtube" value="' + esc(soc.youtube || "") + '">') +
+      '</div></div></div>' +
+      '<div class="card"><h3 class="cp-sec">Print template</h3><div class="sub" style="margin:-4px 0 12px">Pick a header &amp; footer layout. The logo appears on every printout. This is what people see on your documents.</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Logo", '<div id="cp-logo-wrap"></div>', "PNG or JPG. Appears on every printed report.") +
+      fld("Accent colour", '<input id="cp-accent" type="color" value="' + esc(ps.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)">') +
+      '</div><div>' +
+      fld("Show logo", '<select id="cp-showlogo"><option value="1">Yes</option><option value="0">No</option></select>', "Keep on so your brand is on every document.") +
+      fld("Footer note", '<input id="cp-footer" value="' + esc(ps.footer || "") + '" placeholder="e.g. Thank you for your business">') +
+      '</div></div>' +
+      '<div class="cp-tpls">' + tmplCards + '</div>' +
+      '<div class="cp-preview-wrap"><div class="cp-preview-label">Live preview</div><div class="cp-preview" id="cp-preview"></div></div>' +
+      '</div></div>';
+    if (ps.show_logo === false) document.getElementById("cp-showlogo").value = "0";
+    var logoData = (p.logo != null ? p.logo : (ps.logo || "")) || "";
+    function curData() {
+      return printTplData({
+        name: gv("cp-name"), legal_name: gv("cp-legal"), vat: gv("cp-vat"), country: gv("cp-country"),
+        address: document.getElementById("cp-addr").value || "", city: gv("cp-city"), website: gv("cp-web"),
+        phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), logo: logoData,
+        template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1),
+        accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1"
+      });
+    }
+    function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Sample Document") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
+    function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
+    function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
+    paintLogo(); paintPreview();
+    document.querySelectorAll("#o-body input, #o-body textarea, #o-body select").forEach(function (el) { el.addEventListener("input", paintPreview); el.addEventListener("change", paintPreview); });
+    document.querySelectorAll(".cp-tpl").forEach(function (l) { l.addEventListener("click", function () { setTimeout(paintPreview, 0); }); });
+    document.getElementById("cp-save").onclick = async function () {
+      var sv = document.getElementById("cp-save"); sv.disabled = true;
+      var profile = { address: (document.getElementById("cp-addr").value || ""), city: gv("cp-city"), phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
+      var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
+      var r = await sb.from("companies").update(upd).eq("id", S.company.id);
+      sv.disabled = false;
       if (r.error) { toast("Save failed: " + errMsg(r.error)); return; }
-      _printTpl = null; toast("Print template saved");
+      Object.assign(S.company, upd);
+      var ci = S.companies.filter(function (x) { return x.id === S.company.id; })[0]; if (ci) Object.assign(ci, upd);
+      toast("Company profile saved");
     };
   }
   // ORB-06b: admin screen to define custom fields per master entity.
