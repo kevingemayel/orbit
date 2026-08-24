@@ -8237,8 +8237,8 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td class="rl-area-cell num" style="min-width:64px;white-space:nowrap"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th class="num" style="width:70px">Area</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div style="margin-top:8px"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
@@ -8246,7 +8246,7 @@
       if (V.length && L.some(function (l) { return l.description || l.product_id; })) {
         var Lf = L.filter(function (l) { return l.description || l.product_id; });
         var vt = {}; V.forEach(function (v) { vt[v.partner_id] = 0; });
-        var headRow = '<th>Item</th><th class="num">Qty</th><th>Basis</th><th class="num">Last price</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '</th>'; }).join("");
+        var headRow = '<th>Item</th><th class="num">Qty</th><th>Basis</th><th class="num">Last price</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '<div class="muted" style="font-weight:400;font-size:10px">unit price</div></th><th class="num">Total</th>'; }).join("");
         var mrows = Lf.map(function (l) {
           var prod = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null;
           var info = prodMat(prod);
@@ -8254,7 +8254,7 @@
           // the bid is in curBasis; the compared total is qty * the canonical per-item price
           var totals = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? lineCalc(info, l.width, l.height, Number(p), curBasis).unit * (Number(l.quantity) || 0) : null; });
           var valid = totals.filter(function (x) { return x != null; }); var best = valid.length ? Math.min.apply(null, valid) : null;
-          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num' + (isB ? " rfq-best" : "") + '"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="any" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '">' + (t != null ? '<div class="rfq-sub">= ' + money(t) + '</div>' : '') + '</td>'; }).join("");
+          var cells = V.map(function (v, ci) { var t = totals[ci]; if (t != null) vt[v.partner_id] += t; var isB = best != null && t === best && valid.length > 1; return '<td class="num"><input class="rfq-bid num" data-k="' + l.k + '" data-partner="' + v.partner_id + '" type="number" step="any" style="width:92px;text-align:right" value="' + (B[l.k + "|" + v.partner_id] != null ? B[l.k + "|" + v.partner_id] : "") + '"></td><td class="num' + (isB ? " rfq-best" : "") + '">' + (t != null ? money(t) : "") + '</td>'; }).join("");
           var basisSel = '<td><select class="rl-mbasis" data-k="' + l.k + '">' + lineBasisHTML(info.form, curBasis) + '</select></td>';
           var lp = l.product_id ? lastPx[l.product_id] : null;
           var lastVal = lp ? basisFromCanonical(lp.unit_price, lp.width, lp.height, info, curBasis) : null;
@@ -8263,11 +8263,11 @@
           return '<tr><td>' + esc(l.description || "") + (dimTxt ? ' <span class="muted">(' + esc(dimTxt) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + basisSel + lastCell + cells + '</tr>';
         }).join("");
         var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
-        var totRow = '<td><b>Total</b></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
-        var awRow = '<td></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
+        var totRow = '<td><b>Total</b></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
+        var awRow = '<td></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
         matrix = '<h3 style="margin:20px 0 6px">Compare quotes</h3><div class="sub" style="margin:0 0 8px">Set each item\'s <b>basis</b> (per kg / m&sup2; / lm / sheet...), then enter each supplier\'s price <b>in that unit</b>. The <b>Last price</b> column shows what you last paid, in the same unit, for reference. Quotes are compared like-for-like: the lowest total per line is highlighted and the cheapest supplier overall gets the emphasised Award button. Awarding creates a draft PO with prices converted to the per-item price, tagged to this project + cost code.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr>' + headRow + '</tr></thead><tbody>' + mrows + '</tbody><tfoot><tr style="border-top:2px solid var(--line)">' + totRow + '</tr><tr>' + awRow + '</tr></tfoot></table></div>';
       }
-      var btns = awarded ? '<button id="rfq-reopen">Reopen</button>' : '<button class="pri" id="rfq-save">Save</button>';
+      var btns = (awarded ? '<button id="rfq-reopen">Reopen</button>' : '<button class="pri" id="rfq-save">Save</button>') + '<button id="rfq-print">Print RFQ</button>' + ((V.length && L.some(function (l) { return l.description || l.product_id; })) ? '<button id="rfq-printcmp">Print comparison</button>' : "");
       document.querySelector(".o-form").innerHTML = '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div></div><div class="o-sheet"><div class="o-title">' + esc(rfq.number || rfq.title || "New RFQ") + '</div>' + header + linesTbl + vendorsSec + matrix + '</div>';
       var addL = document.getElementById("rl-add"); if (addL) addL.onclick = function () { syncFromDom(); L.push({ k: kc++, product_id: null, description: "", size: "", width: null, height: null, unit: "", quantity: 1 }); draw(); };
       document.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = function () { syncFromDom(); L.splice(Number(b.dataset.i), 1); if (!L.length) L = [{ k: kc++, product_id: null, description: "", size: "", width: null, height: null, unit: "", quantity: 1 }]; draw(); }; });
@@ -8275,7 +8275,7 @@
         var lrec = L.filter(function (x) { return x.k === Number(tr.dataset.k); })[0] || {};
         function applyRfqForm(inf, d1, d2) {
           var cell = tr.querySelector(".rl-meas-cell"); if (!cell) return; cell.innerHTML = lineMeasureHTML(inf, d1, d2);
-          function updArea() { var a = tr.querySelector(".l-area"); if (!a) return; var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0; var c = lineCalc(inf, w, h, 0, inf.basis); a.textContent = c.measure ? ("= " + c.measure) : ""; }
+          function updArea() { var w = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, h = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0; var c = lineCalc(inf, w, h, 0, inf.basis); var ac = tr.querySelector(".rl-area-cell"); if (ac) ac.textContent = c.measure || ""; var a = tr.querySelector(".l-area"); if (a) a.textContent = ""; }
           tr.querySelectorAll(".l-d1,.l-d2").forEach(function (el) { el.addEventListener("input", updArea); }); updArea();
         }
         var prod0 = products.filter(function (x) { return x.id === lrec.product_id; })[0];
@@ -8291,6 +8291,45 @@
       var sv = document.getElementById("rfq-save"); if (sv) sv.onclick = async function () { syncFromDom(); if (await persist()) { toast("Saved"); renderRFQForm(id); } };
       document.querySelectorAll(".rfq-award").forEach(function (b) { b.onclick = function () { award(b.dataset.partner); }; });
       var ro = document.getElementById("rfq-reopen"); if (ro) ro.onclick = async function () { await sb.from("rfqs").update({ status: "sent", awarded_partner_id: null }).eq("id", id); renderRFQForm(id); };
+      function printRfq() {
+        syncFromDom();
+        var body = L.filter(function (l) { return l.description || l.product_id; }).map(function (l) {
+          var _a = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6;
+          var dim = (l.width && l.height) ? (l.width + "x" + l.height + (_a ? " (" + msFmt(_a, 3) + " m2)" : "")) : (l.size || "");
+          return '<tr><td>' + esc(l.description || "") + '</td><td>' + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td><td>' + esc(l.unit || "") + '</td><td></td></tr>';
+        }).join("");
+        var html = '<div class="pinv">' + pdocHead("Request for Quotation", rfq.number || "RFQ") +
+          '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div></div><div><div class="pl">Reply by</div><div class="pv">' + esc(rfq.deadline || "-") + '</div></div></div>' +
+          '<div style="margin:2px 0 12px;color:#444;font-size:12px">Please quote your best price for each item below' + (rfq.note ? '. ' + esc(rfq.note) : '') + '.</div>' +
+          '<table class="ptab"><thead><tr><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
+          pdocFoot() + '</div>';
+        pdocPrint(html);
+      }
+      function printRfqCompare() {
+        syncFromDom();
+        var Lf = L.filter(function (l) { return l.description || l.product_id; });
+        var vt = {}; V.forEach(function (v) { vt[v.partner_id] = 0; });
+        var head = '<th>Item</th><th class="r">Qty</th>' + V.map(function (v) { return '<th class="r">' + esc(vname(v.partner_id)) + '</th>'; }).join("");
+        var rows = Lf.map(function (l) {
+          var prod = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null;
+          var info = prodMat(prod), curBasis = l.basis || info.basis || "each";
+          var tots = V.map(function (v) { var p = B[l.k + "|" + v.partner_id]; return (p != null && p !== "") ? lineCalc(info, l.width, l.height, Number(p), curBasis).unit * (Number(l.quantity) || 0) : null; });
+          var valid = tots.filter(function (x) { return x != null; }), best = valid.length ? Math.min.apply(null, valid) : null;
+          var cells = V.map(function (v, ci) { var t = tots[ci]; if (t != null) vt[v.partner_id] += t; return '<td class="r"' + (best != null && t === best && valid.length > 1 ? ' style="font-weight:700"' : '') + '>' + (t != null ? money(t) : "-") + '</td>'; }).join("");
+          var dim = (l.width && l.height) ? " (" + (l.width + "x" + l.height) + ")" : "";
+          return '<tr><td>' + esc(l.description || "") + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
+        }).join("");
+        var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
+        var totCells = V.map(function (v) { return '<td class="r"' + (v.partner_id === cheapest ? ' style="font-weight:800"' : '') + '>' + money(vt[v.partner_id]) + '</td>'; }).join("");
+        var html = '<div class="pinv">' + pdocHead("Quotation Comparison", rfq.number || "RFQ") +
+          '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div></div><div><div class="pl">Suppliers</div><div class="pv">' + V.length + '</div></div></div>' +
+          '<table class="ptab"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '<tr style="font-weight:700"><td>Total</td><td></td>' + totCells + '</tr></tbody></table>' +
+          (cheapest ? '<div style="margin-top:12px;font-size:13px"><b>Lowest total:</b> ' + esc(vname(cheapest)) + ' - ' + S.company.currency_code + ' ' + money(cmin) + '</div>' : '') +
+          pdocFoot() + '</div>';
+        pdocPrint(html);
+      }
+      var rpb = document.getElementById("rfq-print"); if (rpb) rpb.onclick = printRfq;
+      var rpc = document.getElementById("rfq-printcmp"); if (rpc) rpc.onclick = printRfqCompare;
     }
     draw();
   }
