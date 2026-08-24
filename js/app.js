@@ -3126,6 +3126,28 @@
       toast(got ? ("Received - " + got + " item(s) added to inventory") : "Received"); renderOrderForm(order.id, "purchase");
     };
   }
+  // Camera scanner: uses the browser's native BarcodeDetector (Chrome desktop/Android) to
+  // read a QR or barcode from the device camera. Our QR labels encode ".../?scan=CODE", so
+  // we strip that back to the bare code. Calls onDetect(code) once, then closes.
+  async function openScanner(onDetect) {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "scanmodal";
+    m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>Scan a barcode / QR</h3><div class="scan-wrap"><video id="scan-video" autoplay playsinline muted></video><div class="scan-frame"></div></div><div class="sub" id="scan-msg" style="padding:8px 2px">Point the camera at the label.</div><div class="foot"><button class="btn" id="scan-cancel">Cancel</button></div></div>';
+    document.body.appendChild(m);
+    var video = document.getElementById("scan-video"), msg = document.getElementById("scan-msg");
+    var stream = null, running = true, detector = null;
+    function stop() { running = false; if (stream) try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} m.remove(); }
+    document.getElementById("scan-cancel").onclick = stop;
+    if (!("BarcodeDetector" in window)) { msg.innerHTML = '<span style="color:var(--bad)">This browser cannot scan with the camera (needs Chrome on Android or desktop). You can still pick the product from the list.</span>'; return; }
+    try { detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128", "ean_13", "ean_8", "code_39", "code_93", "codabar", "upc_a", "upc_e"] }); } catch (e) { try { detector = new window.BarcodeDetector(); } catch (e2) { msg.textContent = "Scanner unavailable."; return; } }
+    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } }); video.srcObject = stream; }
+    catch (e) { msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc(e.message || "permission denied") + '. Allow camera access and try again.</span>'; return; }
+    async function tick() {
+      if (!running) return;
+      try { var codes = await detector.detect(video); if (codes && codes.length) { var raw = codes[0].rawValue || ""; var mm = raw.match(/[?&]scan=([^&]+)/); var code = mm ? decodeURIComponent(mm[1]) : raw; running = false; stop(); onDetect(String(code).trim()); return; } } catch (e) {}
+      requestAnimationFrame(tick);
+    }
+    video.onloadedmetadata = function () { requestAnimationFrame(tick); };
+  }
   // Full-page Goods Receipt (stock picking): multi-product, with Receive From / Operation
   // Type / Scheduled Date / Source Document, per-line unit + destination routing. Opened
   // blank from On-Hand, or pre-filled from a PO's "Receive goods".
@@ -3139,7 +3161,7 @@
     var fromOrder = preset.order || null, poLines = [];
     if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
     var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
-    var products = (await sb.from("products").select("id,name,default_code,uom,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var recvUsers = await companyUsers();
     var inv = await ensureInventory();
@@ -3165,9 +3187,10 @@
       '</div></div>' +
       '<div class="o-cf-head" style="margin-top:14px">Items received</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:200px">Product</th><th>Description</th><th style="width:74px">Unit</th>' + (showOrdered ? '<th class="num" style="width:70px">Ordered</th>' : "") + '<th class="num" style="width:96px">Qty received</th><th style="width:120px">Destination</th><th style="width:24px"></th></tr></thead><tbody id="rcp-body"></tbody></table></div>' +
-      '<button class="o-addln" id="rcp-add">+ Add a product</button>' +
+      '<button class="o-addln" id="rcp-add">+ Add a product</button> <button class="o-addln" id="rcp-scan" style="margin-left:6px">&#128247; Scan barcode</button>' +
       '<div class="sub" style="margin-top:10px">Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). Quantities are valued at the PO price where linked. Enter in any <b>unit</b> - if it converts to the product\'s stock unit we store the converted quantity.</div></div>';
     document.getElementById("rcp-discard").onclick = function () { go(back.action); };
+    function findProdByCode(code) { code = String(code || "").trim(); if (!code) return null; return products.filter(function (p) { return p.default_code === code || p.supplier_code === code || p.barcode === code || p.id === code; })[0] || products.filter(function (p) { return (p.name || "").toLowerCase() === code.toLowerCase(); })[0]; }
     var body = document.getElementById("rcp-body");
     function addRow(l) {
       l = l || { product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" };
@@ -3188,6 +3211,7 @@
     }
     initLines.forEach(addRow);
     document.getElementById("rcp-add").onclick = function () { addRow(null); };
+    document.getElementById("rcp-scan").onclick = function () { openScanner(function (code) { var p = findProdByCode(code); if (p) { addRow({ product_id: p.id, name: p.name, uom: p.uom, qty: 1, destination: "warehouse" }); toast("Added " + p.name); } else { toast("No product matches code: " + code); } }); };
     document.getElementById("rcp-do").onclick = async function () {
       var opType = document.getElementById("rcp-type").value, origin = gv("rcp-origin"), recvBy = (document.getElementById("rcp-by") || {}).value || null;
       var partnerId = document.getElementById("rcp-from").value || (fromOrder ? fromOrder.partner_id : null);
@@ -3572,7 +3596,7 @@
     function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
     var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-qr">QR label</button>' : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + prSmart + titleRowHTML('<input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name">', "product", id) +
       '<div class="o-groups"><div>' +
       fld("Item code", '<input id="pr-code" value="' + esc(p.default_code || "") + '" placeholder="auto from classification">', "Your code for this item. Built automatically from the classification tree (e.g. AL-EXT-MUL-001); edit it if you want your own.") +
@@ -3591,6 +3615,7 @@
       fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
       '</div></div>' + materialSpecHTML(p, clsNodes) + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
+    var prQr = document.getElementById("pr-qr"); if (prQr) prQr.onclick = function () { openQRModal(p.name || "Product", p.barcode || p.default_code || p.id, p.default_code || ""); };
     wireMatSpec(p, clsNodes);
     wireAttach("product");
     var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
@@ -9537,7 +9562,7 @@
     if (kind === "receive") lotField = '<div class="row2"><div><label>Lot / Serial (optional)</label>' + fhint("__lot", "A batch or serial number for traceability. Leave blank if not tracked.") + '<input id="k-lot" placeholder="e.g. LOT-2026-014"></div><div><label>Expiry (optional)</label>' + fhint("__exp", "Best-before / expiry date for this lot, if any.") + '<input id="k-exp" type="date"></div></div>';
     else if (kind === "deliver") lotField = '<div><label>Lot / Serial (optional)</label>' + fhint("__lot", "The batch/serial being shipped, for traceability.") + '<input id="k-lot" placeholder="lot shipped"></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
-      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + projField + locField +
+      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<div style="display:flex;gap:6px;align-items:center"><select id="k-prod" style="flex:1">' + opts + '</select><button type="button" class="btn" id="k-scan" title="Scan a barcode / QR" style="padding:8px 11px">&#128247;</button></div></div>' + projField + locField +
       '<div class="row2"><div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : kind === "issue" ? "How many units are issued to the project." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
       '<div><label>Unit</label>' + fhint("__kuom", "The unit you are entering. If it converts to the product\'s stock unit (set in Units of Measure with a factor), we store the converted quantity.") + unitSelectHTML("k-uom", "", uoms) + '<div class="sub" id="k-uomconv" style="margin-top:4px;min-height:13px;font-size:11px"></div></div></div>' + lotField +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
@@ -9556,6 +9581,7 @@
     kProdSel.addEventListener("change", function () { setUnitSelect(kUomSel, prodUom()); updConv(); });
     kUomSel.addEventListener("change", updConv);
     kQtyIn.addEventListener("input", updConv);
+    var kscan = document.getElementById("k-scan"); if (kscan) kscan.onclick = function () { openScanner(function (code) { var p = storable.filter(function (x) { return x.default_code === code || x.id === code || (x.name || "").toLowerCase() === String(code).toLowerCase(); })[0]; if (p) { kProdSel.value = p.id; kProdSel.dispatchEvent(new Event("change")); toast("Selected " + p.name); } else { toast("No product matches: " + code); } }); };
     document.getElementById("k-save").onclick = async function () {
       var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
       if (isNaN(qty)) { toast("Enter a quantity"); return; }
