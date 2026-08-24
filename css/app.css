@@ -1408,3 +1408,17 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .cp-preview{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:16px;overflow-x:auto}
 .cp-paper{background:#fff;border-radius:6px;padding:20px 22px;box-shadow:0 1px 8px rgba(0,0,0,.12);min-width:520px}
 .cp-body-fill{height:120px;background:repeating-linear-gradient(180deg,#eef0f3 0,#eef0f3 8px,#fff 8px,#fff 20px);border-radius:4px;margin:14px 0;opacity:.6}
+
+/* ===== Product category tree ===== */
+.cat-tree{padding:14px 16px;max-width:840px}
+.cat-node{position:relative}
+.cat-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel);margin-bottom:6px}
+.cat-row:hover{border-color:var(--accent)}
+.cat-tw{color:var(--muted);width:14px;text-align:center;font-size:12px}
+.cat-name{font-weight:600;color:var(--ink)}
+.cat-cnt{color:var(--muted);font-size:12px;margin-left:6px}
+.cat-acts{margin-left:auto;display:flex;gap:6px;opacity:0;transition:opacity .12s}
+.cat-row:hover .cat-acts{opacity:1}
+.cat-acts button{border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:7px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.cat-acts button:hover{border-color:var(--accent);color:var(--accent)}
+.cat-acts .cat-del:hover{border-color:var(--bad);color:var(--bad)}

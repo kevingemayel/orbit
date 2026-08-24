@@ -994,8 +994,9 @@
       '<main id="o-main" tabindex="-1" style="overflow:hidden"></main>' +
       '</div>' +
       '</div>';
-    document.getElementById("waffle").onclick = renderHome;
-    var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = renderHome;
+    function goHome() { if (__dirty && !confirm("You have unsaved changes on this page. Leave without saving?")) return; __dirty = false; renderHome(); }
+    document.getElementById("waffle").onclick = goHome;
+    var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = goHome;
     var _op = document.getElementById("oprint"); if (_op) _op.onclick = printCurrentPage;
     installFormPrintButtons();
     var _gs = document.getElementById("o-gs-in");
@@ -1473,9 +1474,22 @@
   }
 
   // ============================ ROUTER ============================
+  // Unsaved-changes guard: any edit inside a form (.o-form) marks the page dirty; clicking a
+  // form action (Save/Discard/Confirm live in .o-sb-btns) clears it; navigating away via the
+  // sidebar/breadcrumb/app switch or closing the tab while dirty prompts first.
+  var __dirty = false;
+  if (!window.__dirtyGuard) {
+    window.__dirtyGuard = true;
+    document.addEventListener("input", function (e) { if (e.target && e.target.closest && e.target.closest(".o-form")) __dirty = true; }, true);
+    document.addEventListener("change", function (e) { if (e.target && e.target.closest && e.target.closest(".o-form")) __dirty = true; }, true);
+    document.addEventListener("click", function (e) { if (e.target && e.target.closest && e.target.closest(".o-sb-btns")) __dirty = false; }, true);
+    window.addEventListener("beforeunload", function (e) { if (__dirty) { e.preventDefault(); e.returnValue = ""; } });
+  }
   function go(action) {
     if (action === "settings.roles" && !canManageRoles()) { toast("Only owners and super admins can manage roles"); if (!S.app) renderHome(); return; }
     if (!canGo(action)) { toast("You do not have access to that"); if (!S.app) renderHome(); return; }
+    if (__dirty && action !== S.action) { if (!confirm("You have unsaved changes on this page. Leave without saving?")) return; }
+    __dirty = false;
     S.action = action;
     if (!S.app) { S.app = ACTION_APP[action] || "accounting"; applyAppColor(); }
     if (!document.getElementById("o-main")) renderShell();
@@ -1584,7 +1598,7 @@
       case "inv.onhand": return renderOnHand();
       case "inv.moves": return renderList(cfgStockMoves());
       case "inv.issues": return renderList(cfgMaterialIssues());
-      case "inv.cats": return renderList(cfgProductCategories());
+      case "inv.cats": return renderCategoryTree();
       case "inv.uoms": return renderList(cfgUoms());
       case "acc.payterms": return renderPaymentTerms();
       case "proj.labels": return renderTaskLabels();
@@ -9408,6 +9422,43 @@
       m.remove(); toast("Saved"); renderView();
     };
   }
+  // Nested tree view of product categories (parent_id), with per-node product counts,
+  // add-sub / edit / delete, and a rolled-up count including descendants.
+  async function renderCategoryTree() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Product Categories") + '<button class="o-new" id="cat-new">New category</button><div class="gap"></div></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var cats = (await sb.from("product_categories").select("*").eq("company_id", S.company.id).order("name")).data || [];
+    var prods = (await sb.from("products").select("category_id").eq("company_id", S.company.id)).data || [];
+    var cnt = {}; prods.forEach(function (p) { if (p.category_id) cnt[p.category_id] = (cnt[p.category_id] || 0) + 1; });
+    var byParent = {}; cats.forEach(function (c) { var k = c.parent_id || "_root"; (byParent[k] = byParent[k] || []).push(c); });
+    function subCount(id) { var t = cnt[id] || 0; (byParent[id] || []).forEach(function (ch) { t += subCount(ch.id); }); return t; }
+    function nodeHTML(c, depth) {
+      var kids = byParent[c.id] || [], own = cnt[c.id] || 0, roll = subCount(c.id);
+      return '<div class="cat-node" style="margin-left:' + (depth * 22) + 'px">' +
+        '<div class="cat-row"><span class="cat-tw">' + (kids.length ? "&#9662;" : "&#8226;") + '</span>' +
+        '<span class="cat-name">' + esc(c.name) + '</span>' +
+        '<span class="cat-cnt">' + own + (roll !== own ? ' <span class="muted">(' + roll + ' incl. sub)</span>' : "") + ' product' + (own === 1 ? "" : "s") + '</span>' +
+        '<span class="cat-acts"><button class="cat-add" data-id="' + c.id + '" title="Add a sub-category">+ sub</button><button class="cat-edit" data-id="' + c.id + '">Edit</button><button class="cat-del" data-id="' + c.id + '" title="Delete">&times;</button></span>' +
+        '</div></div>' + kids.map(function (k) { return nodeHTML(k, depth + 1); }).join("");
+    }
+    var roots = byParent["_root"] || [];
+    var body = document.getElementById("o-body");
+    body.innerHTML = cats.length ? '<div class="cat-tree">' + roots.map(function (c) { return nodeHTML(c, 0); }).join("") + '</div>' : '<div class="o-empty">No categories yet. Create your material groups (e.g. Aluminium &rsaquo; Profiles, Glass &rsaquo; IGU) and nest them with <b>+ sub</b>.</div>';
+    document.getElementById("cat-new").onclick = function () { openCategoryModal(); };
+    body.querySelectorAll(".cat-edit").forEach(function (b) { b.onclick = function () { openCategoryModal(cats.filter(function (x) { return x.id === b.dataset.id; })[0]); }; });
+    body.querySelectorAll(".cat-add").forEach(function (b) { b.onclick = function () { openCategoryModal({ parent_id: b.dataset.id }); }; });
+    body.querySelectorAll(".cat-del").forEach(function (b) {
+      b.onclick = async function () {
+        var c = cats.filter(function (x) { return x.id === b.dataset.id; })[0]; if (!c) return;
+        if ((byParent[c.id] || []).length) { toast("This category has sub-categories - delete or move them first."); return; }
+        if (!confirm("Delete category \"" + c.name + "\"? Any products in it just lose the category link.")) return;
+        var r = await sb.from("product_categories").delete().eq("id", c.id);
+        if (r.error) { toast("Could not delete: " + errMsg(r.error)); return; }
+        toast("Deleted"); renderCategoryTree();
+      };
+    });
+  }
   // ---- Units of measure ----
   var UOM_CATS = ["unit", "length", "area", "volume", "weight"];
   function cfgUoms() {
@@ -12567,6 +12618,7 @@
     { id: "proj-cost", cat: "Projects & delivery", apps: ["project"], title: "Is the job on budget?", teaser: "Budget vs committed vs actual.", html: "<p><b>Costs &rsaquo; Job Cost</b>, pick the project. It shows, per <b>cost code</b>, what you planned (budget), what you have ordered (committed), and what has been spent (actual). Red means over. Put the same cost code on the budget, POs and bills to line them up.</p><p>For procurement progress on a job (needed vs ordered vs received), see <b>Purchase &rsaquo; Procurement Status</b>.</p>" },
     { id: "proj-mywork", cat: "Projects & delivery", apps: ["project"], title: "See your own tasks", teaser: "Everything assigned to you.", html: "<p><b>Projects &rsaquo; My Work</b> gathers every task assigned to one person across all projects, grouped by stage, with overdue items flagged. Pick your name - it is your personal to-do list.</p>" },
     { id: "stock", cat: "Stock", apps: ["inventory"], title: "Receive stock", teaser: "Bring items into a warehouse.", html: "<p>Inventory &rsaquo; <b>Operations</b> &rsaquo; <b>Receive</b>. Choose the products and quantities; on-hand goes up and, if valuation is on, the accounting follows automatically.</p>" },
+    { id: "issue-vs-deliver", cat: "Stock", apps: ["inventory"], title: "Issue to Project vs Deliver vs Delivery Note", teaser: "Which one to use when material leaves stock.", html: "<p>Three different things move stock out - use the right one:</p><p><b>Issue to Project</b> (On Hand &rsaquo; Issue to Project): the material is <i>consumed</i> on one of your own jobs. Stock goes down and the cost is booked to that project (it shows up as project cost / WIP). Use this for anything installed or used on site.</p><p><b>Deliver</b> (On Hand &rsaquo; Deliver): a plain stock-out to a customer with no paperwork - stock goes down and cost of goods sold is booked. Use it for a quick sale/hand-over you are not documenting.</p><p><b>Delivery Note</b> (Inventory &rsaquo; Delivery Notes): a printable <i>document</i> for the customer/site listing what was delivered, with a number and status. It is paperwork - on its own it does not move stock or post accounting. Raise it to accompany goods; use Issue or Deliver to actually reduce stock.</p><p><b>Rule of thumb:</b> installing on your own project &rarr; <b>Issue to Project</b>. Handing goods to a client and you need a signed slip &rarr; <b>Delivery Note</b> (plus Issue/Deliver to move the stock).</p>" },
     { id: "custom", cat: "Your team & settings", apps: ["settings"], title: "Custom fields & renaming", teaser: "Make Orbit fit your words.", html: "<p><b>Settings &rsaquo; Custom Fields</b>: add your own fields to Contacts, Projects and Products. <b>Settings &rsaquo; Terminology</b>: rename the words the app shows - e.g. \"Vendors\" to \"Suppliers\" - for your company only.</p>" },
     { id: "roles", cat: "Your team & settings", apps: ["settings"], title: "Roles & permissions", teaser: "Decide who can see and do what.", html: "<p><b>Settings &rsaquo; Roles &amp; Permissions</b>. Each role switches apps, and parts of apps, on or off, and can hide money values. Start from a template and <b>Customize</b> it, or build your own. People can only manage roles below their own rank.</p>" }
   ];
