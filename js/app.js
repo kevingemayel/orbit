@@ -3054,7 +3054,7 @@
       };
     } else if (confirmed) {
       document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
-      var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { openReceiveModal(order, linesState); };
+      var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { renderReceiptForm({ order: order }); };
     }
     function printOrder() {
       var lns = currentLines(), cc = S.company.currency_code;
@@ -3120,6 +3120,102 @@
       m.remove();
       if (!any) { toast("Enter a quantity to receive"); return; }
       toast(got ? ("Received - " + got + " item(s) added to inventory") : "Received"); renderOrderForm(order.id, "purchase");
+    };
+  }
+  // Full-page Goods Receipt (stock picking): multi-product, with Receive From / Operation
+  // Type / Scheduled Date / Source Document, per-line unit + destination routing. Opened
+  // blank from On-Hand, or pre-filled from a PO's "Receive goods".
+  var RCPT_TYPES = [["receipt", "Receipt (goods in)"], ["return", "Return to vendor"], ["internal", "Internal receipt"]];
+  async function renderReceiptForm(preset) {
+    preset = preset || {};
+    var main = document.getElementById("o-main");
+    var back = preset.order ? { action: "po.list", title: "Purchase Orders" } : { action: "inv.onhand", title: "On Hand" };
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Receive Goods", back) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var fromOrder = preset.order || null, poLines = [];
+    if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,uom,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var recvUsers = await companyUsers();
+    var inv = await ensureInventory();
+    var prodBy = {}; products.forEach(function (p) { prodBy[p.id] = p; });
+    var initLines = [];
+    if (fromOrder) poLines.forEach(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), out = Math.max(0, ord - rec); if (out > 0.0001) initLines.push({ po_line_id: l.id, product_id: l.product_id, name: l.name, uom: l.uom || (l.product_id && prodBy[l.product_id] ? prodBy[l.product_id].uom : ""), ordered: ord, already: rec, qty: out, destination: l.destination || "warehouse", size: l.size, width: l.width, height: l.height, unit_price: l.unit_price }); });
+    if (!initLines.length) initLines.push({ product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" });
+    var showOrdered = !!fromOrder;
+    document.querySelector(".o-bc span:last-child").textContent = "Receive Goods";
+    var prodOpts = '<option value="">- pick a product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + ((fromOrder && fromOrder.partner_id === v.id) ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="rcp-do">Confirm receipt</button><button id="rcp-discard">Discard</button></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Goods Receipt</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Receive from", '<select id="rcp-from">' + vendOpts + '</select>', "The supplier the goods came from.") +
+      fld("Operation type", '<select id="rcp-type">' + RCPT_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join("") + '</select>', "Receipt = goods coming in; Return = sending back to the vendor.") +
+      fld("Received by", userSelectHTML("rcp-by", "", recvUsers, "(select person)"), "Who checked the goods in.") +
+      '</div><div>' +
+      fld("Scheduled date", '<input id="rcp-date" type="date" value="' + today() + '">', "The date the goods are received/expected.") +
+      fld("Source document", '<input id="rcp-origin" value="' + esc(fromOrder ? (fromOrder.number || "") : "") + '" placeholder="e.g. PO number, delivery note ref">', "The paperwork this receipt is against - a PO number, supplier delivery note, etc.") +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:14px">Items received</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:200px">Product</th><th>Description</th><th style="width:74px">Unit</th>' + (showOrdered ? '<th class="num" style="width:70px">Ordered</th>' : "") + '<th class="num" style="width:96px">Qty received</th><th style="width:120px">Destination</th><th style="width:24px"></th></tr></thead><tbody id="rcp-body"></tbody></table></div>' +
+      '<button class="o-addln" id="rcp-add">+ Add a product</button>' +
+      '<div class="sub" style="margin-top:10px">Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). Quantities are valued at the PO price where linked. Enter in any <b>unit</b> - if it converts to the product\'s stock unit we store the converted quantity.</div></div>';
+    document.getElementById("rcp-discard").onclick = function () { go(back.action); };
+    var body = document.getElementById("rcp-body");
+    function addRow(l) {
+      l = l || { product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" };
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td>' + (l.po_line_id ? '<b>' + esc(l.name || "") + '</b>' : '<select class="rcp-prod">' + prodOpts + '</select>') + '</td>' +
+        '<td><input class="rcp-desc" value="' + esc(l.name || "") + '" placeholder="Description"></td>' +
+        '<td>' + unitSelectHTML("rcp-uom", l.uom || "", uoms) + '</td>' +
+        (showOrdered ? '<td class="num rcp-ord">' + (l.ordered != null ? l.ordered : "") + '</td>' : "") +
+        '<td><input class="rcp-qty num" type="number" step="any" min="0" value="' + (l.qty != null ? l.qty : 1) + '"></td>' +
+        '<td><select class="rcp-dest">' + destOptsHTML(l.destination) + '</select></td>' +
+        '<td>' + (l.po_line_id ? "" : '<button class="del" type="button" title="Remove">&times;</button>') + '</td>';
+      body.appendChild(tr);
+      tr._line = l;
+      var ps = tr.querySelector(".rcp-prod");
+      if (ps) { if (l.product_id) ps.value = l.product_id; ps.onchange = function () { var p = prodBy[ps.value]; if (p) { tr.querySelector(".rcp-desc").value = p.name; var ue = tr.querySelector(".rcp-uom"); if (p.uom && !ue.value) setUnitSelect(ue, p.uom); } }; }
+      wireUnitAdd(tr.querySelector(".rcp-uom"), uoms);
+      var del = tr.querySelector(".del"); if (del) del.onclick = function () { tr.remove(); };
+    }
+    initLines.forEach(addRow);
+    document.getElementById("rcp-add").onclick = function () { addRow(null); };
+    document.getElementById("rcp-do").onclick = async function () {
+      var opType = document.getElementById("rcp-type").value, origin = gv("rcp-origin"), recvBy = (document.getElementById("rcp-by") || {}).value || null;
+      var partnerId = document.getElementById("rcp-from").value || (fromOrder ? fromOrder.partner_id : null);
+      var schd = gv("rcp-date") || today();
+      var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) {
+        var l = tr._line || {}, ps = tr.querySelector(".rcp-prod");
+        var pid = l.po_line_id ? l.product_id : (ps ? (ps.value || null) : null);
+        return { po_line_id: l.po_line_id || null, product_id: pid, name: (tr.querySelector(".rcp-desc") || {}).value || l.name || "", uom: (tr.querySelector(".rcp-uom") || {}).value || "", qty: parseFloat((tr.querySelector(".rcp-qty") || {}).value) || 0, destination: (tr.querySelector(".rcp-dest") || {}).value || "warehouse", already: l.already || 0, unit_price: l.unit_price, size: l.size, width: l.width, height: l.height };
+      }).filter(function (r) { return (r.product_id || r.name) && r.qty > 0.0001; });
+      if (!rows.length) { toast("Add at least one product with a quantity"); return; }
+      var isReturn = opType === "return";
+      var pick = await sb.from("stock_pickings").insert({ company_id: S.company.id, type: opType, partner_id: partnerId, location_id: inv ? inv.supplier : null, location_dest_id: inv ? inv.stock : null, scheduled_date: schd, origin: origin || null, state: "done" }).select("id").single();
+      var pickId = pick.error ? null : (pick.data && pick.data.id);
+      var got = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], pr = r.product_id ? prodBy[r.product_id] : null;
+        var stockUnit = (pr && pr.uom) || "Unit";
+        var qtyBase = (r.uom && r.uom !== "__addu") ? uomConvert(r.qty, r.uom, stockUnit, uoms) : r.qty;
+        if (r.po_line_id) await sb.from("purchase_order_lines").update({ qty_received: (Number(r.already) || 0) + r.qty }).eq("id", r.po_line_id);
+        var dest = r.destination || "warehouse";
+        if (!isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
+          var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
+          if (destLoc) {
+            var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: fromOrder ? (fromOrder.project_id || null) : null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
+            if (!mv.error) { await postStockValue("receive", pr, qtyBase, mv.data && mv.data.id, null, r.unit_price); got++; }
+          }
+        } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
+          var srcLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
+          if (srcLoc) { var mv2 = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single(); if (!mv2.error) { await postStockValue("deliver", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
+        }
+      }
+      toast(got ? ("Receipt saved - " + got + " item(s) " + (isReturn ? "returned" : "added to inventory")) : "Receipt saved");
+      if (fromOrder) renderOrderForm(fromOrder.id, "purchase"); else renderOnHand();
     };
   }
   async function nextOrderNumber(kind) {
@@ -9229,8 +9325,9 @@
       "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
   }
   function wireInvBtns(prods) {
-    var b = { "i-recv": "receive", "i-issue": "issue", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
+    var b = { "i-issue": "issue", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
     Object.keys(b).forEach(function (id) { var el = document.getElementById(id); if (el) el.onclick = function () { openStockModal(b[id], prods); }; });
+    var rc = document.getElementById("i-recv"); if (rc) rc.onclick = function () { renderReceiptForm(); };
   }
   async function openStockModal(kind, prods) {
     var titles = { receive: "Receive stock", deliver: "Deliver stock", adjust: "Inventory adjustment", transfer: "Internal transfer", issue: "Issue material to a project", scrap: "Scrap / write-off" };
