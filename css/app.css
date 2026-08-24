@@ -1422,3 +1422,18 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .cat-acts button{border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:7px;padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
 .cat-acts button:hover{border-color:var(--accent);color:var(--accent)}
 .cat-acts .cat-del:hover{border-color:var(--bad);color:var(--bad)}
+
+/* ===== Shipments board ===== */
+.shb-board{display:flex;gap:12px;padding:14px 16px;overflow-x:auto;align-items:flex-start}
+.shb-col{flex:0 0 240px;min-width:240px;background:var(--panel2);border:1px solid var(--line);border-radius:12px;display:flex;flex-direction:column;max-height:calc(100vh - 190px)}
+.shb-col-h{padding:10px 12px;border-bottom:1px solid var(--line);font-weight:700;color:var(--ink);display:flex;align-items:center;gap:8px}
+.shb-col-n{background:var(--panel);border:1px solid var(--line);border-radius:20px;font-size:11px;padding:1px 8px;color:var(--muted);font-weight:600}
+.shb-col-v{margin-left:auto;font-size:11px;color:var(--muted);font-weight:600}
+.shb-col-b{padding:8px;display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.shb-card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:pointer;transition:border-color .12s}
+.shb-card:hover{border-color:var(--accent)}
+.shb-card-r{font-weight:700;color:var(--ink);font-size:13px}
+.shb-card-s{color:var(--ink2);font-size:12px;margin-top:1px}
+.shb-card-m{color:var(--muted);font-size:11px;margin-top:4px}
+.shb-card-f{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.shb-empty{color:var(--ink3);font-size:12px;text-align:center;padding:8px}

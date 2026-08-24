@@ -293,6 +293,7 @@
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
         { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Procurement Status", "pur.procstatus"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Logistics", items: [["Shipments", "shp.list"], ["Shipments board", "shp.board"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
       ]
@@ -455,7 +456,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase",
+    "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -1609,6 +1610,9 @@
       case "loc": return renderList(cfgLocations());
       case "lots": return renderLots();
       case "rfq.list": return renderList(cfgRFQs());
+      case "shp.list": return renderList(cfgShipments());
+      case "shp.board": return renderShipmentBoard();
+      case "shp.new": return renderShipmentForm("new");
       case "pur.req": return renderList(cfgRequisitions());
       case "pur.procstatus": return renderProcurementStatus();
       case "pur.sccert": return renderList(cfgSubcontractCerts());
@@ -3142,11 +3146,12 @@
     var prodBy = {}; products.forEach(function (p) { prodBy[p.id] = p; });
     var initLines = [];
     if (fromOrder) poLines.forEach(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), out = Math.max(0, ord - rec); if (out > 0.0001) initLines.push({ po_line_id: l.id, product_id: l.product_id, name: l.name, uom: l.uom || (l.product_id && prodBy[l.product_id] ? prodBy[l.product_id].uom : ""), ordered: ord, already: rec, qty: out, destination: l.destination || "warehouse", size: l.size, width: l.width, height: l.height, unit_price: l.unit_price }); });
+    else if (preset.items && preset.items.length) initLines = preset.items.slice();
     if (!initLines.length) initLines.push({ product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" });
     var showOrdered = !!fromOrder;
     document.querySelector(".o-bc span:last-child").textContent = "Receive Goods";
     var prodOpts = '<option value="">- pick a product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
-    var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + ((fromOrder && fromOrder.partner_id === v.id) ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
+    var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (((fromOrder && fromOrder.partner_id === v.id) || (preset.supplierId === v.id)) ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="rcp-do">Confirm receipt</button><button id="rcp-discard">Discard</button></div></div>' +
       '<div class="o-sheet"><div class="o-title">Goods Receipt</div>' +
@@ -3156,7 +3161,7 @@
       fld("Received by", userSelectHTML("rcp-by", "", recvUsers, "(select person)"), "Who checked the goods in.") +
       '</div><div>' +
       fld("Scheduled date", '<input id="rcp-date" type="date" value="' + today() + '">', "The date the goods are received/expected.") +
-      fld("Source document", '<input id="rcp-origin" value="' + esc(fromOrder ? (fromOrder.number || "") : "") + '" placeholder="e.g. PO number, delivery note ref">', "The paperwork this receipt is against - a PO number, supplier delivery note, etc.") +
+      fld("Source document", '<input id="rcp-origin" value="' + esc(fromOrder ? (fromOrder.number || "") : (preset.origin || "")) + '" placeholder="e.g. PO number, delivery note ref">', "The paperwork this receipt is against - a PO number, supplier delivery note, etc.") +
       '</div></div>' +
       '<div class="o-cf-head" style="margin-top:14px">Items received</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:200px">Product</th><th>Description</th><th style="width:74px">Unit</th>' + (showOrdered ? '<th class="num" style="width:70px">Ordered</th>' : "") + '<th class="num" style="width:96px">Qty received</th><th style="width:120px">Destination</th><th style="width:24px"></th></tr></thead><tbody id="rcp-body"></tbody></table></div>' +
@@ -8234,6 +8239,185 @@
     var col = { draft: "--ink3", sent: "--accent", closed: "--warn", awarded: "--good", cancelled: "--bad" }[s] || "--ink3";
     var txt = { draft: "Draft", sent: "Sent", closed: "Closed", awarded: "Awarded", cancelled: "Cancelled" }[s] || (s || "Draft");
     return '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;color:var(' + col + ');border:1px solid var(' + col + ')">' + esc(txt) + '</span>';
+  }
+  // ===================== SHIPMENTS / container tracking + landed cost =====================
+  var SHIP_STATUS = [["booked", "Booked"], ["in_transit", "In transit"], ["arrived", "Arrived"], ["cleared", "Customs cleared"], ["received", "Received"], ["cancelled", "Cancelled"]];
+  var INCOTERMS = ["EXW", "FCA", "FOB", "CFR", "CIF", "CPT", "CIP", "DAP", "DPU", "DDP"];
+  var SHIP_MODES = [["sea", "Sea"], ["air", "Air"], ["land", "Land"]];
+  function shipStatusLabel(s) { var m = SHIP_STATUS.filter(function (x) { return x[0] === s; })[0]; return m ? m[1] : "Booked"; }
+  function shipBadge(s) { var cls = { booked: "draft", in_transit: "partial", arrived: "partial", cleared: "paid", received: "paid", cancelled: "unpaid" }; return '<span class="badge ' + (cls[s] || "draft") + '">' + shipStatusLabel(s) + '</span>'; }
+  function shipLanded(s, items) {
+    var goods = (items || []).reduce(function (sum, it) { return sum + Number(it.value || 0); }, 0); if (!goods) goods = Number(s.goods_value || 0);
+    var extra = Number(s.freight_cost || 0) + Number(s.insurance_cost || 0) + Number(s.customs_duty || 0) + Number(s.clearing_cost || 0);
+    return { goods: goods, extra: extra, total: goods + extra, factor: goods > 0 ? (goods + extra) / goods : 1 };
+  }
+  function cfgShipments() {
+    return {
+      title: "Shipments", pageSize: 100,
+      emptyHint: "Track every import from booking to arrival to customs clearance to receipt. Enter the freight, duty and clearing costs and they roll into the landed cost of the goods. Ideal when you have many containers in transit at once.",
+      fetch: function () { return sb.from("shipments").select("*, supplier:supplier_id(name)").eq("company_id", S.company.id).order("eta", { ascending: true, nullsFirst: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.number || "") + " " + (s.container_no || "") + " " + (s.bl_no || "") + " " + (s.vessel || "") + " " + (s.supplier ? s.supplier.name : ""); },
+      columns: [
+        { label: "Ref", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
+        { label: "Supplier", get: function (s) { return esc(s.supplier ? s.supplier.name : ""); } },
+        { label: "Mode", get: function (s) { return '<span class="muted">' + esc(shipModeLabel(s.mode)) + '</span>'; } },
+        { label: "Container / BL", get: function (s) { return '<span class="muted">' + esc(s.container_no || s.bl_no || "-") + '</span>'; } },
+        { label: "ETA", get: function (s) { return '<span class="muted">' + esc(s.eta || "-") + '</span>'; } },
+        { label: "Landed value", num: true, get: function (s) { var l = shipLanded(s, null); return money(l.total); } },
+        { label: "Status", get: function (s) { return shipBadge(s.status); } }
+      ],
+      filters: [{ label: "In transit", test: function (s) { return s.status === "in_transit" || s.status === "booked"; } }, { label: "At port / customs", test: function (s) { return s.status === "arrived"; } }, { label: "Cleared", test: function (s) { return s.status === "cleared"; } }, { label: "Received", test: function (s) { return s.status === "received"; } }],
+      groupBy: [{ label: "Status", get: function (s) { return shipStatusLabel(s.status); } }, { label: "Supplier", get: function (s) { return s.supplier ? s.supplier.name : "None"; } }],
+      onOpen: function (s) { renderShipmentForm(s.id); }, onNew: function () { renderShipmentForm("new"); }
+    };
+  }
+  function shipModeLabel(m) { var x = SHIP_MODES.filter(function (o) { return o[0] === m; })[0]; return x ? x[1] : "Sea"; }
+  async function renderShipmentBoard() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Shipments board") + '<button class="o-new" id="shb-new">New shipment</button><div class="gap"></div><button class="o-filtbtn" id="shb-list">List view</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("shb-new").onclick = function () { renderShipmentForm("new"); };
+    document.getElementById("shb-list").onclick = function () { go("shp.list"); };
+    var ships = (await sb.from("shipments").select("*, supplier:supplier_id(name)").eq("company_id", S.company.id).order("eta", { ascending: true, nullsFirst: false })).data || [];
+    var cols = SHIP_STATUS.filter(function (s) { return s[0] !== "cancelled"; });
+    var byStatus = {}; cols.forEach(function (c) { byStatus[c[0]] = []; });
+    ships.forEach(function (s) { if (byStatus[s.status]) byStatus[s.status].push(s); });
+    var html = '<div class="shb-board">' + cols.map(function (c) {
+      var list = byStatus[c[0]] || [];
+      var val = list.reduce(function (sum, s) { return sum + shipLanded(s, null).total; }, 0);
+      return '<div class="shb-col"><div class="shb-col-h">' + esc(c[1]) + ' <span class="shb-col-n">' + list.length + '</span><div class="shb-col-v">' + S.company.currency_code + " " + money(val) + '</div></div><div class="shb-col-b">' + (list.length ? list.map(function (s) {
+        return '<div class="shb-card" data-id="' + s.id + '"><div class="shb-card-r">' + esc(s.number || "(no ref)") + '</div><div class="shb-card-s">' + esc(s.supplier ? s.supplier.name : "") + '</div><div class="shb-card-m"><span>' + esc(shipModeLabel(s.mode)) + (s.container_no ? " &middot; " + esc(s.container_no) : "") + '</span></div><div class="shb-card-f"><span>ETA ' + esc(s.eta || "-") + '</span><span>' + money(shipLanded(s, null).total) + '</span></div></div>';
+      }).join("") : '<div class="shb-empty">-</div>') + '</div></div>';
+    }).join("") + '</div>';
+    document.getElementById("o-body").innerHTML = html;
+    document.querySelectorAll(".shb-card").forEach(function (c) { c.onclick = function () { renderShipmentForm(c.dataset.id); }; });
+  }
+  async function renderShipmentForm(id) {
+    var parent = { action: "shp.list", title: "Shipments" };
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var s = id === "new" ? { status: "booked", mode: "sea", pod: "Beirut", currency_code: S.company.currency_code } : (await sb.from("shipments").select("*").eq("id", id).maybeSingle()).data || {};
+    var items = id === "new" ? [] : (await sb.from("shipment_items").select("*").eq("shipment_id", id).order("sequence")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var openPOs = (await sb.from("purchase_orders").select("id,number").eq("company_id", S.company.id).in("state", ["draft", "sent", "purchase"]).order("date_order", { ascending: false })).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || "Shipment");
+    var prodBy = {}; products.forEach(function (p) { prodBy[p.id] = p; });
+    var prodOpts = '<option value="">- product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    function opt(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
+    var supOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (s.supplier_id === v.id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
+    var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    var stages = '<div class="o-stages">' + SHIP_STATUS.filter(function (x) { return x[0] !== "cancelled"; }).map(function (x) { var cur = s.status === x[0]; var done = SHIP_STATUS.findIndex(function (y) { return y[0] === s.status; }) > SHIP_STATUS.findIndex(function (y) { return y[0] === x[0]; }); return '<span class="st ' + (cur ? "on" : (done ? "done" : "")) + '">' + x[1] + '</span>'; }).join("") + '</div>';
+    var canReceive = id !== "new" && (s.status === "arrived" || s.status === "cleared");
+    var moneyF = '<input type="number" step="any" ';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sh-save">Save</button><button id="sh-discard">Discard</button>' + (canReceive ? '<button id="sh-receive">Create goods receipt</button>' : "") + '</div>' + stages + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="sh-number" value="' + esc(s.number || "") + '" placeholder="Shipment ref (e.g. SHP-0007 / container no)"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Supplier", '<select id="sh-sup">' + supOpts + '</select>', "Who the goods are coming from.") +
+      fld("Project", '<select id="sh-proj">' + projOpts + '</select>', "Tag to a project if the shipment is for one job.") +
+      fld("Mode", '<select id="sh-mode">' + opt(SHIP_MODES, s.mode || "sea") + '</select>') +
+      fld("Incoterm", '<select id="sh-inco"><option value="">-</option>' + INCOTERMS.map(function (t) { return '<option' + (s.incoterm === t ? " selected" : "") + '>' + t + '</option>'; }).join("") + '</select>', "Who is responsible for the goods at each stage (FOB, CIF, EXW...).") +
+      fld("Status", '<select id="sh-status">' + opt(SHIP_STATUS, s.status || "booked") + '</select>') +
+      '</div><div>' +
+      fld("Container no.", '<input id="sh-container" value="' + esc(s.container_no || "") + '">') +
+      fld("BL / AWB no.", '<input id="sh-bl" value="' + esc(s.bl_no || "") + '">', "Bill of lading (sea) or air waybill.") +
+      fld("Vessel / flight", '<input id="sh-vessel" value="' + esc(s.vessel || "") + '">') +
+      fld("Carrier / forwarder", '<input id="sh-carrier" value="' + esc(s.carrier || "") + '">') +
+      fld("Customs status", '<input id="sh-customs" value="' + esc(s.customs_status || "") + '" placeholder="e.g. under clearance, cleared">') +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:12px">Route &amp; dates</div><div class="o-groups"><div>' +
+      fld("Port of loading", '<input id="sh-pol" value="' + esc(s.pol || "") + '">') +
+      fld("Port of discharge", '<input id="sh-pod" value="' + esc(s.pod || "Beirut") + '">') +
+      '</div><div class="o-groups" style="grid-template-columns:1fr 1fr 1fr;gap:10px">' +
+      fld("ETD", '<input id="sh-etd" type="date" value="' + esc(s.etd || "") + '">') +
+      fld("ETA", '<input id="sh-eta" type="date" value="' + esc(s.eta || "") + '">') +
+      fld("Actual arrival", '<input id="sh-ata" type="date" value="' + esc(s.ata || "") + '">') +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:12px">Landed cost buildup</div><div class="o-groups"><div>' +
+      fld("Freight", moneyF + 'id="sh-freight" value="' + (s.freight_cost || 0) + '">') +
+      fld("Insurance", moneyF + 'id="sh-insurance" value="' + (s.insurance_cost || 0) + '">') +
+      '</div><div>' +
+      fld("Customs duty", moneyF + 'id="sh-duty" value="' + (s.customs_duty || 0) + '">') +
+      fld("Clearing / handling", moneyF + 'id="sh-clearing" value="' + (s.clearing_cost || 0) + '">') +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:14px">Goods on this shipment</div>' +
+      (openPOs.length ? '<div style="margin:2px 0 8px"><select id="sh-importpo" style="max-width:280px"><option value="">+ Import lines from a PO...</option>' + openPOs.map(function (p) { return '<option value="' + p.id + '">' + esc(p.number || p.id) + '</option>'; }).join("") + '</select></div>' : "") +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th class="num" style="width:80px">Qty</th><th style="width:72px">Unit</th><th class="num" style="width:110px">Goods value</th><th class="num" style="width:110px">Landed value</th><th style="width:24px"></th></tr></thead><tbody id="sh-items"></tbody></table></div>' +
+      '<button class="o-addln" id="sh-additem">+ Add item</button>' +
+      '<div class="o-tot" id="sh-landed" style="margin-top:12px"></div>' +
+      '<div class="sub" style="margin-top:6px">Freight, insurance, duty and clearing are spread across the goods by value to give each item its <b>landed cost</b>. When the shipment arrives, use <b>Create goods receipt</b> to bring it into stock at that landed cost.</div>' +
+      fld("Notes", '<textarea id="sh-notes" rows="2">' + esc(s.notes || "") + '</textarea>') + '</div>';
+    document.getElementById("sh-discard").onclick = function () { go("shp.list"); };
+    var itemsBody = document.getElementById("sh-items");
+    function recalcLanded() {
+      var rows = itemsBody.querySelectorAll("tr"), goods = 0;
+      rows.forEach(function (tr) { goods += parseFloat((tr.querySelector(".si-val") || {}).value) || 0; });
+      var extra = (parseFloat(gv("sh-freight")) || 0) + (parseFloat(gv("sh-insurance")) || 0) + (parseFloat(gv("sh-duty")) || 0) + (parseFloat(gv("sh-clearing")) || 0);
+      var factor = goods > 0 ? (goods + extra) / goods : 1;
+      rows.forEach(function (tr) { var v = parseFloat((tr.querySelector(".si-val") || {}).value) || 0; var lc = tr.querySelector(".si-landed"); if (lc) lc.textContent = money(v * factor); });
+      var cc = S.company.currency_code, el = document.getElementById("sh-landed");
+      if (el) el.innerHTML = '<div class="r"><span class="k">Goods value</span><span>' + cc + " " + money(goods) + '</span></div><div class="r"><span class="k">Freight + insurance + duty + clearing</span><span>' + cc + " " + money(extra) + '</span></div><div class="r tt"><span class="k">Total landed cost</span><span>' + cc + " " + money(goods + extra) + " (x" + (Math.round(factor * 1000) / 1000) + ')</span></div>';
+    }
+    function addItem(it) {
+      it = it || {};
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><select class="si-prod">' + prodOpts + '</select></td>' +
+        '<td><input class="si-desc" value="' + esc(it.description || "") + '" placeholder="Description"></td>' +
+        '<td><input class="si-qty num" type="number" step="any" value="' + (it.quantity != null ? it.quantity : 1) + '" style="width:70px"></td>' +
+        '<td>' + unitSelectHTML("si-uom", it.uom || "", uoms) + '</td>' +
+        '<td><input class="si-val num" type="number" step="any" value="' + (it.value != null ? it.value : 0) + '" style="width:96px"></td>' +
+        '<td class="num si-landed">0.00</td>' +
+        '<td><button class="del" type="button" title="Remove">&times;</button></td>';
+      itemsBody.appendChild(tr);
+      tr._poLine = it.po_line_id || null;
+      var ps = tr.querySelector(".si-prod"); if (it.product_id) ps.value = it.product_id;
+      ps.onchange = function () { var p = prodBy[ps.value]; if (p) { if (!tr.querySelector(".si-desc").value) tr.querySelector(".si-desc").value = p.name; var ue = tr.querySelector(".si-uom"); if (p.uom && !ue.value) setUnitSelect(ue, p.uom); } };
+      wireUnitAdd(tr.querySelector(".si-uom"), uoms);
+      tr.querySelector(".del").onclick = function () { tr.remove(); recalcLanded(); };
+      tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalcLanded); });
+    }
+    items.forEach(addItem);
+    if (!items.length) addItem(null);
+    document.getElementById("sh-additem").onclick = function () { addItem(null); };
+    ["sh-freight", "sh-insurance", "sh-duty", "sh-clearing"].forEach(function (idf) { var el = document.getElementById(idf); if (el) el.addEventListener("input", recalcLanded); });
+    recalcLanded();
+    var impPo = document.getElementById("sh-importpo");
+    if (impPo) impPo.onchange = async function () {
+      if (!impPo.value) return; var poId = impPo.value; impPo.value = "";
+      var pls = (await sb.from("purchase_order_lines").select("*").eq("order_id", poId).order("sequence")).data || [];
+      pls.forEach(function (l) { addItem({ po_line_id: l.id, product_id: l.product_id, description: l.name, quantity: l.quantity, uom: l.uom, value: Number(l.quantity || 0) * Number(l.unit_price || 0) }); });
+      recalcLanded();
+    };
+    function collectItems() {
+      return Array.prototype.map.call(itemsBody.querySelectorAll("tr"), function (tr) {
+        var ps = tr.querySelector(".si-prod");
+        return { po_line_id: tr._poLine || null, product_id: ps ? (ps.value || null) : null, description: (tr.querySelector(".si-desc") || {}).value || "", quantity: parseFloat((tr.querySelector(".si-qty") || {}).value) || 0, uom: (tr.querySelector(".si-uom") || {}).value || "", value: parseFloat((tr.querySelector(".si-val") || {}).value) || 0 };
+      }).filter(function (r) { return r.product_id || r.description; });
+    }
+    async function persist() {
+      var num = gv("sh-number") || s.number || ("SHP-" + ("000" + (((await sb.from("shipments").select("id", { count: "exact", head: true }).eq("company_id", S.company.id)).count || 0) + 1)).slice(-4));
+      var its = collectItems();
+      var goods = its.reduce(function (sum, it) { return sum + Number(it.value || 0); }, 0);
+      var row = { number: num, supplier_id: document.getElementById("sh-sup").value || null, project_id: document.getElementById("sh-proj").value || null, mode: document.getElementById("sh-mode").value, incoterm: document.getElementById("sh-inco").value || null, status: document.getElementById("sh-status").value, container_no: gv("sh-container") || null, bl_no: gv("sh-bl") || null, vessel: gv("sh-vessel") || null, carrier: gv("sh-carrier") || null, customs_status: gv("sh-customs") || null, pol: gv("sh-pol") || null, pod: gv("sh-pod") || null, etd: gv("sh-etd") || null, eta: gv("sh-eta") || null, ata: gv("sh-ata") || null, goods_value: goods, freight_cost: parseFloat(gv("sh-freight")) || 0, insurance_cost: parseFloat(gv("sh-insurance")) || 0, customs_duty: parseFloat(gv("sh-duty")) || 0, clearing_cost: parseFloat(gv("sh-clearing")) || 0, currency_code: s.currency_code || S.company.currency_code, notes: gv("sh-notes") || null };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("shipments").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("shipments").update(row).eq("id", id)).error) { toast("Save failed"); return null; } await sb.from("shipment_items").delete().eq("shipment_id", id); }
+      if (its.length) { var ir = await sb.from("shipment_items").insert(its.map(function (it, i) { return { company_id: S.company.id, shipment_id: sid, po_line_id: it.po_line_id, product_id: it.product_id, description: it.description || null, quantity: it.quantity, uom: it.uom || null, value: it.value, sequence: (i + 1) * 10 }; })); if (ir.error) { toast("Items failed: " + errMsg(ir.error)); return null; } }
+      return sid;
+    }
+    document.getElementById("sh-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Shipment saved"); renderShipmentForm(sid); } };
+    var rcv = document.getElementById("sh-receive");
+    if (rcv) rcv.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var its = collectItems(), land = shipLanded({ freight_cost: parseFloat(gv("sh-freight")) || 0, insurance_cost: parseFloat(gv("sh-insurance")) || 0, customs_duty: parseFloat(gv("sh-duty")) || 0, clearing_cost: parseFloat(gv("sh-clearing")) || 0 }, its);
+      var recLines = its.filter(function (it) { return it.product_id; }).map(function (it) { var q = Number(it.quantity || 0); var landedUnit = q ? (Number(it.value || 0) * land.factor) / q : 0; return { product_id: it.product_id, name: it.description, uom: it.uom, qty: q, destination: "warehouse", unit_price: landedUnit }; });
+      await sb.from("shipments").update({ status: "received" }).eq("id", sid);
+      renderReceiptForm({ items: recLines, origin: gv("sh-number") || s.number || "Shipment", supplierId: document.getElementById("sh-sup").value || null });
+    };
   }
   function cfgRFQs() {
     return {
