@@ -9262,7 +9262,7 @@
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
-    var kProdSel = document.getElementById("k-prod"), kUomSel = document.getElementById("k-uom"), kQtyIn = document.getElementById("k-qty");
+    var kProdSel = document.getElementById("k-prod"), kUomSel = m.querySelector(".k-uom"), kQtyIn = document.getElementById("k-qty");
     function prodUom() { var p = storable.filter(function (x) { return x.id === kProdSel.value; })[0]; return (p && p.uom) || "Unit"; }
     function updConv() {
       var el = document.getElementById("k-uomconv"); if (!el) return;
