@@ -8330,11 +8330,11 @@
       fld("Customs status", '<input id="sh-customs" value="' + esc(s.customs_status || "") + '" placeholder="e.g. under clearance, cleared">') +
       '</div></div>' +
       '<div class="o-cf-head" style="margin-top:12px">Route &amp; dates</div><div class="o-groups"><div>' +
-      fld("Port of loading", '<input id="sh-pol" value="' + esc(s.pol || "") + '">') +
+      fld("Port of loading", '<input id="sh-pol" value="' + esc(s.pol || "") + '" placeholder="e.g. Shanghai">') +
       fld("Port of discharge", '<input id="sh-pod" value="' + esc(s.pod || "Beirut") + '">') +
-      '</div><div class="o-groups" style="grid-template-columns:1fr 1fr 1fr;gap:10px">' +
-      fld("ETD", '<input id="sh-etd" type="date" value="' + esc(s.etd || "") + '">') +
-      fld("ETA", '<input id="sh-eta" type="date" value="' + esc(s.eta || "") + '">') +
+      fld("ETD (departure)", '<input id="sh-etd" type="date" value="' + esc(s.etd || "") + '">') +
+      '</div><div>' +
+      fld("ETA (arrival)", '<input id="sh-eta" type="date" value="' + esc(s.eta || "") + '">') +
       fld("Actual arrival", '<input id="sh-ata" type="date" value="' + esc(s.ata || "") + '">') +
       '</div></div>' +
       '<div class="o-cf-head" style="margin-top:12px">Landed cost buildup</div><div class="o-groups"><div>' +
