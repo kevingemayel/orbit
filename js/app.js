@@ -2845,6 +2845,7 @@
     var orderCosts = isSale ? [] : (((await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data) || []);
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
+    var ordUoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = order ? (order.number || "Draft") : "New";
     var invCount = 0, firstInvId = null;
     if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
@@ -2874,7 +2875,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, size: l.size, width: l.width, height: l.height, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -2910,7 +2911,7 @@
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod"); var de = tr.querySelector(".l-dest");
-        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2), destination: (!isSale && de) ? (de.value || null) : null };
+        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2), destination: (!isSale && de) ? (de.value || null) : null };
       });
     }
     function renderLines() {
@@ -2927,15 +2928,15 @@
           }
           var dimCell = "", destCell = "";
           if (showMatch) { var aa = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; dimCell = '<td class="muted">' + (l.width && l.height ? esc(l.width + "x" + l.height) + (aa ? ' <span style="opacity:.7">(' + msFmt(aa, 3) + ' m&sup2;)</span>' : "") : esc(l.size || "")) + '</td>'; destCell = '<td>' + destChip(l.destination) + '</td>'; }
-          return '<tr><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          return '<tr><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td><td class="muted">' + esc(l.uom || "") + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th><th>Unit</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
         var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="min-width:150px">Measure</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="min-width:150px">Measure</th>' : "") + '<th style="width:50px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
         var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
@@ -2956,6 +2957,7 @@
           '<td><input class="l-name" value="' + esc(l.name || "") + '" placeholder="Description"><div class="l-derived"></div></td>' +
           (showSize ? '<td class="l-meas-cell"></td>' : "") +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '"></td>' +
+          '<td>' + unitSelectHTML("l-uom", l.uom || "", ordUoms) + '</td>' +
           '<td><input class="l-price num" type="number" step="any" value="' + (priceValue || 0) + '"></td>' +
           (showSize ? '<td class="l-basis-cell"></td>' : "") +
           (showSize ? '<td><select class="l-dest">' + destOptsHTML(l.destination) + '</select></td>' : "") +
@@ -2970,8 +2972,11 @@
           tr.querySelectorAll(".l-d1,.l-d2,.l-basis").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
         }
         applyForm(info, l.width, l.height, basis);
+        wireUnitAdd(tr.querySelector(".l-uom"), ordUoms);
+        if (l.product_id) { var _ue0 = tr.querySelector(".l-uom"); if (_ue0 && !l.uom && sel && sel.uom) setUnitSelect(_ue0, sel.uom); }
         wireProdCombo(tr, products, function (pr) {
           tr.querySelector(".l-name").value = pr.name;
+          var _ue = tr.querySelector(".l-uom"); if (_ue && pr.uom && !_ue.value) setUnitSelect(_ue, pr.uom);
           var pinfo = prodMat(pr);
           var startPrice = (pinfo.pval != null && pinfo.pval !== "") ? pinfo.pval : ((isSale ? pr.list_price : pr.cost_price) || 0);
           tr.querySelector(".l-price").value = startPrice;
@@ -3019,7 +3024,7 @@
         if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
         await sb.from(ltbl).delete().eq("order_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, destination: (isSale ? null : (l.destination || null)), quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, destination: (isSale ? null : (l.destination || null)), quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
@@ -3927,11 +3932,15 @@
     tr.innerHTML = '<td><select class="ln-item">' + lineItemOptions(opts.products, opts.runs, opts.pitems, selVal) + '</select></td>' +
       '<td><input class="ln-desc" value="' + esc(line.description || "") + '" placeholder="Description"></td>' +
       '<td><input class="ln-qty" type="number" step="any" style="max-width:90px" value="' + (line.qty != null ? line.qty : "") + '"></td>' +
-      '<td><input class="ln-unit" style="max-width:70px" value="' + esc(line.unit || "pcs") + '"></td>' +
+      '<td>' + (opts.uoms ? unitSelectHTML("ln-unit", line.unit || "", opts.uoms) : '<input class="ln-unit" style="max-width:70px" value="' + esc(line.unit || "pcs") + '">') + '</td>' +
       '<td><button class="ln-del" title="Remove">&times;</button></td>';
     tb.appendChild(tr);
-    var itSel = tr.querySelector(".ln-item"), desc = tr.querySelector(".ln-desc");
-    itSel.onchange = function () { if (this.value && !desc.value) { desc.value = this.options[this.selectedIndex].text.replace(/\s*\(.*\)$/, ""); } };
+    var itSel = tr.querySelector(".ln-item"), desc = tr.querySelector(".ln-desc"), unitEl = tr.querySelector(".ln-unit");
+    if (opts.uoms) wireUnitAdd(unitEl, opts.uoms);
+    itSel.onchange = function () {
+      if (this.value && !desc.value) { desc.value = this.options[this.selectedIndex].text.replace(/\s*\(.*\)$/, ""); }
+      if (opts.uoms && this.value.indexOf("product:") === 0) { var pid = this.value.split(":")[1], p = (opts.products || []).filter(function (x) { return x.id === pid; })[0]; if (p && p.uom && (!unitEl.value || unitEl.value === "")) setUnitSelect(unitEl, p.uom); }
+    };
     tr.querySelector(".ln-del").onclick = function () { tr.remove(); };
   }
   function collectLines(tbodyId) {
@@ -4052,10 +4061,11 @@
     wireBc();
     var d = id === "new" ? { status: "draft", dn_date: today() } : (await sb.from("delivery_notes").select("*").eq("id", id).maybeSingle()).data || {};
     var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
-    var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,uom").eq("company_id", S.company.id).order("name")).data || [];
     var runs = (await sb.from("production_runs").select("id,name").eq("company_id", S.company.id).order("run_date", { ascending: false })).data || [];
     var pitems = (await sb.from("project_items").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var dnUoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var lines = id === "new" ? [] : ((await sb.from("delivery_note_lines").select("*").eq("note_id", id)).data || []);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || "New");
     var custOpts = '<option value="">(none)</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (d.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
@@ -4076,7 +4086,7 @@
       '<button class="btn" id="dn-addline" style="margin-top:8px">+ Add item</button>' +
       fld("Notes", '<textarea id="dn-notes" rows="2">' + esc(d.notes || "") + '</textarea>', "") + '</div>';
     document.getElementById("dn-discard").onclick = function () { go("dn.list"); };
-    var opts = { products: products, runs: runs, pitems: pitems };
+    var opts = { products: products, runs: runs, pitems: pitems, uoms: dnUoms };
     lines.forEach(function (l) { addLineRow("dn-lines", opts, l); });
     if (!lines.length) addLineRow("dn-lines", opts, {});
     document.getElementById("dn-addline").onclick = function () { addLineRow("dn-lines", opts, {}); };
@@ -9140,7 +9150,7 @@
       '<div class="gap"></div>' + locSel +
       '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     wireInvBtns(prods);
     var ls = document.getElementById("oh-loc"); if (ls) ls.onchange = function () { OH_LOC = this.value; renderOnHand(); };
     var body = document.getElementById("o-body");
@@ -9151,7 +9161,7 @@
     var list = storable.length ? storable : prods;
     var rows = list.map(function (p) {
       var q = qOf(p.id), val = q * Number(p.cost_price || 0);
-      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
+      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='muted'>" + esc(p.uom || "Unit") + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
     }).join("");
     var totVal = list.reduce(function (s, p) { return s + qOf(p.id) * Number(p.cost_price || 0); }, 0);
     var rules = (await sb.from("reordering_rules").select("product_id,min_qty,location_id").eq("company_id", S.company.id)).data || [];
@@ -9162,8 +9172,8 @@
     var lotoh = await lotOnHand(), soon = new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10);
     var expCount = lots.filter(function (l) { return l.expiry_date && l.expiry_date <= soon && (lotoh[l.id] || 0) > 0; }).length;
     var kpis = '<div class="kpis" style="padding:14px 14px 2px">' + kpi("Total stock value", S.company.currency_code + " " + money(totalAll)) + kpi("Low-stock items", "" + lowCount) + kpi("Expiring / expired lots", "" + expCount) + '</div>';
-    body.innerHTML = kpis + '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
-      "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
+    body.innerHTML = kpis + '<table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th>Type</th><th class="num">On Hand</th><th>Unit</th><th class="num">Unit Cost</th><th class="num">Value</th></tr></thead><tbody>' + rows +
+      "<tr style='font-weight:700'><td></td><td>Total stock value" + (OH_LOC !== "all" ? " (this location)" : "") + "</td><td></td><td></td><td></td><td></td><td class='num'>" + S.company.currency_code + " " + money(totVal) + "</td></tr></tbody></table>";
   }
   function wireInvBtns(prods) {
     var b = { "i-recv": "receive", "i-issue": "issue", "i-deliv": "deliver", "i-xfer": "transfer", "i-adj": "adjust" };
@@ -9174,6 +9184,7 @@
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     if (!storable.length) storable = prods;
     if (!storable.length) { toast("Add a product first (Products screen)"); return; }
+    var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var inv = await ensureInventory(); if (!inv) return;
     if (kind === "transfer" && inv.internal.length < 2) { toast("Add a second location first (Configuration > Locations)"); return; }
     var issueProjs = [];
@@ -9193,13 +9204,30 @@
     else if (kind === "deliver") lotField = '<div><label>Lot / Serial (optional)</label>' + fhint("__lot", "The batch/serial being shipped, for traceability.") + '<input id="k-lot" placeholder="lot shipped"></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
       '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<select id="k-prod">' + opts + '</select></div>' + projField + locField +
-      '<div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : kind === "issue" ? "How many units are issued to the project." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' + lotField +
+      '<div class="row2"><div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : kind === "issue" ? "How many units are issued to the project." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
+      '<div><label>Unit</label>' + fhint("__kuom", "The unit you are entering. If it converts to the product\'s stock unit (set in Units of Measure with a factor), we store the converted quantity.") + unitSelectHTML("k-uom", "", uoms) + '<div class="sub" id="k-uomconv" style="margin-top:4px;min-height:13px;font-size:11px"></div></div></div>' + lotField +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
+    var kProdSel = document.getElementById("k-prod"), kUomSel = document.getElementById("k-uom"), kQtyIn = document.getElementById("k-qty");
+    function prodUom() { var p = storable.filter(function (x) { return x.id === kProdSel.value; })[0]; return (p && p.uom) || "Unit"; }
+    function updConv() {
+      var el = document.getElementById("k-uomconv"); if (!el) return;
+      var stock = prodUom(), entered = kUomSel.value, q = parseFloat(kQtyIn.value) || 0;
+      if (entered && entered !== "__addu" && entered !== stock) { var conv = uomConvert(q, entered, stock, uoms); el.innerHTML = (conv !== q) ? '= <b>' + (Math.round(conv * 1e4) / 1e4) + '</b> ' + esc(stock) + ' (stock unit)' : '<span style="color:var(--bad)">no conversion to ' + esc(stock) + ' - stored as entered</span>'; }
+      else el.textContent = "";
+    }
+    wireUnitAdd(kUomSel, uoms);
+    setUnitSelect(kUomSel, prodUom());
+    kProdSel.addEventListener("change", function () { setUnitSelect(kUomSel, prodUom()); updConv(); });
+    kUomSel.addEventListener("change", updConv);
+    kQtyIn.addEventListener("input", updConv);
     document.getElementById("k-save").onclick = async function () {
       var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
       if (isNaN(qty)) { toast("Enter a quantity"); return; }
+      var product0 = storable.filter(function (x) { return x.id === pid; })[0] || {}, stockUnit = product0.uom || "Unit";
+      var enteredUnit = kUomSel ? kUomSel.value : stockUnit;
+      if (enteredUnit && enteredUnit !== "__addu") qty = uomConvert(qty, enteredUnit, stockUnit, uoms); // store in the product's stock unit
       var loc = document.getElementById("k-loc") ? document.getElementById("k-loc").value : inv.stock;
       var projId = (kind === "issue" && document.getElementById("k-proj")) ? document.getElementById("k-proj").value : null;
       var src, dest, q = qty, vkind = null;
@@ -9209,7 +9237,7 @@
       else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
       else if (kind === "scrap") { src = loc; dest = inv.adjust; vkind = "adjust_down"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
-      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
+      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, uom: stockUnit, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
       var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
@@ -9366,9 +9394,16 @@
       '<div><label>Type</label>' + fhint("__uc", "What it measures. Groups similar units together.") + '<select id="u-cat">' + UOM_CATS.map(function (c) { return '<option value="' + c + '"' + ((u.category || "unit") === c ? " selected" : "") + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Converts to (base unit)</label>' + fhint("__ub", "Link this unit to a base unit so quantities can convert. E.g. base m, this km.") + '<input id="u-base" value="' + esc(u.base_uom || "") + '" placeholder="e.g. m"></div><div><label>1 ' + esc(u.name || "unit") + ' = ? base</label>' + fhint("__uf", "How many base units are in one of this unit. E.g. 1 km = 1000 m.") + '<input id="u-factor" type="number" step="any" value="' + (u.factor != null ? u.factor : "") + '" placeholder="factor"></div></div>' +
       '<div><label>Status</label>' + fhint("__us", "Archived units stay on history but are hidden from new pickers.") + '<select id="u-active"><option value="1"' + (u.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (u.is_active === false ? " selected" : "") + '>Archived</option></select></div>' +
-      '</div><div class="foot"><button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (u.id ? '<button class="btn" id="u-del" style="margin-right:auto;color:var(--bad);border-color:var(--bad)">Delete</button>' : "") + '<button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("u-cancel").onclick = function () { m.remove(); };
+    var udel = document.getElementById("u-del");
+    if (udel) udel.onclick = async function () {
+      if (!confirm("Delete the unit \"" + (u.name || "") + "\"? Records that already use it keep the text; it just disappears from the pickers.")) return;
+      var r = await sb.from("uoms").delete().eq("id", u.id);
+      if (r.error) { toast("Could not delete: " + errMsg(r.error)); return; }
+      m.remove(); toast("Unit deleted"); renderView();
+    };
     document.getElementById("u-save").onclick = async function () {
       var name = gv("u-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, category: document.getElementById("u-cat").value, is_active: document.getElementById("u-active").value === "1", base_uom: gv("u-base") || null, factor: parseFloat(gv("u-factor")) || null };
@@ -9401,6 +9436,18 @@
     };
   }
   function setUnitSelect(sel, val) { if (!sel || !val) return; if (!Array.prototype.some.call(sel.options, function (o) { return o.text === val; })) { var o = document.createElement("option"); o.text = val; var add = sel.querySelector('option[value="__addu"]'); if (add) sel.insertBefore(o, add); else sel.appendChild(o); } sel.value = val; }
+  // Convert a quantity between two units using the linked base_uom + factor set in Units of
+  // Measure (factor = how many base units are in one of this unit). Returns q unchanged if
+  // the two units are the same or no conversion path is defined.
+  function uomConvert(q, fromUnit, toUnit, uoms) {
+    q = Number(q) || 0;
+    if (!fromUnit || !toUnit || fromUnit === toUnit) return q;
+    var a = (uoms || []).filter(function (x) { return x.name === fromUnit; })[0];
+    if (a && a.base_uom === toUnit && Number(a.factor)) return q * Number(a.factor);
+    var b = (uoms || []).filter(function (x) { return x.name === toUnit; })[0];
+    if (b && b.base_uom === fromUnit && Number(b.factor)) return q / Number(b.factor);
+    return q;
+  }
   function wireUnitAdd(sel, uoms) {
     if (!sel) return;
     var prev = sel.value;
