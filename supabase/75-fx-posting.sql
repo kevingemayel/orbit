@@ -1,20 +1,36 @@
 -- ============================================================================
---  Spacework ERP  -  FX-AWARE POSTING (Phase 1) + REALIZED FX (Phase 2)  AFTER 74
---  post_invoice: convert every line from the document currency to the company's
---    FUNCTIONAL currency at the spot rate on the invoice date, storing debit/credit
---    in functional and the original signed amount in amount_currency/currency_code.
---    Same-currency invoices are unchanged (fx_convert short-circuits, no rate needed).
---  register_payment: relieve the receivable/payable at its ORIGINAL booked rate, take
---    the bank at the PAYMENT-date rate, and post the difference to the FX gain/loss
---    account (realized foreign-exchange). Multi-currency-safe and always balanced.
+--  Spacework ERP  -  FX-AWARE POSTING (Phase 1) + REALIZED FX (Phase 2)  AFTER 74/76
+--  This supersedes BOTH 04-posting.sql and 06-refunds.sql: it is FX-aware AND
+--  handles all four move types (out_invoice / out_refund / in_invoice / in_refund).
+--
+--  post_invoice: every income/expense/VAT line is converted from the DOCUMENT
+--    currency to the company's FUNCTIONAL currency at the spot rate on the invoice
+--    date. debit/credit are stored in functional; amount_currency/currency_code keep
+--    the original signed document amount (+debit / -credit). The control line
+--    (Receivable/Payable) takes the summed functional value so the entry can never
+--    post out of balance. Same-currency invoices are unchanged (fx_convert short-
+--    circuits, no rate needed).
+--
+--    Direction is driven by two booleans instead of four copy-pasted branches:
+--      line_dr := (is_cust = is_refund)   -- does the P&L line sit on the debit side?
+--      ctrl_dr := not line_dr             -- the AR/AP control sits opposite
+--        out_invoice (cust,   normal) -> Dr AR      / Cr income / Cr VAT collected
+--        out_refund  (cust,   refund) -> Cr AR      / Dr income / Dr VAT collected
+--        in_invoice  (vendor, normal) -> Dr expense / Dr VAT ded / Cr AP
+--        in_refund   (vendor, refund) -> Cr expense / Cr VAT ded / Dr AP
+--
+--  register_payment: relieve the receivable/payable at its ORIGINAL booked rate,
+--    take the bank at the PAYMENT-date rate, and post the difference to the FX
+--    gain/loss account (realized foreign-exchange). Always balanced.
 --  Both keep the invoice header amounts in the document currency (what the client sees).
 -- ============================================================================
 
 create or replace function public.post_invoice(p_invoice uuid)
 returns uuid language plpgsql security definer set search_path=public as $fn$
 declare inv record; cid uuid; oid uuid; co_ccy text; doc_ccy text; rdate date;
-  jrn uuid; eid uuid; l record; ar uuid; ap uuid; vatc uuid; vatd uuid;
-  untax numeric:=0; tax numeric:=0; ctrl_func numeric:=0; lf numeric; tf numeric; is_out boolean;
+  jrn uuid; eid uuid; l record; ar uuid; ap uuid; vatc uuid; vatd uuid; ctrl uuid; vat uuid;
+  untax numeric:=0; tax numeric:=0; ctrl_func numeric:=0; lf numeric; tf numeric;
+  is_cust boolean; is_refund boolean; line_dr boolean; ctrl_dr boolean; ctrl_label text;
 begin
   select * into inv from public.invoices where id=p_invoice;
   if inv is null then raise exception 'invoice not found'; end if;
@@ -24,44 +40,64 @@ begin
   select currency_code, org_id into co_ccy, oid from public.companies where id=cid;
   doc_ccy := coalesce(nullif(inv.currency_code,''), co_ccy);
   rdate := inv.invoice_date;
-  is_out := inv.move_type like 'out_%';
+  is_cust   := inv.move_type like 'out_%';
+  is_refund := inv.move_type like '%refund';
+  line_dr := (is_cust = is_refund);   -- P&L (income/expense) line on the debit side?
+  ctrl_dr := not line_dr;             -- Receivable/Payable sits opposite the P&L
   select id into ar   from public.accounts where company_id=cid and code='4100';
   select id into ap   from public.accounts where company_id=cid and code='4000';
   select id into vatc from public.accounts where company_id=cid and code='4457';
   select id into vatd from public.accounts where company_id=cid and code='4456';
+  ctrl := case when is_cust then ar else ap end;
+  vat  := case when is_cust then vatc else vatd end;
+  ctrl_label := case
+    when is_cust and not is_refund then 'Receivable'
+    when is_cust and is_refund     then 'Receivable (credit note)'
+    when not is_cust and not is_refund then 'Payable'
+    else 'Payable (debit note)' end;
   select coalesce(sum(price_subtotal),0),
          coalesce(sum(price_subtotal * coalesce((select amount from public.taxes t where t.id=il.tax_id),0)/100),0)
     into untax, tax from public.invoice_lines il where il.invoice_id=p_invoice;
-  select id into jrn from public.journals where company_id=cid and code=(case when is_out then 'INV' else 'BILL' end);
+  select id into jrn from public.journals where company_id=cid and code=(case when is_cust then 'INV' else 'BILL' end);
   insert into public.journal_entries(company_id,journal_id,date,ref,narration,currency_code,state,source_type,source_id)
-    values (cid,jrn,rdate,inv.number,'Invoice '||coalesce(inv.number,''),doc_ccy,'draft','invoice',p_invoice::text)
+    values (cid,jrn,rdate,inv.number,coalesce(inv.number,'')||' entry',doc_ccy,'draft','invoice',p_invoice::text)
     returning id into eid;
+
+  -- income / expense lines, converted to functional
   for l in select il.*,
-             coalesce(il.account_id,(select id from public.accounts where company_id=cid and code=(case when is_out then '7000' else '6000' end))) as acc
+             coalesce(il.account_id,(select id from public.accounts where company_id=cid and code=(case when is_cust then '7000' else '6000' end))) as acc
            from public.invoice_lines il where il.invoice_id=p_invoice loop
     lf := round(public.fx_convert(oid, coalesce(l.price_subtotal,0), doc_ccy, co_ccy, rdate, 'spot'), 2);
     ctrl_func := ctrl_func + lf;
-    if is_out then
-      insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code,analytic_distribution)
-        values (eid,cid,l.acc,l.name,0,lf, -coalesce(l.price_subtotal,0), doc_ccy, coalesce(l.analytic_distribution,'{}'::jsonb));
-    else
-      insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code,analytic_distribution)
-        values (eid,cid,l.acc,l.name,lf,0, coalesce(l.price_subtotal,0), doc_ccy, coalesce(l.analytic_distribution,'{}'::jsonb));
-    end if;
+    insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code,analytic_distribution)
+      values (eid,cid,l.acc,l.name,
+              case when line_dr then lf else 0 end,
+              case when line_dr then 0 else lf end,
+              case when line_dr then coalesce(l.price_subtotal,0) else -coalesce(l.price_subtotal,0) end,
+              doc_ccy,
+              case when l.analytic_account_id is not null then jsonb_build_object(l.analytic_account_id::text,100) else '{}'::jsonb end);
   end loop;
+
+  -- VAT, converted to functional (same side as the P&L lines)
   if tax<>0 then
     tf := round(public.fx_convert(oid, tax, doc_ccy, co_ccy, rdate, 'spot'), 2);
     ctrl_func := ctrl_func + tf;
-    if is_out then insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code) values (eid,cid,vatc,'VAT collected',0,tf,-tax,doc_ccy);
-    else insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code) values (eid,cid,vatd,'VAT deductible',tf,0,tax,doc_ccy); end if;
+    insert into public.journal_lines(entry_id,company_id,account_id,label,debit,credit,amount_currency,currency_code)
+      values (eid,cid,vat,(case when is_cust then 'VAT collected' else 'VAT deductible' end),
+              case when line_dr then tf else 0 end,
+              case when line_dr then 0 else tf end,
+              case when line_dr then tax else -tax end,
+              doc_ccy);
   end if;
-  if is_out then
-    insert into public.journal_lines(entry_id,company_id,account_id,partner_id,label,debit,credit,amount_currency,currency_code,date_maturity)
-      values (eid,cid,ar,inv.partner_id,'Receivable',ctrl_func,0,(untax+tax),doc_ccy,inv.due_date);
-  else
-    insert into public.journal_lines(entry_id,company_id,account_id,partner_id,label,debit,credit,amount_currency,currency_code,date_maturity)
-      values (eid,cid,ap,inv.partner_id,'Payable',0,ctrl_func,-(untax+tax),doc_ccy,inv.due_date);
-  end if;
+
+  -- control line (Receivable / Payable), balancing figure in functional
+  insert into public.journal_lines(entry_id,company_id,account_id,partner_id,label,debit,credit,amount_currency,currency_code,date_maturity)
+    values (eid,cid,ctrl,inv.partner_id,ctrl_label,
+            case when ctrl_dr then ctrl_func else 0 end,
+            case when ctrl_dr then 0 else ctrl_func end,
+            case when ctrl_dr then (untax+tax) else -(untax+tax) end,
+            doc_ccy,inv.due_date);
+
   perform public.post_entry(eid);
   update public.invoices set state='posted', journal_entry_id=eid, amount_untaxed=untax, amount_tax=tax,
     amount_total=untax+tax, amount_residual=untax+tax, payment_state='not_paid' where id=p_invoice;

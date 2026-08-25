@@ -274,7 +274,7 @@
         { label: "Cockpit", action: "cockpit" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
-        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"]] },
+        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
         { label: "Configuration", items: [["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
@@ -1545,6 +1545,7 @@
       case "rep.tax": return renderTaxReport();
       case "rep.stmt": return renderStatement(null);
       case "rep.cons": return renderConsolidation();
+      case "acc.revalue": return renderRevaluation();
       case "rep.cashfwd": return renderCashForecast();
       case "rep.health": return renderDataHealth();
       case "rep.collections": return renderCollections();
@@ -5581,6 +5582,69 @@
   }
 
   // ============================ CONSOLIDATION ============================
+  // ============================ FX REVALUATION (period end) ============================
+  async function renderRevaluation() {
+    var co = S.company, coCcy = co.currency_code, ref = (S.org && S.org.ref_currency) || coCcy;
+    function pad2(x) { return (x < 10 ? "0" : "") + x; }
+    function iso(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+    var n = new Date(), defDate = S._revalDate || iso(new Date(n.getFullYear(), n.getMonth() + 1, 0)); // month end
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("FX Revaluation") + '<div class="gap"></div></div>' +
+      '<div class="o-form-bg"><div class="o-report" id="rev" style="max-width:860px"><div class="o-empty">Loading open foreign-currency positions...</div></div></div></div>';
+    wireBc();
+    var rates = (S.org && S.org.id) ? ((await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || []) : [];
+    var anyMap = {}, closeMap = {};
+    rates.forEach(function (r) { if (anyMap[r.code] === undefined) anyMap[r.code] = Number(r.rate); if (r.rate_type === "closing" && closeMap[r.code] === undefined) closeMap[r.code] = Number(r.rate); });
+    function closeOf(code) { if (code === ref) return 1; return closeMap[code] !== undefined ? closeMap[code] : anyMap[code]; }
+    var fRefFunc = closeOf(coCcy); // presentation-per-functional
+    var accs = (await sb.from("accounts").select("id,type_code,reconcilable").eq("company_id", co.id)).data || [];
+    var mon = {}; accs.forEach(function (a) { if (a.reconcilable || a.type_code === "asset_cash" || /^liability/.test(a.type_code || "")) mon[a.id] = 1; });
+    var lines = (await sb.from("journal_lines").select("account_id,debit,credit,amount_currency,currency_code, journal_entries!inner(state,date,company_id)").eq("journal_entries.company_id", co.id).eq("journal_entries.state", "posted").lte("journal_entries.date", defDate).not("currency_code", "is", null)).data || [];
+    var byCcy = {};
+    lines.forEach(function (l) {
+      if (!mon[l.account_id]) return;
+      var ccy = (l.currency_code || "").toUpperCase(); if (!ccy || ccy === (coCcy || "").toUpperCase()) return;
+      var b = byCcy[ccy] || (byCcy[ccy] = { fc: 0, func: 0 });
+      b.fc += Number(l.amount_currency || 0); b.func += Number(l.debit || 0) - Number(l.credit || 0);
+    });
+    var ccyKeys = Object.keys(byCcy).filter(function (k) { return Math.abs(byCcy[k].fc) > 0.005 || Math.abs(byCcy[k].func) > 0.005; }).sort();
+    var totalAdj = 0, anyMissing = false;
+    var rowsHtml = ccyKeys.map(function (ccy) {
+      var b = byCcy[ccy], fClose = closeOf(ccy), target = null, adj = null;
+      if (fClose !== undefined && fClose !== null && fRefFunc) { target = b.fc * fClose / fRefFunc; adj = target - b.func; totalAdj += adj; }
+      else anyMissing = true;
+      return '<tr><td><b>' + esc(ccy) + '</b></td><td class="num">' + b.fc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="num">' + money(b.func) +
+        '</td><td class="num">' + (target == null ? '<span style="color:var(--warn)">no closing rate</span>' : money(target)) +
+        '</td><td class="num"' + (adj && Math.abs(adj) > 0.005 ? ' style="color:' + (adj > 0 ? "var(--good)" : "var(--bad)") + '"' : '') + '>' + (adj == null ? "-" : money(adj)) + '</td></tr>';
+    }).join("");
+    var body =
+      '<h1>Period-end FX revaluation</h1><div class="sub">' + esc(co.name) + ' &middot; books in ' + esc(coCcy) + '. Open balances in a foreign currency are restated to the <b>closing rate</b> on the chosen date; the movement posts as an unrealized FX gain or loss (IAS 21).</div>' +
+      '<div style="display:flex;gap:12px;align-items:flex-end;margin:16px 0 8px"><div><label style="font-size:12px;color:var(--ink3);display:block;margin-bottom:4px">Revalue as of</label><input id="rev-date" type="date" value="' + defDate + '" style="padding:8px 10px"></div>' +
+      '<button class="btn pri" id="rev-run" style="background:var(--app);border-color:var(--app)">Run revaluation</button></div>';
+    if (!ccyKeys.length) {
+      body += '<div class="o-empty" style="margin-top:14px">No open foreign-currency monetary balances as of this date. Nothing to revalue.</div>';
+    } else {
+      body += '<table class="o-rt" style="margin-top:10px"><tbody><tr class="sec"><td colspan="5">Open foreign-currency exposure</td></tr>' +
+        '<tr style="font-size:11px;color:var(--ink3)"><td>Currency</td><td class="num">Open balance</td><td class="num">On books (' + esc(coCcy) + ')</td><td class="num">At closing rate</td><td class="num">Unrealized adj.</td></tr>' +
+        rowsHtml +
+        '<tr class="tot"><td></td><td></td><td></td><td>Net unrealized ' + (totalAdj >= 0 ? "gain" : "loss") + '</td><td class="num"' + (Math.abs(totalAdj) > 0.005 ? ' style="color:' + (totalAdj > 0 ? "var(--good)" : "var(--bad)") + '"' : '') + '>' + money(totalAdj) + '</td></tr></tbody></table>';
+      if (anyMissing) body += '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-top:12px;font-size:13px">Some currencies have no <b>closing</b> rate for this date - add one under <a id="rev-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Exchange Rates</a> so they can be revalued.</div>';
+      body += '<div class="sub" style="margin-top:12px">Running this posts one balanced journal entry: each monetary account is moved to its closing-rate value and the net difference goes to the FX gain / loss account set in company settings. It is safe to run repeatedly - it only ever posts the incremental change, and reverses automatically once the underlying items settle.</div>';
+    }
+    document.getElementById("rev").innerHTML = body;
+    var rr = document.getElementById("rev-rates"); if (rr) rr.onclick = function () { go("rates"); };
+    document.getElementById("rev-run").onclick = async function () {
+      var d = document.getElementById("rev-date").value || defDate; S._revalDate = d;
+      this.disabled = true; this.textContent = "Posting...";
+      var res = await sb.rpc("fx_revalue", { p_company: co.id, p_date: d });
+      if (res.error) { toast("Revaluation failed: " + errMsg(res.error)); this.disabled = false; this.textContent = "Run revaluation"; return; }
+      var out = res.data || {};
+      if (out.status === "no_change") toast("Already at the closing rate - nothing to post");
+      else toast("Revaluation posted: net " + money(Number(out.net || 0)) + " " + coCcy + " over " + (out.lines || 0) + " account(s)");
+      renderRevaluation();
+    };
+  }
+
   async function renderConsolidation() {
     var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
     var main = document.getElementById("o-main");
@@ -5588,28 +5652,40 @@
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var rates = (await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
-    var rateMap = {}; rates.forEach(function (r) { if (rateMap[r.code] === undefined) rateMap[r.code] = Number(r.rate); }); rateMap[ref] = 1;
+    // IAS 21 translation: balance-sheet items at the CLOSING rate, P&L items at the
+    // AVERAGE rate. rate = units of the presentation currency per 1 unit of the entity
+    // currency. Fall back gracefully (average -> closing -> any) so a partial rate set
+    // still translates rather than blocking the report.
+    var anyMap = {}; rates.forEach(function (r) { if (anyMap[r.code] === undefined) anyMap[r.code] = Number(r.rate); });
+    function ratesOfType(t) { var m = {}; rates.forEach(function (r) { if (r.rate_type === t && m[r.code] === undefined) m[r.code] = Number(r.rate); }); return m; }
+    var closeMap = ratesOfType("closing"), avgMap = ratesOfType("average");
+    function closeOf(code) { if (code === ref) return 1; return closeMap[code] !== undefined ? closeMap[code] : anyMap[code]; }
+    function avgOf(code) { if (code === ref) return 1; return avgMap[code] !== undefined ? avgMap[code] : (closeMap[code] !== undefined ? closeMap[code] : anyMap[code]); }
     var cons = {}, entities = [], missing = {}, factorByCo = {};
     for (var i = 0; i < S.companies.length; i++) {
       var co = S.companies[i];
-      var factor = co.currency_code === ref ? 1 : rateMap[co.currency_code];
-      var known = factor !== undefined;
-      if (!known) { missing[co.currency_code] = 1; factor = 1; }
+      var fClose = co.currency_code === ref ? 1 : closeOf(co.currency_code);
+      var fAvg = co.currency_code === ref ? 1 : avgOf(co.currency_code);
+      var known = fClose !== undefined && fClose !== null;
+      if (!known) { missing[co.currency_code] = 1; fClose = 1; }
+      if (fAvg === undefined || fAvg === null) fAvg = fClose;
       var tb = (await sb.rpc("trial_balance", { p_company: co.id })).data || [];
       var eInc = 0, eExp = 0, eAssets = 0;
       /* eslint-disable no-loop-func */
-      (function (factor) {
+      (function (fClose, fAvg) {
         tb.forEach(function (r) {
           var g = (r.type_code || "").split("_")[0];
+          var isPL = (g === "income" || g === "expense");
+          var f = isPL ? fAvg : fClose;   // P&L at average, balance sheet at closing
           var c = cons[r.code] || (cons[r.code] = { code: r.code, name: r.name, type_code: r.type_code, debit: 0, credit: 0, balance: 0 });
-          c.debit += Number(r.debit) * factor; c.credit += Number(r.credit) * factor; c.balance += Number(r.balance) * factor;
-          if (g === "income") eInc += (Number(r.credit) - Number(r.debit)) * factor;
-          if (g === "expense") eExp += (Number(r.debit) - Number(r.credit)) * factor;
-          if (g === "asset") eAssets += Number(r.balance) * factor;
+          c.debit += Number(r.debit) * f; c.credit += Number(r.credit) * f; c.balance += Number(r.balance) * f;
+          if (g === "income") eInc += (Number(r.credit) - Number(r.debit)) * fAvg;
+          if (g === "expense") eExp += (Number(r.debit) - Number(r.credit)) * fAvg;
+          if (g === "asset") eAssets += Number(r.balance) * fClose;
         });
-      })(factor);
-      entities.push({ name: co.name, cur: co.currency_code, factor: factor, known: known, assets: eAssets, result: eInc - eExp });
-      factorByCo[co.id] = factor;
+      })(fClose, fAvg);
+      entities.push({ name: co.name, cur: co.currency_code, fClose: fClose, fAvg: fAvg, known: known, assets: eAssets, result: eInc - eExp });
+      factorByCo[co.id] = { close: fClose, avg: fAvg };
     }
     var rows = Object.keys(cons).map(function (k) { return cons[k]; }).sort(function (a, b) { return (a.code || "") < (b.code || "") ? -1 : 1; });
     // Intercompany eliminations: partners tagged as a group company -> their sales/costs + AR/AP net out
@@ -5620,7 +5696,10 @@
       var coIds = S.companies.map(function (c) { return c.id; });
       var icInv = (await sb.from("invoices").select("company_id,move_type,amount_untaxed,amount_residual,partner_id").in("company_id", coIds).eq("state", "posted").in("partner_id", icIds)).data || [];
       icInv.forEach(function (v) {
-        var f = factorByCo[v.company_id] || 1, u = Number(v.amount_untaxed || 0) * f, r = Number(v.amount_residual || 0) * f; icCount++;
+        var ff = factorByCo[v.company_id] || { close: 1, avg: 1 };
+        var u = Number(v.amount_untaxed || 0) * ff.avg;      // revenue/cost at average
+        var r = Number(v.amount_residual || 0) * ff.close;   // AR/AP at closing
+        icCount++;
         if (v.move_type === "out_invoice") { icRev += u; icAR += r; }
         else if (v.move_type === "in_invoice") { icCost += u; icAP += r; }
         else if (v.move_type === "out_refund") { icRev -= u; icAR -= r; }
@@ -5630,7 +5709,9 @@
     var missKeys = Object.keys(missing);
     var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
     var entRows = entities.map(function (e) {
-      return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td><td class="num">' + (e.cur === ref ? "1.000000" : (e.known ? Number(e.factor).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn)">n/a</span>')) + '</td><td class="num">' + money(e.assets) + '</td><td class="num">' + money(e.result) + '</td></tr>';
+      var rc = e.cur === ref ? "1.000000" : (e.known ? Number(e.fClose).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn)">n/a</span>');
+      var ra = e.cur === ref ? "1.000000" : (e.fAvg != null ? Number(e.fAvg).toLocaleString("en-US", { maximumFractionDigits: 6 }) : rc);
+      return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td><td class="num">' + rc + '</td><td class="num">' + ra + '</td><td class="num">' + money(e.assets) + '</td><td class="num">' + money(e.result) + '</td></tr>';
     }).join("");
     function grp(prefix, flip) { var t = 0, html = ""; rows.forEach(function (r) { if ((r.type_code || "").indexOf(prefix) !== 0) return; var v = flip ? Number(r.credit) - Number(r.debit) : Number(r.balance); t += v; html += repLine(r.code, r.name, v); }); return { t: t, html: html }; }
     var inc = grp("income", true);
@@ -5643,8 +5724,8 @@
     var cta = gAssets - (gLiab + eq.t + gResult); // translation plug so the group balance sheet balances
     document.getElementById("rep").innerHTML =
       '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + S.companies.length + ' entities &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
-      '<table class="o-rt"><tbody><tr class="sec"><td colspan="5">Entities</td></tr>' +
-      '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
+      '<table class="o-rt"><tbody><tr class="sec"><td colspan="6">Entities</td></tr>' +
+      '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td class="num">Closing &rarr; ' + esc(ref) + '</td><td class="num">Average &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
       entRows + '</tbody></table>' +
       (icCount ? '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="2">Intercompany eliminations &middot; ' + icPartners.length + ' related ' + (icPartners.length > 1 ? "parties" : "party") + '</td></tr>' +
         '<tr><td>Intercompany revenue / cost eliminated</td><td class="num">' + money(icRev) + ' / ' + money(icCost) + '</td></tr>' +
@@ -5663,7 +5744,7 @@
       (eq.html || repEmpty()) + repLine("", "Current Year Earnings", gResult) + repLine("", "Currency translation adjustment", cta) +
       '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + gResult + cta) + '</td></tr>' +
       '<tr class="tot"><td></td><td>Total Liabilities + Equity</td><td class="num">' + money(gLiab + eq.t + gResult + cta) + '</td></tr></tbody></table>' +
-      '<div class="sub" style="margin-top:12px">Each entity is translated to ' + esc(ref) + ' at the entered rate. Balances with parties tagged as a group company (intercompany) are eliminated so internal trade is not double-counted. The <b>currency translation adjustment</b> is the FX effect of translating multi-currency entities and keeps the group balance sheet balancing. Realised FX gain/loss on a foreign-currency invoice is recognised in the entity on settlement; each entity trades in its own currency, so the group FX effect shows here as the translation adjustment.</div>';
+      '<div class="sub" style="margin-top:12px">Each entity is translated to ' + esc(ref) + ' using the IAS 21 method: <b>income and expenses at the average rate</b>, <b>assets, liabilities and equity at the closing rate</b>. Because the two rates differ, the translated balance sheet does not balance on its own; the gap is the <b>currency translation adjustment (CTA)</b>, carried in equity. Balances with parties tagged as a group company (intercompany) are eliminated so internal trade is not double-counted. Realised FX gain/loss on a foreign-currency invoice is recognised in the entity on settlement; the remaining group FX effect of holding entities in different currencies shows here as the CTA.</div>';
     var cr = document.getElementById("cons-rates"); if (cr) cr.onclick = function () { go("rates"); };
   }
 
