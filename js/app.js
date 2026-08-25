@@ -2658,13 +2658,13 @@
     var t = printTplData();
     var logo = (t.show_logo && t.logo) ? '<img class="plogo" src="' + t.logo + '">' : "";
     var lines = [pfAddr(t), pfContact(t)].filter(Boolean).join("<br>");
-    if (t.vat) lines += (lines ? "<br>" : "") + "VAT: " + esc(t.vat);
+    if (t.vat) lines += (lines ? "<br>" : "") + (t.taxLabel || "VAT") + ": " + esc(t.vat);
     return '<div class="phead"><div class="pfrom">' + logo + '<div class="pfrom-txt"><div class="pname">' + esc(pfDisplayName(t)) + '</div>' + (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
       '<div class="pdoc"><div class="pdt">' + docTitle + '</div>' + (docNum ? '<div class="pnum">' + esc(docNum) + '</div>' : "") + '</div></div>';
   }
   function pdocFoot() {
     var t = printTplData();
-    var co = [esc(pfDisplayName(t)), (t.vat ? "VAT " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
+    var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
     return '<div class="pfoot">' + (t.footer ? esc(t.footer) + "<br>" : "") + co + '</div>';
   }
   function pdocPrint(html) {
@@ -8873,6 +8873,7 @@
       template: Number(ps.template || 1), accent: ps.accent || "#2f6bff", footer: ps.footer || (ps.footer === "" ? "" : ""), show_logo: ps.show_logo !== false
     };
     if (over) for (var k in over) d[k] = over[k];
+    if (!d.taxLabel) d.taxLabel = ((p.localization && p.localization.taxIdLabel) || (countryPack(d.country) || {}).taxIdLabel || "VAT");
     return d;
   }
   function pfDisplayName(t) { return t.legal_name || t.name || (S.company && S.company.name) || ""; }
@@ -8890,7 +8891,7 @@
     return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
   }
   function buildPrintFooter(t) {
-    var co = [esc(pfDisplayName(t)), (t.vat ? "VAT " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
+    var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
     return '<div class="pf"><div class="pf-txt">' + esc(t.footer || "") + '</div><div class="pf-co">' + co + '</div></div>';
   }
   function currentPrintTitle() { var bcEl = document.querySelector(".o-bc"), titleEl = bcEl ? bcEl.querySelector("span:last-child") : null; return titleEl ? titleEl.textContent.trim() : ((document.querySelector(".o-title") || {}).textContent || "").trim(); }
@@ -8947,6 +8948,47 @@
     { id: 4, name: "Minimal", desc: "One compact line: logo, name and title. Understated." },
     { id: 5, name: "Side rule", desc: "A coloured bar down the left with the logo and details." }
   ];
+  // ============================ COUNTRY LOCALIZATION PACKS (Phase 5) ===========
+  // Per-country defaults: presentation currency, the label the fiscal ID goes by,
+  // the standard indirect-tax rate(s), and statutory number/date formatting. Applying
+  // a pack seeds the taxes and records the format so documents read the local way.
+  var COUNTRY_PACKS = {
+    "lebanon": { currency: "USD", taxIdLabel: "VAT No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 11%", rate: 11 }] },
+    "united arab emirates": { currency: "AED", taxIdLabel: "TRN", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 5%", rate: 5 }] },
+    "saudi arabia": { currency: "SAR", taxIdLabel: "VAT No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 15%", rate: 15 }] },
+    "qatar": { currency: "QAR", taxIdLabel: "TIN", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [] },
+    "kuwait": { currency: "KWD", taxIdLabel: "Tax No.", dateFmt: "DD/MM/YYYY", decimals: 3, thousands: ",", decimal: ".", taxes: [] },
+    "egypt": { currency: "EGP", taxIdLabel: "Tax Reg. No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 14%", rate: 14 }] },
+    "united kingdom": { currency: "GBP", taxIdLabel: "VAT Reg. No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 20%", rate: 20 }, { name: "VAT 5% (reduced)", rate: 5 }] },
+    "france": { currency: "EUR", taxIdLabel: "TVA / SIRET", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: " ", decimal: ",", taxes: [{ name: "TVA 20%", rate: 20 }, { name: "TVA 10%", rate: 10 }, { name: "TVA 5.5%", rate: 5.5 }] },
+    "germany": { currency: "EUR", taxIdLabel: "USt-IdNr.", dateFmt: "DD.MM.YYYY", decimals: 2, thousands: ".", decimal: ",", taxes: [{ name: "USt 19%", rate: 19 }, { name: "USt 7%", rate: 7 }] },
+    "united states": { currency: "USD", taxIdLabel: "EIN", dateFmt: "MM/DD/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [] },
+    "canada": { currency: "CAD", taxIdLabel: "BN", dateFmt: "YYYY-MM-DD", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "GST 5%", rate: 5 }] }
+  };
+  function countryPack(country) {
+    if (!country) return null;
+    var k = String(country).trim().toLowerCase();
+    var alias = { "uae": "united arab emirates", "u.a.e.": "united arab emirates", "usa": "united states", "u.s.a.": "united states", "us": "united states", "uk": "united kingdom", "u.k.": "united kingdom", "ksa": "saudi arabia", "britain": "united kingdom", "great britain": "united kingdom", "deutschland": "germany" };
+    if (alias[k]) k = alias[k];
+    return COUNTRY_PACKS[k] || null;
+  }
+  // seed a pack's standard taxes for a company (sale + purchase), skipping ones already present
+  async function seedPackTaxes(companyId, pack) {
+    if (!pack || !(pack.taxes || []).length) return 0;
+    var existing = (await sb.from("taxes").select("name,scope").eq("company_id", companyId)).data || [];
+    var have = {}; existing.forEach(function (t) { have[(t.name || "").toLowerCase() + "|" + t.scope] = 1; });
+    var toAdd = [];
+    pack.taxes.forEach(function (t) {
+      ["sale", "purchase"].forEach(function (scope) {
+        var nm = t.name + (scope === "purchase" ? " (purchase)" : "");
+        if (!have[nm.toLowerCase() + "|" + scope]) toAdd.push({ company_id: companyId, name: nm, scope: scope, amount_type: "percent", amount: t.rate, is_active: true });
+      });
+    });
+    if (!toAdd.length) return 0;
+    var r = await sb.from("taxes").insert(toAdd);
+    return r.error ? -1 : toAdd.length;
+  }
+
   async function renderCompanyProfile() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Company Profile") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
@@ -8967,6 +9009,7 @@
       fld("Country", '<input id="cp-country" value="' + esc(c.country || "") + '" placeholder="e.g. Lebanon">') +
       fld("Currency", '<input id="cp-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase">', "The ledger currency for this company.") +
       '</div></div></div>' +
+      '<div class="card"><h3 class="cp-sec">Localization</h3><div class="sub" style="margin:-4px 0 12px">Applying a country pack seeds the standard tax rates, sets the fiscal-ID label and the number/date format your documents use.</div><div id="cp-loc"></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
       fld("Address", '<textarea id="cp-addr" rows="3" ' + ta + ' placeholder="Street, building...">' + esc(p.address || "") + '</textarea>') +
       fld("City", '<input id="cp-city" value="' + esc(p.city || "") + '">') +
@@ -9010,11 +9053,39 @@
     function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
     function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
     paintLogo(); paintPreview();
+    var locState = (c.profile && c.profile.localization) ? c.profile.localization : null;
+    function paintLoc() {
+      var country = gv("cp-country"), pack = countryPack(country), el = document.getElementById("cp-loc");
+      if (!el) return;
+      if (!pack) {
+        el.innerHTML = '<div class="sub" style="margin:0">' + (country ? 'No built-in pack for <b>' + esc(country) + '</b> yet - set the currency and taxes manually.' : 'Enter your country above to see its localization pack.') + (locState ? '<br>Saved format: <b>' + esc(locState.taxIdLabel || "") + '</b> &middot; ' + esc(locState.dateFmt || "") : "") + '</div>';
+        return;
+      }
+      var taxTxt = (pack.taxes && pack.taxes.length) ? pack.taxes.map(function (t) { return esc(t.name); }).join(", ") : "no indirect tax";
+      var applied = locState && locState.country && String(locState.country).toLowerCase() === String(country).toLowerCase();
+      el.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">' +
+        '<div style="flex:1;min-width:240px"><div style="font-weight:700;margin-bottom:4px">' + esc(country) + (applied ? ' <span style="color:var(--good);font-weight:600;font-size:12px">&#10003; applied</span>' : '') + '</div>' +
+        '<div class="sub" style="margin:0">Currency <b>' + esc(pack.currency) + '</b> &middot; fiscal ID <b>' + esc(pack.taxIdLabel) + '</b> &middot; dates <b>' + esc(pack.dateFmt) + '</b><br>Taxes: ' + taxTxt + '</div></div>' +
+        '<button type="button" class="o-filtbtn" id="cp-loc-apply" style="font-weight:700">Apply ' + esc(country) + ' pack</button></div>';
+      var ap = document.getElementById("cp-loc-apply");
+      if (ap) ap.onclick = async function () {
+        ap.disabled = true; ap.textContent = "Applying...";
+        var n = await seedPackTaxes(S.company.id, pack);
+        if (n < 0) { toast("Could not seed taxes"); ap.disabled = false; ap.textContent = "Apply " + country + " pack"; return; }
+        var curIn = document.getElementById("cp-cur"); if (curIn) curIn.value = pack.currency;
+        locState = { country: country, currency: pack.currency, taxIdLabel: pack.taxIdLabel, dateFmt: pack.dateFmt, decimals: pack.decimals, thousands: pack.thousands, decimal: pack.decimal };
+        toast(n > 0 ? ("Applied " + country + " pack · " + n + " tax rate(s) added · Save to keep the format") : ("Applied " + country + " pack · taxes already present · Save to keep the format"));
+        paintPreview(); paintLoc();
+      };
+    }
+    paintLoc();
+    var cpCountryEl = document.getElementById("cp-country"); if (cpCountryEl) cpCountryEl.addEventListener("input", paintLoc);
     document.querySelectorAll("#o-body input, #o-body textarea, #o-body select").forEach(function (el) { el.addEventListener("input", paintPreview); el.addEventListener("change", paintPreview); });
     document.querySelectorAll(".cp-tpl").forEach(function (l) { l.addEventListener("click", function () { setTimeout(paintPreview, 0); }); });
     document.getElementById("cp-save").onclick = async function () {
       var sv = document.getElementById("cp-save"); sv.disabled = true;
       var profile = { address: (document.getElementById("cp-addr").value || ""), city: gv("cp-city"), phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
       var r = await sb.from("companies").update(upd).eq("id", S.company.id);
