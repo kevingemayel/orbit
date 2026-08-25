@@ -2170,6 +2170,15 @@
     var projects = ((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var glLines = [];
     if (inv && inv.state === "posted" && inv.journal_entry_id) glLines = (await sb.from("journal_lines").select("*, accounts(code,name)").eq("entry_id", inv.journal_entry_id)).data || [];
+    // multi-currency: the invoice can be issued in any currency; the ledger converts to the
+    // company functional currency at the spot rate on the invoice date.
+    var coCcy = S.company.currency_code, refCcy = (S.org && S.org.ref_currency) || coCcy;
+    var docCcy = (inv && inv.currency_code) || coCcy;
+    var fxRates = (S.org && S.org.id) ? ((await sb.from("currency_rates").select("code,rate_date,rate,rate_type").eq("org_id", S.org.id).eq("rate_type", "spot").order("rate_date", { ascending: false })).data || []) : [];
+    var curList = (S.org && S.org.id) ? ((await sb.from("currencies").select("code").eq("org_id", S.org.id).eq("is_active", true).order("code")).data || []).map(function (c) { return c.code; }) : [];
+    ["USD", "EUR", "GBP", "LBP", coCcy, docCcy].forEach(function (c) { if (c && curList.indexOf(c) < 0) curList.push(c); });
+    function rateOf(ccy, d) { if (ccy === refCcy) return 1; var r = fxRates.filter(function (x) { return x.code === ccy && x.rate_date <= d; })[0]; return r ? Number(r.rate) : null; }
+    function fxRate(from, to, d) { if (from === to) return 1; var rf = rateOf(from, d), rt = rateOf(to, d); return (rf == null || rt == null) ? null : rf / rt; }
 
     // breadcrumb title
     document.querySelector(".o-bc span:last-child").textContent = inv ? (inv.number || "Draft") : "New";
@@ -2204,6 +2213,7 @@
       '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Reference", editable ? '<input id="f-ref" value="' + esc(inv ? inv.ref || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(inv ? inv.ref || "" : "") + '</span>') +
+      fld("Currency", editable ? '<select id="f-cur">' + curList.map(function (c) { return '<option value="' + esc(c) + '"' + (docCcy === c ? " selected" : "") + '>' + esc(c) + (c === coCcy ? " (company)" : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(docCcy) + '</span>', "The currency this " + (isSale ? "invoice" : "bill") + " is issued in. Foreign amounts convert to the company books (" + esc(coCcy) + ") at the spot rate on the date.") +
       '</div><div>' +
       fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>', "Date the " + (isSale ? "invoice" : "bill") + " is issued.") +
       (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
@@ -2309,9 +2319,16 @@
     function totalsHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTotals(sub, tax) {
       var el = document.getElementById("o-tot"); if (!el) return;
-      el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div>' +
-        '<div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div>' +
-        '<div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>';
+      var total = sub + tax, fxHtml = "";
+      if (docCcy !== coCcy) {
+        var d = (document.getElementById("f-date") ? document.getElementById("f-date").value : null) || (inv && inv.invoice_date) || today();
+        var rt = fxRate(docCcy, coCcy, d);
+        if (rt != null) fxHtml = '<div class="r" style="opacity:.85"><span class="k">In company books (' + esc(coCcy) + ')</span><span>' + coCcy + " " + money(total * rt) + ' <span class="muted">&middot; 1 ' + esc(docCcy) + ' = ' + (Math.round(rt * 1e6) / 1e6) + ' ' + esc(coCcy) + '</span></span></div>';
+        else fxHtml = '<div class="r" style="color:var(--bad)"><span class="k">No ' + esc(docCcy) + ' &rarr; ' + esc(coCcy) + ' rate on ' + esc(d) + '</span><span>add one in Accounting &rsaquo; Exchange Rates before posting</span></div>';
+      }
+      el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + docCcy + " " + money(sub) + '</span></div>' +
+        '<div class="r"><span class="k">Taxes</span><span>' + docCcy + " " + money(tax) + '</span></div>' +
+        '<div class="r tt"><span class="k">Total</span><span>' + docCcy + " " + money(total) + '</span></div>' + fxHtml;
     }
     if (!editable) { // compute static totals
       var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
@@ -2320,6 +2337,10 @@
     } else renderTab("lines");
     document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.onclick = function () { renderTab(x.dataset.t); }; });
     if (smart) document.getElementById("sm-gl").onclick = function () { renderTab("gl"); };
+    var _fcur = document.getElementById("f-cur");
+    if (_fcur) _fcur.onchange = function () { docCcy = _fcur.value; var q = document.querySelector("#lnbody .l-qty"); if (q) q.dispatchEvent(new Event("input", { bubbles: true })); };
+    var _fdt = document.getElementById("f-date");
+    if (_fdt) _fdt.addEventListener("change", function () { if (docCcy !== coCcy) { var q = document.querySelector("#lnbody .l-qty"); if (q) q.dispatchEvent(new Event("input", { bubbles: true })); } });
 
     // ---- actions ----
     async function save(alsoPost) {
@@ -2339,9 +2360,10 @@
         cost_code_id: document.getElementById("f-costcode") ? (document.getElementById("f-costcode").value || null) : null,
         amount_untaxed: untax, amount_tax: taxTot, amount_total: untax + taxTot, amount_residual: untax + taxTot
       };
+      hdr.currency_code = document.getElementById("f-cur") ? document.getElementById("f-cur").value : docCcy;
       var invId = id;
       if (id === "new") {
-        hdr.company_id = S.company.id; hdr.move_type = moveType; hdr.currency_code = S.company.currency_code; hdr.state = "draft";
+        hdr.company_id = S.company.id; hdr.move_type = moveType; hdr.state = "draft";
         hdr.number = await nextNumber(moveType);
         var ins = await sb.from("invoices").insert(hdr).select("id").single();
         if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; }
