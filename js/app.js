@@ -12038,17 +12038,25 @@
     var order = codes.map(function (c) { return c.id; }).filter(function (id) { return map[id]; });
     Object.keys(map).forEach(function (id) { if (id !== "_none" && order.indexOf(id) < 0) order.push(id); });
     if (map["_none"]) order.push("_none");
-    var cc = S.company.currency_code, tot = { budget: 0, committed: 0, actual: 0 };
+    var proj = (await sb.from("projects").select("contract_value").eq("id", projectId).maybeSingle()).data || {};
+    var contract = Number(proj.contract_value || 0);
+    // EAC (estimate at completion) = the larger of the budget or (actual spent + open commitment).
+    // If you've committed more than the budget leaves, the forecast rises above budget - an overrun.
+    function eacOf(m) { var open = Math.max(0, m.committed - m.actual); return Math.max(m.budget, m.actual + open); }
+    var cc = S.company.currency_code, tot = { budget: 0, committed: 0, actual: 0, eac: 0 };
     var rows = order.map(function (id) {
       var m = map[id]; tot.budget += m.budget; tot.committed += m.committed; tot.actual += m.actual;
+      var eac = eacOf(m); tot.eac += eac;
       var name = id === "_none" ? "Uncoded" : (codeById[id] ? (codeById[id].code + (codeById[id].name ? " - " + codeById[id].name : "")) : "Cost code");
-      var variance = m.budget - m.actual, pct = m.budget ? Math.round(m.actual / m.budget * 100) : 0;
-      return '<tr><td>' + esc(name) + '</td><td class="num">' + money(m.budget) + '</td><td class="num">' + money(m.committed) + '</td><td class="num">' + money(m.actual) + '</td><td class="num" style="color:' + (variance < 0 ? "var(--bad)" : "var(--good)") + '">' + money(variance) + '</td><td class="num">' + pct + '%</td></tr>';
+      var vac = m.budget - eac, pct = m.budget ? Math.round(m.actual / m.budget * 100) : 0;
+      return '<tr><td>' + esc(name) + '</td><td class="num">' + money(m.budget) + '</td><td class="num">' + money(m.committed) + '</td><td class="num">' + money(m.actual) + '</td><td class="num">' + money(eac) + '</td><td class="num" style="color:' + (vac < -0.005 ? "var(--bad)" : "var(--good)") + '">' + money(vac) + '</td><td class="num">' + pct + '%</td></tr>';
     }).join("");
-    var totVar = tot.budget - tot.actual, totPct = tot.budget ? Math.round(tot.actual / tot.budget * 100) : 0;
-    el.innerHTML = '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Cost code</th><th class="num">Budget</th><th class="num">Committed</th><th class="num">Actual</th><th class="num">Variance</th><th class="num">% used</th></tr></thead><tbody>' +
-      (rows || '<tr><td colspan="6" class="muted" style="text-align:center;padding:16px">No budget or costs yet. Add a cost budget, then raise POs / bills against this project.</td></tr>') +
-      '</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td>Total (' + esc(cc) + ')</td><td class="num">' + money(tot.budget) + '</td><td class="num">' + money(tot.committed) + '</td><td class="num">' + money(tot.actual) + '</td><td class="num" style="color:' + (totVar < 0 ? "var(--bad)" : "var(--good)") + '">' + money(totVar) + '</td><td class="num">' + totPct + '%</td></tr></tfoot></table></div>';
+    var totVac = tot.budget - tot.eac, totPct = tot.budget ? Math.round(tot.actual / tot.budget * 100) : 0;
+    var fMargin = contract - tot.eac, fMarginPct = contract ? Math.round(fMargin / contract * 100) : 0;
+    var summary = '<div class="o-hd" style="margin-bottom:12px"><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + cc + ' ' + money(contract) + '</div><div class="o-hd-l">Contract value</div></button><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + cc + ' ' + money(tot.eac) + '</div><div class="o-hd-l">Forecast cost (EAC)</div></button><button class="o-hd-k" style="cursor:default"><div class="o-hd-v' + (fMargin < 0 ? " bad" : "") + '">' + cc + ' ' + money(fMargin) + '</div><div class="o-hd-l">Forecast margin (' + fMarginPct + '%)</div></button></div>';
+    el.innerHTML = summary + '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Cost code</th><th class="num">Budget</th><th class="num">Committed</th><th class="num">Actual</th><th class="num">Forecast (EAC)</th><th class="num">Fcast var</th><th class="num">% used</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="7" class="muted" style="text-align:center;padding:16px">No budget or costs yet. Add a cost budget, then raise POs / bills against this project.</td></tr>') +
+      '</tbody><tfoot><tr style="font-weight:700;border-top:2px solid var(--line)"><td>Total (' + esc(cc) + ')</td><td class="num">' + money(tot.budget) + '</td><td class="num">' + money(tot.committed) + '</td><td class="num">' + money(tot.actual) + '</td><td class="num">' + money(tot.eac) + '</td><td class="num" style="color:' + (totVac < -0.005 ? "var(--bad)" : "var(--good)") + '">' + money(totVac) + '</td><td class="num">' + totPct + '%</td></tr></tfoot></table></div>';
   }
 
   // ---- Variations ----
