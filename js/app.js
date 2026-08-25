@@ -397,7 +397,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
-        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Procurement Status", "pur.procstatus"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Procurement Status", "pur.procstatus"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Logistics", items: [["Shipments", "shp.list"], ["Shipments board", "shp.board"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
@@ -562,7 +562,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
+    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -1728,6 +1728,7 @@
       case "shp.board": return renderShipmentBoard();
       case "shp.new": return renderShipmentForm("new");
       case "pur.req": return renderList(cfgRequisitions());
+      case "pur.cutlist": return renderMaterialImport();
       case "pur.procstatus": return renderProcurementStatus();
       case "pur.sccert": return renderList(cfgSubcontractCerts());
       case "pur.match": return renderMatch();
@@ -9915,6 +9916,18 @@
     moves.forEach(function (m) { var q = Number(m.quantity) || 0; if (internal[m.location_dest_id]) add(m.product_id, m.location_dest_id, q); if (internal[m.location_id]) add(m.product_id, m.location_id, -q); });
     return by;
   }
+  // active reservations per product (committed stock that reduces what is AVAILABLE)
+  async function reservedMap() {
+    var rows = (await sb.from("stock_reservations").select("product_id,qty").eq("company_id", S.company.id).eq("status", "active")).data || [];
+    var r = {}; rows.forEach(function (x) { if (x.product_id) r[x.product_id] = (r[x.product_id] || 0) + (Number(x.qty) || 0); }); return r;
+  }
+  // available = on-hand minus active reservations, per product
+  async function availableMap() {
+    var oh = await onHandMap(), rv = await reservedMap(), av = {};
+    Object.keys(oh).forEach(function (pid) { av[pid] = (Number(oh[pid]) || 0) - (rv[pid] || 0); });
+    Object.keys(rv).forEach(function (pid) { if (av[pid] === undefined) av[pid] = -(rv[pid] || 0); });
+    return { available: av, onHand: oh, reserved: rv };
+  }
   var OH_LOC = "all";
   async function renderOnHand() {
     var main = document.getElementById("o-main");
@@ -12344,6 +12357,93 @@
   }
 
   // ============================ MATERIAL REQUISITIONS ============================
+  // ---- CUT LIST: import a material-needed list (from dedicated cutting/nesting
+  // software), reserve the stock you already have, and turn the shortfall into a
+  // draft RFQ. Orbit does not optimize the cut - it handles stock + procurement.
+  async function renderMaterialImport() {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut List") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    function fmtQ(n) { n = Number(n) || 0; return (Math.round(n * 1000) / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 }); }
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var projOpts = '<option value="">(no project)</option>' + projs.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
+    document.getElementById("o-body").innerHTML =
+      '<div style="padding:16px;max-width:1100px">' +
+      '<div class="card"><h3 style="margin:0 0 4px">Cut list &rarr; reserve stock &rarr; buy the rest</h3>' +
+      '<div class="sub" style="margin:0 0 12px">Paste the material list your cutting / nesting software produced. Orbit matches each line to a product, <b>reserves</b> what you already have in stock for this job, and turns the <b>shortfall</b> into a draft RFQ to send suppliers. One line per material.</div>' +
+      '<div class="o-groups"><div>' + fld("Project", '<select id="ci-proj">' + projOpts + '</select>', "Reservations and the RFQ are tagged to this project.") + '</div><div>' + fld("Reference", '<input id="ci-ref" placeholder="e.g. Cut list #12 / nesting run">', "A free reference kept on the reservations.") + '</div></div>' +
+      '<label style="font-size:12px;color:var(--ink3);display:block;margin:8px 0 4px">Paste rows: material code or name, quantity, unit (tab or comma separated)</label>' +
+      '<textarea id="ci-paste" rows="7" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="PROF-6063&#9;120&#9;pcs&#10;Glass 6mm clear, 45, m2&#10;GASKET-EPDM 300 m"></textarea>' +
+      '<div style="margin-top:10px"><button class="pri" id="ci-match">Match &amp; preview</button></div>' +
+      '</div><div id="ci-result"></div></div>';
+    function matchProd(txt) {
+      txt = String(txt || "").trim(); if (!txt) return null; var lc = txt.toLowerCase();
+      return products.filter(function (p) { return p.default_code === txt || p.supplier_code === txt || p.barcode === txt; })[0]
+        || products.filter(function (p) { return (p.name || "").toLowerCase() === lc; })[0]
+        || products.filter(function (p) { return (p.default_code || "").toLowerCase() === lc || (p.name || "").toLowerCase().indexOf(lc) >= 0; })[0] || null;
+    }
+    function parseLine(line) {
+      if (!line || !line.trim()) return null;
+      var parts = line.split(/\t|,|;|\|/).map(function (s) { return s.trim(); }).filter(function (s) { return s.length; });
+      var material, qty = 0, unit = "";
+      if (parts.length >= 2) {
+        material = parts[0];
+        for (var j = 1; j < parts.length; j++) { if (qty === 0 && /^\d+(?:\.\d+)?$/.test(parts[j])) { qty = parseFloat(parts[j]); } else if (qty > 0 && !unit) { unit = parts[j]; } }
+        if (qty === 0) { var any = line.match(/(\d+(?:\.\d+)?)/); if (any) qty = parseFloat(any[1]); }
+      } else {
+        var toks = line.trim().split(/\s+/), qi = -1;
+        for (var i = toks.length - 1; i >= 0; i--) { if (/^\d+(?:\.\d+)?$/.test(toks[i])) { qi = i; break; } }
+        if (qi < 0) { material = line.trim(); } else { qty = parseFloat(toks[qi]); unit = toks.slice(qi + 1).join(" "); material = toks.slice(0, qi).join(" ") || line.trim(); }
+      }
+      return { material: material, qty: qty, unit: unit };
+    }
+    var previewRows = [];
+    document.getElementById("ci-match").onclick = async function () {
+      var lines = (document.getElementById("ci-paste").value || "").split(/\n/).map(parseLine).filter(Boolean);
+      if (!lines.length) { toast("Paste at least one line"); return; }
+      var av = await availableMap();
+      previewRows = lines.map(function (l) { var p = matchProd(l.material); return { material: l.material, qty: l.qty, unit: l.unit || (p ? p.uom : ""), product_id: p ? p.id : "", avail: p ? Math.max(0, Number(av.available[p.id] || 0)) : 0 }; });
+      drawPreview();
+    };
+    function drawPreview() {
+      var body = previewRows.map(function (r, i) {
+        var prodSel = '<select class="ci-prod" data-i="' + i + '" style="max-width:230px"><option value="">(no match &ndash; buy as text)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (r.product_id === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("") + '</select>';
+        var reserve = r.product_id ? Math.min(r.qty, r.avail) : 0, shortfall = Math.max(0, r.qty - reserve);
+        return '<tr><td>' + esc(r.material) + '</td><td>' + prodSel + '</td><td class="num">' + fmtQ(r.qty) + '</td><td>' + esc(r.unit || "") + '</td><td class="num">' + (r.product_id ? fmtQ(r.avail) : "-") + '</td><td class="num" style="color:var(--good)">' + (reserve > 0 ? fmtQ(reserve) : "-") + '</td><td class="num"' + (shortfall > 0 ? ' style="color:var(--bad);font-weight:700"' : '') + '>' + (shortfall > 0 ? fmtQ(shortfall) : "-") + '</td></tr>';
+      }).join("");
+      var totRes = previewRows.reduce(function (s, r) { return s + (r.product_id ? Math.min(r.qty, r.avail) : 0); }, 0);
+      var totShort = previewRows.reduce(function (s, r) { return s + Math.max(0, r.qty - (r.product_id ? Math.min(r.qty, r.avail) : 0)); }, 0);
+      document.getElementById("ci-result").innerHTML =
+        '<div class="card" style="margin-top:16px"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>From your list</td><td>Product</td><td class="num">Needed</td><td>Unit</td><td class="num">Available</td><td class="num">Reserve</td><td class="num">Short (buy)</td></tr></thead><tbody>' + body + '</tbody></table></div>' +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:12px"><div class="sub" style="margin:0">Will reserve <b style="color:var(--good)">' + fmtQ(totRes) + '</b> from stock and put <b style="color:var(--bad)">' + fmtQ(totShort) + '</b> on a draft RFQ.</div><div style="flex:1"></div><button class="pri" id="ci-go">Reserve stock &amp; create RFQ</button></div></div>';
+      document.querySelectorAll(".ci-prod").forEach(function (sel) { sel.onchange = async function () { var i = +sel.dataset.i; previewRows[i].product_id = sel.value; previewRows[i].avail = 0; if (sel.value) { var av = await availableMap(); previewRows[i].avail = Math.max(0, Number(av.available[sel.value] || 0)); } drawPreview(); }; });
+      document.getElementById("ci-go").onclick = doReserveAndRfq;
+    }
+    async function doReserveAndRfq() {
+      var proj = document.getElementById("ci-proj").value || null, ref = gv("ci-ref");
+      var resRows = [], shortLines = [];
+      previewRows.forEach(function (r) {
+        var reserve = r.product_id ? Math.min(r.qty, r.avail) : 0;
+        if (reserve > 0.0001) resRows.push({ company_id: S.company.id, product_id: r.product_id, qty: reserve, uom: r.unit || "", project_id: proj, source_type: "cutlist", source_ref: ref, status: "active", note: r.material });
+        var shortfall = Math.max(0, r.qty - reserve);
+        if (shortfall > 0.0001) shortLines.push({ product_id: r.product_id || null, name: r.material, unit: r.unit || "", quantity: shortfall });
+      });
+      if (resRows.length) { var rr = await sb.from("stock_reservations").insert(resRows); if (rr.error) { toast("Reserve failed: " + errMsg(rr.error)); return; } }
+      var rfqId = null;
+      if (shortLines.length) {
+        var yr = new Date().getFullYear(), py = "RFQ/" + yr + "/";
+        var ex = (await sb.from("rfqs").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+        var num = py + ("000" + (maxSeq(ex, py) + 1)).slice(-4);
+        var rq = await sb.from("rfqs").insert({ company_id: S.company.id, number: num, status: "draft", title: "Cut list shortfall " + (ref || ""), project_id: proj, note: "Shortfall from cut list " + (ref || "") }).select("id").single();
+        if (rq.error) { toast("RFQ failed: " + errMsg(rq.error)); return; }
+        rfqId = rq.data.id;
+        var rl = await sb.from("rfq_lines").insert(shortLines.map(function (l, i) { return { company_id: S.company.id, rfq_id: rfqId, product_id: l.product_id, description: l.name, unit: l.unit, quantity: l.quantity, sequence: (i + 1) * 10 }; }));
+        if (rl.error) { toast("RFQ lines failed: " + errMsg(rl.error)); return; }
+      }
+      toast((resRows.length ? resRows.length + " item(s) reserved" : "Nothing to reserve") + (rfqId ? " · RFQ created for the shortfall" : " · no shortfall to buy"));
+      if (rfqId) renderRFQForm(rfqId); else renderMaterialImport();
+    }
+  }
   function cfgRequisitions() {
     return {
       title: "Material Take-off", pageSize: 80,
