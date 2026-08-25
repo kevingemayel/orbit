@@ -455,6 +455,7 @@
     documents: {
       name: "Documents", icon: "▤", color: "#0369a1", color2: "#075985", home: "doc.subs",
       menus: [
+        { label: "Drawing Register", action: "doc.drawings" },
         { label: "Submittals", action: "doc.subs" },
         { label: "RFIs", action: "doc.rfis" },
         { label: "Transmittals", action: "doc.trans" },
@@ -560,7 +561,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
@@ -1643,6 +1644,7 @@
       case "mfg.wo": return renderList(cfgWorkOrders());
       case "mfg.boms": return renderList(cfgBoms());
       case "inst.jobs": return renderList(cfgInstallJobs());
+      case "doc.drawings": return renderList(cfgDrawings());
       case "doc.subs": return renderList(cfgSubmittals());
       case "doc.rfis": return renderList(cfgRfis());
       case "doc.trans": return renderList(cfgTransmittals());
@@ -9353,6 +9355,108 @@
   }
   function isOverdue(dateStr) { var d = parseD(dateStr); var t0 = new Date(); t0.setHours(0, 0, 0, 0); return d && d < t0; }
 
+  function drawingStatusBadge(s) {
+    var m = { in_progress: "In progress", issued: "Issued", superseded: "Superseded", void: "Void" };
+    var cls = s === "issued" ? "badge paid" : (s === "superseded" || s === "void" ? "badge unpaid" : "badge");
+    return '<span class="' + cls + '">' + esc(m[s] || s || "") + '</span>';
+  }
+  var REV_STATUS = [["draft", "Draft"], ["issued", "Issued"], ["approved", "Approved"], ["rejected", "Rejected"], ["superseded", "Superseded"]];
+  function cfgDrawings() {
+    return {
+      title: "Drawing Register", pageSize: 80,
+      fetch: function () { return sb.from("drawings").select("*, projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (d) { return (d.number || "") + " " + (d.title || "") + " " + (d.discipline || "") + " " + (d.projects ? d.projects.name : ""); },
+      columns: [
+        { label: "Number", get: function (d) { return '<b>' + esc(d.number || "/") + '</b>'; } },
+        { label: "Title", get: function (d) { return esc(d.title || ""); } },
+        { label: "Discipline", get: function (d) { return esc(d.discipline || ""); } },
+        { label: "Current rev", get: function (d) { return '<b>' + esc(d.current_revision || "-") + '</b>'; } },
+        { label: "Project", get: function (d) { return esc(d.projects ? d.projects.name : ""); } },
+        { label: "Status", get: function (d) { return drawingStatusBadge(d.status); } }
+      ],
+      filters: [
+        { label: "In progress", test: function (d) { return d.status === "in_progress"; } },
+        { label: "Issued", test: function (d) { return d.status === "issued"; } },
+        { label: "Superseded", test: function (d) { return d.status === "superseded" || d.status === "void"; } }
+      ],
+      groupBy: [{ label: "Project", get: function (d) { return d.projects ? d.projects.name : "None"; } }, { label: "Discipline", get: function (d) { return d.discipline || "None"; } }, { label: "Status", get: function (d) { return d.status; } }],
+      onOpen: function (d) { renderDrawingForm(d.id); }, onNew: function () { renderDrawingForm("new"); }
+    };
+  }
+  async function renderDrawingForm(id) {
+    var parent = { action: "doc.drawings", title: "Drawing Register" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var d = id === "new" ? { status: "in_progress" } : (await sb.from("drawings").select("*").eq("id", id).maybeSingle()).data || {};
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var revs = id === "new" ? [] : (await sb.from("drawing_revisions").select("*").eq("drawing_id", id).order("sequence")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || d.title || "Drawing");
+    var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    function revRow(r) {
+      return '<tr><td><b>' + esc(r.revision || "") + '</b></td><td>' + esc((REV_STATUS.filter(function (x) { return x[0] === r.status; })[0] || [null, r.status || "draft"])[1]) + '</td><td>' + esc(r.issue_purpose || "") + '</td><td class="muted">' + esc(r.issued_date || "") + '</td><td><a class="dw-open" data-rev="' + r.id + '" style="cursor:pointer;color:var(--accent);font-weight:600">Open / files</a></td><td><button class="dw-del" data-rev="' + r.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>';
+    }
+    var revSection = id === "new"
+      ? '<div class="sub" style="margin-top:16px">Save the drawing first, then add revisions (Rev A, B, C ...) with their files here.</div>'
+      : '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Revisions &amp; version history</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:60px">Rev</th><th>Status</th><th>Purpose</th><th>Issued</th><th>Files</th><th></th></tr></thead><tbody id="dw-revs">' + (revs.length ? revs.map(revRow).join("") : '<tr><td colspan="6" class="muted">No revisions yet.</td></tr>') + '</tbody></table><button id="dw-addrev" class="o-addln">+ New revision</button></div></div>';
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dw-save">Save</button><button id="dw-discard">Discard</button></div><div>' + (d.current_revision ? '<span class="muted">Current rev</span> <b>' + esc(d.current_revision) + '</b>' : '') + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="dw-title" value="' + esc(d.title || "") + '" placeholder="Drawing title"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Drawing / sheet no.", '<input id="dw-number" value="' + esc(d.number || "") + '" placeholder="auto-numbered if blank">', "Sheet number. Leave blank to auto-number (DWG/...).") +
+      fld("Project", '<select id="dw-proj">' + projOpts + '</select>', "Which project this drawing belongs to.") +
+      '</div><div>' +
+      fld("Discipline", '<input id="dw-disc" value="' + esc(d.discipline || "") + '" placeholder="e.g. Facade, Structural, MEP">', "Trade / discipline.") +
+      fld("Status", '<select id="dw-status"><option value="in_progress"' + (d.status === "in_progress" ? " selected" : "") + '>In progress</option><option value="issued"' + (d.status === "issued" ? " selected" : "") + '>Issued</option><option value="superseded"' + (d.status === "superseded" ? " selected" : "") + '>Superseded</option><option value="void"' + (d.status === "void" ? " selected" : "") + '>Void</option></select>', "Overall drawing state.") +
+      '</div></div>' + revSection + '</div>';
+    document.getElementById("dw-discard").onclick = function () { go("doc.drawings"); };
+    async function persist() {
+      var row = { title: gv("dw-title") || "Drawing", number: gv("dw-number"), project_id: (document.getElementById("dw-proj") || {}).value || null, discipline: gv("dw-disc"), status: (document.getElementById("dw-status") || {}).value || "in_progress" };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; if (!row.number) row.number = await nextDocNumber("drawings", "DWG"); var ins = await sb.from("drawings").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("drawings").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      return sid;
+    }
+    document.getElementById("dw-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderDrawingForm(sid); } };
+    var ar = document.getElementById("dw-addrev");
+    if (ar) ar.onclick = async function () {
+      var last = revs[revs.length - 1];
+      var newRev = last ? nextRev(last.revision || "A") : "A";
+      var ins = await sb.from("drawing_revisions").insert({ company_id: S.company.id, drawing_id: id, revision: newRev, status: "draft", sequence: (revs.length + 1) * 10 }).select("id").single();
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      openDrawingRevision(ins.data.id, id);
+    };
+    document.querySelectorAll(".dw-open").forEach(function (a) { a.onclick = function () { openDrawingRevision(a.dataset.rev, id); }; });
+    document.querySelectorAll(".dw-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Delete this revision and its files?")) return; await sb.from("drawing_revisions").delete().eq("id", b.dataset.rev); toast("Revision deleted"); renderDrawingForm(id); }; });
+  }
+  async function openDrawingRevision(revId, drawingId) {
+    var r = (await sb.from("drawing_revisions").select("*").eq("id", revId).maybeSingle()).data || {};
+    var subs = (await sb.from("submittals").select("id,number,title").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var trans = (await sb.from("transmittals").select("id,number,to_party").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var subOpts = '<option value="">(none)</option>' + subs.map(function (s) { return '<option value="' + s.id + '"' + (r.submittal_id === s.id ? " selected" : "") + '>' + esc((s.number || "") + " " + (s.title || "")) + '</option>'; }).join("");
+    var trOpts = '<option value="">(none)</option>' + trans.map(function (t) { return '<option value="' + t.id + '"' + (r.transmittal_id === t.id ? " selected" : "") + '>' + esc((t.number || "") + " " + (t.to_party || "")) + '</option>'; }).join("");
+    var stOpts = REV_STATUS.map(function (x) { return '<option value="' + x[0] + '"' + (r.status === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "drevmodal";
+    m.innerHTML = '<div class="sheet"><h3>Revision ' + esc(r.revision || "") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Revision</label><input id="dr-rev" value="' + esc(r.revision || "A") + '"></div><div><label>Status</label><select id="dr-status">' + stOpts + '</select></div></div>' +
+      '<div class="row2"><div><label>Issue purpose</label><input id="dr-purpose" value="' + esc(r.issue_purpose || "") + '" placeholder="For approval / For construction / As-built"></div><div><label>Issued date</label><input id="dr-issued" type="date" value="' + (r.issued_date || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Submittal</label><select id="dr-sub">' + subOpts + '</select></div><div><label>Issued under transmittal</label><select id="dr-tr">' + trOpts + '</select></div></div>' +
+      '<div><label>Notes</label><input id="dr-notes" value="' + esc(r.notes || "") + '"></div>' +
+      '<div>' + attachBlockHTML("drawing_rev", revId, { label: "Drawing files (PDF / native)" }) + '</div>' +
+      '</div><div class="foot"><button class="btn" id="dr-cancel">Close</button><button class="btn pri" id="dr-save" style="background:var(--app);border-color:var(--app)">Save revision</button></div></div>';
+    document.body.appendChild(m);
+    wireAttach("drawing_rev");
+    document.getElementById("dr-cancel").onclick = function () { m.remove(); renderDrawingForm(drawingId); };
+    document.getElementById("dr-save").onclick = async function () {
+      var upd = { revision: gv("dr-rev") || "A", status: (document.getElementById("dr-status") || {}).value || "draft", issue_purpose: gv("dr-purpose"), issued_date: gv("dr-issued") || null, submittal_id: (document.getElementById("dr-sub") || {}).value || null, transmittal_id: (document.getElementById("dr-tr") || {}).value || null, notes: gv("dr-notes") };
+      if ((await sb.from("drawing_revisions").update(upd).eq("id", revId)).error) { toast("Save failed"); return; }
+      var all = (await sb.from("drawing_revisions").select("revision,status,sequence").eq("drawing_id", drawingId).order("sequence")).data || [];
+      var live = all.filter(function (x) { return x.status !== "superseded"; });
+      var cur = (live.length ? live[live.length - 1] : (all.length ? all[all.length - 1] : null));
+      await sb.from("drawings").update({ current_revision: cur ? cur.revision : "" }).eq("id", drawingId);
+      if (upd.status === "issued") await sb.from("drawings").update({ status: "issued" }).eq("id", drawingId);
+      toast("Revision saved"); m.remove(); renderDrawingForm(drawingId);
+    };
+  }
   function cfgSubmittals() {
     return {
       title: "Submittals", pageSize: 80,
