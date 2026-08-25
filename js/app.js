@@ -469,6 +469,7 @@
         { label: "Install Jobs", action: "inst.jobs" },
         { label: "Snagging", action: "site.snags" },
         { label: "Inspections", action: "site.insp" },
+        { label: "Inspection Checklists", action: "site.inspt" },
         { label: "Plant & Equipment", action: "site.plant" },
         { label: "Tools & Equipment", action: "tools.list" },
         { label: "Site Diary", action: "site.diary" },
@@ -574,7 +575,7 @@
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
-    "site.snags": "site", "site.insp": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
+    "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events"
@@ -1750,6 +1751,7 @@
       case "proj.mywork": return renderMyWork();
       case "site.snags": return renderList(cfgSnags());
       case "site.insp": return renderList(cfgInspections());
+      case "site.inspt": return renderList(cfgInspectionTemplates());
       case "site.plant": return renderList(cfgPlant());
       case "tools.list": return renderList(cfgTools());
       case "proj.materials": return renderList(cfgProjectItems());
@@ -7093,7 +7095,11 @@
     document.getElementById("sn-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("sn-del"); if (del) del.onclick = async function () { await sb.from("snags").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("sn-save").onclick = async function () {
-      var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: document.getElementById("sn-status").value, photo_url: gv("sn-photo") };
+      var st = document.getElementById("sn-status").value;
+      var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: st, photo_url: gv("sn-photo") };
+      if (st === "fixed" && !s.fixed_at) row.fixed_at = new Date().toISOString();
+      if (st === "verified" && !s.verified_at) row.verified_at = new Date().toISOString();
+      if (st === "closed" && !s.closed_at) row.closed_at = new Date().toISOString();
       sugRemember("site_location", row.location); sugRemember("trade", row.trade);
       var r; if (s.id) r = await sb.from("snags").update(row).eq("id", s.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("snags", "SNAG"); r = await sb.from("snags").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
@@ -7121,23 +7127,85 @@
     i = i || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var users = await companyUsers();
+    var templates = (await sb.from("inspection_templates").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var items = i.id ? (await sb.from("inspection_items").select("*").eq("inspection_id", i.id).order("sequence")).data || [] : [];
     var m = document.createElement("div"); m.className = "modal on";
-    m.innerHTML = '<div class="sheet"><h3>' + (i.id ? "Inspection " + esc(i.number || "") : "New inspection") + '</h3><div class="form">' +
+    function itemRow(it) { it = it || {}; return '<tr><td><input class="ii-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><select class="ii-res"><option value="na"' + (it.result === "na" || !it.result ? " selected" : "") + '>N/A</option><option value="pass"' + (it.result === "pass" ? " selected" : "") + '>Pass</option><option value="fail"' + (it.result === "fail" ? " selected" : "") + '>Fail</option></select></td><td><input class="ii-note" value="' + esc(it.note || "") + '" placeholder="note" style="width:130px"></td><td><button class="ii-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    var tmplOpts = '<option value="">Load a checklist template...</option>' + templates.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join("");
+    m.innerHTML = '<div class="sheet" style="max-width:640px"><h3>' + (i.id ? "Inspection " + esc(i.number || "") : "New inspection") + '</h3><div class="form" style="max-height:72vh;overflow:auto">' +
       '<div class="row2"><div><label>Type</label><select id="in-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option><option value="snag">Snag</option></select></div><div><label>Date</label><input id="in-date" type="date" value="' + (i.insp_date || today()) + '"></div></div>' +
       '<div class="row2"><div><label>Project</label><select id="in-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (i.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Area</label><input id="in-area" value="' + esc(i.area || "") + '"></div></div>' +
-      '<div class="row2"><div><label>Inspector</label>' + userSelectHTML("in-insp", i.inspector, users, "(select person)") + '</div><div><label>Score (%)</label><input id="in-score" type="number" min="0" max="100" value="' + (i.score || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Inspector</label>' + userSelectHTML("in-insp", i.inspector, users, "(select person)") + '</div><div><label>Result</label><select id="in-result"><option value="">(pending)</option><option value="pass"' + (i.result === "pass" ? " selected" : "") + '>Pass</option><option value="fail"' + (i.result === "fail" ? " selected" : "") + '>Fail</option></select></div></div>' +
+      '<div style="margin-top:8px;border-top:1px solid var(--line);padding-top:10px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><b style="font-size:13px">Checklist</b><div style="flex:1"></div>' + (templates.length ? '<select id="in-tmpl" style="max-width:210px">' + tmplOpts + '</select><button class="btn" id="in-loadtmpl" style="padding:4px 10px">Load</button>' : '') + '</div>' +
+      '<table class="o-lines" style="margin-top:8px"><thead><tr><th>Item</th><th style="width:90px">Result</th><th>Note</th><th></th></tr></thead><tbody id="in-items">' + (items.length ? items.map(itemRow).join("") : "") + '</tbody></table><button id="in-additem" class="o-addln">+ Add item</button></div>' +
       '<div><label>Notes</label><textarea id="in-notes" rows="2">' + esc(i.notes || "") + '</textarea></div>' +
-      '<div><label>Status</label><select id="in-status"><option value="open">Open</option><option value="closed">Closed</option></select></div>' +
+      '<div class="row2"><div><label>Status</label><select id="in-status"><option value="open">Open</option><option value="closed">Closed</option></select></div><div><label>Signed off by</label><input id="in-signed" value="' + esc(i.signed_by || "") + '" placeholder="' + (i.signed_at ? esc(String(i.signed_at).slice(0, 10)) : "not signed") + '"></div></div>' +
       '</div><div class="foot"><button class="btn" id="in-cancel">Cancel</button>' + (i.id ? '<button class="btn" id="in-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("in-type").value = i.insp_type || "quality";
     document.getElementById("in-status").value = i.status || "open";
+    function wireItemDel() { document.querySelectorAll("#in-items .ii-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireItemDel();
+    document.getElementById("in-additem").onclick = function () { document.getElementById("in-items").insertAdjacentHTML("beforeend", itemRow()); wireItemDel(); };
+    var lt = document.getElementById("in-loadtmpl"); if (lt) lt.onclick = async function () { var tid = document.getElementById("in-tmpl").value; if (!tid) return; var tis = (await sb.from("inspection_template_items").select("*").eq("template_id", tid).order("sequence")).data || []; var tb = document.getElementById("in-items"); tis.forEach(function (ti) { tb.insertAdjacentHTML("beforeend", itemRow({ description: ti.description, result: "na" })); }); wireItemDel(); toast(tis.length + " item(s) loaded"); };
     document.getElementById("in-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("in-del"); if (del) del.onclick = async function () { await sb.from("inspections").delete().eq("id", i.id); m.remove(); toast("Deleted"); renderView(); };
+    function readItems() { return [].map.call(document.querySelectorAll("#in-items tr"), function (tr, k) { return { description: (tr.querySelector(".ii-desc") || {}).value || "", result: (tr.querySelector(".ii-res") || {}).value || "na", note: (tr.querySelector(".ii-note") || {}).value || "", sequence: (k + 1) * 10 }; }).filter(function (it) { return it.description.trim(); }); }
     document.getElementById("in-save").onclick = async function () {
-      var row = { insp_type: document.getElementById("in-type").value, insp_date: gv("in-date") || null, project_id: document.getElementById("in-proj").value || null, area: gv("in-area"), inspector: gv("in-insp"), score: parseInt(gv("in-score"), 10) || 0, notes: (document.getElementById("in-notes") || {}).value || "", status: document.getElementById("in-status").value };
-      var r; if (i.id) r = await sb.from("inspections").update(row).eq("id", i.id); else { row.company_id = S.company.id; row.number = await nextDocNumber("inspections", "INSP"); r = await sb.from("inspections").insert(row); }
-      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
+      var its = readItems(), fails = its.filter(function (it) { return it.result === "fail"; });
+      var rated = its.filter(function (it) { return it.result !== "na"; });
+      var autoResult = gv("in-result") || (rated.length ? (fails.length ? "fail" : "pass") : "");
+      var scoreN = rated.length ? Math.round(rated.filter(function (it) { return it.result === "pass"; }).length / rated.length * 100) : null;
+      var st = document.getElementById("in-status").value, signed = gv("in-signed");
+      var row = { insp_type: document.getElementById("in-type").value, insp_date: gv("in-date") || null, project_id: document.getElementById("in-proj").value || null, area: gv("in-area"), inspector: gv("in-insp"), notes: (document.getElementById("in-notes") || {}).value || "", status: st, result: autoResult, signed_by: signed };
+      if (scoreN != null) row.score = scoreN;
+      if (signed && !i.signed_at) row.signed_at = new Date().toISOString();
+      var iid = i.id;
+      if (i.id) { if ((await sb.from("inspections").update(row).eq("id", i.id)).error) { toast("Save failed"); return; } }
+      else { row.company_id = S.company.id; row.number = await nextDocNumber("inspections", "INSP"); var ins = await sb.from("inspections").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } iid = ins.data.id; }
+      await sb.from("inspection_items").delete().eq("inspection_id", iid);
+      if (its.length) { var ir = await sb.from("inspection_items").insert(its.map(function (it) { it.company_id = S.company.id; it.inspection_id = iid; return it; })); if (ir.error) toast("Checklist: " + errMsg(ir.error)); }
+      if (fails.length && confirm("Raise " + fails.length + " snag(s) for the failed item(s)?")) {
+        for (var f = 0; f < fails.length; f++) { var num = await nextDocNumber("snags", "SNAG"); await sb.from("snags").insert({ company_id: S.company.id, number: num, project_id: row.project_id, inspection_id: iid, description: fails[f].description + (fails[f].note ? " - " + fails[f].note : ""), severity: "medium", status: "open", location: row.area || "" }); }
+        toast(fails.length + " snag(s) raised");
+      }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+  function cfgInspectionTemplates() {
+    return {
+      title: "Inspection Checklists", pageSize: 80,
+      fetch: function () { return sb.from("inspection_templates").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.name || "") + " " + (t.insp_type || ""); },
+      columns: [{ label: "Name", get: function (t) { return '<b>' + esc(t.name || "") + '</b>'; } }, { label: "Type", get: function (t) { return esc((t.insp_type || "").replace("_", " ")); } }, { label: "Active", get: function (t) { return t.is_active === false ? '<span class="muted">no</span>' : "yes"; } }],
+      onOpen: function (t) { openInspTemplateModal(t); }, onNew: function () { openInspTemplateModal(null); }
+    };
+  }
+  async function openInspTemplateModal(t) {
+    t = t || {};
+    var items = t.id ? (await sb.from("inspection_template_items").select("*").eq("template_id", t.id).order("sequence")).data || [] : [];
+    var m = document.createElement("div"); m.className = "modal on";
+    function row(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Checklist" : "New checklist") + '</h3><div class="form" style="max-height:70vh;overflow:auto">' +
+      '<div class="row2"><div><label>Name</label><input id="it-name" value="' + esc(t.name || "") + '" placeholder="e.g. Facade panel install"></div><div><label>For type</label><select id="it-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option></select></div></div>' +
+      '<table class="o-lines" style="margin-top:8px"><thead><tr><th>Check item</th><th></th></tr></thead><tbody id="it-items">' + (items.length ? items.map(row).join("") : row()) + '</tbody></table><button id="it-add" class="o-addln">+ Add item</button>' +
+      '</div><div class="foot"><button class="btn" id="it-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="it-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="it-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("it-type").value = t.insp_type || "quality";
+    function wd() { document.querySelectorAll("#it-items .ti-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wd();
+    document.getElementById("it-add").onclick = function () { document.getElementById("it-items").insertAdjacentHTML("beforeend", row()); wd(); };
+    document.getElementById("it-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("it-del"); if (del) del.onclick = async function () { await sb.from("inspection_templates").delete().eq("id", t.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("it-save").onclick = async function () {
+      var hdr = { name: gv("it-name") || "Checklist", insp_type: document.getElementById("it-type").value };
+      var tid = t.id;
+      if (t.id) { if ((await sb.from("inspection_templates").update(hdr).eq("id", t.id)).error) { toast("Save failed"); return; } }
+      else { hdr.company_id = S.company.id; var ins = await sb.from("inspection_templates").insert(hdr).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } tid = ins.data.id; }
+      await sb.from("inspection_template_items").delete().eq("template_id", tid);
+      var its = [].map.call(document.querySelectorAll("#it-items tr"), function (tr, k) { return { description: (tr.querySelector(".ti-desc") || {}).value || "", sequence: (k + 1) * 10 }; }).filter(function (x) { return x.description.trim(); });
+      if (its.length) await sb.from("inspection_template_items").insert(its.map(function (x) { x.company_id = S.company.id; x.template_id = tid; return x; }));
+      m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -7237,6 +7305,26 @@
   }
 
   // ============================ PROGRAMME (GANTT) - client-facing schedule ============================
+  // Critical-path (CPM) over schedule_tasks: forward/backward pass on the
+  // depends_on network using each activity's duration (end-start), giving total
+  // float per task; float ~ 0 => on the critical path. Pure client-side.
+  function computeCPM(tasks) {
+    var byId = {}, dur = {}, preds = {}, succs = {}, ES = {}, EF = {}, LS = {}, LF = {}, msDay = 864e5;
+    function dms(x) { var p = parseD(x); return p ? p.getTime() : null; }
+    var minStart = Infinity, any = false;
+    tasks.forEach(function (t) { byId[t.id] = t; var s = dms(t.start_date), e = dms(t.end_date); dur[t.id] = (s != null && e != null) ? Math.max(0, Math.round((e - s) / msDay)) : 0; if (s != null) { minStart = Math.min(minStart, s); any = true; } preds[t.id] = []; succs[t.id] = []; });
+    if (!any) return { float: {}, critical: {}, ok: false };
+    tasks.forEach(function (t) { if (t.depends_on && byId[t.depends_on]) { preds[t.id].push(t.depends_on); succs[t.depends_on].push(t.id); } });
+    var indeg = {}, order = [], queue = [];
+    tasks.forEach(function (t) { indeg[t.id] = preds[t.id].length; if (!indeg[t.id]) queue.push(t.id); });
+    while (queue.length) { var id = queue.shift(); order.push(id); succs[id].forEach(function (s) { if (--indeg[s] === 0) queue.push(s); }); }
+    tasks.forEach(function (t) { if (order.indexOf(t.id) < 0) order.push(t.id); }); // cycle fallback
+    order.forEach(function (id) { var es = 0, hp = preds[id].length > 0; preds[id].forEach(function (p) { es = Math.max(es, EF[p] || 0); }); if (!hp) { var s = dms(byId[id].start_date); es = (s != null) ? Math.round((s - minStart) / msDay) : 0; } ES[id] = es; EF[id] = es + (dur[id] || 0); });
+    var projEnd = 0; order.forEach(function (id) { projEnd = Math.max(projEnd, EF[id] || 0); });
+    order.slice().reverse().forEach(function (id) { var lf = projEnd; if (succs[id].length) { lf = Infinity; succs[id].forEach(function (s) { lf = Math.min(lf, LS[s]); }); } LF[id] = lf; LS[id] = lf - (dur[id] || 0); });
+    var fl = {}, crit = {}; tasks.forEach(function (t) { var f = (LS[t.id] || 0) - (ES[t.id] || 0); fl[t.id] = f; crit[t.id] = Math.abs(f) < 0.5; });
+    return { float: fl, critical: crit, ok: true };
+  }
   async function renderSchedule(projectId) {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Programme") + '<div class="gap"></div><select id="sc-proj" class="o-filtbtn"></select><button class="o-filtbtn" id="sc-add">+ Activity</button><button class="o-filtbtn" id="sc-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
@@ -7268,16 +7356,21 @@
       cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
     }
     var todayPct = pct(today());
+    var cpm = computeCPM(tasks), critCount = 0;
     var rows = tasks.map(function (t) {
       var hasDates = t.start_date && t.end_date;
+      var isCrit = cpm.ok && cpm.critical[t.id] && hasDates; if (isCrit) critCount++;
       var left = hasDates ? pct(t.start_date) : 0, right = hasDates ? pct(t.end_date) : 0, w = Math.max(0.6, right - left);
       var prog = Math.max(0, Math.min(100, Number(t.progress || 0)));
+      var fl = cpm.ok ? Math.round(cpm.float[t.id] || 0) : 0;
+      var tip = esc(t.name) + ' (' + prog + '%' + (cpm.ok ? ', float ' + fl + 'd' : '') + ')';
       var bar = t.is_milestone
-        ? '<div class="gantt-ms" style="left:' + left + '%" title="' + esc(t.name) + '"></div>'
-        : (hasDates ? '<div class="gantt-bar" style="left:' + left + '%;width:' + w + '%" title="' + esc(t.name) + ' (' + prog + '%)"><div class="gantt-fill" style="width:' + prog + '%"></div></div>' : '');
-      return '<div class="gantt-row" data-id="' + t.id + '"><div class="gantt-label">' + (t.wbs ? '<span class="muted">' + esc(t.wbs) + '</span> ' : '') + esc(t.name) + '</div><div class="gantt-track">' + bar + '</div></div>';
+        ? '<div class="gantt-ms" style="left:' + left + '%' + (isCrit ? ';background:#ef4444;border-color:#ef4444' : '') + '" title="' + tip + '"></div>'
+        : (hasDates ? '<div class="gantt-bar" style="left:' + left + '%;width:' + w + '%' + (isCrit ? ';background:#ef4444' : '') + '" title="' + tip + '"><div class="gantt-fill" style="width:' + prog + '%"></div></div>' : '');
+      return '<div class="gantt-row" data-id="' + t.id + '"><div class="gantt-label">' + (isCrit ? '<span title="On the critical path" style="color:#ef4444;font-weight:800">&#9679;</span> ' : '') + (t.wbs ? '<span class="muted">' + esc(t.wbs) + '</span> ' : '') + esc(t.name) + '</div><div class="gantt-track">' + bar + '</div></div>';
     }).join("");
-    body.innerHTML = '<div style="padding:14px 16px"><div class="o-rt-wrap"><div class="gantt" style="min-width:820px"><div class="gantt-head"><div class="gantt-label" style="font-weight:700">Activity</div><div class="gantt-track gantt-grid">' + grid + (todayPct >= 0 && todayPct <= 100 ? '<div class="gantt-today" style="left:' + todayPct + '%"></div>' : '') + '</div></div>' + rows + '</div></div><div class="sub" style="margin-top:8px">This is the client-facing programme. Click an activity to edit. The internal team board lives on the project\'s Execution tab.</div></div>';
+    var critNote = cpm.ok ? '<span style="color:#ef4444;font-weight:700">&#9679; ' + critCount + ' activit' + (critCount === 1 ? "y" : "ies") + ' on the critical path</span> - zero float, so any slip pushes the whole programme. Set an activity&rsquo;s <b>Depends on</b> to build the chain. ' : '';
+    body.innerHTML = '<div style="padding:14px 16px"><div class="o-rt-wrap"><div class="gantt" style="min-width:820px"><div class="gantt-head"><div class="gantt-label" style="font-weight:700">Activity</div><div class="gantt-track gantt-grid">' + grid + (todayPct >= 0 && todayPct <= 100 ? '<div class="gantt-today" style="left:' + todayPct + '%"></div>' : '') + '</div></div>' + rows + '</div></div><div class="sub" style="margin-top:8px">' + critNote + 'This is the client-facing programme. Click an activity to edit. The internal team board lives on the project\'s Execution tab.</div></div>';
     document.querySelectorAll(".gantt-row").forEach(function (r) { r.onclick = function () { var t = tasks.filter(function (x) { return x.id === r.dataset.id; })[0]; openScheduleTaskModal(t, projectId); }; });
   }
   async function openScheduleTaskModal(t, projectId) {
@@ -13341,6 +13434,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var done = wo.state === "done", editable = !done;
     var blines = wo.bom_id ? (await sb.from("bom_lines").select("*, products(name,cost_price)").eq("bom_id", wo.bom_id).order("sequence")).data || [] : [];
+    var ops = id === "new" ? [] : (await sb.from("work_order_operations").select("*").eq("work_order_id", id).order("sequence")).data || [];
     var selBom = boms.filter(function (b) { return b.id === wo.bom_id; })[0];
     var factor = selBom && Number(selBom.output_qty) ? (Number(wo.quantity || 0) / Number(selBom.output_qty)) : Number(wo.quantity || 0);
     var matCost = blines.reduce(function (s, l) { return s + Number(l.quantity || 0) * factor * Number(l.products ? l.products.cost_price : 0); }, 0);
@@ -13351,6 +13445,7 @@
     if (id !== "new" && (wo.state === "draft" || wo.state === "in_progress")) btns += '<button class="pri" id="wo-complete">Complete &amp; consume</button>';
     var stages = '<div class="o-stages"><span class="st ' + (wo.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (wo.state === "in_progress" ? "on" : wo.state === "done" ? "done" : "") + '">In progress</span><span class="st ' + (wo.state === "done" ? "on" : "") + '">Done</span></div>';
     function opts(list, sel, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (sel === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
+    function opRow(o) { o = o || {}; var dis = done ? " disabled" : ""; return '<tr><td><input class="op-name" value="' + esc(o.name || "") + '" placeholder="e.g. Cut / Weld / Glaze / QC"' + dis + '></td><td><input class="op-wc" value="' + esc(o.work_center || "") + '" placeholder="Work centre" style="width:130px"' + dis + '></td><td><input class="op-min" type="number" value="' + (o.planned_minutes || 0) + '" style="width:80px"' + dis + '></td><td><select class="op-state"' + dis + '><option value="pending"' + (o.state === "pending" ? " selected" : "") + '>Pending</option><option value="in_progress"' + (o.state === "in_progress" ? " selected" : "") + '>In progress</option><option value="done"' + (o.state === "done" ? " selected" : "") + '>Done</option></select></td><td>' + (done ? "" : '<button class="op-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>'; }
     var compRows = blines.map(function (l) { var q = Number(l.quantity || 0) * factor; return '<tr><td>' + esc(l.products ? l.products.name : (l.name || "")) + '</td><td class="num">' + (Math.round(q * 100) / 100) + '</td><td class="num">' + money(q * Number(l.products ? l.products.cost_price : 0)) + '</td></tr>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
@@ -13365,13 +13460,23 @@
       fld("Estimated material cost", '<span class="v">' + cc + " " + money(matCost) + '</span>', "Component cost for this quantity, from the BOM.") +
       '</div></div>' +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Components for this quantity</div></div><div class="o-nb-pg"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Component</td><td class="num">Qty needed</td><td class="num">Cost</td></tr></thead><tbody>' + (compRows || '<tr><td colspan="3" class="muted">Pick a BOM and quantity, then Save to preview components.</td></tr>') + '<tr class="tot"><td>Total material cost</td><td class="num"></td><td class="num">' + money(matCost) + '</td></tr></tbody></table></div>' + (done ? '<div class="sub" style="margin-top:10px">Completed - ' + Number(wo.quantity_done || 0) + ' unit(s) fabricated; components consumed' + (wo.project_id ? " and costed to the project." : ".") + '</div>' : "") + '</div></div>' +
+      '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Routing / operations</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Operation</th><th>Work centre</th><th>Planned min</th><th>State</th><th></th></tr></thead><tbody id="wo-ops">' + (ops.length ? ops.map(opRow).join("") : opRow()) + '</tbody></table>' + (editable ? '<button id="wo-addop" class="o-addln">+ Add operation</button>' : '') + '<div class="sub" style="margin-top:6px">The steps to fabricate this order, in sequence (e.g. Cut &rarr; Weld &rarr; Glaze &rarr; QC). Advance each as the shop floor works through them.</div></div></div>' +
       '</div>';
     var dbtn = document.getElementById("wo-discard"); if (dbtn) dbtn.onclick = function () { go("mfg.wo"); };
+    function wireOpDel() { document.querySelectorAll("#wo-ops .op-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireOpDel();
+    var addOp = document.getElementById("wo-addop"); if (addOp) addOp.onclick = function () { document.getElementById("wo-ops").insertAdjacentHTML("beforeend", opRow()); wireOpDel(); };
+    function readOps() { return [].map.call(document.querySelectorAll("#wo-ops tr"), function (tr, i) { var stt = (tr.querySelector(".op-state") || {}).value || "pending"; var o = { name: (tr.querySelector(".op-name") || {}).value || "", work_center: (tr.querySelector(".op-wc") || {}).value || "", planned_minutes: parseFloat((tr.querySelector(".op-min") || {}).value) || 0, state: stt, sequence: (i + 1) * 10 }; if (stt === "in_progress") o.started_at = new Date().toISOString(); if (stt === "done") o.done_at = new Date().toISOString(); return o; }).filter(function (o) { return o.name.trim(); }); }
     async function woPersist() {
       var row = { product_id: document.getElementById("wo-prod") ? (document.getElementById("wo-prod").value || null) : wo.product_id, bom_id: document.getElementById("wo-bom") ? (document.getElementById("wo-bom").value || null) : wo.bom_id, project_id: document.getElementById("wo-proj") ? (document.getElementById("wo-proj").value || null) : wo.project_id, quantity: parseFloat(gv("wo-qty")) || 0, date_planned: gv("wo-date") };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.state = "draft"; row.number = await nextWoNumber(); var ins = await sb.from("work_orders").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("work_orders").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      if (document.getElementById("wo-ops")) {
+        await sb.from("work_order_operations").delete().eq("work_order_id", sid);
+        var opsToSave = readOps().map(function (o) { o.company_id = S.company.id; o.work_order_id = sid; return o; });
+        if (opsToSave.length) { var oi = await sb.from("work_order_operations").insert(opsToSave); if (oi.error) toast("Operations: " + errMsg(oi.error)); }
+      }
       return sid;
     }
     var svb = document.getElementById("wo-save"); if (svb) svb.onclick = async function () { var sid = await woPersist(); if (sid) { toast("Saved"); renderWorkOrderForm(sid); } };
