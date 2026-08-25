@@ -701,6 +701,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .pinv .ptab th{text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:1px solid #999;padding:8px}
 .pinv .ptab td{padding:8px;border-bottom:1px solid #e2e2e2}
 .pinv .ptab .r{text-align:right}
+.pinv .ptab-grid th,.pinv .ptab-grid td{border:1px solid #d5d5d5}
+.pinv .ptab-grid{border-collapse:collapse}
 .pinv .psum{margin-left:auto;width:280px;margin-top:14px}
 .pinv .psum .pr{display:flex;justify-content:space-between;padding:5px 0}
 .pinv .psum .ptt{font-weight:800;font-size:16px;border-top:2px solid #111;margin-top:4px;padding-top:8px}
