@@ -10887,8 +10887,32 @@
       var cards = ls.map(function (l) { return '<div class="o-lead" data-id="' + l.id + '"><div class="t">' + esc(l.name) + '</div><div class="m">' + esc(l.partners ? l.partners.name : (l.contact_name || "")) + '</div><div class="rev">' + S.company.currency_code + ' ' + money(l.expected_revenue) + ' &middot; ' + Number(l.probability || 0) + '%</div></div>'; }).join("");
       return '<div class="o-pcol"><div class="hd"><span>' + esc(s.name) + '</span><span class="amt">' + ls.length + ' &middot; ' + S.company.currency_code + ' ' + money(amt) + '</span></div><div class="cards">' + (cards || '<div class="muted" style="font-size:12px;padding:6px">Empty</div>') + '</div></div>';
     }).join("");
-    document.getElementById("o-body").innerHTML = '<div class="o-pipe">' + cols + '</div>';
+    var totalPipe = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0); }, 0);
+    var weighted = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0) * (Number(l.probability || 0) / 100); }, 0);
+    var fc = '<div class="o-hd" style="margin-bottom:12px"><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + S.company.currency_code + ' ' + money(totalPipe) + '</div><div class="o-hd-l">Open pipeline (' + leads.length + ')</div></button><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + S.company.currency_code + ' ' + money(weighted) + '</div><div class="o-hd-l">Weighted forecast</div></button></div>';
+    document.getElementById("o-body").innerHTML = fc + '<div class="o-pipe">' + cols + '</div>';
     document.querySelectorAll(".o-lead[data-id]").forEach(function (el) { el.onclick = function () { renderLeadForm(el.dataset.id); }; });
+  }
+  var ACT_TYPES = [["call", "Call"], ["email", "Email"], ["meeting", "Meeting"], ["note", "Note"], ["task", "Task"]];
+  function actTypeLabel(t) { return (ACT_TYPES.filter(function (x) { return x[0] === t; })[0] || [null, t])[1] || "Note"; }
+  async function openLeadActivity(leadId, partnerId) {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "actmodal";
+    m.innerHTML = '<div class="sheet"><h3>Log activity</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Type</label><select id="ac-type">' + ACT_TYPES.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join("") + '</select></div><div><label>Follow-up date</label><input id="ac-due" type="date"></div></div>' +
+      '<div><label>Subject</label><input id="ac-subj" placeholder="e.g. Called to discuss quote"></div>' +
+      '<div><label>Note</label><textarea id="ac-note" rows="3"></textarea></div>' +
+      '<div><label><input type="checkbox" id="ac-done"> Already done (log as completed)</label></div>' +
+      '</div><div class="foot"><button class="btn" id="ac-cancel">Cancel</button><button class="btn pri" id="ac-save" style="background:var(--accent);border-color:var(--accent)">Log</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ac-cancel").onclick = function () { m.remove(); };
+    document.getElementById("ac-save").onclick = async function () {
+      var doneChk = document.getElementById("ac-done").checked;
+      var row = { company_id: S.company.id, lead_id: leadId, partner_id: partnerId || null, act_type: document.getElementById("ac-type").value, subject: gv("ac-subj"), note: (document.getElementById("ac-note") || {}).value || "", due_date: gv("ac-due") || null, done: doneChk };
+      if (doneChk) row.done_at = new Date().toISOString();
+      var r = await sb.from("crm_activities").insert(row);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Activity logged"); renderLeadForm(leadId);
+    };
   }
   function cfgLeads() {
     return {
@@ -10916,6 +10940,9 @@
     var l = id === "new" ? { probability: 10 } : (await sb.from("crm_leads").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var stages = await ensureCrmStages();
     var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var acts = id === "new" ? [] : (await sb.from("crm_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false })).data || [];
+    function actItemHtml(a) { return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:64px;font-weight:600;font-size:12px;color:var(--accent)">' + esc(actTypeLabel(a.act_type)) + '</div><div style="flex:1"><div><b>' + esc(a.subject || "(no subject)") + '</b>' + (a.due_date && !a.done ? ' <span class="ob-flag"' + (a.due_date < today() ? ' style="background:var(--bad)"' : '') + '>follow up ' + esc(a.due_date) + '</span>' : '') + (a.done ? ' <span class="badge paid">done</span>' : '') + '</div>' + (a.note ? '<div class="muted" style="font-size:12.5px">' + esc(a.note) + '</div>' : '') + '<div class="muted" style="font-size:11px">' + esc(String(a.created_at || "").slice(0, 10)) + '</div></div>' + (!a.done ? '<button class="ld-actdone" data-id="' + a.id + '" style="border:none;background:none;color:var(--good);cursor:pointer;font-size:12px;font-weight:600">Mark done</button>' : '') + '</div>'; }
+    var actSection = id === "new" ? "" : '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Activity &amp; follow-ups</div></div><div class="o-nb-pg"><button id="ld-logact" class="o-addln">+ Log activity</button>' + (acts.length ? '<div style="margin-top:6px">' + acts.map(actItemHtml).join("") + '</div>' : '<div class="muted" style="margin-top:8px">No activity logged yet.</div>') + '</div></div>';
     if (id === "new" && !l.stage_id && stages[0]) l.stage_id = stages[0].id;
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
     var stageBar = '<div class="o-stages">' + stages.map(function (s) { return '<span class="st ' + (l.stage_id === s.id ? "on" : "") + '" data-stage="' + s.id + '">' + esc(s.name) + '</span>'; }).join("") + '</div>';
@@ -10936,7 +10963,9 @@
       fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
       fld("Probability", '<input id="ld-prob" type="number" step="1" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent.") +
       fld("Source", '<input id="ld-src" value="' + esc(l.source || "") + '">', "Where the lead came from, e.g. referral or website.") +
-      '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + '</div>';
+      '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + actSection + '</div>';
+    var la = document.getElementById("ld-logact"); if (la) la.onclick = function () { openLeadActivity(id, l.partner_id); };
+    document.querySelectorAll(".ld-actdone").forEach(function (b) { b.onclick = async function () { await sb.from("crm_activities").update({ done: true, done_at: new Date().toISOString() }).eq("id", b.dataset.id); toast("Marked done"); renderLeadForm(id); }; });
     document.querySelectorAll(".o-stages .st[data-stage]").forEach(function (x) { x.onclick = async function () { l.stage_id = x.dataset.stage; document.querySelectorAll(".o-stages .st").forEach(function (y) { y.classList.toggle("on", y === x); }); if (id !== "new") { await sb.from("crm_leads").update({ stage_id: l.stage_id }).eq("id", id); toast("Stage updated"); } }; });
     document.getElementById("ld-discard").onclick = function () { go("crm.pipe"); };
     custPickerAdd("ld-cust");
