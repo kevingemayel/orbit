@@ -1392,12 +1392,16 @@
     var meas = src.measures[rep.measure] || src.measures.count;
     var dimKey = rep.group_by || "", dim = src.dims[dimKey];
     var rows = (await src.base(sb.from(src.table).select(src.select).eq("company_id", S.company.id))).data || [];
+    if (meas.money) await loadFxRates();
+    // money measures convert each row to the home currency before summing (rows in a
+    // foreign currency would otherwise be added as if they were home-currency amounts)
+    function measVal(r) { var v = Number(r[meas.field] || 0); return meas.money ? fxHomeConvert(v, r.currency_code) : v; }
     if (!dimKey || !dim || !dim.get) {
-      var total = meas.field ? rows.reduce(function (s, r) { return s + Number(r[meas.field] || 0); }, 0) : rows.length;
+      var total = meas.field ? rows.reduce(function (s, r) { return s + measVal(r); }, 0) : rows.length;
       return { single: true, total: total, meas: meas, n: rows.length };
     }
     var map = {};
-    rows.forEach(function (r) { var k = dim.get(r) || "None"; if (!(k in map)) map[k] = 0; map[k] += meas.field ? Number(r[meas.field] || 0) : 1; });
+    rows.forEach(function (r) { var k = dim.get(r) || "None"; if (!(k in map)) map[k] = 0; map[k] += meas.field ? measVal(r) : 1; });
     var entries = Object.keys(map).map(function (k) { return { label: k, value: map[k] }; });
     if (dim.time) entries.sort(function (a, b) { return a.label < b.label ? -1 : 1; }); else entries.sort(function (a, b) { return b.value - a.value; });
     return { single: false, entries: entries, meas: meas, dim: dim, total: entries.reduce(function (s, e) { return s + e.value; }, 0) };
@@ -5579,33 +5583,39 @@
     if (!pid) return;
     var rep = document.getElementById("rep");
     var partner = partners.filter(function (p) { return p.id === pid; })[0] || { name: "" };
-    var invs = (await sb.from("invoices").select("number,move_type,invoice_date,due_date,amount_total").eq("company_id", S.company.id).eq("partner_id", pid).eq("state", "posted")).data || [];
-    var pays = (await sb.from("payments").select("date,amount,amount_company,payment_type,reference,memo").eq("company_id", S.company.id).eq("partner_id", pid).in("state", ["posted", "reconciled"])).data || [];
-    var ev = [];
+    var invs = (await sb.from("invoices").select("number,move_type,invoice_date,due_date,amount_total,currency_code").eq("company_id", S.company.id).eq("partner_id", pid).eq("state", "posted")).data || [];
+    var pays = (await sb.from("payments").select("date,amount,currency_code,payment_type,reference,memo").eq("company_id", S.company.id).eq("partner_id", pid).in("state", ["posted", "reconciled"])).data || [];
+    var home = cc, ev = [];
     invs.forEach(function (v) {
       var t = v.move_type, docs = { out_invoice: "Invoice", out_refund: "Credit Note", in_invoice: "Vendor Bill", in_refund: "Vendor Refund" };
       var delta = (t === "out_invoice" || t === "in_refund" ? 1 : -1) * Number(v.amount_total || 0);
-      ev.push({ date: v.invoice_date || "", doc: docs[t] || t, ref: v.number || "", due: v.due_date || "", delta: delta });
+      ev.push({ date: v.invoice_date || "", doc: docs[t] || t, ref: v.number || "", due: v.due_date || "", delta: delta, ccy: v.currency_code || home });
     });
     pays.forEach(function (p) {
-      var amt = Number(p.amount_company || p.amount || 0);
-      var delta = (p.payment_type === "inbound" ? -1 : 1) * amt;
-      ev.push({ date: p.date || "", doc: p.payment_type === "inbound" ? "Payment received" : "Payment made", ref: p.reference || p.memo || "", due: "", delta: delta });
+      var delta = (p.payment_type === "inbound" ? -1 : 1) * Number(p.amount || 0);
+      ev.push({ date: p.date || "", doc: p.payment_type === "inbound" ? "Payment received" : "Payment made", ref: p.reference || p.memo || "", due: "", delta: delta, ccy: p.currency_code || home });
     });
-    ev.sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-    if (!ev.length) { rep.innerHTML = repHead("Statement - " + partner.name, cc) + '<div class="o-empty">No posted documents for this partner yet.</div>'; return; }
-    var bal = 0;
-    var body = ev.map(function (e) {
-      bal += e.delta;
-      var charge = e.delta > 0 ? money(e.delta) : "";
-      var credit = e.delta < 0 ? money(-e.delta) : "";
-      return '<tr><td>' + esc(e.date) + '</td><td>' + esc(e.doc) + '</td><td>' + esc(e.ref) + '</td><td>' + esc(e.due) + '</td><td class="num">' + charge + '</td><td class="num">' + credit + '</td><td class="num">' + money(bal) + '</td></tr>';
+    if (!ev.length) { rep.innerHTML = repHead("Statement - " + partner.name, home) + '<div class="o-empty">No posted documents for this partner yet.</div>'; return; }
+    // group by document currency so each currency's balance nets correctly (a EUR invoice
+    // and its EUR payment cancel out; mixing currencies in one running balance would not)
+    var byCcy = {}; ev.forEach(function (e) { (byCcy[e.ccy] || (byCcy[e.ccy] = [])).push(e); });
+    var ccys = Object.keys(byCcy).sort(function (a, b) { return a === home ? -1 : b === home ? 1 : (a < b ? -1 : 1); });
+    var multi = ccys.length > 1;
+    var sections = ccys.map(function (ccy) {
+      var list = byCcy[ccy].slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
+      var bal = 0;
+      var body = list.map(function (e) {
+        bal += e.delta;
+        var charge = e.delta > 0 ? money(e.delta) : "", credit = e.delta < 0 ? money(-e.delta) : "";
+        return '<tr><td>' + esc(e.date) + '</td><td>' + esc(e.doc) + '</td><td>' + esc(e.ref) + '</td><td>' + esc(e.due) + '</td><td class="num">' + charge + '</td><td class="num">' + credit + '</td><td class="num">' + money(bal) + '</td></tr>';
+      }).join("");
+      var owed = bal, dir = owed > 0.005 ? partner.name + " owes you" : owed < -0.005 ? "You owe " + partner.name : "Settled";
+      var secHdr = multi ? '<tr class="sec"><td colspan="7">In ' + esc(ccy) + '</td></tr>' : '';
+      return '<div class="o-rt-wrap"' + (multi ? ' style="margin-top:16px"' : '') + '><table class="o-rt"><thead><tr><td>Date</td><td>Document</td><td>Reference</td><td>Due</td><td class="num">Charges (' + esc(ccy) + ')</td><td class="num">Payments (' + esc(ccy) + ')</td><td class="num">Balance (' + esc(ccy) + ')</td></tr></thead><tbody>' +
+        secHdr + body + '<tr class="tot"><td colspan="6">' + esc(dir) + '</td><td class="num">' + moneyC(Math.abs(owed), ccy) + '</td></tr></tbody></table></div>';
     }).join("");
-    var owed = bal, dir = owed > 0.005 ? partner.name + " owes you" : owed < -0.005 ? "You owe " + partner.name : "Settled";
-    rep.innerHTML = repHead("Statement of Account - " + partner.name, cc) +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Date</td><td>Document</td><td>Reference</td><td>Due</td><td class="num">Charges</td><td class="num">Payments</td><td class="num">Balance</td></tr></thead><tbody>' +
-      body + '<tr class="tot"><td colspan="6">' + esc(dir) + '</td><td class="num">' + money(Math.abs(owed)) + '</td></tr></tbody></table></div>' +
-      '<div class="sub" style="margin-top:14px">Charges increase the balance owed to you; payments and credit notes reduce it. A positive closing balance is what the partner still owes. Posted documents only.</div>';
+    rep.innerHTML = repHead("Statement of Account - " + partner.name, multi ? home : ccys[0]) + sections +
+      '<div class="sub" style="margin-top:14px">Charges increase the balance owed to you; payments and credit notes reduce it. A positive closing balance is what the partner still owes. Amounts are shown in each document\'s own currency' + (multi ? ', grouped by currency' : '') + '. Posted documents only.</div>';
   }
 
   // ============================ CONSOLIDATION ============================
