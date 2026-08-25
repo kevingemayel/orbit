@@ -150,7 +150,7 @@
       if (!S.org || !S.org.id) return;
       if (!(S.role && (S.role.full_access || canManage("accounting")))) return;
       var has = (await sb.from("currency_rates").select("id", { count: "exact", head: true }).eq("org_id", S.org.id).eq("rate_type", "spot").eq("rate_date", today())).count || 0;
-      if (has > 0) return;
+      if (has >= 20) return;   // a full market pull is in for today; a stray manual rate won't block it
       await refreshFxRates();
     } catch (e) { /* best effort */ }
   }
