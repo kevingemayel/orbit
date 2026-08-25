@@ -51,6 +51,31 @@
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
+  // currency-aware money: prefixes the given document currency (falls back to the company's home currency)
+  function moneyC(n, code) { var c = code || (S.company && S.company.currency_code) || ""; return (c ? c + " " : "") + money(n); }
+  // FX display cache: currency_rates.rate = units of the org ref currency per 1 unit of code (ref itself = 1)
+  async function loadFxRates(force) {
+    if (S._fxRates && !force) return;
+    S._fxRef = (S.org && S.org.ref_currency) || (S.company && S.company.currency_code) || "USD";
+    var m = {};
+    try {
+      if (S.org && S.org.id) {
+        var rs = (await sb.from("currency_rates").select("code,rate,rate_date").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
+        rs.forEach(function (r) { if (m[r.code] === undefined) m[r.code] = Number(r.rate); }); // latest rate per currency wins
+      }
+    } catch (e) { /* best effort - leave amounts unconverted if rates unavailable */ }
+    S._fxRates = m;
+  }
+  // convert an amount in fromCode into the company's home (functional) currency for aggregation
+  function fxHomeConvert(amt, fromCode) {
+    amt = Number(amt) || 0;
+    var home = (S.company && S.company.currency_code) || "", ref = S._fxRef || home, m = S._fxRates || {};
+    if (!fromCode || fromCode === home) return amt;
+    function rOf(c) { return c === ref ? 1 : (m[c] !== undefined ? m[c] : null); }
+    var rf = rOf(fromCode), rh = rOf(home);
+    if (rf == null || rh == null) return amt; // no rate -> best effort, leave as-is
+    return amt * rf / rh;
+  }
   // central modal accessibility (ORB-07): every .modal gets dialog semantics + autofocus + Escape-to-close
   function _a11yEnhanceModal(m) { if (!m || m._a11y) return; m._a11y = 1; var sheet = m.querySelector(".sheet") || m; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); setTimeout(function () { var f = m.querySelector("input:not([type=hidden]),select,textarea,button"); if (f) { try { f.focus(); } catch (e) { } } }, 40); }
   (function initModalA11y() {
@@ -851,12 +876,13 @@
     try {
       if (!S.company || !canView("accounting")) return;   // money values self-mask via money() for hidden roles
       var cid = S.company.id, cc = S.company.currency_code, td = today();
-      var invs = (await sb.from("invoices").select("amount_residual,due_date,state,move_type").eq("company_id", cid).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
+      await loadFxRates();
+      var invs = (await sb.from("invoices").select("amount_residual,due_date,state,move_type,currency_code").eq("company_id", cid).eq("move_type", "out_invoice").eq("state", "posted")).data || [];
       var recv = 0, overdue = 0;
-      invs.forEach(function (i) { var r = Number(i.amount_residual) || 0; if (r > 0.005) { recv += r; if (i.due_date && i.due_date < td) overdue += r; } });
+      invs.forEach(function (i) { var r = fxHomeConvert(Number(i.amount_residual) || 0, i.currency_code); if (r > 0.005) { recv += r; if (i.due_date && i.due_date < td) overdue += r; } });
       var projN = ((await sb.from("projects").select("id", { count: "exact", head: true }).eq("company_id", cid).eq("is_active", true)).count) || 0;
-      var poRows = (await sb.from("purchase_orders").select("amount_total,state").eq("company_id", cid)).data || [];
-      var openPO = poRows.filter(function (p) { return ["sent", "purchase"].indexOf(p.state) >= 0; }).reduce(function (s, p) { return s + (Number(p.amount_total) || 0); }, 0);
+      var poRows = (await sb.from("purchase_orders").select("amount_total,state,currency_code").eq("company_id", cid)).data || [];
+      var openPO = poRows.filter(function (p) { return ["sent", "purchase"].indexOf(p.state) >= 0; }).reduce(function (s, p) { return s + fxHomeConvert(Number(p.amount_total) || 0, p.currency_code); }, 0);
       var grid = root.querySelector(".o-grid"); if (!grid) return;
       var cards = [["Receivable", cc + " " + money(recv), "rep.aged.recv"], ["Overdue", cc + " " + money(overdue), "rep.aged.recv", overdue > 0.005], ["Active projects", String(projN), "proj.list"], ["Committed (open POs)", cc + " " + money(openPO), "po.list"]];
       var html = '<div class="o-hd">' + cards.map(function (c) { return '<button class="o-hd-k" data-go="' + c[2] + '" aria-label="' + esc(c[0]) + '"><div class="o-hd-v' + (c[3] ? " bad" : "") + '">' + esc(c[1]) + '</div><div class="o-hd-l">' + esc(c[0]) + '</div></button>'; }).join("") + '</div>';
@@ -1914,8 +1940,8 @@
         { label: isSale ? "Customer" : "Vendor", get: function (i) { return esc(i.partners ? i.partners.name : ""); } },
         { label: "Invoice Date", get: function (i) { return '<span class="muted">' + esc(i.invoice_date || "") + '</span>'; } },
         { label: "Due Date", get: function (i) { return '<span class="muted">' + esc(i.due_date || "") + '</span>'; } },
-        { label: "Total", num: true, get: function (i) { return money(i.amount_total); } },
-        { label: "Amount Due", num: true, get: function (i) { return money(i.amount_residual); } },
+        { label: "Total", num: true, get: function (i) { return moneyC(i.amount_total, i.currency_code); } },
+        { label: "Amount Due", num: true, get: function (i) { return moneyC(i.amount_residual, i.currency_code); } },
         { label: "Status", get: function (i) { return stBadge(i); } }
       ],
       filters: [
@@ -1932,7 +1958,7 @@
       kanbanCard: function (i) {
         return '<div class="t">' + esc(i.number || "Draft") + '</div><div class="muted">' + esc(i.partners ? i.partners.name : "") + '</div>' +
           '<div class="r"><span>' + esc(i.invoice_date || "") + '</span>' + stBadge(i) + '</div>' +
-          '<div class="r"><span class="k">Total</span><b>' + S.company.currency_code + " " + money(i.amount_total) + '</b></div>';
+          '<div class="r"><span class="k">Total</span><b>' + moneyC(i.amount_total, i.currency_code) + '</b></div>';
       },
       onOpen: function (i) { renderInvoiceForm(i.id, moveType); },
       onNew: function () { renderInvoiceForm("new", moveType); }
@@ -1967,7 +1993,7 @@
         { label: "Date", get: function (p) { return '<span class="muted">' + esc(p.date || "") + '</span>'; } },
         { label: "Partner", get: function (p) { return '<b>' + esc(p.partners ? p.partners.name : "") + '</b>'; } },
         { label: "Reference", get: function (p) { return esc(p.reference || p.memo || ""); } },
-        { label: "Amount", num: true, get: function (p) { return money(p.amount); } }
+        { label: "Amount", num: true, get: function (p) { return moneyC(p.amount, p.currency_code); } }
       ],
       groupBy: [{ label: "Partner", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Month", get: function (p) { return (p.date || "").slice(0, 7); } }]
     };
@@ -2115,7 +2141,7 @@
         { label: "Number", get: function (o) { return '<b>' + esc(o.number || "Draft") + '</b>'; } },
         { label: isSale ? "Customer" : "Vendor", get: function (o) { return esc(o.partners ? o.partners.name : ""); } },
         { label: "Order Date", get: function (o) { return '<span class="muted">' + esc(o.date_order || "") + '</span>'; } },
-        { label: "Total", num: true, get: function (o) { return money(o.amount_total); } },
+        { label: "Total", num: true, get: function (o) { return moneyC(o.amount_total, o.currency_code); } },
         { label: "Status", get: function (o) { return soBadge(o, isSale); } }
       ],
       filters: [
@@ -2123,7 +2149,7 @@
         { label: isSale ? "Sales Orders" : "Purchase Orders", test: function (o) { return o.state === "sale" || o.state === "purchase"; } }
       ],
       groupBy: [{ label: isSale ? "Customer" : "Vendor", get: function (o) { return o.partners ? o.partners.name : "None"; } }, { label: "Status", get: function (o) { return o.state; } }],
-      kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + S.company.currency_code + " " + money(o.amount_total) + '</b></div>'; },
+      kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + moneyC(o.amount_total, o.currency_code) + '</b></div>'; },
       onOpen: function (o) { renderOrderForm(o.id, kind); },
       onNew: function () { renderOrderForm("new", kind); }
     };
@@ -5480,10 +5506,11 @@
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var cc = S.company.currency_code, rep = document.getElementById("rep");
     var types = isRecv ? ["out_invoice", "out_refund"] : ["in_invoice", "in_refund"];
-    var invs = (await sb.from("invoices").select("partner_id,invoice_date,due_date,amount_residual,move_type, partners(name)").eq("company_id", S.company.id).in("move_type", types).eq("state", "posted")).data || [];
+    var invs = (await sb.from("invoices").select("partner_id,invoice_date,due_date,amount_residual,move_type,currency_code, partners(name)").eq("company_id", S.company.id).in("move_type", types).eq("state", "posted")).data || [];
+    await loadFxRates();
     var todayS = today(), byP = {};
     invs.forEach(function (v) {
-      var due = Number(v.amount_residual || 0); if (Math.abs(due) <= 0.005) return;
+      var due = fxHomeConvert(Number(v.amount_residual || 0), v.currency_code); if (Math.abs(due) <= 0.005) return;
       var sign = (v.move_type === "out_refund" || v.move_type === "in_refund") ? -1 : 1, amt = due * sign;
       var pid = v.partner_id || "none", name = (v.partners && v.partners.name) || "(no partner)";
       var p = byP[pid] || (byP[pid] = { name: name, b: [0, 0, 0, 0, 0], total: 0 });
