@@ -76,6 +76,84 @@
     if (rf == null || rh == null) return amt; // no rate -> best effort, leave as-is
     return amt * rf / rh;
   }
+  // World currencies for every picker (code + name). Majors first, then regional. Currency is
+  // always chosen from this list - it is never free-typed, so codes stay valid and consistent.
+  var CURRENCIES = [
+    { c: "USD", n: "US Dollar" }, { c: "EUR", n: "Euro" }, { c: "GBP", n: "British Pound" },
+    { c: "AED", n: "UAE Dirham" }, { c: "SAR", n: "Saudi Riyal" }, { c: "QAR", n: "Qatari Riyal" },
+    { c: "KWD", n: "Kuwaiti Dinar" }, { c: "BHD", n: "Bahraini Dinar" }, { c: "OMR", n: "Omani Rial" },
+    { c: "LBP", n: "Lebanese Pound" }, { c: "EGP", n: "Egyptian Pound" }, { c: "JOD", n: "Jordanian Dinar" },
+    { c: "IQD", n: "Iraqi Dinar" }, { c: "TRY", n: "Turkish Lira" }, { c: "ILS", n: "Israeli Shekel" },
+    { c: "CHF", n: "Swiss Franc" }, { c: "CAD", n: "Canadian Dollar" }, { c: "AUD", n: "Australian Dollar" },
+    { c: "NZD", n: "New Zealand Dollar" }, { c: "JPY", n: "Japanese Yen" }, { c: "CNY", n: "Chinese Yuan" },
+    { c: "HKD", n: "Hong Kong Dollar" }, { c: "SGD", n: "Singapore Dollar" }, { c: "INR", n: "Indian Rupee" },
+    { c: "PKR", n: "Pakistani Rupee" }, { c: "BDT", n: "Bangladeshi Taka" }, { c: "LKR", n: "Sri Lankan Rupee" },
+    { c: "PHP", n: "Philippine Peso" }, { c: "IDR", n: "Indonesian Rupiah" }, { c: "MYR", n: "Malaysian Ringgit" },
+    { c: "THB", n: "Thai Baht" }, { c: "KRW", n: "South Korean Won" }, { c: "ZAR", n: "South African Rand" },
+    { c: "NGN", n: "Nigerian Naira" }, { c: "KES", n: "Kenyan Shilling" }, { c: "MAD", n: "Moroccan Dirham" },
+    { c: "TND", n: "Tunisian Dinar" }, { c: "DZD", n: "Algerian Dinar" }, { c: "SEK", n: "Swedish Krona" },
+    { c: "NOK", n: "Norwegian Krone" }, { c: "DKK", n: "Danish Krone" }, { c: "PLN", n: "Polish Zloty" },
+    { c: "CZK", n: "Czech Koruna" }, { c: "RON", n: "Romanian Leu" }, { c: "HUF", n: "Hungarian Forint" },
+    { c: "RUB", n: "Russian Ruble" }, { c: "UAH", n: "Ukrainian Hryvnia" }, { c: "BRL", n: "Brazilian Real" },
+    { c: "MXN", n: "Mexican Peso" }, { c: "ARS", n: "Argentine Peso" }, { c: "CLP", n: "Chilean Peso" },
+    { c: "COP", n: "Colombian Peso" }
+  ];
+  var CUR_NAME = {}; CURRENCIES.forEach(function (x) { CUR_NAME[x.c] = x.n; });
+  // reusable <select> of world currencies (keeps any pre-existing non-standard code as an option)
+  function currencySelectHTML(id, current, attrs) {
+    current = (current || "").toUpperCase();
+    var opts = CURRENCIES.slice();
+    if (current && !CUR_NAME[current]) opts.unshift({ c: current, n: current });
+    return '<select id="' + id + '"' + (attrs || "") + '>' + opts.map(function (x) {
+      return '<option value="' + x.c + '"' + (x.c === current ? " selected" : "") + '>' + x.c + " - " + esc(x.n) + '</option>';
+    }).join("") + '</select>';
+  }
+  // live mid-market rates from a credible free daily source (no API key). Provider quotes
+  // code-per-base; we store base(ref)-per-code = 1/that, matching currency_rates convention.
+  async function fetchMarketRates(base) {
+    base = (base || "USD").toUpperCase();
+    var res;
+    try { res = await fetch("https://open.er-api.com/v6/latest/" + encodeURIComponent(base)); } catch (e) { return null; }
+    if (!res || !res.ok) return null;
+    var j = await res.json();
+    if (!j || j.result !== "success" || !j.rates) return null;
+    var out = {}; Object.keys(j.rates).forEach(function (code) { var v = Number(j.rates[code]); if (v > 0) out[code] = 1 / v; });
+    out[base] = 1;
+    return { rates: out, updated: (j.time_last_update_utc || "").slice(0, 16) || today() };
+  }
+  // refresh the org's spot + closing rates from the market feed (idempotent per day via upsert)
+  async function refreshFxRates(opts) {
+    opts = opts || {};
+    if (!S.org || !S.org.id) return { ok: false, msg: "No organisation" };
+    var ref = ((S.org && S.org.ref_currency) || (S.company && S.company.currency_code) || "USD").toUpperCase();
+    var feed = await fetchMarketRates(ref);
+    if (!feed) return { ok: false, msg: "Rate service unavailable - please try again shortly" };
+    var want = {}; CURRENCIES.forEach(function (x) { want[x.c] = 1; });
+    (opts.extra || []).forEach(function (c) { if (c) want[String(c).toUpperCase()] = 1; });
+    try { ((await sb.from("currencies").select("code").eq("org_id", S.org.id)).data || []).forEach(function (r) { want[(r.code || "").toUpperCase()] = 1; }); } catch (e) { }
+    var d = today(), rows = [];
+    Object.keys(want).forEach(function (code) {
+      var r = code === ref ? 1 : feed.rates[code];
+      if (r == null) return;
+      rows.push({ org_id: S.org.id, code: code, rate_date: d, rate: r, rate_type: "spot" });
+      rows.push({ org_id: S.org.id, code: code, rate_date: d, rate: r, rate_type: "closing" });
+    });
+    if (!rows.length) return { ok: false, msg: "No rates returned" };
+    var up = await sb.from("currency_rates").upsert(rows, { onConflict: "org_id,code,rate_date,rate_type" });
+    if (up.error) return { ok: false, msg: errMsg(up.error) };
+    S._fxRates = null; // bust the display cache so new rates show immediately
+    return { ok: true, n: rows.length / 2, updated: feed.updated };
+  }
+  // once per day per org, in the background: pull the market rates if today's are not in yet
+  async function refreshFxRatesDaily() {
+    try {
+      if (!S.org || !S.org.id) return;
+      if (!(S.role && (S.role.full_access || canManage("accounting")))) return;
+      var has = (await sb.from("currency_rates").select("id", { count: "exact", head: true }).eq("org_id", S.org.id).eq("rate_type", "spot").eq("rate_date", today())).count || 0;
+      if (has > 0) return;
+      await refreshFxRates();
+    } catch (e) { /* best effort */ }
+  }
   // central modal accessibility (ORB-07): every .modal gets dialog semantics + autofocus + Escape-to-close
   function _a11yEnhanceModal(m) { if (!m || m._a11y) return; m._a11y = 1; var sheet = m.querySelector(".sheet") || m; sheet.setAttribute("role", "dialog"); sheet.setAttribute("aria-modal", "true"); setTimeout(function () { var f = m.querySelector("input:not([type=hidden]),select,textarea,button"); if (f) { try { f.focus(); } catch (e) { } } }, 40); }
   (function initModalA11y() {
@@ -708,6 +786,7 @@
     renderHome();
     maybeWelcome();
     runAutomations();   // best-effort, once/day/company; drops alerts into the bell
+    refreshFxRatesDaily();   // best-effort, once/day/org; pulls live FX rates from the market feed
     handleScanParam();  // /?scan=CODE deep-link from a QR label -> open that tool / item
     handleEvInvite();   // /?evinvite=TOKEN -> accept an event-collaboration invite
   }
@@ -773,7 +852,7 @@
       '<label for="nc-btype">Business type</label><select id="nc-btype" ' + ss + '><option value="">Select...</option>' + btypes.map(function (b) { return '<option>' + b + '</option>'; }).join("") + '</select>' +
       '<label for="nc-scope">Scope of work</label><input id="nc-scope" placeholder="e.g. Aluminium &amp; glazing facades, curtain walling">' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-emp">Number of employees</label><select id="nc-emp" ' + ss + '><option value="">Select...</option>' + emps.map(function (e) { return '<option>' + e + '</option>'; }).join("") + '</select></div><div><label for="nc-phone">Contact phone</label><input id="nc-phone" placeholder="+961 ..." autocomplete="tel"></div></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-reg">Registration / Tax no. <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-reg"></div><div><label for="nc-cur">Currency</label><input id="nc-cur" value="USD" maxlength="3" style="text-transform:uppercase"></div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-reg">Registration / Tax no. <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-reg"></div><div><label for="nc-cur">Currency</label>' + currencySelectHTML("nc-cur", "USD") + '</div></div>' +
       '<label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;font-size:13px;color:var(--ink2);font-weight:400"><input type="checkbox" id="nc-tc" style="margin-top:3px"><span>I have read and agree to the <a id="nc-terms" style="cursor:pointer">Terms &amp; Conditions</a> on behalf of my company.</span></label>' +
       '<div class="err" id="nc-err" role="alert"></div>' +
       '<button class="btn pri" id="nc-create" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Submit application</button>' +
@@ -1783,6 +1862,7 @@
       '<div class="o-view">' +
       '<div class="o-cp">' + bcHTML(cfg.title) +
       (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-new">New</button>' : '') +
+      (cfg.action && canManageApp(S.app) ? '<button class="o-filtbtn" id="o-action">' + esc(cfg.action.label) + '</button>' : '') +
       '<div class="o-search"><span style="display:flex">' + SEARCH_SVG + '</span><span id="o-facets"></span><input id="o-q" placeholder="Search..."></div>' +
       (cfg.filters ? '<button class="o-filtbtn" id="o-fbtn">Filters &#9660;</button>' : '') +
       (cfg.groupBy ? '<button class="o-filtbtn" id="o-gbtn">Group By &#9660;</button>' : '') +
@@ -1798,6 +1878,7 @@
     wireBc();
     L = { cfg: cfg, all: [], view: "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: 0 };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
+    var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     document.getElementById("o-q").addEventListener("input", function () { L.query = this.value.toLowerCase(); L.page = 0; paintBody(); });
     document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
       b.onclick = function () { L.view = b.dataset.v; document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
@@ -2079,14 +2160,22 @@
         { label: "Rate (1 " + "= ? " + esc(ref) + ")", num: true, get: function (r) { return Number(r.rate).toLocaleString("en-US", { maximumFractionDigits: 6 }); } }
       ],
       groupBy: [{ label: "Currency", get: function (r) { return r.code; } }, { label: "Type", get: function (r) { return r.rate_type; } }],
-      onNew: function () { openRateModal(); }
+      onNew: function () { openRateModal(); },
+      action: {
+        label: "↻ Update from market", run: async function (btn) {
+          if (btn) { btn.disabled = true; btn.textContent = "Fetching..."; }
+          var r = await refreshFxRates();
+          if (r.ok) { toast("Updated " + r.n + " currencies from the market (" + (r.updated || today()) + ")"); renderView(); }
+          else { toast(r.msg || "Could not update rates"); if (btn) { btn.disabled = false; btn.textContent = "↻ Update from market"; } }
+        }
+      }
     };
   }
   function openRateModal() {
     var ref = (S.org && S.org.ref_currency) || "USD";
     var m = document.createElement("div"); m.className = "modal on"; m.id = "ratemodal";
     m.innerHTML = '<div class="sheet"><h3>New exchange rate</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-      '<div><label>Currency code</label>' + fhint("Currency code", "The 3-letter code of the currency you are quoting, e.g. EUR or LBP.") + '<input id="r-code" placeholder="e.g. EUR" style="text-transform:uppercase"></div>' +
+      '<div><label>Currency</label>' + fhint("Currency", "The currency you are quoting a rate for. Pick from the list.") + currencySelectHTML("r-code", "EUR") + '</div>' +
       '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + today() + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
       '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09"></div>' +
       '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button><button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
@@ -2207,7 +2296,8 @@
     var docCcy = (inv && inv.currency_code) || coCcy;
     var fxRates = (S.org && S.org.id) ? ((await sb.from("currency_rates").select("code,rate_date,rate,rate_type").eq("org_id", S.org.id).eq("rate_type", "spot").order("rate_date", { ascending: false })).data || []) : [];
     var curList = (S.org && S.org.id) ? ((await sb.from("currencies").select("code").eq("org_id", S.org.id).eq("is_active", true).order("code")).data || []).map(function (c) { return c.code; }) : [];
-    ["USD", "EUR", "GBP", "LBP", coCcy, docCcy].forEach(function (c) { if (c && curList.indexOf(c) < 0) curList.push(c); });
+    CURRENCIES.forEach(function (x) { if (curList.indexOf(x.c) < 0) curList.push(x.c); });
+    [coCcy, docCcy].forEach(function (c) { if (c && curList.indexOf(c) < 0) curList.push(c); });
     function rateOf(ccy, d) { if (ccy === refCcy) return 1; var r = fxRates.filter(function (x) { return x.code === ccy && x.rate_date <= d; })[0]; return r ? Number(r.rate) : null; }
     function fxRate(from, to, d) { if (from === to) return 1; var rf = rateOf(from, d), rt = rateOf(to, d); return (rf == null || rt == null) ? null : rf / rt; }
 
@@ -2244,7 +2334,7 @@
       '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Reference", editable ? '<input id="f-ref" value="' + esc(inv ? inv.ref || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(inv ? inv.ref || "" : "") + '</span>') +
-      fld("Currency", editable ? '<select id="f-cur">' + curList.map(function (c) { return '<option value="' + esc(c) + '"' + (docCcy === c ? " selected" : "") + '>' + esc(c) + (c === coCcy ? " (company)" : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(docCcy) + '</span>', "The currency this " + (isSale ? "invoice" : "bill") + " is issued in. Foreign amounts convert to the company books (" + esc(coCcy) + ") at the spot rate on the date.") +
+      fld("Currency", editable ? '<select id="f-cur">' + curList.map(function (c) { return '<option value="' + esc(c) + '"' + (docCcy === c ? " selected" : "") + '>' + esc(c) + (CUR_NAME[c] ? " - " + esc(CUR_NAME[c]) : "") + (c === coCcy ? " (company)" : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(docCcy) + '</span>', "The currency this " + (isSale ? "invoice" : "bill") + " is issued in. Foreign amounts convert to the company books (" + esc(coCcy) + ") at the spot rate on the date.") +
       '</div><div>' +
       fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>', "Date the " + (isSale ? "invoice" : "bill") + " is issued.") +
       (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
@@ -4321,7 +4411,7 @@
     var m = document.createElement("div"); m.className = "modal on"; m.id = "comodal";
     m.innerHTML = '<div class="sheet"><h3>' + (id ? "Edit company" : "New company") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div><label>Company name</label>' + fhint("Company name", "The trading name of this company.") + '<input id="co-name" value="' + esc(c.name || "") + '" placeholder="e.g. Skyline Glass SARL"></div>' +
-      '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label><input id="co-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase"></div></div>' +
+      '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label>' + currencySelectHTML("co-cur", c.currency_code || "USD") + '</div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
       (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
       '</div><div class="foot"><button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
@@ -9044,7 +9134,7 @@
       fld("VAT / Tax number", '<input id="cp-vat" value="' + esc(c.tax_id || "") + '">') +
       '</div><div>' +
       fld("Country", '<input id="cp-country" value="' + esc(c.country || "") + '" placeholder="e.g. Lebanon">') +
-      fld("Currency", '<input id="cp-cur" value="' + esc(c.currency_code || "USD") + '" maxlength="3" style="text-transform:uppercase">', "The ledger currency for this company.") +
+      fld("Currency", currencySelectHTML("cp-cur", c.currency_code || "USD"), "The ledger currency for this company.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Localization</h3><div class="sub" style="margin:-4px 0 12px">Applying a country pack seeds the standard tax rates, sets the fiscal-ID label and the number/date format your documents use.</div><div id="cp-loc"></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
