@@ -377,7 +377,7 @@
       menus: [
         { label: "Dashboard", action: "dashboard" },
         { label: "Cockpit", action: "cockpit" },
-        { label: "Customers", items: [["Invoices", "inv.out"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
+        { label: "Customers", items: [["Invoices", "inv.out"], ["Recurring Invoices", "inv.recurring"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
@@ -565,7 +565,7 @@
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project", "proj.labels": "project", "acc.payterms": "accounting",
@@ -792,6 +792,7 @@
     maybeWelcome();
     runAutomations();   // best-effort, once/day/company; drops alerts into the bell
     refreshFxRatesDaily();   // best-effort, once/day/org; pulls live FX rates from the market feed
+    generateRecurringDaily();   // best-effort; generates any recurring invoices that are due
     handleScanParam();  // /?scan=CODE deep-link from a QR label -> open that tool / item
     handleEvInvite();   // /?evinvite=TOKEN -> accept an event-collaboration invite
   }
@@ -1662,6 +1663,7 @@
       case "rep.stmt": return renderStatement(null);
       case "rep.cons": return renderConsolidation();
       case "acc.revalue": return renderRevaluation();
+      case "inv.recurring": return renderList(cfgRecurring());
       case "rep.cashfwd": return renderCashForecast();
       case "rep.health": return renderDataHealth();
       case "rep.collections": return renderCollections();
@@ -2021,6 +2023,118 @@
     var cls = ps === "paid" ? "paid" : ps === "partial" ? "partial" : "unpaid";
     var lbl = ps === "paid" ? "Paid" : ps === "partial" ? "Partial" : "Not Paid";
     return '<span class="badge ' + cls + '">' + lbl + '</span>';
+  }
+  // ---- RECURRING / SUBSCRIPTION INVOICES (feature #8): a template that bills a
+  // customer every interval. Generation creates a real invoice and advances next_date.
+  var RECUR_UNITS = [["week", "Weekly"], ["month", "Monthly"], ["quarter", "Quarterly"], ["year", "Yearly"]];
+  function recurLabel(u, c) { c = Number(c) || 1; var base = { week: "week", month: "month", quarter: "quarter", year: "year" }[u] || "month"; return c === 1 ? ("Every " + base) : ("Every " + c + " " + base + "s"); }
+  function recIsoD(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
+  function addInterval(ds, unit, count) { var d = parseD(ds) || new Date(); count = Number(count) || 1; if (unit === "week") d.setDate(d.getDate() + 7 * count); else if (unit === "quarter") d.setMonth(d.getMonth() + 3 * count); else if (unit === "year") d.setFullYear(d.getFullYear() + count); else d.setMonth(d.getMonth() + count); return recIsoD(d); }
+  function addDaysStr(ds, n) { var d = parseD(ds) || new Date(); d.setDate(d.getDate() + (Number(n) || 0)); return recIsoD(d); }
+  function cfgRecurring() {
+    return {
+      title: "Recurring Invoices", pageSize: 80,
+      fetch: function () { return sb.from("recurring_invoices").select("*, partners(name)").eq("company_id", S.company.id).order("next_date").then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.name || "") + " " + (r.partners ? r.partners.name : ""); },
+      columns: [
+        { label: "Name", get: function (r) { return '<b>' + esc(r.name || "Recurring") + '</b>'; } },
+        { label: "Customer", get: function (r) { return esc(r.partners ? r.partners.name : ""); } },
+        { label: "Every", get: function (r) { return esc(recurLabel(r.interval_unit, r.interval_count)); } },
+        { label: "Next", get: function (r) { return '<span' + (r.active && r.next_date && r.next_date <= today() ? ' style="color:var(--bad);font-weight:700"' : ' class="muted"') + '>' + esc(r.next_date || "") + '</span>'; } },
+        { label: "Mode", get: function (r) { return r.auto_post ? '<span class="badge paid">auto-post</span>' : '<span class="badge">draft</span>'; } },
+        { label: "Active", get: function (r) { return r.active ? "yes" : '<span class="muted">paused</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (r) { return r.active; } }, { label: "Due now", test: function (r) { return r.active && r.next_date && r.next_date <= today(); } }, { label: "Paused", test: function (r) { return !r.active; } }],
+      groupBy: [{ label: "Customer", get: function (r) { return r.partners ? r.partners.name : "None"; } }],
+      onOpen: function (r) { renderRecurringForm(r.id); }, onNew: function () { renderRecurringForm("new"); },
+      action: { label: "Generate due now", run: async function (btn) { if (btn) { btn.disabled = true; btn.textContent = "Generating..."; } var n = await generateDueRecurring(); toast(n ? (n + " invoice(s) generated") : "Nothing due right now"); renderView(); } }
+    };
+  }
+  async function renderRecurringForm(id) {
+    var parent = { action: "inv.recurring", title: "Recurring Invoices" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var r = id === "new" ? { active: true, interval_unit: "month", interval_count: 1, start_date: today(), next_date: today(), payment_days: 30, currency_code: S.company.currency_code, auto_post: false } : (await sb.from("recurring_invoices").select("*").eq("id", id).maybeSingle()).data || {};
+    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,list_price,sale_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).eq("scope", "sale")).data || [];
+    var lines = id === "new" ? [] : (await sb.from("recurring_invoice_lines").select("*").eq("recurring_id", id).order("sequence")).data || [];
+    var prodById = {}; products.forEach(function (p) { prodById[p.id] = p; });
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.name || "Recurring");
+    var custOpts = '<option value="">(select customer)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (r.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+    function prodOptsFor(sel) { return '<option value="">(custom line)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
+    function taxOptsFor(sel) { return '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '"' + (sel === t.id ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
+    var unitOpts = RECUR_UNITS.map(function (u) { return '<option value="' + u[0] + '"' + (r.interval_unit === u[0] ? " selected" : "") + '>' + u[1] + '</option>'; }).join("");
+    function lineRow(l) { l = l || {}; return '<tr><td><select class="rl-prod">' + prodOptsFor(l.product_id) + '</select></td><td><input class="rl-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="rl-qty" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:70px"></td><td><input class="rl-price" type="number" step="0.01" value="' + (l.unit_price != null ? l.unit_price : 0) + '" style="width:90px"></td><td><select class="rl-tax">' + taxOptsFor(l.tax_id) + '</select></td><td><button class="rl-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    var btns = '<button class="pri" id="rc-save">Save</button><button id="rc-discard">Discard</button>' + (id !== "new" ? '<button id="rc-gen">Generate invoice now</button>' : '');
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div>' + (r.next_date ? '<span class="muted">Next</span> <b>' + esc(r.next_date) + '</b>' : '') + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="rc-name" value="' + esc(r.name || "") + '" placeholder="e.g. Monthly maintenance - Tower A"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Customer", '<select id="rc-cust">' + custOpts + '</select>') +
+      fld("Currency", currencySelectHTML("rc-cur", r.currency_code || S.company.currency_code)) +
+      '<div class="row2"><div>' + fld("Repeat", '<select id="rc-unit">' + unitOpts + '</select>') + '</div><div>' + fld("Every", '<input id="rc-count" type="number" min="1" value="' + (r.interval_count || 1) + '">') + '</div></div>' +
+      '</div><div>' +
+      '<div class="row2"><div>' + fld("Start", '<input id="rc-start" type="date" value="' + (r.start_date || today()) + '">') + '</div><div>' + fld("Next run", '<input id="rc-next" type="date" value="' + (r.next_date || today()) + '">', "The next date an invoice is generated.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("End (optional)", '<input id="rc-end" type="date" value="' + (r.end_date || "") + '">') + '</div><div>' + fld("Payment days", '<input id="rc-pdays" type="number" value="' + (r.payment_days != null ? r.payment_days : 30) + '">') + '</div></div>' +
+      '<div class="row2"><div>' + fld("On generate", '<select id="rc-auto"><option value="0"' + (r.auto_post ? "" : " selected") + '>Create as draft</option><option value="1"' + (r.auto_post ? " selected" : "") + '>Post automatically</option></select>', "Draft lets you review before sending; post finalises it straight away.") + '</div><div>' + fld("Status", '<select id="rc-active"><option value="1"' + (r.active === false ? "" : " selected") + '>Active</option><option value="0"' + (r.active === false ? " selected" : "") + '>Paused</option></select>') + '</div></div>' +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Invoice lines (repeated each cycle)</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th>Description</th><th>Qty</th><th>Price</th><th>Tax</th><th></th></tr></thead><tbody id="rc-lines">' + (lines.length ? lines.map(lineRow).join("") : lineRow()) + '</tbody></table><button id="rc-add" class="o-addln">+ Add line</button></div></div>' +
+      '</div>';
+    document.getElementById("rc-discard").onclick = function () { go("inv.recurring"); };
+    function wireLines() {
+      document.querySelectorAll("#rc-lines .rl-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; });
+      document.querySelectorAll("#rc-lines .rl-prod").forEach(function (sel) { sel.onchange = function () { var p = prodById[sel.value]; if (!p) return; var tr = sel.closest("tr"); if (!tr.querySelector(".rl-name").value) tr.querySelector(".rl-name").value = p.name || ""; tr.querySelector(".rl-price").value = Number(p.list_price || 0); if (p.sale_tax_id) tr.querySelector(".rl-tax").value = p.sale_tax_id; }; });
+    }
+    wireLines();
+    document.getElementById("rc-add").onclick = function () { document.getElementById("rc-lines").insertAdjacentHTML("beforeend", lineRow()); wireLines(); };
+    function readLines() { return [].map.call(document.querySelectorAll("#rc-lines tr"), function (tr, k) { return { product_id: (tr.querySelector(".rl-prod") || {}).value || null, name: (tr.querySelector(".rl-name") || {}).value || "", quantity: parseFloat((tr.querySelector(".rl-qty") || {}).value) || 0, unit_price: parseFloat((tr.querySelector(".rl-price") || {}).value) || 0, tax_id: (tr.querySelector(".rl-tax") || {}).value || null, sequence: (k + 1) * 10 }; }).filter(function (l) { return (l.name || "").trim() || l.product_id; }); }
+    async function persist() {
+      var row = { name: gv("rc-name") || "Recurring", partner_id: document.getElementById("rc-cust").value || null, currency_code: document.getElementById("rc-cur").value || S.company.currency_code, interval_unit: document.getElementById("rc-unit").value, interval_count: parseInt(gv("rc-count"), 10) || 1, start_date: gv("rc-start") || null, next_date: gv("rc-next") || null, end_date: gv("rc-end") || null, payment_days: parseInt(gv("rc-pdays"), 10) || 0, auto_post: document.getElementById("rc-auto").value === "1", active: document.getElementById("rc-active").value === "1" };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("recurring_invoices").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
+      else { if ((await sb.from("recurring_invoices").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
+      await sb.from("recurring_invoice_lines").delete().eq("recurring_id", sid);
+      var ls = readLines().map(function (l) { l.company_id = S.company.id; l.recurring_id = sid; return l; });
+      if (ls.length) { var lr = await sb.from("recurring_invoice_lines").insert(ls); if (lr.error) toast("Lines: " + errMsg(lr.error)); }
+      return sid;
+    }
+    document.getElementById("rc-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderRecurringForm(sid); } };
+    var gb = document.getElementById("rc-gen"); if (gb) gb.onclick = async function () { var sid = await persist(); if (!sid) return; var invId = await generateOneRecurring(sid); if (invId) { toast("Invoice generated"); renderInvoiceForm(invId, "out_invoice"); } else toast("Add at least one line first"); };
+  }
+  // create one invoice from a recurring template (by id); advances next_date. Returns invoice id.
+  async function generateOneRecurring(recId) {
+    var rec = (await sb.from("recurring_invoices").select("*").eq("id", recId).maybeSingle()).data; if (!rec) return null;
+    var lns = (await sb.from("recurring_invoice_lines").select("*").eq("recurring_id", recId).order("sequence")).data || [];
+    if (!lns.length) return null;
+    var taxMap = {}; ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || []).forEach(function (t) { taxMap[t.id] = Number(t.amount) || 0; });
+    var untax = 0, tax = 0;
+    lns.forEach(function (l) { var sub = Number(l.quantity || 0) * Number(l.unit_price || 0); untax += sub; tax += sub * (l.tax_id ? (taxMap[l.tax_id] || 0) : 0) / 100; });
+    var invDate = rec.next_date || today(), due = addDaysStr(invDate, rec.payment_days || 30);
+    var hdr = { company_id: S.company.id, move_type: "out_invoice", state: "draft", number: await nextNumber("out_invoice"), invoice_date: invDate, due_date: due, partner_id: rec.partner_id, currency_code: rec.currency_code || S.company.currency_code, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax, ref: "Recurring: " + (rec.name || "") };
+    var ins = await sb.from("invoices").insert(hdr).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; }
+    var invId = ins.data.id;
+    await sb.from("invoice_lines").insert(lns.map(function (l, k) { return { company_id: S.company.id, invoice_id: invId, sequence: (k + 1) * 10, product_id: l.product_id || null, name: l.name || "", tax_id: l.tax_id || null, quantity: Number(l.quantity || 0), unit_price: Number(l.unit_price || 0), price_subtotal: Number(l.quantity || 0) * Number(l.unit_price || 0) }; }));
+    if (rec.auto_post) { try { await sb.rpc("post_invoice", { p_invoice: invId }); } catch (e) { } }
+    await sb.from("recurring_invoices").update({ next_date: addInterval(rec.next_date || today(), rec.interval_unit, rec.interval_count), last_invoice_at: today() }).eq("id", recId);
+    return invId;
+  }
+  // generate every recurring template that is due (next_date <= today, active, not ended)
+  async function generateDueRecurring() {
+    var td = today();
+    var recs = (await sb.from("recurring_invoices").select("id,next_date,end_date").eq("company_id", S.company.id).eq("active", true).lte("next_date", td)).data || [];
+    var count = 0;
+    for (var i = 0; i < recs.length; i++) { if (recs[i].end_date && recs[i].next_date > recs[i].end_date) continue; var iv = await generateOneRecurring(recs[i].id); if (iv) count++; }
+    return count;
+  }
+  async function generateRecurringDaily() {
+    try {
+      if (!S.company || !(S.role && (S.role.full_access || canManage("accounting")))) return;
+      var due = (await sb.from("recurring_invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("active", true).lte("next_date", today())).count || 0;
+      if (!due) return;
+      var n = await generateDueRecurring();
+      if (n) toast(n + " recurring invoice(s) generated");
+    } catch (e) { /* best effort */ }
   }
   function cfgInvoices(moveType) {
     var isSale = moveType.indexOf("out_") === 0, isRefund = moveType.indexOf("refund") >= 0;
