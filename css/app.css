@@ -237,6 +237,87 @@ button{font-family:inherit}
 .mf-svg svg{display:block;width:100%;min-width:600px;height:auto}
 .mf-fig figcaption{margin-top:10px;font-size:12.5px;line-height:1.5;color:var(--ink3);max-width:72ch}
 .mf-fig figcaption b{color:var(--ink2);font-weight:600}
+/* ---- manual visual kit: icons, callouts, step cards, screen maps, mockups ---- */
+.svgico{stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+.man-ico{display:inline-flex;align-items:center;justify-content:center;vertical-align:-.15em}
+.man-ico svg{width:1.05em;height:1.05em}
+/* callout boxes */
+.man-cal{display:flex;gap:11px;align-items:flex-start;border:1px solid var(--line);border-left:3px solid var(--ink3);background:var(--panel2);border-radius:12px;padding:12px 14px;margin:14px 0}
+.man-cal .man-ci{flex:0 0 auto;width:22px;height:22px;color:var(--ink3);margin-top:1px}
+.man-cal .man-ci svg{width:22px;height:22px}
+.man-cal-b{min-width:0}
+.man-cal-t{font-size:13px;font-weight:700;color:var(--ink);margin:0 0 3px;letter-spacing:.01em}
+.man-cal p{font-size:13.5px;line-height:1.55;color:var(--ink2);margin:0}
+.man-cal p+p{margin-top:7px}
+.man-cal.key{border-left-color:var(--accent);background:var(--accent-soft)}
+.man-cal.key .man-ci,.man-cal.key .man-cal-t{color:var(--accent)}
+.man-cal.tip{border-left-color:var(--good);background:var(--good-s)}
+.man-cal.tip .man-ci,.man-cal.tip .man-cal-t{color:var(--good)}
+.man-cal.warn{border-left-color:var(--warn);background:var(--warn-s)}
+.man-cal.warn .man-ci,.man-cal.warn .man-cal-t{color:var(--warn)}
+.man-cal.note{border-left-color:var(--slate);background:var(--slate-s)}
+.man-cal.note .man-ci,.man-cal.note .man-cal-t{color:var(--slate)}
+/* numbered step cards */
+.man-steps{display:flex;flex-direction:column;gap:9px;margin:12px 0}
+.man-step{display:grid;grid-template-columns:28px 1fr;gap:12px;align-items:start}
+.man-step-n{width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;font-variant-numeric:tabular-nums}
+.man-step-b{font-size:13.5px;line-height:1.55;color:var(--ink2);padding-top:3px}
+.man-step-b b{color:var(--ink)}
+/* screen map: every screen in an app, as an icon grid */
+.man-map{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:10px;margin:14px 0 6px}
+.man-scr{display:flex;gap:11px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:11px 12px;transition:border-color .12s,transform .12s,box-shadow .12s}
+.man-scr:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 14px rgba(20,22,28,.07)}
+.man-scr-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--panel);border:1px solid var(--line);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.man-scr-ic svg{width:18px;height:18px}
+.man-scr-b{min-width:0;display:flex;flex-direction:column;gap:2px}
+.man-scr-n{font-size:13.5px;font-weight:700;color:var(--ink);line-height:1.2}
+.man-scr-loc{font-size:10.5px;font-weight:600;letter-spacing:.03em;color:var(--ink3);text-transform:uppercase}
+.man-scr-d{font-size:12.5px;line-height:1.45;color:var(--ink2)}
+/* at-a-glance chips */
+.man-glance{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.man-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600}
+.man-chip .man-ico svg{width:14px;height:14px}
+.man-chip.plain{background:var(--panel2);color:var(--ink2);border-color:var(--line)}
+/* two-up compare cards */
+.man-cmp{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+.man-cmp-c{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+.man-cmp-h{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--ink);margin-bottom:6px}
+.man-cmp-h .man-ico{color:var(--accent)}
+.man-cmp-c p{font-size:13px;line-height:1.5;color:var(--ink2);margin:0}
+.man-cmp-c.alt .man-cmp-h .man-ico{color:var(--warn)}
+/* inline "button" keycap */
+.man-key{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:0 6px;font-size:12.5px;font-weight:600;color:var(--ink);line-height:1.7;white-space:nowrap}
+/* collapsible "more detail" */
+.man-more{border:1px solid var(--line);border-radius:10px;background:var(--panel2);margin:12px 0;padding:0 14px}
+.man-more>summary{cursor:pointer;padding:11px 0;font-size:13px;font-weight:600;color:var(--accent);list-style:none;display:flex;align-items:center;gap:8px;outline:none}
+.man-more>summary::-webkit-details-marker{display:none}
+.man-more>summary::before{content:"";width:0;height:0;border-left:6px solid currentColor;border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .15s}
+.man-more[open]>summary::before{transform:rotate(90deg)}
+.man-more[open]{padding-bottom:10px}
+.man-more .man-more-b{font-size:13.5px;line-height:1.6;color:var(--ink2)}
+.man-more .man-more-b b{color:var(--ink)}
+/* mini UI mockup ("screenshot" figure, drawn not captured, so it never goes stale) */
+.man-mock{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--panel);box-shadow:0 1px 2px rgba(20,22,28,.04),0 8px 22px rgba(20,22,28,.05);margin:14px 0}
+.man-mock-cap{font-size:12.5px;color:var(--ink3);line-height:1.5;margin:8px 2px 0;max-width:72ch}
+.man-mock-bar{display:flex;align-items:center;gap:9px;background:var(--panel2);border-bottom:1px solid var(--line);padding:9px 12px}
+.man-mock-dot{width:10px;height:10px;border-radius:50%;background:var(--line)}
+.man-mock-ttl{font-size:12.5px;font-weight:700;color:var(--ink)}
+.man-mock-sp{flex:1}
+.man-mock-btn{font-size:11.5px;font-weight:700;border-radius:7px;padding:4px 10px;background:var(--accent);color:#fff}
+.man-mock-btn.ghost{background:var(--panel);color:var(--ink2);border:1px solid var(--line)}
+.man-mock-body{padding:10px 12px;display:flex;flex-direction:column;gap:7px}
+.man-mock-r{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:9px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:9px}
+.man-mock-r .l1{font-size:12.5px;font-weight:600;color:var(--ink)}
+.man-mock-r .l2{font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.man-mock-pill{font-size:10.5px;font-weight:700;border-radius:999px;padding:2px 9px}
+.man-mock-pill.d{background:var(--panel);color:var(--ink3);border:1px solid var(--line)}
+.man-mock-pill.g{background:var(--good-s);color:var(--good)}
+.man-mock-pill.w{background:var(--warn-s);color:var(--warn)}
+.man-mock-cols{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px 12px}
+.man-mock-col{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px;display:flex;flex-direction:column;gap:6px;min-height:70px}
+.man-mock-col-h{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3)}
+.man-mock-card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:11.5px;color:var(--ink);box-shadow:0 1px 2px rgba(20,22,28,.05)}
+@media(max-width:560px){.man-cmp{grid-template-columns:1fr}.man-mock-cols{grid-template-columns:repeat(2,1fr)}}
 /* material take-off roll-up summary strip */
 .mr-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 14px}
 .mr-summary:empty{display:none}
