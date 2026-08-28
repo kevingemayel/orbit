@@ -14822,6 +14822,7 @@
       + '<div><label>' + (dir === "in" ? "From (who is handing the money over)" : "To (who is receiving it)") + '</label><input id="cm-handler" list="cm-handler-list" placeholder="Person or company - the one physically paying"><datalist id="cm-handler-list">' + contactData + '</datalist></div>'
       + '<div class="row2"><div><label>Amount</label><input id="cm-amt" type="number" step="0.01"></div>'
       + '<div><label>Currency</label>' + currencySelectHTML("cm-cur", S.company.currency_code) + '</div></div>'
+      + (dir === "in" ? '<div class="row2"><div><label>Cash tendered (optional)</label><input id="cm-tender" type="number" step="0.01" placeholder="If they hand over more"></div><div><label>Change to give back</label><input id="cm-change" type="number" step="0.01" readonly></div></div>' : '')
       + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Method</label><select id="cm-method">' + methodOpts + '</select></div></div>'
       + '<div id="cm-alloc-wrap" style="display:none;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel2)"></div>'
@@ -14871,7 +14872,9 @@
       document.querySelectorAll(".cm-al").forEach(function (inp) { var res = Number(inp.getAttribute("data-res")) || 0, take = Math.round(Math.min(res, Math.max(0, left)) * 100) / 100; inp.value = take > 0 ? take : ""; left = Math.round((left - take) * 100) / 100; });
       recomputeAlloc();
     }
-    document.getElementById("cm-amt").oninput = recomputeAlloc;
+    function cashCalcChange() { var t = document.getElementById("cm-tender"); if (!t) return; var tv = parseFloat(t.value) || 0, am = parseFloat(document.getElementById("cm-amt").value) || 0; var ch = Math.round((tv - am) * 100) / 100; document.getElementById("cm-change").value = ch > 0 ? ch : 0; }
+    var tEl = document.getElementById("cm-tender"); if (tEl) tEl.oninput = cashCalcChange;
+    document.getElementById("cm-amt").oninput = function () { recomputeAlloc(); cashCalcChange(); };
     document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; } };
     document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; };
     document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-alloc-wrap").style.display = "none"; document.getElementById("cm-doc-wrap").style.display = "none"; };
@@ -14899,6 +14902,8 @@
         party_type: k.party, party_id: (pe && partyId) ? partyId : null, payee_name: partyName,
         handler_name: handlerName, handler_id: handlerId, memo: gv("cm-memo"),
         allocations: allocations, link_type: docType || "none", link_id: docId || null,
+        tendered: document.getElementById("cm-tender") ? (parseFloat(document.getElementById("cm-tender").value) || 0) : 0,
+        change_given: document.getElementById("cm-change") ? (parseFloat(document.getElementById("cm-change").value) || 0) : 0,
         contra_account_id: document.getElementById("cm-contra").value || null
       };
       var r = await postCashMovement(mv, chart, wallets);
@@ -14938,7 +14943,7 @@
     var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
     var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
     var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
-    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
+    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
 
     // ---- Path 1: on behalf of a customer/supplier - allocate to invoices + on-account remainder ----
     if (isAR) {
@@ -15128,6 +15133,7 @@
   async function openCashCountModal() {
     var d = await cashBalances();
     if (!d.accts.length) { toast("Add a cash account first"); return; }
+    var ccChart = await cashLoadChart();
     var opts = d.accts.map(function (a) { return '<option value="' + a.id + '" data-bal="' + (d.bal[a.id] || 0) + '">' + esc(a.name) + '</option>'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "ccmodal";
     m.innerHTML = '<div class="sheet"><h3>Count &amp; close</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
@@ -15145,9 +15151,22 @@
     document.getElementById("cc-save").onclick = async function () {
       var acct = document.getElementById("cc-acct").value, exp = parseFloat(document.getElementById("cc-exp").value) || 0, cnt = parseFloat(document.getElementById("cc-cnt").value);
       if (isNaN(cnt)) { toast("Enter the counted amount"); return; }
-      var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: document.getElementById("cc-date").value, expected_amount: exp, counted_amount: cnt, variance: cnt - exp, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note") });
+      var vr = Math.round((cnt - exp) * 100) / 100, cdate = document.getElementById("cc-date").value;
+      var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: cdate, expected_amount: exp, counted_amount: cnt, variance: vr, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note") });
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      m.remove(); toast("Counted and closed"); renderView();
+      // post the over/short so the books match the physical count
+      if (Math.abs(vr) > 0.005) {
+        var wallet = d.accts.filter(function (a) { return a.id === acct; })[0] || {};
+        var cashGl = wallet.gl_account_id || (function () { var a = cashAcctByCode(ccChart, wallet.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
+        var osA = cashAcctByCode(ccChart, "6900"); var osGl = osA ? osA.id : null;
+        var jc = wallet.kind === "bank" ? "BNK" : "CSH";
+        if (cashGl && osGl) {
+          var ref = "CASHCOUNT/" + cdate;
+          var ge = await cashPostEntry(vr > 0 ? "in" : "out", cashGl, osGl, Math.abs(vr), jc, cdate, ref, "Cash over/short at close - " + (wallet.name || ""), null, "cash_count");
+          if (ge.error) { m.remove(); toast("Closed, but the over/short could not post: " + errMsg(ge.error)); renderView(); return; }
+        }
+      }
+      m.remove(); toast(Math.abs(vr) > 0.005 ? ("Closed - variance of " + money(vr) + " posted to over/short") : "Counted and closed"); renderView();
     };
   }
 
@@ -15232,6 +15251,25 @@
     };
   }
 
+  // Turn an appointment into a posted customer invoice (so it hits the ledger,
+  // the client statement, and can be collected in Counter).
+  async function apptBillAppointment(a) {
+    if (a.invoice_id) return { already: true };
+    if (!a.client_id) { toast("This " + apptTermAppt().toLowerCase() + " has no " + apptTermClient().toLowerCase()); return { error: { message: "no client" } }; }
+    var amt = Number(a.price || 0); if (!(amt > 0)) { toast("Set a price on it first"); return { error: { message: "no price" } }; }
+    var svcName = ""; if (a.service_id) { var svc = (await sb.from("appt_services").select("name").eq("id", a.service_id).maybeSingle()).data; if (svc) svcName = svc.name; }
+    var num = await nextNumber("out_invoice");
+    var hdr = { company_id: S.company.id, move_type: "out_invoice", partner_id: a.client_id, number: num, invoice_date: today(), due_date: today(), currency_code: a.currency_code || S.company.currency_code, state: "draft", amount_untaxed: amt, amount_total: amt, amount_residual: amt, ref: apptTermAppt() + " " + (a.number || "") };
+    var ins = await sb.from("invoices").insert(hdr).select("id").single();
+    if (ins.error) return { error: ins.error };
+    var invId = ins.data.id;
+    var lr = await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: invId, sequence: 10, name: (svcName || apptTermAppt()) + " - " + apptFmtDate(a.starts_at), quantity: 1, unit_price: amt, price_subtotal: amt });
+    if (lr.error) return { error: lr.error };
+    var pr = await sb.rpc("post_invoice", { p_invoice: invId });
+    if (pr.error) return { error: pr.error };
+    await sb.from("appt_appointments").update({ invoice_id: invId }).eq("id", a.id);
+    return { invoice_id: invId, number: num };
+  }
   async function openAppointmentModal(id) {
     await apptLoadSettings();
     var a = id ? (await sb.from("appt_appointments").select("*").eq("id", id).single()).data : null; a = a || {};
@@ -15248,8 +15286,9 @@
       + '<div class="row2"><div><label>Starts</label><input id="ap-start" type="datetime-local" value="' + apptDtLocal(a.starts_at) + '"></div><div><label>Duration (min)</label><input id="ap-dur" type="number" step="5" value="' + (a.id && a.starts_at && a.ends_at ? Math.round((new Date(a.ends_at) - new Date(a.starts_at)) / 60000) : 60) + '"></div></div>'
       + '<div class="row2"><div><label>Status</label><select id="ap-status">' + statusOpts + '</select></div><div><label>Price</label><input id="ap-price" type="number" step="0.01" value="' + (Number(a.price || 0)) + '"></div></div>'
       + '<div><label>Notes</label><input id="ap-notes" value="' + esc(a.notes || "") + '" placeholder="Anything for this ' + esc(apptTermAppt().toLowerCase()) + '"></div>'
-      + '</div><div class="foot"><button class="btn" id="ap-cancel">Cancel</button>' + (id ? '<button class="btn" id="ap-del">Delete</button>' : '') + '<button class="btn pri" id="ap-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      + '</div><div class="foot"><button class="btn" id="ap-cancel">Cancel</button>' + (id ? '<button class="btn" id="ap-del">Delete</button>' : '') + (id && a.invoice_id ? '<button class="btn" id="ap-billed" disabled>Billed</button>' : (id ? '<button class="btn" id="ap-bill">Bill</button>' : '')) + '<button class="btn pri" id="ap-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
+    var billB = document.getElementById("ap-bill"); if (billB) billB.onclick = async function () { billB.disabled = true; billB.textContent = "Billing..."; var br = await apptBillAppointment(a); if (br && br.error) { toast("Could not bill: " + errMsg(br.error)); billB.disabled = false; billB.textContent = "Bill"; return; } m.remove(); toast("Invoiced " + (br.number || "") + " - collect it in Counter or Accounting"); renderView(); };
     document.getElementById("ap-client").onchange = function () { document.getElementById("ap-newname-wrap").style.display = this.value === "__new" ? "" : "none"; };
     document.getElementById("ap-svc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var dur = o.getAttribute("data-dur"); if (dur) document.getElementById("ap-dur").value = dur; var pr = o.getAttribute("data-price"); if (pr && !(Number(document.getElementById("ap-price").value) > 0)) document.getElementById("ap-price").value = pr; } };
     document.getElementById("ap-cancel").onclick = function () { m.remove(); };
@@ -15273,6 +15312,13 @@
         location_type: (svcO && svcO.getAttribute("data-loc")) || "in_person", price: parseFloat(document.getElementById("ap-price").value) || 0,
         currency_code: S.company.currency_code, notes: gv("ap-notes")
       };
+      // double-booking check: any non-cancelled overlap (for the same staff if one is set)
+      var staffV = document.getElementById("ap-staff").value;
+      var clashQ = sb.from("appt_appointments").select("id").eq("company_id", S.company.id).neq("status", "cancelled").lt("starts_at", endISO).gt("ends_at", startISO);
+      if (id) clashQ = clashQ.neq("id", id);
+      if (staffV) clashQ = clashQ.eq("staff_id", staffV);
+      var clash = (await clashQ).data || [];
+      if (clash.length && !confirm("Heads up: this overlaps " + clash.length + " other " + apptTermAppt().toLowerCase() + (clash.length > 1 ? "s" : "") + " at that time" + (staffV ? " for this staff member" : "") + ". Book anyway?")) { return; }
       btn.disabled = true;
       var r;
       if (id) { r = await sb.from("appt_appointments").update(row).eq("id", id); }
