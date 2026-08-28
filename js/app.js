@@ -901,6 +901,16 @@
         { label: "Events", action: "events.list" }
       ]
     },
+    counter: {
+      name: "Counter", icon: "$", color: "#a06a16", color2: "#7a4e10", home: "cash.desk",
+      menus: [
+        { label: "Cash Desk", action: "cash.desk" },
+        { label: "Movements", action: "cash.moves" },
+        { label: "Handovers", action: "cash.handovers" },
+        { label: "Daily Close", action: "cash.close" },
+        { label: "Configuration", items: [["Cash Accounts", "cash.accounts"]] }
+      ]
+    },
     help: {
       name: "Help", icon: "?", color: "#0e7490", color2: "#155e63", home: "help.overview",
       menus: HELP_MANUAL.map(function (s) { return { label: s.title, action: "help." + s.key }; })
@@ -928,7 +938,8 @@
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
-    "events.list": "events", "events.new": "events"
+    "events.list": "events", "events.new": "events",
+    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // ============================ PERMISSIONS (RBAC) ============================
@@ -956,6 +967,7 @@
     { key: "employees", label: "Employees (HR)", features: [["payroll", "Payroll"]] },
     { key: "insights", label: "Insights", features: [] },
     { key: "events", label: "Events", features: [] },
+    { key: "counter", label: "Counter (cash desk)", features: [] },
     { key: "settings", label: "Settings", features: [] }
   ];
   var MODULE_LABEL = {}; MODULE_CATALOG.forEach(function (m) { MODULE_LABEL[m.key] = m.label; });
@@ -1021,6 +1033,7 @@
   var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
+    counter: '<svg viewBox="0 0 100 100"><rect x="15" y="33" width="55" height="33" rx="5" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="42.5" cy="49.5" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M26 79 H85" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="30" r="7" fill="#2F6BFF"/></svg>',
     accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
     sales: '<svg viewBox="0 0 100 100"><path d="M8 34 H26 L42 48 M92 34 H74 L58 48 M8 62 H24 M92 62 H76 M40 60 L47 67 M52 55 L59 62" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><path d="M42 48 L50 41 L66 55 L58 62 Z" fill="currentColor" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="50" cy="22" r="7" fill="#2F6BFF"/></svg>',
     purchase: '<svg viewBox="0 0 100 100"><path d="M24 38 H76 L70 80 H30 Z M38 38 C38 24 62 24 62 38" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
@@ -2060,6 +2073,11 @@
       case "dash.home": return renderInsights();
       case "events.list": return renderList(cfgEvents());
       case "events.new": return renderEventForm("new");
+      case "cash.desk": return renderCashDesk();
+      case "cash.moves": return renderList(cfgCashMoves());
+      case "cash.handovers": return renderList(cfgHandovers());
+      case "cash.close": return renderList(cfgCashCounts());
+      case "cash.accounts": return renderList(cfgCashAccounts());
       case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -14623,6 +14641,383 @@
       res.querySelectorAll(".man-res").forEach(function (b) { b.onclick = function () { var sk = b.dataset.sec, ai = b.dataset.ai; if (sk === key) { var t = document.getElementById("man-" + ai); if (t) t.scrollIntoView({ behavior: "smooth" }); res.style.display = "none"; q.value = ""; } else { go("help." + sk); setTimeout(function () { var t2 = document.getElementById("man-" + ai); if (t2) t2.scrollIntoView({ behavior: "smooth" }); }, 220); } }; });
     };
     q.onblur = function () { setTimeout(function () { if (res) res.style.display = "none"; }, 180); };
+  }
+
+  // ============================ CASH DESK ("Counter") ============================
+  // The company's cash desk: every receipt and payment, to/from any party, across
+  // cash and bank, posted to the ledger. Reuses register_payment for document
+  // settlement and a manual balanced journal (post_entry) for everything else.
+  var CASH_KINDS = [
+    { k: "client_receipt", label: "Client receipt", dir: "in", party: "customer", contra: "4190", doc: "invoice" },
+    { k: "supplier_refund", label: "Supplier refund", dir: "in", party: "vendor", contra: "4000" },
+    { k: "capital", label: "Owner capital in", dir: "in", party: "owner", contra: "1000" },
+    { k: "other_in", label: "Other income", dir: "in", party: "payee", contra: "7400" },
+    { k: "supplier_payment", label: "Supplier payment", dir: "out", party: "vendor", contra: "4090", doc: "bill" },
+    { k: "service", label: "Service provider", dir: "out", party: "payee", contra: "6100" },
+    { k: "maintenance", label: "Maintenance", dir: "out", party: "payee", contra: "6500" },
+    { k: "salary", label: "Salary", dir: "out", party: "employee", contra: "4200", doc: "payslip" },
+    { k: "advance", label: "Salary advance", dir: "out", party: "employee", contra: "4080" },
+    { k: "drawing", label: "Owner drawing", dir: "out", party: "owner", contra: "1010" },
+    { k: "expense", label: "Petty expense", dir: "out", party: "payee", contra: "6500" },
+    { k: "other_out", label: "Other payment", dir: "out", party: "payee", contra: "4700" }
+  ];
+  function cashKind(k) { for (var i = 0; i < CASH_KINDS.length; i++) if (CASH_KINDS[i].k === k) return CASH_KINDS[i]; return CASH_KINDS[0]; }
+  function cashKindLabel(k) { return cashKind(k).label; }
+  var CASH_PARTY_LABEL = { customer: "Customer", vendor: "Vendor", employee: "Employee", owner: "Owner name", payee: "Paid to / from" };
+  async function cashLoadChart() { return (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).order("code")).data || []; }
+  function cashAcctByCode(list, code) { for (var i = 0; i < list.length; i++) if (list[i].code === code) return list[i]; return null; }
+  async function cashLoadWallets() { return (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; }
+  async function cashBalances() {
+    var accts = await cashLoadWallets();
+    var mv = (await sb.from("cash_movements").select("cash_account_id,direction,amount,status").eq("company_id", S.company.id).eq("status", "posted")).data || [];
+    var ho = (await sb.from("cash_handovers").select("from_account_id,to_account_id,amount,status").eq("company_id", S.company.id).eq("status", "confirmed")).data || [];
+    var bal = {};
+    accts.forEach(function (a) { bal[a.id] = Number(a.opening_balance || 0); });
+    mv.forEach(function (m) { if (bal[m.cash_account_id] == null) return; bal[m.cash_account_id] += (m.direction === "in" ? 1 : -1) * Number(m.amount || 0); });
+    ho.forEach(function (h) { if (bal[h.from_account_id] != null) bal[h.from_account_id] -= Number(h.amount || 0); if (bal[h.to_account_id] != null) bal[h.to_account_id] += Number(h.amount || 0); });
+    return { accts: accts, bal: bal };
+  }
+
+  // ---- cash accounts (wallets) ----
+  function cfgCashAccounts() {
+    return {
+      title: "Cash Accounts", pageSize: 100,
+      fetch: function () { return cashLoadWallets(); },
+      searchText: function (a) { return (a.name || "") + " " + (a.kind || ""); },
+      columns: [
+        { label: "Name", get: function (a) { return '<b>' + esc(a.name || "") + '</b>'; } },
+        { label: "Kind", get: function (a) { return esc(a.kind === "bank" ? "Bank" : "Cash"); } },
+        { label: "Currency", get: function (a) { return esc(a.currency_code || S.company.currency_code); } },
+        { label: "Opening", num: true, get: function (a) { return money(a.opening_balance); } },
+        { label: "Active", get: function (a) { return a.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+      ],
+      onNew: function () { openCashAccountModal(null); },
+      onOpen: function (a) { openCashAccountModal(a); }
+    };
+  }
+  async function openCashAccountModal(a) {
+    a = a || {};
+    var chart = await cashLoadChart();
+    var cashOnly = chart.filter(function (x) { return x.type_code === "asset_cash"; });
+    var glOpts = '<option value="">(auto: cash / bank)</option>' + cashOnly.map(function (x) { return '<option value="' + x.id + '"' + (a.gl_account_id === x.id ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "camodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (a.id ? "Edit" : "New") + ' cash account</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div><label>Name</label><input id="ca-name" value="' + esc(a.name || "") + '" placeholder="e.g. Main till, Ali (driver), Safe, Bank BLOM"></div>'
+      + '<div class="row2"><div><label>Kind</label><select id="ca-kind"><option value="cash"' + (a.kind !== "bank" ? " selected" : "") + '>Cash</option><option value="bank"' + (a.kind === "bank" ? " selected" : "") + '>Bank</option></select></div>'
+      + '<div><label>Currency</label>' + currencySelectHTML("ca-cur", a.currency_code || S.company.currency_code) + '</div></div>'
+      + '<div><label>Posts to (GL account)</label><select id="ca-gl">' + glOpts + '</select></div>'
+      + '<div class="row2"><div><label>Opening balance</label><input id="ca-open" type="number" step="0.01" value="' + (Number(a.opening_balance || 0)) + '"></div>'
+      + '<div><label>Active</label><select id="ca-act"><option value="1"' + (a.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (a.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
+      + '</div><div class="foot"><button class="btn" id="ca-cancel">Cancel</button><button class="btn pri" id="ca-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ca-cancel").onclick = function () { m.remove(); };
+    document.getElementById("ca-save").onclick = async function () {
+      var name = gv("ca-name"); if (!name) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, name: name, kind: gv("ca-kind"), currency_code: document.getElementById("ca-cur").value, gl_account_id: document.getElementById("ca-gl").value || null, opening_balance: parseFloat(document.getElementById("ca-open").value) || 0, is_active: gv("ca-act") === "1" };
+      var r = a.id ? await sb.from("cash_accounts").update(row).eq("id", a.id) : await sb.from("cash_accounts").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ---- the cash desk hub ----
+  async function renderCashDesk() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cash Desk") + '</div><div class="o-body" id="o-body">Loading...</div></div>';
+    wireBc();
+    var d = await cashBalances();
+    var body = document.getElementById("o-body");
+    if (!d.accts.length) {
+      body.innerHTML = '<div style="padding:30px;text-align:center"><p class="muted">No cash accounts yet. A cash account is a till, a driver pouch, a safe or a bank.</p><button class="btn pri" id="cd-first" style="background:var(--app);border-color:var(--app)">+ Add your first cash account</button></div>';
+      document.getElementById("cd-first").onclick = function () { openCashAccountModal(null); };
+      return;
+    }
+    var recent = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(15)).data || [];
+    var total = 0; d.accts.forEach(function (a) { total += (d.bal[a.id] || 0); });
+    var cards = d.accts.map(function (a) {
+      return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px">'
+        + '<div style="font-weight:700">' + esc(a.name) + '</div>'
+        + '<div class="muted" style="font-size:12px">' + esc(a.kind === "bank" ? "Bank" : "Cash") + ' &middot; ' + esc(a.currency_code || S.company.currency_code) + '</div>'
+        + '<div style="font-size:18px;font-weight:800;margin-top:6px">' + moneyC(d.bal[a.id] || 0, a.currency_code || S.company.currency_code) + '</div></div>';
+    }).join("");
+    var rows = recent.map(function (m) {
+      var sign = m.direction === "in" ? "+" : "-";
+      return '<tr style="border-top:1px solid var(--line)"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
+    }).join("");
+    var canW = canManageApp(S.app);
+    body.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
+      + (canW ? '<button class="btn pri" id="cd-in" style="background:var(--good);border-color:var(--good)">+ Money in</button><button class="btn pri" id="cd-out" style="background:var(--bad);border-color:var(--bad)">- Money out</button><button class="btn" id="cd-ho">Handover</button>' : '')
+      + '<div style="flex:1"></div><div style="font-weight:700">Total held: ' + moneyC(total, S.company.currency_code) + '</div></div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:20px">' + cards + '</div>'
+      + '<h3 style="margin:0 0 6px">Recent movements</h3><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left"><th style="padding:6px 8px">Date</th><th style="padding:6px 8px">No.</th><th style="padding:6px 8px">Type</th><th style="padding:6px 8px">Party</th><th style="padding:6px 8px;text-align:right">Amount</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="muted" style="padding:10px 8px">Nothing yet.</td></tr>') + '</tbody></table></div>';
+    if (canW) {
+      document.getElementById("cd-in").onclick = function () { openCashMoveModal("in"); };
+      document.getElementById("cd-out").onclick = function () { openCashMoveModal("out"); };
+      document.getElementById("cd-ho").onclick = function () { openHandoverModal(null); };
+    }
+  }
+
+  // ---- money in / money out ----
+  async function openCashMoveModal(dir, presetKind) {
+    var wallets = await cashLoadWallets();
+    if (!wallets.length) { toast("Add a cash account first"); openCashAccountModal(null); return; }
+    var chart = await cashLoadChart();
+    var custs = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var vends = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var kinds = CASH_KINDS.filter(function (k) { return k.dir === dir; });
+    var kSel = presetKind || kinds[0].k;
+    var walletOpts = wallets.map(function (a) { return '<option value="' + a.id + '" data-cur="' + esc(a.currency_code || S.company.currency_code) + '" data-kind="' + esc(a.kind) + '">' + esc(a.name) + ' (' + esc(a.kind) + ')</option>'; }).join("");
+    var kindOpts = kinds.map(function (k) { return '<option value="' + k.k + '"' + (k.k === kSel ? " selected" : "") + '>' + esc(k.label) + '</option>'; }).join("");
+    var contraOpts = chart.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "cmmodal";
+    var col = dir === "in" ? "var(--good)" : "var(--bad)";
+    m.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (dir === "in" ? "Money in (receipt)" : "Money out (payment)") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div class="row2"><div><label>Type</label><select id="cm-kind">' + kindOpts + '</select></div>'
+      + '<div><label>Cash account</label><select id="cm-acct">' + walletOpts + '</select></div></div>'
+      + '<div id="cm-party-wrap"></div>'
+      + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
+      + '<div class="row2"><div><label>Amount</label><input id="cm-amt" type="number" step="0.01"></div>'
+      + '<div><label>Currency</label>' + currencySelectHTML("cm-cur", S.company.currency_code) + '</div></div>'
+      + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
+      + '<div><label>Method</label><select id="cm-method"><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></div></div>'
+      + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div style="margin-top:8px"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. Change only if your accountant wants a different account.</div></div></details>'
+      + '<div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div>'
+      + '</div><div class="foot"><button class="btn" id="cm-cancel">Cancel</button><button class="btn pri" id="cm-save" style="background:' + col + ';border-color:' + col + '">Post ' + (dir === "in" ? "receipt" : "payment") + '</button></div></div>';
+    document.body.appendChild(m);
+    function setContraDefault() { var k = cashKind(document.getElementById("cm-kind").value); var acc = cashAcctByCode(chart, k.contra); if (acc) document.getElementById("cm-contra").value = acc.id; }
+    function renderParty() {
+      var k = cashKind(document.getElementById("cm-kind").value);
+      var w = document.getElementById("cm-party-wrap");
+      if (k.party === "customer" || k.party === "vendor" || k.party === "employee") {
+        var list = k.party === "customer" ? custs : (k.party === "vendor" ? vends : emps);
+        w.innerHTML = '<div><label>' + esc(CASH_PARTY_LABEL[k.party]) + '</label><select id="cm-party"><option value="">(select)</option>' + list.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>';
+        document.getElementById("cm-party").onchange = onPartyChange;
+      } else { w.innerHTML = '<div><label>' + esc(CASH_PARTY_LABEL[k.party]) + '</label><input id="cm-payee" placeholder="Name"></div>'; }
+    }
+    async function onPartyChange() {
+      var k = cashKind(document.getElementById("cm-kind").value);
+      var dw = document.getElementById("cm-doc-wrap"), docSel = document.getElementById("cm-doc");
+      var pe = document.getElementById("cm-party"); var pid = pe ? pe.value : "";
+      if (!k.doc || !pid) { dw.style.display = "none"; docSel.innerHTML = '<option value="">(none - just record it)</option>'; return; }
+      if (k.doc === "invoice" || k.doc === "bill") {
+        var mt = k.doc === "invoice" ? "out_invoice" : "in_invoice";
+        var docs = (await sb.from("invoices").select("id,number,amount_residual,currency_code").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", mt).eq("state", "posted").gt("amount_residual", 0).order("date", { ascending: false })).data || [];
+        docSel.innerHTML = '<option value="">(none - just record it)</option>' + docs.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.amount_residual || 0) + '" data-cur="' + esc(x.currency_code || "") + '">' + esc(x.number || "") + ' - due ' + money(x.amount_residual) + '</option>'; }).join("");
+        dw.style.display = docs.length ? "" : "none";
+      } else if (k.doc === "payslip") {
+        var ps = (await sb.from("hr_payslips").select("id,net,state").eq("company_id", S.company.id).eq("employee_id", pid).eq("state", "confirmed").order("created_at", { ascending: false })).data || [];
+        docSel.innerHTML = '<option value="">(none - just record it)</option>' + ps.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.net || 0) + '" data-type="payslip">Payslip - net ' + money(x.net) + '</option>'; }).join("");
+        dw.style.display = ps.length ? "" : "none";
+      }
+    }
+    document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; } };
+    document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; document.getElementById("cm-method").value = o.getAttribute("data-kind") === "bank" ? "bank" : "cash"; };
+    document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-doc-wrap").style.display = "none"; };
+    document.getElementById("cm-cancel").onclick = function () { m.remove(); };
+    document.getElementById("cm-save").onclick = async function () {
+      var btn = this, amt = parseFloat(document.getElementById("cm-amt").value);
+      if (!(amt > 0)) { toast("Enter an amount"); return; }
+      var k = cashKind(document.getElementById("cm-kind").value);
+      var pe = document.getElementById("cm-party"), payeeEl = document.getElementById("cm-payee");
+      var partyId = pe ? pe.value : "", partyName = "";
+      if (pe && partyId) partyName = pe.options[pe.selectedIndex].textContent; else if (payeeEl) partyName = payeeEl.value.trim();
+      var docEl = document.getElementById("cm-doc"), docWrap = document.getElementById("cm-doc-wrap");
+      var docId = (docWrap.style.display !== "none" && docEl) ? docEl.value : "", docType = "";
+      if (docId) { var dt = docEl.options[docEl.selectedIndex].getAttribute("data-type"); docType = dt === "payslip" ? "payslip" : k.doc; }
+      btn.disabled = true; btn.textContent = "Posting...";
+      var mv = {
+        direction: dir, kind: k.k, method: document.getElementById("cm-method").value,
+        cash_account_id: document.getElementById("cm-acct").value, amount: amt,
+        currency_code: document.getElementById("cm-cur").value, move_date: document.getElementById("cm-date").value,
+        party_type: k.party, party_id: (pe && partyId) ? partyId : null, payee_name: partyName, memo: gv("cm-memo"),
+        link_type: docType || "none", link_id: docId || null, contra_account_id: document.getElementById("cm-contra").value || null
+      };
+      var r = await postCashMovement(mv, chart, wallets);
+      if (r && r.error) { toast("Could not post: " + errMsg(r.error)); btn.disabled = false; btn.textContent = "Post " + (dir === "in" ? "receipt" : "payment"); return; }
+      m.remove(); toast("Posted " + k.label); renderView();
+    };
+    setContraDefault(); renderParty();
+  }
+
+  async function postCashMovement(mv, chart, wallets) {
+    var ca = null; for (var i = 0; i < wallets.length; i++) if (wallets[i].id === mv.cash_account_id) ca = wallets[i];
+    var jrnCode = (ca && ca.kind === "bank") ? "BNK" : "CSH";
+    var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
+    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, memo: mv.memo, status: "posted", posted_at: new Date().toISOString() };
+    // Path A: settle a posted invoice/bill through register_payment
+    if ((mv.link_type === "invoice" || mv.link_type === "bill") && mv.link_id) {
+      var rp = await sb.rpc("register_payment", { p_invoice: mv.link_id, p_amount: mv.amount, p_date: mv.move_date, p_journal_code: jrnCode, p_method: mv.method, p_ref: num });
+      if (rp.error) return { error: rp.error };
+      base.link_type = mv.link_type; base.link_id = mv.link_id; base.journal_id = rp.data || null;
+      return await sb.from("cash_movements").insert(base);
+    }
+    // Path B: generic balanced journal (also settles a payslip when linked)
+    var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
+    var contraGl = mv.contra_account_id || (function () { var a = cashAcctByCode(chart, cashKind(mv.kind).contra); return a ? a.id : null; })();
+    if (!cashGl || !contraGl) return { error: { message: "Missing cash or contra account in the chart" } };
+    var funcCur = S.company.currency_code, famt = Number(mv.amount);
+    if (mv.currency_code && mv.currency_code !== funcCur) {
+      var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: mv.amount, p_from: mv.currency_code, p_to: funcCur, p_date: mv.move_date, p_type: "spot" });
+      if (!fc.error && fc.data != null) famt = Number(fc.data);
+    }
+    famt = Math.round(famt * 10000) / 10000;
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", jrnCode).maybeSingle()).data;
+    var narr = mv.memo || (cashKindLabel(mv.kind) + (mv.payee_name ? (" - " + mv.payee_name) : ""));
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: mv.move_date, ref: num, narration: narr, currency_code: funcCur, state: "draft", source_type: "cash_movement" }).select("id").single();
+    if (e.error) return { error: e.error };
+    var eid = e.data.id, lab = (mv.payee_name || cashKindLabel(mv.kind)).slice(0, 120);
+    var tag = (mv.party_type === "customer" || mv.party_type === "vendor") ? mv.party_id : null;
+    var drAcc, crAcc, drTag = null, crTag = null;
+    if (mv.direction === "in") { drAcc = cashGl; crAcc = contraGl; crTag = tag; } else { drAcc = contraGl; crAcc = cashGl; drTag = tag; }
+    var li = await sb.from("journal_lines").insert([
+      { entry_id: eid, company_id: S.company.id, account_id: drAcc, label: lab, debit: famt, credit: 0, partner_id: drTag },
+      { entry_id: eid, company_id: S.company.id, account_id: crAcc, label: lab, debit: 0, credit: famt, partner_id: crTag }
+    ]);
+    if (li.error) return { error: li.error };
+    var post = await sb.rpc("post_entry", { p_entry: eid });
+    if (post.error) return { error: post.error };
+    if (mv.link_type === "payslip" && mv.link_id) { await sb.from("hr_payslips").update({ state: "paid" }).eq("id", mv.link_id); base.link_type = "payslip"; base.link_id = mv.link_id; }
+    base.contra_account_id = contraGl; base.journal_id = eid;
+    return await sb.from("cash_movements").insert(base);
+  }
+
+  // ---- movements list ----
+  function cfgCashMoves() {
+    return {
+      title: "Movements", pageSize: 100,
+      fetch: function () { return sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("move_date", { ascending: false }).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (m) { return (m.number || "") + " " + (m.payee_name || "") + " " + cashKindLabel(m.kind) + " " + (m.memo || ""); },
+      columns: [
+        { label: "Date", get: function (m) { return '<span class="muted">' + esc(m.move_date || "") + '</span>'; } },
+        { label: "No.", get: function (m) { return esc(m.number || ""); } },
+        { label: "Type", get: function (m) { return esc(cashKindLabel(m.kind)); } },
+        { label: "Party", get: function (m) { return '<b>' + esc(m.payee_name || "") + '</b>'; } },
+        { label: "In", num: true, get: function (m) { return m.direction === "in" ? '<span style="color:var(--good)">' + money(m.amount) + '</span>' : ''; } },
+        { label: "Out", num: true, get: function (m) { return m.direction === "out" ? '<span style="color:var(--bad)">' + money(m.amount) + '</span>' : ''; } }
+      ],
+      filters: [
+        { label: "Money in", test: function (m) { return m.direction === "in"; } },
+        { label: "Money out", test: function (m) { return m.direction === "out"; } }
+      ],
+      groupBy: [{ label: "Type", get: function (m) { return cashKindLabel(m.kind); } }, { label: "Month", get: function (m) { return (m.move_date || "").slice(0, 7); } }]
+    };
+  }
+
+  // ---- handovers ----
+  function cfgHandovers() {
+    return {
+      title: "Handovers", pageSize: 100,
+      fetch: async function () { var d = await cashBalances(); var byId = {}; d.accts.forEach(function (a) { byId[a.id] = a.name; }); var rows = (await sb.from("cash_handovers").select("*").eq("company_id", S.company.id).order("hand_date", { ascending: false })).data || []; rows.forEach(function (h) { h._from = byId[h.from_account_id] || ""; h._to = byId[h.to_account_id] || ""; }); return rows; },
+      searchText: function (h) { return (h.number || "") + " " + (h._from || "") + " " + (h._to || "") + " " + (h.purpose || ""); },
+      columns: [
+        { label: "Date", get: function (h) { return '<span class="muted">' + esc(h.hand_date || "") + '</span>'; } },
+        { label: "No.", get: function (h) { return esc(h.number || ""); } },
+        { label: "From", get: function (h) { return esc(h._from || ""); } },
+        { label: "To", get: function (h) { return esc(h._to || ""); } },
+        { label: "Amount", num: true, get: function (h) { return money(h.amount); } },
+        { label: "Status", get: function (h) { return h.status === "confirmed" ? '<span style="color:var(--good)">Confirmed</span>' : (h.status === "cancelled" ? '<span class="muted">Cancelled</span>' : '<span style="color:var(--warn)">Pending</span>'); } }
+      ],
+      onNew: function () { openHandoverModal(null); },
+      onOpen: function (h) { openHandoverModal(h); }
+    };
+  }
+  async function openHandoverModal(h) {
+    h = h || {};
+    var accts = await cashLoadWallets();
+    if (accts.length < 2) { toast("You need at least two cash accounts for a handover"); return; }
+    var opts = function (sel) { return accts.map(function (a) { return '<option value="' + a.id + '"' + (sel === a.id ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join(""); };
+    var view = !!h.id, m = document.createElement("div"); m.className = "modal on"; m.id = "homodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (view ? "Handover " + esc(h.number || "") : "New handover") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div class="row2"><div><label>From</label><select id="ho-from"' + (view ? " disabled" : "") + '>' + opts(h.from_account_id) + '</select></div>'
+      + '<div><label>To</label><select id="ho-to"' + (view ? " disabled" : "") + '>' + opts(h.to_account_id) + '</select></div></div>'
+      + '<div class="row2"><div><label>Amount</label><input id="ho-amt" type="number" step="0.01" value="' + (Number(h.amount || 0) || "") + '"' + (view ? " disabled" : "") + '></div>'
+      + '<div><label>Date</label><input id="ho-date" type="date" value="' + (h.hand_date || today()) + '"' + (view ? " disabled" : "") + '></div></div>'
+      + '<div><label>Purpose</label><input id="ho-purpose" value="' + esc(h.purpose || "") + '" placeholder="e.g. supplier run, return, deposit"' + (view ? " disabled" : "") + '></div>'
+      + (view ? '<div class="muted" style="font-size:12.5px">Status: ' + esc(h.status) + '</div>' : '')
+      + '</div><div class="foot"><button class="btn" id="ho-cancel">Close</button>'
+      + (view && h.status === "pending" ? '<button class="btn" id="ho-void">Cancel it</button><button class="btn pri" id="ho-confirm" style="background:var(--good);border-color:var(--good)">Confirm received</button>' : (view ? '' : '<button class="btn pri" id="ho-save" style="background:var(--app);border-color:var(--app)">Create</button>'))
+      + '</div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ho-cancel").onclick = function () { m.remove(); };
+    var sB = document.getElementById("ho-save"); if (sB) sB.onclick = async function () {
+      var from = document.getElementById("ho-from").value, to = document.getElementById("ho-to").value, amt = parseFloat(document.getElementById("ho-amt").value);
+      if (from === to) { toast("From and To must differ"); return; } if (!(amt > 0)) { toast("Enter an amount"); return; }
+      var num = await nextDocNumber("cash_handovers", "HO");
+      var r = await sb.from("cash_handovers").insert({ company_id: S.company.id, number: num, hand_date: document.getElementById("ho-date").value, from_account_id: from, to_account_id: to, amount: amt, currency_code: S.company.currency_code, purpose: gv("ho-purpose"), status: "pending" });
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Handover created - the receiver confirms it"); renderView();
+    };
+    var cB = document.getElementById("ho-confirm"); if (cB) cB.onclick = async function () {
+      cB.disabled = true; cB.textContent = "Confirming...";
+      var r = await confirmHandover(h);
+      if (r && r.error) { toast("Could not confirm: " + errMsg(r.error)); cB.disabled = false; cB.textContent = "Confirm received"; return; }
+      m.remove(); toast("Handover confirmed"); renderView();
+    };
+    var vB = document.getElementById("ho-void"); if (vB) vB.onclick = async function () {
+      var r = await sb.from("cash_handovers").update({ status: "cancelled" }).eq("id", h.id);
+      if (r.error) { toast("Could not cancel: " + errMsg(r.error)); return; }
+      m.remove(); toast("Handover cancelled"); renderView();
+    };
+  }
+  async function confirmHandover(h) {
+    var chart = await cashLoadChart(), wallets = await cashLoadWallets();
+    function glOf(id) { var ca = null; wallets.forEach(function (a) { if (a.id === id) ca = a; }); if (ca && ca.gl_account_id) return ca.gl_account_id; var a = cashAcctByCode(chart, (ca && ca.kind === "bank") ? "5100" : "5300"); return a ? a.id : null; }
+    var drGl = glOf(h.to_account_id), crGl = glOf(h.from_account_id);
+    if (!drGl || !crGl) return { error: { message: "Missing cash account mapping" } };
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: h.hand_date, ref: h.number, narration: "Cash handover " + (h.purpose || ""), currency_code: S.company.currency_code, state: "draft", source_type: "cash_handover" }).select("id").single();
+    if (e.error) return { error: e.error };
+    var li = await sb.from("journal_lines").insert([
+      { entry_id: e.data.id, company_id: S.company.id, account_id: drGl, label: "Handover in", debit: Number(h.amount), credit: 0 },
+      { entry_id: e.data.id, company_id: S.company.id, account_id: crGl, label: "Handover out", debit: 0, credit: Number(h.amount) }
+    ]);
+    if (li.error) return { error: li.error };
+    var post = await sb.rpc("post_entry", { p_entry: e.data.id });
+    if (post.error) return { error: post.error };
+    return await sb.from("cash_handovers").update({ status: "confirmed", confirmed_at: new Date().toISOString(), journal_id: e.data.id }).eq("id", h.id);
+  }
+
+  // ---- daily close (count) ----
+  function cfgCashCounts() {
+    return {
+      title: "Daily Close", pageSize: 100,
+      fetch: async function () { var d = await cashBalances(); var byId = {}; d.accts.forEach(function (a) { byId[a.id] = a.name; }); var rows = (await sb.from("cash_counts").select("*").eq("company_id", S.company.id).order("count_date", { ascending: false })).data || []; rows.forEach(function (c) { c._acct = byId[c.cash_account_id] || ""; }); return rows; },
+      searchText: function (c) { return (c._acct || "") + " " + (c.count_date || ""); },
+      columns: [
+        { label: "Date", get: function (c) { return '<span class="muted">' + esc(c.count_date || "") + '</span>'; } },
+        { label: "Account", get: function (c) { return '<b>' + esc(c._acct || "") + '</b>'; } },
+        { label: "Expected", num: true, get: function (c) { return money(c.expected_amount); } },
+        { label: "Counted", num: true, get: function (c) { return money(c.counted_amount); } },
+        { label: "Variance", num: true, get: function (c) { var v = Number(c.variance || 0); return '<span style="color:' + (Math.abs(v) < 0.005 ? "var(--good)" : "var(--bad)") + '">' + money(v) + '</span>'; } }
+      ],
+      onNew: function () { openCashCountModal(); }
+    };
+  }
+  async function openCashCountModal() {
+    var d = await cashBalances();
+    if (!d.accts.length) { toast("Add a cash account first"); return; }
+    var opts = d.accts.map(function (a) { return '<option value="' + a.id + '" data-bal="' + (d.bal[a.id] || 0) + '">' + esc(a.name) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "ccmodal";
+    m.innerHTML = '<div class="sheet"><h3>Count &amp; close</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div><label>Cash account</label><select id="cc-acct">' + opts + '</select></div>'
+      + '<div class="row2"><div><label>Expected (system)</label><input id="cc-exp" type="number" step="0.01" readonly></div>'
+      + '<div><label>Counted (physical)</label><input id="cc-cnt" type="number" step="0.01"></div></div>'
+      + '<div class="muted" id="cc-var" style="font-size:13px"></div>'
+      + '<div><label>Date</label><input id="cc-date" type="date" value="' + today() + '"></div>'
+      + '<div><label>Note</label><input id="cc-note" placeholder="Anything to explain a difference?"></div>'
+      + '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button><button class="btn pri" id="cc-save" style="background:var(--app);border-color:var(--app)">Close &amp; sign</button></div></div>';
+    document.body.appendChild(m);
+    function refresh() { var s = document.getElementById("cc-acct"); var bal = Number(s.options[s.selectedIndex].getAttribute("data-bal") || 0); document.getElementById("cc-exp").value = bal.toFixed(2); var cnt = parseFloat(document.getElementById("cc-cnt").value); document.getElementById("cc-var").textContent = isNaN(cnt) ? "" : ("Variance: " + money(cnt - bal) + (Math.abs(cnt - bal) < 0.005 ? " (matches)" : (cnt - bal > 0 ? " (over)" : " (short)"))); }
+    document.getElementById("cc-acct").onchange = refresh; document.getElementById("cc-cnt").oninput = refresh; refresh();
+    document.getElementById("cc-cancel").onclick = function () { m.remove(); };
+    document.getElementById("cc-save").onclick = async function () {
+      var acct = document.getElementById("cc-acct").value, exp = parseFloat(document.getElementById("cc-exp").value) || 0, cnt = parseFloat(document.getElementById("cc-cnt").value);
+      if (isNaN(cnt)) { toast("Enter the counted amount"); return; }
+      var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: document.getElementById("cc-date").value, expected_amount: exp, counted_amount: cnt, variance: cnt - exp, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note") });
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Counted and closed"); renderView();
+    };
   }
 
   // ---- start ----
