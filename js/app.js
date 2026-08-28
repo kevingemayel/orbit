@@ -908,7 +908,7 @@
         { label: "Movements", action: "cash.moves" },
         { label: "Handovers", action: "cash.handovers" },
         { label: "Daily Close", action: "cash.close" },
-        { label: "Configuration", items: [["Cash Accounts", "cash.accounts"]] }
+        { label: "Configuration", items: [["Cash Accounts", "cash.accounts"], ["Payment Methods", "cash.methods"]] }
       ]
     },
     appoint: {
@@ -948,7 +948,7 @@
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
-    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter",
+    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
@@ -2090,6 +2090,7 @@
       case "cash.handovers": return renderList(cfgHandovers());
       case "cash.close": return renderList(cfgCashCounts());
       case "cash.accounts": return renderList(cfgCashAccounts());
+      case "cash.methods": return renderList(cfgPaymentMethods());
       case "appt.cal": return renderApptCalendar();
       case "appt.list": return renderList(cfgAppointments());
       case "appt.clients": return renderList(cfgApptClients());
@@ -3963,6 +3964,10 @@
     var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
     var industries = (await sb.from("industries").select("name").eq("org_id", S.company.org_id).order("name")).data || [];
     var caps = (await sb.from("capabilities").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
+    var allContacts = (await sb.from("partners").select("id,name").order("name")).data || [];
+    var ck = p.contact_kind || "company";
+    var CTYPES = ["client", "supplier", "bank", "insurance", "subcontractor", "other"];
+    var ctypeDef = p.company_type || (isCust ? "client" : isContact ? "other" : "supplier");
     var indNames = INDUSTRY_SEED.slice(); industries.forEach(function (i) { if (indNames.indexOf(i.name) < 0) indNames.push(i.name); });
     var capNames = CAP_SEED.slice(); caps.forEach(function (c) { if (capNames.indexOf(c.name) < 0) capNames.push(c.name); });
     (p.capabilities || []).forEach(function (c) { if (capNames.indexOf(c) < 0) capNames.push(c); });
@@ -3981,6 +3986,13 @@
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + smart +
       titleRowHTML('<input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name">', "partner", id) +
+      '<div class="o-groups"><div>' +
+      fld("Contact type", '<select id="p-kind"><option value="company"' + (ck === "company" ? " selected" : "") + '>Company (third party)</option><option value="freelancer"' + (ck === "freelancer" ? " selected" : "") + '>Freelancer (individual)</option><option value="employee"' + (ck === "employee" ? " selected" : "") + '>Employee of a company</option></select>', "A company you deal with, an individual freelancer, or a person who works at one of your contact companies.") +
+      '<div id="p-ctype-wrap"' + (ck === "company" ? "" : ' style="display:none"') + '>' + fld("Company type", '<select id="p-ctype">' + CTYPES.map(function (t) { return '<option value="' + t + '"' + (ctypeDef === t ? " selected" : "") + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>'; }).join("") + '</select>', "Bank, insurance, client, supplier, subcontractor...") + '</div>' +
+      '</div><div>' +
+      '<div id="p-employer-wrap"' + (ck === "employee" ? "" : ' style="display:none"') + '>' + fld("Works at", '<select id="p-employer"><option value="">(pick a company)</option>' + allContacts.filter(function (c) { return c.id !== id; }).map(function (c) { return '<option value="' + c.id + '"' + (p.employer_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "The company this person works at (one of your contacts).") + '</div>' +
+      fld("Role / title", '<input id="p-role" value="' + esc(p.role_title || "") + '" placeholder="e.g. Accountant, Driver">', "Their job title, for a person.") +
+      '</div></div>' +
       '<div class="o-groups"><div>' +
       fld("Contact person", '<input id="p-contact" value="' + esc(p.contact_person || "") + '" placeholder="Who you deal with">', "The person you actually talk to at this company.") +
       fld("Email", '<input id="p-email" value="' + esc(p.email || "") + '" placeholder="name@company.com">') +
@@ -4029,6 +4041,7 @@
       capAdd.onclick = addCap;
       document.getElementById("cap-new").onkeydown = function (e) { if (e.key === "Enter") { e.preventDefault(); addCap(); } };
     }
+    (function () { var kEl = document.getElementById("p-kind"); if (kEl) kEl.onchange = function () { var v = this.value, cw = document.getElementById("p-ctype-wrap"), ew = document.getElementById("p-employer-wrap"); if (cw) cw.style.display = v === "company" ? "" : "none"; if (ew) ew.style.display = v === "employee" ? "" : "none"; }; })();
     document.getElementById("p-discard").onclick = function () { go(backAction); };
     (function () {
       var isel = document.getElementById("p-industry");
@@ -4049,6 +4062,11 @@
       var creditVal = gv("p-credit");
       var _pn = collectPhone("p-phone"), _pm = collectPhone("p-mobile");
       var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: (p.tags || null), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var _ck = document.getElementById("p-kind") ? document.getElementById("p-kind").value : "company";
+      row.contact_kind = _ck; row.role_title = gv("p-role");
+      if (_ck === "company") { row.is_company = true; var _ct = document.getElementById("p-ctype") ? document.getElementById("p-ctype").value : null; row.company_type = _ct; row.employer_id = null; row.is_customer = _ct === "client"; row.is_vendor = _ct === "supplier" || _ct === "subcontractor"; if (!row.is_customer && !row.is_vendor) { if (isCust) row.is_customer = true; else if (!isContact) row.is_vendor = true; } }
+      else if (_ck === "freelancer") { row.is_company = false; row.company_type = null; row.employer_id = null; row.is_customer = false; row.is_vendor = true; }
+      else { row.is_company = false; row.company_type = null; row.is_customer = false; row.is_vendor = false; row.employer_id = document.getElementById("p-employer") ? (document.getElementById("p-employer").value || null) : null; }
       if (showCaps) {
         var selCaps = [].map.call(document.querySelectorAll(".p-cap:checked"), function (cb) { return cb.value; });
         row.capabilities = selCaps.length ? selCaps : null;
@@ -4061,7 +4079,7 @@
       var cerrP = customError("partner"); if (cerrP) { toast(cerrP); return; }
       row.custom = collectCustom("partner");
       var r, sid = id;
-      if (id === "new") { row.org_id = S.company.org_id; row.company_id = S.company.id; row.is_company = true; if (!isContact) { row.is_customer = isCust; row.is_vendor = !isCust; } var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; await mediaFlush("partner", sid); }
+      if (id === "new") { row.org_id = S.company.org_id; row.company_id = S.company.id; var ins = await sb.from("partners").insert(row).select("id").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return; } sid = ins.data.id; await mediaFlush("partner", sid); }
       else { var gu = await guardedUpdate("partners", row, id, p && p.updated_at); if (gu.conflict) { conflictToast(isContact ? "contact" : (isCust ? "customer" : "vendor")); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
@@ -14776,6 +14794,8 @@
   }
 
   // ---- money in / money out ----
+  async function cashLoadMethods() { var r = (await sb.from("payment_methods").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || []; return r.length ? r : [{ name: "Cash", kind: "cash" }, { name: "Bank transfer", kind: "bank" }, { name: "Cheque", kind: "cheque" }, { name: "Card", kind: "card" }]; }
+  function cashOnBehalfLabel(k) { return k.party === "customer" ? "On behalf of (customer)" : k.party === "vendor" ? "On behalf of (supplier)" : k.party === "employee" ? "Employee" : k.party === "owner" ? "Owner" : "On behalf of / party"; }
   async function openCashMoveModal(dir, presetKind) {
     var wallets = await cashLoadWallets();
     if (!wallets.length) { toast("Add a cash account first"); openCashAccountModal(null); return; }
@@ -14783,73 +14803,103 @@
     var custs = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
     var vends = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var contacts = (await sb.from("partners").select("id,name,contact_kind,company_type").order("name")).data || [];
+    var methods = await cashLoadMethods();
     var kinds = CASH_KINDS.filter(function (k) { return k.dir === dir; });
     var kSel = presetKind || kinds[0].k;
+    var openDocs = [];
     var walletOpts = wallets.map(function (a) { return '<option value="' + a.id + '" data-cur="' + esc(a.currency_code || S.company.currency_code) + '" data-kind="' + esc(a.kind) + '">' + esc(a.name) + ' (' + esc(a.kind) + ')</option>'; }).join("");
     var kindOpts = kinds.map(function (k) { return '<option value="' + k.k + '"' + (k.k === kSel ? " selected" : "") + '>' + esc(k.label) + '</option>'; }).join("");
     var contraOpts = chart.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
+    var methodOpts = methods.map(function (mm) { return '<option value="' + esc(mm.name) + '" data-kind="' + esc(mm.kind || "") + '">' + esc(mm.name) + '</option>'; }).join("");
+    var contactData = contacts.map(function (c) { return '<option value="' + esc(c.name) + '">'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "cmmodal";
     var col = dir === "in" ? "var(--good)" : "var(--bad)";
     m.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (dir === "in" ? "Money in (receipt)" : "Money out (payment)") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
       + '<div class="row2"><div><label>Type</label><select id="cm-kind">' + kindOpts + '</select></div>'
       + '<div><label>Cash account</label><select id="cm-acct">' + walletOpts + '</select></div></div>'
       + '<div id="cm-party-wrap"></div>'
-      + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
+      + '<div><label>' + (dir === "in" ? "From (who is handing the money over)" : "To (who is receiving it)") + '</label><input id="cm-handler" list="cm-handler-list" placeholder="Person or company - the one physically paying"><datalist id="cm-handler-list">' + contactData + '</datalist></div>'
       + '<div class="row2"><div><label>Amount</label><input id="cm-amt" type="number" step="0.01"></div>'
       + '<div><label>Currency</label>' + currencySelectHTML("cm-cur", S.company.currency_code) + '</div></div>'
       + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
-      + '<div><label>Method</label><select id="cm-method"><option value="cash">Cash</option><option value="bank">Bank transfer</option><option value="cheque">Cheque</option><option value="card">Card</option></select></div></div>'
-      + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div style="margin-top:8px"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. Change only if your accountant wants a different account.</div></div></details>'
+      + '<div><label>Method</label><select id="cm-method">' + methodOpts + '</select></div></div>'
+      + '<div id="cm-alloc-wrap" style="display:none;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel2)"></div>'
+      + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
+      + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div style="margin-top:8px"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. For a customer/supplier this is only used for the un-allocated (on account) part.</div></div></details>'
       + '<div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div>'
       + '</div><div class="foot"><button class="btn" id="cm-cancel">Cancel</button><button class="btn pri" id="cm-save" style="background:' + col + ';border-color:' + col + '">Post ' + (dir === "in" ? "receipt" : "payment") + '</button></div></div>';
     document.body.appendChild(m);
-    function setContraDefault() { var k = cashKind(document.getElementById("cm-kind").value); var acc = cashAcctByCode(chart, k.contra); if (acc) document.getElementById("cm-contra").value = acc.id; }
+    function curKind() { return cashKind(document.getElementById("cm-kind").value); }
+    function setContraDefault() { var acc = cashAcctByCode(chart, curKind().contra); if (acc) document.getElementById("cm-contra").value = acc.id; }
     function renderParty() {
-      var k = cashKind(document.getElementById("cm-kind").value);
-      var w = document.getElementById("cm-party-wrap");
+      var k = curKind(), w = document.getElementById("cm-party-wrap");
       if (k.party === "customer" || k.party === "vendor" || k.party === "employee") {
         var list = k.party === "customer" ? custs : (k.party === "vendor" ? vends : emps);
-        w.innerHTML = '<div><label>' + esc(CASH_PARTY_LABEL[k.party]) + '</label><select id="cm-party"><option value="">(select)</option>' + list.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>';
+        w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><select id="cm-party"><option value="">(select)</option>' + list.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>';
         document.getElementById("cm-party").onchange = onPartyChange;
-      } else { w.innerHTML = '<div><label>' + esc(CASH_PARTY_LABEL[k.party]) + '</label><input id="cm-payee" placeholder="Name"></div>'; }
+      } else { w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><input id="cm-payee" placeholder="Name"></div>'; }
     }
     async function onPartyChange() {
-      var k = cashKind(document.getElementById("cm-kind").value);
-      var dw = document.getElementById("cm-doc-wrap"), docSel = document.getElementById("cm-doc");
-      var pe = document.getElementById("cm-party"); var pid = pe ? pe.value : "";
-      if (!k.doc || !pid) { dw.style.display = "none"; docSel.innerHTML = '<option value="">(none - just record it)</option>'; return; }
-      if (k.doc === "invoice" || k.doc === "bill") {
-        var mt = k.doc === "invoice" ? "out_invoice" : "in_invoice";
-        var docs = (await sb.from("invoices").select("id,number,amount_residual,currency_code").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", mt).eq("state", "posted").gt("amount_residual", 0).order("date", { ascending: false })).data || [];
-        docSel.innerHTML = '<option value="">(none - just record it)</option>' + docs.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.amount_residual || 0) + '" data-cur="' + esc(x.currency_code || "") + '">' + esc(x.number || "") + ' - due ' + money(x.amount_residual) + '</option>'; }).join("");
-        dw.style.display = docs.length ? "" : "none";
-      } else if (k.doc === "payslip") {
-        var ps = (await sb.from("hr_payslips").select("id,net,state").eq("company_id", S.company.id).eq("employee_id", pid).eq("state", "confirmed").order("created_at", { ascending: false })).data || [];
-        docSel.innerHTML = '<option value="">(none - just record it)</option>' + ps.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.net || 0) + '" data-type="payslip">Payslip - net ' + money(x.net) + '</option>'; }).join("");
-        dw.style.display = ps.length ? "" : "none";
-      }
+      var k = curKind(), pe = document.getElementById("cm-party"), pid = pe ? pe.value : "";
+      var aw = document.getElementById("cm-alloc-wrap"), dw = document.getElementById("cm-doc-wrap");
+      dw.style.display = "none";
+      if ((k.k === "client_receipt" || k.k === "supplier_payment") && pid) { await loadAlloc(k, pid); }
+      else if (k.doc === "payslip" && pid) { aw.style.display = "none"; var ps = (await sb.from("hr_payslips").select("id,net,state").eq("company_id", S.company.id).eq("employee_id", pid).eq("state", "confirmed").order("created_at", { ascending: false })).data || []; var docSel = document.getElementById("cm-doc"); docSel.innerHTML = '<option value="">(none - just record it)</option>' + ps.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.net || 0) + '" data-type="payslip">Payslip - net ' + money(x.net) + '</option>'; }).join(""); dw.style.display = ps.length ? "" : "none"; }
+      else { aw.style.display = "none"; aw.innerHTML = ""; }
     }
-    document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; } };
-    document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; document.getElementById("cm-method").value = o.getAttribute("data-kind") === "bank" ? "bank" : "cash"; };
-    document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-doc-wrap").style.display = "none"; };
+    async function loadAlloc(k, pid) {
+      var mt = k.k === "client_receipt" ? "out_invoice" : "in_invoice";
+      openDocs = (await sb.from("invoices").select("id,number,amount_residual,currency_code,invoice_date").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", mt).eq("state", "posted").gt("amount_residual", 0.005).order("invoice_date", { ascending: true })).data || [];
+      var aw = document.getElementById("cm-alloc-wrap");
+      if (!openDocs.length) { aw.innerHTML = '<div class="muted" style="font-size:12px">No open ' + (k.k === "client_receipt" ? "invoices" : "bills") + ' - this will be recorded on account (as a credit on their statement).</div>'; aw.style.display = ""; return; }
+      var rows = openDocs.map(function (x) { return '<div style="display:flex;gap:8px;align-items:center;margin-top:5px"><div style="flex:1;font-size:12.5px">' + esc(x.number || "") + ' <span class="muted">due ' + money(x.amount_residual) + '</span></div><input class="cm-al" data-inv="' + x.id + '" data-num="' + esc(x.number || "") + '" data-res="' + Number(x.amount_residual) + '" type="number" step="0.01" style="width:120px" placeholder="0"></div>'; }).join("");
+      aw.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><label style="margin:0">Apply to ' + (k.k === "client_receipt" ? "invoices" : "bills") + '</label><button type="button" class="btn" id="cm-auto" style="padding:2px 9px;font-size:11.5px">Auto</button><div style="flex:1"></div><div id="cm-alloc-sum" class="muted" style="font-size:12px"></div></div>' + rows;
+      aw.style.display = "";
+      aw.querySelectorAll(".cm-al").forEach(function (inp) { inp.oninput = recomputeAlloc; });
+      document.getElementById("cm-auto").onclick = autoAlloc;
+      recomputeAlloc();
+    }
+    function recomputeAlloc() {
+      var amt = parseFloat(document.getElementById("cm-amt").value) || 0, alloc = 0;
+      document.querySelectorAll(".cm-al").forEach(function (inp) { alloc += parseFloat(inp.value) || 0; });
+      var rem = Math.round((amt - alloc) * 100) / 100, sum = document.getElementById("cm-alloc-sum");
+      if (sum) sum.textContent = "Allocated " + money(alloc) + " · On account " + money(rem < 0 ? 0 : rem) + (rem < -0.005 ? " (over-allocated!)" : "");
+    }
+    function autoAlloc() {
+      var left = parseFloat(document.getElementById("cm-amt").value) || 0;
+      document.querySelectorAll(".cm-al").forEach(function (inp) { var res = Number(inp.getAttribute("data-res")) || 0, take = Math.round(Math.min(res, Math.max(0, left)) * 100) / 100; inp.value = take > 0 ? take : ""; left = Math.round((left - take) * 100) / 100; });
+      recomputeAlloc();
+    }
+    document.getElementById("cm-amt").oninput = recomputeAlloc;
+    document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; } };
+    document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; };
+    document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-alloc-wrap").style.display = "none"; document.getElementById("cm-doc-wrap").style.display = "none"; };
     document.getElementById("cm-cancel").onclick = function () { m.remove(); };
     document.getElementById("cm-save").onclick = async function () {
       var btn = this, amt = parseFloat(document.getElementById("cm-amt").value);
       if (!(amt > 0)) { toast("Enter an amount"); return; }
-      var k = cashKind(document.getElementById("cm-kind").value);
-      var pe = document.getElementById("cm-party"), payeeEl = document.getElementById("cm-payee");
+      var k = curKind(), pe = document.getElementById("cm-party"), payeeEl = document.getElementById("cm-payee");
       var partyId = pe ? pe.value : "", partyName = "";
       if (pe && partyId) partyName = pe.options[pe.selectedIndex].textContent; else if (payeeEl) partyName = payeeEl.value.trim();
+      var handlerName = gv("cm-handler"), handlerId = null;
+      if (handlerName) { var hc = contacts.filter(function (c) { return c.name === handlerName; })[0]; if (hc) handlerId = hc.id; }
+      var allocations = [];
+      document.querySelectorAll(".cm-al").forEach(function (inp) { var v = parseFloat(inp.value) || 0; if (v > 0.005) allocations.push({ invoice_id: inp.getAttribute("data-inv"), number: inp.getAttribute("data-num"), amount: Math.round(v * 100) / 100 }); });
+      var allocTotal = allocations.reduce(function (s, a) { return s + a.amount; }, 0);
+      if (allocTotal - amt > 0.005) { toast("You allocated more than the amount"); return; }
       var docEl = document.getElementById("cm-doc"), docWrap = document.getElementById("cm-doc-wrap");
       var docId = (docWrap.style.display !== "none" && docEl) ? docEl.value : "", docType = "";
-      if (docId) { var dt = docEl.options[docEl.selectedIndex].getAttribute("data-type"); docType = dt === "payslip" ? "payslip" : k.doc; }
+      if (docId) { docType = "payslip"; }
       btn.disabled = true; btn.textContent = "Posting...";
       var mv = {
         direction: dir, kind: k.k, method: document.getElementById("cm-method").value,
         cash_account_id: document.getElementById("cm-acct").value, amount: amt,
         currency_code: document.getElementById("cm-cur").value, move_date: document.getElementById("cm-date").value,
-        party_type: k.party, party_id: (pe && partyId) ? partyId : null, payee_name: partyName, memo: gv("cm-memo"),
-        link_type: docType || "none", link_id: docId || null, contra_account_id: document.getElementById("cm-contra").value || null
+        party_type: k.party, party_id: (pe && partyId) ? partyId : null, payee_name: partyName,
+        handler_name: handlerName, handler_id: handlerId, memo: gv("cm-memo"),
+        allocations: allocations, link_type: docType || "none", link_id: docId || null,
+        contra_account_id: document.getElementById("cm-contra").value || null
       };
       var r = await postCashMovement(mv, chart, wallets);
       if (r && r.error) { toast("Could not post: " + errMsg(r.error)); btn.disabled = false; btn.textContent = "Post " + (dir === "in" ? "receipt" : "payment"); return; }
@@ -14858,46 +14908,109 @@
     setContraDefault(); renderParty();
   }
 
-  async function postCashMovement(mv, chart, wallets) {
-    var ca = null; for (var i = 0; i < wallets.length; i++) if (wallets[i].id === mv.cash_account_id) ca = wallets[i];
-    var jrnCode = (ca && ca.kind === "bank") ? "BNK" : "CSH";
-    var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
-    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, memo: mv.memo, status: "posted", posted_at: new Date().toISOString() };
-    // Path A: settle a posted invoice/bill through register_payment
-    if ((mv.link_type === "invoice" || mv.link_type === "bill") && mv.link_id) {
-      var rp = await sb.rpc("register_payment", { p_invoice: mv.link_id, p_amount: mv.amount, p_date: mv.move_date, p_journal_code: jrnCode, p_method: mv.method, p_ref: num });
-      if (rp.error) return { error: rp.error };
-      base.link_type = mv.link_type; base.link_id = mv.link_id; base.journal_id = rp.data || null;
-      return await sb.from("cash_movements").insert(base);
-    }
-    // Path B: generic balanced journal (also settles a payslip when linked)
-    var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
-    var contraGl = mv.contra_account_id || (function () { var a = cashAcctByCode(chart, cashKind(mv.kind).contra); return a ? a.id : null; })();
-    if (!cashGl || !contraGl) return { error: { message: "Missing cash or contra account in the chart" } };
-    var funcCur = S.company.currency_code, famt = Number(mv.amount);
-    if (mv.currency_code && mv.currency_code !== funcCur) {
-      var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: mv.amount, p_from: mv.currency_code, p_to: funcCur, p_date: mv.move_date, p_type: "spot" });
-      if (!fc.error && fc.data != null) famt = Number(fc.data);
-    }
-    famt = Math.round(famt * 10000) / 10000;
+  // FX helper: document amount -> company functional currency
+  async function cashToFunc(amount, ccy, date) {
+    var fn = S.company.currency_code; if (!ccy || ccy === fn) return Math.round(Number(amount) * 10000) / 10000;
+    var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: amount, p_from: ccy, p_to: fn, p_date: date, p_type: "spot" });
+    return (!fc.error && fc.data != null) ? Math.round(Number(fc.data) * 10000) / 10000 : Math.round(Number(amount) * 10000) / 10000;
+  }
+  // Post a balanced 2-line cash entry (Dr/Cr cash vs an account), tagging a partner on the non-cash leg.
+  async function cashPostEntry(dir, cashGl, otherGl, famt, jrnCode, date, ref, narr, partnerTag, sourceType) {
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", jrnCode).maybeSingle()).data;
-    var narr = mv.memo || (cashKindLabel(mv.kind) + (mv.payee_name ? (" - " + mv.payee_name) : ""));
-    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: mv.move_date, ref: num, narration: narr, currency_code: funcCur, state: "draft", source_type: "cash_movement" }).select("id").single();
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: date, ref: ref, narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: sourceType || "cash_movement" }).select("id").single();
     if (e.error) return { error: e.error };
-    var eid = e.data.id, lab = (mv.payee_name || cashKindLabel(mv.kind)).slice(0, 120);
-    var tag = (mv.party_type === "customer" || mv.party_type === "vendor") ? mv.party_id : null;
+    var eid = e.data.id;
     var drAcc, crAcc, drTag = null, crTag = null;
-    if (mv.direction === "in") { drAcc = cashGl; crAcc = contraGl; crTag = tag; } else { drAcc = contraGl; crAcc = cashGl; drTag = tag; }
+    if (dir === "in") { drAcc = cashGl; crAcc = otherGl; crTag = partnerTag; } else { drAcc = otherGl; crAcc = cashGl; drTag = partnerTag; }
     var li = await sb.from("journal_lines").insert([
-      { entry_id: eid, company_id: S.company.id, account_id: drAcc, label: lab, debit: famt, credit: 0, partner_id: drTag },
-      { entry_id: eid, company_id: S.company.id, account_id: crAcc, label: lab, debit: 0, credit: famt, partner_id: crTag }
+      { entry_id: eid, company_id: S.company.id, account_id: drAcc, label: (narr || "").slice(0, 120), debit: famt, credit: 0, partner_id: drTag },
+      { entry_id: eid, company_id: S.company.id, account_id: crAcc, label: (narr || "").slice(0, 120), debit: 0, credit: famt, partner_id: crTag }
     ]);
     if (li.error) return { error: li.error };
     var post = await sb.rpc("post_entry", { p_entry: eid });
     if (post.error) return { error: post.error };
+    return { entry_id: eid, journal_id: jr ? jr.id : null };
+  }
+
+  async function postCashMovement(mv, chart, wallets) {
+    var ca = null; for (var i = 0; i < wallets.length; i++) if (wallets[i].id === mv.cash_account_id) ca = wallets[i];
+    var jrnCode = (ca && ca.kind === "bank") ? "BNK" : "CSH";
+    var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
+    var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
+    var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
+    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
+
+    // ---- Path 1: on behalf of a customer/supplier - allocate to invoices + on-account remainder ----
+    if (isAR) {
+      var allocs = mv.allocations || [], allocated = 0;
+      for (var j = 0; j < allocs.length; j++) {
+        var a = allocs[j];
+        var rp = await sb.rpc("register_payment", { p_invoice: a.invoice_id, p_amount: a.amount, p_date: mv.move_date, p_journal_code: jrnCode, p_method: mv.method, p_ref: num });
+        if (rp.error) return { error: rp.error };
+        a.payment_id = rp.data || null; allocated += Number(a.amount) || 0;
+      }
+      var remainder = Math.round((Number(mv.amount) - allocated) * 100) / 100;
+      if (remainder > 0.005) {
+        // book the on-account part and create a payments row so it shows on the statement
+        var contraGl = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
+        if (!cashGl || !contraGl) return { error: { message: "Missing cash or advance account in the chart" } };
+        var remFunc = await cashToFunc(remainder, mv.currency_code, mv.move_date);
+        var narr = (mv.memo || cashKindLabel(mv.kind)) + " (on account) - " + (mv.payee_name || "");
+        var ge = await cashPostEntry(mv.direction, cashGl, contraGl, remFunc, jrnCode, mv.move_date, num, narr, mv.party_id, "cash_movement");
+        if (ge.error) return { error: ge.error };
+        var pr = await sb.from("payments").insert({ company_id: S.company.id, journal_id: ge.journal_id, partner_id: mv.party_id, entry_id: ge.entry_id, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: remainder, currency_code: mv.currency_code || S.company.currency_code, amount_company: remFunc, memo: "On account " + num, reference: num, state: "posted" });
+        if (pr.error) return { error: pr.error };
+        base.advance_amount = remainder;
+      }
+      base.allocations = allocs;
+      return await sb.from("cash_movements").insert(base);
+    }
+
+    // ---- Path 2: everything else (employee / owner / one-off payee, refunds, expenses) ----
+    var contraGl2 = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
+    if (!cashGl || !contraGl2) return { error: { message: "Missing cash or contra account in the chart" } };
+    var famt = await cashToFunc(mv.amount, mv.currency_code, mv.move_date);
+    var narr2 = mv.memo || (cashKindLabel(mv.kind) + (mv.payee_name ? (" - " + mv.payee_name) : ""));
+    var ge2 = await cashPostEntry(mv.direction, cashGl, contraGl2, famt, jrnCode, mv.move_date, num, narr2, null, "cash_movement");
+    if (ge2.error) return { error: ge2.error };
     if (mv.link_type === "payslip" && mv.link_id) { await sb.from("hr_payslips").update({ state: "paid" }).eq("id", mv.link_id); base.link_type = "payslip"; base.link_id = mv.link_id; }
-    base.contra_account_id = contraGl; base.journal_id = eid;
+    base.contra_account_id = contraGl2; base.journal_id = ge2.entry_id;
     return await sb.from("cash_movements").insert(base);
+  }
+
+  // ---- payment methods (config) ----
+  function cfgPaymentMethods() {
+    return {
+      title: "Payment Methods", pageSize: 100,
+      fetch: function () { return sb.from("payment_methods").select("*").eq("company_id", S.company.id).order("sort").order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (m) { return (m.name || "") + " " + (m.kind || ""); },
+      columns: [
+        { label: "Method", get: function (m) { return '<b>' + esc(m.name || "") + '</b>'; } },
+        { label: "Kind", get: function (m) { return esc(m.kind || ""); } },
+        { label: "Active", get: function (m) { return m.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+      ],
+      onNew: function () { openPaymentMethodModal(null); },
+      onOpen: function (m) { openPaymentMethodModal(m); }
+    };
+  }
+  function openPaymentMethodModal(pm) {
+    pm = pm || {};
+    var kinds = ["cash", "bank", "cheque", "card", "online", "other"];
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "pmmodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (pm.id ? "Edit" : "New") + ' payment method</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div><label>Name</label><input id="pm-name" value="' + esc(pm.name || "") + '" placeholder="e.g. Cash, OMT, Whish, Bank BLOM"></div>'
+      + '<div class="row2"><div><label>Kind</label><select id="pm-kind">' + kinds.map(function (k) { return '<option value="' + k + '"' + ((pm.kind || "cash") === k ? " selected" : "") + '>' + k + '</option>'; }).join("") + '</select></div>'
+      + '<div><label>Active</label><select id="pm-act"><option value="1"' + (pm.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (pm.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
+      + '</div><div class="foot"><button class="btn" id="pm-cancel">Cancel</button><button class="btn pri" id="pm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pm-cancel").onclick = function () { m.remove(); };
+    document.getElementById("pm-save").onclick = async function () {
+      var name = gv("pm-name"); if (!name) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, name: name, kind: document.getElementById("pm-kind").value, is_active: gv("pm-act") === "1" };
+      var r = pm.id ? await sb.from("payment_methods").update(row).eq("id", pm.id) : await sb.from("payment_methods").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
   }
 
   // ---- movements list ----
