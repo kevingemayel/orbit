@@ -911,6 +911,15 @@
         { label: "Configuration", items: [["Cash Accounts", "cash.accounts"]] }
       ]
     },
+    appoint: {
+      name: "Appoint", icon: "◷", color: "#4f46e5", color2: "#4038c9", home: "appt.cal",
+      menus: [
+        { label: "Calendar", action: "appt.cal" },
+        { label: "Appointments", action: "appt.list" },
+        { label: "Clients", action: "appt.clients" },
+        { label: "Configuration", items: [["Services", "appt.services"], ["Availability", "appt.avail"], ["Settings", "appt.settings"]] }
+      ]
+    },
     help: {
       name: "Help", icon: "?", color: "#0e7490", color2: "#155e63", home: "help.overview",
       menus: HELP_MANUAL.map(function (s) { return { label: s.title, action: "help." + s.key }; })
@@ -939,7 +948,8 @@
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
-    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter"
+    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter",
+    "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // ============================ PERMISSIONS (RBAC) ============================
@@ -968,6 +978,7 @@
     { key: "insights", label: "Insights", features: [] },
     { key: "events", label: "Events", features: [] },
     { key: "counter", label: "Counter (cash desk)", features: [] },
+    { key: "appoint", label: "Appoint (bookings)", features: [] },
     { key: "settings", label: "Settings", features: [] }
   ];
   var MODULE_LABEL = {}; MODULE_CATALOG.forEach(function (m) { MODULE_LABEL[m.key] = m.label; });
@@ -1034,6 +1045,7 @@
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
     counter: '<svg viewBox="0 0 100 100"><rect x="15" y="33" width="55" height="33" rx="5" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="42.5" cy="49.5" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M26 79 H85" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="30" r="7" fill="#2F6BFF"/></svg>',
+    appoint: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82 M36 16 V30 M64 16 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><circle cx="50" cy="61" r="7" fill="#2F6BFF"/></svg>',
     accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
     sales: '<svg viewBox="0 0 100 100"><path d="M8 34 H26 L42 48 M92 34 H74 L58 48 M8 62 H24 M92 62 H76 M40 60 L47 67 M52 55 L59 62" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><path d="M42 48 L50 41 L66 55 L58 62 Z" fill="currentColor" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="50" cy="22" r="7" fill="#2F6BFF"/></svg>',
     purchase: '<svg viewBox="0 0 100 100"><path d="M24 38 H76 L70 80 H30 Z M38 38 C38 24 62 24 62 38" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
@@ -2078,6 +2090,12 @@
       case "cash.handovers": return renderList(cfgHandovers());
       case "cash.close": return renderList(cfgCashCounts());
       case "cash.accounts": return renderList(cfgCashAccounts());
+      case "appt.cal": return renderApptCalendar();
+      case "appt.list": return renderList(cfgAppointments());
+      case "appt.clients": return renderList(cfgApptClients());
+      case "appt.services": return renderList(cfgApptServices());
+      case "appt.avail": return renderApptAvailability();
+      case "appt.settings": return renderApptSettings();
       case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -15017,6 +15035,285 @@
       var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: document.getElementById("cc-date").value, expected_amount: exp, counted_amount: cnt, variance: cnt - exp, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note") });
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Counted and closed"); renderView();
+    };
+  }
+
+  // ============================ APPOINT ============================
+  // Appointment-based service platform, as an Orbit module. Clients are ordinary
+  // partners (billing + statements reuse the ledger); Appoint adds scheduling,
+  // the client/patient record, and per-trade configuration.
+  var APPT_VERTICALS = {
+    coach: { label: "Coach / trainer", term_client: "Client", term_appointment: "Session", services: [["Private session", 60, 0], ["Group class", 60, 0], ["Assessment", 45, 0]] },
+    clinic: { label: "Clinic (medical)", term_client: "Patient", term_appointment: "Appointment", services: [["Consultation", 30, 0], ["Follow-up", 15, 0], ["Procedure", 45, 0]] },
+    legal: { label: "Legal", term_client: "Client", term_appointment: "Meeting", services: [["Consultation", 60, 0], ["Case review", 60, 0], ["Document review", 30, 0]] },
+    wellness: { label: "Wellness / dietician", term_client: "Client", term_appointment: "Consultation", services: [["Initial consultation", 60, 0], ["Follow-up", 30, 0], ["Plan review", 30, 0]] },
+    general: { label: "General", term_client: "Client", term_appointment: "Appointment", services: [["Appointment", 60, 0]] }
+  };
+  var APPT_STATUS = { booked: ["Booked", "var(--warn)"], confirmed: ["Confirmed", "var(--accent)"], completed: ["Completed", "var(--good)"], cancelled: ["Cancelled", "var(--ink3)"], no_show: ["No-show", "var(--bad)"] };
+  var _apptSet = null;
+  async function apptLoadSettings(force) {
+    if (_apptSet && !force) return _apptSet;
+    var r = (await sb.from("appt_settings").select("*").eq("company_id", S.company.id).maybeSingle()).data;
+    if (!r) { var ins = await sb.from("appt_settings").insert({ company_id: S.company.id }).select("*").single(); r = ins.data || { vertical: "coach", term_client: "Client", term_appointment: "Appointment", slot_minutes: 30 }; }
+    _apptSet = r; return r;
+  }
+  function apptTermClient() { return (_apptSet && _apptSet.term_client) || "Client"; }
+  function apptTermAppt() { return (_apptSet && _apptSet.term_appointment) || "Appointment"; }
+  function apptDtLocal(iso) { var d = iso ? new Date(iso) : new Date(); var p = function (n) { return (n < 10 ? "0" : "") + n; }; return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()); }
+  function apptFmtDate(iso) { try { return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); } catch (e) { return ""; } }
+  function apptFmtTime(iso) { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
+  function apptStatusPill(s) { var v = APPT_STATUS[s] || ["", "var(--ink3)"]; return '<span style="font-size:11px;font-weight:700;color:' + v[1] + '">' + esc(v[0]) + '</span>'; }
+  async function apptCustomers() { return (await sb.from("partners").select("id,name,email,mobile,phone").eq("is_customer", true).order("name")).data || []; }
+  async function apptServicesList() { return (await sb.from("appt_services").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || []; }
+  async function apptStaff() { return (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || []; }
+
+  // ---- calendar / agenda ----
+  async function renderApptCalendar() {
+    await apptLoadSettings();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '</div><div class="o-body" id="o-body">Loading...</div></div>';
+    wireBc();
+    var start = new Date(); start.setHours(0, 0, 0, 0);
+    var appts = (await sb.from("appt_appointments").select("*, partners(name), appt_services(name), hr_employees(name)").eq("company_id", S.company.id).gte("starts_at", start.toISOString()).order("starts_at").limit(200)).data || [];
+    var body = document.getElementById("o-body");
+    var canW = canManageApp(S.app);
+    var head = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><h1 class="man-h" style="font-size:22px;margin:0">' + esc(apptTermAppt()) + 's</h1><div style="flex:1"></div>' + (canW ? '<button class="btn pri" id="ap-new" style="background:var(--app);border-color:var(--app)">+ New ' + esc(apptTermAppt().toLowerCase()) + '</button>' : '') + '</div>';
+    if (!appts.length) { body.innerHTML = head + '<p class="muted" style="padding:18px 0">Nothing booked yet. Click + New to add one, or set up your Services first.</p>'; if (canW) document.getElementById("ap-new").onclick = function () { openAppointmentModal(null); }; return; }
+    var byDay = {};
+    appts.forEach(function (a) { var k = (a.starts_at || "").slice(0, 10); (byDay[k] = byDay[k] || []).push(a); });
+    var html = head;
+    Object.keys(byDay).sort().forEach(function (k) {
+      html += '<div style="margin:16px 0 6px;font-weight:800;font-size:14px">' + esc(apptFmtDate(k + "T12:00")) + '</div>';
+      byDay[k].forEach(function (a) {
+        html += '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:7px;cursor:pointer;background:var(--panel)">'
+          + '<div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:64px">' + esc(apptFmtTime(a.starts_at)) + '</div>'
+          + '<div style="flex:1"><div style="font-weight:600">' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + '</div>'
+          + '<div class="muted" style="font-size:12px">' + esc((a.appt_services ? a.appt_services.name : "") + (a.hr_employees ? (" &middot; " + a.hr_employees.name) : "")) + '</div></div>'
+          + '<div>' + apptStatusPill(a.status) + '</div></div>';
+      });
+    });
+    body.innerHTML = html;
+    if (canW) document.getElementById("ap-new").onclick = function () { openAppointmentModal(null); };
+    body.querySelectorAll(".ap-row").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
+  }
+
+  function cfgAppointments() {
+    return {
+      title: "Appointments", pageSize: 100,
+      fetch: function () { return sb.from("appt_appointments").select("*, partners(name), appt_services(name)").eq("company_id", S.company.id).order("starts_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.number || "") + " " + (a.partners ? a.partners.name : "") + " " + (a.appt_services ? a.appt_services.name : ""); },
+      columns: [
+        { label: "When", get: function (a) { return '<b>' + esc(apptFmtDate(a.starts_at)) + '</b> <span class="muted">' + esc(apptFmtTime(a.starts_at)) + '</span>'; } },
+        { label: apptTermClient(), get: function (a) { return esc(a.partners ? a.partners.name : (a.title || "")); } },
+        { label: "Service", get: function (a) { return esc(a.appt_services ? a.appt_services.name : ""); } },
+        { label: "Status", get: function (a) { return apptStatusPill(a.status); } },
+        { label: "Price", num: true, get: function (a) { return money(a.price); } }
+      ],
+      filters: [
+        { label: "Upcoming", test: function (a) { return new Date(a.starts_at) >= new Date() && a.status !== "cancelled"; } },
+        { label: "Completed", test: function (a) { return a.status === "completed"; } },
+        { label: "Cancelled", test: function (a) { return a.status === "cancelled"; } }
+      ],
+      onOpen: function (a) { openAppointmentModal(a.id); },
+      onNew: function () { openAppointmentModal(null); }
+    };
+  }
+
+  async function openAppointmentModal(id) {
+    await apptLoadSettings();
+    var a = id ? (await sb.from("appt_appointments").select("*").eq("id", id).single()).data : null; a = a || {};
+    var custs = await apptCustomers(); var svcs = await apptServicesList(); var staff = await apptStaff();
+    var custOpts = '<option value="">(select)</option><option value="__new">+ New ' + esc(apptTermClient().toLowerCase()) + '</option>' + custs.map(function (c) { return '<option value="' + c.id + '"' + (a.client_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+    var svcOpts = '<option value="">(select)</option>' + svcs.map(function (s) { return '<option value="' + s.id + '" data-dur="' + (s.duration_min || 60) + '" data-price="' + (s.price || 0) + '" data-loc="' + esc(s.location_type || "in_person") + '"' + (a.service_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
+    var staffOpts = '<option value="">(any / me)</option>' + staff.map(function (s) { return '<option value="' + s.id + '"' + (a.staff_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
+    var statusOpts = Object.keys(APPT_STATUS).map(function (k) { return '<option value="' + k + '"' + ((a.status || "booked") === k ? " selected" : "") + '>' + esc(APPT_STATUS[k][0]) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "apmodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (id ? "Edit" : "New") + ' ' + esc(apptTermAppt().toLowerCase()) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div><label>' + esc(apptTermClient()) + '</label><select id="ap-client">' + custOpts + '</select></div>'
+      + '<div id="ap-newname-wrap" style="display:none"><label>New ' + esc(apptTermClient().toLowerCase()) + ' name</label><input id="ap-newname" placeholder="Full name"></div>'
+      + '<div class="row2"><div><label>Service</label><select id="ap-svc">' + svcOpts + '</select></div><div><label>Staff</label><select id="ap-staff">' + staffOpts + '</select></div></div>'
+      + '<div class="row2"><div><label>Starts</label><input id="ap-start" type="datetime-local" value="' + apptDtLocal(a.starts_at) + '"></div><div><label>Duration (min)</label><input id="ap-dur" type="number" step="5" value="' + (a.id && a.starts_at && a.ends_at ? Math.round((new Date(a.ends_at) - new Date(a.starts_at)) / 60000) : 60) + '"></div></div>'
+      + '<div class="row2"><div><label>Status</label><select id="ap-status">' + statusOpts + '</select></div><div><label>Price</label><input id="ap-price" type="number" step="0.01" value="' + (Number(a.price || 0)) + '"></div></div>'
+      + '<div><label>Notes</label><input id="ap-notes" value="' + esc(a.notes || "") + '" placeholder="Anything for this ' + esc(apptTermAppt().toLowerCase()) + '"></div>'
+      + '</div><div class="foot"><button class="btn" id="ap-cancel">Cancel</button>' + (id ? '<button class="btn" id="ap-del">Delete</button>' : '') + '<button class="btn pri" id="ap-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ap-client").onchange = function () { document.getElementById("ap-newname-wrap").style.display = this.value === "__new" ? "" : "none"; };
+    document.getElementById("ap-svc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var dur = o.getAttribute("data-dur"); if (dur) document.getElementById("ap-dur").value = dur; var pr = o.getAttribute("data-price"); if (pr && !(Number(document.getElementById("ap-price").value) > 0)) document.getElementById("ap-price").value = pr; } };
+    document.getElementById("ap-cancel").onclick = function () { m.remove(); };
+    var delB = document.getElementById("ap-del"); if (delB) delB.onclick = async function () { if (!confirm("Delete this " + apptTermAppt().toLowerCase() + "?")) return; await sb.from("appt_appointments").delete().eq("id", id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("ap-save").onclick = async function () {
+      var btn = this; var clientSel = document.getElementById("ap-client").value;
+      var clientId = clientSel && clientSel !== "__new" ? clientSel : null;
+      if (clientSel === "__new") {
+        var nm = gv("ap-newname"); if (!nm) { toast("Enter the new " + apptTermClient().toLowerCase() + " name"); return; }
+        var pins = await sb.from("partners").insert({ org_id: S.org.id, company_id: S.company.id, name: nm, is_company: false, is_customer: true }).select("id").single();
+        if (pins.error) { toast("Could not add: " + errMsg(pins.error)); return; }
+        clientId = pins.data.id;
+      }
+      var startVal = document.getElementById("ap-start").value; if (!startVal) { toast("Pick a start time"); return; }
+      var dur = parseInt(document.getElementById("ap-dur").value, 10) || 60;
+      var startISO = new Date(startVal).toISOString(); var endISO = new Date(new Date(startVal).getTime() + dur * 60000).toISOString();
+      var svcSel = document.getElementById("ap-svc"); var svcO = svcSel.options[svcSel.selectedIndex];
+      var row = {
+        company_id: S.company.id, client_id: clientId, service_id: svcSel.value || null, staff_id: document.getElementById("ap-staff").value || null,
+        starts_at: startISO, ends_at: endISO, status: document.getElementById("ap-status").value,
+        location_type: (svcO && svcO.getAttribute("data-loc")) || "in_person", price: parseFloat(document.getElementById("ap-price").value) || 0,
+        currency_code: S.company.currency_code, notes: gv("ap-notes")
+      };
+      btn.disabled = true;
+      var r;
+      if (id) { r = await sb.from("appt_appointments").update(row).eq("id", id); }
+      else { row.number = await nextDocNumber("appt_appointments", "APT"); r = await sb.from("appt_appointments").insert(row); }
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); btn.disabled = false; return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ---- clients / patients ----
+  function cfgApptClients() {
+    return {
+      title: apptTermClient() + "s", pageSize: 100,
+      fetch: function () { return apptCustomers(); },
+      searchText: function (c) { return (c.name || "") + " " + (c.email || "") + " " + (c.mobile || c.phone || ""); },
+      columns: [
+        { label: "Name", get: function (c) { return '<b>' + esc(c.name || "") + '</b>'; } },
+        { label: "Email", get: function (c) { return esc(c.email || ""); } },
+        { label: "Phone", get: function (c) { return esc(c.mobile || c.phone || ""); } }
+      ],
+      onOpen: function (c) { renderApptClient(c.id); },
+      onNew: function () { openAppointmentModal(null); }
+    };
+  }
+  async function renderApptClient(id) {
+    await apptLoadSettings();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(apptTermClient(), { title: apptTermClient() + "s", action: "appt.clients" }) + '</div><div class="o-body" id="o-body">Loading...</div></div>';
+    wireBc();
+    var c = (await sb.from("partners").select("*").eq("id", id).single()).data || {};
+    var appts = (await sb.from("appt_appointments").select("*, appt_services(name)").eq("company_id", S.company.id).eq("client_id", id).order("starts_at", { ascending: false })).data || [];
+    var notes = (await sb.from("appt_notes").select("*").eq("company_id", S.company.id).eq("client_id", id).order("created_at", { ascending: false })).data || [];
+    var now = new Date();
+    var upcoming = appts.filter(function (a) { return new Date(a.starts_at) >= now && a.status !== "cancelled"; });
+    var past = appts.filter(function (a) { return new Date(a.starts_at) < now || a.status === "completed" || a.status === "cancelled"; });
+    var billed = appts.filter(function (a) { return a.status === "completed"; }).reduce(function (s, a) { return s + Number(a.price || 0); }, 0);
+    function apptLine(a) { return '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:var(--panel)"><div style="min-width:120px"><b>' + esc(apptFmtDate(a.starts_at)) + '</b> <span class="muted">' + esc(apptFmtTime(a.starts_at)) + '</span></div><div style="flex:1">' + esc(a.appt_services ? a.appt_services.name : "") + '</div>' + apptStatusPill(a.status) + '</div>'; }
+    var noteHtml = notes.map(function (n) { return '<div style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;background:var(--panel)"><div style="font-size:11px;color:var(--ink3)">' + esc(apptFmtDate(n.created_at)) + '</div>' + (n.title ? '<div style="font-weight:700">' + esc(n.title) + '</div>' : '') + '<div style="font-size:13px;white-space:pre-wrap">' + esc(n.body || "") + '</div></div>'; }).join("") || '<p class="muted">No notes yet.</p>';
+    var body = document.getElementById("o-body");
+    body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px">'
+      + '<div style="flex:1;min-width:220px"><h1 class="man-h" style="font-size:24px;margin:0 0 4px">' + esc(c.name || "") + '</h1><div class="muted" style="font-size:13px">' + esc([c.email, c.mobile || c.phone].filter(Boolean).join(" &middot; ")) + '</div><div class="muted" style="font-size:11px;margin-top:2px">' + esc(apptTermClient()) + ' ID: ' + esc((c.id || "").slice(0, 8).toUpperCase()) + '</div></div>'
+      + '<div style="display:flex;gap:8px"><button class="btn" id="cl-stmt">Statement</button><button class="btn pri" id="cl-book" style="background:var(--app);border-color:var(--app)">+ Book</button></div></div>'
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">' + kpi("Upcoming", String(upcoming.length)) + kpi("Total visits", String(appts.length)) + kpi("Billed value", moneyC(billed, S.company.currency_code)) + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="cl-grid">'
+      + '<div><h3 style="margin:0 0 8px">Upcoming</h3>' + (upcoming.map(apptLine).join("") || '<p class="muted">Nothing upcoming.</p>') + '<h3 style="margin:16px 0 8px">History</h3>' + (past.map(apptLine).join("") || '<p class="muted">No past ' + esc(apptTermAppt().toLowerCase()) + 's.</p>') + '</div>'
+      + '<div><h3 style="margin:0 0 8px">Record &amp; notes</h3><div style="margin-bottom:10px"><input id="cl-note-t" placeholder="Note title (optional)" style="width:100%;margin-bottom:6px"><textarea id="cl-note-b" placeholder="Add a note to this ' + esc(apptTermClient().toLowerCase()) + "'s record..." + '" style="width:100%;min-height:60px"></textarea><button class="btn pri" id="cl-note-add" style="background:var(--app);border-color:var(--app);margin-top:6px">Add note</button></div>' + noteHtml + '</div>'
+      + '</div>';
+    document.getElementById("cl-book").onclick = function () { openAppointmentModal(null); };
+    document.getElementById("cl-stmt").onclick = function () { go("rep.stmt"); };
+    document.getElementById("cl-note-add").onclick = async function () {
+      var b = gv("cl-note-b"); if (!b) { toast("Write a note first"); return; }
+      var r = await sb.from("appt_notes").insert({ company_id: S.company.id, client_id: id, title: gv("cl-note-t"), body: b });
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      toast("Note added"); renderApptClient(id);
+    };
+    body.querySelectorAll(".ap-row").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
+  }
+
+  // ---- services ----
+  function cfgApptServices() {
+    return {
+      title: "Services", pageSize: 100,
+      fetch: function () { return sb.from("appt_services").select("*").eq("company_id", S.company.id).order("sort").order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.name || "") + " " + (s.location_type || ""); },
+      columns: [
+        { label: "Service", get: function (s) { return '<b>' + esc(s.name || "") + '</b>'; } },
+        { label: "Duration", get: function (s) { return (s.duration_min || 0) + " min"; } },
+        { label: "Where", get: function (s) { return esc(s.location_type === "online" ? "Online" : (s.location_type === "phone" ? "Phone" : "In person")); } },
+        { label: "Price", num: true, get: function (s) { return money(s.price); } },
+        { label: "Active", get: function (s) { return s.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+      ],
+      onNew: function () { openServiceModal(null); },
+      onOpen: function (s) { openServiceModal(s); }
+    };
+  }
+  async function openServiceModal(s) {
+    s = s || {}; var staff = await apptStaff();
+    var staffOpts = '<option value="">(any)</option>' + staff.map(function (x) { return '<option value="' + x.id + '"' + (s.staff_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "svmodal";
+    m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' service</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">'
+      + '<div><label>Name</label><input id="sv-name" value="' + esc(s.name || "") + '" placeholder="e.g. Consultation, Private session"></div>'
+      + '<div class="row2"><div><label>Duration (min)</label><input id="sv-dur" type="number" step="5" value="' + (s.duration_min || 60) + '"></div><div><label>Price</label><input id="sv-price" type="number" step="0.01" value="' + (Number(s.price || 0)) + '"></div></div>'
+      + '<div class="row2"><div><label>Where</label><select id="sv-loc"><option value="in_person"' + (s.location_type !== "online" && s.location_type !== "phone" ? " selected" : "") + '>In person</option><option value="online"' + (s.location_type === "online" ? " selected" : "") + '>Online</option><option value="phone"' + (s.location_type === "phone" ? " selected" : "") + '>Phone</option></select></div><div><label>Default staff</label><select id="sv-staff">' + staffOpts + '</select></div></div>'
+      + '<div class="row2"><div><label>Capacity</label><input id="sv-cap" type="number" step="1" value="' + (s.capacity || 1) + '"></div><div><label>Active</label><select id="sv-act"><option value="1"' + (s.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (s.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
+      + '</div><div class="foot"><button class="btn" id="sv-cancel">Cancel</button><button class="btn pri" id="sv-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("sv-cancel").onclick = function () { m.remove(); };
+    document.getElementById("sv-save").onclick = async function () {
+      var name = gv("sv-name"); if (!name) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, name: name, duration_min: parseInt(gv("sv-dur"), 10) || 60, price: parseFloat(document.getElementById("sv-price").value) || 0, currency_code: S.company.currency_code, location_type: document.getElementById("sv-loc").value, staff_id: document.getElementById("sv-staff").value || null, capacity: parseInt(gv("sv-cap"), 10) || 1, is_active: gv("sv-act") === "1" };
+      var r = s.id ? await sb.from("appt_services").update(row).eq("id", s.id) : await sb.from("appt_services").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    };
+  }
+
+  // ---- availability (weekly hours) ----
+  var APPT_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  function apptMinToHHMM(mn) { var h = Math.floor(mn / 60), m = mn % 60; return (h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m; }
+  function apptHHMMToMin(s) { var p = (s || "").split(":"); return (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0); }
+  async function renderApptAvailability() {
+    await apptLoadSettings();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Availability") + '</div><div class="o-body" id="o-body">Loading...</div></div>';
+    wireBc();
+    var rows = (await sb.from("appt_availability").select("*").eq("company_id", S.company.id).is("staff_id", null)).data || [];
+    var byDay = {}; rows.forEach(function (r) { byDay[r.weekday] = r; });
+    var body = document.getElementById("o-body");
+    var grid = '<p class="lead" style="max-width:60ch;color:var(--ink2)">Your working hours for the business. Tick a day and set the start and end time. These are the hours you can be booked.</p><div style="display:grid;gap:8px;max-width:520px;margin-top:12px">';
+    for (var d = 1; d <= 6; d++) grid += apptAvailRow(d, byDay[d]);
+    grid += apptAvailRow(0, byDay[0]);
+    grid += '</div><button class="btn pri" id="av-save" style="background:var(--app);border-color:var(--app);margin-top:14px">Save hours</button>';
+    body.innerHTML = grid;
+    document.getElementById("av-save").onclick = async function () {
+      await sb.from("appt_availability").delete().eq("company_id", S.company.id).is("staff_id", null);
+      var ins = [];
+      [1, 2, 3, 4, 5, 6, 0].forEach(function (d) { if (document.getElementById("av-on-" + d).checked) ins.push({ company_id: S.company.id, weekday: d, start_min: apptHHMMToMin(document.getElementById("av-s-" + d).value), end_min: apptHHMMToMin(document.getElementById("av-e-" + d).value) }); });
+      if (ins.length) { var r = await sb.from("appt_availability").insert(ins); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      toast("Hours saved"); renderView();
+    };
+  }
+  function apptAvailRow(d, row) {
+    var on = !!row, s = row ? apptMinToHHMM(row.start_min) : "09:00", e = row ? apptMinToHHMM(row.end_min) : "17:00";
+    return '<div style="display:flex;gap:10px;align-items:center"><label style="min-width:110px;display:flex;gap:7px;align-items:center"><input type="checkbox" id="av-on-' + d + '"' + (on ? " checked" : "") + '> ' + APPT_DAYS[d] + '</label>'
+      + '<input type="time" id="av-s-' + d + '" value="' + s + '" style="width:120px"> <span class="muted">to</span> <input type="time" id="av-e-' + d + '" value="' + e + '" style="width:120px"></div>';
+  }
+
+  // ---- settings (trade + terminology) ----
+  async function renderApptSettings() {
+    var st = await apptLoadSettings(true);
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Settings") + '</div><div class="o-body" id="o-body"></div></div>';
+    wireBc();
+    var vertOpts = Object.keys(APPT_VERTICALS).map(function (k) { return '<option value="' + k + '"' + (st.vertical === k ? " selected" : "") + '>' + esc(APPT_VERTICALS[k].label) + '</option>'; }).join("");
+    var body = document.getElementById("o-body");
+    body.innerHTML = '<div style="max-width:520px;display:grid;gap:14px">'
+      + '<p class="lead" style="color:var(--ink2)">Pick your profession and Appoint uses the right words. You can fine-tune the wording, and load a starter set of services for your trade.</p>'
+      + '<div><label>Profession</label><select id="st-vert">' + vertOpts + '</select></div>'
+      + '<div class="row2"><div><label>Call clients</label><input id="st-tc" value="' + esc(st.term_client || "Client") + '"></div><div><label>Call bookings</label><input id="st-ta" value="' + esc(st.term_appointment || "Appointment") + '"></div></div>'
+      + '<div><label><input type="checkbox" id="st-seed"> Also load starter services for this profession</label></div>'
+      + '<div><button class="btn pri" id="st-save" style="background:var(--app);border-color:var(--app)">Save</button></div>'
+      + '</div>';
+    document.getElementById("st-vert").onchange = function () { var v = APPT_VERTICALS[this.value]; if (v) { document.getElementById("st-tc").value = v.term_client; document.getElementById("st-ta").value = v.term_appointment; } };
+    document.getElementById("st-save").onclick = async function () {
+      var vert = document.getElementById("st-vert").value;
+      var r = await sb.from("appt_settings").update({ vertical: vert, term_client: gv("st-tc") || "Client", term_appointment: gv("st-ta") || "Appointment" }).eq("company_id", S.company.id);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      if (document.getElementById("st-seed").checked) {
+        var have = (await sb.from("appt_services").select("id").eq("company_id", S.company.id).limit(1)).data || [];
+        var defs = APPT_VERTICALS[vert].services || [];
+        var ins = defs.map(function (d, i) { return { company_id: S.company.id, name: d[0], duration_min: d[1], price: d[2], currency_code: S.company.currency_code, sort: i }; });
+        if (ins.length) await sb.from("appt_services").insert(ins);
+      }
+      _apptSet = null; await apptLoadSettings(true); toast("Saved"); goApp("appt.cal");
     };
   }
 
