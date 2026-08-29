@@ -1546,6 +1546,8 @@
       '<main id="o-main" tabindex="-1" style="overflow:hidden"></main>' +
       '</div>' +
       '</div>';
+    // light top bar: expose the open app's own colour so the brand chip tints to it
+    try { document.documentElement.style.setProperty("--app-accent", (a && a.color) || (getComputedStyle(document.documentElement).getPropertyValue("--app").trim() || "#16171c")); } catch (e) { }
     function goHome() { if (__dirty && !confirm("You have unsaved changes on this page. Leave without saving?")) return; __dirty = false; renderHome(); }
     document.getElementById("waffle").onclick = goHome;
     var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = goHome;
