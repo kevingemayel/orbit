@@ -11651,6 +11651,14 @@
   }
 
   // ============================ EMPLOYEES / HR ============================
+  // Best-effort sequential staff code on a new employee. Silently no-ops until the
+  // employee_no column exists (added by 91-finalize.sql), so it never blocks a save.
+  async function assignEmployeeNo(id) {
+    try {
+      var cnt = (await sb.from("hr_employees").select("id", { count: "exact", head: true }).eq("company_id", S.company.id)).count || 0;
+      await sb.from("hr_employees").update({ employee_no: "EMP-" + String(cnt).padStart(4, "0") }).eq("id", id);
+    } catch (_e) { }
+  }
   function cfgEmployees() {
     return {
       title: "Employees", pageSize: 80,
@@ -11754,6 +11762,7 @@
       '</div></div>' +
       ghdr("Employment") +
       '<div class="o-groups"><div>' +
+      fld("Employee code", '<input value="' + esc(e.employee_no || (id === "new" ? "Assigned on save" : "-")) + '" disabled style="color:var(--ink2)">', "Auto-assigned staff code (needs the finalize migration to start filling).") +
       fld("Department", '<select id="e-dept">' + opts(depts, e.department_id, "None") + '</select>', "The department this employee belongs to.") +
       fld("Job Position", '<select id="e-job">' + opts(jobs, e.job_id, "None") + '</select>', "The employee's job title / position.") +
       fld("Manager", '<select id="e-mgr">' + opts(emps.filter(function (x) { return x.id !== id; }), e.manager_id, "None") + '</select>', "Who this employee reports to.") +
@@ -11786,7 +11795,7 @@
         hire_date: gv("e-hire") || null, work_location: gv("e-loc") || null, bank_account: gv("e-bank") || null,
         notes: gv("e-notes") || null, is_active: document.getElementById("e-active").value === "1"
       };
-      var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
+      var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); assignEmployeeNo(_ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       toast("Saved"); go("hr.emp");
     };
   }
@@ -15203,7 +15212,7 @@
       + '</div><div id="cm-split-sum" class="muted" style="font-size:12px;margin-top:6px"></div><div class="muted" style="font-size:11.5px;margin-top:2px">A split payment is recorded on account; use a single method to settle a specific invoice.</div></details>'
       + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
       + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div style="margin-top:8px"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. For a customer/supplier this is only used for the un-allocated (on account) part.</div></div></details>'
-      + '<div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div>'
+      + '<div class="row2"><div><label>Reference</label><input id="cm-ref" placeholder="Cheque / transfer no. (optional)"></div><div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div></div>'
       + '</div><div class="foot"><button class="btn" id="cm-cancel">Cancel</button><button class="btn pri" id="cm-save" style="background:' + col + ';border-color:' + col + '">Post ' + (dir === "in" ? "receipt" : "payment") + '</button></div></div>';
     document.body.appendChild(m);
     function curKind() { return cashKind(document.getElementById("cm-kind").value); }
@@ -15280,7 +15289,7 @@
         cash_account_id: document.getElementById("cm-acct").value, amount: amt,
         currency_code: document.getElementById("cm-cur").value, move_date: document.getElementById("cm-date").value,
         party_type: k.party, party_id: (pe && partyId) ? partyId : null, payee_name: partyName,
-        handler_name: handlerName, handler_id: handlerId, memo: gv("cm-memo"),
+        handler_name: handlerName, handler_id: handlerId, memo: gv("cm-memo"), reference: gv("cm-ref") || null,
         allocations: allocations, link_type: docType || "none", link_id: docId || null,
         tendered: document.getElementById("cm-tender") ? (parseFloat(document.getElementById("cm-tender").value) || 0) : 0,
         change_given: document.getElementById("cm-change") ? (parseFloat(document.getElementById("cm-change").value) || 0) : 0,
@@ -15318,13 +15327,23 @@
     return { entry_id: eid, journal_id: jr ? jr.id : null };
   }
 
+  // Insert a cash movement, tolerating a column the DB may not have yet (e.g. `reference`
+  // before 91-finalize.sql is run) - strips the unknown column and retries so a receipt never fails.
+  async function cashInsert(base) {
+    var r = await sb.from("cash_movements").insert(base);
+    if (r.error && (r.error.code === "PGRST204" || /Could not find the '.*' column/.test(r.error.message || ""))) {
+      var mm = (r.error.message || "").match(/'([^']+)' column/);
+      if (mm && mm[1] && base.hasOwnProperty(mm[1])) { var b2 = Object.assign({}, base); delete b2[mm[1]]; return await sb.from("cash_movements").insert(b2); }
+    }
+    return r;
+  }
   async function postCashMovement(mv, chart, wallets) {
     var ca = null; for (var i = 0; i < wallets.length; i++) if (wallets[i].id === mv.cash_account_id) ca = wallets[i];
     var jrnCode = (ca && ca.kind === "bank") ? "BNK" : "CSH";
     var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
     var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
     var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
-    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
+    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, reference: mv.reference || null, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
 
     // ---- Split tender: paid via several methods, recorded on account (or as a plain expense) ----
     if (mv.tenders && mv.tenders.length > 1) {
@@ -15350,7 +15369,7 @@
       if (isAR) { var prS = await sb.from("payments").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, partner_id: mv.party_id, entry_id: eidS, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: mv.amount, currency_code: mv.currency_code || S.company.currency_code, amount_company: totalFunc, memo: "On account " + num, reference: num, state: "posted" }); if (prS.error) return { error: prS.error }; }
       base.tenders = mv.tenders; base.contra_account_id = contraGlS; base.journal_id = eidS; base.advance_amount = mv.amount;
       base.allocations = []; // split tender records the full amount on-account (no per-invoice register_payment ran); clearing this stops a later void from wrongly inflating those invoices' residuals
-      return await sb.from("cash_movements").insert(base);
+      return await cashInsert(base);
     }
 
     // ---- Path 1: on behalf of a customer/supplier - allocate to invoices + on-account remainder ----
@@ -15376,7 +15395,7 @@
         base.advance_amount = remainder;
       }
       base.allocations = allocs;
-      return await sb.from("cash_movements").insert(base);
+      return await cashInsert(base);
     }
 
     // ---- Path 2: everything else (employee / owner / one-off payee, refunds, expenses) ----
@@ -15388,7 +15407,7 @@
     if (ge2.error) return { error: ge2.error };
     if (mv.link_type === "payslip" && mv.link_id) { await sb.from("hr_payslips").update({ state: "paid" }).eq("id", mv.link_id); base.link_type = "payslip"; base.link_id = mv.link_id; }
     base.contra_account_id = contraGl2; base.journal_id = ge2.entry_id;
-    return await sb.from("cash_movements").insert(base);
+    return await cashInsert(base);
   }
 
   // ---- payment methods (config) ----
@@ -15509,7 +15528,7 @@
   function printCashReceipt(m) {
     var t = printTplData();
     var logo = (t.show_logo && t.logo) ? '<img src="' + t.logo + '" style="max-height:54px;display:block">' : "";
-    var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
+    var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.reference], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
     var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
     var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<table style="font-size:13px;margin:-8px 0 4px"><tr><td style="color:#666;padding:2px 16px 2px 0">Cash tendered</td><td style="font-weight:600">' + esc(moneyC(m.tendered, m.currency_code)) + '</td></tr><tr><td style="color:#666;padding:2px 16px 2px 0">Change given</td><td style="font-weight:600">' + esc(moneyC(m.change_given, m.currency_code)) + '</td></tr></table>' : '';
     var html = '<div style="max-width:520px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">'
