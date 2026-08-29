@@ -2276,6 +2276,12 @@
     var byId = {}, roots = [];
     rows.forEach(function (r) { r._kids = []; byId[r.id] = r; });
     rows.forEach(function (r) { var p = r[parentField]; if (p && byId[p] && byId[p] !== r) byId[p]._kids.push(r); else roots.push(r); });
+    // cycle safety net: if A->B->A, neither becomes a root and the whole branch vanishes.
+    // Mark everything reachable from roots, then promote any unreached node to a root so it still shows.
+    var reached = {};
+    function mark(list) { for (var i = 0; i < list.length; i++) { var n = list[i]; if (reached[n.id]) continue; reached[n.id] = 1; mark(n._kids); } }
+    mark(roots);
+    rows.forEach(function (r) { if (!reached[r.id]) { roots.push(r); mark([r]); } });
     return roots;
   }
   function treeViewHTML(cfg, rows) {
@@ -2348,7 +2354,8 @@
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
     document.getElementById("o-export").onclick = exportListCsv;
-    cfg.fetch().then(function (rows) { L.all = rows || []; paintBody(); });
+    var myL = L; // guard: if the user navigated to another list before this resolves, don't paint stale rows over it
+    cfg.fetch().then(function (rows) { if (L !== myL) return; L.all = rows || []; paintBody(); });
   }
   function htmlToText(h) { var d = document.createElement("div"); d.innerHTML = (h == null ? "" : String(h)); return (d.textContent || "").replace(/\s+/g, " ").trim(); }
   function csvCell(s) { s = (s == null ? "" : String(s)); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
@@ -2404,7 +2411,7 @@
     // pager
     var pager = document.getElementById("o-pager");
     if (!body || !pager) return; // navigated away before an async list fetch resolved
-    if (L.group != null || L.view === "kanban") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
+    if (L.group != null || L.view === "kanban" || L.view === "tree" || L.view === "org") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
     else {
       var from = total ? L.page * L.size + 1 : 0, to = Math.min((L.page + 1) * L.size, total);
       pager.innerHTML = '<span>' + from + '-' + to + ' / ' + total + '</span>' +
@@ -7031,9 +7038,10 @@
     document.getElementById("lk-cancel").onclick = function () { m.remove(); };
     document.getElementById("lk-save").onclick = async function () {
       var d = document.getElementById("lk-date").value || null;
-      var r = await sb.from("companies").update({ lock_date: d }).eq("id", S.company.id);
+      // write BOTH columns: the client guard (isLocked) reads lock_date, but the server guard in post_entry reads period_lock_date - keep them in sync so the lock is actually enforced on posting
+      var r = await sb.from("companies").update({ lock_date: d, period_lock_date: d }).eq("id", S.company.id);
       if (r.error) { toast(errMsg(r.error)); return; }
-      S.company.lock_date = d; m.remove(); toast(d ? ("Locked on/before " + d) : "Unlocked");
+      S.company.lock_date = d; S.company.period_lock_date = d; m.remove(); toast(d ? ("Locked on/before " + d) : "Unlocked");
     };
   }
 
@@ -11513,16 +11521,18 @@
     return {
       title: "Employees", pageSize: 80,
       fetch: function () {
-        return Promise.all([
-          sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name"),
-          sb.from("hr_employees").select("id,name").eq("company_id", S.company.id)
-        ]).then(async function (res) { var mm = {}; (res[1].data || []).forEach(function (e) { mm[e.id] = e.name; }); var rows = (res[0].data || []).map(function (e) { e._mgr = e.manager_id ? mm[e.manager_id] : ""; return e; }); await attachThumbs(rows, "employee"); return rows; });
+        return sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name").then(async function (res) {
+          var rows = res.data || [], mm = {}; rows.forEach(function (e) { mm[e.id] = e.name; });
+          rows.forEach(function (e) { e._mgr = e.manager_id ? (mm[e.manager_id] || "") : ""; });
+          await attachThumbs(rows, "employee"); return rows;
+        });
       },
-      searchText: function (e) { return (e.name || "") + " " + (e.work_email || "") + " " + (e.hr_jobs ? e.hr_jobs.name : ""); },
+      searchText: function (e) { return [e.name, e.first_name, e.last_name, e.work_email, e.personal_email, e.personal_phone, e.mobile_phone, e.work_phone, e.identification_no, e.nationality, (e.hr_jobs ? e.hr_jobs.name : ""), (e.hr_departments ? e.hr_departments.name : "")].filter(Boolean).join(" "); },
       columns: [
         { label: "Name", get: function (e) { return '<b>' + esc(e.name) + '</b>'; } },
         { label: "Job Position", get: function (e) { return esc(e.hr_jobs ? e.hr_jobs.name : ""); } },
         { label: "Department", get: function (e) { return esc(e.hr_departments ? e.hr_departments.name : ""); } },
+        { label: "Phone", get: function (e) { return '<span class="muted">' + esc(e.personal_phone || e.mobile_phone || e.work_phone || "") + '</span>'; } },
         { label: "Work Email", get: function (e) { return '<span class="muted">' + esc(e.work_email || "") + '</span>'; } },
         { label: "Manager", get: function (e) { return esc(e._mgr || ""); } },
         { label: "Status", get: function (e) { return e.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>'; } }
@@ -11596,13 +11606,13 @@
       var row = {
         name: name, first_name: first || null, last_name: last || null,
         dob: gv("e-dob") || null, gender: gv("e-gender") || null, marital_status: gv("e-marital") || null,
-        nationality: gv("e-nat") || null, identification_no: gv("e-id"),
+        nationality: gv("e-nat") || null, identification_no: gv("e-id") || null,
         personal_email: gv("e-pemail") || null, personal_phone: pphone || null, mobile_phone: pphone || null,
-        work_email: gv("e-email"), work_phone: gv("e-wphone"), address: gv("e-addr") || null,
+        work_email: gv("e-email") || null, work_phone: gv("e-wphone") || null, address: gv("e-addr") || null,
         emergency_name: gv("e-emg") || null, emergency_relation: gv("e-emgr") || null, emergency_phone: gv("e-emgp") || null,
         department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null,
         manager_id: document.getElementById("e-mgr").value || null, employee_type: document.getElementById("e-type").value,
-        hire_date: gv("e-hire") || null, work_location: gv("e-loc"), bank_account: gv("e-bank"),
+        hire_date: gv("e-hire") || null, work_location: gv("e-loc") || null, bank_account: gv("e-bank") || null,
         notes: gv("e-notes") || null, is_active: document.getElementById("e-active").value === "1"
       };
       var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
@@ -11935,7 +11945,7 @@
   function cfgContracts() {
     return {
       title: "Contracts", pageSize: 80,
-      fetch: function () { return sb.from("hr_contracts").select("*, hr_employees(name), hr_salary_structures(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("hr_contracts").select("*, hr_employees(name), hr_salary_structures(name)").eq("company_id", S.company.id).order("date_start", { ascending: false, nullsFirst: false }).then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.hr_employees ? c.hr_employees.name : "") + " " + (c.name || ""); },
       columns: [
         { label: "Employee", get: function (c) { return '<b>' + esc(c.hr_employees ? c.hr_employees.name : "") + '</b>'; } },
@@ -15094,6 +15104,7 @@
       if (peS.error) return { error: peS.error };
       if (isAR) { var prS = await sb.from("payments").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, partner_id: mv.party_id, entry_id: eidS, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: mv.amount, currency_code: mv.currency_code || S.company.currency_code, amount_company: totalFunc, memo: "On account " + num, reference: num, state: "posted" }); if (prS.error) return { error: prS.error }; }
       base.tenders = mv.tenders; base.contra_account_id = contraGlS; base.journal_id = eidS; base.advance_amount = mv.amount;
+      base.allocations = []; // split tender records the full amount on-account (no per-invoice register_payment ran); clearing this stops a later void from wrongly inflating those invoices' residuals
       return await sb.from("cash_movements").insert(base);
     }
 
@@ -15244,9 +15255,9 @@
     }
     // a plain (non-AR) movement has a single journal and no payments - reverse it
     if (!pays.length && m.journal_id) { var rv2 = await reverseEntry(m.journal_id, refNo, "Reversal of " + (m.number || "")); if (rv2.error) return { error: rv2.error }; }
-    // record the reversal on the cash side and lock the original
-    var num = await nextDocNumber("cash_movements", m.direction === "in" ? "PAY" : "RCP");
-    await sb.from("cash_movements").insert({ company_id: S.company.id, number: num, move_date: today(), direction: (m.direction === "in" ? "out" : "in"), kind: m.kind, method: m.method, cash_account_id: m.cash_account_id, amount: m.amount, currency_code: m.currency_code, party_type: m.party_type, party_id: m.party_id, payee_name: m.payee_name, memo: "Void of " + (m.number || ""), void_of: m.id, status: "posted", posted_at: new Date().toISOString() });
+    // Mark the original void. cashBalances only sums status='posted', so voiding it
+    // already backs the amount out of the till - do NOT also insert a reversing
+    // posted movement (that double-subtracted the amount from the drawer balance).
     await sb.from("cash_movements").update({ status: "void", voided_at: new Date().toISOString() }).eq("id", m.id);
     return { ok: true };
   }
