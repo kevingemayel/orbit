@@ -1259,12 +1259,12 @@
       '<h1>Apply for access</h1>' +
       '<p class="sub">Welcome, ' + esc(S.user.email) + '. Tell us a little about your business. We review new accounts and email you within 6 hours.</p>' +
       '<label for="nc-name">Company name</label><input id="nc-name" placeholder="e.g. Skyline Facades SARL" autocomplete="organization">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-country">Country</label><input id="nc-country" placeholder="e.g. Lebanon" autocomplete="country-name"></div><div><label for="nc-city">City <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-city" placeholder="e.g. Beirut"></div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-country">Country</label>' + countrySelectHTML("nc-country", "") + '</div><div><label for="nc-city">City</label><input id="nc-city" placeholder="e.g. Beirut"></div></div>' +
       '<label for="nc-btype">Business type</label><select id="nc-btype" ' + ss + '><option value="">Select...</option>' + btypes.map(function (b) { return '<option>' + b + '</option>'; }).join("") + '</select>' +
       '<label for="nc-scope">Scope of work</label><input id="nc-scope" placeholder="e.g. Aluminium &amp; glazing facades, curtain walling">' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-emp">Number of employees</label><select id="nc-emp" ' + ss + '><option value="">Select...</option>' + emps.map(function (e) { return '<option>' + e + '</option>'; }).join("") + '</select></div><div><label for="nc-phone">Contact phone</label><input id="nc-phone" placeholder="+961 ..." autocomplete="tel"></div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-emp">Number of employees</label><select id="nc-emp" ' + ss + '><option value="">Select...</option>' + emps.map(function (e) { return '<option>' + e + '</option>'; }).join("") + '</select></div><div><label for="nc-phone-cc">Contact phone</label>' + phoneFieldHTML("nc-phone", {}) + '</div></div>' +
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label for="nc-reg">Registration / Tax no. <span class="muted" style="font-weight:400">(optional)</span></label><input id="nc-reg"></div><div><label for="nc-cur">Currency</label>' + currencySelectHTML("nc-cur", "USD") + '</div></div>' +
-      '<label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;font-size:13px;color:var(--ink2);font-weight:400"><input type="checkbox" id="nc-tc" style="margin-top:3px"><span>I have read and agree to the <a id="nc-terms" style="cursor:pointer">Terms &amp; Conditions</a> on behalf of my company.</span></label>' +
+      '<label class="tc-agree"><input type="checkbox" id="nc-tc"><span>I have read and agree to the <a id="nc-terms">Terms &amp; Conditions</a> on behalf of my company.</span></label>' +
       '<div class="err" id="nc-err" role="alert"></div>' +
       '<button class="btn pri" id="nc-create" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Submit application</button>' +
       '<div class="switch">Signed in as ' + esc(S.user.email) + ' &middot; <a id="nc-out">Sign out</a></div>' +
@@ -1276,16 +1276,17 @@
     create.onclick = async function () {
       var g = function (id) { var el = document.getElementById(id); return el ? el.value.trim() : ""; };
       var err = document.getElementById("nc-err"); err.textContent = "";
-      var name = g("nc-name"), country = g("nc-country"), btype = g("nc-btype"), scope = g("nc-scope"), emp = g("nc-emp"), phone = g("nc-phone");
+      var name = g("nc-name"), country = g("nc-country"), btype = g("nc-btype"), scope = g("nc-scope"), emp = g("nc-emp"), phone = collectPhone("nc-phone").combined || "", city = g("nc-city");
       if (!name) { err.textContent = "Enter your company name."; return; }
-      if (!country) { err.textContent = "Enter your country."; return; }
+      if (!country) { err.textContent = "Select your country."; return; }
+      if (!city) { err.textContent = "Enter your city."; return; }
       if (!btype) { err.textContent = "Select your business type."; return; }
       if (!scope) { err.textContent = "Describe your scope of work."; return; }
       if (!emp) { err.textContent = "Select your number of employees."; return; }
       if (!phone) { err.textContent = "Enter a contact phone."; return; }
       if (!document.getElementById("nc-tc").checked) { err.textContent = "Please accept the Terms & Conditions to continue."; return; }
       create.disabled = true; create.textContent = "Submitting...";
-      var res = await sb.rpc("apply_for_company", { p_company: name, p_country: country, p_business_type: btype, p_scope: scope, p_employees: emp, p_phone: phone, p_city: g("nc-city"), p_reg_no: g("nc-reg"), p_currency: (g("nc-cur") || "USD").toUpperCase().slice(0, 3) || "USD", p_tc_version: TC_VERSION });
+      var res = await sb.rpc("apply_for_company", { p_company: name, p_country: country, p_business_type: btype, p_scope: scope, p_employees: emp, p_phone: phone, p_city: city, p_reg_no: g("nc-reg"), p_currency: (g("nc-cur") || "USD").toUpperCase().slice(0, 3) || "USD", p_tc_version: TC_VERSION });
       if (res.error || !res.data) { err.textContent = "Could not submit: " + ((res.error && res.error.message) || "unexpected error") + "."; create.disabled = false; create.textContent = "Submit application"; return; }
       boot(); // -> pending gate -> renderPendingApproval
     };
@@ -9992,6 +9993,21 @@
   // Per-country defaults: presentation currency, the label the fiscal ID goes by,
   // the standard indirect-tax rate(s), and statutory number/date formatting. Applying
   // a pack seeds the taxes and records the format so documents read the local way.
+  var COUNTRY_LIST = ["Australia", "Bahrain", "Canada", "Cyprus", "Egypt", "France", "Germany", "India", "Iraq", "Italy", "Jordan", "Kuwait", "Lebanon", "Netherlands", "Nigeria", "Oman", "Qatar", "Saudi Arabia", "Spain", "Sweden", "Switzerland", "Turkey", "United Arab Emirates", "United Kingdom", "United States", "Other"];
+  function countrySelectHTML(id, cur, attrs) {
+    var lc = String(cur || "").toLowerCase();
+    var has = COUNTRY_LIST.some(function (c) { return c.toLowerCase() === lc; });
+    return '<select id="' + id + '" ' + (attrs || "") + '><option value="">Select country...</option>' +
+      COUNTRY_LIST.map(function (c) { return '<option' + (c.toLowerCase() === lc ? " selected" : "") + '>' + c + '</option>'; }).join("") +
+      (cur && !has ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
+  }
+  var INDUSTRY_LIST = ["Construction / contracting", "Facade / cladding", "Fit-out / interiors", "MEP / engineering", "Architecture / consulting", "Property development", "Real estate", "Manufacturing", "Trading / distribution", "Retail", "Hospitality", "Healthcare", "Education", "Professional services", "Technology / software", "Logistics / transport", "Agriculture", "Other"];
+  function industrySelectHTML(id, cur) {
+    var has = INDUSTRY_LIST.some(function (c) { return c === cur; });
+    return '<select id="' + id + '"><option value="">Select industry...</option>' +
+      INDUSTRY_LIST.map(function (c) { return '<option' + (c === cur ? " selected" : "") + '>' + c + '</option>'; }).join("") +
+      (cur && !has ? '<option selected>' + esc(cur) + '</option>' : '') + '</select>';
+  }
   var COUNTRY_PACKS = {
     "lebanon": { currency: "USD", taxIdLabel: "VAT No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 11%", rate: 11 }] },
     "united arab emirates": { currency: "AED", taxIdLabel: "TRN", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 5%", rate: 5 }] },
@@ -10046,23 +10062,26 @@
       fld("Legal / registered name", '<input id="cp-legal" value="' + esc(c.legal_name || "") + '" placeholder="e.g. Skyline Facades SARL">', "Printed on official documents.") +
       fld("VAT / Tax number", '<input id="cp-vat" value="' + esc(c.tax_id || "") + '">') +
       '</div><div>' +
-      fld("Country", '<input id="cp-country" value="' + esc(c.country || "") + '" placeholder="e.g. Lebanon">') +
+      fld("Country", countrySelectHTML("cp-country", c.country || ""), "Sets the standard VAT rates, currency and date format for this company.") +
       fld("Currency", currencySelectHTML("cp-cur", c.currency_code || "USD"), "The ledger currency for this company.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Localization</h3><div class="sub" style="margin:-4px 0 12px">Applying a country pack seeds the standard tax rates, sets the fiscal-ID label and the number/date format your documents use.</div><div id="cp-loc"></div></div>' +
       '<div class="card"><h3 class="cp-sec">Tax &amp; accounting</h3><div class="sub" style="margin:-4px 0 12px">How this company is taxed and when its financial year runs - used across invoices, the VAT report and year-end.</div><div class="o-groups"><div>' +
       fld("VAT / sales-tax registered", '<select id="cp-vatreg"><option value="">-</option><option value="yes"' + (p.vat_registered === "yes" ? " selected" : "") + '>Yes - we charge tax</option><option value="no"' + (p.vat_registered === "no" ? " selected" : "") + '>No - not registered</option></select>', "Whether this company is registered to charge VAT / sales tax.") +
-      fld("Industry", '<input id="cp-industry" value="' + esc(p.industry || "") + '" placeholder="e.g. Facade contracting">', "Your line of business.") +
+      fld("Industry", industrySelectHTML("cp-industry", p.industry || ""), "Your line of business.") +
       '</div><div>' +
       fld("Fiscal year starts", '<select id="cp-fystart">' + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(function (nm, ix) { var v = String(ix + 1); return '<option value="' + v + '"' + (String(p.fiscal_year_start || "1") === v ? " selected" : "") + '>' + nm + '</option>'; }).join("") + '</select>', "The month your financial year begins - drives report periods and year-end.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
-      fld("Address", '<textarea id="cp-addr" rows="3" ' + ta + ' placeholder="Street, building...">' + esc(p.address || "") + '</textarea>') +
-      fld("City", '<input id="cp-city" value="' + esc(p.city || "") + '">') +
+      fld("Address line 1", '<input id="cp-addr" value="' + esc(p.address || "") + '" placeholder="Street, building">') +
+      fld("Address line 2", '<input id="cp-addr2" value="' + esc(p.address2 || "") + '" placeholder="Unit, floor (optional)">') +
+      fld("City", '<input id="cp-city" value="' + esc(p.city || "") + '" placeholder="e.g. Beirut">', "Required.") +
+      fld("State / Region", '<input id="cp-state" value="' + esc(p.state || "") + '" placeholder="optional">') +
+      fld("Postal code", '<input id="cp-zip" value="' + esc(p.postal_code || "") + '" placeholder="optional">') +
       fld("Website", '<input id="cp-web" value="' + esc(p.website || "") + '" placeholder="www.example.com">') +
       '</div><div>' +
-      fld("Phone", '<input id="cp-phone" value="' + esc(p.phone || "") + '" placeholder="+961 ...">') +
-      fld("Phone 2", '<input id="cp-phone2" value="' + esc(p.phone2 || "") + '" placeholder="optional">') +
+      fld("Phone", phoneFieldHTML("cp-phone", { phone_cc: p.phone_cc, phone_area: p.phone_area, phone_num: p.phone_num, phone: p.phone }), "Dialing code, area code and number.") +
+      fld("Phone 2", phoneFieldHTML("cp-phone2", { phone_cc: p.phone2_cc, phone_area: p.phone2_area, phone_num: p.phone2_num, phone: p.phone2 })) +
       fld("Email", '<input id="cp-email" type="email" value="' + esc(p.email || "") + '">') +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Social links</h3><div class="o-groups"><div>' +
@@ -10087,10 +10106,11 @@
     if (ps.show_logo === false) document.getElementById("cp-showlogo").value = "0";
     var logoData = (p.logo != null ? p.logo : (ps.logo || "")) || "";
     function curData() {
+      var _addr = [gv("cp-addr"), gv("cp-addr2")].filter(Boolean).join(", ");
       return printTplData({
         name: gv("cp-name"), legal_name: gv("cp-legal"), vat: gv("cp-vat"), country: gv("cp-country"),
-        address: document.getElementById("cp-addr").value || "", city: gv("cp-city"), website: gv("cp-web"),
-        phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), logo: logoData,
+        address: _addr, city: gv("cp-city"), website: gv("cp-web"),
+        phone: collectPhone("cp-phone").combined || "", phone2: collectPhone("cp-phone2").combined || "", email: gv("cp-email"), logo: logoData,
         template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1),
         accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1"
       });
@@ -10125,12 +10145,20 @@
       };
     }
     paintLoc();
-    var cpCountryEl = document.getElementById("cp-country"); if (cpCountryEl) cpCountryEl.addEventListener("input", paintLoc);
+    var cpCountryEl = document.getElementById("cp-country"); if (cpCountryEl) cpCountryEl.addEventListener("change", function () {
+      paintLoc();
+      // selecting a country pre-fills the ledger currency from its pack (only if still on the default)
+      var pk = countryPack(gv("cp-country")); var curEl = document.getElementById("cp-cur");
+      if (pk && curEl && (!curEl.value || curEl.value === "USD")) curEl.value = pk.currency;
+      paintPreview();
+    });
     document.querySelectorAll("#o-body input, #o-body textarea, #o-body select").forEach(function (el) { el.addEventListener("input", paintPreview); el.addEventListener("change", paintPreview); });
     document.querySelectorAll(".cp-tpl").forEach(function (l) { l.addEventListener("click", function () { setTimeout(paintPreview, 0); }); });
     document.getElementById("cp-save").onclick = async function () {
+      if (!gv("cp-city")) { toast("Enter the city"); return; }
       var sv = document.getElementById("cp-save"); sv.disabled = true;
-      var profile = { address: (document.getElementById("cp-addr").value || ""), city: gv("cp-city"), phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
+      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };

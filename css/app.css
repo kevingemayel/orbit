@@ -80,6 +80,10 @@ button{font-family:inherit}
 .login label{font-size:12px;color:var(--ink2);font-weight:600;display:block;margin:12px 0 5px}
 .login input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px}
 .login input:focus{outline:none;border-color:var(--accent)}
+.login input[type="checkbox"]{width:16px;height:16px;min-width:16px;padding:0;border-radius:4px;flex:0 0 auto;accent-color:var(--accent);cursor:pointer}
+.login .tc-agree{display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:13px;color:var(--ink2);font-weight:400;line-height:1.4;cursor:pointer}
+.login .tc-agree a{color:var(--accent);cursor:pointer;font-weight:600}
+.login select{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px}
 .login .err{color:var(--bad);font-size:12.5px;margin-top:10px;min-height:16px}
 .login .switch{font-size:12.5px;color:var(--ink3);margin-top:14px;text-align:center}
 .login .switch a{cursor:pointer}
@@ -608,7 +612,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-title input{font-size:26px;font-weight:800;border:1px solid var(--line);border-radius:8px;padding:4px 10px;background:var(--panel2);color:var(--ink);width:100%;max-width:360px}
 .o-groups{display:grid;grid-template-columns:1fr 1fr;gap:10px 34px;margin-bottom:8px}
 .o-fld{display:grid;grid-template-columns:180px 1fr;align-items:start;gap:14px;padding:9px 0;border-bottom:1px dashed var(--line)}
-.o-fld .lbl label{font-size:12.5px;color:var(--ink2);font-weight:600;display:block}
+.o-fld .lbl label{font-size:12.5px;color:var(--ink2);font-weight:600;display:block;cursor:default}
 .o-fld .lbl .d{display:block;font-size:11px;color:var(--ink3);font-weight:400;margin-top:2px;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:help}
 .o-fld .lbl-row{display:flex;align-items:center;gap:6px}
 /* per-field help "?" button + popover (see helpQ/showFieldHelp) */
