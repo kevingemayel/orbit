@@ -1750,7 +1750,7 @@
   }
 
   // ============================ APPROVALS ============================
-  var APPR_DOC_LABEL = { purchase_order: "Purchase order", sales_order: "Sales order", vendor_bill: "Vendor bill", customer_invoice: "Customer invoice", subcontract: "Subcontract", variation: "Variation", expense: "Expense" };
+  var APPR_DOC_LABEL = { purchase_order: "Purchase order", sales_order: "Sales order", vendor_bill: "Vendor bill", customer_invoice: "Customer invoice", subcontract: "Subcontract", variation: "Variation", expense: "Expense", journal_entry: "Journal entry", payroll: "Payroll run" };
   // Returns "ok" (allowed to post) or "blocked" (approval requested / awaiting).
   async function approvalGate(docType, docId, docNumber, amount, backAction) {
     var rules = (await sb.from("approval_rules").select("*").eq("company_id", S.company.id).eq("doc_type", docType).eq("is_active", true)).data || [];
@@ -2825,6 +2825,7 @@
     var postB = document.getElementById("je-post"); if (postB) postB.onclick = async function () {
       if (isLocked(gv("je-date"))) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
       var eid = await persist(); if (!eid) return;
+      var _t = totals(); var _jg = await approvalGate("journal_entry", eid, gv("je-narr") || "Journal entry", _t.d, null); if (_jg === "blocked") { go("moves"); return; }
       var pe = await sb.rpc("post_entry", { p_entry: eid }); if (pe.error) { toast("Could not post: " + errMsg(pe.error)); return; }
       toast("Posted"); go("moves");
     };
@@ -3216,7 +3217,11 @@
       var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
       var lr = await sb.from("invoice_lines").insert(rows);
       if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
-      if (alsoPost) { var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + errMsg(pr.error)); return invId; } }
+      if (alsoPost) {
+        var _adt = moveType === "out_invoice" ? "customer_invoice" : (moveType === "in_invoice" ? "vendor_bill" : null);
+        if (_adt) { var _ag = await approvalGate(_adt, invId, (hdr.number || (inv && inv.number) || ""), untax + taxTot, null); if (_ag === "blocked") return invId; }
+        var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + errMsg(pr.error)); return invId; }
+      }
       return invId;
     }
     if (editable) {
@@ -12524,6 +12529,8 @@
     var pab = document.getElementById("pr-postall"); if (pab) pab.onclick = async function () {
       var todo = (await sb.from("hr_payslips").select("*").eq("company_id", S.company.id).eq("run_id", id).eq("state", "draft")).data || [];
       if (!todo.length) { toast("No draft payslips to post"); return; }
+      var _payTot = todo.reduce(function (s, x) { return s + Number(x.net || 0); }, 0);
+      var _pg = await approvalGate("payroll", id, (run.name || "Payroll run"), _payTot, null); if (_pg === "blocked") return;
       var n = 0; for (var i = 0; i < todo.length; i++) { if (await postPayslip(todo[i])) n++; }
       await sb.from("hr_payslip_runs").update({ state: "done" }).eq("id", id);
       toast(n + " payslip(s) posted to the ledger"); renderPayslipRunForm(id);
