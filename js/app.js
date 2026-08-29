@@ -12758,13 +12758,15 @@
       if (!known) { missing[co.currency_code] = 1; factor = 1; }
       var gRef = gross * factor, eRef = employer * factor, nRef = net * factor;
       totGross += gRef; totEmployer += eRef; totNet += nRef;
-      rows.push('<tr><td>' + esc(co.name) + '</td><td class="muted">' + esc(co.currency_code) + '</td><td class="num">' + money(gRef) + '</td><td class="num">' + money(eRef) + '</td><td class="num">' + money(gRef + eRef) + '</td><td class="num">' + money(nRef) + '</td></tr>');
+      var rateCell = co.currency_code === ref ? '<span class="muted">1.0000</span>' : (known ? Number(factor).toFixed(4) : '<span style="color:var(--warn)">1:1 no rate</span>');
+      var native = co.currency_code === ref ? '' : '<div class="muted" style="font-size:11px">' + esc(co.currency_code) + " " + money(gross) + ' &rarr;</div>';
+      rows.push('<tr><td>' + esc(co.name) + '</td><td class="muted">' + esc(co.currency_code) + '</td><td class="num">' + rateCell + '</td><td class="num">' + native + money(gRef) + '</td><td class="num">' + money(eRef) + '</td><td class="num">' + money(gRef + eRef) + '</td><td class="num">' + money(nRef) + '</td></tr>');
     }
     var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
-    document.getElementById("rep").innerHTML = '<h1>Payroll Consolidation</h1><div class="sub">' + esc((S.org && S.org.name) || S.company.name) + ' &middot; ' + ref + ' &middot; posted payslips</div>' + banner +
-      '<table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Gross</td><td class="num">Employer cost</td><td class="num">Total cost</td><td class="num">Net</td></tr></thead><tbody>' +
-      (rows.join("") || '<tr><td colspan="6" class="muted">No posted payslips yet.</td></tr>') +
-      '<tr class="tot"><td colspan="2">Total (' + ref + ')</td><td class="num">' + money(totGross) + '</td><td class="num">' + money(totEmployer) + '</td><td class="num">' + money(totGross + totEmployer) + '</td><td class="num">' + money(totNet) + '</td></tr>' +
+    document.getElementById("rep").innerHTML = '<h1>Payroll Consolidation</h1><div class="sub">All ' + S.companies.length + ' entities, converted to <b>' + esc(ref) + '</b> at the latest exchange rate (rate + native amount shown per entity) &middot; posted payslips</div>' + banner +
+      '<table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Gross</td><td class="num">Employer cost</td><td class="num">Total cost</td><td class="num">Net</td></tr></thead><tbody>' +
+      (rows.join("") || '<tr><td colspan="7" class="muted">No posted payslips yet.</td></tr>') +
+      '<tr class="tot"><td colspan="3">Total (' + ref + ')</td><td class="num">' + money(totGross) + '</td><td class="num">' + money(totEmployer) + '</td><td class="num">' + money(totGross + totEmployer) + '</td><td class="num">' + money(totNet) + '</td></tr>' +
       '</tbody></table>';
   }
 
@@ -12861,7 +12863,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
     var sel = (S.jobCostProj && projs.some(function (p) { return p.id === S.jobCostProj; })) ? S.jobCostProj : projs[0].id;
-    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills), grouped by cost code. Assign cost codes on budget, PO and bill lines to fill it in.</div><div id="jc-table"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills + materials issued from stock + site labour), grouped by cost code. Stock/labour show under Uncoded. The Actual total matches Project P&amp;L.</div><div id="jc-table"><div class="o-empty">Loading...</div></div></div></div>';
     document.getElementById("jc-proj").onchange = function () { jobCostTable(this.value); };
     jobCostTable(sel);
   }
@@ -12877,6 +12879,12 @@
     buds.forEach(function (b) { bucket(b.cost_code_id).budget += Number(b.amount) || 0; });
     pos.forEach(function (p) { if (["sent", "purchase", "done"].indexOf(p.state) >= 0) bucket(p.cost_code_id).committed += Number(p.amount_untaxed) || Number(p.amount_total) || 0; });
     bills.forEach(function (b) { if (b.state === "posted") bucket(b.cost_code_id).actual += Number(b.amount_untaxed) || Number(b.amount_total) || 0; });
+    // Materials issued from stock + site labour are real actual cost too (Project P&L counts them),
+    // so include them here (as Uncoded) - otherwise Job Cost and Project P&L contradict each other.
+    var jcIssues = (await sb.from("stock_moves").select("quantity,products(cost_price)").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    jcIssues.forEach(function (m) { bucket("_none").actual += Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); });
+    var jcLabour = (await sb.from("install_jobs").select("labour_cost").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
+    jcLabour.forEach(function (l) { bucket("_none").actual += Number(l.labour_cost || 0); });
     var codeById = {}; codes.forEach(function (c) { codeById[c.id] = c; });
     var order = codes.map(function (c) { return c.id; }).filter(function (id) { return map[id]; });
     Object.keys(map).forEach(function (id) { if (id !== "_none" && order.indexOf(id) < 0) order.push(id); });
