@@ -9051,7 +9051,7 @@
     { key: "numbering", n: "Document numbering", why: "Choose how invoices, POs, tenders and certificates are numbered (prefix, year, running digits).", cta: "Set numbering", go: "settings.numbering" },
     { key: "taxes", n: "Tax rates", why: "Add your VAT / sales-tax rates so quotes and invoices calculate the right totals.", cta: "Add tax rates", go: "taxes" },
     { key: "team", n: "Your team", why: "Add the people who work with you, so you can assign tasks and run payroll.", cta: "Add people", go: "hr.emp" },
-    { key: "customer", n: "First customer", why: "Add a client you will bill. Contacts are shared across all your companies.", cta: "Add a customer", go: "cust" },
+    { key: "customer", n: "First customer", why: "Add a client you will bill. Each company keeps its own contacts.", cta: "Add a customer", go: "cust" },
     { key: "project", n: "First project", why: "Create the job you are delivering. Budget, BOQ, certificates and the execution board all hang off a project.", cta: "Create a project", go: "proj.list" }
   ];
   // compute which steps are done, from live data (cheap head/count queries, each tolerant of failure)
@@ -10016,6 +10016,12 @@
       fld("Currency", currencySelectHTML("cp-cur", c.currency_code || "USD"), "The ledger currency for this company.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Localization</h3><div class="sub" style="margin:-4px 0 12px">Applying a country pack seeds the standard tax rates, sets the fiscal-ID label and the number/date format your documents use.</div><div id="cp-loc"></div></div>' +
+      '<div class="card"><h3 class="cp-sec">Tax &amp; accounting</h3><div class="sub" style="margin:-4px 0 12px">How this company is taxed and when its financial year runs - used across invoices, the VAT report and year-end.</div><div class="o-groups"><div>' +
+      fld("VAT / sales-tax registered", '<select id="cp-vatreg"><option value="">-</option><option value="yes"' + (p.vat_registered === "yes" ? " selected" : "") + '>Yes - we charge tax</option><option value="no"' + (p.vat_registered === "no" ? " selected" : "") + '>No - not registered</option></select>', "Whether this company is registered to charge VAT / sales tax.") +
+      fld("Industry", '<input id="cp-industry" value="' + esc(p.industry || "") + '" placeholder="e.g. Facade contracting">', "Your line of business.") +
+      '</div><div>' +
+      fld("Fiscal year starts", '<select id="cp-fystart">' + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(function (nm, ix) { var v = String(ix + 1); return '<option value="' + v + '"' + (String(p.fiscal_year_start || "1") === v ? " selected" : "") + '>' + nm + '</option>'; }).join("") + '</select>', "The month your financial year begins - drives report periods and year-end.") +
+      '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
       fld("Address", '<textarea id="cp-addr" rows="3" ' + ta + ' placeholder="Street, building...">' + esc(p.address || "") + '</textarea>') +
       fld("City", '<input id="cp-city" value="' + esc(p.city || "") + '">') +
@@ -10090,7 +10096,7 @@
     document.querySelectorAll(".cp-tpl").forEach(function (l) { l.addEventListener("click", function () { setTimeout(paintPreview, 0); }); });
     document.getElementById("cp-save").onclick = async function () {
       var sv = document.getElementById("cp-save"); sv.disabled = true;
-      var profile = { address: (document.getElementById("cp-addr").value || ""), city: gv("cp-city"), phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var profile = { address: (document.getElementById("cp-addr").value || ""), city: gv("cp-city"), phone: gv("cp-phone"), phone2: gv("cp-phone2"), email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
