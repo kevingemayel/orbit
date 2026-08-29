@@ -4519,6 +4519,8 @@
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
       var name = gv("pr-name"); if (!name) { toast("Name is required"); return; }
+      var _ptype = document.getElementById("pr-type").value;
+      if ((_ptype === "storable" || _ptype === "consumable") && !gv("pr-uom")) { toast("A stock item needs a unit of measure (UOM) so quantities are unambiguous."); return; }
       var row = {
         name: name, default_code: gv("pr-code"), type: document.getElementById("pr-type").value,
         category_id: document.getElementById("pr-cat").value || null, uom: gv("pr-uom") || null,
