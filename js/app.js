@@ -819,7 +819,7 @@
       name: "Site & Install", icon: "✓", color: "#ca8a04", color2: "#a16207", home: "site.snags",
       menus: [
         { label: "Install Jobs", action: "inst.jobs" },
-        { label: "Snagging", action: "site.snags" },
+        { label: "Snags", action: "site.snags" },
         { label: "Inspections", action: "site.insp" },
         { label: "Inspection Checklists", action: "site.inspt" },
         { label: "Plant & Equipment", action: "site.plant" },
@@ -1110,23 +1110,33 @@
       '<h1>' + (mode === "in" ? "Sign in to Orbit" : "Create your account") + "</h1>" +
       '<p class="sub">Business management for the built environment</p>' +
       '<label>Email</label><input id="email" type="email" autocomplete="username" placeholder="you@company.com">' +
-      '<label>Password</label><input id="pw" type="password" autocomplete="current-password" placeholder="........">' +
+      '<label>Password' + (mode === "up" ? ' <span class="sub" style="font-weight:400">(at least 8 characters)</span>' : '') + '</label><input id="pw" type="password" autocomplete="' + (mode === "in" ? "current-password" : "new-password") + '" placeholder="........">' +
       (HCAPTCHA_SITE_KEY ? '<div id="cf-widget" style="margin-top:14px"></div>' : '') +
       (mode === "in" ? '<label class="rememberrow"><input type="checkbox" id="remember"' + (_remember ? " checked" : "") + '> Keep me signed in on this device</label>' : '') +
       '<div class="err" id="err"></div>' +
       '<button class="btn pri" id="go" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">' + (mode === "in" ? "Sign in" : "Sign up") + "</button>" +
+      (mode === "in" ? '<div class="switch"><a id="forgot">Forgot your password?</a></div>' : '') +
       '<div class="switch">' + (mode === "in" ? 'No account yet? <a id="sw">Create one</a>' : 'Already have an account? <a id="sw">Sign in</a>') + "</div>" +
       "</div></div>";
     document.getElementById("sw").onclick = function () { renderLogin(mode === "in" ? "up" : "in"); };
     document.getElementById("go").onclick = doAuth.bind(null, mode);
     document.getElementById("pw").onkeydown = function (e) { if (e.key === "Enter") doAuth(mode); };
+    var fg = document.getElementById("forgot"); if (fg) fg.onclick = doReset;
     mountHcaptcha();
+  }
+  async function doReset() {
+    var email = (document.getElementById("email") || {}).value ? document.getElementById("email").value.trim() : "";
+    var err = document.getElementById("err"); if (err) err.textContent = "";
+    if (!email) { if (err) err.textContent = "Enter your email above first, then click Forgot your password."; return; }
+    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (err) { err.style.color = res.error ? "" : "var(--good)"; err.textContent = res.error ? res.error.message : "If that email has an account, a password-reset link is on its way. Open it on this device to set a new password."; }
   }
   async function doAuth(mode) {
     var email = document.getElementById("email").value.trim();
     var pw = document.getElementById("pw").value;
     var err = document.getElementById("err"); err.textContent = "";
     if (!email || !pw) { err.textContent = "Enter your email and password."; return; }
+    if (mode === "up" && pw.length < 8) { err.textContent = "Use at least 8 characters for your password."; return; }
     var rm = document.getElementById("remember"); if (rm) { _remember = rm.checked; localStorage.setItem(REMEMBER_KEY, _remember ? "1" : "0"); }
     var creds = { email: email, password: pw };
     if (HCAPTCHA_SITE_KEY) {
@@ -1137,6 +1147,24 @@
     if (res.error) { err.textContent = res.error.message; if (HCAPTCHA_SITE_KEY && window.hcaptcha) { try { window.hcaptcha.reset(_hcaptchaId); } catch (e) {} window.__cfToken = ""; } return; }
     if (mode === "up" && !res.data.session) { err.textContent = "Check your email to confirm, then sign in."; return; }
     boot();
+  }
+  function renderSetNewPassword() {
+    root.innerHTML = '<div class="login"><div class="card">' +
+      '<div class="brandrow"><div class="lockup">' + orbitLockup() + '</div><div class="byline">by Space Work</div></div>' +
+      '<h1>Set a new password</h1><p class="sub">Choose a new password for your account.</p>' +
+      '<label>New password <span class="sub" style="font-weight:400">(at least 8 characters)</span></label><input id="np" type="password" autocomplete="new-password" placeholder="........">' +
+      '<div class="err" id="nperr"></div>' +
+      '<button class="btn pri" id="npgo" style="width:100%;margin-top:14px;background:var(--accent);border-color:var(--accent)">Update password</button>' +
+      '</div></div>';
+    document.getElementById("npgo").onclick = async function () {
+      var pw = document.getElementById("np").value, err = document.getElementById("nperr");
+      if (!pw || pw.length < 8) { err.textContent = "Use at least 8 characters."; return; }
+      var res = await sb.auth.updateUser({ password: pw });
+      if (res.error) { err.textContent = res.error.message; return; }
+      err.style.color = "var(--good)"; err.textContent = "Password updated. Signing you in...";
+      setTimeout(boot, 800);
+    };
+    document.getElementById("np").onkeydown = function (e) { if (e.key === "Enter") document.getElementById("npgo").click(); };
   }
   async function signOut() { await sb.auth.signOut(); renderLogin("in"); }
 
@@ -3408,7 +3436,8 @@
   function fhint(label, override) {
     var d = override || FIELD_DESC[label] || "";
     var full = override || FIELD_HELP[label] || FIELD_DESC[label] || "";
-    return (full ? helpQ(full, label) : "") + (d ? '<div class="fd">' + esc(d) + '</div>' : "");
+    var lbl = (label && String(label).indexOf("__") === 0) ? "this field" : label; // never leak an internal key (e.g. __kproj) into the aria-label / tooltip
+    return (full ? helpQ(full, lbl) : "") + (d ? '<div class="fd">' + esc(d) + '</div>' : "");
   }
   // field-help popover (delegated; one handler for every "?" on the page)
   function closeFieldHelp() { document.querySelectorAll("[data-fpop]").forEach(function (p) { p.remove(); }); }
@@ -16110,6 +16139,6 @@
 
   // ---- start ----
   applyTheme();
-  sb.auth.onAuthStateChange(function (_e, session) { if (!session) renderLogin("in"); });
+  sb.auth.onAuthStateChange(function (_e, session) { if (_e === "PASSWORD_RECOVERY") { renderSetNewPassword(); return; } if (!session) renderLogin("in"); });
   boot();
 })();
