@@ -6739,7 +6739,7 @@
     var rep = document.getElementById("rep");
     rep.innerHTML = repHead("Data Health Check", cc) + '<div class="sub" style="margin:6px 0 12px">Automated integrity checks on this company\'s books. Green means the data is internally consistent - run it any time, especially after a big import or month-end.</div><div id="dh-body"><div class="o-empty">Running checks...</div></div>';
     var checks = [], r2 = function (x) { return Math.round(x * 100) / 100; };
-    function add(name, ok, detail) { checks.push({ name: name, ok: ok, detail: detail }); }
+    function add(name, ok, detail, warn) { checks.push({ name: name, ok: ok, detail: detail, warn: !!warn }); }
     var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
     var dr = 0, cr = 0; tb.forEach(function (r) { dr += Number(r.debit) || 0; cr += Number(r.credit) || 0; });
     add("Trial balance balances", Math.abs(dr - cr) < 0.01, "Debits " + cc + " " + money(dr) + " vs credits " + cc + " " + money(cr));
@@ -6761,10 +6761,39 @@
     var oh = {}; moves.forEach(function (m) { var q = Number(m.quantity) || 0; if (internal[m.location_dest_id]) oh[m.product_id] = (oh[m.product_id] || 0) + q; if (internal[m.location_id]) oh[m.product_id] = (oh[m.product_id] || 0) - q; });
     var neg = Object.keys(oh).filter(function (k) { return oh[k] < -0.001; });
     add("No negative stock on hand", neg.length === 0, neg.length ? neg.length + " product(s) below zero" : "all on-hand >= 0");
-    var allOk = checks.every(function (c) { return c.ok; });
-    var banner = '<div class="ob-banner" style="margin:0 0 12px;background:' + (allOk ? "var(--good-s,#e7f6ec)" : "var(--bad-s,#fdeaea)") + ';color:' + (allOk ? "var(--good,#127a2e)" : "var(--bad,#b3261e)") + '">' + (allOk ? "&#10003; All checks passed - the books are internally consistent." : "&#9888; Some checks need attention - see below.") + '</div>';
+
+    // ---- reconciliation suite (added) ----
+    // Suspense / to allocate (4700) must be cleared - direct stock receipts park value here until matched.
+    var susp = Math.abs(acc("4700"));
+    add("Suspense (4700) is cleared", susp < 0.5, susp < 0.5 ? "nothing parked in suspense" : money(susp) + " sitting in Suspense (4700) - allocate the receipt/payment or clear it with a journal");
+    // Journal entries: numbering + stranded drafts.
+    var jes = (await sb.from("journal_entries").select("id,number,state").eq("company_id", S.company.id)).data || [];
+    var unnum = jes.filter(function (j) { return j.state === "posted" && (!j.number || String(j.number).trim() === "" || String(j.number).trim() === "/"); });
+    add("Every posted journal entry is numbered", unnum.length === 0, unnum.length ? unnum.length + " posted entr(y/ies) unnumbered ('/') - set document numbering in Settings so entries get real numbers" : "all numbered");
+    var jdraft = jes.filter(function (j) { return j.state !== "posted"; });
+    add("No stranded draft journal entries", jdraft.length === 0, jdraft.length ? jdraft.length + " draft entr(y/ies) not posted (not yet in the ledger)" : "none pending", true);
+    // Cash / bank should never be negative.
+    var negCash = tb.filter(function (t) { return t.type_code === "asset_cash" && Number(t.balance) < -0.5; });
+    add("No negative cash / bank balances", negCash.length === 0, negCash.length ? negCash.map(function (t) { return (t.code || "") + " " + money(t.balance); }).join(", ") : "all cash/bank >= 0");
+    // Every payment ties to a journal entry.
+    var pays = (await sb.from("payments").select("id,entry_id").eq("company_id", S.company.id)).data || [];
+    var payNoEnt = pays.filter(function (p) { return !p.entry_id; });
+    add("Every payment has a journal entry", payNoEnt.length === 0, payNoEnt.length ? payNoEnt.length + " payment(s) with no journal entry" : "all " + pays.length + " journalled");
+    // Duplicate document numbers within the same move type.
+    var _seen = {}, _dups = {}; inv.forEach(function (i) { if (!i.number) return; var k = (i.move_type || "") + "|" + i.number; if (_seen[k]) _dups[i.number] = 1; _seen[k] = 1; });
+    var dupN = Object.keys(_dups);
+    add("No duplicate document numbers", dupN.length === 0, dupN.length ? "duplicates: " + dupN.slice(0, 6).join(", ") : "all document numbers unique");
+    // Draft (unposted) invoices/bills, informational.
+    var invDraft = inv.filter(function (i) { return i.state !== "posted" && i.state !== "cancelled"; });
+    add("No forgotten draft invoices / bills", invDraft.length === 0, invDraft.length ? invDraft.length + " still in draft (not in the ledger or on statements)" : "none pending", true);
+
+    var fails = checks.filter(function (c) { return !c.ok && !c.warn; });
+    var warns = checks.filter(function (c) { return !c.ok && c.warn; });
+    var allOk = fails.length === 0;
+    var msg = allOk ? (warns.length ? "&#10003; No integrity problems - " + warns.length + " item(s) to review (draft/pending, in amber below)." : "&#10003; All checks passed - the books are internally consistent.") : ("&#9888; " + fails.length + " check(s) need attention - see the red rows below.");
+    var banner = '<div class="ob-banner" style="margin:0 0 12px;background:' + (allOk ? "var(--good-s,#e7f6ec)" : "var(--bad-s,#fdeaea)") + ';color:' + (allOk ? "var(--good,#127a2e)" : "var(--bad,#b3261e)") + '">' + msg + '</div>';
     var table = '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Check</td><td>Result</td><td>Detail</td></tr></thead><tbody>' +
-      checks.map(function (c) { return '<tr><td>' + esc(c.name) + '</td><td><span class="badge ' + (c.ok ? "paid" : "unpaid") + '">' + (c.ok ? "PASS" : "FAIL") + '</span></td><td class="muted">' + esc(c.detail) + '</td></tr>'; }).join("") + '</tbody></table></div>';
+      checks.map(function (c) { var lbl = c.ok ? "PASS" : (c.warn ? "REVIEW" : "FAIL"); var cls = c.ok ? "paid" : (c.warn ? "draft" : "unpaid"); return '<tr><td>' + esc(c.name) + '</td><td><span class="badge ' + cls + '">' + lbl + '</span></td><td class="muted">' + esc(c.detail) + '</td></tr>'; }).join("") + '</tbody></table></div>';
     document.getElementById("dh-body").innerHTML = banner + table;
   }
 
