@@ -5324,6 +5324,19 @@
     document.body.appendChild(m);
     if (id) wireAttach("company");
     document.getElementById("co-cancel").onclick = function () { m.remove(); };
+    // picking a country pre-fills the ledger currency from its pack, matching the
+    // Company Profile + sign-up forms - but only while the user hasn't hand-picked a currency
+    var coCountryEl = document.getElementById("co-country");
+    if (coCountryEl) {
+      var coCurAuto = (document.getElementById("co-cur").value || "").toUpperCase();
+      coCountryEl.addEventListener("change", function () {
+        var pk = countryPack(coCountryEl.value), curEl = document.getElementById("co-cur");
+        if (!pk || !curEl) return;
+        if ((curEl.value || "").toUpperCase() !== coCurAuto) return; // user chose their own - leave it
+        var want = String(pk.currency || "").toUpperCase();
+        if (want && [].some.call(curEl.options, function (o) { return o.value.toUpperCase() === want; })) { curEl.value = want; coCurAuto = want; }
+      });
+    }
     document.getElementById("co-save").onclick = async function () {
       var name = gv("co-name"); if (!name) { toast("Enter a company name"); return; }
       var row = { name: name, legal_name: gv("co-legal") || null, currency_code: (gv("co-cur") || "USD").toUpperCase().slice(0, 3), country: document.getElementById("co-country").value || null, parent_company_id: document.getElementById("co-parent").value || null };
