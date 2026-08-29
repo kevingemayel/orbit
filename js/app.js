@@ -2667,8 +2667,47 @@
         { label: "Reference", get: function (p) { return esc(p.reference || p.memo || ""); } },
         { label: "Amount", num: true, get: function (p) { return moneyC(p.amount, p.currency_code); } }
       ],
-      groupBy: [{ label: "Partner", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Month", get: function (p) { return (p.date || "").slice(0, 7); } }]
+      groupBy: [{ label: "Partner", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Month", get: function (p) { return (p.date || "").slice(0, 7); } }],
+      onOpen: function (p) { openPaymentView(p); }
     };
+  }
+  async function openPaymentView(p) {
+    var pname = p.partners ? p.partners.name : ((await sb.from("partners").select("name").eq("id", p.partner_id).maybeSingle()).data || {}).name || "";
+    var inbound = p.payment_type === "inbound";
+    var canW = canManageApp("accounting");
+    var m = document.createElement("div"); m.className = "modal on";
+    var rowsH = [["Date", p.date], ["Partner", pname], ["Type", inbound ? "Customer receipt" : "Vendor payment"], ["Reference", p.reference || p.memo], ["Memo", p.memo]]
+      .filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:var(--ink2);padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
+    m.innerHTML = '<div class="sheet"><h3>Payment ' + esc(p.reference || "") + '</h3>' +
+      '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
+      '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' +
+      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-rev" style="color:var(--bad)">Reverse payment</button>' : '') + '</div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pv-close").onclick = function () { m.remove(); };
+    var rb = document.getElementById("pv-rev"); if (rb) rb.onclick = async function () {
+      if (!confirm("Reverse this payment? It backs out the journal entry and re-opens the invoice it settled.")) return;
+      rb.disabled = true; rb.textContent = "Reversing...";
+      var r = await reversePayment(p);
+      if (r && r.error) { toast("Could not reverse: " + errMsg(r.error)); rb.disabled = false; rb.textContent = "Reverse payment"; return; }
+      m.remove(); toast("Payment reversed"); renderView();
+    };
+  }
+  async function reversePayment(p) {
+    var refNo = "REV/" + (p.reference || String(p.id).slice(0, 8));
+    var ent = p.entry_id ? ((await sb.from("journal_entries").select("source_id").eq("id", p.entry_id).maybeSingle()).data || {}) : {};
+    var invId = ent.source_id || null;
+    if (p.entry_id) {
+      var plines = (await sb.from("journal_lines").select("id").eq("entry_id", p.entry_id)).data || [];
+      var ids = plines.map(function (x) { return x.id; });
+      if (ids.length) await sb.from("partial_reconciles").delete().or("debit_line_id.in.(" + ids.join(",") + "),credit_line_id.in.(" + ids.join(",") + ")");
+      var rv = await reverseEntry(p.entry_id, refNo, "Reversal of payment " + (p.reference || "")); if (rv.error) return { error: rv.error };
+    }
+    if (invId) {
+      var inv = (await sb.from("invoices").select("amount_total,amount_residual").eq("id", invId).maybeSingle()).data;
+      if (inv) { var nr = Math.min(Number(inv.amount_total), Number(inv.amount_residual || 0) + Number(p.amount || 0)); await sb.from("invoices").update({ amount_residual: nr, payment_state: (nr >= Number(inv.amount_total) - 0.005 ? "not_paid" : "partial") }).eq("id", invId); }
+    }
+    await sb.from("payments").delete().eq("id", p.id);
+    return { ok: true };
   }
   function cfgAccounts() {
     var tName = {}; S.types.forEach(function (t) { tName[t.code] = t.name; });
@@ -2701,7 +2740,84 @@
         { label: "Status", get: function (m) { return m.state === "posted" ? '<span class="badge paid">Posted</span>' : '<span class="badge draft">Draft</span>'; } }
       ],
       filters: [{ label: "Posted", test: function (m) { return m.state === "posted"; } }, { label: "Draft", test: function (m) { return m.state !== "posted"; } }],
-      groupBy: [{ label: "Journal", get: function (m) { return m.journals ? m.journals.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }]
+      groupBy: [{ label: "Journal", get: function (m) { return m.journals ? m.journals.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }],
+      onOpen: function (m) { renderJournalEntryForm(m.id); },
+      onNew: canManageApp("accounting") ? function () { renderJournalEntryForm("new"); } : null
+    };
+  }
+  async function renderJournalEntryForm(id) {
+    var parent = { action: "moves", title: "Journal Entries" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var accts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var jrns = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
+    var genJ = jrns.filter(function (j) { return j.code === "MISC" || j.code === "GEN"; })[0] || jrns[0];
+    var ent = id === "new" ? { date: today(), state: "draft", journal_id: genJ ? genJ.id : null } : (await sb.from("journal_entries").select("*").eq("id", id).maybeSingle()).data || {};
+    var lines = id === "new" ? [{}, {}] : ((await sb.from("journal_lines").select("*").eq("entry_id", id).order("id")).data || []);
+    if (!lines.length) lines = [{}, {}];
+    var posted = ent.state === "posted";
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (ent.number || ent.ref || "Entry");
+    function acctOpts(cur) { return '<option value="">Account...</option>' + accts.map(function (a) { return '<option value="' + a.id + '"' + (cur === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>'; }).join(""); }
+    function totals() { var d = 0, c = 0; lines.forEach(function (l) { d += Number(l.debit) || 0; c += Number(l.credit) || 0; }); return { d: d, c: c, bal: Math.abs(d - c) < 0.005 && (d > 0 || c > 0) }; }
+    function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> &nbsp; ' + (t.bal ? '<span style="color:var(--good);font-weight:700">Balanced</span>' : '<span style="color:var(--bad);font-weight:700">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
+    function paint() {
+      document.getElementById("je-grid").innerHTML = lines.map(function (l, i) {
+        return '<tr>' +
+          '<td><select data-i="' + i + '" data-f="account_id"' + (posted ? " disabled" : "") + '>' + acctOpts(l.account_id) + '</select></td>' +
+          '<td><input data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Description"' + (posted ? " disabled" : "") + '></td>' +
+          '<td><input data-i="' + i + '" data-f="debit" type="number" step="0.01" style="text-align:right" value="' + (l.debit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
+          '<td><input data-i="' + i + '" data-f="credit" type="number" step="0.01" style="text-align:right" value="' + (l.credit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
+          '<td style="text-align:center">' + (posted ? "" : '<button data-del="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>';
+      }).join("");
+      document.getElementById("je-tot").innerHTML = totHTML();
+      document.querySelectorAll("#je-grid [data-i]").forEach(function (el) {
+        el.oninput = el.onchange = function () { lines[+el.dataset.i][el.dataset.f] = el.value; document.getElementById("je-tot").innerHTML = totHTML(); };
+      });
+      document.querySelectorAll("#je-grid [data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({}); paint(); }; });
+    }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted ? '<button id="je-rev" style="color:var(--bad)">Reverse</button>' : '') + '</div>' +
+      '<div class="o-stages"><span class="st ' + (posted ? "done" : "on") + '">Draft</span><span class="st ' + (posted ? "on" : "") + '">Posted</span></div></div>' +
+      '<div class="o-sheet"><div class="o-title">Journal entry ' + esc(ent.number || ent.ref || "") + '</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + (posted ? " disabled" : "") + '>') +
+      fld("Journal", '<select id="je-journal"' + (posted ? " disabled" : "") + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
+      '</div><div>' +
+      fld("Reference / narration", '<input id="je-narr" value="' + esc(ent.narration || ent.ref || "") + '"' + (posted ? " disabled" : "") + '>') +
+      '</div></div>' +
+      '<div style="overflow-x:auto;margin-top:8px"><table class="o-list" style="min-width:640px"><thead><tr><th style="width:34%">Account</th><th>Description</th><th class="num" style="width:130px">Debit</th><th class="num" style="width:130px">Credit</th><th style="width:34px"></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
+      (posted ? '' : '<button id="je-add" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>') +
+      '<div id="je-tot" style="margin-top:12px;font-size:14px;text-align:right"></div></div>';
+    paint();
+    document.getElementById("je-discard").onclick = function () { go("moves"); };
+    var addB = document.getElementById("je-add"); if (addB) addB.onclick = function () { lines.push({}); paint(); };
+    async function collect() {
+      var clean = lines.filter(function (l) { return l.account_id && ((Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0); });
+      return clean.map(function (l) { return { account_id: l.account_id, label: (l.label || "").slice(0, 160), debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 }; });
+    }
+    async function persist() {
+      var rows = await collect();
+      if (rows.length < 2) { toast("Add at least two lines"); return null; }
+      var t = totals(); if (!t.bal) { toast("Debits and credits must balance"); return null; }
+      var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: gv("je-narr"), ref: gv("je-narr"), currency_code: S.company.currency_code, source_type: "manual" };
+      var eid = id;
+      if (id === "new") { head.company_id = S.company.id; head.state = "draft"; var ins = await sb.from("journal_entries").insert(head).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } eid = ins.data.id; }
+      else { var up = await sb.from("journal_entries").update(head).eq("id", id); if (up.error) { toast(errMsg(up.error)); return null; } await sb.from("journal_lines").delete().eq("entry_id", id); }
+      var pls = rows.map(function (l) { return { entry_id: eid, company_id: S.company.id, account_id: l.account_id, label: l.label, debit: l.debit, credit: l.credit }; });
+      var li = await sb.from("journal_lines").insert(pls); if (li.error) { toast(errMsg(li.error)); return null; }
+      return eid;
+    }
+    var saveB = document.getElementById("je-save"); if (saveB) saveB.onclick = async function () { var eid = await persist(); if (eid) { toast("Draft saved"); renderJournalEntryForm(eid); } };
+    var postB = document.getElementById("je-post"); if (postB) postB.onclick = async function () {
+      if (isLocked(gv("je-date"))) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
+      var eid = await persist(); if (!eid) return;
+      var pe = await sb.rpc("post_entry", { p_entry: eid }); if (pe.error) { toast("Could not post: " + errMsg(pe.error)); return; }
+      toast("Posted"); go("moves");
+    };
+    var revB = document.getElementById("je-rev"); if (revB) revB.onclick = async function () {
+      if (!confirm("Reverse this entry? A mirror entry is posted to cancel it.")) return;
+      var rv = await reverseEntry(id, "REV/" + (ent.number || ent.ref || ""), "Reversal of " + (ent.number || ent.ref || "")); if (rv.error) { toast(errMsg(rv.error)); return; }
+      toast("Reversed"); go("moves");
     };
   }
   function cfgCompanies() {
@@ -2949,7 +3065,7 @@
       document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.classList.toggle("on", x.dataset.t === t); });
       if (t === "lines") renderLines(pg);
       else if (t === "gl") pg.innerHTML = glTable();
-      else pg.innerHTML = '<div class="o-groups"><div>' + fld("Narration", '<span class="v">' + esc(inv ? inv.narration || "-" : "-") + '</span>') + '</div><div>' + fld("Source", '<span class="v">' + (inv ? esc(inv.source_type || "manual") : "manual") + '</span>') + '</div></div>';
+      else { var edN = (!inv || inv.state !== "posted"); pg.innerHTML = '<div class="o-groups"><div>' + fld("Narration", edN ? '<textarea id="f-narr" style="width:100%;min-height:70px" placeholder="Notes / payment terms shown on this document">' + esc(inv ? inv.narration || "" : "") + '</textarea>' : '<span class="v">' + esc(inv ? inv.narration || "-" : "-") + '</span>', "Free-text notes stored on the document.") + '</div><div>' + fld("Source", '<span class="v">' + (inv ? esc(inv.source_type || "manual") : "manual") + '</span>') + '</div></div>'; }
     }
     function glTable() {
       var td = 0, tc = 0;
@@ -3069,6 +3185,7 @@
         amount_untaxed: untax, amount_tax: taxTot, amount_total: untax + taxTot, amount_residual: untax + taxTot
       };
       hdr.currency_code = document.getElementById("f-cur") ? document.getElementById("f-cur").value : docCcy;
+      if (document.getElementById("f-narr")) hdr.narration = document.getElementById("f-narr").value;
       var invId = id;
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.move_type = moveType; hdr.state = "draft";
@@ -5960,7 +6077,7 @@
     var due = Number(inv.amount_residual || inv.amount_total || 0);
     var m = document.createElement("div"); m.className = "modal on"; m.id = "paymodal";
     m.innerHTML = '<div class="sheet"><h3>Register Payment &middot; ' + esc(inv.number || "") + '</h3><div class="form">' +
-      '<div><label>Amount (' + esc(S.company.currency_code) + ')</label>' + fhint("__amt", "How much is being paid now. Defaults to the full amount still due.") + '<input id="p-amt" type="number" step="0.01" value="' + due + '"></div>' +
+      '<div><label>Amount (' + esc(inv.currency_code || S.company.currency_code) + ')</label>' + fhint("__amt", "How much is being paid now, in the invoice currency. Defaults to the full amount still due.") + '<input id="p-amt" type="number" step="0.01" value="' + due + '"></div>' +
       '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date the money was received or paid.") + '<input id="p-date" type="date" value="' + today() + '"></div><div><label>Journal</label>' + fhint("Journal", "Which account the money moves through: your bank or cash on hand.") + '<select id="p-jrn"><option value="BNK">Bank</option><option value="CSH">Cash</option></select></div></div>' +
       '<div><label>Reference</label>' + fhint("Reference", "Optional: the transfer/receipt number for your records.") + '<input id="p-ref" placeholder="Receipt / transfer ref"></div>' +
       '</div><div class="foot"><button class="btn" id="p-cancel">Cancel</button><button class="btn pri" id="p-save" style="background:var(--app);border-color:var(--app)">Register</button></div></div>';
@@ -5970,6 +6087,7 @@
     document.getElementById("p-save").onclick = async function () {
       var amt = parseFloat(document.getElementById("p-amt").value);
       if (!(amt > 0)) { toast("Enter an amount"); return; }
+      if (isLocked(document.getElementById("p-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
       var r = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: document.getElementById("p-date").value, p_journal_code: document.getElementById("p-jrn").value, p_method: "bank", p_ref: document.getElementById("p-ref").value });
       if (r.error) { toast("Could not register: " + errMsg(r.error)); return; }
       m.remove(); toast("Payment registered"); if (onDone) onDone();
