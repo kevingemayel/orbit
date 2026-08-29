@@ -10360,7 +10360,8 @@
       '</div>';
     var db = document.getElementById("sm-discard"); if (db) db.onclick = function () { go("doc.subs"); };
     async function persist(extra) {
-      var row = Object.assign({ title: gv("sm-title") || "Submittal", project_id: (document.getElementById("sm-proj") || {}).value || null, doc_type: (document.getElementById("sm-type") || {}).value || "shop_drawing", revision: gv("sm-rev-in") || "A", ref: gv("sm-ref"), consultant: gv("sm-cons"), due_date: gv("sm-due") || null, notes: (document.getElementById("sm-notes") || {}).value || "" }, extra || {});
+      var smTitle = gv("sm-title"); if (!smTitle || !smTitle.trim()) { toast("Give the submittal a title"); return null; }
+      var row = Object.assign({ title: smTitle.trim(), project_id: (document.getElementById("sm-proj") || {}).value || null, doc_type: (document.getElementById("sm-type") || {}).value || "shop_drawing", revision: gv("sm-rev-in") || "A", ref: gv("sm-ref"), consultant: gv("sm-cons"), due_date: gv("sm-due") || null, notes: (document.getElementById("sm-notes") || {}).value || "" }, extra || {});
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.status = "draft"; row.number = await nextDocNumber("submittals", "SUB"); var ins = await sb.from("submittals").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("submittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -10432,7 +10433,10 @@
       '</div>';
     document.getElementById("rf-discard").onclick = function () { go("doc.rfis"); };
     async function persist(extra) {
-      var row = Object.assign({ subject: gv("rf-subj") || "RFI", project_id: (document.getElementById("rf-proj") || {}).value || null, discipline: gv("rf-disc"), raised_date: gv("rf-raised") || null, needed_by: gv("rf-needed") || null, question: (document.getElementById("rf-q") || {}).value || "", answer: (document.getElementById("rf-a") || {}).value || "" }, extra || {});
+      var rfSubj = gv("rf-subj"), rfQ = (document.getElementById("rf-q") || {}).value || "";
+      if (!rfSubj || !rfSubj.trim()) { toast("Give the RFI a subject"); return null; }
+      if (!rfQ.trim()) { toast("Enter the question you're raising"); return null; }
+      var row = Object.assign({ subject: rfSubj.trim(), project_id: (document.getElementById("rf-proj") || {}).value || null, discipline: gv("rf-disc"), raised_date: gv("rf-raised") || null, needed_by: gv("rf-needed") || null, question: rfQ, answer: (document.getElementById("rf-a") || {}).value || "" }, extra || {});
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.status = "open"; row.number = await nextDocNumber("rfis", "RFI"); var ins = await sb.from("rfis").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("rfis").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -10489,7 +10493,8 @@
     document.getElementById("tr-add").onclick = function () { var tb = document.getElementById("tr-lines"); tb.insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
     function readItems() { return [].map.call(document.querySelectorAll("#tr-lines tr"), function (tr, i) { return { description: (tr.querySelector(".ti-desc") || {}).value || "", doc_ref: (tr.querySelector(".ti-ref") || {}).value || "", revision: (tr.querySelector(".ti-rev") || {}).value || "", copies: parseInt((tr.querySelector(".ti-cop") || {}).value, 10) || 1, sequence: (i + 1) * 10 }; }).filter(function (it) { return it.description.trim(); }); }
     async function persist() {
-      var row = { to_party: gv("tr-to"), project_id: (document.getElementById("tr-proj") || {}).value || null, purpose: gv("tr-purpose"), transmittal_date: gv("tr-date") || null, notes: gv("tr-notes") };
+      var trTo = gv("tr-to"); if (!trTo || !trTo.trim()) { toast("Enter who the transmittal is being sent to"); return null; }
+      var row = { to_party: trTo.trim(), project_id: (document.getElementById("tr-proj") || {}).value || null, purpose: gv("tr-purpose"), transmittal_date: gv("tr-date") || null, notes: gv("tr-notes") };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; row.number = await nextDocNumber("transmittals", "TR"); var ins = await sb.from("transmittals").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("transmittals").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -14177,6 +14182,7 @@
   async function convertTenderToProject(tenderId) {
     var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
     if (!t) { toast("Tender not found"); return; }
+    if (!t.partner_id) { toast("Set a customer on the tender before marking it Won - the project needs a client to bill against."); return; }
     var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
     if (proj.error) { toast("Could not create project: " + errMsg(proj.error)); return; }
     var pid = proj.data.id;
