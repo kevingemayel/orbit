@@ -20,6 +20,7 @@
   var root = document.getElementById("root");
   var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
+  var LIST_VIEW = {}; // per-screen (keyed by S.action) view prefs: {view, kanbanGroupIdx, kwidth} - keeps list/kanban/thumb sticky per screen
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
   function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
   function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
@@ -2200,6 +2201,7 @@
     var table = g.table || cfg.table, field = g.field;
     return {
       label: g.label,
+      field: field,
       rawKey: function (r) { return g.get ? g.get(r) : (r[field] == null ? "" : String(r[field])); },
       columns: g.options ? g.options.map(function (o) { return { value: String(o[0]), label: o[1] }; }) : null,
       set: (field && table) ? function (row, val) { var u = {}; u[field] = (val === "" ? null : val); return sb.from(table).update(u).eq("id", row.id).then(function (r) { if (!r.error) row[field] = (val === "" ? null : val); return !r.error; }); } : null
@@ -2223,18 +2225,32 @@
     var buckets = {}; cols.forEach(function (c) { if (!(c.value in buckets)) buckets[c.value] = []; });
     rows.forEach(function (r) { var k = kf(r); if (!(k in buckets)) k = ""; (buckets[k] = buckets[k] || []).push(r); });
     var drag = !!g.set;
-    var picker = '<div class="o-kbar"><label>Columns by</label><select id="o-kgrp">' + groups.map(function (gg, i) { return '<option value="' + i + '"' + (i === idx ? " selected" : "") + '>' + esc(gg.label) + '</option>'; }).join("") + '</select><span class="o-kbar-hint' + (drag ? "" : " muted") + '">' + (drag ? "Drag cards between columns to update" : "Grouping only for this field") + '</span></div>';
-    var done = {}, board = '<div class="o-kboard">';
+    var canAdd = !!(cfg.onNew && canManageApp(S.app));
+    var kw = L.kwidth || "m";
+    var widthCtl = '<span class="o-kw" id="o-kw"><label>Width</label>' +
+      [["s", "S"], ["m", "M"], ["l", "L"]].map(function (w) { return '<button data-w="' + w[0] + '"' + (w[0] === kw ? ' class="on"' : "") + ' title="' + ({ s: "Narrow", m: "Medium", l: "Wide" }[w[0]]) + ' columns">' + w[1] + '</button>'; }).join("") + '</span>';
+    var picker = '<div class="o-kbar"><label>Columns by</label><select id="o-kgrp">' + groups.map(function (gg, i) { return '<option value="' + i + '"' + (i === idx ? " selected" : "") + '>' + esc(gg.label) + '</option>'; }).join("") + '</select>' + widthCtl + '<span class="o-kbar-hint' + (drag ? "" : " muted") + '">' + (drag ? "Drag cards between columns to update" : "Grouping only for this field") + '</span></div>';
+    var done = {}, board = '<div class="o-kboard o-kw-' + esc(kw) + '">';
     cols.forEach(function (c) {
       if (done[c.value]) return; done[c.value] = 1; var list = buckets[c.value] || [];
       board += '<div class="o-kcol' + (drag ? " drop" : "") + '" data-col="' + esc(c.value) + '"><div class="o-kcol-h"><span class="lbl">' + esc(c.label) + '</span><span class="cnt">' + list.length + '</span></div><div class="o-kcol-b">' +
-        list.map(function (r) { return '<div class="o-card' + (drag ? " drag" : "") + '" data-id="' + r.id + '"' + (drag ? ' draggable="true"' : "") + '>' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div></div>';
+        list.map(function (r) { return '<div class="o-card' + (drag ? " drag" : "") + '" data-id="' + r.id + '"' + (drag ? ' draggable="true"' : "") + '>' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>' +
+        (canAdd ? '<button class="o-kadd" data-kcol="' + esc(c.value) + '" title="Add in this column">+ Add</button>' : '') + '</div>';
     });
     return picker + board + '</div>';
   }
   function wireKanban(cfg, rows, groups) {
     var sel = document.getElementById("o-kgrp");
-    if (sel) sel.onchange = function () { L.kanbanGroupIdx = +this.value; paintBody(); };
+    if (sel) sel.onchange = function () { L.kanbanGroupIdx = +this.value; saveListView(); paintBody(); };
+    document.querySelectorAll("#o-kw [data-w]").forEach(function (b) { b.onclick = function () { L.kwidth = b.dataset.w; saveListView(); paintBody(); }; });
+    var gAdd = groups[L.kanbanGroupIdx || 0];
+    document.querySelectorAll("#o-body .o-kadd").forEach(function (b) {
+      b.onclick = function () {
+        if (!cfg.onNew) return;
+        var col = b.dataset.kcol; var seed = (gAdd && gAdd.field && col) ? { field: gAdd.field, value: col, label: gAdd.label } : null;
+        cfg.onNew(seed);
+      };
+    });
     var g = groups[L.kanbanGroupIdx || 0]; if (!g || !g.set) return;
     var dragId = null;
     document.querySelectorAll("#o-body .o-card.drag").forEach(function (card) {
@@ -2254,6 +2270,49 @@
       });
     });
   }
+  // ---- hierarchy views (tree + org chart) for any list whose cfg declares .tree / .orgChart ----
+  // spec: { parent: "<field name>", label: fn(row)->text, meta/sub: fn(row)->html }
+  function buildHierarchy(rows, parentField) {
+    var byId = {}, roots = [];
+    rows.forEach(function (r) { r._kids = []; byId[r.id] = r; });
+    rows.forEach(function (r) { var p = r[parentField]; if (p && byId[p] && byId[p] !== r) byId[p]._kids.push(r); else roots.push(r); });
+    return roots;
+  }
+  function treeViewHTML(cfg, rows) {
+    var t = cfg.tree, roots = buildHierarchy(rows.slice(), t.parent), seen = {};
+    function node(r, depth) {
+      if (seen[r.id] || depth > 30) return ""; seen[r.id] = 1;
+      var kids = r._kids || [];
+      var lbl = t.label ? t.label(r) : (r.name || r.number || r.id || "");
+      var meta = t.meta ? t.meta(r) : "";
+      var caret = kids.length ? '<span class="o-tw-caret">&#9662;</span>' : '<span class="o-tw-caret empty"></span>';
+      var row = '<div class="o-tw-row" data-id="' + r.id + '" style="padding-left:' + (depth * 22 + 8) + 'px">' + caret +
+        '<span class="o-tw-lbl">' + esc(lbl) + '</span>' + (meta ? '<span class="o-tw-meta">' + meta + '</span>' : '') +
+        (kids.length ? '<span class="o-tw-n">' + kids.length + '</span>' : '') + '</div>';
+      var kidsHtml = kids.length ? '<div class="o-tw-kids">' + kids.map(function (k) { return node(k, depth + 1); }).join("") + '</div>' : "";
+      return '<div class="o-tw-node">' + row + kidsHtml + '</div>';
+    }
+    return '<div class="o-tree">' + (roots.length ? roots.map(function (r) { return node(r, 0); }).join("") : '<div class="o-empty">Nothing to show.</div>') + '</div>';
+  }
+  function wireTree(cfg, rows) {
+    document.querySelectorAll("#o-body .o-tw-caret:not(.empty)").forEach(function (c) {
+      c.onclick = function (e) { e.stopPropagation(); var n = c.closest(".o-tw-node"); n.classList.toggle("collapsed"); c.innerHTML = n.classList.contains("collapsed") ? "&#9656;" : "&#9662;"; };
+    });
+  }
+  function orgChartHTML(cfg, rows) {
+    var t = cfg.orgChart, roots = buildHierarchy(rows.slice(), t.parent), seen = {};
+    function node(r, depth) {
+      if (seen[r.id] || (depth || 0) > 30) return ""; seen[r.id] = 1;
+      var kids = r._kids || [];
+      var lbl = t.label ? t.label(r) : (r.name || r.number || "");
+      var sub = t.sub ? t.sub(r) : "";
+      var box = '<div class="o-oc-box" data-id="' + r.id + '"><div class="o-oc-n">' + esc(lbl) + '</div>' + (sub ? '<div class="o-oc-s">' + esc(sub) + '</div>' : "") + '</div>';
+      return box + (kids.length ? '<ul>' + kids.map(function (k) { return '<li>' + node(k, (depth || 0) + 1) + '</li>'; }).join("") + '</ul>' : "");
+    }
+    if (!roots.length) return '<div class="o-empty">Nothing to show.</div>';
+    return '<div class="o-orgchart"><ul>' + roots.map(function (r) { return '<li>' + node(r, 0) + '</li>'; }).join("") + '</ul></div>';
+  }
+  function saveListView() { if (S.action) LIST_VIEW[S.action] = { view: L.view, kanbanGroupIdx: L.kanbanGroupIdx, kwidth: L.kwidth }; }
   function renderList(cfg) {
     var main = document.getElementById("o-main");
     main.innerHTML =
@@ -2268,18 +2327,23 @@
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
       '<button data-v="thumb" title="Thumbnails" aria-label="Thumbnail view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.6"></circle><path d="M21 15l-5-4L5 20"></path></svg></button>' +
-      '<button data-v="kanban" title="Cards / Kanban">&#9638;</button></div>' +
+      '<button data-v="kanban" title="Kanban board" aria-label="Kanban board view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="5" height="14" rx="1"></rect></svg></button>' +
+      (cfg.tree ? '<button data-v="tree" title="Tree view" aria-label="Tree view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="20" y2="6"></line><line x1="13" y1="12" x2="20" y2="12"></line><line x1="13" y1="18" x2="20" y2="18"></line><path d="M4 4v13a2 2 0 0 0 2 2h5"></path><path d="M4 11h7"></path></svg></button>' : "") +
+      (cfg.orgChart ? '<button data-v="org" title="Org chart" aria-label="Org chart view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"></rect><rect x="2" y="16" width="6" height="5" rx="1"></rect><rect x="16" y="16" width="6" height="5" rx="1"></rect><path d="M12 7v3M5 16v-3h14v3M12 10v3"></path></svg></button>' : "") +
+      '</div>' +
       '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
       '</div>' +
       '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
       '</div>';
     wireBc();
-    L = { cfg: cfg, all: [], view: "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: 0 };
+    var _lv = (S.action && LIST_VIEW[S.action]) || {};
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     document.getElementById("o-q").addEventListener("input", function () { L.query = this.value.toLowerCase(); L.page = 0; paintBody(); });
+    document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x.dataset.v === L.view); });
     document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
-      b.onclick = function () { L.view = b.dataset.v; document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
+      b.onclick = function () { L.view = b.dataset.v; saveListView(); document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
     });
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
@@ -2366,7 +2430,13 @@
       }
       return;
     }
-    if (L.view === "kanban") {
+    if (L.view === "tree" && cfg.tree) {
+      body.innerHTML = treeViewHTML(cfg, rows); wireTree(cfg, rows);
+    }
+    else if (L.view === "org" && cfg.orgChart) {
+      body.innerHTML = orgChartHTML(cfg, rows);
+    }
+    else if (L.view === "kanban") {
       var kg = kanbanGroupsFor(cfg);
       if (kg.length) { if (L.kanbanGroupIdx == null || L.kanbanGroupIdx >= kg.length) L.kanbanGroupIdx = 0; body.innerHTML = kanbanBoardHTML(cfg, rows, kg); wireKanban(cfg, rows, kg); }
       else { body.innerHTML = '<div class="o-kan">' + rows.map(function (r) { return '<div class="o-card" data-id="' + r.id + '">' + kanbanCardFor(cfg, r) + '</div>'; }).join("") + '</div>'; }
@@ -10758,6 +10828,8 @@
         { label: "Parent", get: function (c) { return esc(c._parent || ""); } },
         { label: "Products", num: true, get: function (c) { return c._count; } }
       ],
+      tree: { parent: "parent_id", label: function (c) { return c.name; }, meta: function (c) { return c._count ? '<span class="muted">' + c._count + ' product' + (c._count === 1 ? "" : "s") + '</span>' : ""; } },
+      orgChart: { parent: "parent_id", label: function (c) { return c.name; }, sub: function (c) { return c._count ? c._count + " products" : ""; } },
       onOpen: function (c) { openCategoryModal(c); }, onNew: function () { openCategoryModal(); }
     };
   }
@@ -11458,6 +11530,7 @@
       filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }],
       groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
       kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
+      orgChart: { parent: "manager_id", label: function (e) { return e.name; }, sub: function (e) { return (e.hr_jobs ? e.hr_jobs.name : "") || (e.hr_departments ? e.hr_departments.name : ""); } },
       onOpen: function (e) { renderEmployeeForm(e.id); },
       onNew: function () { renderEmployeeForm("new"); }
     };
@@ -11475,23 +11548,63 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (e.name || "");
     function opts(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button></div>' : "";
+    function ghdr(t) { return '<div style="font-weight:700;font-size:11.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 2px">' + t + '</div>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="e-save">Save</button><button id="e-discard">Discard</button></div><div></div></div>' +
-      '<div class="o-sheet">' + smart + titleRowHTML('<input id="e-name" value="' + esc(e.name || "") + '" placeholder="Employee name">', "employee", id) +
+      '<div class="o-sheet">' + smart + titleRowHTML('<input id="e-first" value="' + esc(e.first_name || "") + '" placeholder="First name" style="max-width:190px;margin-right:8px"><input id="e-last" value="' + esc(e.last_name || "") + '" placeholder="Last name" style="max-width:190px">', "employee", id) +
       '<div class="o-groups"><div>' +
-      fld("Work Email", '<input id="e-email" value="' + esc(e.work_email || "") + '" placeholder="name@company.com">', "The employee's work email address.") +
+      fld("Date of birth", '<input id="e-dob" type="date" value="' + esc(e.dob || "") + '">', "The employee's date of birth.") +
+      fld("Gender", '<select id="e-gender"><option value="">-</option>' + ["Male", "Female", "Other"].map(function (g) { return '<option' + (e.gender === g ? " selected" : "") + '>' + g + '</option>'; }).join("") + '</select>') +
+      fld("Marital status", '<select id="e-marital"><option value="">-</option>' + ["Single", "Married", "Divorced", "Widowed"].map(function (g) { return '<option' + (e.marital_status === g ? " selected" : "") + '>' + g + '</option>'; }).join("") + '</select>') +
+      fld("Nationality", '<input id="e-nat" value="' + esc(e.nationality || "") + '">') +
+      fld("National ID", '<input id="e-id" value="' + esc(e.identification_no || "") + '" placeholder="ID / passport no.">') +
+      '</div><div>' +
+      fld("Personal email", '<input id="e-pemail" value="' + esc(e.personal_email || "") + '" placeholder="personal@email.com">') +
+      fld("Personal phone", '<input id="e-pphone" value="' + esc(e.personal_phone || e.mobile_phone || "") + '" placeholder="Mobile number">') +
+      fld("Work email", '<input id="e-email" value="' + esc(e.work_email || "") + '" placeholder="name@company.com">', "The employee's work email address.") +
+      fld("Work phone", '<input id="e-wphone" value="' + esc(e.work_phone || "") + '">') +
+      fld("Home address", '<input id="e-addr" value="' + esc(e.address || "") + '">') +
+      '</div></div>' +
+      ghdr("Emergency contact") +
+      '<div class="o-groups"><div>' +
+      fld("Contact name", '<input id="e-emg" value="' + esc(e.emergency_name || "") + '">') +
+      fld("Relationship", '<input id="e-emgr" value="' + esc(e.emergency_relation || "") + '" placeholder="e.g. Spouse, Parent">') +
+      '</div><div>' +
+      fld("Contact phone", '<input id="e-emgp" value="' + esc(e.emergency_phone || "") + '">') +
+      '</div></div>' +
+      ghdr("Employment") +
+      '<div class="o-groups"><div>' +
       fld("Department", '<select id="e-dept">' + opts(depts, e.department_id, "None") + '</select>', "The department this employee belongs to.") +
       fld("Job Position", '<select id="e-job">' + opts(jobs, e.job_id, "None") + '</select>', "The employee's job title / position.") +
-      '</div><div>' +
       fld("Manager", '<select id="e-mgr">' + opts(emps.filter(function (x) { return x.id !== id; }), e.manager_id, "None") + '</select>', "Who this employee reports to.") +
+      fld("Employee type", '<select id="e-type">' + ["employee", "worker", "contractor", "intern"].map(function (t) { return '<option' + ((e.employee_type || "employee") === t ? " selected" : "") + '>' + t + '</option>'; }).join("") + '</select>') +
+      '</div><div>' +
+      fld("Hire date", '<input id="e-hire" type="date" value="' + esc(e.hire_date || "") + '">') +
+      fld("Work location", '<input id="e-loc" value="' + esc(e.work_location || "") + '">') +
+      fld("Bank account", '<input id="e-bank" value="' + esc(e.bank_account || "") + '">') +
       fld("Status", '<select id="e-active"><option value="1"' + (e.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!e.is_active ? " selected" : "") + '>Archived</option></select>', "Active employees appear in selections; archived ones are hidden.") +
-      '</div></div></div>';
+      '</div></div>' +
+      fld("Notes", '<textarea id="e-notes" style="width:100%;min-height:58px">' + esc(e.notes || "") + '</textarea>') +
+      '</div>';
     document.getElementById("e-discard").onclick = function () { go("hr.emp"); };
     wireAttach("employee");
     var _el = document.getElementById("e-sm-lv"); if (_el) _el.onclick = function () { go("hr.leaves"); };
     document.getElementById("e-save").onclick = async function () {
-      var name = gv("e-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, work_email: gv("e-email"), department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null, manager_id: document.getElementById("e-mgr").value || null, is_active: document.getElementById("e-active").value === "1" };
+      var first = gv("e-first"), last = gv("e-last"); var name = (first + " " + last).trim();
+      if (!name) { toast("Enter a first or last name"); return; }
+      var pphone = gv("e-pphone");
+      var row = {
+        name: name, first_name: first || null, last_name: last || null,
+        dob: gv("e-dob") || null, gender: gv("e-gender") || null, marital_status: gv("e-marital") || null,
+        nationality: gv("e-nat") || null, identification_no: gv("e-id"),
+        personal_email: gv("e-pemail") || null, personal_phone: pphone || null, mobile_phone: pphone || null,
+        work_email: gv("e-email"), work_phone: gv("e-wphone"), address: gv("e-addr") || null,
+        emergency_name: gv("e-emg") || null, emergency_relation: gv("e-emgr") || null, emergency_phone: gv("e-emgp") || null,
+        department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null,
+        manager_id: document.getElementById("e-mgr").value || null, employee_type: document.getElementById("e-type").value,
+        hire_date: gv("e-hire") || null, work_location: gv("e-loc"), bank_account: gv("e-bank"),
+        notes: gv("e-notes") || null, is_active: document.getElementById("e-active").value === "1"
+      };
       var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
       toast("Saved"); go("hr.emp");
     };
@@ -11511,6 +11624,8 @@
         { label: "Parent", get: function (d) { return esc(d._parent || ""); } },
         { label: "Manager", get: function (d) { return esc(d._mgr || ""); } }
       ],
+      tree: { parent: "parent_id", label: function (d) { return d.name; }, meta: function (d) { return d._mgr ? '<span class="muted">' + esc(d._mgr) + '</span>' : ""; } },
+      orgChart: { parent: "parent_id", label: function (d) { return d.name; }, sub: function (d) { return d._mgr || ""; } },
       onOpen: function (d) { openDeptModal(d); },
       onNew: function () { openDeptModal(); }
     };
