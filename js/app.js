@@ -4316,13 +4316,14 @@
       fld("Type", '<select id="a-type">' + typeOpts + '</select>') +
       '</div><div>' +
       fld("Status", '<select id="a-active"><option value="1"' + (a.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!a.is_active ? " selected" : "") + '>Archived</option></select>') +
+      fld("Reconcilable", '<select id="a-recon"><option value="0"' + (!a.reconcilable ? " selected" : "") + '>No</option><option value="1"' + (a.reconcilable ? " selected" : "") + '>Yes</option></select>', "Turn on for receivable/payable/bank accounts so payments can be matched and foreign-currency balances are revalued.") +
       '</div></div></div>';
     document.getElementById("a-discard").onclick = function () { go("accounts"); };
     if (id !== "new") { var _ag = document.getElementById("a-sm-gl"); if (_ag) _ag.onclick = function () { go("rep.gl"); }; }
     document.getElementById("a-save").onclick = async function () {
       var code = gv("a-code"), name = gv("a-name");
       if (!code || !name) { toast("Code and name are required"); return; }
-      var row = { code: code, name: name, type_code: document.getElementById("a-type").value, is_active: document.getElementById("a-active").value === "1" };
+      var row = { code: code, name: name, type_code: document.getElementById("a-type").value, is_active: document.getElementById("a-active").value === "1", reconcilable: document.getElementById("a-recon").value === "1" };
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("accounts").insert(row); }
       else r = await sb.from("accounts").update(row).eq("id", id);
@@ -11676,8 +11677,40 @@
       groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
       kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
       orgChart: { parent: "manager_id", label: function (e) { return e.name; }, sub: function (e) { return (e.hr_jobs ? e.hr_jobs.name : "") || (e.hr_departments ? e.hr_departments.name : ""); } },
+      action: { label: "Import", run: function () { openEmployeeImport(); } },
       onOpen: function (e) { renderEmployeeForm(e.id); },
       onNew: function () { renderEmployeeForm("new"); }
+    };
+  }
+  async function openEmployeeImport() {
+    var depts = (await sb.from("hr_departments").select("id,name").eq("company_id", S.company.id)).data || [];
+    var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id)).data || [];
+    var dById = {}, jById = {}; depts.forEach(function (d) { dById[(d.name || "").toLowerCase().trim()] = d.id; }); jobs.forEach(function (j) { jById[(j.name || "").toLowerCase().trim()] = j.id; });
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Import employees</h3><div class="form">' +
+      '<p class="muted" style="margin:0 0 2px">Paste one employee per line, columns separated by comma or tab:</p>' +
+      '<p class="muted" style="margin:0 0 6px;font-family:ui-monospace,monospace;font-size:12px">First, Last, Work email, Phone, Department, Job title</p>' +
+      '<textarea id="imp-txt" style="width:100%;min-height:150px;font-family:ui-monospace,monospace;font-size:12.5px" placeholder="Jane, Doe, jane@acme.com, +961 3 000000, Engineering, Facade Engineer\nSam, Ali, sam@acme.com, , Site Operations, Foreman"></textarea>' +
+      '<div class="muted" id="imp-prev" style="font-size:12.5px"></div>' +
+      '</div><div class="foot"><button class="btn" id="imp-cancel">Cancel</button><button class="btn pri" id="imp-go" style="background:var(--app);border-color:var(--app)">Import</button></div></div>';
+    document.body.appendChild(m);
+    function parse() {
+      var lines = gv("imp-txt").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
+      return lines.map(function (l) {
+        var p = l.indexOf("\t") >= 0 ? l.split("\t") : l.split(",");
+        p = p.map(function (x) { return (x || "").trim(); });
+        var first = p[0] || "", last = p[1] || "", name = (first + " " + last).trim();
+        return { name: name, first_name: first || null, last_name: last || null, work_email: p[2] || null, personal_phone: p[3] || null, mobile_phone: p[3] || null, department_id: dById[(p[4] || "").toLowerCase()] || null, job_id: jById[(p[5] || "").toLowerCase()] || null };
+      }).filter(function (r) { return r.name; });
+    }
+    document.getElementById("imp-txt").oninput = function () { var n = parse().length; document.getElementById("imp-prev").textContent = n ? (n + " employee(s) ready to import.") : ""; };
+    document.getElementById("imp-cancel").onclick = function () { m.remove(); };
+    document.getElementById("imp-go").onclick = async function () {
+      var rows = parse(); if (!rows.length) { toast("Nothing to import - paste some rows first."); return; }
+      rows.forEach(function (r) { r.company_id = S.company.id; r.is_active = true; });
+      var r = await sb.from("hr_employees").insert(rows);
+      if (r.error) { toast("Import failed: " + errMsg(r.error)); return; }
+      m.remove(); toast(rows.length + " employee(s) imported"); renderView();
     };
   }
   async function renderEmployeeForm(id) {
