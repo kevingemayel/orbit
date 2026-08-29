@@ -11641,7 +11641,9 @@
       fetch: function () {
         return sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name").then(async function (res) {
           var rows = res.data || [], mm = {}; rows.forEach(function (e) { mm[e.id] = e.name; });
-          rows.forEach(function (e) { e._mgr = e.manager_id ? (mm[e.manager_id] || "") : ""; });
+          var cts = (await sb.from("hr_contracts").select("employee_id").eq("company_id", S.company.id).eq("state", "running")).data || [];
+          var hasC = {}; cts.forEach(function (c) { hasC[c.employee_id] = 1; });
+          rows.forEach(function (e) { e._mgr = e.manager_id ? (mm[e.manager_id] || "") : ""; e._noContract = !hasC[e.id]; });
           await attachThumbs(rows, "employee"); return rows;
         });
       },
@@ -11653,9 +11655,9 @@
         { label: "Phone", get: function (e) { return '<span class="muted">' + esc(e.personal_phone || e.mobile_phone || e.work_phone || "") + '</span>'; } },
         { label: "Work Email", get: function (e) { return '<span class="muted">' + esc(e.work_email || "") + '</span>'; } },
         { label: "Manager", get: function (e) { return esc(e._mgr || ""); } },
-        { label: "Status", get: function (e) { return e.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>'; } }
+        { label: "Status", get: function (e) { return (e.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>') + (e.is_active && e._noContract ? ' <span class="badge unpaid" title="No running contract - excluded from payroll">No contract</span>' : ''); } }
       ],
-      filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }],
+      filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }, { label: "Missing contract", test: function (e) { return e.is_active && e._noContract; } }],
       groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
       kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
       orgChart: { parent: "manager_id", label: function (e) { return e.name; }, sub: function (e) { return (e.hr_jobs ? e.hr_jobs.name : "") || (e.hr_departments ? e.hr_departments.name : ""); } },
@@ -11673,13 +11675,15 @@
     var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var leaveCount = id === "new" ? 0 : ((await sb.from("hr_leaves").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("employee_id", id)).count || 0);
+    var ctCount = id === "new" ? 0 : ((await sb.from("hr_contracts").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("employee_id", id)).count || 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (e.name || "");
     function opts(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
-    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button></div>' : "";
+    var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button><button class="sb" id="e-sm-ct"><span class="v">' + ctCount + '</span><span class="k">Contract</span></button></div>' : "";
     function ghdr(t) { return '<div style="font-weight:700;font-size:11.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 2px">' + t + '</div>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="e-save">Save</button><button id="e-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet">' + smart + titleRowHTML('<input id="e-first" value="' + esc(e.first_name || "") + '" placeholder="First name" style="max-width:190px;margin-right:8px"><input id="e-last" value="' + esc(e.last_name || "") + '" placeholder="Last name" style="max-width:190px">', "employee", id) +
+      ghdr("Private information") +
       '<div class="o-groups"><div>' +
       fld("Date of birth", '<input id="e-dob" type="date" value="' + esc(e.dob || "") + '">', "The employee's date of birth.") +
       fld("Gender", '<select id="e-gender"><option value="">-</option>' + ["Male", "Female", "Other"].map(function (g) { return '<option' + (e.gender === g ? " selected" : "") + '>' + g + '</option>'; }).join("") + '</select>') +
@@ -11717,6 +11721,7 @@
     document.getElementById("e-discard").onclick = function () { go("hr.emp"); };
     wireAttach("employee");
     var _el = document.getElementById("e-sm-lv"); if (_el) _el.onclick = function () { go("hr.leaves"); };
+    var _ec = document.getElementById("e-sm-ct"); if (_ec) _ec.onclick = function () { if (ctCount > 0) { go("hr.contracts"); } else { renderContractForm("new", id); } };
     document.getElementById("e-save").onclick = async function () {
       var first = gv("e-first"), last = gv("e-last"); var name = (first + " " + last).trim();
       if (!name) { toast("Enter a first or last name"); return; }
@@ -11743,14 +11748,15 @@
       fetch: function () {
         return sb.from("hr_departments").select("*").eq("company_id", S.company.id).order("name").then(function (r) {
           var rows = r.data || [], nm = {}; rows.forEach(function (d) { nm[d.id] = d.name; });
-          return sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).then(function (er) { var em = {}; (er.data || []).forEach(function (x) { em[x.id] = x.name; }); rows.forEach(function (d) { d._parent = d.parent_id ? nm[d.parent_id] : ""; d._mgr = d.manager_id ? em[d.manager_id] : ""; }); return rows; });
+          return sb.from("hr_employees").select("id,name,department_id").eq("company_id", S.company.id).then(function (er) { var em = {}, cnt = {}; (er.data || []).forEach(function (x) { em[x.id] = x.name; if (x.department_id) cnt[x.department_id] = (cnt[x.department_id] || 0) + 1; }); rows.forEach(function (d) { d._parent = d.parent_id ? nm[d.parent_id] : ""; d._mgr = d.manager_id ? em[d.manager_id] : ""; d._count = cnt[d.id] || 0; }); return rows; });
         });
       },
       searchText: function (d) { return d.name || ""; },
       columns: [
         { label: "Department", get: function (d) { return '<b>' + esc(d.name) + '</b>'; } },
         { label: "Parent", get: function (d) { return esc(d._parent || ""); } },
-        { label: "Manager", get: function (d) { return esc(d._mgr || ""); } }
+        { label: "Manager", get: function (d) { return esc(d._mgr || ""); } },
+        { label: "Headcount", num: true, get: function (d) { return d._count; } }
       ],
       tree: { parent: "parent_id", label: function (d) { return d.name; }, meta: function (d) { return d._mgr ? '<span class="muted">' + esc(d._mgr) + '</span>' : ""; } },
       orgChart: { parent: "parent_id", label: function (d) { return d.name; }, sub: function (d) { return d._mgr || ""; } },
@@ -11768,9 +11774,19 @@
       '<div><label>Name</label>' + fhint("__dname", "The department name, e.g. Engineering or Site Operations.") + '<input id="d-name" value="' + esc(dept.name || "") + '"></div>' +
       '<div class="row2"><div><label>Parent department</label>' + fhint("__dparent", "The department this one sits under, if any.") + '<select id="d-parent">' + opts(depts.filter(function (x) { return x.id !== dept.id; }), dept.parent_id) + '</select></div>' +
       '<div><label>Manager</label>' + fhint("__dmgr", "The employee who manages this department.") + '<select id="d-mgr">' + opts(emps, dept.manager_id) + '</select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="d-cancel">Cancel</button><button class="btn pri" id="d-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="d-cancel">Cancel</button>' + (dept.id ? '<button class="btn" id="d-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="d-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("d-cancel").onclick = function () { m.remove(); };
+    var ddel = document.getElementById("d-del"); if (ddel) ddel.onclick = async function () {
+      var used = (await sb.from("hr_employees").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("department_id", dept.id)).count || 0;
+      var kids = (await sb.from("hr_departments").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("parent_id", dept.id)).count || 0;
+      if (used) { toast(used + " employee(s) are in this department. Reassign them first."); return; }
+      if (kids) { toast("This department has sub-departments. Remove them first."); return; }
+      if (!confirm("Delete department \"" + dept.name + "\"?")) return;
+      var r = await sb.from("hr_departments").delete().eq("id", dept.id);
+      if (r.error) { toast("Could not delete: " + errMsg(r.error)); return; }
+      m.remove(); toast("Deleted"); renderView();
+    };
     document.getElementById("d-save").onclick = async function () {
       var name = gv("d-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, parent_id: document.getElementById("d-parent").value || null, manager_id: document.getElementById("d-mgr").value || null };
@@ -11782,11 +11798,12 @@
   function cfgJobs() {
     return {
       title: "Job Positions", pageSize: 80,
-      fetch: function () { return sb.from("hr_jobs").select("*, hr_departments(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("hr_jobs").select("*, hr_departments(name)").eq("company_id", S.company.id).order("name").then(function (r) { var rows = r.data || []; return sb.from("hr_employees").select("job_id").eq("company_id", S.company.id).then(function (er) { var cnt = {}; (er.data || []).forEach(function (x) { if (x.job_id) cnt[x.job_id] = (cnt[x.job_id] || 0) + 1; }); rows.forEach(function (j) { j._count = cnt[j.id] || 0; }); return rows; }); }); },
       searchText: function (j) { return (j.name || "") + " " + (j.hr_departments ? j.hr_departments.name : ""); },
       columns: [
         { label: "Job Position", get: function (j) { return '<b>' + esc(j.name) + '</b>'; } },
-        { label: "Department", get: function (j) { return esc(j.hr_departments ? j.hr_departments.name : ""); } }
+        { label: "Department", get: function (j) { return esc(j.hr_departments ? j.hr_departments.name : ""); } },
+        { label: "Headcount", num: true, get: function (j) { return j._count; } }
       ],
       groupBy: [{ label: "Department", get: function (j) { return j.hr_departments ? j.hr_departments.name : "None"; } }],
       onOpen: function (j) { openJobModal(j); },
@@ -11800,9 +11817,17 @@
     m.innerHTML = '<div class="sheet"><h3>' + (job.id ? "Edit job position" : "New job position") + '</h3><div class="form">' +
       '<div><label>Job title</label>' + fhint("__jname", "The position title, e.g. Facade Engineer or Project Manager.") + '<input id="j-name" value="' + esc(job.name || "") + '"></div>' +
       '<div><label>Department</label>' + fhint("__jdept", "The department this role belongs to.") + '<select id="j-dept"><option value="">None</option>' + depts.map(function (d) { return '<option value="' + d.id + '"' + (job.department_id === d.id ? " selected" : "") + '>' + esc(d.name) + '</option>'; }).join("") + '</select></div>' +
-      '</div><div class="foot"><button class="btn" id="j-cancel">Cancel</button><button class="btn pri" id="j-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="j-cancel">Cancel</button>' + (job.id ? '<button class="btn" id="j-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="j-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("j-cancel").onclick = function () { m.remove(); };
+    var jdel = document.getElementById("j-del"); if (jdel) jdel.onclick = async function () {
+      var used = (await sb.from("hr_employees").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("job_id", job.id)).count || 0;
+      if (used) { toast(used + " employee(s) hold this position. Reassign them first."); return; }
+      if (!confirm("Delete job position \"" + job.name + "\"?")) return;
+      var r = await sb.from("hr_jobs").delete().eq("id", job.id);
+      if (r.error) { toast("Could not delete: " + errMsg(r.error)); return; }
+      m.remove(); toast("Deleted"); renderView();
+    };
     document.getElementById("j-save").onclick = async function () {
       var name = gv("j-name"); if (!name) { toast("Name required"); return; }
       var row = { name: name, department_id: document.getElementById("j-dept").value || null };
@@ -12074,15 +12099,43 @@
       ],
       filters: [{ label: "Running", test: function (c) { return c.state === "running"; } }, { label: "Draft", test: function (c) { return c.state !== "running" && c.state !== "expired"; } }],
       groupBy: [{ label: "Structure", get: function (c) { return c.hr_salary_structures ? c.hr_salary_structures.name : "None"; } }],
+      action: { label: "Create for all", run: function () { openBulkContractModal(); } },
       onOpen: function (c) { renderContractForm(c.id); },
       onNew: function () { renderContractForm("new"); }
     };
   }
-  async function renderContractForm(id) {
+  async function openBulkContractModal() {
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var cts = (await sb.from("hr_contracts").select("employee_id").eq("company_id", S.company.id).eq("state", "running")).data || [];
+    var has = {}; cts.forEach(function (c) { has[c.employee_id] = 1; });
+    var missing = emps.filter(function (e) { return !has[e.id]; });
+    var structs = (await sb.from("hr_salary_structures").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Create contracts</h3><div class="form">' +
+      '<p class="muted" style="margin:0 0 4px">' + missing.length + ' active employee(s) have no running contract. Give them a starting contract in one step.</p>' +
+      '<div><label>Salary structure</label><select id="bc-struct"><option value="">None (draft only)</option>' + structs.map(function (s) { return '<option value="' + s.id + '">' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Default monthly wage</label><input id="bc-wage" type="number" step="0.01" value="0"></div>' +
+      '<div><label>Set to</label><select id="bc-state"><option value="draft">Draft (set wages later)</option><option value="running">Running (pay now)</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="bc-cancel">Cancel</button><button class="btn pri" id="bc-save" style="background:var(--app);border-color:var(--app)"' + (missing.length ? '' : ' disabled') + '>Create ' + missing.length + ' contract(s)</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("bc-cancel").onclick = function () { m.remove(); };
+    document.getElementById("bc-save").onclick = async function () {
+      var structId = document.getElementById("bc-struct").value || null;
+      var wage = parseFloat(gv("bc-wage")) || 0;
+      var state = document.getElementById("bc-state").value;
+      if (state === "running" && (!structId || !(wage > 0))) { toast("Running contracts need a structure and a wage above 0. Use Draft, or set both."); return; }
+      var rows = missing.map(function (e) { return { company_id: S.company.id, employee_id: e.id, structure_id: structId, wage: wage, currency_code: S.company.currency_code, working_days: 26, daily_hours: 8, ot_multiplier: 1.25, state: state, date_start: today() }; });
+      if (!rows.length) { m.remove(); return; }
+      var r = await sb.from("hr_contracts").insert(rows);
+      if (r.error) { toast("Could not create: " + errMsg(r.error)); return; }
+      m.remove(); toast(rows.length + " contract(s) created"); renderView();
+    };
+  }
+  async function renderContractForm(id, preEmp) {
     var parent = { action: "hr.contracts", title: "Contracts" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
-    var c = id === "new" ? { state: "draft", working_days: 26, daily_hours: 8, ot_multiplier: 1.25, currency_code: S.company.currency_code } : (await sb.from("hr_contracts").select("*").eq("id", id).maybeSingle()).data || {};
+    var c = id === "new" ? { state: "draft", working_days: 26, daily_hours: 8, ot_multiplier: 1.25, currency_code: S.company.currency_code, employee_id: preEmp || null } : (await sb.from("hr_contracts").select("*").eq("id", id).maybeSingle()).data || {};
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var structs = (await sb.from("hr_salary_structures").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var slipCount = id === "new" ? 0 : ((await sb.from("hr_payslips").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("contract_id", id)).count || 0);
