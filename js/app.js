@@ -11985,12 +11985,23 @@
       fld("Daily Hours", '<input id="ct-dhours" type="number" step="0.5" value="' + (c.daily_hours || 8) + '">', "Standard hours per day, used for the hourly (overtime) rate.") +
       fld("Overtime Multiplier", '<input id="ct-otm" type="number" step="0.05" value="' + (c.ot_multiplier || 1.25) + '">', "Overtime pay = OT hours x hourly rate x this multiplier (e.g. 1.25, 1.5, 2).") +
       fld("Start Date", '<input id="ct-start" type="date" value="' + (c.date_start || "") + '">', "When the contract begins.") +
+      fld("End Date", '<input id="ct-end" type="date" value="' + (c.date_end || "") + '">', "When the contract ends. Leave blank if open-ended; an ended contract is skipped by payroll.") +
       '</div></div></div>';
     document.getElementById("ct-discard").onclick = function () { go("hr.contracts"); };
     var _cs = document.getElementById("ct-sm-slip"); if (_cs) _cs.onclick = function () { go("hr.slips"); };
     document.getElementById("ct-save").onclick = async function () {
-      if (!document.getElementById("ct-emp").value) { toast("Pick an employee"); return; }
-      var row = { employee_id: document.getElementById("ct-emp").value, structure_id: document.getElementById("ct-struct").value || null, wage: parseFloat(gv("ct-wage")) || 0, currency_code: S.company.currency_code, working_days: parseFloat(gv("ct-wdays")) || 26, daily_hours: parseFloat(gv("ct-dhours")) || 8, ot_multiplier: parseFloat(gv("ct-otm")) || 1.25, state: document.getElementById("ct-state").value, date_start: gv("ct-start") || null };
+      var empId = document.getElementById("ct-emp").value;
+      if (!empId) { toast("Pick an employee"); return; }
+      var state = document.getElementById("ct-state").value;
+      var wage = parseFloat(gv("ct-wage")) || 0, structId = document.getElementById("ct-struct").value || null;
+      if (state === "running") {
+        if (!structId) { toast("A running contract needs a salary structure - payroll would pay nothing without it."); return; }
+        if (!(wage > 0)) { toast("A running contract needs a wage above 0."); return; }
+        // one running contract per employee, or payroll would pay them twice
+        var dup = (await sb.from("hr_contracts").select("id").eq("company_id", S.company.id).eq("employee_id", empId).eq("state", "running")).data || [];
+        if (dup.some(function (x) { return x.id !== id; })) { toast("This employee already has a running contract. Set the old one to Expired first."); return; }
+      }
+      var row = { employee_id: empId, structure_id: structId, wage: wage, currency_code: S.company.currency_code, working_days: parseFloat(gv("ct-wdays")) || 26, daily_hours: parseFloat(gv("ct-dhours")) || 8, ot_multiplier: parseFloat(gv("ct-otm")) || 1.25, state: state, date_start: gv("ct-start") || null, date_end: gv("ct-end") || null };
       var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("hr_contracts").insert(row); } else r = await sb.from("hr_contracts").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("hr.contracts");
@@ -12189,17 +12200,28 @@
       var contracts = (await sb.from("hr_contracts").select("*").eq("company_id", S.company.id).eq("state", "running")).data || [];
       if (!contracts.length) { toast("No running contracts. Set a contract to Running first."); return; }
       var headsAll = (await sb.from("hr_salary_heads").select("*").eq("company_id", S.company.id)).data || [];
+      // Skip contracts that would pay nothing (no structure / zero wage) or that ended before the period,
+      // and keep only one running contract per employee, so nobody is paid zero or paid twice.
+      var seenEmp = {}, skipped = 0, pFrom = run.date_from || gv("pr-from"), pTo = run.date_to || gv("pr-to");
+      var usable = [];
+      contracts.forEach(function (ct) {
+        if (ct.date_end && pFrom && String(ct.date_end) < String(pFrom)) { skipped++; return; } // contract ended before the period
+        if (!ct.structure_id || !(Number(ct.wage) > 0)) { skipped++; return; }
+        if (seenEmp[ct.employee_id]) { return; } seenEmp[ct.employee_id] = 1;
+        usable.push(ct);
+      });
+      if (!usable.length) { toast("Nothing to pay: " + skipped + " running contract(s) have no wage/structure or have ended."); return; }
       await sb.from("hr_payslips").delete().eq("company_id", S.company.id).eq("run_id", id);
       var made = 0;
-      for (var i = 0; i < contracts.length; i++) {
-        var ct = contracts[i];
+      for (var i = 0; i < usable.length; i++) {
+        var ct = usable[i];
         var w = await payslipWorked(ct.employee_id, run.date_from, run.date_to, ct);
         var heads = headsAll.filter(function (h) { return h.structure_id === ct.structure_id; });
         var res = computePayslip(ct, heads, w);
         var ins = await sb.from("hr_payslips").insert({ company_id: S.company.id, run_id: id, employee_id: ct.employee_id, contract_id: ct.id, date_from: run.date_from, date_to: run.date_to, worked_days: w.worked_days, worked_hours: w.worked_hours, ot_hours: w.ot_hours, ut_hours: w.ut_hours, leave_days: w.leave_days, gross: res.gross, total_deductions: res.deductions, net: res.net, currency_code: ct.currency_code || S.company.currency_code, state: "draft" }).select("id").single();
         if (!ins.error && ins.data) { made++; var pls = res.lines.map(function (l) { return { company_id: S.company.id, payslip_id: ins.data.id, code: l.code, name: l.name, category: l.category, amount: l.amount, sequence: l.sequence }; }); await sb.from("hr_payslip_lines").insert(pls); }
       }
-      toast(made + " payslip(s) generated"); renderPayslipRunForm(id);
+      toast(made + " payslip(s) generated" + (skipped ? (" - " + skipped + " skipped (no wage/structure or ended)") : "")); renderPayslipRunForm(id);
     };
     var pab = document.getElementById("pr-postall"); if (pab) pab.onclick = async function () {
       var todo = (await sb.from("hr_payslips").select("*").eq("company_id", S.company.id).eq("run_id", id).eq("state", "draft")).data || [];
@@ -14836,7 +14858,11 @@
     accts.forEach(function (a) { bal[a.id] = Number(a.opening_balance || 0); });
     mv.forEach(function (m) { if (bal[m.cash_account_id] == null) return; bal[m.cash_account_id] += (m.direction === "in" ? 1 : -1) * Number(m.amount || 0); });
     ho.forEach(function (h) { if (bal[h.from_account_id] != null) bal[h.from_account_id] -= Number(h.amount || 0); if (bal[h.to_account_id] != null) bal[h.to_account_id] += Number(h.amount || 0); });
-    return { accts: accts, bal: bal };
+    // Convert each wallet's native balance to the company (functional) currency for a correct grand total
+    // (a USD till and an LBP till must not be added as if the same unit).
+    var fn = S.company.currency_code, func = {}, total = 0;
+    for (var i = 0; i < accts.length; i++) { var a = accts[i]; var c = a.currency_code || fn; var f = (c === fn) ? Number(bal[a.id] || 0) : await cashToFunc(bal[a.id] || 0, c, today()); func[a.id] = f; total += f; }
+    return { accts: accts, bal: bal, func: func, total: Math.round(total * 10000) / 10000, fn: fn };
   }
 
   // ---- cash accounts (wallets) ----
@@ -14894,7 +14920,7 @@
       return;
     }
     var recent = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(15)).data || [];
-    var total = 0; d.accts.forEach(function (a) { total += (d.bal[a.id] || 0); });
+    var total = d.total || 0; // functional-currency grand total (wallets converted, so mixed currencies add up correctly)
     var cards = d.accts.map(function (a) {
       return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px">'
         + '<div style="font-weight:700">' + esc(a.name) + '</div>'
@@ -15335,6 +15361,9 @@
   }
   async function confirmHandover(h) {
     var chart = await cashLoadChart(), wallets = await cashLoadWallets();
+    var fromW = null, toW = null, fnc = S.company.currency_code;
+    wallets.forEach(function (a) { if (a.id === h.from_account_id) fromW = a; if (a.id === h.to_account_id) toW = a; });
+    if (fromW && toW && (fromW.currency_code || fnc) !== (toW.currency_code || fnc)) { return { error: { message: "Cross-currency handovers aren't supported. Use Money out from \"" + fromW.name + "\" then Money in to \"" + toW.name + "\" so the exchange is recorded." } }; }
     function glOf(id) { var ca = null; wallets.forEach(function (a) { if (a.id === id) ca = a; }); if (ca && ca.gl_account_id) return ca.gl_account_id; var a = cashAcctByCode(chart, (ca && ca.kind === "bank") ? "5100" : "5300"); return a ? a.id : null; }
     var drGl = glOf(h.to_account_id), crGl = glOf(h.from_account_id);
     if (!drGl || !crGl) return { error: { message: "Missing cash account mapping" } };
