@@ -3802,7 +3802,7 @@
           var matchCells = "";
           if (showMatch) {
             var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0);
-            var badge = (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>'));
+            var badge = !l.product_id ? '<span class="badge" title="No product - a cost line, never stocked">Description only</span>' : ((bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>')));
             matchCells = '<td class="num">' + rec + '</td><td class="num">' + bil + '</td><td>' + badge + '</td>';
           }
           var dimCell = "", destCell = "";
@@ -3982,7 +3982,9 @@
       m.querySelectorAll(".rcv-q").forEach(function (inp) { qs[inp.dataset.i] = parseFloat(inp.value) || 0; });
       var got = 0, any = false;
       for (var i = 0; i < outstanding.length; i++) {
-        var x = outstanding[i], l = x.l, take = Math.min(x.out, qs[i] || 0); if (take <= 0.0001) continue; any = true;
+        var x = outstanding[i], l = x.l, take = Math.min(x.out, qs[i] || 0); if (take <= 0.0001) continue;
+        if ((l.destination || "warehouse") !== "site" && !l.product_id) { toast('Line "' + (l.name || "") + '" has no product - add one, or set the line destination to Site (cost only), to receive it.'); continue; }
+        any = true;
         if (l.id) await sb.from("purchase_order_lines").update({ qty_received: x.rec + take }).eq("id", l.id);
         var pr = l.product_id ? prodBy[l.product_id] : null;
         var dest = l.destination || "warehouse";
@@ -4104,6 +4106,7 @@
       var got = 0;
       for (var i = 0; i < rows.length; i++) {
         var r = rows[i], pr = r.product_id ? prodBy[r.product_id] : null;
+        if (!isReturn && (r.destination || "warehouse") !== "site" && !r.product_id) { toast('Line "' + (r.name || "") + '" has no product - add one, or set destination to Site (cost only), to receive it.'); continue; }
         var stockUnit = (pr && pr.uom) || "Unit";
         var qtyBase = (r.uom && r.uom !== "__addu") ? uomConvert(r.qty, r.uom, stockUnit, uoms) : r.qty;
         if (r.po_line_id) await sb.from("purchase_order_lines").update({ qty_received: (Number(r.already) || 0) + r.qty }).eq("id", r.po_line_id);
@@ -10872,6 +10875,16 @@
       else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
       else if (kind === "scrap") { src = loc; dest = inv.adjust; vkind = "adjust_down"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
+      // block moves that would drive on-hand negative at the source (manager can override + confirm)
+      var _outKinds = { deliver: 1, issue: 1, scrap: 1, transfer: 1 };
+      if (_outKinds[kind] && src) {
+        var _avail = ((await onHandByLoc())[pid] || {})[src] || 0;
+        if (q > _avail + 1e-6) {
+          var _msg = "Only " + (Math.round(_avail * 100) / 100) + " on hand here; you're moving " + q + ".";
+          if (!canManageApp("inventory")) { toast(_msg + " Not enough stock."); return; }
+          if (!confirm(_msg + " Post anyway and allow negative stock?")) return;
+        }
+      }
       var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, uom: stockUnit, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
@@ -13383,13 +13396,13 @@
     var cc = S.company.currency_code;
     var pos = (await sb.from("purchase_orders").select("id,number,state, partners(name)").eq("company_id", S.company.id).in("state", ["purchase", "done"]).order("date_order", { ascending: false })).data || [];
     if (!pos.length) { document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="o-empty">No confirmed purchase orders yet. Confirm a PO, receive goods, then bill it to see the match here.</div>'; return; }
-    var lines = (await sb.from("purchase_order_lines").select("order_id,name,quantity,qty_received,qty_billed,unit_price").in("order_id", pos.map(function (p) { return p.id; }))).data || [];
+    var lines = (await sb.from("purchase_order_lines").select("order_id,product_id,name,quantity,qty_received,qty_billed,unit_price").in("order_id", pos.map(function (p) { return p.id; }))).data || [];
     var byPo = {}; lines.forEach(function (l) { (byPo[l.order_id] = byPo[l.order_id] || []).push(l); });
-    function badge(ord, rec, bil) { return (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>')); }
+    function badge(ord, rec, bil, hasProd) { if (!hasProd) return '<span class="badge" title="No product - a cost line, never stocked">Description only</span>'; return (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>')); }
     var rows = pos.map(function (p) {
       var ls = byPo[p.id] || [];
       var head = '<tr class="sec"><td colspan="6">' + esc(p.number || "") + ' &middot; ' + esc(p.partners ? p.partners.name : "") + '</td></tr>';
-      var lrows = ls.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0); return '<tr><td>' + esc(l.name) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + bil + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + badge(ord, rec, bil) + '</td></tr>'; }).join("");
+      var lrows = ls.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0); return '<tr><td>' + esc(l.name) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + bil + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + badge(ord, rec, bil, !!l.product_id) + '</td></tr>'; }).join("");
       return head + (lrows || '<tr><td colspan="6" class="muted">No lines.</td></tr>');
     }).join("");
     var exceptions = lines.filter(function (l) { return Number(l.qty_billed || 0) > Number(l.qty_received || 0) + 0.001; }).length;
@@ -14338,6 +14351,7 @@
     document.getElementById("bm-addln").onclick = function () { addRow(null); };
     document.getElementById("bm-save").onclick = async function () {
       var row = { name: gv("bm-name") || "BOM", product_id: document.getElementById("bm-prod").value || null, output_qty: parseFloat(gv("bm-outqty")) || 1 };
+      if (row.product_id && Array.prototype.some.call(lb.querySelectorAll(".bl-prod"), function (ps) { return ps.value && ps.value === row.product_id; })) { toast("A product can't be a component of itself. Remove the finished product from the component lines."); return; }
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("boms").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("boms").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("bom_lines").delete().eq("bom_id", id); }
@@ -14431,6 +14445,10 @@
   async function completeWorkOrder(wo) {
     if (wo.state === "done") { toast("Already completed"); return; }
     if (!wo.bom_id) { toast("Set a BOM first so components can be consumed"); return; }
+    // don't complete while routing operations are still open
+    var _ops = (await sb.from("work_order_operations").select("state,name").eq("work_order_id", wo.id)).data || [];
+    var _openOps = _ops.filter(function (o) { return o.state !== "done"; });
+    if (_openOps.length) { toast("Finish all routing operations first - " + _openOps.length + " still open (" + _openOps.map(function (o) { return o.name; }).slice(0, 3).join(", ") + ")"); return; }
     var bom = (await sb.from("boms").select("*").eq("id", wo.bom_id).maybeSingle()).data;
     var blines = (await sb.from("bom_lines").select("*, products(name,cost_price)").eq("bom_id", wo.bom_id).order("sequence")).data || [];
     var inv = await ensureInventory();
@@ -14443,8 +14461,15 @@
       var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: bl.product_id, quantity: qty, location_id: inv.stock, location_dest_id: inv.customer, project_id: wo.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
       if (!mv.error) { await postStockValue("deliver", { id: bl.product_id, name: pr.name, cost_price: pr.cost_price }, qty, mv.data && mv.data.id, wo.project_id || null); consumed++; }
     }
+    // book the finished goods back into stock (quantity-only, matching the production-run path;
+    // components are already expensed to the job above, so the FG move carries no book value = no double count)
+    var produced = false;
+    if (wo.product_id && Number(wo.quantity || 0) > 0) {
+      var fg = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: wo.product_id, quantity: Number(wo.quantity), location_id: inv.supplier, location_dest_id: inv.stock, project_id: wo.project_id || null, state: "done", date: new Date().toISOString() });
+      produced = !fg.error;
+    }
     await sb.from("work_orders").update({ quantity_done: Number(wo.quantity || 0), state: "done" }).eq("id", wo.id);
-    toast(consumed ? ("Work order complete - " + consumed + " component(s) consumed" + (wo.project_id ? " to the project" : "")) : "Work order complete (no components)");
+    toast("Work order complete - " + consumed + " component(s) consumed" + (produced ? (", " + Number(wo.quantity) + " produced into stock") : ""));
     renderWorkOrderForm(wo.id);
   }
 
