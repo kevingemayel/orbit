@@ -3908,7 +3908,7 @@
         if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
         await sb.from(ltbl).delete().eq("order_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, destination: (isSale ? null : (l.destination || null)), quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { var row = { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; if (!isSale) row.destination = l.destination || null; return row; }); // sale_order_lines has no `destination` column (only purchase side does); omit the key for sales
       var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
@@ -7580,7 +7580,9 @@
     document.getElementById("ev-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("ev-del"); if (del) del.onclick = async function () { await sb.from("calendar_events").delete().eq("id", eventId); m.remove(); toast("Deleted"); renderCalendar(); };
     document.getElementById("ev-save").onclick = async function () {
-      var row = { title: gv("ev-title") || "Event", event_date: gv("ev-date") || today(), category: document.getElementById("ev-cat").value, start_time: gv("ev-start"), end_time: gv("ev-end"), project_id: document.getElementById("ev-proj").value || null, location: gv("ev-loc"), notes: gv("ev-notes") };
+      var evTitle = gv("ev-title"); if (!evTitle) { toast("Give the event a title"); return; }
+      var evStart = gv("ev-start"), evEnd = gv("ev-end"); if (evStart && evEnd && evEnd < evStart) { toast("End time can't be before the start time"); return; }
+      var row = { title: evTitle, event_date: gv("ev-date") || today(), category: document.getElementById("ev-cat").value, start_time: evStart, end_time: evEnd, project_id: document.getElementById("ev-proj").value || null, location: gv("ev-loc"), notes: gv("ev-notes") };
       var r; if (eventId) r = await sb.from("calendar_events").update(row).eq("id", eventId); else { row.company_id = S.company.id; r = await sb.from("calendar_events").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderCalendar();
     };
@@ -7733,7 +7735,8 @@
       '</div>';
     document.getElementById("ap-discard").onclick = function () { go("rec.applicants"); };
     async function persist(extra) {
-      var row = Object.assign({ name: gv("ap-name") || "Applicant", email: gv("ap-email"), phone: gv("ap-phone"), job_id: document.getElementById("ap-job").value || null, stage: document.getElementById("ap-stage").value, source: gv("ap-source"), rating: parseInt(gv("ap-rating"), 10) || 0, applied_date: gv("ap-applied") || null, cv_link: gv("ap-cv"), notes: (document.getElementById("ap-notes") || {}).value || "" }, extra || {});
+      var apName = gv("ap-name"); if (!apName || !apName.trim()) { toast("Enter the applicant's name"); return null; }
+      var row = Object.assign({ name: apName.trim(), email: gv("ap-email"), phone: gv("ap-phone"), job_id: document.getElementById("ap-job").value || null, stage: document.getElementById("ap-stage").value, source: gv("ap-source"), rating: Math.max(0, Math.min(5, parseInt(gv("ap-rating"), 10) || 0)), applied_date: gv("ap-applied") || null, cv_link: gv("ap-cv"), notes: (document.getElementById("ap-notes") || {}).value || "" }, extra || {});
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("applicants").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("applicants").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -7773,7 +7776,10 @@
       '</div>';
     document.getElementById("kb-discard").onclick = function () { go("kb.articles"); };
     document.getElementById("kb-save").onclick = async function () {
-      var row = { title: gv("kb-title") || "Untitled", category: gv("kb-cat"), body: (document.getElementById("kb-body") || {}).value || "", is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
+      var kbTitle = gv("kb-title"), kbBody = (document.getElementById("kb-body") || {}).value || "";
+      if (!kbTitle || !kbTitle.trim()) { toast("Give the article a title"); return; }
+      if (document.getElementById("kb-pub").value === "1" && !kbBody.trim()) { toast("Add some content before publishing (or keep it as a draft)."); return; }
+      var row = { title: kbTitle.trim(), category: gv("kb-cat"), body: kbBody, is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("articles").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
@@ -7826,7 +7832,10 @@
     var del = document.getElementById("sn-del"); if (del) del.onclick = async function () { await sb.from("snags").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("sn-save").onclick = async function () {
       var st = document.getElementById("sn-status").value;
-      var row = { description: gv("sn-desc") || "Snag", project_id: document.getElementById("sn-proj").value || null, location: gv("sn-loc"), severity: document.getElementById("sn-sev").value, trade: gv("sn-trade"), assigned_to: document.getElementById("sn-emp").value || null, due_date: gv("sn-due") || null, status: st, photo_url: gv("sn-photo") };
+      var snDesc = gv("sn-desc"); if (!snDesc || !snDesc.trim()) { toast("Describe the snag"); return; }
+      var snSev = document.getElementById("sn-sev").value, snLoc = gv("sn-loc"), snEmp = document.getElementById("sn-emp").value || null, snDue = gv("sn-due") || null;
+      if ((snSev === "high" || snSev === "critical") && (!snLoc || !snEmp || !snDue)) { toast("A " + snSev + " snag needs a location, an assignee and a due date."); return; }
+      var row = { description: snDesc.trim(), project_id: document.getElementById("sn-proj").value || null, location: snLoc, severity: snSev, trade: gv("sn-trade"), assigned_to: snEmp, due_date: snDue, status: st, photo_url: gv("sn-photo") };
       if (st === "fixed" && !s.fixed_at) row.fixed_at = new Date().toISOString();
       if (st === "verified" && !s.verified_at) row.verified_at = new Date().toISOString();
       if (st === "closed" && !s.closed_at) row.closed_at = new Date().toISOString();
@@ -9216,7 +9225,11 @@
     var del = document.getElementById("in2-del"); if (del) del.onclick = async function () { await sb.from("site_incidents").delete().eq("id", inc.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("in2-save").onclick = async function () {
       var gv = function (id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; };
-      var row = { incident_date: gv("in2-date") || today(), project_id: document.getElementById("in2-proj").value || null, incident_type: document.getElementById("in2-type").value, severity: document.getElementById("in2-sev").value, location: gv("in2-loc"), description: gv("in2-desc") || "Incident", action_taken: gv("in2-act"), reported_by: gv("in2-rep"), status: document.getElementById("in2-status").value };
+      var inProj = document.getElementById("in2-proj").value || null, inLoc = gv("in2-loc"), inDesc = gv("in2-desc"), inAct = gv("in2-act"), inRep = gv("in2-rep");
+      if (!inProj || !inLoc || !inDesc || !inRep) { toast("An incident needs a project, location, what happened, and who reported it."); return; }
+      var inSev = document.getElementById("in2-sev").value;
+      if ((inSev === "high" || inSev === "critical" || inSev === "major" || inSev === "serious") && !inAct) { toast("A serious incident needs the immediate action taken."); return; }
+      var row = { incident_date: gv("in2-date") || today(), project_id: inProj, incident_type: document.getElementById("in2-type").value, severity: inSev, location: inLoc, description: inDesc, action_taken: inAct, reported_by: inRep, status: document.getElementById("in2-status").value };
       var r; if (inc.id) r = await sb.from("site_incidents").update(row).eq("id", inc.id); else { row.company_id = S.company.id; r = await sb.from("site_incidents").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
@@ -11506,7 +11519,7 @@
       return '<div class="o-pcol"><div class="hd"><span>' + esc(s.name) + '</span><span class="amt">' + ls.length + ' &middot; ' + S.company.currency_code + ' ' + money(amt) + '</span></div><div class="cards">' + (cards || '<div class="muted" style="font-size:12px;padding:6px">Empty</div>') + '</div></div>';
     }).join("");
     var totalPipe = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0); }, 0);
-    var weighted = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0) * (Number(l.probability || 0) / 100); }, 0);
+    var weighted = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0) * (Math.max(0, Math.min(100, Number(l.probability || 0))) / 100); }, 0);
     var fc = '<div class="o-hd" style="margin-bottom:12px"><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + S.company.currency_code + ' ' + money(totalPipe) + '</div><div class="o-hd-l">Open pipeline (' + leads.length + ')</div></button><button class="o-hd-k" style="cursor:default"><div class="o-hd-v">' + S.company.currency_code + ' ' + money(weighted) + '</div><div class="o-hd-l">Weighted forecast</div></button></div>';
     document.getElementById("o-body").innerHTML = fc + '<div class="o-pipe">' + cols + '</div>';
     document.querySelectorAll(".o-lead[data-id]").forEach(function (el) { el.onclick = function () { renderLeadForm(el.dataset.id); }; });
@@ -11579,7 +11592,7 @@
       fld("Phone", phoneFieldHTML("ld-phone", l, { cc: "phone_cc", area: "phone_area", num: "phone_num", combined: "phone" }), "Contact phone number - dialing code, area code and number.") +
       '</div><div>' +
       fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
-      fld("Probability", '<input id="ld-prob" type="number" step="1" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent.") +
+      fld("Probability", '<input id="ld-prob" type="number" step="1" min="0" max="100" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent (0-100).") +
       fld("Source", '<input id="ld-src" value="' + esc(l.source || "") + '">', "Where the lead came from, e.g. referral or website.") +
       '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + actSection + '</div>';
     var la = document.getElementById("ld-logact"); if (la) la.onclick = function () { openLeadActivity(id, l.partner_id); };
@@ -11589,8 +11602,10 @@
     custPickerAdd("ld-cust");
     document.getElementById("ld-save").onclick = async function () {
       var name = gv("ld-name"); if (!name) { toast("Name required"); return; }
+      var _cust = document.getElementById("ld-cust").value || null;
+      if (!_cust && !gv("ld-contact") && !gv("ld-email") && !gv("ld-phone")) { toast("Add a customer or a contact name / email / phone so this opportunity can be followed up."); return; }
       var lph = collectPhone("ld-phone");
-      var row = { name: name, partner_id: document.getElementById("ld-cust").value || null, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: lph.combined, phone_cc: lph.cc, phone_area: lph.area, phone_num: lph.num, expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: parseFloat(gv("ld-prob")) || 0, source: gv("ld-src"), stage_id: l.stage_id };
+      var row = { name: name, partner_id: _cust, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: lph.combined, phone_cc: lph.cc, phone_area: lph.area, phone_num: lph.num, expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: Math.max(0, Math.min(100, parseFloat(gv("ld-prob")) || 0)), source: gv("ld-src"), stage_id: l.stage_id };
       var r; if (id === "new") { row.company_id = S.company.id; row.is_active = true; r = await sb.from("crm_leads").insert(row); } else r = await sb.from("crm_leads").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("crm.pipe");
@@ -15817,6 +15832,8 @@
     var delB = document.getElementById("ap-del"); if (delB) delB.onclick = async function () { if (!confirm("Delete this " + apptTermAppt().toLowerCase() + "?")) return; await sb.from("appt_appointments").delete().eq("id", id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("ap-save").onclick = async function () {
       var btn = this; var clientSel = document.getElementById("ap-client").value;
+      if (!clientSel) { toast("Pick a " + apptTermClient().toLowerCase() + " (or add a new one)"); return; }
+      if (!document.getElementById("ap-svc").value) { toast("Choose a service"); return; }
       var clientId = clientSel && clientSel !== "__new" ? clientSel : null;
       if (clientSel === "__new") {
         var nm = gv("ap-newname"); if (!nm) { toast("Enter the new " + apptTermClient().toLowerCase() + " name"); return; }
