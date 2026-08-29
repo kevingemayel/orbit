@@ -1387,6 +1387,40 @@
     S.app = key;
     applyAppColor();
     go(APPS[key].home);
+    maybeShowAppGuide(key);
+  }
+  // First-time, per-app quick-start guide. Shown once per app (per browser); the user
+  // can turn all tips off. Re-openable from Help.
+  var APP_GUIDES = {
+    accounting: { intro: "Your books - invoices, bills, payments and the ledger, kept in balance automatically.", steps: ["In Configuration, set your VAT/tax rates and review the Chart of Accounts.", "Raise a customer invoice or record a vendor bill - posting it hits the ledger.", "Register payments against them, then watch the Dashboard, Aged reports and Data Health."] },
+    sales: { intro: "Quote, confirm and invoice everything you sell.", steps: ["Pick or add a customer (you can add one on the fly from the dropdown).", "Create a Quotation, add lines, and Confirm it into a Sales Order.", "Turn the order into an invoice when it's delivered."] },
+    purchase: { intro: "Order from suppliers, receive the goods, and match the bill.", steps: ["Create a Purchase Order for a supplier and send it.", "Receive the goods against it (stock updates for product lines).", "Record the vendor bill - the 3-Way Match shows order vs received vs billed."] },
+    crm: { intro: "Track leads and deals through your pipeline.", steps: ["Add an opportunity with a contact and an expected value.", "Log calls/meetings and set the probability as it warms up.", "Mark it Won to turn it into a customer, a quote or a priced tender."] },
+    estimation: { intro: "Build priced tenders (bids) with a full cost breakdown.", steps: ["Create a Tender and set the customer.", "Build the cost sheet - materials, labour, subcontract - and set your margin.", "Mark it Won and it becomes a project with its budget and schedule of values."] },
+    inventory: { intro: "Track stock, movements and valuation across locations.", steps: ["Add your products (add one instantly from any product dropdown).", "Receive stock in, then issue/deliver it out - on-hand and value update live.", "Use On-Hand and the Stock Valuation report to see where everything is."] },
+    project: { intro: "Deliver jobs on budget - tasks, cost, certificates and margin.", steps: ["Create a project (or win a tender straight into one) with a contract value.", "Set the cost Budget and the Schedule of Values (BOQ).", "Tag POs, bills, timesheets and issues to it - Job Cost and P&L fill themselves in."] },
+    manufacturing: { intro: "Fabricate finished goods from a bill of materials.", steps: ["Create a Bill of Materials: the finished product + its components (add products on the fly).", "Raise a Work Order for the quantity to build and Start it.", "Complete it - components are consumed and the finished goods are booked into stock."] },
+    contacts: { intro: "Everyone you deal with - customers, suppliers and more.", steps: ["Add a contact and tag it as a customer, supplier or both.", "Fill in payment terms, credit limit and tax details for accurate documents.", "Contacts are per-company and flow into every quote, invoice and statement."] },
+    hr: { intro: "Your people - records, contracts, leave and payroll.", steps: ["Add employees (or import many at once), and set up departments and positions.", "Give each a running contract with a salary structure and wage.", "Run payroll - it generates payslips and posts them to the ledger."] },
+    counter: { intro: "The company cash desk - all money in and out, to anyone.", steps: ["Add your cash accounts (a till, a safe, a bank).", "Record Money in / Money out against any party - it posts to the ledger and moves statements.", "Do a daily Count & close; variances post to over/short automatically."] },
+    appoint: { intro: "Bookings and client records for appointment-based work.", steps: ["Add your Services (duration, price, capacity, buffer) and set your Availability.", "Share your public booking link (Settings) so clients can book themselves.", "Manage the calendar, keep client records, and bill a completed appointment in one click."] },
+    site: { intro: "Run site work - snags, incidents, diaries and installs.", steps: ["Log snags with a location, assignee and due date; track them to closure.", "Record safety incidents with the action taken.", "Keep site diaries and manage installation work orders."] },
+    documents: { intro: "Controlled project documents - RFIs, submittals, transmittals.", steps: ["Raise an RFI with the question and the date you need an answer.", "Send submittals to the consultant and track their status.", "Issue transmittals with a document register."] }
+  };
+  function maybeShowAppGuide(key) {
+    try { if (localStorage.getItem("orbit_guides_off") === "1") return; if (localStorage.getItem("orbit_guide_" + key) === "1") return; } catch (e) { }
+    var g = APP_GUIDES[key]; if (!g) return;
+    var appName = (APPS[key] && APPS[key].name) || key;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:520px"><h3>' + esc(appName) + ' &middot; quick start</h3><div class="form">' +
+      '<p style="margin:0 0 4px;color:var(--ink2);font-size:14px;line-height:1.5">' + esc(g.intro) + '</p>' +
+      '<ol style="margin:8px 0 0;padding:0;list-style:none">' + g.steps.map(function (s, i) { return '<li style="position:relative;padding:11px 0 11px 38px;font-size:13.5px;color:var(--ink);border-top:1px solid var(--line);line-height:1.45"><span style="position:absolute;left:0;top:9px;width:26px;height:26px;border-radius:8px;background:var(--app);color:#fff;font-size:12.5px;font-weight:700;display:grid;place-items:center">' + (i + 1) + '</span>' + esc(s) + '</li>'; }).join("") + '</ol>' +
+      '</div><div class="foot"><label style="margin-right:auto;font-size:12px;color:var(--ink3);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ag-off"> Don\'t show tips</label><button class="btn pri" id="ag-got" style="background:var(--app);border-color:var(--app)">Got it</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("ag-got").onclick = function () {
+      try { localStorage.setItem("orbit_guide_" + key, "1"); if (document.getElementById("ag-off").checked) localStorage.setItem("orbit_guides_off", "1"); } catch (e) { }
+      m.remove();
+    };
   }
 
   // ============================ SHELL ============================
@@ -4788,6 +4822,40 @@
       if (sel.value === "__add") {
         sel.value = prev;
         openQuickCustomer(function (c) { if (c) { var o = document.createElement("option"); o.value = c.id; o.textContent = c.name; sel.insertBefore(o, sel.querySelector('option[value="__add"]')); sel.value = c.id; prev = c.id; sel.dispatchEvent(new Event("change")); } });
+      } else { prev = sel.value; }
+    });
+  }
+  // Quick-add a product without leaving the form (mirrors openQuickCustomer).
+  async function openQuickProduct(onDone) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:480px"><h3>New product</h3><div class="form">' +
+      '<div><label>Name</label><input id="qp-name" placeholder="Product / material name"></div>' +
+      '<div class="row2"><div><label>Type</label><select id="qp-type"><option value="storable">Storable (kept in stock)</option><option value="consumable">Consumable</option><option value="service">Service (not stocked)</option></select></div>' +
+      '<div><label>Unit of measure</label><input id="qp-uom" value="Unit" placeholder="e.g. Unit, m, kg, m2"></div></div>' +
+      '<div class="row2"><div><label>Cost price</label><input id="qp-cost" type="number" step="0.01" value="0"></div><div><label>Sale price</label><input id="qp-price" type="number" step="0.01" value="0"></div></div>' +
+      '</div><div class="foot"><button class="btn" id="qp-cancel">Cancel</button><button class="btn pri" id="qp-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; select</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qp-cancel").onclick = function () { m.remove(); if (onDone) onDone(null); };
+    var qn = document.getElementById("qp-name"); if (qn) qn.focus();
+    document.getElementById("qp-save").onclick = async function () {
+      var name = gv("qp-name"); if (!name) { toast("Name is required"); return; }
+      var type = document.getElementById("qp-type").value, uom = gv("qp-uom") || "Unit";
+      if ((type === "storable" || type === "consumable") && !uom) { toast("A stock item needs a unit of measure"); return; }
+      var ins = await sb.from("products").insert({ company_id: S.company.id, name: name, type: type, uom: uom, cost_price: parseFloat(gv("qp-cost")) || 0, list_price: parseFloat(gv("qp-price")) || 0, is_active: true }).select("id,name").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+      m.remove(); toast("Product created"); if (onDone) onDone(ins.data);
+    };
+  }
+  // Give a product <select> (by id or element) a "+ Add a new product..." row.
+  function prodPickerAdd(sel) {
+    if (typeof sel === "string") sel = document.getElementById(sel);
+    if (!sel) return;
+    if (!sel.querySelector('option[value="__addp"]')) { var o = document.createElement("option"); o.value = "__addp"; o.textContent = "+ Add a new product..."; sel.appendChild(o); }
+    var prev = sel.value;
+    sel.addEventListener("change", function () {
+      if (sel.value === "__addp") {
+        sel.value = prev;
+        openQuickProduct(function (p) { if (p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.insertBefore(o, sel.querySelector('option[value="__addp"]')); sel.value = p.id; prev = p.id; sel.dispatchEvent(new Event("change")); } });
       } else { prev = sel.value; }
     });
   }
@@ -10950,6 +11018,7 @@
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri" id="k-save" style="background:var(--app);border-color:var(--app)">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("k-cancel").onclick = function () { m.remove(); };
+    prodPickerAdd("k-prod");
     var kProdSel = document.getElementById("k-prod"), kUomSel = m.querySelector(".k-uom"), kQtyIn = document.getElementById("k-qty");
     function prodUom() { var p = storable.filter(function (x) { return x.id === kProdSel.value; })[0]; return (p && p.uom) || "Unit"; }
     function updConv() {
@@ -14453,6 +14522,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Components</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:220px">Component</th><th>Description</th><th style="width:90px;text-align:right">Qty</th><th style="width:90px">Unit</th><th style="width:22px"></th></tr></thead><tbody id="bmbody"></tbody></table><button class="o-addln" id="bm-addln">+ Add a component</button></div></div>' +
       '</div>';
     document.getElementById("bm-discard").onclick = function () { go("mfg.boms"); };
+    prodPickerAdd("bm-prod");
     var lb = document.getElementById("bmbody");
     function addRow(l) {
       var tr = document.createElement("tr");
@@ -14460,6 +14530,7 @@
       lb.appendChild(tr);
       var ps = tr.querySelector(".bl-prod");
       ps.addEventListener("change", function () { var pr = products.filter(function (x) { return x.id === ps.value; })[0]; if (pr && !tr.querySelector(".bl-name").value) tr.querySelector(".bl-name").value = pr.name; if (pr && pr.uom && !tr.querySelector(".bl-unit").value) tr.querySelector(".bl-unit").value = pr.uom; });
+      prodPickerAdd(ps);
       tr.querySelector(".del").onclick = function () { tr.remove(); };
     }
     if (lines.length) lines.forEach(addRow); else addRow(null);
@@ -14553,6 +14624,7 @@
       }
       return sid;
     }
+    prodPickerAdd("wo-prod");
     var svb = document.getElementById("wo-save"); if (svb) svb.onclick = async function () { var sid = await woPersist(); if (sid) { toast("Saved"); renderWorkOrderForm(sid); } };
     var stb = document.getElementById("wo-start"); if (stb) stb.onclick = async function () { var sid = await woPersist(); if (!sid) return; await sb.from("work_orders").update({ state: "in_progress" }).eq("id", sid); toast("Started"); renderWorkOrderForm(sid); };
     var cpb = document.getElementById("wo-complete"); if (cpb) cpb.onclick = async function () { var sid = await woPersist(); if (!sid) return; var full = (await sb.from("work_orders").select("*").eq("id", sid).maybeSingle()).data; await completeWorkOrder(full); };
