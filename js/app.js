@@ -15036,8 +15036,37 @@
         { label: "Money in", test: function (m) { return m.direction === "in"; } },
         { label: "Money out", test: function (m) { return m.direction === "out"; } }
       ],
-      groupBy: [{ label: "Type", get: function (m) { return cashKindLabel(m.kind); } }, { label: "Month", get: function (m) { return (m.move_date || "").slice(0, 7); } }]
+      groupBy: [{ label: "Type", get: function (m) { return cashKindLabel(m.kind); } }, { label: "Month", get: function (m) { return (m.move_date || "").slice(0, 7); } }],
+      onOpen: function (m) { openMovementReceipt(m); }
     };
+  }
+  function openMovementReceipt(m) {
+    var mm = document.createElement("div"); mm.className = "modal on"; mm.id = "mrmodal";
+    var col = m.direction === "in" ? "var(--good)" : "var(--bad)";
+    var rows = [["No.", m.number], ["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "From" : "To"), m.handler_name], ["Method", m.method], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line)"><span class="muted">' + esc(r[0]) + '</span><span style="font-weight:600;text-align:right">' + esc(String(r[1])) + '</span></div>'; }).join("");
+    var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<div style="display:flex;justify-content:space-between;padding:7px 0"><span class="muted">Tendered / change</span><span style="font-weight:600">' + moneyC(m.tendered, m.currency_code) + ' / ' + moneyC(m.change_given, m.currency_code) + '</span></div>' : '';
+    mm.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (m.direction === "in" ? "Receipt " : "Payment ") + esc(m.number || "") + '</h3><div class="form" style="padding:16px 18px">'
+      + '<div style="font-size:26px;font-weight:800;color:' + col + ';font-variant-numeric:tabular-nums">' + (m.direction === "in" ? "+" : "-") + moneyC(m.amount, m.currency_code) + '</div>'
+      + '<div style="margin-top:10px">' + rows + tender + '</div>'
+      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button><button class="btn pri" id="mr-print" style="background:var(--app);border-color:var(--app)">Print receipt</button></div></div>';
+    document.body.appendChild(mm);
+    document.getElementById("mr-close").onclick = function () { mm.remove(); };
+    document.getElementById("mr-print").onclick = function () { mm.remove(); printCashReceipt(m); };
+  }
+  function printCashReceipt(m) {
+    var t = printTplData();
+    var logo = (t.show_logo && t.logo) ? '<img src="' + t.logo + '" style="max-height:54px;display:block">' : "";
+    var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
+    var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
+    var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<table style="font-size:13px;margin:-8px 0 4px"><tr><td style="color:#666;padding:2px 16px 2px 0">Cash tendered</td><td style="font-weight:600">' + esc(moneyC(m.tendered, m.currency_code)) + '</td></tr><tr><td style="color:#666;padding:2px 16px 2px 0">Change given</td><td style="font-weight:600">' + esc(moneyC(m.change_given, m.currency_code)) + '</td></tr></table>' : '';
+    var html = '<div style="max-width:520px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">'
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:18px">'
+      + '<div>' + logo + '<div style="font-size:17px;font-weight:800;margin-top:6px">' + esc(pfDisplayName(t)) + '</div></div>'
+      + '<div style="text-align:right"><div style="font-size:20px;font-weight:800;letter-spacing:.03em">' + (m.direction === "in" ? "RECEIPT" : "PAYMENT VOUCHER") + '</div><div style="font-size:12px;color:#666;font-family:monospace">' + esc(m.number || "") + '</div></div></div>'
+      + '<table style="font-size:13.5px;border-collapse:collapse">' + rows + '</table>' + amt + tender
+      + '<div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px;color:#666"><div>_____________________<br>' + (m.direction === "in" ? "Received by" : "Received by") + '</div><div style="text-align:right">_____________________<br>Cashier</div></div>'
+      + pdocFoot() + '</div>';
+    pdocPrint(html);
   }
 
   // ---- handovers ----
