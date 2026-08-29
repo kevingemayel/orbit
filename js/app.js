@@ -14826,6 +14826,11 @@
       + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Method</label><select id="cm-method">' + methodOpts + '</select></div></div>'
       + '<div id="cm-alloc-wrap" style="display:none;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel2)"></div>'
+      + '<details id="cm-split"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Split across payment methods (part cash, part card...)</summary><div style="margin-top:8px;display:flex;flex-direction:column;gap:7px">'
+      + '<div style="display:flex;gap:7px"><select class="cm-tm" style="flex:1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
+      + '<div style="display:flex;gap:7px"><select class="cm-tm" style="flex:1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
+      + '<div style="display:flex;gap:7px"><select class="cm-tm" style="flex:1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
+      + '</div><div id="cm-split-sum" class="muted" style="font-size:12px;margin-top:6px"></div><div class="muted" style="font-size:11.5px;margin-top:2px">A split payment is recorded on account; use a single method to settle a specific invoice.</div></details>'
       + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
       + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div style="margin-top:8px"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. For a customer/supplier this is only used for the un-allocated (on account) part.</div></div></details>'
       + '<div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div>'
@@ -14873,8 +14878,10 @@
       recomputeAlloc();
     }
     function cashCalcChange() { var t = document.getElementById("cm-tender"); if (!t) return; var tv = parseFloat(t.value) || 0, am = parseFloat(document.getElementById("cm-amt").value) || 0; var ch = Math.round((tv - am) * 100) / 100; document.getElementById("cm-change").value = ch > 0 ? ch : 0; }
+    function cashSplitSum() { var tot = 0, n = 0; m.querySelectorAll(".cm-ta").forEach(function (inp) { var v = parseFloat(inp.value) || 0; if (v > 0) { tot += v; n++; } }); var am = parseFloat(document.getElementById("cm-amt").value) || 0; var el = document.getElementById("cm-split-sum"); if (el) el.textContent = n ? ("Split total " + money(tot) + " of " + money(am) + (Math.abs(tot - am) < 0.005 ? " (matches)" : " (must equal the amount)")) : ""; }
+    m.querySelectorAll(".cm-ta").forEach(function (inp) { inp.oninput = cashSplitSum; });
     var tEl = document.getElementById("cm-tender"); if (tEl) tEl.oninput = cashCalcChange;
-    document.getElementById("cm-amt").oninput = function () { recomputeAlloc(); cashCalcChange(); };
+    document.getElementById("cm-amt").oninput = function () { recomputeAlloc(); cashCalcChange(); cashSplitSum(); };
     document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; } };
     document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; };
     document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-alloc-wrap").style.display = "none"; document.getElementById("cm-doc-wrap").style.display = "none"; };
@@ -14894,6 +14901,9 @@
       var docEl = document.getElementById("cm-doc"), docWrap = document.getElementById("cm-doc-wrap");
       var docId = (docWrap.style.display !== "none" && docEl) ? docEl.value : "", docType = "";
       if (docId) { docType = "payslip"; }
+      var tenders = [];
+      m.querySelectorAll("#cm-split .cm-tm").forEach(function (sel, idx) { var amtEl = m.querySelectorAll("#cm-split .cm-ta")[idx]; var v = parseFloat(amtEl.value) || 0; if (v > 0.005) { var o = sel.options[sel.selectedIndex]; tenders.push({ method: sel.value, kind: o.getAttribute("data-kind") || "cash", amount: Math.round(v * 100) / 100 }); } });
+      if (tenders.length > 1) { var ts = tenders.reduce(function (s, tt) { return s + tt.amount; }, 0); if (Math.abs(ts - amt) > 0.02) { toast("The split payment must add up to the amount"); return; } }
       btn.disabled = true; btn.textContent = "Posting...";
       var mv = {
         direction: dir, kind: k.k, method: document.getElementById("cm-method").value,
@@ -14904,7 +14914,8 @@
         allocations: allocations, link_type: docType || "none", link_id: docId || null,
         tendered: document.getElementById("cm-tender") ? (parseFloat(document.getElementById("cm-tender").value) || 0) : 0,
         change_given: document.getElementById("cm-change") ? (parseFloat(document.getElementById("cm-change").value) || 0) : 0,
-        contra_account_id: document.getElementById("cm-contra").value || null
+        contra_account_id: document.getElementById("cm-contra").value || null,
+        tenders: tenders.length > 1 ? tenders : []
       };
       var r = await postCashMovement(mv, chart, wallets);
       if (r && r.error) { toast("Could not post: " + errMsg(r.error)); btn.disabled = false; btn.textContent = "Post " + (dir === "in" ? "receipt" : "payment"); return; }
@@ -14944,6 +14955,32 @@
     var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
     var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
     var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
+
+    // ---- Split tender: paid via several methods, recorded on account (or as a plain expense) ----
+    if (mv.tenders && mv.tenders.length > 1) {
+      var contraGlS = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
+      var bankGl = (function () { var b = cashAcctByCode(chart, "5100"); return b ? b.id : null; })();
+      if (!cashGl || !contraGlS) return { error: { message: "Missing cash or contra account in the chart" } };
+      var jrS = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", jrnCode).maybeSingle()).data;
+      var narrS = mv.memo || (cashKindLabel(mv.kind) + " (split)" + (mv.payee_name ? (" - " + mv.payee_name) : ""));
+      var eS = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, date: mv.move_date, ref: num, narration: narrS, currency_code: S.company.currency_code, state: "draft", source_type: "cash_movement" }).select("id").single();
+      if (eS.error) return { error: eS.error };
+      var eidS = eS.data.id, linesS = [], totalFunc = 0, labS = (mv.payee_name || cashKindLabel(mv.kind)).slice(0, 110);
+      for (var ti = 0; ti < mv.tenders.length; ti++) {
+        var tn = mv.tenders[ti], f = await cashToFunc(tn.amount, mv.currency_code, mv.move_date); totalFunc += f;
+        var gl = (tn.kind === "cash") ? cashGl : (bankGl || cashGl);
+        linesS.push({ entry_id: eidS, company_id: S.company.id, account_id: gl, label: labS + " (" + tn.method + ")", debit: mv.direction === "in" ? f : 0, credit: mv.direction === "in" ? 0 : f, partner_id: null });
+      }
+      totalFunc = Math.round(totalFunc * 10000) / 10000;
+      linesS.push({ entry_id: eidS, company_id: S.company.id, account_id: contraGlS, label: labS, debit: mv.direction === "in" ? 0 : totalFunc, credit: mv.direction === "in" ? totalFunc : 0, partner_id: isAR ? mv.party_id : null });
+      var liS = await sb.from("journal_lines").insert(linesS);
+      if (liS.error) return { error: liS.error };
+      var peS = await sb.rpc("post_entry", { p_entry: eidS });
+      if (peS.error) return { error: peS.error };
+      if (isAR) { var prS = await sb.from("payments").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, partner_id: mv.party_id, entry_id: eidS, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: mv.amount, currency_code: mv.currency_code || S.company.currency_code, amount_company: totalFunc, memo: "On account " + num, reference: num, state: "posted" }); if (prS.error) return { error: prS.error }; }
+      base.tenders = mv.tenders; base.contra_account_id = contraGlS; base.journal_id = eidS; base.advance_amount = mv.amount;
+      return await sb.from("cash_movements").insert(base);
+    }
 
     // ---- Path 1: on behalf of a customer/supplier - allocate to invoices + on-account remainder ----
     if (isAR) {
@@ -15048,10 +15085,55 @@
     mm.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (m.direction === "in" ? "Receipt " : "Payment ") + esc(m.number || "") + '</h3><div class="form" style="padding:16px 18px">'
       + '<div style="font-size:26px;font-weight:800;color:' + col + ';font-variant-numeric:tabular-nums">' + (m.direction === "in" ? "+" : "-") + moneyC(m.amount, m.currency_code) + '</div>'
       + '<div style="margin-top:10px">' + rows + tender + '</div>'
-      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button><button class="btn pri" id="mr-print" style="background:var(--app);border-color:var(--app)">Print receipt</button></div></div>';
+      + (m.status === "void" ? '<div style="margin-top:10px;font-size:12.5px;color:var(--bad);font-weight:600">This movement was voided.</div>' : "")
+      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button>' + (m.status !== "void" && !m.void_of ? '<button class="btn" id="mr-void" style="color:var(--bad);border-color:var(--bad)">Void</button>' : "") + '<button class="btn pri" id="mr-print" style="background:var(--app);border-color:var(--app)">Print receipt</button></div></div>';
     document.body.appendChild(mm);
     document.getElementById("mr-close").onclick = function () { mm.remove(); };
     document.getElementById("mr-print").onclick = function () { mm.remove(); printCashReceipt(m); };
+    var vb = document.getElementById("mr-void"); if (vb) vb.onclick = async function () { if (!confirm("Void " + (m.number || "this movement") + "? This reverses it in the books and on the customer statement, and restores any invoices it settled.")) return; vb.disabled = true; vb.textContent = "Voiding..."; var r = await voidCashMovement(m); if (r && r.error) { toast("Could not void: " + errMsg(r.error)); vb.disabled = false; vb.textContent = "Void"; return; } if (r && r.already) { vb.disabled = false; return; } mm.remove(); toast("Voided " + (m.number || "")); renderView(); };
+  }
+  async function reverseEntry(entryId, refNo, narr) {
+    var lns = (await sb.from("journal_lines").select("account_id,debit,credit,partner_id,label").eq("entry_id", entryId)).data || [];
+    if (!lns.length) return { ok: true };
+    var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: today(), ref: refNo, narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "cash_void" }).select("id").single();
+    if (e.error) return { error: e.error };
+    var rows = lns.map(function (l) { return { entry_id: e.data.id, company_id: S.company.id, account_id: l.account_id, label: "Reversal: " + (l.label || ""), debit: Number(l.credit) || 0, credit: Number(l.debit) || 0, partner_id: l.partner_id || null }; });
+    var li = await sb.from("journal_lines").insert(rows);
+    if (li.error) return { error: li.error };
+    var pe = await sb.rpc("post_entry", { p_entry: e.data.id });
+    if (pe.error) return { error: pe.error };
+    return { ok: true };
+  }
+  async function voidCashMovement(m) {
+    if (m.status === "void" || m.void_of) { toast("Already voided"); return { already: true }; }
+    var refNo = "VOID/" + (m.number || "");
+    // reverse and remove every payment this movement created (register_payment legs + on-account), all share reference = the movement number
+    var pays = (await sb.from("payments").select("id,entry_id").eq("company_id", S.company.id).eq("reference", m.number)).data || [];
+    for (var i = 0; i < pays.length; i++) {
+      var p = pays[i];
+      if (p.entry_id) {
+        var plines = (await sb.from("journal_lines").select("id").eq("entry_id", p.entry_id)).data || [];
+        var ids = plines.map(function (x) { return x.id; });
+        if (ids.length) { await sb.from("partial_reconciles").delete().or("debit_line_id.in.(" + ids.join(",") + "),credit_line_id.in.(" + ids.join(",") + ")"); }
+        var rv = await reverseEntry(p.entry_id, refNo, "Reversal of " + (m.number || "")); if (rv.error) return { error: rv.error };
+      }
+      await sb.from("payments").delete().eq("id", p.id);
+    }
+    // restore the invoices this movement settled
+    var allocs = m.allocations || [];
+    for (var j = 0; j < allocs.length; j++) {
+      var a = allocs[j]; if (!a.invoice_id) continue;
+      var inv = (await sb.from("invoices").select("amount_total,amount_residual").eq("id", a.invoice_id).maybeSingle()).data;
+      if (inv) { var nr = Math.min(Number(inv.amount_total), Number(inv.amount_residual) + Number(a.amount)); await sb.from("invoices").update({ amount_residual: nr, payment_state: (nr >= Number(inv.amount_total) - 0.005 ? "not_paid" : "partial") }).eq("id", a.invoice_id); }
+    }
+    // a plain (non-AR) movement has a single journal and no payments - reverse it
+    if (!pays.length && m.journal_id) { var rv2 = await reverseEntry(m.journal_id, refNo, "Reversal of " + (m.number || "")); if (rv2.error) return { error: rv2.error }; }
+    // record the reversal on the cash side and lock the original
+    var num = await nextDocNumber("cash_movements", m.direction === "in" ? "PAY" : "RCP");
+    await sb.from("cash_movements").insert({ company_id: S.company.id, number: num, move_date: today(), direction: (m.direction === "in" ? "out" : "in"), kind: m.kind, method: m.method, cash_account_id: m.cash_account_id, amount: m.amount, currency_code: m.currency_code, party_type: m.party_type, party_id: m.party_id, payee_name: m.payee_name, memo: "Void of " + (m.number || ""), void_of: m.id, status: "posted", posted_at: new Date().toISOString() });
+    await sb.from("cash_movements").update({ status: "void", voided_at: new Date().toISOString() }).eq("id", m.id);
+    return { ok: true };
   }
   function printCashReceipt(m) {
     var t = printTplData();
@@ -15488,12 +15570,18 @@
       + '<div><label>Profession</label><select id="st-vert">' + vertOpts + '</select></div>'
       + '<div class="row2"><div><label>Call clients</label><input id="st-tc" value="' + esc(st.term_client || "Client") + '"></div><div><label>Call bookings</label><input id="st-ta" value="' + esc(st.term_appointment || "Appointment") + '"></div></div>'
       + '<div><label><input type="checkbox" id="st-seed"> Also load starter services for this profession</label></div>'
+      + '<hr style="border:none;border-top:1px solid var(--line);margin:2px 0">'
+      + '<div><label>Public booking link</label><div style="display:flex;gap:7px;align-items:center"><span style="color:var(--ink3);font-size:13px;white-space:nowrap">.../book.html?s=</span><input id="st-slug" value="' + esc(st.public_slug || "") + '" placeholder="your-name" style="max-width:220px"></div><div class="muted" style="font-size:12px;margin-top:5px">Share this link and clients book themselves, no login needed. Leave blank to switch the link off.</div><div id="st-linkbox" style="margin-top:8px"></div></div>'
+      + '<div><label>Reminders</label><div style="font-size:13.5px;color:var(--ink2)"><input type="checkbox" id="st-rem"' + (st.reminders_enabled ? " checked" : "") + '> Email a reminder <input id="st-remh" type="number" value="' + (Number(st.reminder_hours) || 24) + '" style="width:64px;height:32px;display:inline-block"> hours before the ' + esc((st.term_appointment || "appointment").toLowerCase()) + '</div></div>'
       + '<div><button class="btn pri" id="st-save" style="background:var(--app);border-color:var(--app)">Save</button></div>'
       + '</div>';
     document.getElementById("st-vert").onchange = function () { var v = APPT_VERTICALS[this.value]; if (v) { document.getElementById("st-tc").value = v.term_client; document.getElementById("st-ta").value = v.term_appointment; } };
+    function apptRenderLink() { var s = (document.getElementById("st-slug").value || "").trim(); var box = document.getElementById("st-linkbox"); if (!s) { box.innerHTML = ""; return; } var link = location.origin + "/book.html?s=" + encodeURIComponent(s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "")); box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px"><a href="' + esc(link) + '" target="_blank" style="flex:1;font-size:12.5px;color:var(--accent);word-break:break-all">' + esc(link) + '</a><button class="btn" id="st-copy" style="padding:4px 10px;font-size:12px">Copy</button></div>'; document.getElementById("st-copy").onclick = function () { try { navigator.clipboard.writeText(link); toast("Link copied"); } catch (e) { toast("Select and copy the link"); } }; }
+    document.getElementById("st-slug").oninput = apptRenderLink; apptRenderLink();
     document.getElementById("st-save").onclick = async function () {
       var vert = document.getElementById("st-vert").value;
-      var r = await sb.from("appt_settings").update({ vertical: vert, term_client: gv("st-tc") || "Client", term_appointment: gv("st-ta") || "Appointment" }).eq("company_id", S.company.id);
+      var slug = (gv("st-slug") || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
+      var r = await sb.from("appt_settings").update({ vertical: vert, term_client: gv("st-tc") || "Client", term_appointment: gv("st-ta") || "Appointment", public_slug: slug || null, reminders_enabled: document.getElementById("st-rem").checked, reminder_hours: parseInt(gv("st-remh"), 10) || 24 }).eq("company_id", S.company.id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (document.getElementById("st-seed").checked) {
         var have = (await sb.from("appt_services").select("id").eq("company_id", S.company.id).limit(1)).data || [];

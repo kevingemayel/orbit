@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Book an appointment</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap">
+<style>
+:root{--paper:#f4f2ec;--surface:#fff;--surf2:#f5f2ec;--ink:#191a1f;--ink2:#575a63;--ink3:#8b8d95;--line:#e6e1d7;--accent:#2f6bff;--accent-ink:#1f4fd6;--accent-soft:#e8edff;--good:#0e9f6e;--sans:'Onest',system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:28px 18px 60px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(24,22,18,.05),0 14px 40px -18px rgba(24,22,18,.22);overflow:hidden}
+.head{padding:22px 22px 18px;border-bottom:1px solid var(--line)}
+.biz{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.sub{font-size:13.5px;color:var(--ink2);margin-top:3px}
+.body{padding:20px 22px 24px;display:flex;flex-direction:column;gap:20px}
+.step-l{font-size:11.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);margin-bottom:9px}
+.svcs{display:flex;flex-direction:column;gap:9px}
+.svc{display:flex;align-items:center;gap:12px;text-align:left;width:100%;border:1px solid var(--line);border-radius:12px;background:var(--surf2);padding:13px 15px;cursor:pointer;font:inherit;transition:.12s}
+.svc:hover{border-color:var(--ink3)}
+.svc.sel{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 3px var(--accent-soft)}
+.svc-b{flex:1}
+.svc-n{font-size:15px;font-weight:700}
+.svc-m{font-size:12.5px;color:var(--ink2);margin-top:1px}
+.svc-p{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+input,select{width:100%;height:44px;border:1px solid var(--line);border-radius:11px;background:var(--surf2);color:var(--ink);font:inherit;font-size:15px;padding:0 13px}
+input:focus,select:focus{outline:none;border-color:var(--accent);background:var(--surface);box-shadow:0 0 0 3px var(--accent-soft)}
+label{display:block;font-size:12.5px;font-weight:600;color:var(--ink2);margin-bottom:6px}
+.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px}
+.slot{height:40px;border:1px solid var(--line);border-radius:10px;background:var(--surf2);color:var(--ink);font:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:.1s}
+.slot:hover{border-color:var(--ink3)}
+.slot.sel{background:var(--accent);border-color:var(--accent);color:#fff}
+.slot.none{grid-column:1/-1;border:none;background:none;color:var(--ink3);font-weight:500;font-size:13.5px;height:auto;text-align:left;cursor:default}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.btn{width:100%;height:50px;border:none;border-radius:12px;background:var(--accent);color:#fff;font:inherit;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(47,107,255,.3),0 8px 20px -6px rgba(47,107,255,.4)}
+.btn:hover{filter:brightness(1.05)}
+.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}
+.msg{font-size:13.5px;padding:11px 14px;border-radius:10px}
+.msg.err{background:#fce8e8;color:#c0392b}
+.foot{text-align:center;font-size:12px;color:var(--ink3);margin-top:18px}
+.foot b{color:var(--ink2)}
+.done{text-align:center;padding:30px 22px}
+.done .tick{width:64px;height:64px;border-radius:50%;background:var(--good);display:grid;place-items:center;margin:0 auto 16px}
+.done .tick svg{width:34px;height:34px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.done h2{font-size:22px;font-weight:800;margin:0 0 6px}
+.done p{font-size:14.5px;color:var(--ink2);margin:0 0 4px}
+.done .ref{font-family:ui-monospace,monospace;font-size:13px;color:var(--ink3);margin-top:8px}
+.skel{color:var(--ink3);text-align:center;padding:40px}
+@media(max-width:480px){.row2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card" id="card"><div class="skel" id="skel">Loading&hellip;</div></div>
+  <div class="foot">Powered by <b>Space Work</b> &middot; Orbit</div>
+</div>
+<script>
+var SUPABASE_URL="https://hlkwzbkgkwywomuvilwe.supabase.co";
+var ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imhsa3d6Ymtna3d5d29tdXZpbHdlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODU0MDMsImV4cCI6MjEwMTg2MTQwM30.1JJ_2f7_t_N5jjZ5Xg4sNmQ4tgvmKqHaRuTUt-DQlKA";
+function H(){return{apikey:ANON,Authorization:"Bearer "+ANON,"Content-Type":"application/json"};}
+function rpc(fn,body){return fetch(SUPABASE_URL+"/rest/v1/rpc/"+fn,{method:"POST",headers:H(),body:JSON.stringify(body)});}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function money(n,cur){return (cur?cur+" ":"")+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0});}
+var slug=new URLSearchParams(location.search).get("s")||"";
+var INFO=null, state={service:null, date:"", slot:""};
+
+function fmtMin(m){var h=Math.floor(m/60),mm=m%60;var ap=h>=12?"PM":"AM",h12=h%12||12;return h12+":"+(mm<10?"0":"")+mm+" "+ap;}
+function build(){
+  var el=document.getElementById("card");
+  if(!INFO){ el.innerHTML='<div class="skel">This booking link is not active.<br>Please contact the business for a valid link.</div>'; return; }
+  var svcSel=state.service;
+  var svcHtml=INFO.services.map(function(s){var on=svcSel&&svcSel.id===s.id;return '<button class="svc'+(on?' sel':'')+'" data-id="'+s.id+'"><div class="svc-b"><div class="svc-n">'+esc(s.name)+'</div><div class="svc-m">'+(s.duration_min||30)+' min</div></div>'+(Number(s.price)>0?'<div class="svc-p">'+esc(money(s.price,s.currency_code||INFO.currency))+'</div>':'')+'</button>';}).join("");
+  var slotsHtml="";
+  if(svcSel && state.date){
+    var d=new Date(state.date+"T00:00:00"); var wd=d.getDay();
+    var av=INFO.availability.filter(function(a){return a.weekday===wd;});
+    var dur=Number(svcSel.duration_min)||30, step=Math.max(dur,15), out=[];
+    var now=new Date();
+    av.forEach(function(a){ for(var m=a.start_min;m+dur<=a.end_min;m+=step){ var st=new Date(state.date+"T00:00:00"); st.setMinutes(m); if(st>now){ out.push({m:m,iso:st.toISOString()}); } } });
+    slotsHtml = out.length ? out.map(function(s){var on=state.slot===s.iso;return '<button class="slot'+(on?' sel':'')+'" data-iso="'+s.iso+'">'+esc(fmtMin(s.m))+'</button>';}).join("") : '<div class="slot none">No times available on that day. Try another date.</div>';
+  }
+  el.innerHTML='<div class="head"><div class="biz">'+esc(INFO.business)+'</div><div class="sub">Book your '+esc((INFO.term_appointment||"appointment").toLowerCase())+' below.</div></div>'
+    +'<div class="body">'
+    +'<div><div class="step-l">1 &middot; Choose a service</div><div class="svcs">'+svcHtml+'</div></div>'
+    +(svcSel?'<div><div class="step-l">2 &middot; Pick a date</div><input type="date" id="f-date" min="'+new Date().toISOString().slice(0,10)+'" value="'+esc(state.date)+'"></div>':'')
+    +(svcSel&&state.date?'<div><div class="step-l">3 &middot; Pick a time</div><div class="slots">'+slotsHtml+'</div></div>':'')
+    +(state.slot?'<div><div class="step-l">4 &middot; Your details</div><div style="display:flex;flex-direction:column;gap:12px"><div><label>Full name</label><input id="f-name" placeholder="Your name"></div><div class="row2"><div><label>Email</label><input id="f-email" type="email" placeholder="you@email.com"></div><div><label>Phone</label><input id="f-phone" placeholder="Mobile"></div></div></div></div>':'')
+    +'<div id="msg"></div>'
+    +(state.slot?'<button class="btn" id="f-book">Confirm booking</button>':'')
+    +'</div>';
+  el.querySelectorAll(".svc").forEach(function(b){b.onclick=function(){state.service=INFO.services.filter(function(s){return s.id===b.dataset.id;})[0];state.slot="";build();};});
+  var dt=document.getElementById("f-date"); if(dt) dt.onchange=function(){state.date=this.value;state.slot="";build();};
+  el.querySelectorAll(".slot[data-iso]").forEach(function(b){b.onclick=function(){state.slot=b.dataset.iso;build();};});
+  var bk=document.getElementById("f-book"); if(bk) bk.onclick=submit;
+}
+async function submit(){
+  var name=(document.getElementById("f-name")||{}).value||"", email=(document.getElementById("f-email")||{}).value||"", phone=(document.getElementById("f-phone")||{}).value||"";
+  var msg=document.getElementById("msg");
+  if(name.trim().length<2){ msg.innerHTML='<div class="msg err">Please enter your name.</div>'; return; }
+  var bk=document.getElementById("f-book"); bk.disabled=true; bk.textContent="Booking…";
+  try{
+    var r=await rpc("public_book_appointment",{p_slug:slug,p_service:state.service.id,p_start:state.slot,p_name:name,p_email:email,p_phone:phone});
+    var d=await r.json();
+    if(!r.ok||(d&&d.message)){ throw new Error((d&&(d.message||d.hint))||"Could not book. Please try again."); }
+    var when=new Date(state.slot);
+    document.getElementById("card").innerHTML='<div class="done"><div class="tick"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></div><h2>You’re booked!</h2><p>'+esc(state.service.name)+'</p><p>'+esc(when.toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"}))+' at '+esc(when.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}))+'</p><div class="ref">Ref '+esc(d.number||"")+'</div></div>';
+  }catch(e){ msg.innerHTML='<div class="msg err">'+esc(e.message)+'</div>'; bk.disabled=false; bk.textContent="Confirm booking"; }
+}
+(async function(){
+  if(!slug){ INFO=null; build(); return; }
+  try{ var r=await rpc("public_appt_info",{p_slug:slug}); INFO=await r.json(); }catch(e){ INFO=null; }
+  build();
+})();
+</script>
+</body>
+</html>

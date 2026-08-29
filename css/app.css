@@ -1,6 +1,6 @@
 :root{
   /* Space Work brand palette (matches spacework.ai) */
-  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
+  --bg:#f6f4ee;--panel:#ffffff;--panel2:#efeade;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
   --line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--accent-soft:#e9eeff;
   --good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--warn-s:#fbf0da;--bad:#f4573d;--bad-s:#fdeae6;--slate:#55565c;--slate-s:#f1eee8;
   --mono:"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
@@ -48,7 +48,7 @@
   --app:#db2777;--app2:#be185d;--sh:0 1px 2px rgba(90,20,50,.06),0 8px 22px rgba(150,30,90,.10);
 }
 :root[data-theme="spacework"]{
-  --bg:#fafaf8;--panel:#ffffff;--panel2:#f1eee8;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
+  --bg:#f6f4ee;--panel:#ffffff;--panel2:#efeade;--ink:#16171c;--ink2:#55565c;--ink3:#676d79;
   --line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--accent-soft:#e9eeff;
   --good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--warn-s:#fbf0da;--bad:#f4573d;--bad-s:#fdeae6;--slate:#55565c;--slate-s:#f1eee8;
   --app:#16171c;--app2:#24252c;--sh:0 1px 2px rgba(22,23,28,.05),0 14px 40px -20px rgba(22,23,28,.22);
