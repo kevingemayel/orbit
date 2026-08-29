@@ -1257,6 +1257,10 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-oc-box:hover{border-color:var(--accent);box-shadow:0 4px 14px -6px rgba(20,23,28,.22)}
 .o-oc-n{font-weight:700;font-size:13.5px;color:var(--ink)}
 .o-oc-s{font-size:12px;color:var(--ink2);margin-top:2px}
+.o-oc-tog{margin-top:8px;border:1px solid var(--line);background:var(--panel2);color:var(--ink2);border-radius:20px;padding:1px 9px;font:inherit;font-size:11px;font-weight:600;cursor:pointer}
+.o-oc-tog:hover{border-color:var(--accent);color:var(--accent)}
+/* keyboard focus ring for openable rows/cards/tree/org (added via role=button + tabindex) */
+.o-list tr[data-id]:focus-visible,.o-card[data-id]:focus-visible,.o-tw-row:focus-visible,.o-oc-box:focus-visible,.o-thumb:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:6px}
 
 /* ---- Events workspace ---- */
 .ev-wrap{padding:18px;max-width:1200px;overflow-y:auto;min-height:0;height:100%;box-sizing:border-box}

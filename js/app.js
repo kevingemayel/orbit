@@ -2312,11 +2312,20 @@
       var kids = r._kids || [];
       var lbl = t.label ? t.label(r) : (r.name || r.number || "");
       var sub = t.sub ? t.sub(r) : "";
-      var box = '<div class="o-oc-box" data-id="' + r.id + '"><div class="o-oc-n">' + esc(lbl) + '</div>' + (sub ? '<div class="o-oc-s">' + esc(sub) + '</div>' : "") + '</div>';
+      var box = '<div class="o-oc-box" data-id="' + r.id + '"><div class="o-oc-n">' + esc(lbl) + '</div>' + (sub ? '<div class="o-oc-s">' + esc(sub) + '</div>' : "") + (kids.length ? '<button class="o-oc-tog" title="Collapse / expand"><span class="n">' + kids.length + '</span> <span class="c">&#9662;</span></button>' : "") + '</div>';
       return box + (kids.length ? '<ul>' + kids.map(function (k) { return '<li>' + node(k, (depth || 0) + 1) + '</li>'; }).join("") + '</ul>' : "");
     }
     if (!roots.length) return '<div class="o-empty">Nothing to show.</div>';
     return '<div class="o-orgchart"><ul>' + roots.map(function (r) { return '<li>' + node(r, 0) + '</li>'; }).join("") + '</ul></div>';
+  }
+  function wireOrg() {
+    document.querySelectorAll("#o-body .o-oc-tog").forEach(function (b) {
+      b.onclick = function (e) {
+        e.stopPropagation();
+        var box = b.closest(".o-oc-box"), ul = box ? box.nextElementSibling : null;
+        if (ul && ul.tagName === "UL") { var hide = ul.style.display !== "none"; ul.style.display = hide ? "none" : ""; var c = b.querySelector(".c"); if (c) c.innerHTML = hide ? "&#9656;" : "&#9662;"; }
+      };
+    });
   }
   function saveListView() { if (S.action) LIST_VIEW[S.action] = { view: L.view, kanbanGroupIdx: L.kanbanGroupIdx, kwidth: L.kwidth }; }
   function renderList(cfg) {
@@ -2346,7 +2355,7 @@
     L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
-    document.getElementById("o-q").addEventListener("input", function () { L.query = this.value.toLowerCase(); L.page = 0; paintBody(); });
+    var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
     document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x.dataset.v === L.view); });
     document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
       b.onclick = function () { L.view = b.dataset.v; saveListView(); document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
@@ -2441,7 +2450,7 @@
       body.innerHTML = treeViewHTML(cfg, rows); wireTree(cfg, rows);
     }
     else if (L.view === "org" && cfg.orgChart) {
-      body.innerHTML = orgChartHTML(cfg, rows);
+      body.innerHTML = orgChartHTML(cfg, rows); wireOrg();
     }
     else if (L.view === "kanban") {
       var kg = kanbanGroupsFor(cfg);
@@ -2465,7 +2474,11 @@
       var page = rows.slice(L.page * L.size, (L.page + 1) * L.size);
       body.innerHTML = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>' + page.map(function (r) { return rowHTML(cfg, r); }).join("") + '</tbody></table>';
     }
-    body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { var r = rows.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); }; });
+    body.querySelectorAll("[data-id]").forEach(function (el) {
+      var open = function () { var r = rows.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
+      el.onclick = open;
+      if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
+    });
   }
   function headRow(cfg) { return '<tr>' + cfg.columns.map(function (c) { return '<th class="' + (c.num ? "num" : "") + '">' + esc(c.label) + '</th>'; }).join("") + '</tr>'; }
   function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
