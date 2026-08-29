@@ -3308,6 +3308,7 @@
         }
         refreshCreditWarn();
       };
+      if (fpart) { if (isSale) custPickerAdd("f-partner"); else vendPickerAdd("f-partner"); }
       if (id === "new" && !inv) applyTerms(); // seed due date from default terms on a fresh invoice
       document.getElementById("f-discard").onclick = function () { go(isSale ? "inv.out" : "inv.in"); };
       document.getElementById("f-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved as draft"); renderInvoiceForm(nid, moveType); } };
@@ -3669,9 +3670,11 @@
     function render(q) {
       var terms = (q || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
       var m = (!terms.length ? idx : idx.filter(function (o) { return terms.every(function (t) { return o.t.indexOf(t) >= 0; }); })).slice(0, 25);
-      if (!m.length) menu.innerHTML = '<div class="o-combo-empty">No catalog match - you can still type a free description.</div>';
-      else menu.innerHTML = m.map(function (o) { var p = o.p, sub = [(p.spec || {}).material, (p.spec || {}).color, p.family].filter(Boolean).join(" &middot; "); return '<div class="o-combo-opt" data-id="' + p.id + '"><span class="oc-name">' + esc(prodLabel(p)) + '</span>' + (sub ? '<span class="oc-sub">' + esc(sub) + '</span>' : "") + '</div>'; }).join("");
-      menu.querySelectorAll(".o-combo-opt").forEach(function (el) { el.addEventListener("mousedown", function (e) { e.preventDefault(); var p = products.filter(function (x) { return x.id === el.dataset.id; })[0]; if (!p) return; hid.value = p.id; inp.value = prodLabel(p); menu.hidden = true; if (onPick) onPick(p); }); });
+      var qt = (q || inp.value || "").trim();
+      var addOpt = '<div class="o-combo-opt o-combo-add" data-add="1"><span class="oc-name" style="color:var(--accent);font-weight:600">+ Add ' + (qt ? '&ldquo;' + esc(qt) + '&rdquo; as ' : '') + 'a new product</span></div>';
+      if (!m.length) menu.innerHTML = '<div class="o-combo-empty">No catalog match - type a free description, or:</div>' + addOpt;
+      else menu.innerHTML = m.map(function (o) { var p = o.p, sub = [(p.spec || {}).material, (p.spec || {}).color, p.family].filter(Boolean).join(" &middot; "); return '<div class="o-combo-opt" data-id="' + p.id + '"><span class="oc-name">' + esc(prodLabel(p)) + '</span>' + (sub ? '<span class="oc-sub">' + esc(sub) + '</span>' : "") + '</div>'; }).join("") + addOpt;
+      menu.querySelectorAll(".o-combo-opt").forEach(function (el) { el.addEventListener("mousedown", function (e) { e.preventDefault(); if (el.dataset.add) { menu.hidden = true; openQuickProduct(function (np) { if (np) { products.push(np); idx.push({ p: np, t: prodSearchText(np) }); hid.value = np.id; inp.value = prodLabel(np); if (onPick) onPick(np); } }, qt); return; } var p = products.filter(function (x) { return x.id === el.dataset.id; })[0]; if (!p) return; hid.value = p.id; inp.value = prodLabel(p); menu.hidden = true; if (onPick) onPick(p); }); });
       var r = inp.getBoundingClientRect(); menu.style.position = "fixed"; menu.style.top = (r.bottom + 2) + "px"; menu.style.left = r.left + "px"; menu.style.width = Math.max(r.width, 280) + "px";
       menu.hidden = false;
     }
@@ -3983,6 +3986,7 @@
     }
     if (editable) {
       document.getElementById("o-discard").onclick = function () { go(listAction); };
+      if (document.getElementById("o-partner")) { if (isSale) custPickerAdd("o-partner"); else vendPickerAdd("o-partner"); }
       document.getElementById("o-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderOrderForm(nid, kind); } };
       document.getElementById("o-confirm").onclick = async function () {
         var nid = await save(false); if (!nid) return;
@@ -4584,6 +4588,7 @@
     var prQr = document.getElementById("pr-qr"); if (prQr) prQr.onclick = function () { openQRModal(p.name || "Product", p.barcode || p.default_code || p.id, p.default_code || ""); };
     wireMatSpec(p, clsNodes);
     wireAttach("product");
+    catPickerAdd("pr-cat");
     var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
     var _po = document.getElementById("pr-sm-oh"); if (_po) _po.onclick = function () { go("inv.onhand"); };
     document.getElementById("pr-save").onclick = async function () {
@@ -4826,10 +4831,10 @@
     });
   }
   // Quick-add a product without leaving the form (mirrors openQuickCustomer).
-  async function openQuickProduct(onDone) {
+  async function openQuickProduct(onDone, preName) {
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet" style="max-width:480px"><h3>New product</h3><div class="form">' +
-      '<div><label>Name</label><input id="qp-name" placeholder="Product / material name"></div>' +
+      '<div><label>Name</label><input id="qp-name" value="' + esc(preName || "") + '" placeholder="Product / material name"></div>' +
       '<div class="row2"><div><label>Type</label><select id="qp-type"><option value="storable">Storable (kept in stock)</option><option value="consumable">Consumable</option><option value="service">Service (not stocked)</option></select></div>' +
       '<div><label>Unit of measure</label><input id="qp-uom" value="Unit" placeholder="e.g. Unit, m, kg, m2"></div></div>' +
       '<div class="row2"><div><label>Cost price</label><input id="qp-cost" type="number" step="0.01" value="0"></div><div><label>Sale price</label><input id="qp-price" type="number" step="0.01" value="0"></div></div>' +
@@ -4841,7 +4846,7 @@
       var name = gv("qp-name"); if (!name) { toast("Name is required"); return; }
       var type = document.getElementById("qp-type").value, uom = gv("qp-uom") || "Unit";
       if ((type === "storable" || type === "consumable") && !uom) { toast("A stock item needs a unit of measure"); return; }
-      var ins = await sb.from("products").insert({ company_id: S.company.id, name: name, type: type, uom: uom, cost_price: parseFloat(gv("qp-cost")) || 0, list_price: parseFloat(gv("qp-price")) || 0, is_active: true }).select("id,name").single();
+      var ins = await sb.from("products").insert({ company_id: S.company.id, name: name, type: type, uom: uom, cost_price: parseFloat(gv("qp-cost")) || 0, list_price: parseFloat(gv("qp-price")) || 0, is_active: true }).select("id,name,default_code,type,uom,cost_price,list_price").single();
       if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
       m.remove(); toast("Product created"); if (onDone) onDone(ins.data);
     };
@@ -4857,6 +4862,61 @@
         sel.value = prev;
         openQuickProduct(function (p) { if (p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.insertBefore(o, sel.querySelector('option[value="__addp"]')); sel.value = p.id; prev = p.id; sel.dispatchEvent(new Event("change")); } });
       } else { prev = sel.value; }
+    });
+  }
+  // Quick-add a supplier (mirrors openQuickCustomer).
+  async function openQuickVendor(onDone) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>New supplier</h3><div class="form">' +
+      '<div><label>Name</label><input id="qv-name" placeholder="Supplier name"></div>' +
+      '<div><label>Email</label><input id="qv-email" placeholder="name@company.com"></div>' +
+      '<div><label>Phone</label>' + phoneFieldHTML("qv-ph", {}) + '</div>' +
+      '</div><div class="foot"><button class="btn" id="qv-cancel">Cancel</button><button class="btn pri" id="qv-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; select</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qv-cancel").onclick = function () { m.remove(); if (onDone) onDone(null); };
+    var qn = document.getElementById("qv-name"); if (qn) qn.focus();
+    document.getElementById("qv-save").onclick = async function () {
+      var name = gv("qv-name"); if (!name) { toast("Name is required"); return; }
+      var ph = collectPhone("qv-ph");
+      var ins = await sb.from("partners").insert({ org_id: S.company.org_id, company_id: S.company.id, name: name, is_company: true, is_vendor: true, email: gv("qv-email") || null, phone: ph.combined, phone_cc: ph.cc, phone_area: ph.area, phone_num: ph.num }).select("id,name").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+      m.remove(); toast("Supplier created"); if (onDone) onDone(ins.data);
+    };
+  }
+  function vendPickerAdd(sel) {
+    if (typeof sel === "string") sel = document.getElementById(sel);
+    if (!sel) return;
+    if (!sel.querySelector('option[value="__addv"]')) { var o = document.createElement("option"); o.value = "__addv"; o.textContent = "+ Add a new supplier..."; sel.appendChild(o); }
+    var prev = sel.value;
+    sel.addEventListener("change", function () {
+      if (sel.value === "__addv") { sel.value = prev; openQuickVendor(function (p) { if (p) { var o = document.createElement("option"); o.value = p.id; o.textContent = p.name; sel.insertBefore(o, sel.querySelector('option[value="__addv"]')); sel.value = p.id; prev = p.id; sel.dispatchEvent(new Event("change")); } }); } else { prev = sel.value; }
+    });
+  }
+  // Quick-add a product category.
+  async function openQuickCategory(onDone) {
+    var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New category</h3><div class="form">' +
+      '<div><label>Name</label><input id="qcat-name" placeholder="e.g. Aluminium, Glass, Hardware"></div>' +
+      '<div><label>Parent category</label><select id="qcat-parent"><option value="">None</option>' + cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select></div>' +
+      '</div><div class="foot"><button class="btn" id="qcat-cancel">Cancel</button><button class="btn pri" id="qcat-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; select</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("qcat-cancel").onclick = function () { m.remove(); if (onDone) onDone(null); };
+    var qn = document.getElementById("qcat-name"); if (qn) qn.focus();
+    document.getElementById("qcat-save").onclick = async function () {
+      var name = gv("qcat-name"); if (!name) { toast("Name is required"); return; }
+      var ins = await sb.from("product_categories").insert({ company_id: S.company.id, name: name, parent_id: document.getElementById("qcat-parent").value || null }).select("id,name").single();
+      if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+      m.remove(); toast("Category created"); if (onDone) onDone(ins.data);
+    };
+  }
+  function catPickerAdd(sel) {
+    if (typeof sel === "string") sel = document.getElementById(sel);
+    if (!sel) return;
+    if (!sel.querySelector('option[value="__addc"]')) { var o = document.createElement("option"); o.value = "__addc"; o.textContent = "+ Add a new category..."; sel.appendChild(o); }
+    var prev = sel.value;
+    sel.addEventListener("change", function () {
+      if (sel.value === "__addc") { sel.value = prev; openQuickCategory(function (c) { if (c) { var o = document.createElement("option"); o.value = c.id; o.textContent = c.name; sel.insertBefore(o, sel.querySelector('option[value="__addc"]')); sel.value = c.id; prev = c.id; sel.dispatchEvent(new Event("change")); } }); } else { prev = sel.value; }
     });
   }
 
