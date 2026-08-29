@@ -21,6 +21,7 @@
   var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
   var LIST_VIEW = {}; // per-screen (keyed by S.action) view prefs: {view, kanbanGroupIdx, kwidth} - keeps list/kanban/thumb sticky per screen
+  var STMT_PRESET_PARTNER = null; // one-shot: preselect this partner when the statement screen next opens
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
   function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
   function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
@@ -6397,6 +6398,7 @@
   }
 
   async function renderStatement(pid) {
+    if (!pid && STMT_PRESET_PARTNER) { pid = STMT_PRESET_PARTNER; STMT_PRESET_PARTNER = null; }
     var cc = S.company.currency_code;
     var partners = (await sb.from("partners").select("id,name").order("name")).data || [];
     var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
@@ -15591,18 +15593,35 @@
       + '<div class="row2"><div><label>Expected (system)</label><input id="cc-exp" type="number" step="0.01" readonly></div>'
       + '<div><label>Counted (physical)</label><input id="cc-cnt" type="number" step="0.01"></div></div>'
       + '<div class="muted" id="cc-var" style="font-size:13px"></div>'
+      + '<details style="border:1px solid var(--line);border-radius:9px;padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Count by denomination (optional)</summary>'
+      + '<table style="width:100%;font-size:13px;margin-top:8px;border-collapse:collapse"><thead><tr><th style="text-align:left;font-weight:600;color:var(--ink2)">Note / coin</th><th style="font-weight:600;color:var(--ink2)">Qty</th><th style="text-align:right;font-weight:600;color:var(--ink2)">Total</th></tr></thead><tbody id="cc-denom"></tbody></table>'
+      + '<button type="button" id="cc-denom-add" style="margin-top:6px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:7px;padding:5px 10px;cursor:pointer;font:inherit">+ Add row</button></details>'
       + '<div><label>Date</label><input id="cc-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Note</label><input id="cc-note" placeholder="Anything to explain a difference?"></div>'
       + '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button><button class="btn pri" id="cc-save" style="background:var(--app);border-color:var(--app)">Close &amp; sign</button></div></div>';
     document.body.appendChild(m);
+    var denoms = [{}, {}, {}, {}];
+    function paintDenom() {
+      document.getElementById("cc-denom").innerHTML = denoms.map(function (r, i) {
+        var tot = (Number(r.v) || 0) * (Number(r.q) || 0);
+        return '<tr><td><input data-di="' + i + '" data-df="v" type="number" step="0.01" placeholder="Value" value="' + (r.v || "") + '" style="width:100%"></td><td><input data-di="' + i + '" data-df="q" type="number" step="1" placeholder="0" value="' + (r.q || "") + '" style="width:80px"></td><td style="text-align:right;font-variant-numeric:tabular-nums">' + money(tot) + '</td></tr>';
+      }).join("");
+      document.querySelectorAll("#cc-denom [data-di]").forEach(function (el) {
+        el.oninput = function () { denoms[+el.dataset.di][el.dataset.df] = el.value; var sum = denoms.reduce(function (s, r) { return s + (Number(r.v) || 0) * (Number(r.q) || 0); }, 0); if (sum > 0) { document.getElementById("cc-cnt").value = (Math.round(sum * 100) / 100).toFixed(2); } paintDenomTotals(); refresh(); };
+      });
+    }
+    function paintDenomTotals() { var cells = document.querySelectorAll("#cc-denom tr"); denoms.forEach(function (r, i) { var t = cells[i] && cells[i].children[2]; if (t) t.textContent = money((Number(r.v) || 0) * (Number(r.q) || 0)); }); }
     function refresh() { var s = document.getElementById("cc-acct"); var bal = Number(s.options[s.selectedIndex].getAttribute("data-bal") || 0); document.getElementById("cc-exp").value = bal.toFixed(2); var cnt = parseFloat(document.getElementById("cc-cnt").value); document.getElementById("cc-var").textContent = isNaN(cnt) ? "" : ("Variance: " + money(cnt - bal) + (Math.abs(cnt - bal) < 0.005 ? " (matches)" : (cnt - bal > 0 ? " (over)" : " (short)"))); }
+    document.getElementById("cc-denom-add").onclick = function () { denoms.push({}); paintDenom(); };
+    paintDenom();
     document.getElementById("cc-acct").onchange = refresh; document.getElementById("cc-cnt").oninput = refresh; refresh();
     document.getElementById("cc-cancel").onclick = function () { m.remove(); };
     document.getElementById("cc-save").onclick = async function () {
       var acct = document.getElementById("cc-acct").value, exp = parseFloat(document.getElementById("cc-exp").value) || 0, cnt = parseFloat(document.getElementById("cc-cnt").value);
       if (isNaN(cnt)) { toast("Enter the counted amount"); return; }
       var vr = Math.round((cnt - exp) * 100) / 100, cdate = document.getElementById("cc-date").value;
-      var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: cdate, expected_amount: exp, counted_amount: cnt, variance: vr, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note") });
+      var denomList = denoms.filter(function (r) { return (Number(r.v) || 0) > 0 && (Number(r.q) || 0) > 0; }).map(function (r) { return { value: Number(r.v), qty: Number(r.q) }; });
+      var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: cdate, expected_amount: exp, counted_amount: cnt, variance: vr, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note"), denominations: denomList });
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       // post the over/short so the books match the physical count
       if (Math.abs(vr) > 0.005) {
@@ -15720,11 +15739,12 @@
     await sb.from("appt_appointments").update({ invoice_id: invId }).eq("id", a.id);
     return { invoice_id: invId, number: num };
   }
-  async function openAppointmentModal(id) {
+  async function openAppointmentModal(id, preClientId) {
     await apptLoadSettings();
     var a = id ? (await sb.from("appt_appointments").select("*").eq("id", id).single()).data : null; a = a || {};
+    var preSel = a.client_id || preClientId || "";
     var custs = await apptCustomers(); var svcs = await apptServicesList(); var staff = await apptStaff();
-    var custOpts = '<option value="">(select)</option><option value="__new">+ New ' + esc(apptTermClient().toLowerCase()) + '</option>' + custs.map(function (c) { return '<option value="' + c.id + '"' + (a.client_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+    var custOpts = '<option value="">(select)</option><option value="__new">+ New ' + esc(apptTermClient().toLowerCase()) + '</option>' + custs.map(function (c) { return '<option value="' + c.id + '"' + (preSel === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var svcOpts = '<option value="">(select)</option>' + svcs.map(function (s) { return '<option value="' + s.id + '" data-dur="' + (s.duration_min || 60) + '" data-price="' + (s.price || 0) + '" data-loc="' + esc(s.location_type || "in_person") + '"' + (a.service_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
     var staffOpts = '<option value="">(any / me)</option>' + staff.map(function (s) { return '<option value="' + s.id + '"' + (a.staff_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("");
     var statusOpts = Object.keys(APPT_STATUS).map(function (k) { return '<option value="' + k + '"' + ((a.status || "booked") === k ? " selected" : "") + '>' + esc(APPT_STATUS[k][0]) + '</option>'; }).join("");
@@ -15762,13 +15782,16 @@
         location_type: (svcO && svcO.getAttribute("data-loc")) || "in_person", price: parseFloat(document.getElementById("ap-price").value) || 0,
         currency_code: S.company.currency_code, notes: gv("ap-notes")
       };
-      // double-booking check: any non-cancelled overlap (for the same staff if one is set)
+      // double-booking check: overlap allowed up to the service capacity; a service buffer extends the busy window
+      var svcObj = svcs.filter(function (s) { return s.id === svcSel.value; })[0];
+      var cap = svcObj ? (Number(svcObj.capacity) || 1) : 1, buf = svcObj ? (Number(svcObj.buffer_min) || 0) : 0;
+      var bufEndISO = new Date(new Date(startVal).getTime() + (dur + buf) * 60000).toISOString();
       var staffV = document.getElementById("ap-staff").value;
-      var clashQ = sb.from("appt_appointments").select("id").eq("company_id", S.company.id).neq("status", "cancelled").lt("starts_at", endISO).gt("ends_at", startISO);
+      var clashQ = sb.from("appt_appointments").select("id").eq("company_id", S.company.id).neq("status", "cancelled").lt("starts_at", bufEndISO).gt("ends_at", startISO);
       if (id) clashQ = clashQ.neq("id", id);
       if (staffV) clashQ = clashQ.eq("staff_id", staffV);
       var clash = (await clashQ).data || [];
-      if (clash.length && !confirm("Heads up: this overlaps " + clash.length + " other " + apptTermAppt().toLowerCase() + (clash.length > 1 ? "s" : "") + " at that time" + (staffV ? " for this staff member" : "") + ". Book anyway?")) { return; }
+      if (clash.length >= cap && !confirm("Heads up: this time already has " + clash.length + " " + apptTermAppt().toLowerCase() + (clash.length > 1 ? "s" : "") + (cap > 1 ? " (capacity " + cap + ")" : "") + (staffV ? " for this staff member" : "") + ". Book anyway?")) { return; }
       btn.disabled = true;
       var r;
       if (id) { r = await sb.from("appt_appointments").update(row).eq("id", id); }
@@ -15816,8 +15839,8 @@
       + '<div><h3 style="margin:0 0 8px">Upcoming</h3>' + (upcoming.map(apptLine).join("") || '<p class="muted">Nothing upcoming.</p>') + '<h3 style="margin:16px 0 8px">History</h3>' + (past.map(apptLine).join("") || '<p class="muted">No past ' + esc(apptTermAppt().toLowerCase()) + 's.</p>') + '</div>'
       + '<div><h3 style="margin:0 0 8px">Record &amp; notes</h3><div style="margin-bottom:10px"><input id="cl-note-t" placeholder="Note title (optional)" style="width:100%;margin-bottom:6px"><textarea id="cl-note-b" placeholder="Add a note to this ' + esc(apptTermClient().toLowerCase()) + "'s record..." + '" style="width:100%;min-height:60px"></textarea><button class="btn pri" id="cl-note-add" style="background:var(--app);border-color:var(--app);margin-top:6px">Add note</button></div>' + noteHtml + '</div>'
       + '</div>';
-    document.getElementById("cl-book").onclick = function () { openAppointmentModal(null); };
-    document.getElementById("cl-stmt").onclick = function () { go("rep.stmt"); };
+    document.getElementById("cl-book").onclick = function () { openAppointmentModal(null, id); };
+    document.getElementById("cl-stmt").onclick = function () { STMT_PRESET_PARTNER = id; go("rep.stmt"); };
     document.getElementById("cl-note-add").onclick = async function () {
       var b = gv("cl-note-b"); if (!b) { toast("Write a note first"); return; }
       var r = await sb.from("appt_notes").insert({ company_id: S.company.id, client_id: id, title: gv("cl-note-t"), body: b });
@@ -15852,13 +15875,14 @@
       + '<div><label>Name</label><input id="sv-name" value="' + esc(s.name || "") + '" placeholder="e.g. Consultation, Private session"></div>'
       + '<div class="row2"><div><label>Duration (min)</label><input id="sv-dur" type="number" step="5" value="' + (s.duration_min || 60) + '"></div><div><label>Price</label><input id="sv-price" type="number" step="0.01" value="' + (Number(s.price || 0)) + '"></div></div>'
       + '<div class="row2"><div><label>Where</label><select id="sv-loc"><option value="in_person"' + (s.location_type !== "online" && s.location_type !== "phone" ? " selected" : "") + '>In person</option><option value="online"' + (s.location_type === "online" ? " selected" : "") + '>Online</option><option value="phone"' + (s.location_type === "phone" ? " selected" : "") + '>Phone</option></select></div><div><label>Default staff</label><select id="sv-staff">' + staffOpts + '</select></div></div>'
-      + '<div class="row2"><div><label>Capacity</label><input id="sv-cap" type="number" step="1" value="' + (s.capacity || 1) + '"></div><div><label>Active</label><select id="sv-act"><option value="1"' + (s.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (s.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
+      + '<div class="row2"><div><label>Capacity</label><input id="sv-cap" type="number" step="1" value="' + (s.capacity || 1) + '"></div><div><label>Buffer after (min)</label><input id="sv-buf" type="number" step="5" value="' + (s.buffer_min || 0) + '"></div></div>'
+      + '<div><label>Active</label><select id="sv-act"><option value="1"' + (s.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (s.is_active === false ? " selected" : "") + '>Off</option></select></div>'
       + '</div><div class="foot"><button class="btn" id="sv-cancel">Cancel</button><button class="btn pri" id="sv-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sv-cancel").onclick = function () { m.remove(); };
     document.getElementById("sv-save").onclick = async function () {
       var name = gv("sv-name"); if (!name) { toast("Enter a name"); return; }
-      var row = { company_id: S.company.id, name: name, duration_min: parseInt(gv("sv-dur"), 10) || 60, price: parseFloat(document.getElementById("sv-price").value) || 0, currency_code: S.company.currency_code, location_type: document.getElementById("sv-loc").value, staff_id: document.getElementById("sv-staff").value || null, capacity: parseInt(gv("sv-cap"), 10) || 1, is_active: gv("sv-act") === "1" };
+      var row = { company_id: S.company.id, name: name, duration_min: parseInt(gv("sv-dur"), 10) || 60, price: parseFloat(document.getElementById("sv-price").value) || 0, currency_code: S.company.currency_code, location_type: document.getElementById("sv-loc").value, staff_id: document.getElementById("sv-staff").value || null, capacity: parseInt(gv("sv-cap"), 10) || 1, buffer_min: parseInt(gv("sv-buf"), 10) || 0, is_active: gv("sv-act") === "1" };
       var r = s.id ? await sb.from("appt_services").update(row).eq("id", s.id) : await sb.from("appt_services").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
