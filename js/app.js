@@ -1513,7 +1513,7 @@
     function P(ok, builder) { return ok ? builder() : Promise.resolve({ data: [] }); }
     try {
       var res = await Promise.all([
-        P(canView("accounting") || canView("contacts"), function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("org_id", oid).ilike("name", like).limit(6); }),
+        P(canView("accounting") || canView("contacts"), function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("company_id", S.company.id).ilike("name", like).limit(6); }),
         P(canView("projects"), function () { return sb.from("projects").select("id,name").eq("company_id", cid).ilike("name", like).limit(6); }),
         P(canView("accounting"), function () { return sb.from("invoices").select("id,number,move_type").eq("company_id", cid).ilike("number", like).limit(6); }),
         P(canView("purchase"), function () { return sb.from("purchase_orders").select("id,number").eq("company_id", cid).ilike("number", like).limit(6); }),
@@ -1938,7 +1938,7 @@
   }
   async function openPortalInviteModal(r) {
     r = r || {};
-    var partners = (await sb.from("partners").select("id,name,email").order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,email").eq("company_id", S.company.id).order("name")).data || [];
     var pOpts = '<option value="">Pick a contact</option>' + partners.map(function (p) { return '<option value="' + p.id + '" data-email="' + esc(p.email || "") + '"' + (r.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var roleOpts = Object.keys(PORTAL_ROLE).map(function (k) { return '<option value="' + k + '">' + PORTAL_ROLE[k] + '</option>'; }).join("");
     var portalUrl = window.location.origin + "/portal.html";
@@ -2533,7 +2533,7 @@
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var r = id === "new" ? { active: true, interval_unit: "month", interval_count: 1, start_date: today(), next_date: today(), payment_days: 30, currency_code: S.company.currency_code, auto_post: false } : (await sb.from("recurring_invoices").select("*").eq("id", id).maybeSingle()).data || {};
-    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,list_price,sale_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).eq("scope", "sale")).data || [];
     var lines = id === "new" ? [] : (await sb.from("recurring_invoice_lines").select("*").eq("recurring_id", id).order("sequence")).data || [];
@@ -2655,7 +2655,7 @@
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
       title: isCust ? "Customers" : "Vendors", pageSize: 80,
-      fetch: async function () { var rows = (await sb.from("partners").select("*").eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
+      fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
@@ -2980,7 +2980,7 @@
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
-    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var creditCache = {};
     async function creditWarnHtml() {
       if (!isSale) return "";
@@ -3468,7 +3468,7 @@
   }
   async function sugSeedFromPartners() {
     try {
-      var rows = (await sb.from("partners").select("city,street").limit(3000)).data || [];
+      var rows = (await sb.from("partners").select("city,street").eq("company_id", S.company.id).limit(3000)).data || [];
       rows.forEach(function (p) { sugRemember("city", p.city); sugRemember("street", p.street); });
     } catch (e) { }
   }
@@ -3703,7 +3703,7 @@
     }
     var editable = !order || order.state === "draft" || order.state === "sent";
     var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
-    var partners = (await sb.from("partners").select("id,name,pricelist_id").eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,pricelist_id").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var plItemsCache = {};
     async function pricelistPriceFor(productId) {
@@ -4038,7 +4038,7 @@
     wireBc();
     var fromOrder = preset.order || null, poLines = [];
     if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
-    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var recvUsers = await companyUsers();
@@ -4175,7 +4175,7 @@
     var banks = id === "new" ? [] : (await sb.from("partner_bank_accounts").select("*").eq("partner_id", id).order("id")).data || [];
     var industries = (await sb.from("industries").select("name").eq("org_id", S.company.org_id).order("name")).data || [];
     var caps = (await sb.from("capabilities").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
-    var allContacts = (await sb.from("partners").select("id,name").order("name")).data || [];
+    var allContacts = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var ck = p.contact_kind || "company";
     var CTYPES = ["client", "supplier", "bank", "insurance", "subcontractor", "other"];
     var ctypeDef = p.company_type || (isCust ? "client" : isContact ? "other" : "supplier");
@@ -4794,7 +4794,7 @@
     wireBc();
     var t = id === "new" ? { status: "in_stock", condition: "good", holder_type: "none" } : (await sb.from("tools").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromPartners();
-    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var moves = id === "new" ? [] : ((await sb.from("tool_movements").select("*").eq("tool_id", id).order("at", { ascending: false }).limit(12)).data || []);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "");
@@ -5099,7 +5099,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var d = id === "new" ? { status: "draft", dn_date: today() } : (await sb.from("delivery_notes").select("*").eq("id", id).maybeSingle()).data || {};
-    var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,uom").eq("company_id", S.company.id).order("name")).data || [];
     var runs = (await sb.from("production_runs").select("id,name").eq("company_id", S.company.id).order("run_date", { ascending: false })).data || [];
     var pitems = (await sb.from("project_items").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -5263,7 +5263,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New event" : "Edit", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var e = id === "new" ? { status: "planning", event_type: "wedding", currency: (S.company && S.company.currency_code) || "USD" } : (await sb.from("event_events").select("*").eq("id", id).maybeSingle()).data || {};
-    var evCustomers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var evCustomers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var evProjects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New event" : (e.name || "");
     function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
@@ -5708,7 +5708,7 @@
   }
   async function openSupplierModal(s) {
     s = s || {}; var isNew = !s.id;
-    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add supplier" : "Edit supplier") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div class="row2"><div><label>Supplier / option</label><input id="sm-name" value="' + esc(s.name || "") + '"></div><div><label>Category</label>' + sug("sm-cat", s.category, "ev_bcat", "e.g. Reception Venue") + '</div></div>' +
@@ -6404,7 +6404,7 @@
   async function renderStatement(pid) {
     if (!pid && STMT_PRESET_PARTNER) { pid = STMT_PRESET_PARTNER; STMT_PRESET_PARTNER = null; }
     var cc = S.company.currency_code;
-    var partners = (await sb.from("partners").select("id,name").order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
       partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>';
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Partner Statement") + '<div class="gap"></div>' + sel +
@@ -6897,7 +6897,7 @@
   function cfgContacts() {
     return {
       title: "Contacts", pageSize: 80,
-      fetch: async function () { var rows = (await sb.from("partners").select("*").order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
+      fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
         { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
@@ -9031,7 +9031,7 @@
       cnt(sb.from("number_sequences").select("id", { count: "exact", head: true }).eq("company_id", cid)),
       cnt(sb.from("taxes").select("id", { count: "exact", head: true }).eq("company_id", cid)),
       cnt(sb.from("hr_employees").select("id", { count: "exact", head: true }).eq("company_id", cid)),
-      oid ? cnt(sb.from("partners").select("id", { count: "exact", head: true }).eq("org_id", oid).eq("is_customer", true)) : Promise.resolve(0),
+      cnt(sb.from("partners").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("is_customer", true)),
       cnt(sb.from("projects").select("id", { count: "exact", head: true }).eq("company_id", cid))
     ]);
     var profileDone = !!(S.company.legal_name && S.company.country && S.company.currency_code);
@@ -9417,7 +9417,7 @@
     wireBc();
     var s = id === "new" ? { status: "booked", mode: "sea", pod: "Beirut", currency_code: S.company.currency_code } : (await sb.from("shipments").select("*").eq("id", id).maybeSingle()).data || {};
     var items = id === "new" ? [] : (await sb.from("shipment_items").select("*").eq("shipment_id", id).order("sequence")).data || [];
-    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -9562,7 +9562,7 @@
     var rfq = isNew ? { status: "draft", title: "Request for Quotation" } : ((await sb.from("rfqs").select("*").eq("id", id).maybeSingle()).data || {});
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
-    var vendorParts = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendorParts = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var rfqTaxes = ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data) || [];
     var lastPx = await loadLastPrices();
@@ -11324,7 +11324,7 @@
     wireBc();
     var p = id === "new" ? { is_active: true, billing_type: "none" } : (await sb.from("projects").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var srcTender = (id !== "new" && p.source_tender_id) ? (await sb.from("tenders").select("id,number,name").eq("id", p.source_tender_id).maybeSingle()).data : null;
-    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var tasks = id === "new" ? [] : (await sb.from("project_tasks").select("*").eq("project_id", id).order("created_at")).data || [];
     var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced").eq("project_id", id)).data || [];
     var hoursByTask = {}, totalHours = 0, unbilledHours = 0, unbilledIds = []; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); } });
@@ -11583,7 +11583,7 @@
     wireBc();
     var l = id === "new" ? { probability: 10 } : (await sb.from("crm_leads").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var stages = await ensureCrmStages();
-    var customers = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var acts = id === "new" ? [] : (await sb.from("crm_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false })).data || [];
     function actItemHtml(a) { return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:64px;font-weight:600;font-size:12px;color:var(--accent)">' + esc(actTypeLabel(a.act_type)) + '</div><div style="flex:1"><div><b>' + esc(a.subject || "(no subject)") + '</b>' + (a.due_date && !a.done ? ' <span class="ob-flag"' + (a.due_date < today() ? ' style="background:var(--bad)"' : '') + '>follow up ' + esc(a.due_date) + '</span>' : '') + (a.done ? ' <span class="badge paid">done</span>' : '') + '</div>' + (a.note ? '<div class="muted" style="font-size:12.5px">' + esc(a.note) + '</div>' : '') + '<div class="muted" style="font-size:11px">' + esc(String(a.created_at || "").slice(0, 10)) + '</div></div>' + (!a.done ? '<button class="ld-actdone" data-id="' + a.id + '" style="border:none;background:none;color:var(--good);cursor:pointer;font-size:12px;font-weight:600">Mark done</button>' : '') + '</div>'; }
     var actSection = id === "new" ? "" : '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Activity &amp; follow-ups</div></div><div class="o-nb-pg"><button id="ld-logact" class="o-addln">+ Log activity</button>' + (acts.length ? '<div style="margin-top:6px">' + acts.map(actItemHtml).join("") + '</div>' : '<div class="muted" style="margin-top:8px">No activity logged yet.</div>') + '</div></div>';
@@ -12925,7 +12925,7 @@
   async function openSubcontractModal(sc) {
     sc = sc || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var vendors = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (sc.id ? "Subcontract" : "New subcontract") + '</h3><div class="form">' +
       '<div><label>Subcontract name</label>' + fhint("__scn", "What is subcontracted, e.g. Aluminium fabrication.") + '<input id="sc-name" value="' + esc(sc.name || "") + '"></div>' +
@@ -14094,7 +14094,7 @@
     wireBc();
     var t = id === "new" ? { status: "draft", tender_date: today(), margin_pct: 15 } : (await sb.from("tenders").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("tender_lines").select("*").eq("tender_id", id).order("sequence")).data || [];
-    var partners = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var tuoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var srcLead = t.source_lead_id ? (await sb.from("crm_leads").select("id,name").eq("id", t.source_lead_id).maybeSingle()).data : null;
     var locked = t.status === "won";
@@ -15219,10 +15219,10 @@
     var wallets = await cashLoadWallets();
     if (!wallets.length) { toast("Add a cash account first"); openCashAccountModal(null); return; }
     var chart = await cashLoadChart();
-    var custs = (await sb.from("partners").select("id,name").eq("is_customer", true).order("name")).data || [];
-    var vends = (await sb.from("partners").select("id,name").eq("is_vendor", true).order("name")).data || [];
+    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
+    var vends = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var contacts = (await sb.from("partners").select("id,name,contact_kind,company_type").order("name")).data || [];
+    var contacts = (await sb.from("partners").select("id,name,contact_kind,company_type").eq("company_id", S.company.id).order("name")).data || [];
     var methods = await cashLoadMethods();
     var kinds = CASH_KINDS.filter(function (k) { return k.dir === dir; });
     var kSel = presetKind || kinds[0].k;
@@ -15756,7 +15756,7 @@
   function apptFmtDate(iso) { try { return new Date(iso).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }); } catch (e) { return ""; } }
   function apptFmtTime(iso) { try { return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) { return ""; } }
   function apptStatusPill(s) { var v = APPT_STATUS[s] || ["", "var(--ink3)"]; return '<span style="font-size:11px;font-weight:700;color:' + v[1] + '">' + esc(v[0]) + '</span>'; }
-  async function apptCustomers() { return (await sb.from("partners").select("id,name,email,mobile,phone").eq("is_customer", true).order("name")).data || []; }
+  async function apptCustomers() { return (await sb.from("partners").select("id,name,email,mobile,phone").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || []; }
   async function apptServicesList() { return (await sb.from("appt_services").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || []; }
   async function apptStaff() { return (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || []; }
 
