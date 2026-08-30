@@ -16218,33 +16218,52 @@
   async function apptStaff() { return (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || []; }
 
   // ---- calendar / agenda ----
+  var APPT_CAL = { view: "agenda", off: 0 };
+  function apptDayKey(d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); }
   async function renderApptCalendar() {
     await apptLoadSettings();
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '</div><div class="o-body" id="o-body">Loading...</div></div>';
     wireBc();
-    var start = new Date(); start.setHours(0, 0, 0, 0);
-    var appts = (await sb.from("appt_appointments").select("*, partners(name), appt_services(name), hr_employees(name)").eq("company_id", S.company.id).gte("starts_at", start.toISOString()).order("starts_at").limit(200)).data || [];
-    var body = document.getElementById("o-body");
-    var canW = canManageApp(S.app);
-    var head = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><h1 class="man-h" style="font-size:22px;margin:0">' + esc(apptTermAppt()) + 's</h1><div style="flex:1"></div>' + (canW ? '<button class="btn pri" id="ap-new" style="background:var(--app);border-color:var(--app)">+ New ' + esc(apptTermAppt().toLowerCase()) + '</button>' : '') + '</div>';
-    if (!appts.length) { body.innerHTML = head + '<p class="muted" style="padding:18px 0">Nothing booked yet. Click + New to add one, or set up your Services first.</p>'; if (canW) document.getElementById("ap-new").onclick = function () { openAppointmentModal(null); }; return; }
-    var byDay = {};
-    appts.forEach(function (a) { var k = (a.starts_at || "").slice(0, 10); (byDay[k] = byDay[k] || []).push(a); });
-    var html = head;
-    Object.keys(byDay).sort().forEach(function (k) {
-      html += '<div style="margin:16px 0 6px;font-weight:800;font-size:14px">' + esc(apptFmtDate(k + "T12:00")) + '</div>';
-      byDay[k].forEach(function (a) {
-        html += '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:7px;cursor:pointer;background:var(--panel)">'
-          + '<div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:64px">' + esc(apptFmtTime(a.starts_at)) + '</div>'
-          + '<div style="flex:1"><div style="font-weight:600">' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + '</div>'
-          + '<div class="muted" style="font-size:12px">' + esc((a.appt_services ? a.appt_services.name : "") + (a.hr_employees ? (" &middot; " + a.hr_employees.name) : "")) + '</div></div>'
-          + '<div>' + apptStatusPill(a.status) + '</div></div>';
-      });
-    });
-    body.innerHTML = html;
-    if (canW) document.getElementById("ap-new").onclick = function () { openAppointmentModal(null); };
-    body.querySelectorAll(".ap-row").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
+    var body = document.getElementById("o-body"), canW = canManageApp(S.app), V = APPT_CAL.view;
+    // date range for the query, by view
+    var rFrom = new Date(); rFrom.setHours(0, 0, 0, 0); var rTo = null, ws = null;
+    if (V === "week") { ws = new Date(rFrom); var wd = (ws.getDay() + 6) % 7; ws.setDate(ws.getDate() - wd + APPT_CAL.off * 7); rFrom = new Date(ws); rTo = new Date(ws); rTo.setDate(rTo.getDate() + 7); }
+    else if (V === "day") { rFrom.setDate(rFrom.getDate() + APPT_CAL.off); rTo = new Date(rFrom); rTo.setDate(rTo.getDate() + 1); }
+    var q = sb.from("appt_appointments").select("*, partners(name), appt_services(name), hr_employees(name)").eq("company_id", S.company.id).gte("starts_at", rFrom.toISOString());
+    if (rTo) q = q.lt("starts_at", rTo.toISOString());
+    var appts = (await q.order("starts_at").limit(400)).data || [];
+    var toggle = '<div class="o-vs" id="ap-vs"><button data-v="agenda"' + (V === "agenda" ? ' class="on"' : '') + '>Agenda</button><button data-v="week"' + (V === "week" ? ' class="on"' : '') + '>Week</button><button data-v="day"' + (V === "day" ? ' class="on"' : '') + '>Day</button></div>';
+    var label = "";
+    if (V === "week") { var we = new Date(ws); we.setDate(we.getDate() + 6); label = apptFmtDate(apptDayKey(ws) + "T12:00") + " – " + apptFmtDate(apptDayKey(we) + "T12:00"); }
+    else if (V === "day") { label = apptFmtDate(apptDayKey(rFrom) + "T12:00"); }
+    var nav = (V === "agenda") ? "" : '<button class="o-filtbtn" id="ap-prev" aria-label="Previous">‹</button><button class="o-filtbtn" id="ap-today">Today</button><button class="o-filtbtn" id="ap-next" aria-label="Next">›</button><span class="muted" style="margin-left:8px;font-weight:600">' + esc(label) + '</span>';
+    var head = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap"><h1 class="man-h" style="font-size:22px;margin:0">' + esc(apptTermAppt()) + 's</h1>' + nav + '<div style="flex:1"></div>' + toggle + (canW ? '<button class="btn pri" id="ap-new" style="background:var(--app);border-color:var(--app)">+ New ' + esc(apptTermAppt().toLowerCase()) + '</button>' : '') + '</div>';
+    var byDay = {}; appts.forEach(function (a) { var k = (a.starts_at || "").slice(0, 10); (byDay[k] = byDay[k] || []).push(a); });
+    var content;
+    if (V === "week") {
+      var cols = "", todayK = apptDayKey(new Date());
+      for (var i = 0; i < 7; i++) {
+        var d = new Date(ws); d.setDate(d.getDate() + i); var k = apptDayKey(d), list = byDay[k] || [];
+        cols += '<div class="ap-wc' + (k === todayK ? " today" : "") + '"><div class="ap-wc-h">' + ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i] + ' <span>' + d.getDate() + '</span></div><div class="ap-wc-b">' +
+          (list.length ? list.map(function (a) { return '<div class="ap-chip" data-id="' + a.id + '"><span class="ap-chip-t">' + esc(apptFmtTime(a.starts_at)) + '</span> ' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + (a.appt_services ? '<span class="ap-chip-s">' + esc(a.appt_services.name) + '</span>' : "") + '</div>'; }).join("") : '<div class="ap-wc-e">—</div>') + '</div></div>';
+      }
+      content = '<div class="ap-week">' + cols + '</div>';
+    } else {
+      var keys = Object.keys(byDay).sort();
+      content = keys.length ? keys.map(function (k) {
+        return '<div style="margin:16px 0 6px;font-weight:800;font-size:14px">' + esc(apptFmtDate(k + "T12:00")) + '</div>' + byDay[k].map(function (a) {
+          return '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:7px;cursor:pointer;background:var(--panel)"><div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:64px">' + esc(apptFmtTime(a.starts_at)) + '</div><div style="flex:1"><div style="font-weight:600">' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + '</div><div class="muted" style="font-size:12px">' + esc((a.appt_services ? a.appt_services.name : "") + (a.hr_employees ? (" &middot; " + a.hr_employees.name) : "")) + '</div></div><div>' + apptStatusPill(a.status) + '</div></div>';
+        }).join("");
+      }).join("") : '<p class="muted" style="padding:18px 0">Nothing booked' + (V === "day" ? " this day" : (V === "agenda" ? " yet" : "")) + '. Click + New to add one.</p>';
+    }
+    body.innerHTML = head + content;
+    if (canW) { var nb = document.getElementById("ap-new"); if (nb) nb.onclick = function () { openAppointmentModal(null); }; }
+    document.getElementById("ap-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { APPT_CAL.view = b.dataset.v; APPT_CAL.off = 0; renderApptCalendar(); }; });
+    var pv = document.getElementById("ap-prev"); if (pv) pv.onclick = function () { APPT_CAL.off--; renderApptCalendar(); };
+    var nx = document.getElementById("ap-next"); if (nx) nx.onclick = function () { APPT_CAL.off++; renderApptCalendar(); };
+    var td = document.getElementById("ap-today"); if (td) td.onclick = function () { APPT_CAL.off = 0; renderApptCalendar(); };
+    body.querySelectorAll(".ap-row,.ap-chip").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
   }
 
   function cfgAppointments() {
