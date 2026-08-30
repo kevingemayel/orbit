@@ -547,7 +547,8 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-tile-edit.off .o-tile-tog{background:var(--good)}
 .as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .as-card{display:flex;flex-direction:column;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;padding:14px 10px;background:var(--panel)}
-.as-card .ic svg{width:26px;height:26px}
+.as-card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:#16171c;color:#fff;box-shadow:var(--sh-sm);border:1px solid rgba(255,255,255,.08)}
+.as-card .ic svg{width:26px;height:26px;display:block}
 .as-nm{font-weight:600;font-size:13px;text-align:center}
 .as-open{font-size:11.5px;color:var(--accent);cursor:pointer;text-decoration:none}
 .as-open:hover{text-decoration:underline}
