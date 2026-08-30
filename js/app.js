@@ -1003,6 +1003,24 @@
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
+  // Per-app help: instead of one big standalone Help app, every app carries its own
+  // Help page (a "Help" item at the bottom of its menu) that shows just that app's
+  // chapter + flow diagram. The full manual still exists behind the deep links and the
+  // top-right "?" drawer. APP_HELP maps an app to the manual chapter(s) it should show.
+  var APP_HELP = {
+    accounting: ["accounting"], sales: ["sales"], purchase: ["purchase"], crm: ["crm"],
+    estimation: ["estimation"], inventory: ["inventory"], project: ["projects"],
+    manufacturing: ["manufacturing"], documents: ["documents"], site: ["site"], hr: ["hr"],
+    insights: ["insights"], settings: ["settings"], contacts: ["start"], counter: ["accounting"],
+    calendar: ["more"], sign: ["more"], recruitment: ["more"], knowledge: ["more"],
+    events: ["more"], appoint: ["more"]
+  };
+  Object.keys(APPS).forEach(function (k) {
+    if (k === "help") return;
+    var a = APPS[k]; if (!a || !a.menus) return;
+    a.menus = a.menus.concat([{ label: "Help", action: k + ".help" }]);
+    ACTION_APP[k + ".help"] = k;
+  });
   // ============================ PERMISSIONS (RBAC) ============================
   // S.role is the resolved role row (from public.roles). full_access => god.
   // permissions jsonb: { "*":{v,m}, "<module>":{v,m,f:{feature:bool}} }.
@@ -1384,7 +1402,7 @@
     { title: "People", apps: ["hr", "recruitment"] },
     { title: "Workspace", apps: ["documents", "calendar", "sign", "knowledge", "insights", "activity"] },
     { title: "Specialty", apps: ["events", "appoint"] },
-    { title: "Admin", apps: ["settings", "help"] }
+    { title: "Admin", apps: ["settings"] }
   ];
   // App Store: the home shows only apps you keep; the rest are hidden (still fully
   // usable via the App Store + global search). A new company starts with a sensible
@@ -1424,7 +1442,7 @@
       if (HOME_EDIT) return '<div class="o-tile o-tile-edit' + (hid[k] ? " off" : "") + '" data-edit="' + k + '"><span class="o-tile-tog">' + (hid[k] ? "+" : "&times;") + '</span><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></div>';
       return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>';
     }
-    var viewable = Object.keys(APPS).filter(function (k) { return canViewApp(k) && (HOME_EDIT || !hid[k]); }), placed = {};
+    var viewable = Object.keys(APPS).filter(function (k) { return k !== "help" && canViewApp(k) && (HOME_EDIT || !hid[k]); }), placed = {};
     var tiles = APP_GROUPS.map(function (g) {
       var ks = g.apps.filter(function (k) { return APPS[k] && viewable.indexOf(k) >= 0; });
       ks.forEach(function (k) { placed[k] = 1; });
@@ -2192,6 +2210,7 @@
   }
   function routeAction(action) {
     if (action.indexOf("help.") === 0) return renderManual(action.slice(5));
+    if (/\.help$/.test(action)) return renderAppHelp(action.slice(0, -5));
     if (action.indexOf("act.") === 0) return renderList(cfgActivity(action === "act.all" ? null : action.slice(4)));
     switch (action) {
       case "dashboard": return renderDashboard();
@@ -3924,6 +3943,11 @@
   function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
   function lineSizeStr(form, d1, d2, d3) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2 + ((d3 != null && d3 !== "" && Number(d3) > 0) ? "x" + d3 : ""); if (form === "bar" && d1) return d1 + "m"; return null; }
+  // Position number: a 1-based line number shown on take-off, RFQ and PO line editors.
+  // Because take-off -> RFQ -> PO conversions copy lines in order, position N is the
+  // same item across all three documents (and on their prints), so a buyer can say
+  // "position 5" and mean the same line everywhere.
+  function posRenumber(tbodyEl) { if (!tbodyEl) return; var i = 0; Array.prototype.forEach.call(tbodyEl.children, function (tr) { var c = tr.querySelector(".pos-cell"); if (c) { i++; c.textContent = i; } }); }
   // Where a purchased line is needed. Drives how a goods receipt is routed:
   // warehouse -> into stock (asset), factory -> WIP location, site -> straight to
   // the job as a cost (never stocked). null is treated as warehouse everywhere.
@@ -4068,6 +4092,7 @@
         var dEl = tr.querySelector(".l-derived");
         if (dEl) { var showD = ru.calc && ru.calc.derived.length && (ru.d1 || ru.d2 || ru.form === "liquid" || ru.form === "roll"); dEl.innerHTML = showD ? lineDerivedHTML(ru.calc.derived) : ""; }
       });
+      posRenumber(lb);
       setTot(sub, tax);
     }
     function currentLines() {
@@ -4082,7 +4107,7 @@
       var pg = document.getElementById("nbpg");
       if (!editable) {
         var showMatch = !isSale;
-        var body = linesState.map(function (l) {
+        var body = linesState.map(function (l, _pi) {
           var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
           var matchCells = "";
           if (showMatch) {
@@ -4092,15 +4117,15 @@
           }
           var dimCell = "", destCell = "";
           if (showMatch) { var aa = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; dimCell = '<td class="muted">' + (l.width && l.height ? esc(l.width + "x" + l.height) + (aa ? ' <span style="opacity:.7">(' + msFmt(aa, 3) + ' m&sup2;)</span>' : "") : esc(l.size || "")) + '</td>'; destCell = '<td>' + destChip(l.destination) + '</td>'; }
-          return '<tr><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td><td class="muted">' + esc(l.uom || "") + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          return '<tr><td class="num muted">' + (_pi + 1) + '</td><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td><td class="muted">' + esc(l.uom || "") + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th><th>Unit</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:38px">Pos</th><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th style="text-align:right">' + (showMatch ? "Ordered" : "Qty") + '</th><th>Unit</th>' + (showMatch ? '<th style="text-align:right">Received</th><th style="text-align:right">Billed</th><th>3-way match</th>' : '') + '<th style="text-align:right">Unit Price</th><th>Tax</th><th style="text-align:right">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
         var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px" title="Length for bars, thickness for panels">L / Thk</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px" title="Length for bars, thickness for panels">L / Thk</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
         var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
@@ -4117,7 +4142,7 @@
         var info = prodMat(sel);
         var basis = l.price_basis || (info.form ? info.basis : "each");
         var priceValue = ("priceValue" in l) ? l.priceValue : priceValueFor(l, info);
-        tr.innerHTML = '<td>' + prodComboHTML("l-prod", sel) + '</td>' +
+        tr.innerHTML = '<td class="pos-cell num muted"></td><td>' + prodComboHTML("l-prod", sel) + '</td>' +
           '<td><input class="l-name" value="' + esc(l.name || "") + '" placeholder="Description"><div class="l-derived"></div></td>' +
           (showSize ? '<td class="l-w-cell"></td><td class="l-h-cell"></td><td class="l-l-cell"></td><td class="num l-area-cell"></td>' : "") +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:66px"></td>' +
@@ -4249,7 +4274,7 @@
         return { w: w, h: h, len: len, thk: thk, area: area };
       }
       var _prevName = null;   // print: repeat a description only when it changes (grouped dimension rows read cleaner)
-      var body = lns.map(function (l) {
+      var body = lns.map(function (l, _pi) {
         var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
         var ls = Number(l.quantity || 0) * Number(l.unit_price || 0); sub += ls; tax += ls * amt / 100;
         var d = dimOf(l);
@@ -4257,9 +4282,9 @@
         var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
         var nm = l.name || "";
         var showName = (nm !== _prevName); _prevName = nm;
-        return '<tr><td>' + (showName ? esc(nm) : "") + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+        return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + (showName ? esc(nm) : "") + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
       }).join("");
-      var head = '<th>Description</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
+      var head = '<th class="r">Pos</th><th>Description</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div></div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl" style="margin-top:8px">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + '</div></div>' +
@@ -4415,7 +4440,11 @@
       l = l || { product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" };
       var tr = document.createElement("tr");
       var outLine = (l.po_line_id && l.ordered != null) ? Math.max(0, Number(l.ordered) - Number(l.already || 0)) : null;
-      tr.innerHTML = '<td>' + (l.po_line_id ? '<b>' + esc(l.name || "") + '</b>' : '<select class="rcp-prod">' + prodOpts + '</select>') + '</td>' +
+      // Show the ordered size next to the product so each variant (a +size panel, a
+      // different roll/liquid pack) is a visibly separate line to receive on its own.
+      var vlabel = l.size ? String(l.size) : ((l.width && l.height) ? (l.width + "x" + l.height) : "");
+      var vchip = (l.po_line_id && vlabel) ? ' <span class="badge" title="Ordered size - received separately from other variants">' + esc(vlabel) + '</span>' : "";
+      tr.innerHTML = '<td>' + (l.po_line_id ? '<b>' + esc(l.name || "") + '</b>' + vchip : '<select class="rcp-prod">' + prodOpts + '</select>') + '</td>' +
         '<td><input class="rcp-desc" value="' + esc(l.name || "") + '" placeholder="Description"></td>' +
         '<td>' + unitSelectHTML("rcp-uom", l.uom || "", uoms) + '</td>' +
         (showOrdered ? '<td class="num rcp-ord">' + (l.ordered != null ? l.ordered : "") + (outLine != null ? ' <span class="muted" style="font-size:11px">(' + (Math.round(outLine * 1000) / 1000) + ' left)</span>' : "") + '</td>' : "") +
@@ -10199,8 +10228,8 @@
         fld("Note", '<input id="rfq-note" value="' + esc(rfq.note || "") + '" placeholder="optional">') +
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
-      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td class="rl-area-cell num" style="min-width:64px;white-space:nowrap"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th class="num" style="width:70px">Area</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
+      var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td class="num muted">' + (i + 1) + '</td><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td class="rl-area-cell num" style="min-width:64px;white-space:nowrap"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th class="num" style="width:70px">Area</th><th>Unit</th><th style="text-align:right">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new" id="rl-add" style="margin-top:6px">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div style="margin-top:8px"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
@@ -10208,8 +10237,8 @@
       if (V.length && L.some(function (l) { return l.description || l.product_id; })) {
         var Lf = L.filter(function (l) { return l.description || l.product_id; });
         var vt = {}; V.forEach(function (v) { vt[v.partner_id] = 0; });
-        var headRow = '<th>Item</th><th class="num">Qty</th><th>Basis</th><th class="num">Last price</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '<div class="muted" style="font-weight:400;font-size:10px">unit price</div></th><th class="num">Total</th>'; }).join("");
-        var mrows = Lf.map(function (l) {
+        var headRow = '<th class="num">Pos</th><th>Item</th><th class="num">Qty</th><th>Basis</th><th class="num">Last price</th>' + V.map(function (v) { return '<th class="num">' + esc(vname(v.partner_id)) + '<div class="muted" style="font-weight:400;font-size:10px">unit price</div></th><th class="num">Total</th>'; }).join("");
+        var mrows = Lf.map(function (l, _pi) {
           var prod = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null;
           var info = prodMat(prod);
           var curBasis = l.basis || info.basis || "each";
@@ -10222,11 +10251,11 @@
           var lastVal = lp ? basisFromCanonical(lp.unit_price, lp.width, lp.height, info, curBasis) : null;
           var lastCell = '<td class="num muted" title="' + (lp ? "Last bought " + esc(lp.date || "") : "No prior purchase on record") + '">' + (lastVal ? "~" + money(lastVal) : "-") + '</td>';
           var _a = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; var dimTxt = (l.width && l.height) ? (l.width + "x" + l.height + (_a ? " - " + msFmt(_a, 3) + " m2" : "")) : (l.size || "");
-          return '<tr><td>' + esc(l.description || "") + (dimTxt ? ' <span class="muted">(' + esc(dimTxt) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + basisSel + lastCell + cells + '</tr>';
+          return '<tr><td class="num muted">' + (_pi + 1) + '</td><td>' + esc(l.description || "") + (dimTxt ? ' <span class="muted">(' + esc(dimTxt) + ')</span>' : "") + '</td><td class="num">' + (Number(l.quantity) || 0) + '</td>' + basisSel + lastCell + cells + '</tr>';
         }).join("");
         var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
-        var totRow = '<td><b>Total</b></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
-        var awRow = '<td></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
+        var totRow = '<td></td><td><b>Total</b></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num"><b>' + money(vt[v.partner_id]) + '</b></td>'; }).join("");
+        var awRow = '<td></td><td></td><td></td><td></td><td></td>' + V.map(function (v) { return '<td></td><td class="num">' + (awarded ? (rfq.awarded_partner_id === v.partner_id ? '<span class="rfq-awarded">✓ Awarded</span>' : '') : '<button class="rfq-award btn' + (v.partner_id === cheapest ? " pri" : "") + '" data-partner="' + v.partner_id + '"' + (v.partner_id === cheapest ? ' style="background:var(--accent);border-color:var(--accent)"' : '') + '>Award</button>') + '</td>'; }).join("");
         matrix = '<h3 style="margin:20px 0 6px">Compare quotes</h3><div class="sub" style="margin:0 0 8px">Set each item\'s <b>basis</b> (per kg / m&sup2; / lm / sheet...), then enter each supplier\'s price <b>in that unit</b>. The <b>Last price</b> column shows what you last paid, in the same unit, for reference. Quotes are compared like-for-like: the lowest total per line is highlighted and the cheapest supplier overall gets the emphasised Award button. Awarding creates a draft PO with prices converted to the per-item price, tagged to this project + cost code.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr>' + headRow + '</tr></thead><tbody>' + mrows + '</tbody><tfoot><tr style="border-top:2px solid var(--line)">' + totRow + '</tr><tr>' + awRow + '</tr></tfoot></table></div>';
       }
       var btns = (awarded ? '<button id="rfq-reopen">Reopen</button>' : '<button class="pri" id="rfq-save">Save</button>') + '<button id="rfq-print">Print RFQ</button>' + ((V.length && L.some(function (l) { return l.description || l.product_id; })) ? '<button id="rfq-printcmp">Print comparison</button>' : "");
@@ -10255,15 +10284,17 @@
       var ro = document.getElementById("rfq-reopen"); if (ro) ro.onclick = async function () { await sb.from("rfqs").update({ status: "sent", awarded_partner_id: null }).eq("id", id); renderRFQForm(id); };
       function printRfq() {
         syncFromDom();
-        var body = L.filter(function (l) { return l.description || l.product_id; }).map(function (l) {
+        var _rprev = null;
+        var body = L.filter(function (l) { return l.description || l.product_id; }).map(function (l, _pi) {
           var _a = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6;
           var dim = (l.width && l.height) ? (l.width + "x" + l.height + (_a ? " (" + msFmt(_a, 3) + " m2)" : "")) : (l.size || "");
-          return '<tr><td>' + esc(l.description || "") + '</td><td>' + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td><td>' + esc(l.unit || "") + '</td><td></td></tr>';
+          var nm = l.description || "", showN = (nm !== _rprev); _rprev = nm;
+          return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + (showN ? esc(nm) : "") + '</td><td>' + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td><td>' + esc(l.unit || "") + '</td><td></td></tr>';
         }).join("");
         var html = '<div class="pinv">' + pdocHead("Request for Quotation", rfq.number || "RFQ") +
           '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div></div><div><div class="pl">Reply by</div><div class="pv">' + esc(rfq.deadline || "-") + '</div></div></div>' +
           '<div style="margin:2px 0 12px;color:#444;font-size:12px">Please quote your best price for each item below' + (rfq.note ? '. ' + esc(rfq.note) : '') + '.</div>' +
-          '<table class="ptab"><thead><tr><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
+          '<table class="ptab"><thead><tr><th class="r">Pos</th><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
           pdocFoot() + '</div>';
         pdocPrint(html);
       }
@@ -14187,7 +14218,7 @@
       fld("Note", '<input id="mr-note" value="' + esc(req.note || "") + '"' + (ordered ? " disabled" : "") + ' placeholder="optional">', "Any instructions for procurement.") +
       '<div id="mr-summary" class="mr-summary"></div>' +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Take-off items</div></div><div class="o-nb-pg">' +
-      '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th><th style="width:104px">Category</th><th style="min-width:140px">Measure</th><th style="width:56px;text-align:right">Qty</th><th style="width:64px">Unit</th><th style="width:112px">Destination</th><th style="width:80px;text-align:right">Last ~</th>' + (ordered ? "" : '<th style="width:56px"></th>') + '</tr></thead><tbody id="mrbody"></tbody></table></div>' + (ordered ? "" : '<button class="o-addln" id="mr-addln">+ Add a line</button>') + '</div></div>' +
+      '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through to RFQ and PO">Pos</th><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th><th style="width:104px">Category</th><th style="min-width:140px">Measure</th><th style="width:56px;text-align:right">Qty</th><th style="width:64px">Unit</th><th style="width:112px">Destination</th><th style="width:80px;text-align:right">Last ~</th>' + (ordered ? "" : '<th style="width:56px"></th>') + '</tr></thead><tbody id="mrbody"></tbody></table></div>' + (ordered ? "" : '<button class="o-addln" id="mr-addln">+ Add a line</button>') + '</div></div>' +
       '</div>';
     document.getElementById("mr-discard").onclick = function () { go("pur.req"); };
     var lb = document.getElementById("mrbody");
@@ -14200,11 +14231,12 @@
       var destTxt = DEST_OPTS.map(function (o) { return byDest[o[0]] ? ('<b>' + byDest[o[0]] + '</b> ' + o[1].toLowerCase()) : null; }).filter(Boolean).join(" &middot; ");
       var catTxt = TAKEOFF_CATS.map(function (c) { return byCat[c] ? (byCat[c] + " " + c.toLowerCase()) : null; }).filter(Boolean).join(", ");
       el.innerHTML = '<span class="mr-sum-n">' + lns.length + ' item' + (lns.length !== 1 ? "s" : "") + '</span>' + (destTxt ? '<span class="mr-sum-seg">' + destTxt + '</span>' : "") + (catTxt ? '<span class="mr-sum-seg">' + catTxt + '</span>' : "");
+      posRenumber(lb);
     }
     function roLine(l) {
       var pr = pById(l.product_id), info = prodMat(pr);
       var meas = l.width && l.height ? (l.width + "x" + l.height) : (l.size || "");
-      return '<tr><td><b>' + esc((pr || {}).name || l.name || "") + '</b></td><td>' + esc(l.name || "") + '</td><td>' + esc(l.category || "") + '</td><td class="muted">' + esc(meas) + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td>' + destChip(l.destination) + '</td><td></td></tr>';
+      return '<tr><td class="pos-cell num muted"></td><td><b>' + esc((pr || {}).name || l.name || "") + '</b></td><td>' + esc(l.name || "") + '</td><td>' + esc(l.category || "") + '</td><td class="muted">' + esc(meas) + '</td><td class="num">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td>' + destChip(l.destination) + '</td><td></td></tr>';
     }
     function addRow(l) {
       l = l || {};
@@ -14212,7 +14244,7 @@
       var tr = document.createElement("tr"); tr.className = "mr-row";
       var sel = l.product_id ? pById(l.product_id) : null, info = prodMat(sel);
       tr.innerHTML =
-        '<td>' + prodComboHTML("mr-prod", sel) + '</td>' +
+        '<td class="pos-cell num muted"></td><td>' + prodComboHTML("mr-prod", sel) + '</td>' +
         '<td><input class="mr-name" value="' + esc(l.name || "") + '" placeholder="Description"></td>' +
         '<td><select class="mr-cat">' + catOptsHTML(l.category) + '</select></td>' +
         '<td class="mr-meas-cell"></td>' +
@@ -15708,6 +15740,46 @@
       res.innerHTML = hits.slice(0, 24).map(function (h) { return '<button class="man-res" data-sec="' + h.s.key + '" data-ai="' + h.ai + '"><b>' + h.a.t + '</b><span>' + h.s.title + '</span></button>'; }).join("");
       res.style.display = "block";
       res.querySelectorAll(".man-res").forEach(function (b) { b.onclick = function () { var sk = b.dataset.sec, ai = b.dataset.ai; if (sk === key) { var t = document.getElementById("man-" + ai); if (t) t.scrollIntoView({ behavior: "smooth" }); res.style.display = "none"; q.value = ""; } else { go("help." + sk); setTimeout(function () { var t2 = document.getElementById("man-" + ai); if (t2) t2.scrollIntoView({ behavior: "smooth" }); }, 220); } }; });
+    };
+    q.onblur = function () { setTimeout(function () { if (res) res.style.display = "none"; }, 180); };
+  }
+  // Per-app Help page: the app's own manual chapter(s) + flow diagram, shown inside
+  // the app's own shell (so it reads as "help for THIS app", not a separate Help app).
+  function renderAppHelp(appKey) {
+    var keys = APP_HELP[appKey] || ["overview"];
+    var inThisApp = {}; keys.forEach(function (k) { inThisApp[k] = 1; });
+    var secs = keys.map(function (k) { return HELP_MANUAL.filter(function (s) { return s.key === k; })[0]; }).filter(Boolean);
+    if (!secs.length) secs = [HELP_MANUAL[0]];
+    var appName = (APPS[appKey] ? term(APPS[appKey].name) : "This app");
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Help") + '</div><div class="o-body" id="o-body"></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body");
+    var flowKey = APP_FLOW[appKey]; var flow = flowKey && HELP_FLOWS[flowKey]; var flowHtml = flow ? mfPanel(flow) : "";
+    var arts = "", idx = 0, toc = [];
+    secs.forEach(function (sec) {
+      sec.articles.forEach(function (a) {
+        arts += '<article class="man-art" id="man-' + idx + '"><h3>' + a.t + '</h3>' + a.h + '</article>';
+        toc.push('<a data-i="' + idx + '">' + a.t + '</a>'); idx++;
+      });
+    });
+    var tocHtml = idx > 1 ? '<nav class="man-toc">' + toc.join("") + '</nav>' : "";
+    body.innerHTML = '<div class="man-wrap">' +
+      '<div class="man-search"><input id="man-q" type="text" placeholder="Search all help..." autocomplete="off"><div class="man-results" id="man-results"></div></div>' +
+      '<h1 class="man-h">' + esc(appName) + ' &middot; Help</h1>' +
+      '<p class="man-lead">Everything you need to run <b>' + esc(appName) + '</b>. To search across the whole system, use the box above or the <b>?</b> button at the top right of any screen.</p>' +
+      flowHtml + tocHtml + '<div class="man-body">' + arts + '</div></div>';
+    body.querySelectorAll(".man-toc a").forEach(function (a) { a.onclick = function () { var t = document.getElementById("man-" + a.dataset.i); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }; });
+    var q = document.getElementById("man-q"), res = document.getElementById("man-results");
+    q.oninput = function () {
+      var v = this.value.trim().toLowerCase();
+      if (v.length < 2) { res.style.display = "none"; res.innerHTML = ""; return; }
+      var hits = [];
+      HELP_MANUAL.forEach(function (s) { s.articles.forEach(function (a, ai) { if ((a.t + " " + a.h + " " + s.title).toLowerCase().indexOf(v) >= 0) hits.push({ s: s, a: a, ai: ai }); }); });
+      if (!hits.length) { res.innerHTML = '<div class="man-res-empty">No matches for &ldquo;' + esc(v) + '&rdquo;</div>'; res.style.display = "block"; return; }
+      res.innerHTML = hits.slice(0, 24).map(function (h) { return '<button class="man-res" data-sec="' + h.s.key + '" data-ai="' + h.ai + '"><b>' + h.a.t + '</b><span>' + h.s.title + '</span></button>'; }).join("");
+      res.style.display = "block";
+      res.querySelectorAll(".man-res").forEach(function (b) { b.onclick = function () { var sk = b.dataset.sec, ai = b.dataset.ai; if (inThisApp[sk]) { var t = document.getElementById("man-" + ai); if (t) t.scrollIntoView({ behavior: "smooth" }); res.style.display = "none"; q.value = ""; } else { go("help." + sk); setTimeout(function () { var t2 = document.getElementById("man-" + ai); if (t2) t2.scrollIntoView({ behavior: "smooth" }); }, 220); } }; });
     };
     q.onblur = function () { setTimeout(function () { if (res) res.style.display = "none"; }, 180); };
   }

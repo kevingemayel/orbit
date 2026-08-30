@@ -222,6 +222,7 @@ button{font-family:inherit}
 .man-res span{font-size:11.5px;color:var(--ink3)}
 .man-res-empty{padding:12px;color:var(--ink3);font-size:13px}
 .man-h{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:0 0 14px}
+.man-lead{font-size:14px;color:var(--ink2);line-height:1.5;margin:0 0 16px;max-width:70ch}
 .man-toc{display:flex;flex-direction:column;gap:3px;border-left:2px solid var(--line);padding:2px 0 2px 12px;margin:0 0 20px}
 .man-toc a{color:var(--accent);font-size:13.5px;cursor:pointer;text-decoration:none}
 .man-toc a:hover{text-decoration:underline}
