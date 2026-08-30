@@ -5407,10 +5407,20 @@
       '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label>' + currencySelectHTML("co-cur", c.currency_code || "USD") + '</div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
       (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
-      '</div><div class="foot"><button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
+      '</div><div class="foot">' + (id ? '<button class="btn" id="co-del" style="margin-right:auto;color:var(--bad)">Delete</button>' : '') + '<button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
     document.body.appendChild(m);
     if (id) wireAttach("company");
     document.getElementById("co-cancel").onclick = function () { m.remove(); };
+    var coDel = document.getElementById("co-del");
+    if (coDel) coDel.onclick = async function () {
+      if (S.company && S.company.id === id) { toast("Switch to another company first, then delete this one."); return; }
+      if (!confirm("Delete the company “" + esc(c.name || "") + "” for good? This only works if it has no real data (no entries, contacts, products, employees or cash) - otherwise it's refused.")) return;
+      coDel.disabled = true; coDel.textContent = "Deleting...";
+      var r = await sb.rpc("delete_company_empty", { p_company: id });
+      if (r.error) { toast(errMsg(r.error)); coDel.disabled = false; coDel.textContent = "Delete"; return; }
+      try { S.companies = (await sb.from("companies").select("*").order("name")).data || S.companies; } catch (e) { }
+      m.remove(); toast("Company deleted"); renderView();
+    };
     // picking a country pre-fills the ledger currency from its pack, matching the
     // Company Profile + sign-up forms - but only while the user hasn't hand-picked a currency
     var coCountryEl = document.getElementById("co-country");
@@ -13056,11 +13066,21 @@
   async function renderEOS() {
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var sel = '<select id="eos-emp" class="o-filtbtn" style="min-width:200px"><option value="">Select employee...</option>' + emps.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>';
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("End of Service") + '<div class="gap"></div>' + sel + '<input id="eos-date" type="date" class="o-filtbtn" value="' + today() + '"><button class="o-filtbtn" id="eos-calc">Calculate</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="eos" style="max-width:660px"><div class="o-empty">Pick an employee and their last working day, then Calculate the end-of-service gratuity.</div></div></div></div>';
+    var eosCfg = (S.company.profile && S.company.profile.eos) || {};
+    var eDiv = Number(eosCfg.divisor) || 30, eD1 = (eosCfg.days1 != null ? Number(eosCfg.days1) : 21), eCap = (eosCfg.cap != null ? Number(eosCfg.cap) : 5), eD2 = (eosCfg.days2 != null ? Number(eosCfg.days2) : 30);
+    var rulesBar = '<div class="eos-rules">Gratuity rule &nbsp; day rate = basic &divide; <input id="eos-div" type="number" step="1" min="1" value="' + eDiv + '"> &nbsp;&middot;&nbsp; <input id="eos-d1" type="number" step="1" min="0" value="' + eD1 + '"> days/yr for the first <input id="eos-cap" type="number" step="1" min="0" value="' + eCap + '"> years, then <input id="eos-d2" type="number" step="1" min="0" value="' + eD2 + '"> days/yr <button class="o-filtbtn" id="eos-saverules">Save as company default</button><div class="eos-hint">Defaults are Gulf/UAE (basic&divide;30, 21 then 30 days). Set to your law &mdash; e.g. KSA half then full month, or Lebanon\'s indemnity &mdash; then Save.</div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("End of Service") + '<div class="gap"></div>' + sel + '<input id="eos-date" type="date" class="o-filtbtn" value="' + today() + '"><button class="o-filtbtn" id="eos-calc">Calculate</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg">' + rulesBar + '<div class="o-report" id="eos" style="max-width:660px"><div class="o-empty">Pick an employee and their last working day, then Calculate the end-of-service gratuity.</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("eos-calc").onclick = compute;
     document.getElementById("eos-emp").onchange = function () { if (this.value) compute(); };
+    document.getElementById("eos-saverules").onclick = async function () {
+      var cfg = { divisor: parseFloat(gv("eos-div")) || 30, days1: parseFloat(gv("eos-d1")) || 0, cap: parseFloat(gv("eos-cap")) || 0, days2: parseFloat(gv("eos-d2")) || 0 };
+      var profile = Object.assign({}, S.company.profile || {}); profile.eos = cfg;
+      var r = await sb.from("companies").update({ profile: profile }).eq("id", S.company.id);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      S.company.profile = profile; toast("Gratuity rules saved as this company's default");
+    };
     async function compute() {
       var empId = document.getElementById("eos-emp").value; if (!empId) { toast("Pick an employee"); return; }
       var end = document.getElementById("eos-date").value || today();
@@ -13070,9 +13090,10 @@
       if (!contract || !contract.date_start) { rep.innerHTML = '<div class="o-empty">This employee has no contract with a start date. Set a contract start date under Contracts.</div>'; return; }
       var cc = contract.currency_code || S.company.currency_code;
       var start = new Date(contract.date_start + "T00:00:00"), fin = new Date(end + "T00:00:00");
-      var years = Math.max(0, (fin - start) / (365.25 * 864e5)), basic = Number(contract.wage) || 0, dayRate = basic / 30;
-      var first5 = Math.min(years, 5), after = Math.max(0, years - 5), days21 = first5 * 21, days30 = after * 30;
-      var g1 = dayRate * days21, g2 = dayRate * days30, total = g1 + g2;
+      var div = parseFloat(gv("eos-div")) || 30, d1 = parseFloat(gv("eos-d1")) || 0, cap = parseFloat(gv("eos-cap")) || 0, d2 = parseFloat(gv("eos-d2")) || 0;
+      var years = Math.max(0, (fin - start) / (365.25 * 864e5)), basic = Number(contract.wage) || 0, dayRate = basic / div;
+      var firstY = Math.min(years, cap), afterY = Math.max(0, years - cap), daysA = firstY * d1, daysB = afterY * d2;
+      var g1 = dayRate * daysA, g2 = dayRate * daysB, total = g1 + g2;
       var empName = (emps.filter(function (e) { return e.id === empId; })[0] || {}).name || "";
       rep.innerHTML = '<h1>End-of-Service Settlement</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + esc(empName) + ' &middot; ' + cc + '</div>' +
         '<table class="o-rt"><tbody>' +
@@ -13080,13 +13101,13 @@
         '<tr><td>Last working day</td><td class="num">' + esc(end) + '</td></tr>' +
         '<tr><td>Years of service</td><td class="num">' + years.toFixed(2) + '</td></tr>' +
         '<tr><td>Last basic salary</td><td class="num">' + cc + " " + money(basic) + '</td></tr>' +
-        '<tr><td>Daily rate (basic / 30)</td><td class="num">' + cc + " " + money(dayRate) + '</td></tr>' +
-        '<tr class="sec"><td colspan="2">Gratuity (21 days/yr first 5 years, 30 days/yr after)</td></tr>' +
-        '<tr><td>First 5 years: ' + first5.toFixed(2) + ' yr &times; 21 days = ' + days21.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g1) + '</td></tr>' +
-        '<tr><td>Beyond 5 years: ' + after.toFixed(2) + ' yr &times; 30 days = ' + days30.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g2) + '</td></tr>' +
+        '<tr><td>Daily rate (basic &divide; ' + div + ')</td><td class="num">' + cc + " " + money(dayRate) + '</td></tr>' +
+        '<tr class="sec"><td colspan="2">Gratuity (' + d1 + ' days/yr for first ' + cap + ' years, ' + d2 + ' days/yr after)</td></tr>' +
+        '<tr><td>First ' + cap + ' years: ' + firstY.toFixed(2) + ' yr &times; ' + d1 + ' days = ' + daysA.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g1) + '</td></tr>' +
+        '<tr><td>Beyond ' + cap + ' years: ' + afterY.toFixed(2) + ' yr &times; ' + d2 + ' days = ' + daysB.toFixed(1) + ' days</td><td class="num">' + cc + " " + money(g2) + '</td></tr>' +
         '<tr class="tot"><td>Total end-of-service gratuity</td><td class="num">' + cc + " " + money(total) + '</td></tr>' +
         '</tbody></table>' +
-        '<div class="sub" style="margin-top:14px">Standard Gulf-style gratuity: 21 days of basic per year for the first 5 years, 30 days per year thereafter. This is the total accrued benefit due; net any monthly EOS provision already booked via payslips.</div>';
+        '<div class="sub" style="margin-top:14px">Computed from the gratuity rule above (basic &divide; ' + div + '; ' + d1 + ' days/yr for the first ' + cap + ' years, then ' + d2 + ' days/yr). Adjust the rule to your jurisdiction and Save it. This is the total accrued benefit due; net any monthly EOS provision already booked via payslips.</div>';
     }
   }
 

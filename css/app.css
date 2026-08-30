@@ -774,6 +774,12 @@ select.gce{cursor:pointer;appearance:auto}
 .ap-chip-t{font-weight:700;font-variant-numeric:tabular-nums;color:var(--accent)}
 .ap-chip-s{display:block;color:var(--ink3);font-size:10.5px}
 .ap-wc-e{color:var(--ink3);font-size:13px;text-align:center;padding:10px 0}
+/* End-of-service configurable gratuity rule */
+.eos-rules{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13.5px;color:var(--ink2);line-height:2.1}
+.eos-rules input{width:54px;border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);font:inherit;font-size:13px;padding:4px 6px;text-align:center;margin:0 2px}
+.eos-rules input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.eos-rules .o-filtbtn{margin-left:8px}
+.eos-hint{font-size:12px;color:var(--ink3);margin-top:6px;line-height:1.4}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 1px 1px rgba(22,23,28,.04);transition:transform .08s,box-shadow .12s,filter .12s,background .12s,border-color .12s}
 .btn:hover{background:var(--panel2);border-color:var(--ink3)}
 .btn.pri{background:var(--accent);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(22,23,28,.14),0 4px 12px -3px rgba(22,23,28,.28)}
