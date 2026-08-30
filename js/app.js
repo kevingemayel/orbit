@@ -3902,12 +3902,12 @@
     var sp = product.spec || {}, d = sp.dims || {}, form = product.material_form || "generic";
     var dens = (d.density != null && d.density !== "") ? Number(d.density) : (MATERIAL_DENSITY[sp.material] || 0);
     var t = Number(d.t || 0), u = d.volunit || "L", factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1);
-    return { form: form, isSheet: form === "sheet", kgm2: (t / 1000) * dens, wpm: Number(d.wpm || 0), liters: (Number(d.vol) || 0) * factor, rlen: Number(d.rlen || 0), rwt: Number(d.rwt || 0), basis: sp.basis || lineDefaultBasis(form), pval: sp.pval };
+    return { form: form, isSheet: form === "sheet", kgm2: (t / 1000) * dens, dens: dens, t: t, wpm: Number(d.wpm || 0), liters: (Number(d.vol) || 0) * factor, rlen: Number(d.rlen || 0), rwt: Number(d.rwt || 0), basis: sp.basis || lineDefaultBasis(form), pval: sp.pval };
   }
   // canonical per-unit price (sheet/bar/container/roll/each) + a derived conversion readout, per material form
-  function lineCalc(info, d1, d2, priceVal, basis, cc) {
+  function lineCalc(info, d1, d2, priceVal, basis, cc, d3) {
     cc = cc || S.company.currency_code; var pv = Number(priceVal) || 0, f = info.form;
-    if (f === "sheet") { var w = Number(d1) || 0, h = Number(d2) || 0, area = w * h / 1e6, kgm2 = info.kgm2, weight = area * kgm2, pk, pm, ps; if (basis === "kg") { pk = pv; ps = pv * weight; pm = pv * kgm2; } else if (basis === "m2") { pm = pv; ps = pv * area; pk = weight ? ps / weight : 0; } else { ps = pv; pm = area ? ps / area : 0; pk = weight ? ps / weight : 0; } return { unit: ps, measure: (w && h) ? msFmt(area, 3) + " m2" : "", derived: [["kg/m&sup2;", kgm2], ["wt/sheet", weight, "kg"], [cc + "/sheet", ps], [cc + "/m&sup2;", pm], [cc + "/kg", pk]] }; }
+    if (f === "sheet") { var w = Number(d1) || 0, h = Number(d2) || 0, area = w * h / 1e6, tmm = (d3 != null && d3 !== "" && Number(d3) > 0) ? Number(d3) : info.t, kgm2 = (tmm && info.dens) ? (tmm / 1000) * info.dens : info.kgm2, weight = area * kgm2, pk, pm, ps; if (basis === "kg") { pk = pv; ps = pv * weight; pm = pv * kgm2; } else if (basis === "m2") { pm = pv; ps = pv * area; pk = weight ? ps / weight : 0; } else { ps = pv; pm = area ? ps / area : 0; pk = weight ? ps / weight : 0; } return { unit: ps, measure: (w && h) ? msFmt(area, 3) + " m2" + (tmm ? " x " + msFmt(tmm) + "mm" : "") : "", derived: [["thk", tmm, "mm"], ["kg/m&sup2;", kgm2], ["wt/sheet", weight, "kg"], [cc + "/sheet", ps], [cc + "/m&sup2;", pm], [cc + "/kg", pk]] }; }
     if (f === "bar") { var L = Number(d1) || 0, wpm = info.wpm, wpb = wpm * L, bk, bm, bb; if (basis === "kg") { bk = pv; bb = pv * wpb; bm = pv * wpm; } else if (basis === "m") { bm = pv; bb = pv * L; bk = wpm ? pv / wpm : 0; } else { bb = pv; bm = L ? pv / L : 0; bk = wpb ? pv / wpb : 0; } return { unit: bb, measure: L ? msFmt(wpb) + " kg/bar" : "", derived: [["wt/bar", wpb, "kg"], [cc + "/bar", bb], [cc + "/m", bm], [cc + "/kg", bk]] }; }
     if (f === "liquid") { var liters = info.liters, lc, ll; if (basis === "L") { ll = pv; lc = pv * liters; } else { lc = pv; ll = liters ? pv / liters : 0; } return { unit: lc, measure: "", derived: [["L/container", liters, "L"], [cc + "/container", lc], [cc + "/L", ll]] }; }
     if (f === "roll") { var rlen = info.rlen, rwt = info.rwt, rk, rlm, rr; if (basis === "kg") { rk = pv; rr = pv * rwt; rlm = rlen ? pv * rwt / rlen : 0; } else if (basis === "lm") { rlm = pv; rr = pv * rlen; rk = rwt ? pv * rlen / rwt : 0; } else { rr = pv; rk = rwt ? pv / rwt : 0; rlm = rlen ? pv / rlen : 0; } return { unit: rr, measure: "", derived: [["roll", rlen, "m"], ["wt", rwt, "kg"], [cc + "/roll", rr], [cc + "/lm", rlm], [cc + "/kg", rk]] }; }
@@ -3923,7 +3923,7 @@
   }
   function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
-  function lineSizeStr(form, d1, d2) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2; if (form === "bar" && d1) return d1 + "m"; return null; }
+  function lineSizeStr(form, d1, d2, d3) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2 + ((d3 != null && d3 !== "" && Number(d3) > 0) ? "x" + d3 : ""); if (form === "bar" && d1) return d1 + "m"; return null; }
   // Where a purchased line is needed. Drives how a goods receipt is routed:
   // warehouse -> into stock (asset), factory -> WIP location, site -> straight to
   // the job as a cost (never stocked). null is treated as warehouse everywhere.
@@ -4024,7 +4024,7 @@
     var partnerField = editable ? '<select id="o-partner">' + partners.map(function (p) { return '<option value="' + p.id + '"' + ((order && order.partner_id === p.id) ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(order && order.partners ? order.partners.name : "") + '</span>';
     var groups = '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
-      fld("Project", editable ? '<select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0] || {}).name || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L.") +
+      fld("Project", editable ? '<div class="o-projrow"><select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select><button type="button" id="o-newproj" class="o-newbtn" title="Start a new project for this order">+ New</button></div>' : '<span class="v">' + esc((orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0] || {}).name || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L. Use <b>+ New</b> to open a project on the spot without leaving this order.") +
       (isSale ? "" : fld("Cost Code", editable ? '<select id="o-costcode"><option value="">(none)</option>' + orderCosts.map(function (c) { return '<option value="' + c.id + '"' + ((order && order.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderCosts.filter(function (c) { return order && c.id === order.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing - this PO rolls up under this code in the Job Cost report.")) +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div><div>' +
@@ -4038,7 +4038,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { var _tm = (l.width && l.height) ? String(l.size || "").match(/x(\d+(?:\.\d+)?)$/) : null; return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: _tm ? Number(_tm[1]) : null, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -4049,10 +4049,11 @@
       var basisEl = tr.querySelector(".l-basis"); var basis = basisEl ? basisEl.value : (info.form ? info.basis : "each");
       if (!isSale && info.form && info.form !== "generic") {
         var d1 = parseFloat((tr.querySelector(".l-d1") || {}).value) || 0, d2 = parseFloat((tr.querySelector(".l-d2") || {}).value) || 0;
-        var c = lineCalc(info, d1, d2, priceVal, basis);
-        return { unit: c.unit, d1: d1, d2: d2, basis: basis, form: info.form, calc: c };
+        var d3 = parseFloat((tr.querySelector(".l-thk") || {}).value) || 0;
+        var c = lineCalc(info, d1, d2, priceVal, basis, null, d3);
+        return { unit: c.unit, d1: d1, d2: d2, d3: d3, basis: basis, form: info.form, calc: c };
       }
-      return { unit: priceVal, d1: 0, d2: 0, basis: basis, form: "generic", calc: null };
+      return { unit: priceVal, d1: 0, d2: 0, d3: 0, basis: basis, form: "generic", calc: null };
     }
     function recalc() {
       var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0, cc0 = S.company.currency_code;
@@ -4074,7 +4075,7 @@
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod"); var de = tr.querySelector(".l-dest");
-        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
+        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2, ru.d3), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), thk: (ru.form === "sheet" ? (ru.d3 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
       });
     }
     function renderLines() {
@@ -4099,7 +4100,7 @@
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px">Size L</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px" title="Length for bars, thickness for panels">L / Thk</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
         var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
@@ -4128,18 +4129,18 @@
           '<td class="l-acts">' + (showSize ? '<button class="l-addsize" type="button" title="Add another size of this item">+size</button>' : "") + '<button class="del" type="button" title="Remove line">&times;</button></td>';
         if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
         if (l.tax_id) tr.querySelector(".l-tax").value = l.tax_id;
-        function applyForm(inf, d1, d2, basisCur) {
+        function applyForm(inf, d1, d2, basisCur, thkCur) {
           if (!showSize) return;
           var f = inf.form, dash = '<span class="muted">-</span>';
           var wc = tr.querySelector(".l-w-cell"), hc = tr.querySelector(".l-h-cell"), lc = tr.querySelector(".l-l-cell"), ac = tr.querySelector(".l-area-cell");
-          if (f === "sheet") { wc.innerHTML = '<input class="l-d1 l-w num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="W mm">'; hc.innerHTML = '<input class="l-d2 l-h num" type="number" step="any" value="' + (d2 != null ? d2 : "") + '" placeholder="H mm">'; lc.innerHTML = dash; }
+          if (f === "sheet") { wc.innerHTML = '<input class="l-d1 l-w num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="W mm">'; hc.innerHTML = '<input class="l-d2 l-h num" type="number" step="any" value="' + (d2 != null ? d2 : "") + '" placeholder="H mm">'; lc.innerHTML = '<input class="l-thk num" type="number" step="any" value="' + (thkCur != null && thkCur !== "" ? thkCur : "") + '" placeholder="T mm" title="Panel thickness (mm)">'; }
           else if (f === "bar") { wc.innerHTML = dash; hc.innerHTML = dash; lc.innerHTML = '<input class="l-d1 l-len num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="L m">'; }
           else { wc.innerHTML = dash; hc.innerHTML = dash; lc.innerHTML = dash; }
           if (ac) ac.textContent = "";
           tr.querySelector(".l-basis-cell").innerHTML = '<select class="l-basis">' + lineBasisHTML(inf.form, basisCur) + '</select>';
-          tr.querySelectorAll(".l-d1,.l-d2,.l-basis").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
+          tr.querySelectorAll(".l-d1,.l-d2,.l-thk,.l-basis").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
         }
-        applyForm(info, l.width, l.height, basis);
+        applyForm(info, l.width, l.height, basis, (l.thk != null ? l.thk : info.t));
         wireUnitAdd(tr.querySelector(".l-uom"), ordUoms);
         if (l.product_id) { var _ue0 = tr.querySelector(".l-uom"); if (_ue0 && !l.uom && sel && sel.uom) setUnitSelect(_ue0, sel.uom); }
         wireProdCombo(tr, products, function (pr) {
@@ -4149,14 +4150,14 @@
           var startPrice = (pinfo.pval != null && pinfo.pval !== "") ? pinfo.pval : ((isSale ? pr.list_price : pr.cost_price) || 0);
           tr.querySelector(".l-price").value = startPrice;
           var tx = isSale ? pr.sale_tax_id : pr.purchase_tax_id; if (tx) tr.querySelector(".l-tax").value = tx;
-          applyForm(pinfo, null, null, pinfo.basis);
+          applyForm(pinfo, null, null, pinfo.basis, pinfo.t);
           if (isSale) pricelistPriceFor(pr.id).then(function (plp) { if (plp != null) { tr.querySelector(".l-price").value = plp; recalc(); } });
           recalc();
         });
         var asz = tr.querySelector(".l-addsize");
         if (asz) asz.onclick = function () {
           var hid = tr.querySelector(".l-prod");
-          addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, priceValue: parseFloat(tr.querySelector(".l-price").value) || 0, price_basis: tr.querySelector(".l-basis") ? tr.querySelector(".l-basis").value : "each", destination: (tr.querySelector(".l-dest") || {}).value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: 1 }, tr);
+          addRow({ product_id: hid ? (hid.value || null) : null, name: tr.querySelector(".l-name").value, priceValue: parseFloat(tr.querySelector(".l-price").value) || 0, price_basis: tr.querySelector(".l-basis") ? tr.querySelector(".l-basis").value : "each", destination: (tr.querySelector(".l-dest") || {}).value || null, tax_id: tr.querySelector(".l-tax").value || null, thk: parseFloat((tr.querySelector(".l-thk") || {}).value) || null, quantity: 1 }, tr);
           recalc();
           var newTr = tr.nextSibling; if (newTr) { var d1 = newTr.querySelector(".l-d1"); if (d1) d1.focus(); }
         };
@@ -4198,6 +4199,27 @@
     }
     if (editable) {
       document.getElementById("o-discard").onclick = function () { go(listAction); };
+      var _npb = document.getElementById("o-newproj");
+      if (_npb) _npb.onclick = function () {
+        var ps2 = document.getElementById("o-partner");
+        var vname = ps2 && ps2.value ? ((partners.filter(function (p) { return p.id === ps2.value; })[0] || {}).name || "") : "";
+        var suggest = (vname ? vname + " - " : "") + (order && order.number ? order.number : today());
+        var m = document.createElement("div"); m.className = "modal on"; m.setAttribute("data-noi18n", "");
+        m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New project</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px"><label class="fl">Project name<input id="np-name" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px" value="' + esc(suggest) + '"></label><div class="sub">Creates the project and tags this order to it. You can fill in the rest later from the Projects app.</div></div><div class="foot"><button class="btn" id="np-cancel">Cancel</button><button class="btn pri" id="np-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; link</button></div></div>';
+        document.body.appendChild(m);
+        var nm = document.getElementById("np-name"); if (nm) { nm.focus(); nm.select(); }
+        document.getElementById("np-cancel").onclick = function () { m.remove(); };
+        document.getElementById("np-save").onclick = async function () {
+          var name = (document.getElementById("np-name").value || "").trim(); if (!name) { toast("Give the project a name"); return; }
+          var partnerId = ps2 ? (ps2.value || null) : null;
+          var r = await sb.from("projects").insert({ company_id: S.company.id, name: name, partner_id: partnerId, is_active: true }).select("id,name").single();
+          if (r.error) { toast("Could not create project: " + errMsg(r.error)); return; }
+          var sel = document.getElementById("o-proj");
+          if (sel) { var opt = document.createElement("option"); opt.value = r.data.id; opt.textContent = r.data.name; sel.appendChild(opt); sel.value = r.data.id; }
+          orderProjects.push({ id: r.data.id, name: r.data.name });
+          m.remove(); toast("Project created and linked");
+        };
+      };
       if (document.getElementById("o-partner")) { if (isSale) custPickerAdd("o-partner"); else vendPickerAdd("o-partner"); }
       document.getElementById("o-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderOrderForm(nid, kind); } };
       document.getElementById("o-confirm").onclick = async function () {
@@ -4222,17 +4244,22 @@
         var w = (l.sw != null ? l.sw : ((l.width && l.height) ? l.width : null));
         var h = (l.sh != null ? l.sh : ((l.width && l.height) ? l.height : null));
         var len = (l.sl != null ? l.sl : ((l.width && !l.height) ? l.width : null));
+        var thk = l.thk != null ? l.thk : (function () { var m = String(l.size || "").match(/x(\d+(?:\.\d+)?)$/); return (m && l.width && l.height) ? Number(m[1]) : null; })();
         var area = (l.area != null ? l.area : ((l.width && l.height) ? Number(l.width) * Number(l.height) / 1e6 : null));
-        return { w: w, h: h, len: len, area: area };
+        return { w: w, h: h, len: len, thk: thk, area: area };
       }
+      var _prevName = null;   // print: repeat a description only when it changes (grouped dimension rows read cleaner)
       var body = lns.map(function (l) {
         var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
         var ls = Number(l.quantity || 0) * Number(l.unit_price || 0); sub += ls; tax += ls * amt / 100;
         var d = dimOf(l);
-        var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + (d.len != null ? d.len : "") + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
-        return '<tr><td>' + esc(l.name || "") + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+        var third = (d.len != null ? d.len : (d.thk != null ? d.thk : ""));
+        var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
+        var nm = l.name || "";
+        var showName = (nm !== _prevName); _prevName = nm;
+        return '<tr><td>' + (showName ? esc(nm) : "") + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
       }).join("");
-      var head = '<th>Description</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">Size L</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
+      var head = '<th>Description</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div></div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl" style="margin-top:8px">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + '</div></div>' +
