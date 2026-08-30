@@ -15382,17 +15382,42 @@
   async function cashLoadWallets() { return (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; }
   async function cashBalances() {
     var accts = await cashLoadWallets();
-    var mv = (await sb.from("cash_movements").select("cash_account_id,direction,amount,status").eq("company_id", S.company.id).eq("status", "posted")).data || [];
-    var ho = (await sb.from("cash_handovers").select("from_account_id,to_account_id,amount,status").eq("company_id", S.company.id).eq("status", "confirmed")).data || [];
-    var bal = {};
-    accts.forEach(function (a) { bal[a.id] = Number(a.opening_balance || 0); });
-    mv.forEach(function (m) { if (bal[m.cash_account_id] == null) return; bal[m.cash_account_id] += (m.direction === "in" ? 1 : -1) * Number(m.amount || 0); });
-    ho.forEach(function (h) { if (bal[h.from_account_id] != null) bal[h.from_account_id] -= Number(h.amount || 0); if (bal[h.to_account_id] != null) bal[h.to_account_id] += Number(h.amount || 0); });
-    // Convert each wallet's native balance to the company (functional) currency for a correct grand total
-    // (a USD till and an LBP till must not be added as if the same unit).
-    var fn = S.company.currency_code, func = {}, total = 0;
-    for (var i = 0; i < accts.length; i++) { var a = accts[i]; var c = a.currency_code || fn; var f = (c === fn) ? Number(bal[a.id] || 0) : await cashToFunc(bal[a.id] || 0, c, today()); func[a.id] = f; total += f; }
-    return { accts: accts, bal: bal, func: func, total: Math.round(total * 10000) / 10000, fn: fn };
+    var mv = (await sb.from("cash_movements").select("cash_account_id,direction,amount,currency_code,status").eq("company_id", S.company.id).eq("status", "posted")).data || [];
+    var ho = (await sb.from("cash_handovers").select("from_account_id,to_account_id,amount,currency_code,status").eq("company_id", S.company.id).eq("status", "confirmed")).data || [];
+    var fn = S.company.currency_code;
+    var wcur = {}; accts.forEach(function (a) { wcur[a.id] = a.currency_code || fn; });
+    // Each wallet is single-currency. An amount recorded in a DIFFERENT currency than
+    // its wallet is grouped and converted into the wallet's own currency before it is
+    // added - never summed 1:1 (that was the multi-currency balance bug).
+    var bal = {}, foreign = {}, warn = [], seenWarn = {};
+    accts.forEach(function (a) { bal[a.id] = Number(a.opening_balance || 0); foreign[a.id] = {}; });
+    function add(acct, cur, amt) {
+      if (bal[acct] == null) return;
+      var wc = wcur[acct];
+      if (!cur || cur === wc) bal[acct] += amt;
+      else foreign[acct][cur] = (foreign[acct][cur] || 0) + amt;
+    }
+    function flag(from, to) { var k = from + ">" + to; if (!seenWarn[k]) { seenWarn[k] = 1; warn.push({ from: from, to: to }); } }
+    mv.forEach(function (m) { add(m.cash_account_id, m.currency_code, (m.direction === "in" ? 1 : -1) * Number(m.amount || 0)); });
+    ho.forEach(function (h) { add(h.from_account_id, h.currency_code, -Number(h.amount || 0)); add(h.to_account_id, h.currency_code, Number(h.amount || 0)); });
+    // fold each wallet's foreign-currency amounts into its native balance
+    for (var wi = 0; wi < accts.length; wi++) {
+      var id = accts[wi].id, wc = wcur[id], curs = Object.keys(foreign[id]);
+      for (var ci = 0; ci < curs.length; ci++) {
+        var r = await cashFx(foreign[id][curs[ci]], curs[ci], wc, today());
+        if (r.ok) bal[id] += r.value; else flag(curs[ci], wc);
+      }
+    }
+    // grand total in the company (functional) currency - a USD till and an LBP till
+    // must not be added as if the same unit; a wallet with no rate is EXCLUDED (not
+    // added 1:1) and reported so the total is honest.
+    var func = {}, total = 0, totalOk = true;
+    for (var i = 0; i < accts.length; i++) {
+      var a = accts[i], c = wcur[a.id];
+      if (c === fn) { func[a.id] = Math.round((bal[a.id] || 0) * 10000) / 10000; total += func[a.id]; }
+      else { var cv = await cashFx(bal[a.id] || 0, c, fn, today()); if (cv.ok) { func[a.id] = cv.value; total += cv.value; } else { func[a.id] = null; totalOk = false; flag(c, fn); } }
+    }
+    return { accts: accts, bal: bal, func: func, total: Math.round(total * 10000) / 10000, fn: fn, totalOk: totalOk, warn: warn };
   }
 
   // ---- cash accounts (wallets) ----
@@ -15455,8 +15480,11 @@
       return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px">'
         + '<div style="font-weight:700">' + esc(a.name) + '</div>'
         + '<div class="muted" style="font-size:12px">' + esc(a.kind === "bank" ? "Bank" : "Cash") + ' &middot; ' + esc(a.currency_code || S.company.currency_code) + '</div>'
-        + '<div style="font-size:18px;font-weight:800;margin-top:6px">' + moneyC(d.bal[a.id] || 0, a.currency_code || S.company.currency_code) + '</div></div>';
+        + '<div style="font-size:18px;font-weight:800;margin-top:6px">' + moneyC(d.bal[a.id] || 0, a.currency_code || S.company.currency_code) + '</div>'
+        + ((d.func[a.id] === null) ? '<div style="font-size:11px;color:var(--warn);margin-top:3px;font-weight:600">No ' + esc((a.currency_code || "") + " → " + d.fn) + ' rate · not in total</div>' : '')
+        + '</div>';
     }).join("");
+    var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
     var rows = recent.map(function (m) {
       var sign = m.direction === "in" ? "+" : "-";
       return '<tr style="border-top:1px solid var(--line)"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
@@ -15464,7 +15492,8 @@
     var canW = canManageApp(S.app);
     body.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
       + (canW ? '<button class="btn pri" id="cd-in" style="background:var(--good);border-color:var(--good)">+ Money in</button><button class="btn pri" id="cd-out" style="background:var(--bad);border-color:var(--bad)">- Money out</button><button class="btn" id="cd-ho">Handover</button>' : '')
-      + '<div style="flex:1"></div><div style="font-weight:700">Total held: ' + moneyC(total, S.company.currency_code) + '</div></div>'
+      + '<div style="flex:1"></div><div style="font-weight:700">Total held: ' + moneyC(total, S.company.currency_code) + (d.totalOk ? '' : ' <span style="color:var(--warn);font-weight:600" title="Wallets without an exchange rate are excluded">(partial)</span>') + '</div></div>'
+      + warnBanner
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:20px">' + cards + '</div>'
       + '<h3 style="margin:0 0 6px">Recent movements</h3><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left"><th style="padding:6px 8px">Date</th><th style="padding:6px 8px">No.</th><th style="padding:6px 8px">Type</th><th style="padding:6px 8px">Party</th><th style="padding:6px 8px;text-align:right">Amount</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="muted" style="padding:10px 8px">Nothing yet.</td></tr>') + '</tbody></table></div>';
     if (canW) {
@@ -15611,6 +15640,16 @@
     var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: amount, p_from: ccy, p_to: fn, p_date: date, p_type: "spot" });
     return (!fc.error && fc.data != null) ? Math.round(Number(fc.data) * 10000) / 10000 : Math.round(Number(amount) * 10000) / 10000;
   }
+  // Strict FX for the cash SCREEN: convert `amount` from -> to and report success.
+  // Unlike cashToFunc it never silently falls back to 1:1 - a missing rate returns
+  // {ok:false} so the Cash Desk can flag it instead of showing a wrong total.
+  async function cashFx(amount, from, to, date) {
+    var a = Number(amount) || 0;
+    if (!from || !to || from === to) return { ok: true, value: Math.round(a * 10000) / 10000 };
+    var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: a, p_from: from, p_to: to, p_date: date, p_type: "spot" });
+    if (fc.error || fc.data == null) return { ok: false, value: 0, from: from, to: to };
+    return { ok: true, value: Math.round(Number(fc.data) * 10000) / 10000 };
+  }
   // Post a balanced 2-line cash entry (Dr/Cr cash vs an account), tagging a partner on the non-cash leg.
   async function cashPostEntry(dir, cashGl, otherGl, famt, jrnCode, date, ref, narr, partnerTag, sourceType) {
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", jrnCode).maybeSingle()).data;
@@ -15646,6 +15685,13 @@
     var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
     var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
     var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, reference: mv.reference || null, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
+
+    // Multi-currency guard: a foreign-currency movement must have an FX rate, or the
+    // journal amount used to fall back to 1:1 silently. Fail loudly instead.
+    if (mv.currency_code && mv.currency_code !== S.company.currency_code) {
+      var _chk = await cashFx(1, mv.currency_code, S.company.currency_code, mv.move_date);
+      if (!_chk.ok) return { error: { message: "No exchange rate for " + mv.currency_code + " → " + S.company.currency_code + " on " + mv.move_date + ". Add it in Accounting first, then post." } };
+    }
 
     // ---- Split tender: paid via several methods, recorded on account (or as a plain expense) ----
     if (mv.tenders && mv.tenders.length > 1) {
