@@ -537,7 +537,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-home-grp.wide{grid-column:1 / -1}
 .o-home-grp-t{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px;padding-left:4px}
 .o-home-grp .o-grid{margin:0;padding:0;max-width:none;grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
-@media(max-width:900px){.o-home-groups{grid-template-columns:1fr}.o-home-grp.wide{grid-column:auto}}
+@media(max-width:760px){.o-home-groups{grid-template-columns:1fr}.o-home-grp.wide{grid-column:auto}}
 .o-home-soon{opacity:.7}
 /* app store + home edit mode */
 .o-home-edithint{max-width:980px;margin:0 auto;padding:10px 20px 0;font-size:12.5px;color:var(--ink3)}
