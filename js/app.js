@@ -2418,7 +2418,7 @@
       '</div>';
     wireBc();
     var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -2460,7 +2460,7 @@
       dd.innerHTML = '<div class="sec">Group By</div>' + L.cfg.groupBy.map(function (g, i) {
         return '<button class="it" data-i="' + i + '">' + (L.group === i ? "&#10003; " : "") + esc(g.label) + '</button>';
       }).join("");
-      dd.querySelectorAll("[data-i]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.i; L.group = (L.group === i ? null : i); refreshFacets(); paintBody(); closeDropdowns(); }; });
+      dd.querySelectorAll("[data-i]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.i; L.group = (L.group === i ? null : i); L.colGroup = null; paintBody(); closeDropdowns(); }; });
     }
     document.body.appendChild(dd);
   }
@@ -2469,15 +2469,32 @@
     var chips = "";
     Object.keys(L.filters).forEach(function (i) { if (L.filters[i]) chips += '<span class="o-facet">' + esc(L.cfg.filters[i].label) + ' <span class="x" data-fx="' + i + '">&times;</span></span>'; });
     if (L.group != null) chips += '<span class="o-facet">' + esc(L.cfg.groupBy[L.group].label) + ' <span class="x" data-gx="1">&times;</span></span>';
+    if (L.colGroup != null && L.cfg.columns[L.colGroup]) chips += '<span class="o-facet">Grouped: ' + esc(L.cfg.columns[L.colGroup].label) + ' <span class="x" data-cgx="1">&times;</span></span>';
+    if (L.sort && L.cfg.columns[L.sort.i]) chips += '<span class="o-facet">Sorted: ' + esc(L.cfg.columns[L.sort.i].label) + ' ' + (L.sort.dir > 0 ? "↑" : "↓") + ' <span class="x" data-sx="1">&times;</span></span>';
+    Object.keys(L.colFilters).forEach(function (ci) { if (L.cfg.columns[ci]) chips += '<span class="o-facet">' + esc(L.cfg.columns[ci].label) + ': ' + Object.keys(L.colFilters[ci]).length + ' <span class="x" data-cfx="' + ci + '">&times;</span></span>'; });
     f.innerHTML = chips;
-    f.querySelectorAll("[data-fx]").forEach(function (x) { x.onclick = function () { L.filters[x.dataset.fx] = false; refreshFacets(); paintBody(); }; });
-    f.querySelectorAll("[data-gx]").forEach(function (x) { x.onclick = function () { L.group = null; refreshFacets(); paintBody(); }; });
+    f.querySelectorAll("[data-fx]").forEach(function (x) { x.onclick = function () { L.filters[x.dataset.fx] = false; paintBody(); }; });
+    f.querySelectorAll("[data-gx]").forEach(function (x) { x.onclick = function () { L.group = null; paintBody(); }; });
+    f.querySelectorAll("[data-cgx]").forEach(function (x) { x.onclick = function () { L.colGroup = null; paintBody(); }; });
+    f.querySelectorAll("[data-sx]").forEach(function (x) { x.onclick = function () { L.sort = null; paintBody(); }; });
+    f.querySelectorAll("[data-cfx]").forEach(function (x) { x.onclick = function () { delete L.colFilters[x.dataset.cfx]; paintBody(); }; });
+  }
+  function colText(c, r) { return htmlToText(c.get(r)); }
+  function numify(s) { if (s == null) return null; var t = String(s).replace(/[^0-9.\-]/g, ""); if (t === "" || t === "-" || t === "." || isNaN(Number(t))) return null; return Number(t); }
+  function colCompare(c, a, b) {
+    var va = colText(c, a), vb = colText(c, b), na = numify(va), nb = numify(vb);
+    if (na != null && nb != null && na !== nb) return na - nb;
+    var la = va.toLowerCase(), lb = vb.toLowerCase();
+    return la < lb ? -1 : (la > lb ? 1 : 0);
   }
   function applyRows() {
     var cfg = L.cfg, rows = L.all.slice();
     var active = Object.keys(L.filters).filter(function (i) { return L.filters[i]; });
     if (active.length) rows = rows.filter(function (r) { return active.some(function (i) { return cfg.filters[i].test(r); }); });
+    var cfKeys = Object.keys(L.colFilters);
+    if (cfKeys.length) rows = rows.filter(function (r) { return cfKeys.every(function (ci) { var sel = L.colFilters[ci]; return !sel || !!sel[colText(cfg.columns[ci], r)]; }); });
     if (L.query) rows = rows.filter(function (r) { return cfg.searchText(r).toLowerCase().indexOf(L.query) >= 0; });
+    if (L.sort && cfg.columns[L.sort.i]) { var sc = cfg.columns[L.sort.i], dir = L.sort.dir; rows.sort(function (a, b) { return dir * colCompare(sc, a, b); }); }
     return rows;
   }
   function paintBody() {
@@ -2486,7 +2503,8 @@
     // pager
     var pager = document.getElementById("o-pager");
     if (!body || !pager) return; // navigated away before an async list fetch resolved
-    if (L.group != null || L.view === "kanban" || L.view === "tree" || L.view === "org") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
+    refreshFacets();
+    if (L.group != null || L.colGroup != null || L.view === "kanban" || L.view === "tree" || L.view === "org") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
     else {
       var from = total ? L.page * L.size + 1 : 0, to = Math.min((L.page + 1) * L.size, total);
       pager.innerHTML = '<span>' + from + '-' + to + ' / ' + total + '</span>' +
@@ -2527,9 +2545,11 @@
       var tpage = rows.slice(L.page * L.size, (L.page + 1) * L.size);
       body.innerHTML = '<div class="o-thumbs">' + tpage.map(function (r) { return thumbTileHTML(cfg, r); }).join("") + '</div>';
     }
-    else if (L.group != null) {
-      var g = cfg.groupBy[L.group], groups = {};
-      rows.forEach(function (r) { var k = g.get(r) || "None"; (groups[k] = groups[k] || []).push(r); });
+    else if (L.colGroup != null || L.group != null) {
+      var groups = {}, keyFn;
+      if (L.colGroup != null && cfg.columns[L.colGroup]) { var gc = cfg.columns[L.colGroup]; keyFn = function (r) { return colText(gc, r) || "None"; }; }
+      else { var g = cfg.groupBy[L.group]; keyFn = function (r) { return g.get(r) || "None"; }; }
+      rows.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
       var html = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>';
       Object.keys(groups).sort().forEach(function (k) {
         html += '<tr class="o-grp"><td colspan="' + cfg.columns.length + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
@@ -2545,8 +2565,52 @@
       el.onclick = open;
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
+    body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
   }
-  function headRow(cfg) { return '<tr>' + cfg.columns.map(function (c) { return '<th class="' + (c.num ? "num" : "") + '">' + esc(c.label) + '</th>'; }).join("") + '</tr>'; }
+  function headRow(cfg) {
+    return '<tr>' + cfg.columns.map(function (c, i) {
+      var srt = (L.sort && L.sort.i === i) ? ' <span class="o-th-sort">' + (L.sort.dir > 0 ? "↑" : "↓") + '</span>' : "";
+      var on = (L.sort && L.sort.i === i) || (L.colGroup === i) || (L.colFilters[i] && Object.keys(L.colFilters[i]).length);
+      return '<th class="' + (c.num ? "num" : "") + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span></th>';
+    }).join("") + '</tr>';
+  }
+  function openColMenu(i, btn) {
+    closeDropdowns();
+    var cfg = L.cfg, c = cfg.columns[i]; if (!c) return;
+    var rect = btn.getBoundingClientRect();
+    var dd = document.createElement("div"); dd.className = "o-dd o-colmenu"; dd.dataset.dd = "1";
+    dd.style.position = "fixed"; dd.style.top = (rect.bottom + 4) + "px"; dd.style.left = Math.max(6, Math.min(rect.left, window.innerWidth - 268)) + "px";
+    var isG = L.colGroup === i, asc = L.sort && L.sort.i === i && L.sort.dir > 0, desc = L.sort && L.sort.i === i && L.sort.dir < 0;
+    var vals = {}, order = [];
+    L.all.forEach(function (row) { var v = colText(c, row); if (!(v in vals)) { vals[v] = 0; order.push(v); } vals[v]++; });
+    order.sort();
+    var cf = L.colFilters[i] || null;
+    dd.innerHTML = '<div class="sec">' + esc(c.label) + '</div>' +
+      '<button class="it" data-a="asc">' + (asc ? "✓ " : "") + '&#8593; Sort ascending</button>' +
+      '<button class="it" data-a="desc">' + (desc ? "✓ " : "") + '&#8595; Sort descending</button>' +
+      ((L.sort && L.sort.i === i) ? '<button class="it" data-a="nosort">Clear sort</button>' : '') +
+      '<div class="sep"></div>' +
+      '<button class="it" data-a="group">' + (isG ? "✓ Grouped &ndash; ungroup" : "Group by this column") + '</button>' +
+      '<div class="sep"></div><div class="sec">Filter values</div>' +
+      '<div class="o-colf-tools"><input class="o-colf-q" placeholder="Search values..."><button class="o-colf-all" data-a="selall">All</button><button class="o-colf-all" data-a="selnone">None</button></div>' +
+      '<div class="o-colf-list">' + order.map(function (v) { var ck = !cf || cf[v]; return '<label class="o-colf-row"><input type="checkbox" data-v="' + esc(v) + '"' + (ck ? " checked" : "") + '><span>' + (v === "" ? "<i>(empty)</i>" : esc(v)) + '</span><span class="o-colf-n">' + vals[v] + '</span></label>'; }).join("") + '</div>' +
+      '<div class="o-colf-foot"><button class="btn sm pri" data-a="applyf" style="background:var(--app);border-color:var(--app)">Apply filter</button>' + (cf ? '<button class="btn sm" data-a="clearf">Clear</button>' : '') + '</div>';
+    document.body.appendChild(dd);
+    dd.querySelector('[data-a="asc"]').onclick = function () { L.sort = { i: i, dir: 1 }; L.page = 0; paintBody(); closeDropdowns(); };
+    dd.querySelector('[data-a="desc"]').onclick = function () { L.sort = { i: i, dir: -1 }; L.page = 0; paintBody(); closeDropdowns(); };
+    var ns = dd.querySelector('[data-a="nosort"]'); if (ns) ns.onclick = function () { L.sort = null; paintBody(); closeDropdowns(); };
+    dd.querySelector('[data-a="group"]').onclick = function () { L.colGroup = (L.colGroup === i ? null : i); L.group = null; L.page = 0; paintBody(); closeDropdowns(); };
+    var q = dd.querySelector(".o-colf-q"); q.oninput = function () { var t = this.value.toLowerCase(); dd.querySelectorAll(".o-colf-row").forEach(function (row) { row.style.display = row.textContent.toLowerCase().indexOf(t) >= 0 ? "" : "none"; }); };
+    dd.querySelector('[data-a="selall"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = true; }); };
+    dd.querySelector('[data-a="selnone"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = false; }); };
+    dd.querySelector('[data-a="applyf"]').onclick = function () {
+      var sel = {}, any = false, allSel = true;
+      dd.querySelectorAll(".o-colf-list input").forEach(function (x) { if (x.checked) { sel[x.dataset.v] = true; any = true; } else allSel = false; });
+      if (allSel || !any) delete L.colFilters[i]; else L.colFilters[i] = sel;
+      L.page = 0; paintBody(); closeDropdowns();
+    };
+    var cfb = dd.querySelector('[data-a="clearf"]'); if (cfb) cfb.onclick = function () { delete L.colFilters[i]; L.page = 0; paintBody(); closeDropdowns(); };
+  }
   function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
   // A gallery tile for the thumbnail view: the row photo (where a list attaches one)
   // over the first column as a title and the second as a subtitle; a lettered
@@ -5583,6 +5647,7 @@
   // ---- guests ----
   async function evGuests(host) {
     var rows = (await sb.from("event_guests").select("*, event_tables:table_id(name)").eq("event_id", EV.eventId).order("family_name")).data || [];
+    var gTables = (await sb.from("event_tables").select("id,name").eq("event_id", EV.eventId).order("name")).data || [];
     var target = EV.event.guest_target || 0;
     var invited = rows.filter(function (r) { return ["invited", "confirmed"].indexOf(r.invite_stage) >= 0; }).length;
     var confirmed = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).length;
@@ -5609,14 +5674,54 @@
       var body = document.getElementById("g-body");
       if (view === "pivot") { return evGuestPivot(body, shown); }
       if (view === "board") {
-        evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
+        evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openGuestModal(s); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
       } else {
         if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No guests yet</div><div class="o-empty2-h">Add your first guest, or Import a list.</div></div>'; return; }
-        body.innerHTML = '<table class="o-list"><thead><tr><th>Side</th><th>Name</th><th>Category</th><th>Priority</th><th>Stage</th><th>RSVP</th><th class="num">+1</th><th>Table</th></tr></thead><tbody>' +
+        // Inline-editable table: edit fields right in the view, then Save.
+        function optsFor(list, cur, blank) { return (blank != null ? '<option value="">' + blank + '</option>' : "") + list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur == null ? "" : cur) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
+        function tblOptsFor(cur) { return '<option value="">-</option>' + gTables.map(function (t) { return '<option value="' + t.id + '"' + (String(cur || "") === String(t.id) ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
+        body.innerHTML = '<div class="gt-bar"><button class="btn pri" id="g-save" disabled style="background:var(--app);border-color:var(--app)">Save changes</button><span class="muted" id="g-dirty" style="font-size:12.5px"></span><span style="flex:1"></span><span class="muted" style="font-size:12px">Edit any cell, then Save</span></div>' +
+          '<div style="overflow-x:auto"><table class="o-list gtbl"><thead><tr><th>Side</th><th>First name</th><th>Family name</th><th>Category</th><th>Priority</th><th>Stage</th><th>RSVP</th><th class="num">+1</th><th>Table</th><th></th></tr></thead><tbody>' +
           shown.map(function (r) {
-            return '<tr data-id="' + r.id + '" style="cursor:pointer"><td>' + esc(r.side || "") + '</td><td><b>' + esc(((r.first_name || "") + " " + (r.family_name || "")).trim()) + '</b>' + (r.is_vip ? ' <span class="badge">VIP</span>' : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td>' + (r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : "") + '</td><td>' + '<span class="badge ' + guestStageCls(r.invite_stage) + '">' + esc(evLabel(GUEST_STAGE, r.invite_stage)) + '</span></td><td class="muted">' + esc(evLabel(RSVP_OPTS, r.rsvp)) + '</td><td class="num">' + (r.plus_ones || 0) + '</td><td class="muted">' + esc(r.event_tables ? r.event_tables.name : "") + '</td></tr>';
-          }).join("") + '</tbody></table>';
-        body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { openGuestModal(rows.filter(function (x) { return x.id === el.dataset.id; })[0]); }; });
+            return '<tr data-id="' + r.id + '">' +
+              '<td><input class="gce" data-f="side" value="' + esc(r.side || "") + '"></td>' +
+              '<td><input class="gce" data-f="first_name" value="' + esc(r.first_name || "") + '"></td>' +
+              '<td><input class="gce" data-f="family_name" value="' + esc(r.family_name || "") + '"></td>' +
+              '<td><input class="gce" data-f="category" value="' + esc(r.category || "") + '"></td>' +
+              '<td><select class="gce" data-f="priority">' + optsFor(GUEST_PRIO, r.priority, "-") + '</select></td>' +
+              '<td><select class="gce" data-f="invite_stage">' + optsFor(GUEST_STAGE, r.invite_stage || "longlist", null) + '</select></td>' +
+              '<td><select class="gce" data-f="rsvp">' + optsFor(RSVP_OPTS, r.rsvp || "pending", null) + '</select></td>' +
+              '<td><input class="gce" type="number" min="0" data-f="plus_ones" value="' + (r.plus_ones || 0) + '" style="width:64px"></td>' +
+              '<td><select class="gce" data-f="table_id">' + tblOptsFor(r.table_id) + '</select></td>' +
+              '<td><button class="gt-open" data-open="' + r.id + '" title="Open full details">&#8942;</button></td>' +
+              '</tr>';
+          }).join("") + '</tbody></table></div>';
+        var gdirty = {};
+        function markDirty() { var n = Object.keys(gdirty).length; var sv = document.getElementById("g-save"); if (sv) sv.disabled = n === 0; var dl = document.getElementById("g-dirty"); if (dl) dl.textContent = n ? (n + " row" + (n > 1 ? "s" : "") + " changed") : ""; __dirty = n > 0; }
+        body.querySelectorAll(".gce").forEach(function (el) {
+          function touch() { var tr = el.closest("tr"); gdirty[tr.dataset.id] = 1; el.classList.add("dirty"); markDirty(); }
+          el.addEventListener("input", touch); el.addEventListener("change", touch);
+        });
+        body.querySelectorAll(".gt-open").forEach(function (b) { b.onclick = function () { openGuestModal(rows.filter(function (x) { return x.id === b.dataset.open; })[0]); }; });
+        document.getElementById("g-save").onclick = async function () {
+          var sv = this; sv.disabled = true; sv.textContent = "Saving...";
+          var ids = Object.keys(gdirty), okAll = true;
+          for (var i = 0; i < ids.length; i++) {
+            var tr = body.querySelector('tr[data-id="' + ids[i] + '"]'); if (!tr) continue;
+            var upd = {};
+            tr.querySelectorAll(".gce").forEach(function (el) {
+              var f = el.dataset.f, v = el.value;
+              if (f === "plus_ones") v = parseInt(v, 10) || 0;
+              else if (v === "") v = null;
+              upd[f] = v;
+            });
+            if (!upd.first_name && !upd.family_name) { toast("Every guest needs a name"); sv.disabled = false; sv.textContent = "Save changes"; return; }
+            var u = await sb.from("event_guests").update(upd).eq("id", ids[i]);
+            if (u.error) { okAll = false; toast(errMsg(u.error)); break; }
+          }
+          if (okAll) { __dirty = false; toast(ids.length + " guest" + (ids.length > 1 ? "s" : "") + " saved"); evGuests(host); evOverviewStats(); }
+          else { sv.disabled = false; sv.textContent = "Save changes"; }
+        };
       }
     }
     document.getElementById("g-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
@@ -5730,10 +5835,12 @@
     cols.forEach(function (c) {
       if (done[c.value]) return; done[c.value] = 1; var list = buckets[c.value] || [];
       board += '<div class="o-kcol drop" data-col="' + esc(c.value) + '"><div class="o-kcol-h"><span class="lbl">' + esc(c.label) + '</span><span class="cnt">' + list.length + '</span></div><div class="o-kcol-b">' +
-        list.map(function (r) { return '<div class="o-card drag" data-id="' + r.id + '" draggable="true">' + cfg.cardHTML(r) + '</div>'; }).join("") + '</div></div>';
+        list.map(function (r) { return '<div class="o-card drag" data-id="' + r.id + '" draggable="true">' + cfg.cardHTML(r) + '</div>'; }).join("") + '</div>' +
+        (cfg.onAdd ? '<button class="o-kadd" data-kcol="' + esc(c.value) + '" title="Add in this column">+ Add</button>' : '') + '</div>';
     });
     host.innerHTML = picker + board + '</div>';
     document.getElementById("evb-grp").onchange = function () { _evBoardIdx[key] = +this.value; evBoard(host, cfg); };
+    host.querySelectorAll(".o-kadd").forEach(function (b) { b.onclick = function () { var v = b.dataset.kcol; if (cfg.onAdd) cfg.onAdd(g.field, v === "" ? null : v); }; });
     host.querySelectorAll(".o-card.drag").forEach(function (card) {
       card.onclick = function () { if (card._dragging) return; var r = cfg.rows.filter(function (x) { return x.id === card.dataset.id; })[0]; if (r && cfg.onOpen) cfg.onOpen(r); };
       card.addEventListener("dragstart", function (e) { card._dragging = true; host._dragId = card.dataset.id; if (e.dataTransfer) { e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", card.dataset.id); } catch (_) { } } });
@@ -5872,7 +5979,7 @@
     function paint() {
       var shown = rows.filter(function (r) { return !q || ((r.name || "") + " " + (r.category || "") + " " + (r.contact_name || "")).toLowerCase().indexOf(q) >= 0; });
       var body = document.getElementById("s-body");
-      if (view === "board") { evBoard(body, { rows: shown, table: "event_suppliers", groups: [{ label: "Status", field: "status", options: SUPPLIER_STATUS }, { label: "Category", field: "category" }], stateKey: "sup", onOpen: function (r) { openSupplierModal(r); }, refresh: function () { evSuppliers(host); }, cardHTML: function (r) { return '<div class="t">' + (r.is_pick ? "&#9733; " : "") + esc(r.name) + '</div><div class="muted">' + esc(r.category || "") + '</div>' + (r.price_band ? '<div class="r"><span></span><span>' + esc(r.price_band) + '</span></div>' : ""); } }); return; }
+      if (view === "board") { evBoard(body, { rows: shown, table: "event_suppliers", groups: [{ label: "Status", field: "status", options: SUPPLIER_STATUS }, { label: "Category", field: "category" }], stateKey: "sup", onOpen: function (r) { openSupplierModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openSupplierModal(s); }, refresh: function () { evSuppliers(host); }, cardHTML: function (r) { return '<div class="t">' + (r.is_pick ? "&#9733; " : "") + esc(r.name) + '</div><div class="muted">' + esc(r.category || "") + '</div>' + (r.price_band ? '<div class="r"><span></span><span>' + esc(r.price_band) + '</span></div>' : ""); } }); return; }
       if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No suppliers yet</div><div class="o-empty2-h">Add vendors/options per budget category.</div></div>'; return; }
       var byCat = {}; shown.forEach(function (r) { (byCat[r.category || "Other"] = byCat[r.category || "Other"] || []).push(r); });
       body.innerHTML = '<table class="o-list"><thead><tr><th>Supplier / option</th><th>Category</th><th>Price band</th><th>Contact</th><th>Status</th><th>Pick</th></tr></thead><tbody>' +
@@ -5930,7 +6037,7 @@
     document.getElementById("pr-add").onclick = function () { openProcModal(null); };
     document.getElementById("pr-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._procView = b.dataset.v; evProcurement(host); }; });
     var body = document.getElementById("pr-body");
-    if (view === "board") { evBoard(body, { rows: rows, table: "event_procurement", groups: [{ label: "Status", field: "status", options: PROC_STATUS }], stateKey: "proc", onOpen: function (r) { openProcModal(r); }, refresh: function () { evProcurement(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.description || "Item") + '</div><div class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : (r.category || "")) + '</div><div class="r"><span>' + (r.qty || 0) + ' x</span><b>' + evM(r.amount) + '</b></div>'; } }); return; }
+    if (view === "board") { evBoard(body, { rows: rows, table: "event_procurement", groups: [{ label: "Status", field: "status", options: PROC_STATUS }], stateKey: "proc", onOpen: function (r) { openProcModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openProcModal(s); }, refresh: function () { evProcurement(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.description || "Item") + '</div><div class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : (r.category || "")) + '</div><div class="r"><span>' + (r.qty || 0) + ' x</span><b>' + evM(r.amount) + '</b></div>'; } }); return; }
     if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No procurement items</div><div class="o-empty2-h">Track what you order from suppliers for the event.</div></div>'; return; }
     body.innerHTML = '<table class="o-list"><thead><tr><th>Item</th><th>Supplier</th><th>Category</th><th class="num">Qty</th><th class="num">Unit</th><th class="num">Amount</th><th>Needed by</th><th>Status</th></tr></thead><tbody>' +
       rows.map(function (r) { return '<tr data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.description || "") + '</b>' + (r.notes ? '<div class="muted" style="font-size:11px">' + esc(r.notes) + '</div>' : "") + '</td><td class="muted">' + esc(r.event_suppliers ? r.event_suppliers.name : "") + '</td><td class="muted">' + esc(r.category || "") + '</td><td class="num">' + (r.qty || 0) + '</td><td class="num">' + evM(r.unit_price) + '</td><td class="num">' + evM(r.amount) + '</td><td class="muted">' + esc(r.needed_by || "") + '</td><td><span class="badge ' + (r.status === "delivered" ? "paid" : r.status === "confirmed" || r.status === "ordered" ? "partial" : "draft") + '">' + esc(evLabel(PROC_STATUS, r.status)) + '</span></td></tr>'; }).join("") + '</tbody></table>';
@@ -6012,7 +6119,7 @@
     function paint() {
       var shown = rows.filter(function (r) { return !q || ((r.title || "") + " " + (r.phase || "") + " " + (r.category || "") + " " + (r.assignee || "")).toLowerCase().indexOf(q) >= 0; });
       var body = document.getElementById("t-body");
-      if (view === "board") { evBoard(body, { rows: shown, table: "event_tasks", groups: [{ label: "Status", field: "status", options: EV_TASK_STATUS }, { label: "Phase", field: "phase" }, { label: "Category", field: "category" }], stateKey: "evtasks", onOpen: function (r) { openEvTaskModal(r); }, refresh: function () { evTasks(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.title) + '</div><div class="muted">' + esc(r.phase || r.category || "") + '</div><div class="r"><span>' + esc(r.due_date || "") + '</span><span>' + (r.assignee ? esc(r.assignee) : "") + (r.is_payment ? ' &#128176;' : "") + (r.is_booking ? ' &#128197;' : "") + '</span></div>'; } }); return; }
+      if (view === "board") { evBoard(body, { rows: shown, table: "event_tasks", groups: [{ label: "Status", field: "status", options: EV_TASK_STATUS }, { label: "Phase", field: "phase" }, { label: "Category", field: "category" }], stateKey: "evtasks", onOpen: function (r) { openEvTaskModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openEvTaskModal(s); }, refresh: function () { evTasks(host); }, cardHTML: function (r) { return '<div class="t">' + esc(r.title) + '</div><div class="muted">' + esc(r.phase || r.category || "") + '</div><div class="r"><span>' + esc(r.due_date || "") + '</span><span>' + (r.assignee ? esc(r.assignee) : "") + (r.is_payment ? ' &#128176;' : "") + (r.is_booking ? ' &#128197;' : "") + '</span></div>'; } }); return; }
       if (view === "gantt") { evGantt(body, shown); return; }
       if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No tasks yet</div><div class="o-empty2-h">Add checklist items with phases, assignees and due dates.</div></div>'; return; }
       var byPhase = {}, order = []; shown.forEach(function (r) { var k = r.phase || "General"; if (!byPhase[k]) { byPhase[k] = []; order.push(k); } byPhase[k].push(r); });
