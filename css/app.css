@@ -535,6 +535,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-home-grp-t{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px;padding-left:4px}
 .o-home-grp .o-grid{margin:0;padding:0;max-width:none;grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
 .o-home-soon{opacity:.7}
+/* app store + home edit mode */
+.o-home-edithint{max-width:980px;margin:0 auto;padding:10px 20px 0;font-size:12.5px;color:var(--ink3)}
+.o-tile-edit{position:relative;border:1px dashed var(--line)!important;background:var(--panel2)!important}
+.o-tile-edit.off{opacity:.5}
+.o-tile-tog{position:absolute;top:5px;right:7px;width:20px;height:20px;border-radius:50%;background:var(--bad);color:#fff;font-size:14px;font-weight:700;display:grid;place-items:center;line-height:1}
+.o-tile-edit.off .o-tile-tog{background:var(--good)}
+.as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.as-card{display:flex;flex-direction:column;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;padding:14px 10px;background:var(--panel)}
+.as-card .ic svg{width:26px;height:26px}
+.as-nm{font-weight:600;font-size:13px;text-align:center}
+.as-open{font-size:11.5px;color:var(--accent);cursor:pointer;text-decoration:none}
+.as-open:hover{text-decoration:underline}
 @media(max-width:600px){.o-home-groups{padding:0 12px;margin:16px auto;gap:12px}.o-home-grp .o-grid{grid-template-columns:repeat(auto-fill,minmax(94px,1fr))}.o-tile{padding:14px 6px}}
 /* ORB-11: owner KPI strip on home */
 .o-hd{display:flex;flex-wrap:wrap;gap:10px;max-width:920px;margin:22px auto 0;padding:0 20px}

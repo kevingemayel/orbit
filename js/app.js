@@ -1386,10 +1386,45 @@
     { title: "Specialty", apps: ["events", "appoint"] },
     { title: "Admin", apps: ["settings", "help"] }
   ];
+  // App Store: the home shows only apps you keep; the rest are hidden (still fully
+  // usable via the App Store + global search). A new company starts with a sensible
+  // set for its industry. This is display-only - it never changes what an app can do.
+  var CORE_APPS = ["accounting", "sales", "purchase", "inventory", "contacts", "project", "documents", "settings"];
+  function industryApps(ind) {
+    ind = String(ind || "").toLowerCase();
+    if (/constru|facade|clad|fit-?out|interior|mep|engineer|architect|fabric/.test(ind)) return ["estimation", "manufacturing", "site", "crm", "hr", "calendar"];
+    if (/manufactur/.test(ind)) return ["manufacturing", "estimation", "hr", "calendar"];
+    if (/retail|trading|distribut|logistic/.test(ind)) return ["counter", "crm", "calendar"];
+    if (/hospitality/.test(ind)) return ["events", "appoint", "counter", "calendar"];
+    if (/health|clinic|medical|educat|profession|service|coach|law|consult|technolog|software|agency/.test(ind)) return ["appoint", "crm", "hr", "calendar"];
+    if (/propert|real estate|develop/.test(ind)) return ["site", "crm", "calendar"];
+    return ["crm", "estimation", "calendar"];
+  }
+  var HOME_EDIT = false;
+  function homePrefKey() { return "orbit_home_" + (S.company ? S.company.id : "x"); }
+  function homePref() {
+    try { var raw = localStorage.getItem(homePrefKey()); if (raw) { var p = JSON.parse(raw); if (p && p.hidden) return p; } } catch (e) { }
+    var ind = (S.company && S.company.profile && S.company.profile.industry) || "";
+    var vis = {}; CORE_APPS.concat(industryApps(ind)).forEach(function (k) { vis[k] = 1; });
+    var hidden = {}; Object.keys(APPS).forEach(function (k) { if (!vis[k] && k !== "settings") hidden[k] = 1; });
+    var p = { hidden: hidden }; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { }
+    return p;
+  }
+  function homeSetHidden(k, hide) { var p = homePref(); p.hidden = p.hidden || {}; if (hide) p.hidden[k] = 1; else delete p.hidden[k]; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { } }
+  function homeTop(extraLeft, extraRight) {
+    var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
+    return '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div>' + (extraLeft || '<span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>') +
+      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + (extraRight || "") + companySelectHTML("home") + '<button class="o-theme-tog" id="home-theme" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle><path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g><path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button><div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>';
+  }
   function renderHome() {
     S.app = null; S.action = null;
-    function tileHTML(k) { var a = APPS[k]; return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>'; }
-    var viewable = Object.keys(APPS).filter(function (k) { return canViewApp(k); }), placed = {};
+    var hid = (homePref().hidden) || {};
+    function tileHTML(k) {
+      var a = APPS[k];
+      if (HOME_EDIT) return '<div class="o-tile o-tile-edit' + (hid[k] ? " off" : "") + '" data-edit="' + k + '"><span class="o-tile-tog">' + (hid[k] ? "+" : "&times;") + '</span><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></div>';
+      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>';
+    }
+    var viewable = Object.keys(APPS).filter(function (k) { return canViewApp(k) && (HOME_EDIT || !hid[k]); }), placed = {};
     var tiles = APP_GROUPS.map(function (g) {
       var ks = g.apps.filter(function (k) { return APPS[k] && viewable.indexOf(k) >= 0; });
       ks.forEach(function (k) { placed[k] = 1; });
@@ -1398,14 +1433,16 @@
     }).join("");
     var extra = viewable.filter(function (k) { return !placed[k]; });
     if (extra.length) tiles += '<section class="o-home-grp"><div class="o-home-grp-t">More</div><div class="o-grid">' + extra.map(tileHTML).join("") + '</div></section>';
-    var soonT = SOON.map(function (s) { return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>'; }).join("");
+    var soonT = HOME_EDIT ? "" : SOON.map(function (s) { return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>'; }).join("");
     var soon = soonT ? '<section class="o-home-grp o-home-soon"><div class="o-home-grp-t">Coming soon</div><div class="o-grid">' + soonT + '</div></section>' : "";
-    var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
+    var rightBtns = '<button class="o-filtbtn" id="home-store" title="Add or remove apps from this home">&#9638; App Store</button><button class="o-filtbtn' + (HOME_EDIT ? " on" : "") + '" id="home-edit">' + (HOME_EDIT ? "Done" : "Edit") + '</button>';
     root.innerHTML =
-      '<div class="o-home">' + supportBarHTML() +
-      '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
-      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<button class="o-theme-tog" id="home-theme" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle><path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g><path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button><div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
+      '<div class="o-home">' + supportBarHTML() + homeTop(null, rightBtns) +
+      (HOME_EDIT ? '<div class="o-home-edithint">Tap &times; to take an app off the home, + to put it back. Hidden apps stay in the App Store and in search - nothing is lost.</div>' : '') +
       '<div class="o-home-groups">' + tiles + soon + '</div></div>';
+    root.querySelectorAll(".o-tile-edit[data-edit]").forEach(function (t) { t.onclick = function () { var k = t.dataset.edit; homeSetHidden(k, !((homePref().hidden || {})[k])); renderHome(); }; });
+    var _st = document.getElementById("home-store"); if (_st) _st.onclick = function () { HOME_EDIT = false; renderAppStore(); };
+    var _ed = document.getElementById("home-edit"); if (_ed) _ed.onclick = function () { HOME_EDIT = !HOME_EDIT; renderHome(); };
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
     var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); toast(S.ui.theme === "dark" ? "Dark appearance" : "Colourful appearance"); };
     wireCompanySelect("home");
@@ -1414,6 +1451,29 @@
     homeDashInject();
     setupBannerInject();
     invitesBannerInject();
+  }
+  function renderAppStore() {
+    S.app = null; S.action = null;
+    var hid = (homePref().hidden) || {};
+    function card(k) {
+      var a = APPS[k], off = !!hid[k];
+      return '<div class="as-card"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><div class="as-nm">' + esc(term(a.name)) + '</div>' +
+        '<button class="btn sm' + (off ? " pri" : "") + '" data-store="' + k + '"' + (off ? ' style="background:var(--app);border-color:var(--app)"' : '') + '>' + (off ? "+ Add" : "✓ On home") + '</button>' +
+        '<a class="as-open" data-open="' + k + '">Open &rsaquo;</a></div>';
+    }
+    var groups = APP_GROUPS.map(function (g) {
+      var ks = g.apps.filter(function (k) { return APPS[k] && canViewApp(k); });
+      if (!ks.length) return "";
+      return '<section class="o-home-grp"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="as-grid">' + ks.map(card).join("") + '</div></section>';
+    }).join("");
+    var left = '<button class="o-filtbtn" id="as-back">&#8249; Home</button><b style="margin-left:10px">App Store</b><span class="muted" style="margin-left:8px;font-size:12px;">Add apps to your home or take unwanted ones off. Every app stays reachable here and in search.</span>';
+    root.innerHTML = '<div class="o-home">' + supportBarHTML() + homeTop(left, "") + '<div class="o-home-groups">' + groups + '</div></div>';
+    document.getElementById("as-back").onclick = renderHome;
+    root.querySelectorAll("[data-store]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.store; homeSetHidden(k, !((homePref().hidden || {})[k])); renderAppStore(); }; });
+    root.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = function () { openApp(b.dataset.open); }; });
+    var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); };
+    wireCompanySelect("home");
+    var _av = document.getElementById("ava"); if (_av) _av.onclick = function (e) { openAvatarMenu(e.currentTarget); };
   }
   // a teammate who already has a company but was invited to ANOTHER org sees a join banner
   function invitesBannerInject() {
