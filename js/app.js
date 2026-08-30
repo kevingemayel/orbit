@@ -2412,13 +2412,14 @@
       (cfg.tree ? '<button data-v="tree" title="Tree view" aria-label="Tree view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="20" y2="6"></line><line x1="13" y1="12" x2="20" y2="12"></line><line x1="13" y1="18" x2="20" y2="18"></line><path d="M4 4v13a2 2 0 0 0 2 2h5"></path><path d="M4 11h7"></path></svg></button>' : "") +
       (cfg.orgChart ? '<button data-v="org" title="Org chart" aria-label="Org chart view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"></rect><rect x="2" y="16" width="6" height="5" rx="1"></rect><rect x="16" y="16" width="6" height="5" rx="1"></rect><path d="M12 7v3M5 16v-3h14v3M12 10v3"></path></svg></button>' : "") +
       '</div>' +
+      '<button class="o-filtbtn" id="o-selbtn" title="Select rows for bulk export">Select</button>' +
       '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
       '</div>' +
       '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
       '</div>';
     wireBc();
     var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -2428,14 +2429,17 @@
     });
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
-    document.getElementById("o-export").onclick = exportListCsv;
+    document.getElementById("o-export").onclick = function () { exportListCsv(); };
+    var _selBtn = document.getElementById("o-selbtn");
+    if (_selBtn) _selBtn.onclick = function () { L.selMode = !L.selMode; if (!L.selMode) L.sel = {}; _selBtn.classList.toggle("on", L.selMode); paintBody(); };
     var myL = L; // guard: if the user navigated to another list before this resolves, don't paint stale rows over it
     cfg.fetch().then(function (rows) { if (L !== myL) return; L.all = rows || []; paintBody(); });
   }
   function htmlToText(h) { var d = document.createElement("div"); d.innerHTML = (h == null ? "" : String(h)); return (d.textContent || "").replace(/\s+/g, " ").trim(); }
   function csvCell(s) { s = (s == null ? "" : String(s)); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
-  function exportListCsv() {
+  function exportListCsv(selectedOnly) {
     var cfg = L.cfg, rows = applyRows(), cols = cfg.columns;
+    if (selectedOnly) rows = rows.filter(function (r) { return L.sel[r.id]; });
     var out = [cols.map(function (c) { return csvCell(c.label); }).join(",")];
     rows.forEach(function (r) { out.push(cols.map(function (c) { return csvCell(htmlToText(c.get(r))); }).join(",")); });
     var csv = "﻿" + out.join("\r\n");
@@ -2552,7 +2556,7 @@
       rows.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
       var html = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>';
       Object.keys(groups).sort().forEach(function (k) {
-        html += '<tr class="o-grp"><td colspan="' + cfg.columns.length + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
+        html += '<tr class="o-grp"><td colspan="' + (cfg.columns.length + (L.selMode ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
         groups[k].forEach(function (r) { html += rowHTML(cfg, r); });
       });
       body.innerHTML = html + "</tbody></table>";
@@ -2566,9 +2570,26 @@
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
+    if (L.selMode) {
+      var selbar = document.createElement("div"); selbar.className = "o-selbar";
+      function updSel() {
+        var ids = Object.keys(L.sel).filter(function (k) { return L.sel[k]; });
+        if (!ids.length) { selbar.style.display = "none"; return; }
+        selbar.style.display = "";
+        selbar.innerHTML = '<span class="o-seln">' + ids.length + ' selected</span><button class="btn sm pri" id="o-selexp" style="background:var(--app);border-color:var(--app)">Export selected</button><button class="btn sm" id="o-selclr">Clear</button>';
+        document.getElementById("o-selexp").onclick = function () { exportListCsv(true); };
+        document.getElementById("o-selclr").onclick = function () { L.sel = {}; paintBody(); };
+      }
+      body.insertBefore(selbar, body.firstChild);
+      updSel();
+      body.querySelectorAll(".o-selcol").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); }; });
+      body.querySelectorAll(".o-selrow").forEach(function (cb) { cb.onclick = function (e) { e.stopPropagation(); if (cb.checked) L.sel[cb.dataset.sid] = true; else delete L.sel[cb.dataset.sid]; updSel(); }; });
+      var selAll = body.querySelector(".o-selall");
+      if (selAll) selAll.onclick = function (e) { e.stopPropagation(); var on = selAll.checked; body.querySelectorAll(".o-selrow").forEach(function (cb) { cb.checked = on; if (on) L.sel[cb.dataset.sid] = true; else delete L.sel[cb.dataset.sid]; }); updSel(); };
+    }
   }
   function headRow(cfg) {
-    return '<tr>' + cfg.columns.map(function (c, i) {
+    return '<tr>' + (L.selMode ? '<th class="o-selcol"><input type="checkbox" class="o-selall" title="Select all on this page"></th>' : "") + cfg.columns.map(function (c, i) {
       var srt = (L.sort && L.sort.i === i) ? ' <span class="o-th-sort">' + (L.sort.dir > 0 ? "↑" : "↓") + '</span>' : "";
       var on = (L.sort && L.sort.i === i) || (L.colGroup === i) || (L.colFilters[i] && Object.keys(L.colFilters[i]).length);
       return '<th class="' + (c.num ? "num" : "") + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span></th>';
@@ -2611,7 +2632,7 @@
     };
     var cfb = dd.querySelector('[data-a="clearf"]'); if (cfb) cfb.onclick = function () { delete L.colFilters[i]; L.page = 0; paintBody(); closeDropdowns(); };
   }
-  function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
+  function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
   // A gallery tile for the thumbnail view: the row photo (where a list attaches one)
   // over the first column as a title and the second as a subtitle; a lettered
   // placeholder when there is no image, so every table has a usable thumbnail view.
@@ -6478,10 +6499,18 @@
   }
 
   // ============================ REPORTS ============================
-  var REP_PERIOD = "year";
-  var PERIODS = [["year", "This year"], ["quarter", "This quarter"], ["month", "This month"], ["lastyear", "Last year"], ["all", "All time"]];
-  function periodSelect() { return '<select id="rp-period" class="o-filtbtn" style="margin-right:8px">' + PERIODS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === REP_PERIOD ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>'; }
-  function wirePeriod(rerender) { var el = document.getElementById("rp-period"); if (el) el.onchange = function () { REP_PERIOD = this.value; rerender(); }; }
+  var REP_PERIOD = "year", REP_FROM = "", REP_TO = "";
+  var PERIODS = [["year", "This year"], ["quarter", "This quarter"], ["month", "This month"], ["lastyear", "Last year"], ["all", "All time"], ["custom", "Custom range…"]];
+  function periodSelect() {
+    var s = '<select id="rp-period" class="o-filtbtn" style="margin-right:8px">' + PERIODS.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === REP_PERIOD ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>';
+    if (REP_PERIOD === "custom") s += '<input id="rp-from" type="date" class="o-filtbtn" value="' + esc(REP_FROM || "") + '" style="margin-right:6px" title="From"><input id="rp-to" type="date" class="o-filtbtn" value="' + esc(REP_TO || "") + '" style="margin-right:8px" title="To">';
+    return s;
+  }
+  function wirePeriod(rerender) {
+    var el = document.getElementById("rp-period"); if (el) el.onchange = function () { REP_PERIOD = this.value; rerender(); };
+    var f = document.getElementById("rp-from"); if (f) f.onchange = function () { REP_FROM = this.value; rerender(); };
+    var t = document.getElementById("rp-to"); if (t) t.onchange = function () { REP_TO = this.value; rerender(); };
+  }
   function periodRange(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
     function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
@@ -6491,6 +6520,7 @@
     if (p === "lastyear") return { from: ymd(y - 1, 1, 1), to: ymd(y - 1, 12, 31), label: "FY " + (y - 1) };
     if (p === "quarter") { var qs = Math.floor(m / 3) * 3; return { from: ymd(y, qs + 1, 1), to: ymd(y, qs + 3, lastDay(y, qs + 3)), label: "Q" + (Math.floor(m / 3) + 1) + " " + y }; }
     if (p === "month") return { from: ymd(y, m + 1, 1), to: ymd(y, m + 1, lastDay(y, m + 1)), label: names[m] + " " + y };
+    if (p === "custom") return { from: REP_FROM || null, to: REP_TO || today(), label: (REP_FROM ? REP_FROM + " to " : "up to ") + (REP_TO || today()) };
     return { from: null, to: null, label: "all time" };
   }
   // Recreates the trial_balance rpc row shape ({code,name,type_code,debit,credit,balance})
@@ -15557,9 +15587,21 @@
       + '<div><label>Posts to (GL account)</label><select id="ca-gl">' + glOpts + '</select></div>'
       + '<div class="row2"><div><label>Opening balance</label><input id="ca-open" type="number" step="0.01" value="' + (Number(a.opening_balance || 0)) + '"></div>'
       + '<div><label>Active</label><select id="ca-act"><option value="1"' + (a.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (a.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
-      + '</div><div class="foot"><button class="btn" id="ca-cancel">Cancel</button><button class="btn pri" id="ca-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      + '</div><div class="foot">' + (a.id ? '<button class="btn" id="ca-del" style="margin-right:auto;color:var(--bad)">Delete</button>' : '') + '<button class="btn" id="ca-cancel">Cancel</button><button class="btn pri" id="ca-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ca-cancel").onclick = function () { m.remove(); };
+    var caDel = document.getElementById("ca-del");
+    if (caDel) caDel.onclick = async function () {
+      // Safe delete: only when the account has never been used. Otherwise switch it Off instead.
+      var mvN = (await sb.from("cash_movements").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("cash_account_id", a.id)).count || 0;
+      var hoF = (await sb.from("cash_handovers").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("from_account_id", a.id)).count || 0;
+      var hoT = (await sb.from("cash_handovers").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("to_account_id", a.id)).count || 0;
+      if (mvN + hoF + hoT > 0) { toast("This account has " + (mvN + hoF + hoT) + " movement(s)/handover(s) and can't be deleted. Switch it to Off instead."); return; }
+      if (!confirm("Delete the cash account “" + (a.name || "") + "”? It has never been used, so this is safe.")) return;
+      var dr = await sb.from("cash_accounts").delete().eq("id", a.id);
+      if (dr.error) { toast("Could not delete: " + errMsg(dr.error)); return; }
+      m.remove(); toast("Cash account deleted"); renderView();
+    };
     document.getElementById("ca-save").onclick = async function () {
       var name = gv("ca-name"); if (!name) { toast("Enter a name"); return; }
       var row = { company_id: S.company.id, name: name, kind: gv("ca-kind"), currency_code: document.getElementById("ca-cur").value, gl_account_id: document.getElementById("ca-gl").value || null, opening_balance: parseFloat(document.getElementById("ca-open").value) || 0, is_active: gv("ca-act") === "1" };

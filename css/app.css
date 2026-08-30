@@ -754,6 +754,12 @@ select.gce{cursor:pointer;appearance:auto}
 .o-colf-row input{width:15px;height:15px;flex:none;accent-color:var(--accent);cursor:pointer}
 .o-colf-n{color:var(--ink3);font-size:11px;font-variant-numeric:tabular-nums}
 .o-colf-foot{display:flex;gap:6px;padding:7px 8px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--panel)}
+/* bulk multi-select on lists */
+.o-selcol{width:36px;text-align:center;padding-left:10px}
+.o-selcol input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
+.o-selbar{display:flex;align-items:center;gap:9px;background:var(--accent-soft);border:1px solid var(--accent);border-radius:10px;padding:8px 12px;margin-bottom:12px;position:sticky;top:0;z-index:6}
+.o-seln{font-weight:700;font-size:13px;color:var(--accent);margin-right:auto}
+.o-filtbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:9px;padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 1px 1px rgba(22,23,28,.04);transition:transform .08s,box-shadow .12s,filter .12s,background .12s,border-color .12s}
 .btn:hover{background:var(--panel2);border-color:var(--ink3)}
 .btn.pri{background:var(--accent);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(22,23,28,.14),0 4px 12px -3px rgba(22,23,28,.28)}
