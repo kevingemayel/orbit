@@ -1466,7 +1466,6 @@
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
-    homeDashInject();
     setupBannerInject();
     invitesBannerInject();
   }
