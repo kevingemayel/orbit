@@ -15379,7 +15379,7 @@
   var CASH_PARTY_LABEL = { customer: "Customer", vendor: "Vendor", employee: "Employee", owner: "Owner name", payee: "Paid to / from" };
   async function cashLoadChart() { return (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).order("code")).data || []; }
   function cashAcctByCode(list, code) { for (var i = 0; i < list.length; i++) if (list[i].code === code) return list[i]; return null; }
-  async function cashLoadWallets() { return (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; }
+  async function cashLoadWallets(all) { var r = (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; return all ? r : r.filter(function (a) { return a.is_active !== false; }); }
   async function cashBalances() {
     var accts = await cashLoadWallets();
     var mv = (await sb.from("cash_movements").select("cash_account_id,direction,amount,currency_code,status").eq("company_id", S.company.id).eq("status", "posted")).data || [];
@@ -15424,7 +15424,7 @@
   function cfgCashAccounts() {
     return {
       title: "Cash Accounts", pageSize: 100,
-      fetch: function () { return cashLoadWallets(); },
+      fetch: function () { return cashLoadWallets(true); }, // config list shows inactive accounts too, so they can be re-activated
       searchText: function (a) { return (a.name || "") + " " + (a.kind || ""); },
       columns: [
         { label: "Name", get: function (a) { return '<b>' + esc(a.name || "") + '</b>'; } },
