@@ -50,34 +50,22 @@
   function orbitMark(stroke) { stroke = stroke || "currentColor"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
   // Orbit lockup: the mark is the "O" (no dot); the blue dot moves out to become the tittle of the i in "orbit".
   // Mark stroke + wordmark inherit currentColor (theme-aware); the AI dot stays blue.
-  // Language: translate the whole app to any language via Google Translate.
-  // The translator is loaded at page load (hidden) so a chosen language sticks
-  // across reloads and re-renders; the globe button just opens the picker.
-  var _gtInit = false;
-  function gtEnsureEl() {
+  // Language: Orbit re-renders its whole DOM on every action, which the embedded
+  // Google-Translate widget can't keep up with (it marks the page translated but
+  // leaves the live content in English). The browser's own translator handles that
+  // correctly, so the globe button opens a short how-to for it. A translation built
+  // into Orbit (a proper i18n layer) is the real long-term path.
+  function ensureTranslate() {
     var panel = document.getElementById("gt-panel");
-    if (!panel) {
-      panel = document.createElement("div"); panel.id = "gt-panel"; panel.className = "gt-panel"; panel.style.display = "none";
-      panel.innerHTML = '<div class="gt-panel-h"><span>Translate this app</span><button class="gt-x" id="gt-x" aria-label="Close">&times;</button></div><div id="google_translate_element"></div><div class="gt-note">Pick any language. Powered by Google Translate; figures and codes stay as-is. Choose the top (blank) option or your browser&rsquo;s own Translate to switch back to English.</div>';
-      document.body.appendChild(panel);
-      document.getElementById("gt-x").onclick = function () { panel.style.display = "none"; };
-    }
-    return panel;
+    if (panel) { panel.style.display = (panel.style.display === "none" ? "block" : "none"); return; }
+    panel = document.createElement("div"); panel.id = "gt-panel"; panel.className = "gt-panel";
+    panel.innerHTML = '<div class="gt-panel-h"><span>View Orbit in your language</span><button class="gt-x" id="gt-x" aria-label="Close">&times;</button></div>' +
+      '<div class="gt-note" style="margin-top:0">Show Orbit in any language using your browser&rsquo;s built-in translator, which keeps up as you move around the app:</div>' +
+      '<ol class="gt-steps"><li>Right-click anywhere on the page.</li><li>Choose <b>Translate to&hellip;</b> and pick your language.</li></ol>' +
+      '<div class="gt-note">On phones: the browser menu offers <b>Translate</b> too. Numbers, codes and amounts always stay as they are. A translation built into Orbit itself is on the way.</div>';
+    document.body.appendChild(panel);
+    document.getElementById("gt-x").onclick = function () { panel.style.display = "none"; };
   }
-  function loadTranslate() {
-    gtEnsureEl();
-    if (_gtInit) return; _gtInit = true;
-    window.googleTranslateElementInit = function () {
-      try { new google.translate.TranslateElement({ pageLanguage: "en" }, "google_translate_element"); } catch (e) { }
-    };
-    var s = document.createElement("script");
-    s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"; s.async = true;
-    s.onerror = function () { var g = document.getElementById("google_translate_element"); if (g) g.innerHTML = '<div class="gt-note" style="color:var(--bad)">Could not load the translator (network or an extension may be blocking it). Your browser\'s own &ldquo;Translate page&rdquo; also works.</div>'; };
-    document.body.appendChild(s);
-  }
-  function ensureTranslate() { var panel = gtEnsureEl(); loadTranslate(); panel.style.display = (panel.style.display === "none" ? "block" : "none"); }
-  // On boot: if a non-English language was previously chosen, load the translator so it re-applies.
-  try { if (/(^|;\s*)googtrans=\/[a-z-]+\/(?!en(;|$|\/))[a-z-]+/i.test(document.cookie)) setTimeout(loadTranslate, 400); } catch (e) { }
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };

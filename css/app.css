@@ -786,6 +786,9 @@ select.gce{cursor:pointer;appearance:auto}
 .gt-x{border:0;background:none;font-size:20px;line-height:1;color:var(--ink3);cursor:pointer}
 .gt-x:hover{color:var(--ink)}
 .gt-note{font-size:11.5px;color:var(--ink3);margin-top:8px;line-height:1.4}
+.gt-steps{margin:8px 0;padding-left:20px;font-size:12.5px;color:var(--ink2);line-height:1.5}
+.gt-steps li{margin:3px 0}
+.gt-steps b{color:var(--ink)}
 .goog-te-banner-frame,.goog-te-gadget-icon{display:none!important}
 body{top:0!important}
 .goog-te-gadget{font-size:0!important;color:transparent!important}
