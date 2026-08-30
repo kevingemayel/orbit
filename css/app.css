@@ -530,11 +530,14 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-home-top .lockup svg{height:26px;width:auto;display:block}
 .o-home-top b{font-size:15px}
 .o-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px 4px;max-width:920px;margin:34px auto;padding:0 20px}
-/* home grouped by department */
-.o-home-groups{max-width:980px;margin:26px auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
+/* home grouped by department - small groups pair up side by side (less scrolling),
+   groups with many apps span the full width so their tiles are not cramped */
+.o-home-groups{max-width:1040px;margin:26px auto;padding:0 20px;display:grid;grid-template-columns:repeat(2,1fr);gap:16px;align-items:start;grid-auto-flow:row dense}
 .o-home-grp{border:1px solid var(--line);border-radius:16px;padding:13px 14px 15px;background:var(--panel)}
+.o-home-grp.wide{grid-column:1 / -1}
 .o-home-grp-t{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px;padding-left:4px}
-.o-home-grp .o-grid{margin:0;padding:0;max-width:none;grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+.o-home-grp .o-grid{margin:0;padding:0;max-width:none;grid-template-columns:repeat(auto-fill,minmax(112px,1fr))}
+@media(max-width:900px){.o-home-groups{grid-template-columns:1fr}.o-home-grp.wide{grid-column:auto}}
 .o-home-soon{opacity:.7}
 /* app store + home edit mode */
 .o-home-edithint{max-width:980px;margin:0 auto;padding:10px 20px 0;font-size:12.5px;color:var(--ink3)}

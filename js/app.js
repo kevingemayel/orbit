@@ -1447,10 +1447,10 @@
       var ks = g.apps.filter(function (k) { return APPS[k] && viewable.indexOf(k) >= 0; });
       ks.forEach(function (k) { placed[k] = 1; });
       if (!ks.length) return "";
-      return '<section class="o-home-grp"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="o-grid">' + ks.map(tileHTML).join("") + '</div></section>';
+      return '<section class="o-home-grp' + (ks.length > 4 ? " wide" : "") + '"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="o-grid">' + ks.map(tileHTML).join("") + '</div></section>';
     }).join("");
     var extra = viewable.filter(function (k) { return !placed[k]; });
-    if (extra.length) tiles += '<section class="o-home-grp"><div class="o-home-grp-t">More</div><div class="o-grid">' + extra.map(tileHTML).join("") + '</div></section>';
+    if (extra.length) tiles += '<section class="o-home-grp' + (extra.length > 4 ? " wide" : "") + '"><div class="o-home-grp-t">More</div><div class="o-grid">' + extra.map(tileHTML).join("") + '</div></section>';
     var soonT = HOME_EDIT ? "" : SOON.map(function (s) { return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>'; }).join("");
     var soon = soonT ? '<section class="o-home-grp o-home-soon"><div class="o-home-grp-t">Coming soon</div><div class="o-grid">' + soonT + '</div></section>' : "";
     var rightBtns = '<button class="o-filtbtn" id="home-store" title="Add or remove apps from this home">&#9638; App Store</button><button class="o-filtbtn' + (HOME_EDIT ? " on" : "") + '" id="home-edit">' + (HOME_EDIT ? "Done" : "Edit") + '</button>';
@@ -1482,7 +1482,7 @@
     var groups = APP_GROUPS.map(function (g) {
       var ks = g.apps.filter(function (k) { return APPS[k] && canViewApp(k); });
       if (!ks.length) return "";
-      return '<section class="o-home-grp"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="as-grid">' + ks.map(card).join("") + '</div></section>';
+      return '<section class="o-home-grp' + (ks.length > 4 ? " wide" : "") + '"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="as-grid">' + ks.map(card).join("") + '</div></section>';
     }).join("");
     var left = '<button class="o-filtbtn" id="as-back">&#8249; Home</button><b style="margin-left:10px">App Store</b><span class="muted" style="margin-left:8px;font-size:12px;">Add apps to your home or take unwanted ones off. Every app stays reachable here and in search.</span>';
     root.innerHTML = '<div class="o-home">' + supportBarHTML() + homeTop(left, "") + '<div class="o-home-groups">' + groups + '</div></div>';
