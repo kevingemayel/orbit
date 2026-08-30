@@ -50,6 +50,26 @@
   function orbitMark(stroke) { stroke = stroke || "currentColor"; return '<svg viewBox="0 0 100 100" aria-hidden="true"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="' + stroke + '" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="' + stroke + '" transform="rotate(45 50 50)"></rect><circle cx="68.4" cy="31.2" r="8" fill="#2f6bff"></circle></svg>'; }
   // Orbit lockup: the mark is the "O" (no dot); the blue dot moves out to become the tittle of the i in "orbit".
   // Mark stroke + wordmark inherit currentColor (theme-aware); the AI dot stays blue.
+  // Language: on-demand Google Translate widget (translate the whole app to any language).
+  var _gtInit = false;
+  function ensureTranslate() {
+    var panel = document.getElementById("gt-panel");
+    if (panel) { panel.style.display = (panel.style.display === "none" ? "block" : "none"); return; }
+    panel = document.createElement("div"); panel.id = "gt-panel"; panel.className = "gt-panel";
+    panel.innerHTML = '<div class="gt-panel-h"><span>Translate this app</span><button class="gt-x" id="gt-x" aria-label="Close">&times;</button></div><div id="google_translate_element"></div><div class="gt-note">Pick any language. Powered by Google Translate; figures and codes stay as-is. Choose the top (blank) option to switch back to English.</div>';
+    document.body.appendChild(panel);
+    document.getElementById("gt-x").onclick = function () { panel.style.display = "none"; };
+    if (!_gtInit) {
+      _gtInit = true;
+      window.googleTranslateElementInit = function () {
+        try { new google.translate.TranslateElement({ pageLanguage: "en", autoDisplay: false }, "google_translate_element"); } catch (e) { }
+      };
+      var s = document.createElement("script");
+      s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"; s.async = true;
+      s.onerror = function () { var g = document.getElementById("google_translate_element"); if (g) g.innerHTML = '<div class="gt-note" style="color:var(--bad)">Could not load the translator (network or an extension may be blocking it). Your browser\'s own &ldquo;Translate page&rdquo; also works.</div>'; };
+      document.body.appendChild(s);
+    }
+  }
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
@@ -86,6 +106,7 @@
     { c: "KWD", n: "Kuwaiti Dinar" }, { c: "BHD", n: "Bahraini Dinar" }, { c: "OMR", n: "Omani Rial" },
     { c: "LBP", n: "Lebanese Pound" }, { c: "EGP", n: "Egyptian Pound" }, { c: "JOD", n: "Jordanian Dinar" },
     { c: "IQD", n: "Iraqi Dinar" }, { c: "TRY", n: "Turkish Lira" }, { c: "ILS", n: "Israeli Shekel" },
+    { c: "SYP", n: "Syrian Pound" }, { c: "RUB", n: "Russian Ruble" }, { c: "INR", n: "Indian Rupee" }, { c: "CNY", n: "Chinese Yuan" },
     { c: "CHF", n: "Swiss Franc" }, { c: "CAD", n: "Canadian Dollar" }, { c: "AUD", n: "Australian Dollar" },
     { c: "NZD", n: "New Zealand Dollar" }, { c: "JPY", n: "Japanese Yen" }, { c: "CNY", n: "Chinese Yuan" },
     { c: "HKD", n: "Hong Kong Dollar" }, { c: "SGD", n: "Singapore Dollar" }, { c: "INR", n: "Indian Rupee" },
@@ -1536,7 +1557,7 @@
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       (APP_FLOW[S.app] ? '<button class="o-howto" id="ohowto" title="How ' + esc(term(a.name)) + ' works" aria-label="How ' + esc(term(a.name)) + ' works"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h7.6"/><path d="M13 9l3 3-3 3"/></svg><span>How this works</span></button>' : '') +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help" id="olang" aria-label="Change language" title="Translate this app to any language"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg></button><button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
       '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
@@ -1552,6 +1573,7 @@
     document.getElementById("waffle").onclick = goHome;
     var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = goHome;
     var _op = document.getElementById("oprint"); if (_op) _op.onclick = printCurrentPage;
+    var _lg = document.getElementById("olang"); if (_lg) _lg.onclick = ensureTranslate;
     installFormPrintButtons();
     var _gs = document.getElementById("o-gs-in");
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
@@ -10283,7 +10305,7 @@
   // Per-country defaults: presentation currency, the label the fiscal ID goes by,
   // the standard indirect-tax rate(s), and statutory number/date formatting. Applying
   // a pack seeds the taxes and records the format so documents read the local way.
-  var COUNTRY_LIST = ["Australia", "Bahrain", "Canada", "Cyprus", "Egypt", "France", "Germany", "India", "Iraq", "Italy", "Jordan", "Kuwait", "Lebanon", "Netherlands", "Nigeria", "Oman", "Qatar", "Saudi Arabia", "Spain", "Sweden", "Switzerland", "Turkey", "United Arab Emirates", "United Kingdom", "United States", "Other"];
+  var COUNTRY_LIST = ["Australia", "Bahrain", "Canada", "China", "Cyprus", "Egypt", "France", "Germany", "India", "Iraq", "Italy", "Jordan", "Kuwait", "Lebanon", "Netherlands", "Nigeria", "Oman", "Qatar", "Russia", "Saudi Arabia", "Spain", "Sweden", "Switzerland", "Syria", "Turkey", "United Arab Emirates", "United Kingdom", "United States", "Other"];
   function countrySelectHTML(id, cur, attrs) {
     var lc = String(cur || "").toLowerCase();
     var has = COUNTRY_LIST.some(function (c) { return c.toLowerCase() === lc; });
@@ -10309,7 +10331,11 @@
     "france": { currency: "EUR", taxIdLabel: "TVA / SIRET", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: " ", decimal: ",", taxes: [{ name: "TVA 20%", rate: 20 }, { name: "TVA 10%", rate: 10 }, { name: "TVA 5.5%", rate: 5.5 }] },
     "germany": { currency: "EUR", taxIdLabel: "USt-IdNr.", dateFmt: "DD.MM.YYYY", decimals: 2, thousands: ".", decimal: ",", taxes: [{ name: "USt 19%", rate: 19 }, { name: "USt 7%", rate: 7 }] },
     "united states": { currency: "USD", taxIdLabel: "EIN", dateFmt: "MM/DD/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [] },
-    "canada": { currency: "CAD", taxIdLabel: "BN", dateFmt: "YYYY-MM-DD", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "GST 5%", rate: 5 }] }
+    "canada": { currency: "CAD", taxIdLabel: "BN", dateFmt: "YYYY-MM-DD", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "GST 5%", rate: 5 }] },
+    "syria": { currency: "SYP", taxIdLabel: "Tax No.", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [] },
+    "russia": { currency: "RUB", taxIdLabel: "INN", dateFmt: "DD.MM.YYYY", decimals: 2, thousands: " ", decimal: ",", taxes: [{ name: "VAT 20%", rate: 20 }, { name: "VAT 10%", rate: 10 }] },
+    "india": { currency: "INR", taxIdLabel: "GSTIN", dateFmt: "DD/MM/YYYY", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "GST 18%", rate: 18 }, { name: "GST 12%", rate: 12 }, { name: "GST 5%", rate: 5 }, { name: "GST 28%", rate: 28 }] },
+    "china": { currency: "CNY", taxIdLabel: "USCC", dateFmt: "YYYY-MM-DD", decimals: 2, thousands: ",", decimal: ".", taxes: [{ name: "VAT 13%", rate: 13 }, { name: "VAT 9%", rate: 9 }, { name: "VAT 6%", rate: 6 }] }
   };
   function countryPack(country) {
     if (!country) return null;
