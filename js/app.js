@@ -4217,24 +4217,53 @@
   // Camera scanner: uses the browser's native BarcodeDetector (Chrome desktop/Android) to
   // read a QR or barcode from the device camera. Our QR labels encode ".../?scan=CODE", so
   // we strip that back to the bare code. Calls onDetect(code) once, then closes.
+  function loadZXing(cb) {
+    if (window.ZXing && window.ZXing.BrowserMultiFormatReader) { cb(true); return; }
+    if (window.__zxingLoading) { window.__zxingLoading.push(cb); return; }
+    window.__zxingLoading = [cb];
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js";
+    s.onload = function () { (window.__zxingLoading || []).forEach(function (f) { try { f(!!(window.ZXing && window.ZXing.BrowserMultiFormatReader)); } catch (e) { } }); window.__zxingLoading = null; };
+    s.onerror = function () { (window.__zxingLoading || []).forEach(function (f) { try { f(false); } catch (e) { } }); window.__zxingLoading = null; };
+    document.head.appendChild(s);
+  }
   async function openScanner(onDetect) {
     var m = document.createElement("div"); m.className = "modal on"; m.id = "scanmodal";
     m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>Scan a barcode / QR</h3><div class="scan-wrap"><video id="scan-video" autoplay playsinline muted></video><div class="scan-frame"></div></div><div class="sub" id="scan-msg" style="padding:8px 2px">Point the camera at the label.</div><div class="foot"><button class="btn" id="scan-cancel">Cancel</button></div></div>';
     document.body.appendChild(m);
     var video = document.getElementById("scan-video"), msg = document.getElementById("scan-msg");
-    var stream = null, running = true, detector = null;
-    function stop() { running = false; if (stream) try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} m.remove(); }
+    var stream = null, running = true, detector = null, zreader = null;
+    function stop() { running = false; if (zreader) try { zreader.reset(); } catch (e) { } if (stream) try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) { } m.remove(); }
     document.getElementById("scan-cancel").onclick = stop;
-    if (!("BarcodeDetector" in window)) { msg.innerHTML = '<span style="color:var(--bad)">This browser cannot scan with the camera (needs Chrome on Android or desktop). You can still pick the product from the list.</span>'; return; }
-    try { detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128", "ean_13", "ean_8", "code_39", "code_93", "codabar", "upc_a", "upc_e"] }); } catch (e) { try { detector = new window.BarcodeDetector(); } catch (e2) { msg.textContent = "Scanner unavailable."; return; } }
-    try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } }); video.srcObject = stream; }
-    catch (e) { msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc(e.message || "permission denied") + '. Allow camera access and try again.</span>'; return; }
-    async function tick() {
-      if (!running) return;
-      try { var codes = await detector.detect(video); if (codes && codes.length) { var raw = codes[0].rawValue || ""; var mm = raw.match(/[?&]scan=([^&]+)/); var code = mm ? decodeURIComponent(mm[1]) : raw; running = false; stop(); onDetect(String(code).trim()); return; } } catch (e) {}
-      requestAnimationFrame(tick);
+    function handle(raw) { var mm = String(raw).match(/[?&]scan=([^&]+)/); var code = mm ? decodeURIComponent(mm[1]) : raw; running = false; stop(); onDetect(String(code).trim()); }
+    // Preferred path: the browser's native BarcodeDetector (Chrome desktop/Android).
+    if ("BarcodeDetector" in window) {
+      try { detector = new window.BarcodeDetector({ formats: ["qr_code", "code_128", "ean_13", "ean_8", "code_39", "code_93", "codabar", "upc_a", "upc_e"] }); } catch (e) { try { detector = new window.BarcodeDetector(); } catch (e2) { detector = null; } }
     }
-    video.onloadedmetadata = function () { requestAnimationFrame(tick); };
+    if (detector) {
+      try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } }); video.srcObject = stream; }
+      catch (e) { msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc(e.message || "permission denied") + '. Allow camera access and try again.</span>'; return; }
+      var tick = async function () {
+        if (!running) return;
+        try { var codes = await detector.detect(video); if (codes && codes.length) { handle(codes[0].rawValue || ""); return; } } catch (e) { }
+        requestAnimationFrame(tick);
+      };
+      video.onloadedmetadata = function () { requestAnimationFrame(tick); };
+      return;
+    }
+    // Fallback (Safari, Firefox, older browsers): decode with ZXing in JS.
+    msg.textContent = "Starting the scanner...";
+    loadZXing(function (ok) {
+      if (!running) return;
+      if (!ok || !window.ZXing) { msg.innerHTML = '<span style="color:var(--bad)">Could not load the scanner. You can still pick the product from the list.</span>'; return; }
+      try {
+        zreader = new window.ZXing.BrowserMultiFormatReader();
+        zreader.decodeFromConstraints({ video: { facingMode: { ideal: "environment" } } }, video, function (result, err) {
+          if (!running || !result) return; handle(result.getText());
+        }).catch(function (e) { if (running) msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc((e && e.message) || "permission denied") + '. Allow camera access and try again.</span>'; });
+        msg.textContent = "Point the camera at the label.";
+      } catch (e) { msg.textContent = "Scanner unavailable on this device."; }
+    });
   }
   // Full-page Goods Receipt (stock picking): multi-product, with Receive From / Operation
   // Type / Scheduled Date / Source Document, per-line unit + destination routing. Opened
@@ -4283,11 +4312,12 @@
     function addRow(l) {
       l = l || { product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" };
       var tr = document.createElement("tr");
+      var outLine = (l.po_line_id && l.ordered != null) ? Math.max(0, Number(l.ordered) - Number(l.already || 0)) : null;
       tr.innerHTML = '<td>' + (l.po_line_id ? '<b>' + esc(l.name || "") + '</b>' : '<select class="rcp-prod">' + prodOpts + '</select>') + '</td>' +
         '<td><input class="rcp-desc" value="' + esc(l.name || "") + '" placeholder="Description"></td>' +
         '<td>' + unitSelectHTML("rcp-uom", l.uom || "", uoms) + '</td>' +
-        (showOrdered ? '<td class="num rcp-ord">' + (l.ordered != null ? l.ordered : "") + '</td>' : "") +
-        '<td><input class="rcp-qty num" type="number" step="any" min="0" value="' + (l.qty != null ? l.qty : 1) + '"></td>' +
+        (showOrdered ? '<td class="num rcp-ord">' + (l.ordered != null ? l.ordered : "") + (outLine != null ? ' <span class="muted" style="font-size:11px">(' + (Math.round(outLine * 1000) / 1000) + ' left)</span>' : "") + '</td>' : "") +
+        '<td><input class="rcp-qty num" type="number" step="any" min="0"' + (outLine != null ? ' max="' + outLine + '" title="Only ' + (Math.round(outLine * 1000) / 1000) + ' left to receive on this PO line"' : '') + ' value="' + (l.qty != null ? l.qty : 1) + '"></td>' +
         '<td><select class="rcp-dest">' + destOptsHTML(l.destination) + '</select></td>' +
         '<td>' + (l.po_line_id ? "" : '<button class="del" type="button" title="Remove">&times;</button>') + '</td>';
       body.appendChild(tr);
@@ -4310,6 +4340,18 @@
         return { po_line_id: l.po_line_id || null, product_id: pid, name: (tr.querySelector(".rcp-desc") || {}).value || l.name || "", uom: (tr.querySelector(".rcp-uom") || {}).value || "", qty: parseFloat((tr.querySelector(".rcp-qty") || {}).value) || 0, destination: (tr.querySelector(".rcp-dest") || {}).value || "warehouse", already: l.already || 0, unit_price: l.unit_price, size: l.size, width: l.width, height: l.height };
       }).filter(function (r) { return (r.product_id || r.name) && r.qty > 0.0001; });
       if (!rows.length) { toast("Add at least one product with a quantity"); return; }
+      // Guard: for PO-linked lines, never receive more than remains outstanding (checked live,
+      // in the PO line's own unit, so a concurrent receipt can't be double-counted either).
+      for (var v = 0; v < rows.length; v++) {
+        var rv = rows[v]; if (!rv.po_line_id) continue;
+        var cur = (await sb.from("purchase_order_lines").select("quantity,qty_received,uom").eq("id", rv.po_line_id).maybeSingle()).data;
+        if (!cur) continue;
+        var lineUom = cur.uom || rv.uom;
+        var recvLU = (rv.uom && lineUom && rv.uom !== lineUom) ? uomConvert(rv.qty, rv.uom, lineUom, uoms) : rv.qty;
+        var remain = Math.max(0, Number(cur.quantity || 0) - Number(cur.qty_received || 0));
+        if (recvLU > remain + 0.0001) { toast('Cannot receive more than ordered on "' + (rv.name || "the line") + '": only ' + (Math.round(remain * 1000) / 1000) + ' ' + (lineUom || "") + ' left on the PO.'); return; }
+        rv._recvLineUom = recvLU; rv._liveReceived = Number(cur.qty_received || 0);
+      }
       var isReturn = opType === "return";
       var pick = await sb.from("stock_pickings").insert({ company_id: S.company.id, type: opType, partner_id: partnerId, location_id: inv ? inv.supplier : null, location_dest_id: inv ? inv.stock : null, scheduled_date: schd, origin: origin || null, state: "done" }).select("id").single();
       var pickId = pick.error ? null : (pick.data && pick.data.id);
@@ -4319,7 +4361,7 @@
         if (!isReturn && (r.destination || "warehouse") !== "site" && !r.product_id) { toast('Line "' + (r.name || "") + '" has no product - add one, or set destination to Site (cost only), to receive it.'); continue; }
         var stockUnit = (pr && pr.uom) || "Unit";
         var qtyBase = (r.uom && r.uom !== "__addu") ? uomConvert(r.qty, r.uom, stockUnit, uoms) : r.qty;
-        if (r.po_line_id) await sb.from("purchase_order_lines").update({ qty_received: (Number(r.already) || 0) + r.qty }).eq("id", r.po_line_id);
+        if (r.po_line_id) await sb.from("purchase_order_lines").update({ qty_received: (r._liveReceived != null ? r._liveReceived : (Number(r.already) || 0)) + (r._recvLineUom != null ? r._recvLineUom : r.qty) }).eq("id", r.po_line_id);
         var dest = r.destination || "warehouse";
         if (!isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
