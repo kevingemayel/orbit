@@ -529,6 +529,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-home-top .lockup svg{height:26px;width:auto;display:block}
 .o-home-top b{font-size:15px}
 .o-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px 4px;max-width:920px;margin:34px auto;padding:0 20px}
+/* home grouped by department */
+.o-home-groups{max-width:980px;margin:26px auto;padding:0 20px;display:flex;flex-direction:column;gap:16px}
+.o-home-grp{border:1px solid var(--line);border-radius:16px;padding:13px 14px 15px;background:var(--panel)}
+.o-home-grp-t{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);margin:0 0 6px;padding-left:4px}
+.o-home-grp .o-grid{margin:0;padding:0;max-width:none;grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+.o-home-soon{opacity:.7}
+@media(max-width:600px){.o-home-groups{padding:0 12px;margin:16px auto;gap:12px}.o-home-grp .o-grid{grid-template-columns:repeat(auto-fill,minmax(94px,1fr))}.o-tile{padding:14px 6px}}
 /* ORB-11: owner KPI strip on home */
 .o-hd{display:flex;flex-wrap:wrap;gap:10px;max-width:920px;margin:22px auto 0;padding:0 20px}
 .o-hd-k{flex:1;min-width:150px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--sh);padding:13px 16px;text-align:left;cursor:pointer;font:inherit;color:var(--ink)}

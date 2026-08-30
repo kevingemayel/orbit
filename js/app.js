@@ -1376,21 +1376,36 @@
   }
 
   // ======================= APP SWITCHER (HOME) =======================
+  // Home is grouped by department: each group is a titled, framed row of app tiles.
+  var APP_GROUPS = [
+    { title: "Sales & Customers", apps: ["crm", "sales", "contacts", "estimation"] },
+    { title: "Procurement & Finance", apps: ["purchase", "inventory", "accounting", "counter"] },
+    { title: "Execution", apps: ["project", "manufacturing", "site"] },
+    { title: "People", apps: ["hr", "recruitment"] },
+    { title: "Workspace", apps: ["documents", "calendar", "sign", "knowledge", "insights", "activity"] },
+    { title: "Specialty", apps: ["events", "appoint"] },
+    { title: "Admin", apps: ["settings", "help"] }
+  ];
   function renderHome() {
     S.app = null; S.action = null;
-    var tiles = Object.keys(APPS).filter(function (k) { return canViewApp(k); }).map(function (k) {
-      var a = APPS[k];
-      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>';
+    function tileHTML(k) { var a = APPS[k]; return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>'; }
+    var viewable = Object.keys(APPS).filter(function (k) { return canViewApp(k); }), placed = {};
+    var tiles = APP_GROUPS.map(function (g) {
+      var ks = g.apps.filter(function (k) { return APPS[k] && viewable.indexOf(k) >= 0; });
+      ks.forEach(function (k) { placed[k] = 1; });
+      if (!ks.length) return "";
+      return '<section class="o-home-grp"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="o-grid">' + ks.map(tileHTML).join("") + '</div></section>';
     }).join("");
-    var soon = SOON.map(function (s) {
-      return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>';
-    }).join("");
+    var extra = viewable.filter(function (k) { return !placed[k]; });
+    if (extra.length) tiles += '<section class="o-home-grp"><div class="o-home-grp-t">More</div><div class="o-grid">' + extra.map(tileHTML).join("") + '</div></section>';
+    var soonT = SOON.map(function (s) { return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>'; }).join("");
+    var soon = soonT ? '<section class="o-home-grp o-home-soon"><div class="o-home-grp-t">Coming soon</div><div class="o-grid">' + soonT + '</div></section>' : "";
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     root.innerHTML =
       '<div class="o-home">' + supportBarHTML() +
       '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div><span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>' +
       '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + companySelectHTML("home") + '<button class="o-theme-tog" id="home-theme" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle><path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g><path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button><div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>' +
-      '<div class="o-grid">' + tiles + soon + '</div></div>';
+      '<div class="o-home-groups">' + tiles + soon + '</div></div>';
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
     var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); toast(S.ui.theme === "dark" ? "Dark appearance" : "Colourful appearance"); };
     wireCompanySelect("home");
