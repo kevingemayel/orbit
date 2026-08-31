@@ -3951,6 +3951,10 @@
   function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
   function lineSizeStr(form, d1, d2, d3) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2 + ((d3 != null && d3 !== "" && Number(d3) > 0) ? "x" + d3 : ""); if (form === "bar" && d1) return d1 + "m"; return null; }
+  // Thickness lives ONLY in a genuine 3-part "WxHxT" size. A plain "WxH" has NO
+  // thickness - do not mistake the height for it (that bug turned 1500x2500 into
+  // thk 2500, exploding kg-priced weight). Returns null unless there are 3 segments.
+  function sizeThk(sizeStr) { var m = String(sizeStr || "").match(/^\s*[\d.]+x[\d.]+x([\d.]+)\s*$/); return m ? Number(m[1]) : null; }
   // Position number: a 1-based line number shown on take-off, RFQ and PO line editors.
   // Because take-off -> RFQ -> PO conversions copy lines in order, position N is the
   // same item across all three documents (and on their prints), so a buyer can say
@@ -4070,7 +4074,7 @@
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
 
-    var linesState = lines.map(function (l) { var _tm = (l.width && l.height) ? String(l.size || "").match(/x(\d+(?:\.\d+)?)$/) : null; return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: _tm ? Number(_tm[1]) : null, price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: sizeThk(l.size), price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -4277,7 +4281,7 @@
         var w = (l.sw != null ? l.sw : ((l.width && l.height) ? l.width : null));
         var h = (l.sh != null ? l.sh : ((l.width && l.height) ? l.height : null));
         var len = (l.sl != null ? l.sl : ((l.width && !l.height) ? l.width : null));
-        var thk = l.thk != null ? l.thk : (function () { var m = String(l.size || "").match(/x(\d+(?:\.\d+)?)$/); return (m && l.width && l.height) ? Number(m[1]) : null; })();
+        var thk = l.thk != null ? l.thk : sizeThk(l.size);
         var area = (l.area != null ? l.area : ((l.width && l.height) ? Number(l.width) * Number(l.height) / 1e6 : null));
         return { w: w, h: h, len: len, thk: thk, area: area };
       }
