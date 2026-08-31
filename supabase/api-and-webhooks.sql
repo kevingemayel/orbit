@@ -68,7 +68,7 @@ alter table public.webhook_deliveries enable row level security;
 --  Key management (called by the signed-in app; guarded by can_write_company)
 -- ---------------------------------------------------------------------------
 create or replace function public.api_key_create(p_company uuid, p_name text, p_scopes text[])
-returns text language plpgsql security definer set search_path=public as $$
+returns text language plpgsql security definer set search_path=public, extensions as $$
 declare v_key text; v_scopes text[];
 begin
   if not public.can_write_company(p_company) then raise exception 'not allowed'; end if;
@@ -82,7 +82,7 @@ end $$;
 
 create or replace function public.api_key_list(p_company uuid)
 returns table(id uuid, name text, prefix text, scopes text[], created_at timestamptz, last_used_at timestamptz, revoked_at timestamptz)
-language plpgsql security definer set search_path=public as $$
+language plpgsql security definer set search_path=public, extensions as $$
 begin
   if not public.can_write_company(p_company) then raise exception 'not allowed'; end if;
   return query select k.id,k.name,k.prefix,k.scopes,k.created_at,k.last_used_at,k.revoked_at
@@ -90,7 +90,7 @@ begin
 end $$;
 
 create or replace function public.api_key_revoke(p_id uuid)
-returns void language plpgsql security definer set search_path=public as $$
+returns void language plpgsql security definer set search_path=public, extensions as $$
 declare v_co uuid;
 begin
   select company_id into v_co from public.api_keys where id = p_id;
@@ -102,7 +102,7 @@ end $$;
 --  Public gateway helpers (called with only the API key)
 -- ---------------------------------------------------------------------------
 create or replace function public.api_authenticate(p_key text)
-returns table(company_id uuid, scopes text[]) language plpgsql security definer set search_path=public as $$
+returns table(company_id uuid, scopes text[]) language plpgsql security definer set search_path=public, extensions as $$
 declare v_id uuid; v_co uuid; v_scopes text[];
 begin
   select id, api_keys.company_id, api_keys.scopes into v_id, v_co, v_scopes
@@ -114,7 +114,7 @@ end $$;
 
 -- Whitelisted READ. Resources map to a safe set of columns; company scoping is forced.
 create or replace function public.api_query(p_key text, p_resource text, p_id uuid, p_limit int, p_offset int)
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public, extensions as $$
 declare v_co uuid; v_scopes text[]; v_lim int; v_off int; v_res jsonb; v_sql text; v_cols text; v_tbl text;
 begin
   select company_id, scopes into v_co, v_scopes from public.api_authenticate(p_key);
@@ -142,7 +142,7 @@ end $$;
 
 -- Whitelisted WRITE - safe master data only (contacts, products, projects). Company is forced.
 create or replace function public.api_write(p_key text, p_resource text, p_op text, p_id uuid, p_data jsonb)
-returns jsonb language plpgsql security definer set search_path=public as $$
+returns jsonb language plpgsql security definer set search_path=public, extensions as $$
 declare v_co uuid; v_scopes text[]; v_tbl text; v_allow text[]; v_cols text:=''; v_vals text:=''; v_set text:=''; k text; v_new uuid; v_res jsonb;
 begin
   select company_id, scopes into v_co, v_scopes from public.api_authenticate(p_key);
@@ -175,7 +175,7 @@ end $$;
 --  Webhooks
 -- ---------------------------------------------------------------------------
 create or replace function public.webhook_create(p_company uuid, p_url text, p_events text[])
-returns table(id uuid, secret text) language plpgsql security definer set search_path=public as $$
+returns table(id uuid, secret text) language plpgsql security definer set search_path=public, extensions as $$
 declare v_id uuid; v_secret text;
 begin
   if not public.can_write_company(p_company) then raise exception 'not allowed'; end if;
@@ -187,7 +187,7 @@ end $$;
 
 create or replace function public.webhook_list(p_company uuid)
 returns table(id uuid, url text, events text[], active boolean, created_at timestamptz, last_delivery_at timestamptz, last_status int)
-language plpgsql security definer set search_path=public as $$
+language plpgsql security definer set search_path=public, extensions as $$
 begin
   if not public.can_write_company(p_company) then raise exception 'not allowed'; end if;
   return query select w.id,w.url,w.events,w.active,w.created_at,w.last_delivery_at,w.last_status
@@ -195,7 +195,7 @@ begin
 end $$;
 
 create or replace function public.webhook_delete(p_id uuid)
-returns void language plpgsql security definer set search_path=public as $$
+returns void language plpgsql security definer set search_path=public, extensions as $$
 declare v_co uuid;
 begin
   select company_id into v_co from public.webhook_endpoints where id=p_id;
@@ -205,7 +205,7 @@ end $$;
 
 -- Fire an event: POST the signed payload to every active endpoint subscribed to it.
 create or replace function public.webhook_fire(p_company uuid, p_event text, p_payload jsonb)
-returns void language plpgsql security definer set search_path=public as $$
+returns void language plpgsql security definer set search_path=public, extensions as $$
 declare w record; body text; sig text;
 begin
   for w in select * from public.webhook_endpoints where company_id=p_company and active and (p_event = any(events)) loop
@@ -224,7 +224,7 @@ begin
 end $$;
 
 -- Triggers on the events we publish.
-create or replace function public.tg_webhook_invoice() returns trigger language plpgsql security definer set search_path=public as $$
+create or replace function public.tg_webhook_invoice() returns trigger language plpgsql security definer set search_path=public, extensions as $$
 begin
   perform public.webhook_fire(NEW.company_id,
     case when NEW.move_type in ('out_invoice','out_refund') then 'invoice.created' else 'bill.created' end,
@@ -234,7 +234,7 @@ end $$;
 drop trigger if exists trg_webhook_invoice on public.invoices;
 create trigger trg_webhook_invoice after insert on public.invoices for each row execute function public.tg_webhook_invoice();
 
-create or replace function public.tg_webhook_po() returns trigger language plpgsql security definer set search_path=public as $$
+create or replace function public.tg_webhook_po() returns trigger language plpgsql security definer set search_path=public, extensions as $$
 begin
   if TG_OP='INSERT' or (OLD.state is distinct from NEW.state and NEW.state in ('purchase','sent')) then
     perform public.webhook_fire(NEW.company_id, case when TG_OP='INSERT' then 'purchase_order.created' else 'purchase_order.confirmed' end,
@@ -245,7 +245,7 @@ end $$;
 drop trigger if exists trg_webhook_po on public.purchase_orders;
 create trigger trg_webhook_po after insert or update of state on public.purchase_orders for each row execute function public.tg_webhook_po();
 
-create or replace function public.tg_webhook_payment() returns trigger language plpgsql security definer set search_path=public as $$
+create or replace function public.tg_webhook_payment() returns trigger language plpgsql security definer set search_path=public, extensions as $$
 begin
   perform public.webhook_fire(NEW.company_id,'payment.recorded',
     jsonb_build_object('id',NEW.id,'partner_id',NEW.partner_id,'amount',NEW.amount,'payment_type',NEW.payment_type,'date',NEW.date));
