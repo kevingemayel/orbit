@@ -939,6 +939,7 @@
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
+        { label: "Developers (API)", action: "settings.api" },
         { label: "Appearance", action: "appearance" }
       ]
     },
@@ -984,7 +985,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -2295,6 +2296,7 @@
       case "settings.audit": return renderList(cfgAuditLog());
       case "site.incidents": return renderList(cfgIncidents());
       case "settings.numbering": return renderNumbering();
+      case "settings.api": return renderDevelopers();
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
@@ -10371,6 +10373,98 @@
     draw();
   }
 
+  var API_WH_EVENTS = ["invoice.created", "bill.created", "purchase_order.created", "purchase_order.confirmed", "payment.recorded"];
+  async function renderDevelopers() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Developers (API)") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body");
+    var keys, hooks, setupNeeded = false;
+    try {
+      var kr = await sb.rpc("api_key_list", { p_company: S.company.id });
+      if (kr.error) { if (/(function|schema).*api_key_list|does not exist|not find/i.test(kr.error.message || "")) setupNeeded = true; }
+      keys = kr.data || [];
+      var wr = await sb.rpc("webhook_list", { p_company: S.company.id });
+      hooks = wr.data || [];
+    } catch (e) { setupNeeded = true; }
+    if (setupNeeded) {
+      body.innerHTML = '<div style="padding:16px;max-width:760px"><div class="card"><h3 style="margin:0 0 8px">Developers &middot; API &amp; Webhooks</h3><div class="sub">The API back-end is not installed yet. Run <span class="path">supabase/api-and-webhooks.sql</span> once in the Supabase SQL editor, then reload this page. It adds the api_keys / webhook tables and the secure functions the API uses.</div></div></div>';
+      return;
+    }
+    var base = "https://orbit.spacework.ai/api/v1";
+    function keyRows() {
+      if (!keys.length) return '<tr><td colspan="5" class="muted" style="padding:12px">No API keys yet.</td></tr>';
+      return keys.map(function (k) {
+        var revoked = !!k.revoked_at;
+        return '<tr' + (revoked ? ' style="opacity:.5"' : '') + '><td><b>' + esc(k.name) + '</b></td><td class="muted"><code>' + esc(k.prefix) + '</code></td><td>' + (k.scopes || []).map(function (s) { return '<span class="badge">' + esc(s) + '</span>'; }).join(" ") + '</td><td class="muted">' + esc(k.last_used_at ? k.last_used_at.slice(0, 10) : "never") + '</td><td>' + (revoked ? '<span class="muted">revoked</span>' : '<button class="btn sm ak-rev" data-id="' + k.id + '">Revoke</button>') + '</td></tr>';
+      }).join("");
+    }
+    function hookRows() {
+      if (!hooks.length) return '<tr><td colspan="5" class="muted" style="padding:12px">No webhook endpoints yet.</td></tr>';
+      return hooks.map(function (w) {
+        return '<tr><td class="muted" style="max-width:280px;overflow:hidden;text-overflow:ellipsis"><code>' + esc(w.url) + '</code></td><td>' + (w.events || []).map(function (e) { return '<span class="badge" style="font-size:10px">' + esc(e) + '</span>'; }).join(" ") + '</td><td>' + (w.active ? '<span class="badge paid">active</span>' : '<span class="muted">off</span>') + '</td><td class="muted">' + (w.last_status != null ? (w.last_status === 202 ? "ok" : "err " + w.last_status) : "-") + '</td><td><button class="btn sm wh-del" data-id="' + w.id + '">Delete</button></td></tr>';
+      }).join("");
+    }
+    body.innerHTML = '<div style="padding:16px;max-width:900px">' +
+      '<div class="card"><h3 style="margin:0 0 4px">Public API</h3><div class="sub" style="margin-bottom:8px">Call Orbit programmatically. Base URL <code>' + base + '</code>. Authenticate with <code>Authorization: Bearer &lt;key&gt;</code>. Read: contacts, products, projects, invoices, purchase_orders, payments. Write (create/update): contacts, products, projects. Full guide at <a href="/developers" target="_blank">orbit.spacework.ai/developers</a>.</div>' +
+      '<div style="display:flex;align-items:center;gap:10px;margin:10px 0 6px"><b>API keys</b><button class="btn sm pri ak-new" style="margin-left:auto;background:var(--app);border-color:var(--app)">+ New key</button></div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Name</th><th>Key</th><th>Scopes</th><th>Last used</th><th></th></tr></thead><tbody id="ak-body">' + keyRows() + '</tbody></table></div></div>' +
+      '<div class="card" style="margin-top:14px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Webhooks</h3><button class="btn sm pri wh-new" style="margin-left:auto;background:var(--app);border-color:var(--app)">+ New endpoint</button></div>' +
+      '<div class="sub" style="margin:4px 0 8px">Orbit POSTs a signed JSON payload to your URL when an event happens. Verify the <code>X-Orbit-Signature</code> header (HMAC-SHA256 of the body with your endpoint secret).</div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>URL</th><th>Events</th><th>Status</th><th>Last</th><th></th></tr></thead><tbody id="wh-body">' + hookRows() + '</tbody></table></div></div></div>';
+    // wire
+    body.querySelector(".ak-new").onclick = akNew;
+    body.querySelector(".wh-new").onclick = whNew;
+    function rewire() { body.querySelectorAll(".ak-rev").forEach(function (b) { b.onclick = function () { akRevoke(b.dataset.id); }; }); body.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = function () { whDel(b.dataset.id); }; }); }
+    rewire();
+    async function akRevoke(id) { if (!confirm("Revoke this key? Any integration using it stops working immediately.")) return; var r = await sb.rpc("api_key_revoke", { p_id: id }); if (r.error) { toast(errMsg(r.error)); return; } toast("Key revoked"); renderDevelopers(); }
+    async function whDel(id) { if (!confirm("Delete this webhook endpoint?")) return; var r = await sb.rpc("webhook_delete", { p_id: id }); if (r.error) { toast(errMsg(r.error)); return; } toast("Endpoint deleted"); renderDevelopers(); }
+    function akNew() {
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New API key</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+        '<label class="fl">Name<input id="ak-name" placeholder="e.g. Zapier, our website" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"></label>' +
+        '<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="ak-write"> Allow writes (create/update contacts, products, projects)</label>' +
+        '<div class="sub">The key is shown once, now. Store it somewhere safe - you cannot see it again.</div></div>' +
+        '<div class="foot"><button class="btn" id="ak-cancel">Cancel</button><button class="btn pri" id="ak-save" style="background:var(--accent);border-color:var(--accent)">Create key</button></div></div>';
+      document.body.appendChild(m);
+      document.getElementById("ak-cancel").onclick = function () { m.remove(); };
+      document.getElementById("ak-save").onclick = async function () {
+        var name = gv("ak-name") || "API key", scopes = document.getElementById("ak-write").checked ? ["read", "write"] : ["read"];
+        var r = await sb.rpc("api_key_create", { p_company: S.company.id, p_name: name, p_scopes: scopes });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        m.remove(); showSecret("Your new API key", r.data, "Use it as  Authorization: Bearer " + r.data); renderDevelopers();
+      };
+    }
+    function whNew() {
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>New webhook endpoint</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+        '<label class="fl">URL<input id="wh-url" placeholder="https://your-app.com/hooks/orbit" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"></label>' +
+        '<div><div style="font-size:12.5px;color:var(--ink2);font-weight:600;margin-bottom:5px">Events</div>' + API_WH_EVENTS.map(function (e) { return '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:2px 0"><input type="checkbox" class="wh-ev" value="' + e + '" checked> ' + e + '</label>'; }).join("") + '</div></div>' +
+        '<div class="foot"><button class="btn" id="wh-cancel">Cancel</button><button class="btn pri" id="wh-save" style="background:var(--accent);border-color:var(--accent)">Create endpoint</button></div></div>';
+      document.body.appendChild(m);
+      document.getElementById("wh-cancel").onclick = function () { m.remove(); };
+      document.getElementById("wh-save").onclick = async function () {
+        var url = gv("wh-url"); if (!/^https?:\/\//.test(url)) { toast("Enter a valid https URL"); return; }
+        var evs = [].map.call(m.querySelectorAll(".wh-ev:checked"), function (c) { return c.value; });
+        if (!evs.length) { toast("Pick at least one event"); return; }
+        var r = await sb.rpc("webhook_create", { p_company: S.company.id, p_url: url, p_events: evs });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var row = Array.isArray(r.data) ? r.data[0] : r.data;
+        m.remove(); showSecret("Endpoint signing secret", row && row.secret, "Verify X-Orbit-Signature = 'sha256=' + HMAC_SHA256(body, this secret)."); renderDevelopers();
+      };
+    }
+    function showSecret(title, value, note) {
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet" style="max-width:520px"><h3>' + esc(title) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
+        '<div class="sub" style="color:var(--bad)">Copy this now - it is shown only once.</div>' +
+        '<textarea readonly id="sec-val" style="width:100%;min-height:64px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-family:var(--mono);font-size:12.5px">' + esc(value || "") + '</textarea>' +
+        (note ? '<div class="sub">' + esc(note) + '</div>' : '') + '</div>' +
+        '<div class="foot"><button class="btn" id="sec-copy">Copy</button><button class="btn pri" id="sec-close" style="background:var(--accent);border-color:var(--accent)">Done</button></div></div>';
+      document.body.appendChild(m);
+      document.getElementById("sec-copy").onclick = function () { var t = document.getElementById("sec-val"); t.select(); try { document.execCommand("copy"); toast("Copied"); } catch (e) { } };
+      document.getElementById("sec-close").onclick = function () { m.remove(); };
+    }
+  }
   async function renderNumbering() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
