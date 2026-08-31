@@ -857,6 +857,7 @@
     documents: {
       name: "Documents", icon: "▤", color: "#0369a1", color2: "#075985", home: "doc.subs",
       menus: [
+        { label: "Search & OCR", action: "doc.search" },
         { label: "Drawing Register", action: "doc.drawings" },
         { label: "Submittals", action: "doc.subs" },
         { label: "RFIs", action: "doc.rfis" },
@@ -984,7 +985,7 @@
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
-    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
+    "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
@@ -2235,6 +2236,7 @@
       case "mfg.panels": return renderList(cfgPanels());
       case "mfg.boms": return renderList(cfgBoms());
       case "inst.jobs": return renderList(cfgInstallJobs());
+      case "doc.search": return renderDocSearch();
       case "doc.drawings": return renderList(cfgDrawings());
       case "doc.subs": return renderList(cfgSubmittals());
       case "doc.rfis": return renderList(cfgRfis());
@@ -4358,6 +4360,17 @@
     s.src = "https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1/umd/index.min.js";
     s.onload = function () { (window.__zxingLoading || []).forEach(function (f) { try { f(!!(window.ZXing && window.ZXing.BrowserMultiFormatReader)); } catch (e) { } }); window.__zxingLoading = null; };
     s.onerror = function () { (window.__zxingLoading || []).forEach(function (f) { try { f(false); } catch (e) { } }); window.__zxingLoading = null; };
+    document.head.appendChild(s);
+  }
+  // Lazy-load tesseract.js (in-browser OCR) from the same CDN pattern as ZXing.
+  function loadTesseract(cb) {
+    if (window.Tesseract) { cb(true); return; }
+    if (window.__tessLoading) { window.__tessLoading.push(cb); return; }
+    window.__tessLoading = [cb];
+    var s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js";
+    s.onload = function () { (window.__tessLoading || []).forEach(function (f) { try { f(!!window.Tesseract); } catch (e) { } }); window.__tessLoading = null; };
+    s.onerror = function () { (window.__tessLoading || []).forEach(function (f) { try { f(false); } catch (e) { } }); window.__tessLoading = null; };
     document.head.appendChild(s);
   }
   async function openScanner(onDetect) {
@@ -10829,6 +10842,64 @@
     return '<span class="' + cls + '">' + esc(m[s] || s || "") + '</span>';
   }
   var REV_STATUS = [["draft", "Draft"], ["issued", "Issued"], ["approved", "Approved"], ["rejected", "Rejected"], ["superseded", "Superseded"]];
+  // ---- Document Search & OCR. Full-text search across document records (drawings,
+  // RFIs, submittals, transmittals) and file captions, plus in-browser OCR (tesseract.js)
+  // that pulls the text out of a scanned image so it can be searched or copied.
+  async function renderDocSearch() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Search & OCR") + '</div><div class="o-body" id="o-body"></div></div>';
+    wireBc();
+    var cid = S.company.id;
+    var body = document.getElementById("o-body");
+    body.innerHTML = '<div style="padding:16px;max-width:900px">' +
+      '<div class="card"><h3 style="margin:0 0 8px">Search documents</h3>' +
+      '<input id="ds-q" placeholder="Search drawings, RFIs, submittals, transmittals and file captions..." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px">' +
+      '<div id="ds-res" style="margin-top:10px"><div class="muted" style="font-size:13px">Type at least two characters to search across every document in this company.</div></div></div>' +
+      '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Extract text from an image (OCR)</h3>' +
+      '<div class="sub" style="margin:0 0 10px">Pick a photo or scan (a drawing title block, a delivery note, a label) and Orbit reads the text out of it, in your browser. Then search it or copy it into a document.</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="ds-file" accept="image/*"><button class="btn sm pri" id="ds-ocr" style="background:var(--accent);border-color:var(--accent)">Extract text</button><span id="ds-prog" class="muted" style="font-size:12px"></span></div>' +
+      '<textarea id="ds-text" placeholder="Extracted text appears here..." style="width:100%;margin-top:10px;min-height:120px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></textarea>' +
+      '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" id="ds-copy">Copy text</button><button class="btn sm" id="ds-search">Search this text</button></div></div></div>';
+    var q = document.getElementById("ds-q"), res = document.getElementById("ds-res");
+    async function runSearch(term) {
+      term = (term || "").trim().toLowerCase();
+      if (term.length < 2) { res.innerHTML = '<div class="muted" style="font-size:13px">Type at least two characters to search across every document in this company.</div>'; return; }
+      res.innerHTML = '<div class="o-empty">Searching...</div>';
+      var out = [];
+      function hit(text, extra) { return String(text || "").toLowerCase().indexOf(term) >= 0 || (extra && String(extra).toLowerCase().indexOf(term) >= 0); }
+      var dr = (await sb.from("drawings").select("id,number,title,discipline,status").eq("company_id", cid)).data || [];
+      dr.filter(function (d) { return hit(d.number, d.title) || hit(d.discipline); }).forEach(function (d) { out.push({ t: "Drawing", n: (d.number || "") + " " + (d.title || ""), sub: [d.discipline, d.status].filter(Boolean).join(" &middot; "), go: "doc.drawings" }); });
+      var rf = (await sb.from("rfis").select("id,number,subject,status").eq("company_id", cid)).data || [];
+      rf.filter(function (r) { return hit(r.number, r.subject); }).forEach(function (r) { out.push({ t: "RFI", n: (r.number || "") + " " + (r.subject || ""), sub: r.status || "", go: "doc.rfis" }); });
+      var su = (await sb.from("submittals").select("id,number,title,status").eq("company_id", cid)).data || [];
+      su.filter(function (s) { return hit(s.number, s.title); }).forEach(function (s) { out.push({ t: "Submittal", n: (s.number || "") + " " + (s.title || ""), sub: s.status || "", go: "doc.subs" }); });
+      var tr = (await sb.from("transmittals").select("id,number,to_party").eq("company_id", cid)).data || [];
+      tr.filter(function (t) { return hit(t.number, t.to_party); }).forEach(function (t) { out.push({ t: "Transmittal", n: (t.number || "") + " to " + (t.to_party || ""), sub: "", go: "doc.trans" }); });
+      var md = (await sb.from("media").select("caption,entity,kind").eq("company_id", cid).not("caption", "is", null)).data || [];
+      md.filter(function (m) { return hit(m.caption); }).slice(0, 30).forEach(function (m) { out.push({ t: "File", n: m.caption, sub: (m.kind || "file") + " on " + (m.entity || ""), go: null }); });
+      if (!out.length) { res.innerHTML = '<div class="o-empty">No documents match &ldquo;' + esc(term) + '&rdquo;.</div>'; return; }
+      res.innerHTML = '<div class="sub" style="margin-bottom:6px">' + out.length + ' match' + (out.length === 1 ? "" : "es") + '</div>' + out.map(function (o, i) {
+        return '<div class="ds-hit" data-go="' + (o.go || "") + '" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px' + (o.go ? ';cursor:pointer' : '') + '"><span class="badge">' + o.t + '</span><span style="flex:1"><b>' + esc(o.n) + '</b>' + (o.sub ? ' <span class="muted" style="font-size:12px">' + o.sub + '</span>' : "") + '</span>' + (o.go ? '<span class="muted">open &rsaquo;</span>' : "") + '</div>';
+      }).join("");
+      res.querySelectorAll(".ds-hit[data-go]").forEach(function (el) { if (el.dataset.go) el.onclick = function () { go(el.dataset.go); }; });
+    }
+    var deb; q.oninput = function () { clearTimeout(deb); var v = this.value; deb = setTimeout(function () { runSearch(v); }, 250); };
+    var fileRef = { f: null };
+    document.getElementById("ds-file").onchange = function () { fileRef.f = this.files && this.files[0]; };
+    document.getElementById("ds-ocr").onclick = function () {
+      if (!fileRef.f) { toast("Pick an image first"); return; }
+      var prog = document.getElementById("ds-prog"); prog.textContent = "Loading OCR engine...";
+      loadTesseract(function (ok) {
+        if (!ok) { prog.textContent = ""; toast("Could not load the OCR engine (check your connection)"); return; }
+        prog.textContent = "Reading image...";
+        window.Tesseract.recognize(fileRef.f, "eng", { logger: function (mm) { if (mm.status === "recognizing text") prog.textContent = "Reading... " + Math.round((mm.progress || 0) * 100) + "%"; } })
+          .then(function (r) { document.getElementById("ds-text").value = (r && r.data && r.data.text) ? r.data.text.trim() : ""; prog.textContent = "Done"; })
+          .catch(function () { prog.textContent = ""; toast("Could not read that image"); });
+      });
+    };
+    document.getElementById("ds-copy").onclick = function () { var ta = document.getElementById("ds-text"); ta.select(); try { document.execCommand("copy"); toast("Copied"); } catch (e) { } };
+    document.getElementById("ds-search").onclick = function () { var txt = (document.getElementById("ds-text").value || "").trim().split(/\s+/).slice(0, 6).join(" "); q.value = txt; runSearch(txt); q.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  }
   function cfgDrawings() {
     return {
       title: "Drawing Register", pageSize: 80,
