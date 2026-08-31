@@ -823,7 +823,7 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"]] },
+        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"], ["Planning", "inv.planning"], ["Cycle Count", "inv.cyclecount"]] },
         { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Classification", "settings.classification"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
@@ -986,7 +986,7 @@
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
+    "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
@@ -2324,6 +2324,8 @@
       case "settings.profile": return renderCompanyProfile();
       case "wh": return renderList(cfgWarehouses());
       case "inv.reorder": return renderReorder();
+      case "inv.planning": return renderPlanning();
+      case "inv.cyclecount": return renderCycleCount();
       case "loc": return renderList(cfgLocations());
       case "lots": return renderLots();
       case "rfq.list": return renderList(cfgRFQs());
@@ -11878,6 +11880,154 @@
     }
     body.querySelectorAll(".rr-min, .rr-max").forEach(function (inp) { inp.addEventListener("change", function () { saveRule(inp.dataset.id).then(function () { toast("Rule saved"); renderReorder(); }); }); });
     body.querySelectorAll(".rr-order").forEach(function (b) { b.onclick = function () { openStockModal("receive", storable); setTimeout(function () { var ps = document.getElementById("k-prod"); if (ps) ps.value = b.dataset.id; var qi = document.getElementById("k-qty"); if (qi) qi.value = b.dataset.need; }, 200); }; });
+  }
+  // ---- Cycle Count: count many items at one location in a single session, review the
+  // variances, then post every adjustment at once. Reuses the same adjust-move + valuation
+  // path as the per-item adjustment, so the books follow the count. No new tables.
+  async function renderCycleCount() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cycle Count") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var inv = await ensureInventory();
+    var locs = (inv.internal || []).slice();
+    var prods = (await sb.from("products").select("id,name,default_code,type,family,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
+    var byLoc = await onHandByLoc();
+    var body = document.getElementById("o-body");
+    if (!storable.length) { body.innerHTML = '<div class="o-empty">No storable products yet. Set a product\'s type to <b>Storable</b> to count it.</div>'; return; }
+    var fams = {}; storable.forEach(function (p) { if (p.family) fams[p.family] = 1; });
+    var famOpts = '<option value="">All categories</option>' + Object.keys(fams).sort().map(function (f) { return '<option value="' + esc(f) + '">' + esc(f) + '</option>'; }).join("");
+    var locOpts = locs.map(function (l) { return '<option value="' + l.id + '"' + (l.id === inv.stock ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join("");
+    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Cycle Count</h3>' +
+      '<label class="muted" style="font-size:12px">Location <select id="cc-loc">' + locOpts + '</select></label>' +
+      '<label class="muted" style="font-size:12px">Category <select id="cc-fam">' + famOpts + '</select></label>' +
+      '<input id="cc-q" placeholder="Filter products..." style="padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px">' +
+      '<button class="btn sm pri" id="cc-post" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">Post adjustments</button></div>' +
+      '<div class="sub" style="margin:6px 0 12px">Enter what you physically counted for each item at this location. Leave a row blank if you did not count it. <b>Post adjustments</b> writes an inventory adjustment for every variance and posts it to the ledger.</div>' +
+      '<div id="cc-sum" class="sub" style="margin-bottom:8px"></div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th class="num">Expected</th><th class="num" style="width:110px">Counted</th><th class="num">Variance</th></tr></thead><tbody id="cc-body"></tbody></table></div></div></div>';
+    var counts = {};   // pid -> entered value (string)
+    function expectedFor(pid, loc) { return (byLoc[pid] || {})[loc] || 0; }
+    function draw() {
+      var loc = document.getElementById("cc-loc").value, fam = document.getElementById("cc-fam").value, q = (document.getElementById("cc-q").value || "").toLowerCase();
+      var list = storable.filter(function (p) { return (!fam || p.family === fam) && (!q || (p.name + " " + (p.default_code || "")).toLowerCase().indexOf(q) >= 0); });
+      var tb = document.getElementById("cc-body");
+      tb.innerHTML = list.map(function (p) {
+        var exp = expectedFor(p.id, loc);
+        var cv = counts[p.id];
+        var v = (cv !== undefined && cv !== "") ? (Number(cv) - exp) : null;
+        var vCell = v == null ? "" : (v === 0 ? '<span class="muted">0</span>' : '<span class="badge ' + (v > 0 ? "paid" : "unpaid") + '">' + (v > 0 ? "+" : "") + (Math.round(v * 1000) / 1000) + '</span>');
+        return '<tr><td class="num" style="text-align:left">' + esc(p.default_code || "") + '</td><td><b>' + esc(p.name) + '</b> <span class="muted" style="font-size:11px">' + esc(p.uom || "") + '</span></td>' +
+          '<td class="num">' + (Math.round(exp * 1000) / 1000) + '</td>' +
+          '<td class="num"><input class="cc-in" data-id="' + p.id + '" type="number" step="any" value="' + (cv !== undefined ? cv : "") + '" style="width:92px;text-align:right;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></td>' +
+          '<td class="num">' + vCell + '</td></tr>';
+      }).join("");
+      tb.querySelectorAll(".cc-in").forEach(function (inp) { inp.addEventListener("input", function () { counts[inp.dataset.id] = inp.value; summarise(); }); inp.addEventListener("change", function () { draw(); }); });
+      summarise();
+    }
+    function summarise() {
+      var loc = document.getElementById("cc-loc").value, n = 0, up = 0, down = 0;
+      Object.keys(counts).forEach(function (pid) { var cv = counts[pid]; if (cv === undefined || cv === "") return; var d = Number(cv) - expectedFor(pid, loc); if (Math.abs(d) > 0.0001) { n++; if (d > 0) up++; else down++; } });
+      var el = document.getElementById("cc-sum"); if (el) el.innerHTML = n ? ('<b>' + n + '</b> variance' + (n === 1 ? "" : "s") + ' ready to post &middot; ' + up + ' up, ' + down + ' down') : "No variances entered yet.";
+    }
+    document.getElementById("cc-loc").onchange = draw;
+    document.getElementById("cc-fam").onchange = draw;
+    document.getElementById("cc-q").oninput = draw;
+    document.getElementById("cc-post").onclick = async function () {
+      var loc = document.getElementById("cc-loc").value;
+      var todo = Object.keys(counts).map(function (pid) { var cv = counts[pid]; if (cv === undefined || cv === "") return null; var d = Number(cv) - expectedFor(pid, loc); return Math.abs(d) > 0.0001 ? { pid: pid, diff: d } : null; }).filter(Boolean);
+      if (!todo.length) { toast("Nothing to post - no variances entered"); return; }
+      if (!confirm("Post " + todo.length + " inventory adjustment" + (todo.length === 1 ? "" : "s") + "? This updates stock and the ledger.")) return;
+      var done = 0;
+      for (var i = 0; i < todo.length; i++) {
+        var t = todo[i], product = storable.filter(function (p) { return p.id === t.pid; })[0] || {};
+        var src, dest, q, vkind;
+        if (t.diff > 0) { src = inv.adjust; dest = loc; q = t.diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -t.diff; vkind = "adjust_down"; }
+        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: t.pid, quantity: q, uom: product.uom || "Unit", location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
+        if (r.error) { toast("Line failed: " + errMsg(r.error)); continue; }
+        await postStockValue(vkind, product, q, r.data && r.data.id, null);
+        done++;
+      }
+      toast("Posted " + done + " adjustment" + (done === 1 ? "" : "s") + " from the count"); counts = {}; renderCycleCount();
+    };
+    draw();
+  }
+  // ---- Planning (MRP-lite): net demand against supply across the business and suggest
+  // exactly what to buy. Demand = confirmed sales orders + project take-offs + components
+  // exploded from open work-order BOMs + below-min rules. Supply = on-hand + open POs.
+  // One click turns the shortfall into a draft purchase order.
+  async function renderPlanning() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Planning") + '</div><div class="o-body" id="o-body"><div class="o-empty">Netting demand against supply...</div></div></div>';
+    wireBc();
+    await ensureInventory();
+    var oh = await onHandMap();
+    var prods = (await sb.from("products").select("id,name,default_code,type,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var pById = {}; prods.forEach(function (p) { pById[p.id] = p; });
+    var demand = {}, srcTags = {};
+    function addDemand(pid, qty, tag) { if (!pid || !(qty > 0)) return; demand[pid] = (demand[pid] || 0) + qty; (srcTags[pid] = srcTags[pid] || {})[tag] = 1; }
+    // 1) confirmed sales orders not yet fully delivered
+    var sos = (await sb.from("sale_orders").select("id,state").eq("company_id", S.company.id).eq("state", "sale")).data || [];
+    var soIds = sos.map(function (s) { return s.id; });
+    if (soIds.length) { var sol = []; for (var a = 0; a < soIds.length; a += 200) { sol = sol.concat((await sb.from("sale_order_lines").select("product_id,quantity").in("order_id", soIds.slice(a, a + 200))).data || []); } sol.forEach(function (l) { addDemand(l.product_id, Number(l.quantity) || 0, "Sales orders"); }); }
+    // 2) project take-offs not yet turned into a PO
+    var reqs = (await sb.from("material_requisitions").select("id,state").eq("company_id", S.company.id).neq("state", "ordered")).data || [];
+    var reqIds = reqs.map(function (r) { return r.id; });
+    if (reqIds.length) { var rl = []; for (var b = 0; b < reqIds.length; b += 200) { rl = rl.concat((await sb.from("material_requisition_lines").select("product_id,quantity").in("requisition_id", reqIds.slice(b, b + 200))).data || []); } rl.forEach(function (l) { addDemand(l.product_id, Number(l.quantity) || 0, "Take-offs"); }); }
+    // 3) open work orders -> explode their BOM into component demand
+    var wos = (await sb.from("work_orders").select("id,product_id,quantity,quantity_done,state").eq("company_id", S.company.id).not("state", "in", "(done,cancel)")).data || [];
+    if (wos.length) {
+      var boms = (await sb.from("boms").select("id,product_id,output_qty").eq("company_id", S.company.id)).data || [];
+      var bomByProd = {}; boms.forEach(function (bm) { if (!bomByProd[bm.product_id]) bomByProd[bm.product_id] = { id: bm.id, out: Number(bm.output_qty) || 1 }; });
+      var bomIds = boms.map(function (bm) { return bm.id; });
+      var blByBom = {};
+      if (bomIds.length) { var bls = []; for (var c = 0; c < bomIds.length; c += 200) { bls = bls.concat((await sb.from("bom_lines").select("bom_id,product_id,quantity").in("bom_id", bomIds.slice(c, c + 200))).data || []); } bls.forEach(function (bl) { (blByBom[bl.bom_id] = blByBom[bl.bom_id] || []).push(bl); }); }
+      wos.forEach(function (w) { var bm = bomByProd[w.product_id]; if (!bm) return; var remain = Math.max(0, (Number(w.quantity) || 0) - (Number(w.quantity_done) || 0)); if (!remain) return; var runs = remain / (bm.out || 1); (blByBom[bm.id] || []).forEach(function (bl) { addDemand(bl.product_id, (Number(bl.quantity) || 0) * runs, "Work orders"); }); });
+    }
+    // 4) reorder minimums as a floor
+    var rules = (await sb.from("reordering_rules").select("product_id,min_qty").eq("company_id", S.company.id)).data || [];
+    var minByProd = {}; rules.forEach(function (r) { if (!r.location_id) minByProd[r.product_id] = Number(r.min_qty || 0); });
+    // supply: open purchase orders (confirmed / sent), outstanding qty
+    var incoming = {};
+    var pos = (await sb.from("purchase_orders").select("id,state").eq("company_id", S.company.id).in("state", ["sent", "purchase"])).data || [];
+    var poIds = pos.map(function (p) { return p.id; });
+    if (poIds.length) { var pol = []; for (var d = 0; d < poIds.length; d += 200) { pol = pol.concat((await sb.from("purchase_order_lines").select("product_id,quantity,qty_received").in("order_id", poIds.slice(d, d + 200))).data || []); } pol.forEach(function (l) { if (!l.product_id) return; var out = Math.max(0, (Number(l.quantity) || 0) - (Number(l.qty_received) || 0)); incoming[l.product_id] = (incoming[l.product_id] || 0) + out; }); }
+    // build rows
+    var pids = {}; Object.keys(demand).forEach(function (p) { pids[p] = 1; }); Object.keys(minByProd).forEach(function (p) { if (minByProd[p] > 0) pids[p] = 1; });
+    var rows = Object.keys(pids).map(function (pid) {
+      var p = pById[pid]; if (!p) return null;
+      var dem = demand[pid] || 0, min = minByProd[pid] || 0, onh = oh[pid] || 0, inc = incoming[pid] || 0;
+      var net = onh + inc - dem;
+      var suggest = Math.max(0, (dem + min) - onh - inc);
+      return { p: p, dem: dem, min: min, onh: onh, inc: inc, net: net, suggest: suggest, tags: Object.keys(srcTags[pid] || {}) };
+    }).filter(Boolean).filter(function (r) { return r.dem > 0 || r.min > 0; }).sort(function (x, y) { return y.suggest - x.suggest; });
+    var buy = rows.filter(function (r) { return r.suggest > 0.0001; });
+    var body = document.getElementById("o-body");
+    if (!rows.length) { body.innerHTML = '<div style="padding:18px"><div class="o-empty">Nothing to plan yet. Confirm a sales order, add a take-off, open a work order, or set a reorder minimum, and this nets the demand against your stock and open POs.</div></div>'; return; }
+    var trs = rows.map(function (r) {
+      var short = r.suggest > 0.0001;
+      return '<tr><td class="num" style="text-align:left">' + esc(r.p.default_code || "") + '</td><td><b>' + esc(r.p.name) + '</b></td>' +
+        '<td class="num">' + (Math.round(r.onh * 1000) / 1000) + '</td><td class="num">' + (r.inc ? Math.round(r.inc * 1000) / 1000 : "") + '</td>' +
+        '<td class="num">' + (Math.round(r.dem * 1000) / 1000) + (r.tags.length ? ' <span class="muted" style="font-size:10px">' + esc(r.tags.join(", ")) + '</span>' : "") + '</td>' +
+        '<td class="num"' + (r.net < 0 ? ' style="color:var(--bad)"' : '') + '>' + (Math.round(r.net * 1000) / 1000) + '</td>' +
+        '<td class="num">' + (short ? '<b>' + (Math.round(r.suggest * 1000) / 1000) + '</b>' : '<span class="muted">-</span>') + '</td>' +
+        '<td>' + (short ? '<span class="badge unpaid">Buy</span>' : '<span class="badge paid">Covered</span>') + '</td></tr>';
+    }).join("");
+    var kpis = '<div class="kpis" style="margin-bottom:14px">' + kpi("Items planned", String(rows.length)) + kpi("Short items", String(buy.length)) + kpi("Suggested lines", String(buy.length)) + '</div>';
+    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Planning (demand vs supply)</h3>' +
+      (buy.length ? '<button class="btn sm pri" id="pl-po" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">Create draft PO (' + buy.length + ')</button>' : '') + '</div>' +
+      '<div class="sub" style="margin:6px 0 12px">Demand = confirmed sales orders + project take-offs + components from open work orders + reorder minimums. Supply = on-hand + open POs. <b>Suggested</b> is what to buy to cover the shortfall. Quantities are in each product&rsquo;s stock unit.</div>' +
+      kpis + '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Reference</th><th>Product</th><th class="num">On hand</th><th class="num">Incoming</th><th class="num">Demand</th><th class="num">Net</th><th class="num">Suggested</th><th>Status</th></tr></thead><tbody>' + trs + '</tbody></table></div></div></div>';
+    var poBtn = document.getElementById("pl-po");
+    if (poBtn) poBtn.onclick = async function () {
+      var num = await nextOrderNumber("purchase");
+      var po = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: num, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "Auto-generated from Planning (demand netting)" }).select("id").single();
+      if (po.error) { toast(errMsg(po.error)); return; }
+      var sub = 0, plines = buy.map(function (r, i) { var price = Number(r.p.cost_price || 0); sub += r.suggest * price; return { company_id: S.company.id, order_id: po.data.id, product_id: r.p.id, name: r.p.name, quantity: r.suggest, uom: r.p.uom || null, unit_price: price, price_subtotal: r.suggest * price, qty_received: 0, qty_billed: 0, sequence: (i + 1) * 10 }; });
+      var lr = await sb.from("purchase_order_lines").insert(plines); if (lr.error) { toast(errMsg(lr.error)); return; }
+      await sb.from("purchase_orders").update({ amount_untaxed: sub, amount_total: sub }).eq("id", po.data.id);
+      toast("Draft PO " + num + " created with " + buy.length + " item" + (buy.length === 1 ? "" : "s") + " - pick the vendor and confirm"); renderOrderForm(po.data.id, "purchase");
+    };
   }
   async function findOrCreateLot(productId, name, expiry) {
     var ex = (await sb.from("stock_lots").select("id").eq("company_id", S.company.id).eq("product_id", productId).eq("name", name).maybeSingle()).data;
