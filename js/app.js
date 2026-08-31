@@ -4353,7 +4353,9 @@
         if (dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
           if (destLoc) {
-            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: order.project_id || null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
+            // Warehouse/factory receipt is an inventory asset, not a project cost - do not tag
+            // it with the project (cost is recognized on issue). See renderReceiptForm.
+            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
             if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
           }
         }
@@ -4530,7 +4532,11 @@
         if (!isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
           if (destLoc) {
-            var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: fromOrder ? (fromOrder.project_id || null) : null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
+            // Warehouse/factory receipt = inventory asset (Dr Inventory / Cr Interim), NOT a
+            // project cost. Do NOT tag the move with a project - otherwise Job Cost / Project P&L
+            // count the receipt as "materials issued". The cost is recognized only when the stock
+            // is issued to the project. (Direct-to-site material is handled separately, below.)
+            var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
             if (!mv.error) { await postStockValue("receive", pr, qtyBase, mv.data && mv.data.id, null, r.unit_price); got++; }
           }
         } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
@@ -4551,8 +4557,13 @@
   async function createInvoiceFromOrder(order, lines, kind) {
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
     var pids = lines.map(function (l) { return l.product_id; }).filter(Boolean);
-    var prods = pids.length ? ((await sb.from("products").select("id,income_account_id,expense_account_id").in("id", pids)).data || []) : [];
+    var prods = pids.length ? ((await sb.from("products").select("id,type,income_account_id,expense_account_id").in("id", pids)).data || []) : [];
     var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
+    // For a purchase bill, a storable line was already Dr Inventory / Cr Interim at receipt.
+    // The bill must clear the Interim (GRNI) account, NOT expense the material again - the cost
+    // is recognized only when the stock is issued. Non-stock lines (service/expense) still post
+    // to their expense account. (Warehouse-style project costing.)
+    var _interimAcc = null; if (!isSale) { try { var _ia = await invAccounts(); _interimAcc = _ia && _ia.susp; } catch (e) { } }
     var taxes = (await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || [];
     var taxAmt = {}; taxes.forEach(function (t) { taxAmt[t.id] = Number(t.amount) || 0; });
     var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
@@ -4562,7 +4573,7 @@
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
-    var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var acc = p ? (isSale ? p.income_account_id : p.expense_account_id) : null; return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+    var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var isStock = p && (p.type === "storable" || p.type === "consumable"); var acc = isSale ? (p ? p.income_account_id : null) : ((isStock && _interimAcc) ? _interimAcc : (p ? p.expense_account_id : null)); return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Invoice lines failed: " + errMsg(lr.error)); return; }
     if (!isSale) { for (var i = 0; i < lines.length; i++) { if (lines[i].id) await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id); } }
@@ -13707,18 +13718,37 @@
     document.getElementById("jc-proj").onchange = function () { jobCostTable(this.value); };
     jobCostTable(sel);
   }
+  // Sum of a bill's lines that represent real project expense (service / non-stock) - i.e.
+  // EXCLUDING storable/consumable lines, whose cost is recognized via inventory issue, not the
+  // bill (warehouse-style). Returns { invoiceId: expenseSubtotal } ONLY for bills that have
+  // lines, so callers can fall back to the header total for a line-less bill.
+  async function projectBillExpense(billIds) {
+    var out = {};
+    if (!billIds || !billIds.length) return out;
+    var lines = [];
+    for (var i = 0; i < billIds.length; i += 200) { lines = lines.concat((await sb.from("invoice_lines").select("invoice_id,product_id,price_subtotal").in("invoice_id", billIds.slice(i, i + 200))).data || []); }
+    if (!lines.length) return out;
+    var pids = []; lines.forEach(function (l) { if (l.product_id && pids.indexOf(l.product_id) < 0) pids.push(l.product_id); });
+    var ptype = {}; if (pids.length) { ((await sb.from("products").select("id,type").in("id", pids)).data || []).forEach(function (p) { ptype[p.id] = p.type; }); }
+    lines.forEach(function (l) { if (!(l.invoice_id in out)) out[l.invoice_id] = 0; var stock = l.product_id && (ptype[l.product_id] === "storable" || ptype[l.product_id] === "consumable"); if (!stock) out[l.invoice_id] += Number(l.price_subtotal || 0); });
+    return out;
+  }
   async function jobCostTable(projectId) {
     S.jobCostProj = projectId;
     var el = document.getElementById("jc-table"); if (!el) return;
     var codes = (await sb.from("cost_codes").select("id,code,name,sort").eq("company_id", S.company.id).order("sort")).data || [];
     var buds = (await sb.from("project_budgets").select("cost_code_id,amount").eq("project_id", projectId)).data || [];
     var pos = (await sb.from("purchase_orders").select("cost_code_id,state,amount_untaxed,amount_total").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
-    var bills = (await sb.from("invoices").select("cost_code_id,state,amount_untaxed,amount_total").eq("company_id", S.company.id).eq("project_id", projectId).eq("move_type", "in_invoice")).data || [];
+    var bills = (await sb.from("invoices").select("id,cost_code_id,state,amount_untaxed,amount_total").eq("company_id", S.company.id).eq("project_id", projectId).eq("move_type", "in_invoice").eq("state", "posted")).data || [];
     var map = {};
     function bucket(id) { id = id || "_none"; if (!map[id]) map[id] = { budget: 0, committed: 0, actual: 0 }; return map[id]; }
     buds.forEach(function (b) { bucket(b.cost_code_id).budget += Number(b.amount) || 0; });
     pos.forEach(function (p) { if (["sent", "purchase", "done"].indexOf(p.state) >= 0) bucket(p.cost_code_id).committed += Number(p.amount_untaxed) || Number(p.amount_total) || 0; });
-    bills.forEach(function (b) { if (b.state === "posted") bucket(b.cost_code_id).actual += Number(b.amount_untaxed) || Number(b.amount_total) || 0; });
+    // Actual bill cost EXCLUDES storable/consumable lines: those were Dr Inventory at receipt
+    // and their cost is recognized when issued to the project (counted below via stock moves).
+    // A storable bill only clears the Interim (GRNI) account - counting it here would double it.
+    var billExpense = await projectBillExpense(bills.map(function (b) { return b.id; }));
+    bills.forEach(function (b) { bucket(b.cost_code_id).actual += (b.id in billExpense) ? billExpense[b.id] : (Number(b.amount_untaxed) || Number(b.amount_total) || 0); });
     // Materials issued from stock + site labour are real actual cost too (Project P&L counts them),
     // so include them here (as Uncoded) - otherwise Job Cost and Project P&L contradict each other.
     var jcIssues = (await sb.from("stock_moves").select("quantity,products(cost_price)").eq("company_id", S.company.id).eq("project_id", projectId)).data || [];
@@ -14021,7 +14051,11 @@
     var certs = (await sb.from("project_certificates").select("project_id,current_certified,state").eq("company_id", S.company.id)).data || [];
     var budgets = (await sb.from("project_budgets").select("project_id,category,amount").eq("company_id", S.company.id)).data || [];
     // ACTUAL cost = posted project-tagged vendor bill lines (by GL account) + materials issued + site labour
-    var billLines = (await sb.from("invoice_lines").select("price_subtotal, accounts(code), invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
+    var billLines = (await sb.from("invoice_lines").select("price_subtotal, product_id, accounts(code), invoices!inner(project_id,move_type,state,company_id)").eq("invoices.company_id", S.company.id).eq("invoices.move_type", "in_invoice").eq("invoices.state", "posted").not("invoices.project_id", "is", null)).data || [];
+    // Storable/consumable bill lines are inventory (cleared to GRNI at billing); their project
+    // cost is recognized on issue, counted below - so EXCLUDE them here (warehouse-style).
+    var _blPids = []; billLines.forEach(function (l) { if (l.product_id && _blPids.indexOf(l.product_id) < 0) _blPids.push(l.product_id); });
+    var _blType = {}; if (_blPids.length) { ((await sb.from("products").select("id,type").in("id", _blPids)).data || []).forEach(function (p) { _blType[p.id] = p.type; }); }
     var issues = (await sb.from("stock_moves").select("quantity,project_id,products(cost_price)").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
     var labour = (await sb.from("install_jobs").select("project_id,labour_cost").eq("company_id", S.company.id).not("project_id", "is", null)).data || [];
     // COMMITTED = open purchase orders (draft/sent/purchase) tagged to the project, NET of what's already billed
@@ -14031,7 +14065,7 @@
     function bump(o, pid, cat, v) { if (!o[pid]) o[pid] = {}; o[pid][cat] = (o[pid][cat] || 0) + v; }
     certs.forEach(function (c) { if (c.state !== "draft") certBy[c.project_id] = (certBy[c.project_id] || 0) + Number(c.current_certified || 0); });
     budgets.forEach(function (b) { budBy[b.project_id] = (budBy[b.project_id] || 0) + Number(b.amount || 0); bump(catBud, b.project_id, normCat(b.category), Number(b.amount || 0)); });
-    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (!pid) return; var v = Number(l.price_subtotal || 0); actBy[pid] = (actBy[pid] || 0) + v; bump(catAct, pid, catForAccount(l.accounts && l.accounts.code), v); });
+    billLines.forEach(function (l) { var pid = l.invoices && l.invoices.project_id; if (!pid) return; if (l.product_id && (_blType[l.product_id] === "storable" || _blType[l.product_id] === "consumable")) return; var v = Number(l.price_subtotal || 0); actBy[pid] = (actBy[pid] || 0) + v; bump(catAct, pid, catForAccount(l.accounts && l.accounts.code), v); });
     issues.forEach(function (m) { var v = Number(m.quantity || 0) * Number(m.products ? m.products.cost_price : 0); actBy[m.project_id] = (actBy[m.project_id] || 0) + v; bump(catAct, m.project_id, "Material", v); });
     labour.forEach(function (l) { var v = Number(l.labour_cost || 0); if (!v || !l.project_id) return; actBy[l.project_id] = (actBy[l.project_id] || 0) + v; bump(catAct, l.project_id, "Labour", v); });
     poLines.forEach(function (l) { var pid = l.purchase_orders && l.purchase_orders.project_id; if (!pid) return; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; comBy[pid] = (comBy[pid] || 0) + v; bump(catCom, pid, (l.product_id && pm[l.product_id]) || "Material", v); });
