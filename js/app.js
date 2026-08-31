@@ -798,7 +798,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
-        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Procurement Status", "pur.procstatus"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Procurement Status", "pur.procstatus"], ["Vendor Scorecards", "pur.scorecards"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Logistics", items: [["Shipments", "shp.list"], ["Shipments board", "shp.board"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
@@ -984,7 +984,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
+    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -2333,6 +2333,7 @@
       case "pur.req": return renderList(cfgRequisitions());
       case "pur.cutlist": return renderMaterialImport();
       case "pur.procstatus": return renderProcurementStatus();
+      case "pur.scorecards": return renderVendorScorecards();
       case "pur.sccert": return renderList(cfgSubcontractCerts());
       case "pur.match": return renderMatch();
       case "proj.list": return renderList(cfgProjects());
@@ -14314,6 +14315,126 @@
     var py = "MR/" + new Date().getFullYear() + "/";
     var rows = (await sb.from("material_requisitions").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
     return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+
+  // ---- Vendor Scorecards: rate every supplier on the record you already have -
+  // spend, on-time delivery (receipt date vs the PO's promised date), fill rate
+  // (received vs ordered), price competitiveness (RFQ bid win-rate) and returns.
+  // Read-only; no new tables. Gives a defensible A-D grade per vendor.
+  function vsGrade(score) { return score >= 85 ? "A" : score >= 70 ? "B" : score >= 50 ? "C" : "D"; }
+  function vsGradeCls(g) { return g === "A" ? "paid" : g === "B" ? "partial" : g === "C" ? "draft" : "unpaid"; }
+  async function renderVendorScorecards() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vendor Scorecards") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    if (S.vsWindow === undefined) S.vsWindow = 12;   // months; 0 = all time
+    var body = document.getElementById("o-body");
+    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Vendor Scorecards</h3>' +
+      '<select id="vs-win" aria-label="Period" style="margin-left:auto"><option value="12"' + (S.vsWindow === 12 ? " selected" : "") + '>Last 12 months</option><option value="24"' + (S.vsWindow === 24 ? " selected" : "") + '>Last 24 months</option><option value="0"' + (S.vsWindow === 0 ? " selected" : "") + '>All time</option></select></div>' +
+      '<div class="sub" style="margin:6px 0 12px">Every supplier graded on the record you already have: <b>on-time delivery</b> (receipt vs the PO&rsquo;s promised date), <b>fill rate</b> (received vs ordered), <b>price</b> (how often their RFQ quote was the cheapest) and <b>returns</b>. No extra data entry - it reads your POs, receipts and quotes.</div>' +
+      '<div id="vs-body"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("vs-win").onchange = function () { S.vsWindow = Number(this.value); vsBody(); };
+    vsBody();
+  }
+  async function vsBody() {
+    var el = document.getElementById("vs-body"); if (!el) return;
+    el.innerHTML = '<div class="o-empty">Crunching your purchase history...</div>';
+    await loadFxRates();
+    var cc = S.company.currency_code, cid = S.company.id;
+    var since = null;
+    if (S.vsWindow) { var d = new Date(); d.setMonth(d.getMonth() - S.vsWindow); since = d.toISOString().slice(0, 10); }
+    var vendors = (await sb.from("partners").select("id,name").eq("company_id", cid)).data || [];
+    var vName = {}; vendors.forEach(function (v) { vName[v.id] = v.name; });
+    var poQ = sb.from("purchase_orders").select("id,number,partner_id,date_order,date_planned,state,amount_total,currency_code").eq("company_id", cid).in("state", ["sent", "purchase", "done"]);
+    if (since) poQ = poQ.gte("date_order", since);
+    var pos = (await poQ).data || [];
+    if (!pos.length) { el.innerHTML = '<div class="o-empty">No confirmed purchase orders in this period yet. Confirm a PO and receive goods against it, and vendors will start to score here.</div>'; return; }
+    var poIds = pos.map(function (p) { return p.id; });
+    var poById = {}; pos.forEach(function (p) { poById[p.id] = p; });
+    // lines (fill rate + fully-received test)
+    var lines = [];
+    for (var i = 0; i < poIds.length; i += 200) { var chunk = poIds.slice(i, i + 200); var lr = (await sb.from("purchase_order_lines").select("order_id,quantity,qty_received").in("order_id", chunk)).data || []; lines = lines.concat(lr); }
+    var linesByPo = {}; lines.forEach(function (l) { (linesByPo[l.order_id] = linesByPo[l.order_id] || []).push(l); });
+    // receipts: match a picking to its PO by origin=number, keep the latest receipt date per PO number
+    var recDateByNumber = {};
+    var picks = (await sb.from("stock_pickings").select("partner_id,origin,created_at,scheduled_date,type,state").eq("company_id", cid)).data || [];
+    var returnsByVendor = {};
+    picks.forEach(function (pk) {
+      var t = (pk.type || "").toLowerCase();
+      if (/return/.test(t)) { if (pk.partner_id) returnsByVendor[pk.partner_id] = (returnsByVendor[pk.partner_id] || 0) + 1; return; }
+      var num = (pk.origin || "").trim(); if (!num) return;
+      var dt = pk.created_at || pk.scheduled_date; if (!dt) return;
+      if (!recDateByNumber[num] || dt > recDateByNumber[num]) recDateByNumber[num] = dt;
+    });
+    // price competitiveness: per RFQ line, did this vendor bid the lowest?
+    var bids = (await sb.from("rfq_bids").select("rfq_line_id,partner_id,unit_price").eq("company_id", cid)).data || [];
+    var bidByLine = {}; bids.forEach(function (b) { (bidByLine[b.rfq_line_id] = bidByLine[b.rfq_line_id] || []).push(b); });
+    var priceBid = {}, priceWin = {};   // per vendor: lines bid on, lines won
+    Object.keys(bidByLine).forEach(function (lid) {
+      var arr = bidByLine[lid].filter(function (b) { return Number(b.unit_price) > 0; });
+      if (arr.length < 2) return;   // need a real comparison
+      var min = Math.min.apply(null, arr.map(function (b) { return Number(b.unit_price); }));
+      arr.forEach(function (b) { priceBid[b.partner_id] = (priceBid[b.partner_id] || 0) + 1; if (Math.abs(Number(b.unit_price) - min) < 1e-9) priceWin[b.partner_id] = (priceWin[b.partner_id] || 0) + 1; });
+    });
+    // aggregate per vendor
+    var agg = {};
+    var todayStr = today();
+    pos.forEach(function (p) {
+      var v = p.partner_id; if (!v) return;
+      var a = agg[v] || (agg[v] = { orders: 0, spend: 0, ordQty: 0, recQty: 0, otBase: 0, otHit: 0, lateOpen: 0, lateVal: 0, lastOrder: "" });
+      a.orders++;
+      a.spend += fxHomeConvert(Number(p.amount_total) || 0, p.currency_code);
+      if (p.date_order && p.date_order > a.lastOrder) a.lastOrder = p.date_order;
+      var pl = linesByPo[p.id] || [];
+      var ord = 0, rec = 0, fully = pl.length > 0;
+      pl.forEach(function (l) { var q = Number(l.quantity) || 0, r = Number(l.qty_received) || 0; ord += q; rec += Math.min(r, q); if (r < q - 0.0001) fully = false; });
+      a.ordQty += ord; a.recQty += rec;
+      // on-time: only evaluable for a fully-received PO that has a promised date and a receipt date
+      if (p.date_planned && fully) {
+        var rd = recDateByNumber[(p.number || "").trim()];
+        if (rd) { a.otBase++; if (rd.slice(0, 10) <= p.date_planned) a.otHit++; }
+      }
+      // currently late: promised date passed and not fully received
+      if (p.date_planned && !fully && p.date_planned < todayStr) { a.lateOpen++; a.lateVal += fxHomeConvert(Number(p.amount_total) || 0, p.currency_code); }
+    });
+    var rows = Object.keys(agg).map(function (v) {
+      var a = agg[v];
+      var fill = a.ordQty > 0 ? (a.recQty / a.ordQty) * 100 : null;
+      var ot = a.otBase > 0 ? (a.otHit / a.otBase) * 100 : null;
+      var pw = priceBid[v] > 0 ? (priceWin[v] / priceBid[v]) * 100 : null;
+      var ret = returnsByVendor[v] || 0;
+      // composite: on-time 40, fill 30, price 20, returns penalty; missing signals fall back to neutral 70
+      var score = 0.40 * (ot != null ? ot : 70) + 0.30 * (fill != null ? Math.min(fill, 100) : 70) + 0.20 * (pw != null ? pw : 60) + 0.10 * 100;
+      score = Math.max(0, score - Math.min(ret, 5) * 4);
+      return { v: v, name: vName[v] || "(unknown)", a: a, fill: fill, ot: ot, pw: pw, ret: ret, score: score, grade: vsGrade(score) };
+    }).sort(function (x, y) { return y.score - x.score; });
+    // summary tiles
+    var totSpend = rows.reduce(function (s, r) { return s + r.a.spend; }, 0);
+    var otRows = rows.filter(function (r) { return r.ot != null; });
+    var avgOt = otRows.length ? otRows.reduce(function (s, r) { return s + r.ot; }, 0) / otRows.length : null;
+    var lateTot = rows.reduce(function (s, r) { return s + r.a.lateOpen; }, 0);
+    var pct = function (x) { return x == null ? '<span class="muted">-</span>' : (Math.round(x) + "%"); };
+    var kpis = '<div class="kpis" style="margin-bottom:14px">' +
+      kpi("Vendors scored", String(rows.length)) +
+      kpi("Spend (period)", cc + " " + money(totSpend)) +
+      kpi("Avg on-time", avgOt == null ? "-" : Math.round(avgOt) + "%") +
+      kpi("Open late orders", String(lateTot)) + '</div>';
+    var trs = rows.map(function (r) {
+      return '<tr class="vs-row" data-v="' + r.v + '" style="cursor:pointer">' +
+        '<td><span class="badge ' + vsGradeCls(r.grade) + '" style="font-weight:800">' + r.grade + '</span></td>' +
+        '<td><b>' + esc(r.name) + '</b></td>' +
+        '<td class="num">' + r.a.orders + '</td>' +
+        '<td class="num">' + cc + " " + money(r.a.spend) + '</td>' +
+        '<td class="num">' + pct(r.fill) + '</td>' +
+        '<td class="num">' + pct(r.ot) + '</td>' +
+        '<td class="num">' + pct(r.pw) + '</td>' +
+        '<td class="num">' + (r.a.lateOpen ? '<span class="badge unpaid">' + r.a.lateOpen + '</span>' : "0") + '</td>' +
+        '<td class="num">' + (r.ret ? '<span class="badge partial">' + r.ret + '</span>' : "0") + '</td>' +
+        '<td class="muted">' + esc(r.a.lastOrder || "") + '</td></tr>';
+    }).join("");
+    el.innerHTML = kpis + '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Grade</th><th>Vendor</th><th class="num">Orders</th><th class="num">Spend</th><th class="num" title="Received vs ordered quantity">Fill</th><th class="num" title="Delivered on or before the PO&rsquo;s promised date">On-time</th><th class="num" title="How often this vendor&rsquo;s RFQ quote was the cheapest">Price win</th><th class="num" title="Confirmed POs past their promised date, not fully received">Late</th><th class="num">Returns</th><th>Last order</th></tr></thead><tbody>' + trs + '</tbody></table></div>' +
+      '<div class="sub" style="margin-top:10px">Grade weights on-time (40%), fill rate (30%), price win-rate (20%) and returns. A dash means there is not enough history yet for that signal (e.g. a vendor never invited to an RFQ has no price win-rate). Click a vendor to open their record.</div>';
+    el.querySelectorAll(".vs-row").forEach(function (tr) { tr.onclick = function () { renderPartnerForm(tr.dataset.v, "vendor"); }; });
   }
 
   // ---- Procurement Status: per-project funnel of needed -> quoted -> ordered ->
