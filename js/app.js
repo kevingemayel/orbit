@@ -4050,9 +4050,19 @@
     if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
     var smart = (order && invCount) ? '<div class="o-smart"><button class="sb" id="o-sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isSale ? "Invoices" : "Bills") + '</span></button></div>' : "";
 
+    // PO closure control (audit P0-5): once every product line is fully received AND
+    // fully billed, stop offering unrestricted Receive / Create Bill and show it Closed.
+    // Description-only lines need no receipt; over-receipt/over-bill is already blocked.
+    var _prodLines = (lines || []).filter(function (l) { return l.product_id; });
+    var fullyReceived = _prodLines.length > 0 && _prodLines.every(function (l) { return Number(l.qty_received || 0) >= Number(l.quantity || 0) - 0.0001; });
+    var fullyBilled = (lines || []).length > 0 && (lines || []).every(function (l) { return Number(l.qty_billed || 0) >= Number(l.quantity || 0) - 0.0001; });
     var btns = "";
     if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
-    else if (confirmed) { if (!isSale) btns += '<button id="o-receive">Receive goods</button>'; btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>'; }
+    else if (confirmed) {
+      if (!isSale && !fullyReceived) btns += '<button id="o-receive">Receive goods</button>';
+      if (!fullyBilled) btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>';
+      if ((isSale || fullyReceived) && fullyBilled) btns += '<span class="badge paid" style="align-self:center;padding:6px 12px">' + (isSale ? "Fully invoiced" : "Received &amp; billed &middot; closed") + '</span>';
+    }
     if (order) btns += '<button id="o-print">Print</button>';
     var st = order ? order.state : "draft", atFirst = (st === "draft" || st === "sent");
     var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "RFQ") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
@@ -4267,7 +4277,7 @@
         var nid2 = await save(true); if (nid2) { toast(isSale ? "Sales order confirmed" : "Purchase order confirmed"); renderOrderForm(nid2, kind); }
       };
     } else if (confirmed) {
-      document.getElementById("o-toinv").onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
+      var toinvBtn = document.getElementById("o-toinv"); if (toinvBtn) toinvBtn.onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
       var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { renderReceiptForm({ order: order }); };
     }
     function printOrder() {
