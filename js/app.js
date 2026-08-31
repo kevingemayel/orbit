@@ -797,7 +797,7 @@
     purchase: {
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
-        { label: "Orders", items: [["Purchase Orders", "po.list"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
+        { label: "Orders", items: [["Purchase Orders", "po.list"], ["Blanket Orders", "pur.blanket"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
         { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Procurement Status", "pur.procstatus"], ["Vendor Scorecards", "pur.scorecards"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Logistics", items: [["Shipments", "shp.list"], ["Shipments board", "shp.board"]] },
         { label: "Vendors", action: "vend" },
@@ -881,6 +881,7 @@
       name: "Contacts", icon: "☎", color: "#0ea5e9", color2: "#0284c7", home: "contacts",
       menus: [
         { label: "Contacts", action: "contacts" },
+        { label: "Find Duplicates", action: "contact.dedupe" },
         { label: "Configuration", items: [["Tags", "contact.tags"]] }
       ]
     },
@@ -984,7 +985,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
+    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -993,7 +994,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
@@ -2273,6 +2274,7 @@
       case "hr.shifttmpl": return renderList(cfgShiftTemplates());
       case "contacts": return renderList(cfgContacts());
       case "contact.tags": return renderList(cfgContactTags());
+      case "contact.dedupe": return renderContactMerge();
       case "cal.month": return renderCalendar();
       case "cal.agenda": return renderAgenda();
       case "sign.list": return renderList(cfgSignRequests());
@@ -2336,6 +2338,7 @@
       case "pur.cutlist": return renderMaterialImport();
       case "pur.procstatus": return renderProcurementStatus();
       case "pur.scorecards": return renderVendorScorecards();
+      case "pur.blanket": return renderBlanketOrders();
       case "pur.sccert": return renderList(cfgSubcontractCerts());
       case "pur.match": return renderMatch();
       case "proj.list": return renderList(cfgProjects());
@@ -14587,6 +14590,128 @@
     el.querySelectorAll(".vs-row").forEach(function (tr) { tr.onclick = function () { renderPartnerForm(tr.dataset.v, "vendor"); }; });
   }
 
+  // ---- Blanket / contract orders: a standing agreement with a vendor (agreed items,
+  // prices and a validity date) that you draw against with "release" call-off POs.
+  // Zero schema: a blanket is a PO numbered BPO/..., a release is a normal PO whose
+  // note reads "Release of BPO/...". The screen tracks agreed vs released vs remaining.
+  async function nextBlanketNumber() {
+    var py = "BPO/" + new Date().getFullYear() + "/";
+    var rows = (await sb.from("purchase_orders").select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    return py + ("0000" + (maxSeq(rows, py) + 1)).slice(-4);
+  }
+  async function renderBlanketOrders() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Blanket Orders") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var cid = S.company.id, cc = S.company.currency_code;
+    var pos = (await sb.from("purchase_orders").select("id,number,partner_id,date_order,date_planned,state,amount_total,note").eq("company_id", cid)).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", cid)).data || [];
+    var pName = {}; partners.forEach(function (p) { pName[p.id] = p.name; });
+    var blankets = pos.filter(function (p) { return /^BPO\//.test(p.number || ""); });
+    var body = document.getElementById("o-body");
+    var newBtn = '<button class="btn sm pri" id="bo-new" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">+ New blanket agreement</button>';
+    if (!blankets.length) {
+      body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Blanket Orders</h3>' + newBtn + '</div><div class="o-empty" style="margin-top:14px">No blanket agreements yet. A blanket order is a standing deal with a vendor - agreed items and prices over a period - that you call off against with release POs. Create one, add the agreed lines, then raise releases as you need stock.</div></div></div>';
+      document.getElementById("bo-new").onclick = boNew; return;
+    }
+    var rows = blankets.map(function (b) {
+      var released = pos.filter(function (p) { return p.id !== b.id && (p.state !== "cancel") && (p.note || "").indexOf(b.number) >= 0; });
+      var relTot = released.reduce(function (s, p) { return s + Number(p.amount_total || 0); }, 0);
+      var agreed = Number(b.amount_total || 0);
+      var remain = agreed - relTot;
+      var pctUsed = agreed > 0 ? Math.min(100, Math.round(relTot / agreed * 100)) : 0;
+      var expired = b.date_planned && b.date_planned < today();
+      var statusBadge = expired ? '<span class="badge unpaid">Expired</span>' : (remain <= 0.009 && agreed > 0 ? '<span class="badge partial">Fully drawn</span>' : '<span class="badge paid">Active</span>');
+      return '<tr><td><b>' + esc(b.number) + '</b></td><td>' + esc(pName[b.partner_id] || "-") + '</td>' +
+        '<td class="muted">' + esc(b.date_planned || "-") + '</td>' +
+        '<td class="num">' + cc + " " + money(agreed) + '</td>' +
+        '<td class="num">' + cc + " " + money(relTot) + ' <span class="muted" style="font-size:11px">(' + released.length + ')</span></td>' +
+        '<td class="num"' + (remain < 0 ? ' style="color:var(--bad)"' : '') + '>' + cc + " " + money(remain) + '</td>' +
+        '<td style="min-width:90px"><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + pctUsed + '%;background:var(--accent)"></div></div></td>' +
+        '<td>' + statusBadge + '</td>' +
+        '<td><button class="btn sm bo-rel" data-id="' + b.id + '">Release</button> <button class="btn sm bo-open" data-id="' + b.id + '">Open</button></td></tr>';
+    }).join("");
+    body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Blanket Orders</h3>' + newBtn + '</div>' +
+      '<div class="sub" style="margin:6px 0 12px">A blanket agreement (BPO number) fixes the vendor, items and prices over a validity period. <b>Release</b> raises a call-off PO for the quantity you need now, at the agreed prices; the bar shows how much of the agreement you have drawn.</div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Number</th><th>Vendor</th><th>Valid until</th><th class="num">Agreed</th><th class="num">Released</th><th class="num">Remaining</th><th>Drawn</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div></div>';
+    document.getElementById("bo-new").onclick = boNew;
+    body.querySelectorAll(".bo-open").forEach(function (btn) { btn.onclick = function () { renderOrderForm(btn.dataset.id, "purchase"); }; });
+    body.querySelectorAll(".bo-rel").forEach(function (btn) { btn.onclick = function () { boRelease(btn.dataset.id); }; });
+  }
+  async function boNew() {
+    var num = await nextBlanketNumber();
+    var r = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: num, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: "Blanket agreement" }).select("id").single();
+    if (r.error) { toast("Could not create: " + errMsg(r.error)); return; }
+    toast("Blanket agreement " + num + " created - add the agreed items and a Valid-until date (Order Date's neighbour), then Save"); renderOrderForm(r.data.id, "purchase");
+  }
+  async function boRelease(blanketId) {
+    var b = (await sb.from("purchase_orders").select("id,number,partner_id,currency_code").eq("id", blanketId).maybeSingle()).data;
+    if (!b) { toast("Blanket not found"); return; }
+    var lines = (await sb.from("purchase_order_lines").select("*").eq("order_id", blanketId).order("sequence")).data || [];
+    var num = await nextOrderNumber("purchase");
+    var sub = lines.reduce(function (s, l) { return s + Number(l.price_subtotal || l.quantity * l.unit_price || 0); }, 0);
+    var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: num, partner_id: b.partner_id, state: "draft", date_order: today(), currency_code: b.currency_code || S.company.currency_code, amount_untaxed: sub, amount_total: sub, note: "Release of " + b.number }).select("id").single();
+    if (ins.error) { toast("Could not create release: " + errMsg(ins.error)); return; }
+    if (lines.length) {
+      var copy = lines.map(function (l, i) { return { company_id: S.company.id, order_id: ins.data.id, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, destination: l.destination || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id || null, price_subtotal: Number(l.price_subtotal || l.quantity * l.unit_price || 0), qty_received: 0, qty_billed: 0 }; });
+      await sb.from("purchase_order_lines").insert(copy);
+    }
+    toast("Release " + num + " drafted from " + b.number + " - set the call-off quantities and confirm"); renderOrderForm(ins.data.id, "purchase");
+  }
+  // ---- Contact duplicate detection + merge. Conservative and reversible: it reassigns
+  // every document from the losers to the chosen survivor, then flags each loser with
+  // custom.merged_into (never deletes), so a merge can be traced back and undone.
+  var MERGE_PARTNER_TABLES = ["invoices", "sale_orders", "purchase_orders", "payments", "projects", "project_tasks", "stock_pickings", "delivery_notes", "rfqs", "rfq_vendors", "rfq_bids", "tenders", "crm_leads", "crm_activities", "recurring_invoices", "ar_followups", "bank_statement_lines", "journal_lines", "portal_access", "event_suppliers", "event_payment_reminders", "partner_bank_accounts"];
+  function normName(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, ""); }
+  async function renderContactMerge() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Find Duplicates") + '</div><div class="o-body" id="o-body"><div class="o-empty">Scanning contacts...</div></div></div>';
+    wireBc();
+    var cid = S.company.id;
+    var parts = (await sb.from("partners").select("id,name,email,phone,vat,custom").eq("company_id", cid).order("name")).data || [];
+    var active = parts.filter(function (p) { return !(p.custom && p.custom.merged_into); });
+    var groups = {};
+    function push(k, p) { if (!k) return; (groups[k] = groups[k] || []).push(p); }
+    active.forEach(function (p) { push("n:" + normName(p.name), p); var e = (p.email || "").trim().toLowerCase(); if (e) push("e:" + e, p); var ph = (p.phone || "").replace(/[^0-9]/g, ""); if (ph.length >= 6) push("p:" + ph, p); });
+    var seen = {}, dupSets = [];
+    Object.keys(groups).forEach(function (k) { var g = groups[k]; if (g.length < 2) return; var ids = g.map(function (x) { return x.id; }).sort(); var sig = ids.join(","); if (seen[sig]) return; seen[sig] = 1; dupSets.push({ why: k[0], members: g }); });
+    var whyLabel = { n: "same name", e: "same email", p: "same phone" };
+    var body = document.getElementById("o-body");
+    if (!dupSets.length) { body.innerHTML = '<div style="padding:16px"><div class="card"><h3 style="margin:0 0 8px">Find Duplicates</h3><div class="o-empty">No likely duplicate contacts found - nothing matches on name, email or phone. Good, your contact list is clean.</div></div></div>'; return; }
+    var setsHtml = dupSets.map(function (s, si) {
+      var rows = s.members.map(function (p, i) {
+        return '<label class="cm-opt" style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-top:1px solid var(--line)"><input type="radio" name="cm-' + si + '" value="' + p.id + '"' + (i === 0 ? " checked" : "") + '><span style="flex:1"><b>' + esc(p.name) + '</b>' + (p.email ? ' <span class="muted">&middot; ' + esc(p.email) + '</span>' : "") + (p.phone ? ' <span class="muted">&middot; ' + esc(p.phone) + '</span>' : "") + (p.vat ? ' <span class="muted">&middot; ' + esc(p.vat) + '</span>' : "") + '</span></label>';
+      }).join("");
+      return '<div class="card" style="margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><b>' + s.members.length + ' contacts</b> <span class="badge">' + (whyLabel[s.why] || "match") + '</span><button class="btn sm pri cm-merge" data-si="' + si + '" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">Merge into selected</button></div><div class="sub" style="margin:4px 0 2px">Pick the one to <b>keep</b>. The others are merged into it: their invoices, orders, projects and history move across, then they are flagged as merged (not deleted).</div>' + rows + '</div>';
+    }).join("");
+    body.innerHTML = '<div style="padding:16px"><h3 style="margin:0 0 4px">Find Duplicates</h3><div class="sub" style="margin:0 0 12px">' + dupSets.length + ' possible duplicate group' + (dupSets.length === 1 ? "" : "s") + ' found. Merging is conservative: nothing is deleted, and each merged contact keeps a pointer to the survivor so it can be traced.</div>' + setsHtml + '</div>';
+    body.querySelectorAll(".cm-merge").forEach(function (btn) {
+      btn.onclick = function () {
+        var si = Number(btn.dataset.si), set = dupSets[si];
+        var survivor = document.querySelector('input[name="cm-' + si + '"]:checked').value;
+        var losers = set.members.map(function (m) { return m.id; }).filter(function (id) { return id !== survivor; });
+        var survName = (set.members.filter(function (m) { return m.id === survivor; })[0] || {}).name || "";
+        if (!confirm("Merge " + losers.length + " contact" + (losers.length === 1 ? "" : "s") + " into \"" + survName + "\"? Their documents move to it; the others are flagged as merged (not deleted).")) return;
+        mergeContacts(cid, survivor, losers);
+      };
+    });
+  }
+  async function mergeContacts(cid, survivorId, loserIds) {
+    var moved = 0;
+    for (var i = 0; i < loserIds.length; i++) {
+      var loser = loserIds[i];
+      for (var t = 0; t < MERGE_PARTNER_TABLES.length; t++) {
+        try { var r = await sb.from(MERGE_PARTNER_TABLES[t]).update({ partner_id: survivorId }).eq("partner_id", loser).select("id"); if (r && r.data) moved += r.data.length; } catch (e) { }
+      }
+      try { await sb.from("rfqs").update({ awarded_partner_id: survivorId }).eq("awarded_partner_id", loser); } catch (e) { }
+      try { await sb.from("tools").update({ holder_partner_id: survivorId }).eq("holder_partner_id", loser); } catch (e) { }
+      var lp = (await sb.from("partners").select("name,custom").eq("id", loser).maybeSingle()).data || {};
+      var cust = lp.custom || {}; cust.merged_into = survivorId; cust.merged_at = today();
+      var nm = (lp.name || "").replace(/ \[merged\]$/, "") + " [merged]";
+      await sb.from("partners").update({ name: nm, custom: cust }).eq("id", loser);
+    }
+    toast("Merged " + loserIds.length + " contact" + (loserIds.length === 1 ? "" : "s") + " - " + moved + " document link" + (moved === 1 ? "" : "s") + " moved"); renderContactMerge();
+  }
   // ---- Procurement Status: per-project funnel of needed -> quoted -> ordered ->
   // received, vs the cost budget. Ties the take-off, RFQs and POs back to the job.
   async function renderProcurementStatus() {
