@@ -12227,12 +12227,12 @@
   }
   function cfgWarehouses() {
     return {
-      title: "Warehouses", pageSize: 50,
+      title: "Warehouses", pageSize: 50, editTable: "warehouses",
       fetch: function () { return sb.from("warehouses").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (w) { return (w.name || "") + " " + (w.code || ""); },
       columns: [
-        { label: "Name", get: function (w) { return '<b>' + esc(w.name) + '</b>'; } },
-        { label: "Code", get: function (w) { return '<span class="muted">' + esc(w.code || "") + '</span>'; } }
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (w) { return '<b>' + esc(w.name) + '</b>'; } },
+        { label: "Code", edit: { field: "code", type: "text" }, get: function (w) { return '<span class="muted">' + esc(w.code || "") + '</span>'; } }
       ],
       onNew: function () { openWarehouseModal(); }
     };
@@ -12253,7 +12253,7 @@
   }
   function cfgLocations() {
     return {
-      title: "Locations", pageSize: 100,
+      title: "Locations", pageSize: 100, editTable: "stock_locations",
       fetch: function () {
         return Promise.all([
           sb.from("stock_locations").select("*").eq("company_id", S.company.id).order("name"),
@@ -12262,9 +12262,9 @@
       },
       searchText: function (l) { return (l.name || "") + " " + (l.usage || ""); },
       columns: [
-        { label: "Name", get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
         { label: "Warehouse", get: function (l) { return '<span class="muted">' + esc(l._wh || "") + '</span>'; } },
-        { label: "Usage", get: function (l) { return '<span class="badge">' + esc(l.usage) + '</span>'; } }
+        { label: "Usage", edit: { field: "usage", type: "select", options: [["internal", "internal"], ["supplier", "supplier"], ["customer", "customer"], ["inventory_loss", "inventory_loss"], ["production", "production"], ["transit", "transit"]] }, get: function (l) { return '<span class="badge">' + esc(l.usage) + '</span>'; } }
       ],
       groupBy: [{ label: "Usage", get: function (l) { return l.usage; } }, { label: "Warehouse", get: function (l) { return l._wh || "None"; } }],
       onNew: function () { openLocationModal(); }
@@ -12531,9 +12531,9 @@
       searchText: function (p) { return (p.name || "") + " " + (p.partners ? p.partners.name : ""); },
       columns: [
         { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
-        { label: "Project", get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
+        { label: "Project", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
         { label: "Customer", get: function (p) { return esc(p.partners ? p.partners.name : ""); } },
-        { label: "Deadline", get: function (p) { return '<span class="muted">' + esc(p.date_deadline || "") + '</span>'; } },
+        { label: "Deadline", edit: { field: "date_deadline", type: "date" }, get: function (p) { return '<span class="muted">' + esc(p.date_deadline || "") + '</span>'; } },
         { label: "Billing", get: function (p) { return '<span class="muted">' + esc(BILLING[p.billing_type] || p.billing_type) + '</span>'; } },
         { label: "Hours", num: true, get: function (p) { return Number(p._hours).toFixed(2); } },
         { label: "Stage", get: function (p) { var m = {}; PROJECT_STATUS.forEach(function (s) { m[s[0]] = s[1]; }); return '<span class="muted">' + esc(m[p.status] || p.status || "") + '</span>'; } },
@@ -12654,9 +12654,9 @@
       },
       searchText: function (t) { return (t.name || "") + " " + (t.projects ? t.projects.name : ""); },
       columns: [
-        { label: "Task", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } },
+        { label: "Task", edit: { field: "name", type: "text" }, get: function (t) { return '<b>' + esc(t.name) + '</b>'; } },
         { label: "Project", get: function (t) { return esc(t.projects ? t.projects.name : ""); } },
-        { label: "Planned h", num: true, get: function (t) { return Number(t.planned_hours || 0); } },
+        { label: "Planned h", num: true, edit: { field: "planned_hours", type: "number" }, get: function (t) { return Number(t.planned_hours || 0); } },
         { label: "Logged h", num: true, get: function (t) { return Number(t._hours).toFixed(2); } },
         { label: "Deadline", get: function (t) { return '<span class="muted">' + esc(t.date_deadline || "") + '</span>'; } }
       ],
@@ -12920,7 +12920,7 @@
   }
   function cfgEmployees() {
     return {
-      title: "Employees", pageSize: 80,
+      title: "Employees", pageSize: 80, editTable: "hr_employees",
       fetch: function () {
         return sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name").then(async function (res) {
           var rows = res.data || [], mm = {}; rows.forEach(function (e) { mm[e.id] = e.name; });
@@ -12932,11 +12932,11 @@
       },
       searchText: function (e) { return [e.name, e.first_name, e.last_name, e.work_email, e.personal_email, e.personal_phone, e.mobile_phone, e.work_phone, e.identification_no, e.nationality, (e.hr_jobs ? e.hr_jobs.name : ""), (e.hr_departments ? e.hr_departments.name : "")].filter(Boolean).join(" "); },
       columns: [
-        { label: "Name", get: function (e) { return '<b>' + esc(e.name) + '</b>'; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (e) { return '<b>' + esc(e.name) + '</b>'; } },
         { label: "Job Position", get: function (e) { return esc(e.hr_jobs ? e.hr_jobs.name : ""); } },
         { label: "Department", get: function (e) { return esc(e.hr_departments ? e.hr_departments.name : ""); } },
         { label: "Phone", get: function (e) { return '<span class="muted">' + esc(e.personal_phone || e.mobile_phone || e.work_phone || "") + '</span>'; } },
-        { label: "Work Email", get: function (e) { return '<span class="muted">' + esc(e.work_email || "") + '</span>'; } },
+        { label: "Work Email", edit: { field: "work_email", type: "text" }, get: function (e) { return '<span class="muted">' + esc(e.work_email || "") + '</span>'; } },
         { label: "Manager", get: function (e) { return esc(e._mgr || ""); } },
         { label: "Status", get: function (e) { return (e.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>') + (e.is_active && e._noContract ? ' <span class="badge unpaid" title="No running contract - excluded from payroll">No contract</span>' : ''); } }
       ],
@@ -14025,13 +14025,13 @@
   // ---- Cost codes (ORB-13): the shared cost dimension used across budget / PO / bill ----
   function cfgCostCodes() {
     return {
-      title: "Cost Codes", pageSize: 300,
+      title: "Cost Codes", pageSize: 300, editTable: "cost_codes",
       fetch: function () { return sb.from("cost_codes").select("*").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.code || "") + " " + (c.name || "") + " " + (c.category || ""); },
       columns: [
-        { label: "Code", get: function (c) { return '<b>' + esc(c.code) + '</b>'; } },
-        { label: "Name", get: function (c) { return esc(c.name || ""); } },
-        { label: "Category", get: function (c) { return '<span class="muted">' + esc(c.category || "") + '</span>'; } },
+        { label: "Code", edit: { field: "code", type: "text" }, get: function (c) { return '<b>' + esc(c.code) + '</b>'; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (c) { return esc(c.name || ""); } },
+        { label: "Category", edit: { field: "category", type: "text" }, get: function (c) { return '<span class="muted">' + esc(c.category || "") + '</span>'; } },
         { label: "Status", get: function (c) { return c.is_active === false ? '<span class="badge draft">Inactive</span>' : '<span class="badge partial">Active</span>'; } }
       ],
       groupBy: [{ label: "Category", get: function (c) { return c.category || "Uncategorised"; } }],
@@ -14671,19 +14671,49 @@
     var cc = S.company.currency_code;
     var pos = (await sb.from("purchase_orders").select("id,number,state, partners(name)").eq("company_id", S.company.id).in("state", ["purchase", "done"]).order("date_order", { ascending: false })).data || [];
     if (!pos.length) { document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="o-empty">No confirmed purchase orders yet. Confirm a PO, receive goods, then bill it to see the match here.</div>'; return; }
-    var lines = (await sb.from("purchase_order_lines").select("order_id,product_id,name,quantity,qty_received,qty_billed,unit_price").in("order_id", pos.map(function (p) { return p.id; }))).data || [];
+    var poIds = pos.map(function (p) { return p.id; });
+    var lines = (await sb.from("purchase_order_lines").select("order_id,product_id,name,quantity,qty_received,qty_billed,unit_price,size,width,height").in("order_id", poIds)).data || [];
+    // actual bill lines (real charged qty + price), joined to the PO via invoices.purchase_order_id
+    var bills = (await sb.from("invoices").select("id,purchase_order_id").in("purchase_order_id", poIds).eq("move_type", "in_invoice")).data || [];
+    var billByInv = {}, billIds = bills.map(function (b) { billByInv[b.id] = b.purchase_order_id; return b.id; });
+    var ilines = billIds.length ? ((await sb.from("invoice_lines").select("invoice_id,product_id,name,quantity,unit_price,price_subtotal").in("invoice_id", billIds)).data || []) : [];
+    // products (typed) for converted base quantities
+    var pids = lines.map(function (l) { return l.product_id; }).filter(Boolean);
+    var prodBy = {}; if (pids.length) { ((await sb.from("products").select("id,material_form,spec,uom").in("id", pids)).data || []).forEach(function (p) { prodBy[p.id] = p; }); }
+    // aggregate actual billed qty + value per (PO, product/name)
+    var billAgg = {};  // key po|prod|name -> {qty, val}
+    function keyOf(po, pid, nm) { return po + "|" + (pid || "") + "|" + (pid ? "" : (nm || "").toLowerCase()); }
+    ilines.forEach(function (il) { var po = billByInv[il.invoice_id]; if (!po) return; var k = keyOf(po, il.product_id, il.name); var a = billAgg[k] = billAgg[k] || { qty: 0, val: 0 }; a.qty += Number(il.quantity || 0); a.val += Number(il.price_subtotal || 0); });
     var byPo = {}; lines.forEach(function (l) { (byPo[l.order_id] = byPo[l.order_id] || []).push(l); });
-    function badge(ord, rec, bil, hasProd) { if (!hasProd) return '<span class="badge" title="No product - a cost line, never stocked">Description only</span>'; return (bil > rec + 0.001) ? '<span class="badge unpaid">Billed &gt; received</span>' : (rec >= ord - 0.001 && bil >= ord - 0.001 ? '<span class="badge paid">Matched</span>' : (rec > 0.001 || bil > 0.001 ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>')); }
+    var TOL = 0.005;  // 0.5% price-variance tolerance
+    var exQty = 0, exPrice = 0;
+    function baseNote(l) { var pr = prodBy[l.product_id]; if (!pr) return ""; var pk = packInfo(pr); if (pk.form === "generic" || !pk.factor) return ""; var f = pk.factor; if (pk.form === "sheet" || pk.form === "glass") { var w = Number(l.width) || 0, h = Number(l.height) || 0; if (w && h) f = w * h / 1e6; } else if (pk.form === "bar" && l.size) { var L = parseFloat(l.size) || 0; if (L > 0) f = L; } if (!(f > 0)) return ""; return '<div class="muted" style="font-size:10px">base: ord ' + msFmt(Number(l.quantity || 0) * f, 2) + ' / rec ' + msFmt(Number(l.qty_received || 0) * f, 2) + ' ' + pk.base + '</div>'; }
     var rows = pos.map(function (p) {
       var ls = byPo[p.id] || [];
-      var head = '<tr class="sec"><td colspan="6">' + esc(p.number || "") + ' &middot; ' + esc(p.partners ? p.partners.name : "") + '</td></tr>';
-      var lrows = ls.map(function (l) { var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), bil = Number(l.qty_billed || 0); return '<tr><td>' + esc(l.name) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + bil + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + badge(ord, rec, bil, !!l.product_id) + '</td></tr>'; }).join("");
-      return head + (lrows || '<tr><td colspan="6" class="muted">No lines.</td></tr>');
+      var head = '<tr class="sec"><td colspan="8">' + esc(p.number || "") + ' &middot; ' + esc(p.partners ? p.partners.name : "") + '</td></tr>';
+      var lrows = ls.map(function (l) {
+        var ord = Number(l.quantity || 0), rec = Number(l.qty_received || 0), poPrice = Number(l.unit_price || 0);
+        var agg = billAgg[keyOf(p.id, l.product_id, l.name)] || { qty: Number(l.qty_billed || 0), val: Number(l.qty_billed || 0) * poPrice };
+        var bilQty = agg.qty, bilVal = agg.val, bilPrice = bilQty ? bilVal / bilQty : 0;
+        var ordVal = ord * poPrice, pvar = bilPrice - poPrice, pvarPct = poPrice ? (pvar / poPrice * 100) : 0;
+        var overRec = bilQty > rec + 0.001, priceOff = bilQty > 0 && Math.abs(pvar) > Math.max(0.005, Math.abs(poPrice) * TOL);
+        if (overRec) exQty++; if (priceOff) exPrice++;
+        var status = !l.product_id ? '<span class="badge" title="Cost line, never stocked">Description only</span>'
+          : overRec ? '<span class="badge unpaid" title="Billed for more than received - investigate before paying">Billed &gt; received</span>'
+            : priceOff ? '<span class="badge unpaid" title="Bill price differs from the PO price">Price ' + (pvar > 0 ? "+" : "") + (Math.round(pvarPct * 10) / 10) + '%</span>'
+              : (rec >= ord - 0.001 && bilQty >= ord - 0.001) ? '<span class="badge paid">Matched</span>'
+                : (rec > 0.001 || bilQty > 0.001) ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>';
+        var priceCell = poPrice ? money(poPrice) + (bilQty && Math.abs(pvar) > 0.005 ? ' <span style="color:var(--bad);font-size:11px">&rarr; ' + money(bilPrice) + '</span>' : "") : "";
+        return '<tr><td>' + esc(l.name) + baseNote(l) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + (Math.round(bilQty * 1000) / 1000) + '</td><td class="num">' + priceCell + '</td><td class="num">' + money(ordVal) + '</td><td class="num">' + money(bilVal) + '</td><td>' + status + '</td></tr>';
+      }).join("");
+      return head + (lrows || '<tr><td colspan="8" class="muted">No lines.</td></tr>');
     }).join("");
-    var exceptions = lines.filter(function (l) { return Number(l.qty_billed || 0) > Number(l.qty_received || 0) + 0.001; }).length;
-    document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; ordered vs received vs billed &middot; ' + (exceptions ? '<span style="color:var(--bad)">' + exceptions + ' exception(s)</span>' : 'no exceptions') + '</div>' +
-      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Item</td><td class="num">Ordered</td><td class="num">Received</td><td class="num">Billed</td><td class="num">Unit price</td><td>Status</td></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:12px">Matched = goods received and billed both cover the ordered quantity. "Billed &gt; received" flags a bill for goods not yet received - investigate before paying. Use Receive goods on a confirmed PO to record receipts.</div>';
+    var totOrd = 0, totBill = 0;
+    lines.forEach(function (l) { totOrd += Number(l.quantity || 0) * Number(l.unit_price || 0); var a = billAgg[keyOf(l.order_id, l.product_id, l.name)]; totBill += a ? a.val : 0; });
+    document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; PO vs receipt vs bill on quantity, price &amp; value &middot; ' + ((exQty + exPrice) ? '<span style="color:var(--bad)">' + exQty + ' over-billed, ' + exPrice + ' price-variance</span>' : 'no exceptions') + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Item</td><td class="num">Ordered</td><td class="num">Received</td><td class="num">Billed</td><td class="num">Price (PO&rarr;bill)</td><td class="num">Ordered value</td><td class="num">Billed value</td><td>Status</td></tr></thead><tbody>' + rows +
+      '<tr class="tot" style="font-weight:700"><td>Total</td><td></td><td></td><td></td><td></td><td class="num">' + money(totOrd) + '</td><td class="num">' + money(totBill) + '</td><td></td></tr></tbody></table></div>' +
+      '<div class="sub" style="margin-top:12px"><b>Matched</b> = received and billed both cover the order and the bill price equals the PO price. <b>Billed &gt; received</b> = a bill for goods not yet received. <b>Price ±%</b> = the bill unit price differs from the PO (invoice price variance) - the classic 3-way exception to catch before paying. Base row shows the converted stock measure for counted materials (sheets&rarr;m&sup2;, bars&rarr;m).</div>';
   }
 
   // ============================ MATERIAL REQUISITIONS ============================
