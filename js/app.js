@@ -5739,16 +5739,31 @@
       else { var up = await sb.from("production_runs").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } await sb.from("production_consumption").delete().eq("run_id", id); }
       var cl = collectLines("rn-lines").map(function (l) { return { org_id: S.company.org_id, run_id: runId, product_id: l.kind === "product" ? l.rid : null, project_item_id: l.kind === "pitem" ? l.rid : null, description: l.description || null, qty: l.qty, unit: l.unit }; });
       if (cl.length) { var ci = await sb.from("production_consumption").insert(cl); if (ci.error) { toast("Saved, but lines failed: " + errMsg(ci.error)); go("mfg.runs"); return; } }
-      // Completing a run moves stock: consume the input materials out of on-hand, put
-      // the output in (quantity only - materials are already expensed on the vendor bill).
+      // Completing a run moves stock through WIP (like a work order): components are
+      // consumed out of raw-material inventory into WIP (Dr 3500 / Cr 3100) and the
+      // output is booked back at the absorbed component cost (Dr 3100 / Cr 3500), so
+      // the finished item carries real value. No 3500 account -> quantity-only (legacy).
       var movedStock = false;
       if (row.status === "done" && !r.stock_posted) {
         var invp = await ensureInventory();
         if (invp && invp.stock) {
-          var pmoves = [];
-          cl.forEach(function (l) { if (l.product_id && (Number(l.qty) || 0) > 0) pmoves.push({ company_id: S.company.id, product_id: l.product_id, quantity: Number(l.qty), size: null, location_id: invp.stock, location_dest_id: invp.customer, project_id: row.project_id || null, state: "done", date: (row.run_date || today()) + "T10:00:00Z" }); });
-          if (row.output_product_id && (Number(row.output_qty) || 0) > 0) pmoves.push({ company_id: S.company.id, product_id: row.output_product_id, quantity: Number(row.output_qty), size: null, location_id: invp.supplier, location_dest_id: invp.stock, project_id: row.project_id || null, state: "done", date: (row.run_date || today()) + "T10:05:00Z" });
-          if (pmoves.length) { var mv = await sb.from("stock_moves").insert(pmoves); if (!mv.error) { await sb.from("production_runs").update({ stock_posted: true }).eq("id", runId); movedStock = true; } }
+          var wipAcc = (await invAccounts()).wip;
+          var _pids = cl.filter(function (l) { return l.product_id; }).map(function (l) { return l.product_id; });
+          if (row.output_product_id) _pids.push(row.output_product_id);
+          var _pmap = {}; if (_pids.length) { ((await sb.from("products").select("id,name,cost_price").in("id", _pids)).data || []).forEach(function (p) { _pmap[p.id] = p; }); }
+          var absorbed = 0, movedAny = false;
+          for (var ci2 = 0; ci2 < cl.length; ci2++) {
+            var l2 = cl[ci2]; if (!l2.product_id || !(Number(l2.qty) > 0)) continue;
+            var pm = _pmap[l2.product_id] || {};
+            var cmv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: l2.product_id, quantity: Number(l2.qty), location_id: invp.stock, location_dest_id: invp.customer, project_id: wipAcc ? null : (row.project_id || null), state: "done", date: (row.run_date || today()) + "T10:00:00Z" }).select("id").single();
+            if (!cmv.error) { absorbed += Number(l2.qty) * Number(pm.cost_price || 0); movedAny = true; if (wipAcc) await postStockValue("wip_consume", { id: l2.product_id, name: pm.name, cost_price: pm.cost_price }, Number(l2.qty), cmv.data && cmv.data.id, null); }
+          }
+          if (row.output_product_id && (Number(row.output_qty) || 0) > 0) {
+            var opm = _pmap[row.output_product_id] || {};
+            var omv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: row.output_product_id, quantity: Number(row.output_qty), location_id: invp.supplier, location_dest_id: invp.stock, project_id: null, state: "done", date: (row.run_date || today()) + "T10:05:00Z" }).select("id").single();
+            if (!omv.error) { movedAny = true; if (wipAcc && absorbed > 0) { var ou = absorbed / Number(row.output_qty); await postStockValue("wip_output", { id: row.output_product_id, name: opm.name }, Number(row.output_qty), omv.data && omv.data.id, null, ou); await sb.from("products").update({ cost_price: Math.round(ou * 10000) / 10000 }).eq("id", row.output_product_id); } }
+          }
+          if (movedAny) { await sb.from("production_runs").update({ stock_posted: true }).eq("id", runId); movedStock = true; }
         }
       }
       toast(movedStock ? "Done - materials consumed and output added to stock" : "Saved"); go("mfg.runs");
@@ -11904,27 +11919,41 @@
   var INVACC = null;
   async function invAccounts() {
     if (INVACC && INVACC.company === S.company.id) return INVACC;
-    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["3100", "4700", "6000", "6500"])).data || [];
+    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["3100", "3500", "4700", "6000", "6500"])).data || [];
     var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
+    // Self-heal: older companies may predate the WIP/finished-goods account (3500).
+    // Create it so fabrication (work orders / production) can capitalise through WIP.
+    if (!by["3500"] && by["3100"]) {
+      var w = await sb.from("accounts").insert({ company_id: S.company.id, code: "3500", name: "Work in progress / finished goods", type_code: "asset_current" }).select("id").single();
+      if (!w.error && w.data) by["3500"] = w.data.id;
+    }
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
-    INVACC = { company: S.company.id, inv: by["3100"], susp: by["4700"], cogs: by["6000"], adj: by["6500"], journal: jr ? jr.id : null };
+    INVACC = { company: S.company.id, inv: by["3100"], wip: by["3500"], susp: by["4700"], cogs: by["6000"], adj: by["6500"], journal: jr ? jr.id : null };
     return INVACC;
   }
   // Perpetual-inventory GL posting for a stock move (value = qty x product cost).
   //  receive: Dr 3100 Inventory / Cr 4700 Interim ; deliver: Dr 6000 COGS / Cr 3100
   //  adjust up: Dr 3100 / Cr 6500 ; adjust down: Dr 6500 / Cr 3100
+  //  wip_consume: Dr 3500 WIP / Cr 3100  (raw material into fabrication)
+  //  wip_output:  Dr 3100 / Cr 3500 WIP  (finished good back into stock at absorbed cost)
   async function postStockValue(kind, product, qty, moveId, projId, unitCost) {
     var cost = (unitCost != null && unitCost !== "" && Number(unitCost) > 0) ? Number(unitCost) : Number(product.cost_price || 0), value = qty * cost;
     if (value <= 0) return;
     var a = await invAccounts();
     if (!a.journal || !a.inv) return;
+    // WIP paths need the 3500 account; if it is somehow missing, degrade safely:
+    // consume -> expense (old behaviour), output -> quantity-only (skip GL).
+    if (kind === "wip_consume" && !a.wip) kind = "deliver";
+    if (kind === "wip_output" && !a.wip) return;
     var dr, cr, sQ = qty, sV = value;
     if (kind === "receive") { dr = a.inv; cr = a.susp; }
     else if (kind === "deliver") { dr = a.cogs; cr = a.inv; sQ = -qty; sV = -value; }
     else if (kind === "adjust_up") { dr = a.inv; cr = a.adj; }
+    else if (kind === "wip_consume") { dr = a.wip; cr = a.inv; sQ = -qty; sV = -value; }
+    else if (kind === "wip_output") { dr = a.inv; cr = a.wip; }
     else { dr = a.adj; cr = a.inv; sQ = -qty; sV = -value; }
     if (!dr || !cr) return;
-    var narr = (projId ? "Material issued: " : "Stock: ") + (product.name || "");
+    var narr = (kind === "wip_consume" ? "WIP consume: " : kind === "wip_output" ? "WIP output: " : projId ? "Material issued: " : "Stock: ") + (product.name || "");
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: a.journal, date: today(), ref: "", narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: projId ? "material_issue" : "stock", source_id: moveId ? String(moveId) : "" }).select("id").single();
     if (e.error) { toast("Stock saved; GL entry failed: " + errMsg(e.error)); return; }
     var eid = e.data.id;
@@ -15925,23 +15954,36 @@
     var blines = (await sb.from("bom_lines").select("*, products(name,cost_price)").eq("bom_id", wo.bom_id).order("sequence")).data || [];
     var inv = await ensureInventory();
     var factor = bom && Number(bom.output_qty) ? (Number(wo.quantity || 0) / Number(bom.output_qty)) : Number(wo.quantity || 0);
-    var consumed = 0;
+    var wipAcc = (await invAccounts()).wip;
+    // WIP costing: raw components are moved OUT of raw-material inventory into WIP
+    // (Dr 3500 / Cr 3100), and the finished good is booked back into stock at the
+    // ABSORBED component cost (Dr 3100 / Cr 3500). WIP nets to zero; the fabricated
+    // unit now carries real book value, and its cost hits the job only when it is
+    // later issued/installed - not at fabrication. (No 3500 account -> old behaviour:
+    // consume expenses to COGS on the project, finished good is quantity-only.)
+    var consumed = 0, absorbed = 0;
     for (var i = 0; i < blines.length; i++) {
       var bl = blines[i], pr = bl.products || {};
       var qty = Number(bl.quantity || 0) * factor;
       if (!(qty > 0) || !bl.product_id) continue;
-      var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: bl.product_id, quantity: qty, location_id: inv.stock, location_dest_id: inv.customer, project_id: wo.project_id || null, state: "done", date: new Date().toISOString() }).select("id").single();
-      if (!mv.error) { await postStockValue("deliver", { id: bl.product_id, name: pr.name, cost_price: pr.cost_price }, qty, mv.data && mv.data.id, wo.project_id || null); consumed++; }
+      var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: bl.product_id, quantity: qty, location_id: inv.stock, location_dest_id: inv.customer, project_id: wipAcc ? null : (wo.project_id || null), state: "done", date: new Date().toISOString() }).select("id").single();
+      if (!mv.error) { absorbed += qty * Number(pr.cost_price || 0); await postStockValue(wipAcc ? "wip_consume" : "deliver", { id: bl.product_id, name: pr.name, cost_price: pr.cost_price }, qty, mv.data && mv.data.id, wipAcc ? null : (wo.project_id || null)); consumed++; }
     }
-    // book the finished goods back into stock (quantity-only, matching the production-run path;
-    // components are already expensed to the job above, so the FG move carries no book value = no double count)
-    var produced = false;
+    // Book the finished good back into stock. With a WIP account it carries the
+    // absorbed cost (capitalised); without one it is quantity-only (legacy).
+    var produced = false, fgUnit = 0;
     if (wo.product_id && Number(wo.quantity || 0) > 0) {
-      var fg = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: wo.product_id, quantity: Number(wo.quantity), location_id: inv.supplier, location_dest_id: inv.stock, project_id: wo.project_id || null, state: "done", date: new Date().toISOString() });
-      produced = !fg.error;
+      var fgprod = (await sb.from("products").select("id,name").eq("id", wo.product_id).maybeSingle()).data || { id: wo.product_id, name: "" };
+      var fgmv = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: wo.product_id, quantity: Number(wo.quantity), location_id: inv.supplier, location_dest_id: inv.stock, project_id: null, state: "done", date: new Date().toISOString() }).select("id").single();
+      produced = !fgmv.error;
+      if (produced && wipAcc && absorbed > 0) {
+        fgUnit = absorbed / Number(wo.quantity);
+        await postStockValue("wip_output", fgprod, Number(wo.quantity), fgmv.data && fgmv.data.id, null, fgUnit);
+        await sb.from("products").update({ cost_price: Math.round(fgUnit * 10000) / 10000 }).eq("id", wo.product_id);
+      }
     }
     await sb.from("work_orders").update({ quantity_done: Number(wo.quantity || 0), state: "done" }).eq("id", wo.id);
-    toast("Work order complete - " + consumed + " component(s) consumed" + (produced ? (", " + Number(wo.quantity) + " produced into stock") : ""));
+    toast("Work order complete - " + consumed + " component(s) consumed" + (produced ? (", " + Number(wo.quantity) + " produced" + (wipAcc && absorbed > 0 ? " (capitalised at " + S.company.currency_code + " " + money(fgUnit) + "/unit)" : " into stock")) : ""));
     renderWorkOrderForm(wo.id);
   }
 
