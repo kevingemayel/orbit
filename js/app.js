@@ -1424,14 +1424,12 @@
   var HOME_EDIT = false;
   function homePrefKey() { return "orbit_home_" + (S.company ? S.company.id : "x"); }
   function homePref() {
-    try { var raw = localStorage.getItem(homePrefKey()); if (raw) { var p = JSON.parse(raw); if (p && p.hidden) return p; } } catch (e) { }
-    var ind = (S.company && S.company.profile && S.company.profile.industry) || "";
-    var vis = {}; CORE_APPS.concat(industryApps(ind)).forEach(function (k) { vis[k] = 1; });
-    var hidden = {}; Object.keys(APPS).forEach(function (k) { if (!vis[k] && k !== "settings") hidden[k] = 1; });
-    var p = { hidden: hidden }; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { }
-    return p;
+    // Only a home the user DELIBERATELY trimmed (userSet) is remembered. Everyone
+    // else sees EVERY app they can access - they remove what they don't need via Edit.
+    try { var raw = localStorage.getItem(homePrefKey()); if (raw) { var p = JSON.parse(raw); if (p && p.userSet && p.hidden) return p; } } catch (e) { }
+    return { hidden: {} };
   }
-  function homeSetHidden(k, hide) { var p = homePref(); p.hidden = p.hidden || {}; if (hide) p.hidden[k] = 1; else delete p.hidden[k]; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { } }
+  function homeSetHidden(k, hide) { var p = homePref(); p.hidden = p.hidden || {}; if (hide) p.hidden[k] = 1; else delete p.hidden[k]; p.userSet = true; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { } }
   function homeTop(extraLeft, extraRight) {
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     return '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div>' + (extraLeft || '<span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>') +
@@ -4678,7 +4676,9 @@
   // Full list of countries for the address dropdown (cities stay free text - a world
   // cities list is far too large to embed; type the town/city).
   var COUNTRIES = ["Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia", "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin", "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi", "Cambodia", "Cameroon", "Canada", "Cape Verde", "Central African Republic", "Chad", "Chile", "China", "Colombia", "Comoros", "Congo (Brazzaville)", "Congo (Kinshasa)", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Cyprus", "Czechia", "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea", "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana", "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya", "Kiribati", "Kosovo", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein", "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands", "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco", "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria", "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea", "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis", "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia", "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia", "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia", "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States", "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe"];
-  var INDUSTRY_SEED = ["Construction", "General contractor", "Subcontractor", "Property developer", "Consultant / engineering", "Architecture", "Facade / cladding", "Fit-out / interiors", "Glass / glazing", "Aluminium / metalwork", "Steel fabrication", "Manufacturing", "Supplier / trading", "Real estate", "Hospitality", "Retail", "Government / public", "Education", "Healthcare", "Other"];
+  // A broad, cross-industry starting list (a company can add its own from the form).
+  // Kept general on purpose - Orbit is not construction-only.
+  var INDUSTRY_SEED = ["Agriculture", "Architecture", "Automotive", "Banking / Finance", "Construction", "Consulting", "Consumer goods", "E-commerce", "Education", "Energy / Utilities", "Engineering", "Entertainment / Media", "Fashion / Apparel", "Food & Beverage", "Government / Public sector", "Healthcare", "Hospitality / Hotels", "Import / Export", "Insurance", "IT / Software", "Legal services", "Logistics / Transport", "Manufacturing", "Marketing / Advertising", "Mining / Metals", "Non-profit / NGO", "Oil & Gas", "Pharmaceuticals", "Real estate", "Retail", "Telecommunications", "Textiles", "Tourism / Travel", "Wholesale / Distribution", "Other"];
   var CAP_SEED = ["Aluminium profiles", "Glass", "Sealants & adhesives", "Hardware & accessories", "Steel & metalwork", "Fabrication", "Powder coating / anodising", "Gaskets & rubber", "Fasteners", "Installation / labour", "Transport / logistics", "Composite panels"];
   var RAT_PRICE = ["", "Very Cheap", "Cheap", "Average", "Expensive", "Very Expensive"];
   var RAT_QUAL = ["", "Low", "Medium", "High"];
