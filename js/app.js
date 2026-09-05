@@ -3925,8 +3925,8 @@
     inp.addEventListener("blur", function () { setTimeout(function () { menu.hidden = true; }, 160); });
   }
   // ---- material maths: reuse the product calculator (all forms) on a purchase line ----
-  var LINE_BASIS = { sheet: [["sheet", "per sheet"], ["m2", "per m2"], ["kg", "per kg"]], bar: [["bar", "per bar"], ["m", "per metre"], ["kg", "per kg"]], liquid: [["container", "per container"], ["L", "per litre"]], roll: [["roll", "per roll"], ["lm", "per linear m"], ["kg", "per kg"]], generic: [["each", "each"]] };
-  function lineDefaultBasis(form) { return ({ sheet: "sheet", bar: "bar", liquid: "container", roll: "roll" })[form] || "each"; }
+  var LINE_BASIS = { sheet: [["sheet", "per sheet"], ["m2", "per m2"], ["kg", "per kg"]], glass: [["unit", "per unit"], ["m2", "per m2"], ["kg", "per kg"]], bar: [["bar", "per bar"], ["m", "per metre"], ["kg", "per kg"]], liquid: [["container", "per container"], ["L", "per litre"]], roll: [["roll", "per roll"], ["lm", "per linear m"], ["kg", "per kg"]], generic: [["each", "each"]] };
+  function lineDefaultBasis(form) { return ({ sheet: "sheet", glass: "m2", bar: "bar", liquid: "container", roll: "roll" })[form] || "each"; }
   function prodMat(product) {
     if (!product) return { form: "generic", basis: "each" };
     var sp = product.spec || {}, d = sp.dims || {}, form = product.material_form || "generic";
@@ -3942,7 +3942,7 @@
   // them (the item's own area/length/volume - never a global uom factor).
   function packInfo(product) {
     var m = prodMat(product), d = (product && product.spec && product.spec.dims) || {};
-    if (m.form === "sheet") { var w = Number(d.w) || 0, h = Number(d.h) || 0, a = w * h / 1e6; return { form: "sheet", count: "sheet", base: "m2", factor: a > 0 ? a : null, wt: a * m.kgm2 }; }
+    if (m.form === "sheet" || m.form === "glass") { var w = Number(d.w) || 0, h = Number(d.h) || 0, a = w * h / 1e6; return { form: m.form, count: (m.form === "glass" ? "unit" : "sheet"), base: "m2", factor: a > 0 ? a : null, wt: a * m.kgm2 }; }
     if (m.form === "bar") { var L = Number(d.len) || 0; return { form: "bar", count: "bar", base: "m", factor: L > 0 ? L : null, wt: m.wpm * L }; }
     if (m.form === "liquid") { var v = m.liters; return { form: "liquid", count: "container", base: "L", factor: v > 0 ? v : null, wt: 0 }; }
     if (m.form === "roll") { var r = m.rlen; return { form: "roll", count: "roll", base: "m", factor: r > 0 ? r : null, wt: m.rwt }; }
@@ -3980,7 +3980,7 @@
   // canonical per-unit price (sheet/bar/container/roll/each) + a derived conversion readout, per material form
   function lineCalc(info, d1, d2, priceVal, basis, cc, d3) {
     cc = cc || S.company.currency_code; var pv = Number(priceVal) || 0, f = info.form;
-    if (f === "sheet") { var w = Number(d1) || 0, h = Number(d2) || 0, area = w * h / 1e6, tmm = (d3 != null && d3 !== "" && Number(d3) > 0) ? Number(d3) : info.t, kgm2 = (tmm && info.dens) ? (tmm / 1000) * info.dens : info.kgm2, weight = area * kgm2, pk, pm, ps; if (basis === "kg") { pk = pv; ps = pv * weight; pm = pv * kgm2; } else if (basis === "m2") { pm = pv; ps = pv * area; pk = weight ? ps / weight : 0; } else { ps = pv; pm = area ? ps / area : 0; pk = weight ? ps / weight : 0; } return { unit: ps, measure: (w && h) ? msFmt(area, 3) + " m2" + (tmm ? " x " + msFmt(tmm) + "mm" : "") : "", derived: [["thk", tmm, "mm"], ["kg/m&sup2;", kgm2], ["wt/sheet", weight, "kg"], [cc + "/sheet", ps], [cc + "/m&sup2;", pm], [cc + "/kg", pk]] }; }
+    if (f === "sheet" || f === "glass") { var w = Number(d1) || 0, h = Number(d2) || 0, area = w * h / 1e6, tmm = (d3 != null && d3 !== "" && Number(d3) > 0) ? Number(d3) : info.t, kgm2 = (tmm && info.dens) ? (tmm / 1000) * info.dens : info.kgm2, weight = area * kgm2, pk, pm, ps; if (basis === "kg") { pk = pv; ps = pv * weight; pm = pv * kgm2; } else if (basis === "m2") { pm = pv; ps = pv * area; pk = weight ? ps / weight : 0; } else { ps = pv; pm = area ? ps / area : 0; pk = weight ? ps / weight : 0; } return { unit: ps, measure: (w && h) ? msFmt(area, 3) + " m2" + (tmm ? " x " + msFmt(tmm) + "mm" : "") : "", derived: [["thk", tmm, "mm"], ["kg/m&sup2;", kgm2], ["wt/sheet", weight, "kg"], [cc + "/sheet", ps], [cc + "/m&sup2;", pm], [cc + "/kg", pk]] }; }
     if (f === "bar") { var L = Number(d1) || 0, wpm = info.wpm, wpb = wpm * L, bk, bm, bb; if (basis === "kg") { bk = pv; bb = pv * wpb; bm = pv * wpm; } else if (basis === "m") { bm = pv; bb = pv * L; bk = wpm ? pv / wpm : 0; } else { bb = pv; bm = L ? pv / L : 0; bk = wpb ? pv / wpb : 0; } return { unit: bb, measure: L ? msFmt(wpb) + " kg/bar" : "", derived: [["wt/bar", wpb, "kg"], [cc + "/bar", bb], [cc + "/m", bm], [cc + "/kg", bk]] }; }
     if (f === "liquid") { var liters = info.liters, lc, ll; if (basis === "L") { ll = pv; lc = pv * liters; } else { lc = pv; ll = liters ? pv / liters : 0; } return { unit: lc, measure: "", derived: [["L/container", liters, "L"], [cc + "/container", lc], [cc + "/L", ll]] }; }
     if (f === "roll") { var rlen = info.rlen, rwt = info.rwt, rk, rlm, rr; if (basis === "kg") { rk = pv; rr = pv * rwt; rlm = rlen ? pv * rwt / rlen : 0; } else if (basis === "lm") { rlm = pv; rr = pv * rlen; rk = rwt ? pv * rlen / rwt : 0; } else { rr = pv; rk = rwt ? pv / rwt : 0; rlm = rlen ? pv / rlen : 0; } return { unit: rr, measure: "", derived: [["roll", rlen, "m"], ["wt", rwt, "kg"], [cc + "/roll", rr], [cc + "/lm", rlm], [cc + "/kg", rk]] }; }
@@ -3988,7 +3988,7 @@
   }
   function lineMeasureHTML(info, d1, d2) {
     var f = info.form;
-    if (f === "sheet") return '<span class="l-meas"><input class="l-d1 num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="W mm"><span class="mx">&times;</span><input class="l-d2 num" type="number" step="any" value="' + (d2 != null ? d2 : "") + '" placeholder="H mm"><span class="l-area muted"></span></span>';
+    if (f === "sheet" || f === "glass") return '<span class="l-meas"><input class="l-d1 num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="W mm"><span class="mx">&times;</span><input class="l-d2 num" type="number" step="any" value="' + (d2 != null ? d2 : "") + '" placeholder="H mm"><span class="l-area muted"></span></span>';
     if (f === "bar") return '<span class="l-meas"><input class="l-d1 num" type="number" step="any" value="' + (d1 != null ? d1 : "") + '" placeholder="Length m"><span class="l-area muted"></span></span>';
     if (f === "liquid") return '<span class="l-meas muted">container' + (info.liters ? " " + msFmt(info.liters, 3) + " L" : "") + '</span>';
     if (f === "roll") return '<span class="l-meas muted">roll' + (info.rlen ? " " + msFmt(info.rlen) + " m" : "") + (info.rwt ? " / " + msFmt(info.rwt) + " kg" : "") + '</span>';
@@ -3996,7 +3996,7 @@
   }
   function lineBasisHTML(form, cur) { return (LINE_BASIS[form] || LINE_BASIS.generic).map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
   function lineDerivedHTML(list) { return list.map(function (x) { return x[0] + " " + msFmt(x[1]) + (x[2] ? " " + x[2] : ""); }).join(" &middot; "); }
-  function lineSizeStr(form, d1, d2, d3) { if (form === "sheet" && d1 && d2) return d1 + "x" + d2 + ((d3 != null && d3 !== "" && Number(d3) > 0) ? "x" + d3 : ""); if (form === "bar" && d1) return d1 + "m"; return null; }
+  function lineSizeStr(form, d1, d2, d3) { if ((form === "sheet" || form === "glass") && d1 && d2) return d1 + "x" + d2 + ((d3 != null && d3 !== "" && Number(d3) > 0) ? "x" + d3 : ""); if (form === "bar" && d1) return d1 + "m"; return null; }
   // Thickness lives ONLY in a genuine 3-part "WxHxT" size. A plain "WxH" has NO
   // thickness - do not mistake the height for it (that bug turned 1500x2500 into
   // thk 2500, exploding kg-priced weight). Returns null unless there are 3 segments.
@@ -4019,7 +4019,7 @@
   // buyer's own unit for reference while quoting.
   function basisFromCanonical(unit, width, height, info, basis) {
     unit = Number(unit) || 0; var f = info.form;
-    if (f === "sheet") { var area = (Number(width) || 0) * (Number(height) || 0) / 1e6, weight = area * info.kgm2; if (basis === "m2") return area ? unit / area : 0; if (basis === "kg") return weight ? unit / weight : 0; return unit; }
+    if (f === "sheet" || f === "glass") { var area = (Number(width) || 0) * (Number(height) || 0) / 1e6, weight = area * info.kgm2; if (basis === "m2") return area ? unit / area : 0; if (basis === "kg") return weight ? unit / weight : 0; return unit; }
     if (f === "bar") { var L = Number(width) || 0, wpb = info.wpm * L; if (basis === "m") return L ? unit / L : 0; if (basis === "kg") return wpb ? unit / wpb : 0; return unit; }
     if (f === "liquid") { if (basis === "L") return info.liters ? unit / info.liters : 0; return unit; }
     if (f === "roll") { if (basis === "lm") return info.rlen ? unit / info.rlen : 0; if (basis === "kg") return info.rwt ? unit / info.rwt : 0; return unit; }
@@ -4847,7 +4847,21 @@
   // classification + dimensions + computed unit prices are kept in products.spec (jsonb);
   // material_form + family are real columns for grouping. The computed base unit price
   // is pushed into the product Cost field so purchasing and stock use it.
-  var MATERIAL_FORMS = [["generic", "General item"], ["bar", "Bar / profile"], ["sheet", "Sheet / plate"], ["liquid", "Liquid (paint, sealant)"], ["roll", "Roll / coil"]];
+  var MATERIAL_FORMS = [["generic", "General item"], ["bar", "Bar / profile"], ["sheet", "Sheet / plate"], ["glass", "Glass unit (IGU / laminated)"], ["liquid", "Liquid (paint, sealant)"], ["roll", "Roll / coil"]];
+  var GLASS_CONFIG = [["single", "Single glazed"], ["igu", "Double glazed (IGU)"], ["triple", "Triple glazed"], ["laminated", "Laminated"]];
+  var GLASS_PANE = ["Clear", "Low-E", "Laminated (PVB)", "Tempered", "Heat-strengthened", "Tinted", "Reflective", "Acid-etched", "Ceramic frit"];
+  var GLASS_FILL = ["Air", "Argon", "Krypton"];
+  // Compact glazing make-up, outer -> inner, e.g. "6 / 16 Argon / 6 Low-E".
+  function glassMakeupStr(panes, gaps) {
+    var parts = [];
+    (panes || []).forEach(function (p, i) {
+      var s = (p.t != null && p.t !== "" ? p.t : "") + (p.type && p.type !== "Clear" ? " " + String(p.type).replace(/\s*\(.*\)/, "") : "");
+      if (s.trim()) parts.push(s.trim());
+      var c = (gaps || [])[i];
+      if (c && (c.mm || c.fill)) parts.push(((c.mm != null && c.mm !== "" ? c.mm : "") + (c.fill && c.fill !== "Air" ? " " + c.fill : "")).trim());
+    });
+    return parts.filter(Boolean).join(" / ");
+  }
   function matFormLabel(f) { if (!f || f === "generic") return ""; var m = {}; MATERIAL_FORMS.forEach(function (x) { m[x[0]] = x[1]; }); return m[f] || f; }
   var MATERIAL_DENSITY = { "Aluminium": 2700, "Steel": 7850, "Stainless steel": 8000, "Glass": 2500, "Copper": 8960, "Brass": 8500, "Bronze": 8800, "Zinc": 7140, "Lead": 11340, "PVC": 1400, "Polycarbonate": 1200, "Acrylic": 1180, "Wood": 700, "MDF": 750, "Concrete": 2400, "Rubber": 1500, "Other": 0 };
   // --- classification tree helpers (product form cascading dropdowns + auto item code) ---
@@ -4906,6 +4920,16 @@
         '<div class="ms-f"><label>Density <span class="muted">(kg/m3)</span></label><input id="ms-density" type="number" step="any" value="' + (dens !== "" ? dens : "") + '"></div>' +
         basis("ms-basis", [["kg", "Price per kg"], ["sheet", "Price per sheet"], ["m2", "Price per m2"]], sp.basis || "sheet") + pval + '</div>' + out;
     }
+    if (form === "glass") {
+      var g = sp.glass || {}, gp = g.panes || [], gg = g.gaps || [];
+      function paneRow(i) { var p = gp[i] || {}; return '<div class="ms-f"><label>Pane ' + (i + 1) + ' <span class="muted">(mm / type)</span></label><div style="display:flex;gap:4px"><input id="gl-pt' + i + '" type="number" step="any" style="width:64px" value="' + (p.t != null ? p.t : "") + '" placeholder="mm"><select id="gl-py' + i + '" style="flex:1"><option value="">-</option>' + GLASS_PANE.map(function (o) { return '<option' + (p.type === o ? " selected" : "") + '>' + o + '</option>'; }).join("") + '</select></div></div>'; }
+      function gapRow(i) { var c = gg[i] || {}; return '<div class="ms-f"><label>Cavity ' + (i + 1) + ' <span class="muted">(mm / fill)</span></label><div style="display:flex;gap:4px"><input id="gl-gm' + i + '" type="number" step="any" style="width:64px" value="' + (c.mm != null ? c.mm : "") + '" placeholder="mm"><select id="gl-gf' + i + '" style="flex:1"><option value="">-</option>' + GLASS_FILL.map(function (o) { return '<option' + (c.fill === o ? " selected" : "") + '>' + o + '</option>'; }).join("") + '</select></div></div>'; }
+      return '<div class="ms-grid"><div class="ms-f"><label>Configuration</label><select id="ms-gconfig">' + GLASS_CONFIG.map(function (o) { return '<option value="' + o[0] + '"' + ((g.config || "igu") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>' + f("ms-w", "Unit width", d.w, "mm") + f("ms-h", "Unit height", d.h, "mm") + '</div>' +
+        '<div class="o-cf-head" style="margin-top:10px;font-size:12px">Make-up (outer &rarr; inner)</div>' +
+        '<div class="ms-grid">' + paneRow(0) + gapRow(0) + paneRow(1) + gapRow(1) + paneRow(2) + '</div>' +
+        '<div class="ms-grid" style="margin-top:8px"><div class="ms-f"><label>Ug <span class="muted">(W/m&sup2;K)</span></label><input id="ms-ug" type="number" step="any" value="' + (g.ug != null ? g.ug : "") + '"></div>' +
+        basis("ms-basis", [["m2", "Price per m2"], ["unit", "Price per unit"]], sp.basis || "m2") + pval + '</div>' + out;
+    }
     if (form === "liquid") {
       var units = [["L", "L"], ["ml", "ml"], ["gal", "Gallon"]];
       return '<div class="ms-grid">' + f("ms-vol", "Container size", d.vol) +
@@ -4932,6 +4956,15 @@
       var area = w * h / 1e6, wt = area * (t / 1000) * dn, kgm2 = (t / 1000) * dn, pk2, ps, pm2;
       if (b2 === "kg") { pk2 = p2; ps = p2 * wt; pm2 = p2 * kgm2; } else if (b2 === "sheet") { ps = p2; pk2 = wt ? p2 / wt : 0; pm2 = area ? ps / area : 0; } else { pm2 = p2; ps = p2 * area; pk2 = wt ? ps / wt : 0; }
       cost = ps; html = chip("Area", msFmt(area, 3), "m2") + chip("Weight/sheet", msFmt(wt), "kg") + chip("kg/m2", msFmt(kgm2)) + chip(cc + "/kg", msFmt(pk2)) + chip(cc + "/sheet", msFmt(ps)) + chip(cc + "/m2", msFmt(pm2)); if (area > 0) packNote = "Counted in sheets · 1 sheet = " + msFmt(area, 3) + " m2 in stock";
+    } else if (form === "glass") {
+      var gw = msNum("ms-w"), gh = msNum("ms-h"), garea = gw * gh / 1e6, gpanes = [], ggaps = [], gtt = 0, gglass = 0;
+      for (var gi = 0; gi < 3; gi++) { var pt = msNum("gl-pt" + gi), py = msVal("gl-py" + gi); if (pt || py) { gpanes.push({ t: pt, type: py }); gtt += pt; gglass += pt; } }
+      for (var gj = 0; gj < 2; gj++) { var gmm = msNum("gl-gm" + gj), gf = msVal("gl-gf" + gj); if (gmm || gf) { ggaps.push({ mm: gmm, fill: gf }); gtt += gmm; } }
+      var gwt = garea * (gglass / 1000) * 2500, gb2 = msVal("ms-basis"), gpv2 = msNum("ms-pval"), gunit, gm2;
+      if (gb2 === "unit") { gunit = gpv2; gm2 = garea ? gpv2 / garea : 0; } else { gm2 = gpv2; gunit = gpv2 * garea; }
+      cost = gunit; var gmk = glassMakeupStr(gpanes, ggaps);
+      html = chip("Make-up", gmk || "-") + chip("Total thk", msFmt(gtt), "mm") + chip("Area", msFmt(garea, 3), "m2") + chip("Weight", msFmt(gwt), "kg") + chip(cc + "/unit", msFmt(gunit)) + chip(cc + "/m2", msFmt(gm2));
+      if (garea > 0) packNote = "Counted in units · 1 unit = " + msFmt(garea, 3) + " m2 in stock";
     } else if (form === "liquid") {
       var vol = msNum("ms-vol"), u = msVal("ms-volunit") || "L", pv3 = msNum("ms-pval");
       var factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1), liters = vol * factor, perL = liters ? pv3 / liters : 0;
@@ -4971,6 +5004,15 @@
     var bs = document.getElementById("ms-basis"); if (bs) spec.basis = bs.value;
     var pv = document.getElementById("ms-pval"); if (pv && pv.value !== "") spec.pval = parseFloat(pv.value);
     spec.dims = dims;
+    if (fe.value === "glass") {
+      var gpanes = [], ggaps = [], gtt = 0, gglass = 0;
+      for (var gi = 0; gi < 3; gi++) { var pt = msNum("gl-pt" + gi), py = msVal("gl-py" + gi); if (pt || py) { gpanes.push({ t: pt || null, type: py || null }); gtt += pt; gglass += pt; } }
+      for (var gj = 0; gj < 2; gj++) { var gm = msNum("gl-gm" + gj), gf = msVal("gl-gf" + gj); if (gm || gf) { ggaps.push({ mm: gm || null, fill: gf || null }); gtt += gm; } }
+      spec.glass = { config: msVal("ms-gconfig") || null, panes: gpanes, gaps: ggaps, ug: msNum("ms-ug") || null, makeup: glassMakeupStr(gpanes, ggaps) };
+      if (gtt > 0) dims.t = gtt;
+      if (gglass > 0 && !dims.density) dims.density = 2500;
+      if (!spec.material) spec.material = "Glass";
+    }
     var o = document.getElementById("ms-out"); if (o) spec.summary = o.textContent;
     return { material_form: fe.value, family_node_id: deepestSel("fam") || null, type_node_id: deepestSel("typ") || null, spec: spec };
   }
@@ -15723,6 +15765,22 @@
       onOpen: function (b) { renderBomForm(b.id); }, onNew: function () { renderBomForm("new"); }
     };
   }
+  // Would setting `finishedPid`'s components to `componentPids` create a loop, i.e.
+  // does any component consume the finished product again through its OWN bom
+  // (A needs B, B needs A)? Direct self-use is blocked separately. Returns the name
+  // of the offending top-level component, or null if the BOM is acyclic.
+  async function bomWouldCycle(finishedPid, componentPids, prodNameById) {
+    if (!finishedPid || !componentPids.length) return null;
+    var boms = (await sb.from("boms").select("id,product_id").eq("company_id", S.company.id)).data || [];
+    var bomByProduct = {}; boms.forEach(function (b) { if (b.product_id) bomByProduct[b.product_id] = b.id; });
+    var bomIds = boms.map(function (b) { return b.id; });
+    var compsByBom = {};
+    if (bomIds.length) { var bl = (await sb.from("bom_lines").select("bom_id,product_id").in("bom_id", bomIds)).data || []; bl.forEach(function (l) { if (l.product_id) (compsByBom[l.bom_id] = compsByBom[l.bom_id] || []).push(l.product_id); }); }
+    function componentsOf(pid) { var bid = bomByProduct[pid]; return bid ? (compsByBom[bid] || []) : []; }
+    function reaches(pid, target, seen, depth) { if (depth > 60 || seen[pid]) return false; if (pid === target) return true; seen[pid] = 1; return componentsOf(pid).some(function (c) { return reaches(c, target, seen, depth + 1); }); }
+    for (var i = 0; i < componentPids.length; i++) { if (reaches(componentPids[i], finishedPid, {}, 0)) return (prodNameById && prodNameById[componentPids[i]]) || "a component"; }
+    return null;
+  }
   async function renderBomForm(id) {
     var parent = { action: "mfg.boms", title: "Bills of Materials" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
@@ -15759,6 +15817,12 @@
     document.getElementById("bm-save").onclick = async function () {
       var row = { name: gv("bm-name") || "BOM", product_id: document.getElementById("bm-prod").value || null, output_qty: parseFloat(gv("bm-outqty")) || 1 };
       if (row.product_id && Array.prototype.some.call(lb.querySelectorAll(".bl-prod"), function (ps) { return ps.value && ps.value === row.product_id; })) { toast("A product can't be a component of itself. Remove the finished product from the component lines."); return; }
+      if (row.product_id) {
+        var _compIds = Array.prototype.map.call(lb.querySelectorAll(".bl-prod"), function (ps) { return ps.value; }).filter(Boolean);
+        var _nameBy = {}; products.forEach(function (p) { _nameBy[p.id] = p.name; });
+        var _loop = await bomWouldCycle(row.product_id, _compIds, _nameBy);
+        if (_loop) { toast('This BOM would create a loop: "' + _loop + '" already consumes this finished product through its own bill of materials. Remove it.'); return; }
+      }
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("boms").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
       else { if ((await sb.from("boms").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("bom_lines").delete().eq("bom_id", id); }
