@@ -781,7 +781,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Recurring Invoices", "inv.recurring"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
         { label: "Configuration", items: [["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
     },
@@ -798,7 +798,7 @@
       name: "Purchase", icon: "⛁", color: "#b45309", color2: "#92400e", home: "po.list",
       menus: [
         { label: "Orders", items: [["Purchase Orders", "po.list"], ["Blanket Orders", "pur.blanket"], ["Bills", "inv.in"], ["3-Way Match", "pur.match"]] },
-        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Procurement Status", "pur.procstatus"], ["Vendor Scorecards", "pur.scorecards"], ["Subcontract Certificates", "pur.sccert"]] },
+        { label: "Procurement", items: [["RFQ / Compare Quotes", "rfq.list"], ["Material Take-off", "pur.req"], ["Cut List (reserve & buy)", "pur.cutlist"], ["Cut Nesting / Optimiser", "pur.nesting"], ["Procurement Status", "pur.procstatus"], ["Vendor Scorecards", "pur.scorecards"], ["Subcontract Certificates", "pur.sccert"]] },
         { label: "Logistics", items: [["Shipments", "shp.list"], ["Shipments board", "shp.board"]] },
         { label: "Vendors", action: "vend" },
         { label: "Products", action: "products" }
@@ -987,7 +987,7 @@
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
-    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
+    "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
@@ -2256,6 +2256,7 @@
       case "inv.recurring": return renderList(cfgRecurring());
       case "rep.cashfwd": return renderCashForecast();
       case "rep.health": return renderDataHealth();
+      case "rep.trace": return renderTraceability();
       case "rep.collections": return renderCollections();
       case "cockpit": return renderCockpit();
       case "assets.list": return renderList(cfgAssets());
@@ -2341,6 +2342,7 @@
       case "shp.new": return renderShipmentForm("new");
       case "pur.req": return renderList(cfgRequisitions());
       case "pur.cutlist": return renderMaterialImport();
+      case "pur.nesting": return renderNesting();
       case "pur.procstatus": return renderProcurementStatus();
       case "pur.scorecards": return renderVendorScorecards();
       case "pur.blanket": return renderBlanketOrders();
@@ -14688,6 +14690,203 @@
   // ---- CUT LIST: import a material-needed list (from dedicated cutting/nesting
   // software), reserve the stock you already have, and turn the shortfall into a
   // draft RFQ. Orbit does not optimize the cut - it handles stock + procurement.
+  // ============================ TRACEABILITY (take-off -> GL) ============================
+  async function sha256hex(str) {
+    try { var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
+    catch (e) { var h = 0, i; for (i = 0; i < str.length; i++) { h = (h * 31 + str.charCodeAt(i)) >>> 0; } return ("00000000" + h.toString(16)).slice(-8); }  // fallback if subtle crypto unavailable
+  }
+  // Reconstruct the full document lineage for a project (or all), walking the FK
+  // links where present and falling back to the note/number text where the link
+  // is only textual. Returns one chain per take-off (requisition).
+  async function buildTrace(projectId) {
+    var co = S.company.id;
+    var q = sb.from("material_requisitions").select("*").eq("company_id", co); if (projectId) q = q.eq("project_id", projectId);
+    var reqs = (await q.order("number")).data || [];
+    var rfqs = (await sb.from("rfqs").select("*").eq("company_id", co)).data || [];
+    var pos = (await sb.from("purchase_orders").select("*").eq("company_id", co)).data || [];
+    var picks = (await sb.from("stock_pickings").select("*").eq("company_id", co)).data || [];
+    var bills = (await sb.from("invoices").select("*").eq("company_id", co).eq("move_type", "in_invoice")).data || [];
+    var entries = (await sb.from("journal_entries").select("id,ref,narration,source_type,source_id,state").eq("company_id", co).in("source_type", ["invoice", "stock", "material_issue"])).data || [];
+    var entryByBill = {}; entries.forEach(function (e) { if (e.source_type === "invoice" && e.source_id) entryByBill[e.source_id] = e; });
+    function hasNo(txt, no) { return no && txt && String(txt).indexOf(no) >= 0; }
+    var chains = reqs.map(function (req) {
+      var no = req.number || "";
+      var crfqs = rfqs.filter(function (r) { return r.requisition_id === req.id || hasNo(r.note, no); });
+      var cpos = pos.filter(function (p) { return p.source_req_id === req.id || (p.source_rfq_id && crfqs.some(function (r) { return r.id === p.source_rfq_id; })) || hasNo(p.note, no) || crfqs.some(function (r) { return hasNo(p.note, r.number); }); });
+      var poNodes = cpos.map(function (po) {
+        var cpicks = picks.filter(function (pk) { return pk.po_id === po.id || (po.number && pk.origin === po.number); });
+        var cbills = bills.filter(function (b) { return b.purchase_order_id === po.id; });
+        return { po: po, picks: cpicks, bills: cbills.map(function (b) { return { bill: b, entry: entryByBill[b.id] || (b.journal_entry_id ? entries.filter(function (e) { return e.id === b.journal_entry_id; })[0] : null) }; }) };
+      });
+      return { req: req, rfqs: crfqs, pos: poNodes };
+    });
+    return { chains: chains, counts: { reqs: reqs.length, rfqs: rfqs.length, pos: pos.length, picks: picks.length, bills: bills.length } };
+  }
+  // Canonical, order-independent snapshot of the lineage - the thing we hash/seal.
+  function traceSnapshotStr(data) {
+    var docs = [];
+    data.chains.forEach(function (c) {
+      docs.push("REQ|" + c.req.id + "|" + (c.req.number || ""));
+      c.rfqs.forEach(function (r) { docs.push("RFQ|" + r.id + "|" + (r.number || "")); });
+      c.pos.forEach(function (pn) {
+        docs.push("PO|" + pn.po.id + "|" + (pn.po.number || "") + "|" + (pn.po.state || "") + "|" + (pn.po.amount_total || 0));
+        pn.picks.forEach(function (pk) { docs.push("PICK|" + pk.id + "|" + (pk.origin || "")); });
+        pn.bills.forEach(function (b) { docs.push("BILL|" + b.bill.id + "|" + (b.bill.number || "") + "|" + (b.bill.amount_total || 0) + "|" + (b.bill.state || "") + "|" + (b.entry ? b.entry.id : "-")); });
+      });
+    });
+    docs.sort();
+    return docs.join("\n");
+  }
+  function brk(txt) { return '<span class="badge warn" style="font-size:10px">' + txt + '</span>'; }
+  function okb(txt) { return '<span class="badge" style="font-size:10px">' + txt + '</span>'; }
+  async function renderTraceability() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Traceability") + '<div class="gap"></div><select id="tr-proj" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px"></select><button class="o-filtbtn" id="tr-seal" title="Freeze a tamper-evident hash of the current lineage">Seal</button><button class="o-filtbtn" id="tr-verify" title="Check the lineage still matches the last seal">Verify</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var sel = document.getElementById("tr-proj");
+    sel.innerHTML = '<option value="">All projects</option>' + projs.map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
+    sel.onchange = function () { paintTrace(sel.value); };
+    document.getElementById("tr-seal").onclick = function () { sealTrace(sel.value); };
+    document.getElementById("tr-verify").onclick = function () { verifyTrace(sel.value); };
+    paintTrace("");
+  }
+  async function paintTrace(projectId) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    body.innerHTML = '<div class="o-empty">Building lineage...</div>';
+    var data = await buildTrace(projectId);
+    var scope = projectId ? ("project:" + projectId) : "all";
+    var seals = (await sb.from("trace_seals").select("*").eq("company_id", S.company.id).eq("scope", scope).order("seq", { ascending: false }).limit(1)).data;
+    var sealLine = "";
+    if (seals && seals.length) { var s = seals[0]; sealLine = '<div class="sub" style="margin:0 0 10px">Last sealed: <b>#' + s.seq + '</b> on ' + esc((s.sealed_at || "").slice(0, 16).replace("T", " ")) + ' &middot; ' + (s.doc_count || 0) + ' docs &middot; hash <code>' + esc((s.content_hash || "").slice(0, 16)) + '</code> &middot; <b>Verify</b> to check it is unchanged.</div>'; }
+    else if (seals) sealLine = '<div class="sub" style="margin:0 0 10px">Not sealed yet. <b>Seal</b> freezes a cryptographic fingerprint of this lineage so any later change to a document is detectable.</div>';
+    if (!data.chains.length) { body.innerHTML = sealLine + '<div class="o-empty">No take-offs' + (projectId ? " for this project" : "") + ' yet. The chain starts at a Material Take-off.</div>'; return; }
+    var html = sealLine + '<div class="o-form-bg" style="padding:8px 4px">';
+    data.chains.forEach(function (c) {
+      html += '<div class="o-matspec" style="margin:0 0 12px;padding:12px 14px"><div style="font-weight:700;font-size:14px">Take-off ' + esc(c.req.number || "(draft)") + (c.req.title ? ' &middot; ' + esc(c.req.title) : "") + '</div>';
+      html += '<div style="margin:6px 0 0;padding-left:12px;border-left:2px solid var(--line)">';
+      html += '<div style="margin:4px 0">RFQ: ' + (c.rfqs.length ? c.rfqs.map(function (r) { return okb(esc(r.number || "RFQ")); }).join(" ") : brk("no RFQ (bought direct?)")) + '</div>';
+      if (!c.pos.length) html += '<div style="margin:4px 0">' + brk("not ordered - no PO traced to this take-off") + '</div>';
+      c.pos.forEach(function (pn) {
+        html += '<div style="margin:8px 0 2px"><b>PO ' + esc(pn.po.number || "") + '</b> ' + okb(esc(pn.po.state || "")) + (pn.po.amount_total ? ' <span class="muted">' + S.company.currency_code + " " + money(pn.po.amount_total) + '</span>' : "") + '</div>';
+        html += '<div style="padding-left:14px">';
+        html += '<div style="margin:2px 0">Receipt: ' + (pn.picks.length ? pn.picks.map(function (pk) { return okb((pk.origin || "GRN") + " &middot; " + esc((pk.scheduled_date || "").slice(0, 10))); }).join(" ") : brk("not received")) + '</div>';
+        if (!pn.bills.length) html += '<div style="margin:2px 0">' + brk("not billed") + '</div>';
+        pn.bills.forEach(function (bn) {
+          html += '<div style="margin:2px 0">Bill <b>' + esc(bn.bill.number || "") + '</b> <span class="muted">' + S.company.currency_code + " " + money(bn.bill.amount_total) + '</span> &rarr; GL ' + (bn.entry ? okb("posted " + esc(bn.entry.ref || bn.entry.source_type || "")) : brk("not posted to GL")) + '</div>';
+        });
+        html += '</div>';
+      });
+      html += '</div></div>';
+    });
+    html += '</div>';
+    body.innerHTML = html;
+  }
+  async function sealTrace(projectId) {
+    var data = await buildTrace(projectId), snap = traceSnapshotStr(data), hash = await sha256hex(snap);
+    var scope = projectId ? ("project:" + projectId) : "all";
+    var prev = (await sb.from("trace_seals").select("seq,content_hash").eq("company_id", S.company.id).eq("scope", scope).order("seq", { ascending: false }).limit(1)).data;
+    if (!prev) { toast("Run migration 95 (traceability) first to enable sealing."); return; }
+    var seq = prev.length ? prev[0].seq + 1 : 1, prevHash = prev.length ? prev[0].content_hash : null;
+    var docCount = snap ? snap.split("\n").filter(Boolean).length : 0;
+    var r = await sb.from("trace_seals").insert({ company_id: S.company.id, seq: seq, scope: scope, content_hash: hash, prev_hash: prevHash, doc_count: docCount, summary: data.counts, sealed_by: ((typeof S !== "undefined" && S.user && S.user.email) || null) });
+    if (r.error) { toast(errMsg(r.error)); return; }
+    toast("Sealed #" + seq + " - " + docCount + " documents (" + hash.slice(0, 12) + "...)");
+    paintTrace(projectId);
+  }
+  async function verifyTrace(projectId) {
+    var scope = projectId ? ("project:" + projectId) : "all";
+    var seals = (await sb.from("trace_seals").select("*").eq("company_id", S.company.id).eq("scope", scope).order("seq", { ascending: false }).limit(1)).data;
+    if (!seals) { toast("Run migration 95 (traceability) first."); return; }
+    if (!seals.length) { toast("No seal yet for this scope - Seal it first."); return; }
+    var latest = seals[0], data = await buildTrace(projectId), hash = await sha256hex(traceSnapshotStr(data));
+    if (hash === latest.content_hash) { alert("Verified intact.\n\nThe lineage still matches seal #" + latest.seq + " taken " + (latest.sealed_at || "").slice(0, 16).replace("T", " ") + ".\nNo sealed document has changed."); }
+    else { alert("TAMPER DETECTED.\n\nThe lineage no longer matches seal #" + latest.seq + ".\nA document in the take-off -> GL chain was edited, added or removed since it was sealed."); }
+  }
+
+  // ============================ CUT NESTING / OPTIMISER ============================
+  // 1D first-fit-decreasing bar packing.
+  function nest1D(pieces, stockLen, kerf) {
+    kerf = kerf || 0; var items = pieces.slice().sort(function (a, b) { return b.len - a.len; }); var bars = [];
+    items.forEach(function (it) { var need = it.len + kerf, bar = null; for (var i = 0; i < bars.length; i++) { if (bars[i].rem >= need - 1e-9) { bar = bars[i]; break; } } if (!bar) { bar = { rem: stockLen, cuts: [] }; bars.push(bar); } bar.cuts.push(it); bar.rem -= need; });
+    var waste = bars.reduce(function (s, b) { return s + Math.max(0, b.rem); }, 0);
+    return { barsNeeded: bars.length, bars: bars, wasteLen: Math.round(waste * 1000) / 1000, wastePct: bars.length ? Math.round((waste / (bars.length * stockLen)) * 1000) / 10 : 0, offcuts: bars.map(function (b) { return Math.round(b.rem * 1000) / 1000; }).filter(function (r) { return r > 0.05; }) };
+  }
+  // 2D shelf (guillotine) packing of W x H pieces onto stock sheets, honouring kerf.
+  function nest2D(pieces, SW, SH, kerf, rot) {
+    kerf = kerf || 0; var items = pieces.map(function (p) { return { w: p.w, h: p.h }; }).sort(function (a, b) { return Math.max(b.w, b.h) - Math.max(a.w, a.h) || (b.w * b.h) - (a.w * a.h); }); var sheets = [];
+    function place(it) {
+      for (var si = 0; si < sheets.length; si++) { var s = sheets[si]; var oris = rot ? [[it.w, it.h], [it.h, it.w]] : [[it.w, it.h]];
+        for (var oi = 0; oi < oris.length; oi++) { var w = oris[oi][0], h = oris[oi][1];
+          for (var k = 0; k < s.shelves.length; k++) { var sh = s.shelves[k]; if (h <= sh.h + 1e-9 && sh.x + w + kerf <= SW + 1e-9) { sh.x += w + kerf; s.usedArea += w * h; return true; } }
+          var topY = s.shelves.length ? (s.shelves[s.shelves.length - 1].y + s.shelves[s.shelves.length - 1].h + kerf) : 0;
+          if (topY + h <= SH + 1e-9 && w <= SW + 1e-9) { s.shelves.push({ y: topY, h: h, x: w + kerf }); s.usedArea += w * h; return true; } } }
+      return false;
+    }
+    items.forEach(function (it) { if (!place(it)) { sheets.push({ shelves: [], usedArea: 0 }); place(it); } });
+    var area = SW * SH, used = sheets.reduce(function (s, sh) { return s + sh.usedArea; }, 0);
+    return { sheetsNeeded: sheets.length, usedM2: Math.round(used / 1e6 * 1000) / 1000, sheetM2: Math.round(sheets.length * area / 1e6 * 1000) / 1000, wastePct: sheets.length ? Math.round((1 - used / (sheets.length * area)) * 1000) / 10 : 0 };
+  }
+  async function renderNesting() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut Nesting / Optimiser") + '<div class="gap"></div><label style="font-size:12px;color:var(--ink2)">Saw kerf (mm) <input id="ne-kerf" type="number" value="4" style="width:56px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:6px;padding:4px 6px"></label><label style="font-size:12px;color:var(--ink2);margin-left:8px"><input id="ne-rot" type="checkbox" checked> allow rotation</label></div><div class="o-body" id="o-body"><div class="o-empty">Loading take-offs...</div></div></div>';
+    wireBc();
+    var reqs = (await sb.from("material_requisitions").select("id,number,project_id").eq("company_id", S.company.id).order("number", { ascending: false })).data || [];
+    var body = document.getElementById("o-body");
+    if (!reqs.length) { body.innerHTML = '<div class="o-empty">No take-offs yet. Create a Material Take-off with sized lines, then optimise its cutting here.</div>'; return; }
+    body.innerHTML = '<div class="o-form-bg" style="padding:14px"><div style="max-width:420px"><label style="font-size:12px;color:var(--ink2);font-weight:600;display:block;margin-bottom:4px">Take-off to nest</label><select id="ne-req" style="width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:8px 10px;font:inherit">' + reqs.map(function (r) { return '<option value="' + r.id + '">' + esc(r.number || "(draft)") + '</option>'; }).join("") + '</select><button class="btn pri" id="ne-go" style="margin-top:10px;background:var(--app);border-color:var(--app)">Optimise cutting</button></div><div id="ne-out" style="margin-top:16px"></div></div>';
+    document.getElementById("ne-go").onclick = function () { runNesting(document.getElementById("ne-req").value); };
+  }
+  async function runNesting(reqId) {
+    var out = document.getElementById("ne-out"); if (!out) return;
+    out.innerHTML = '<div class="o-empty">Optimising...</div>';
+    var kerfMm = parseFloat((document.getElementById("ne-kerf") || {}).value) || 0, rot = (document.getElementById("ne-rot") || {}).checked;
+    var lines = (await sb.from("material_requisition_lines").select("*").eq("requisition_id", reqId).order("sequence")).data || [];
+    var pids = lines.map(function (l) { return l.product_id; }).filter(Boolean);
+    var prods = {}; if (pids.length) { ((await sb.from("products").select("id,name,material_form,spec,uom").in("id", pids)).data || []).forEach(function (p) { prods[p.id] = p; }); }
+    var groups = {};  // product_id -> { product, bars:[len], sheets:[{w,h}] }
+    lines.forEach(function (l) {
+      var p = prods[l.product_id]; if (!p) return; var pk = packInfo(p), qty = Number(l.quantity || 0) || 1, d = (p.spec && p.spec.dims) || {};
+      var g = groups[l.product_id] = groups[l.product_id] || { product: p, pk: pk, bars: [], sheets: [] };
+      if (pk.form === "bar") { var len = parseFloat(l.size) || Number(d.len) || 0; for (var i = 0; i < qty; i++) if (len > 0) g.bars.push({ len: len }); }
+      else if (pk.form === "sheet" || pk.form === "glass") { var w = Number(l.width || d.w) || 0, h = Number(l.height || d.h) || 0; for (var j = 0; j < qty; j++) if (w > 0 && h > 0) g.sheets.push({ w: w, h: h }); }
+    });
+    var keys = Object.keys(groups);
+    if (!keys.length) { out.innerHTML = '<div class="o-empty">No nestable lines. Nesting needs sized bar or sheet/glass products (with a stock length or sheet size on the product) and cut dimensions on the take-off lines.</div>'; return; }
+    window.__NEST = { reqId: reqId, results: [] };
+    var html = '';
+    keys.forEach(function (pid) {
+      var g = groups[pid], p = g.product, d = (p.spec && p.spec.dims) || {};
+      if (g.pk.form === "bar" && g.bars.length) {
+        var stockLen = Number(d.len) || 6, r = nest1D(g.bars, stockLen, kerfMm / 1000);
+        window.__NEST.results.push({ product_id: pid, name: p.name, kind: "bar", stock: stockLen + " m bar", need: r.barsNeeded, wastePct: r.wastePct, offcuts: r.offcuts, uom: p.uom });
+        html += '<div class="o-matspec" style="margin:0 0 10px;padding:12px 14px"><div style="font-weight:700">' + esc(p.name) + ' <span class="muted">&middot; ' + g.bars.length + ' pieces on ' + stockLen + ' m bars</span></div>' +
+          '<div class="o-groups" style="margin-top:6px"><div>' + fld("Bars needed", '<b>' + r.barsNeeded + '</b>') + fld("Cut waste", r.wastePct + '%') + '</div><div>' + fld("Offcuts (m)", r.offcuts.length ? r.offcuts.join(", ") : "-") + '</div></div></div>';
+      } else if ((g.pk.form === "sheet" || g.pk.form === "glass") && g.sheets.length) {
+        var SW = Number(d.w) || 0, SH = Number(d.h) || 0;
+        if (!(SW > 0 && SH > 0)) { html += '<div class="o-matspec" style="margin:0 0 10px;padding:12px 14px"><b>' + esc(p.name) + '</b> <span class="badge warn">set the product\'s stock sheet size (W x H) to nest</span></div>'; return; }
+        var r2 = nest2D(g.sheets, SW, SH, kerfMm, rot);
+        window.__NEST.results.push({ product_id: pid, name: p.name, kind: "sheet", stock: SW + "x" + SH + " mm", need: r2.sheetsNeeded, wastePct: r2.wastePct, uom: p.uom });
+        html += '<div class="o-matspec" style="margin:0 0 10px;padding:12px 14px"><div style="font-weight:700">' + esc(p.name) + ' <span class="muted">&middot; ' + g.sheets.length + ' cuts on ' + SW + 'x' + SH + ' mm sheets</span></div>' +
+          '<div class="o-groups" style="margin-top:6px"><div>' + fld("Sheets needed", '<b>' + r2.sheetsNeeded + '</b>') + fld("Used area", r2.usedM2 + ' m2') + '</div><div>' + fld("Waste", r2.wastePct + '%') + fld("Sheet area", r2.sheetM2 + ' m2') + '</div></div></div>';
+      }
+    });
+    html += '<div class="sub" style="margin-top:6px">Bar packing is first-fit-decreasing (near optimal); sheet packing is a shelf/guillotine heuristic honouring the saw kerf. </div>';
+    var proj = (lines[0] && (await sb.from("material_requisitions").select("project_id").eq("id", reqId).maybeSingle()).data) || {};
+    window.__NEST.projectId = proj.project_id || null;
+    if (window.__NEST.results.some(function (x) { return x.offcuts && x.offcuts.length; })) html += '<button class="btn" id="ne-remnant" style="margin-top:8px">Record offcuts as remnants</button>';
+    out.innerHTML = html;
+    var rb = document.getElementById("ne-remnant"); if (rb) rb.onclick = function () { saveRemnants(); };
+  }
+  async function saveRemnants() {
+    var N = window.__NEST; if (!N || !N.projectId) { toast("This take-off has no project - open it and set a project to record remnants."); return; }
+    var rows = [];
+    N.results.forEach(function (res) { if (res.kind === "bar" && res.offcuts) res.offcuts.forEach(function (len) { rows.push({ company_id: S.company.id, project_id: N.projectId, product_id: res.product_id, material_form: "bar", spec: {}, dims: { length: len, unit: "m" }, qty: 1, unit: res.uom || "bar", is_remnant: true, status: "in_stock", notes: "Offcut from nesting take-off" }); }); });
+    if (!rows.length) { toast("No bar offcuts to record"); return; }
+    var r = await sb.from("project_items").insert(rows);
+    if (r.error) { toast(errMsg(r.error)); return; }
+    toast(rows.length + " offcut(s) recorded as remnants in Projects > Materials & Remnants");
+  }
   async function renderMaterialImport() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut List") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
