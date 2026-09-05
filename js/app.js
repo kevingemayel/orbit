@@ -2724,6 +2724,7 @@
       el.onclick = open;
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
+    if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
@@ -2787,7 +2788,45 @@
     };
     var cfb = dd.querySelector('[data-a="clearf"]'); if (cfb) cfb.onclick = function () { delete L.colFilters[i]; L.page = 0; paintBody(); closeDropdowns(); };
   }
-  function rowHTML(cfg, r) { return '<tr data-id="' + r.id + '">' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c) { return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + '">' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
+  function rowHTML(cfg, r) { var et = cfg.editTable || cfg.table; return '<tr data-id="' + r.id + '">' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c, ci) { var ed = et && c.edit && canManageApp(S.app); return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + (ed ? " o-ecell" : "") + '"' + (ed ? ' data-eci="' + ci + '" title="Click to edit"' : "") + '>' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
+  // Inline cell editing: click an editable cell to change its value in place and
+  // save straight to the row's table - no need to open the record. A column opts in
+  // with an `edit:{field,type,options}` descriptor and the cfg names its `editTable`.
+  var _editStyled = false;
+  function ensureEditStyle() { if (_editStyled) return; _editStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-ecell{cursor:text}.o-list tbody tr:not(.o-grp) .o-ecell:hover{background:var(--panel2,#f2f4f7);box-shadow:inset 0 0 0 1px var(--line,#dde)}.o-ein{width:100%;box-sizing:border-box;font:inherit;padding:2px 4px;border:1px solid var(--app,#2a7);border-radius:4px;background:var(--panel,#fff);color:var(--ink,#111)}"; document.head.appendChild(s); } catch (e) { } }
+  function startCellEdit(td) {
+    if (td.querySelector(".o-ein")) return;
+    var tr = td.closest("[data-id]"); if (!tr) return;
+    var id = tr.dataset.id, cfg = L.cfg, ci = +td.dataset.eci, col = cfg.columns[ci]; if (!col || !col.edit) return;
+    var row = L.all.filter(function (x) { return x.id === id; })[0]; if (!row) return;
+    var e = col.edit, cur = row[e.field], editor;
+    if (e.type === "select") {
+      var opts = typeof e.options === "function" ? e.options(row) : (e.options || []);
+      editor = document.createElement("select"); editor.className = "o-ein";
+      opts.forEach(function (o) { var v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o; var op = document.createElement("option"); op.value = v; op.textContent = l; if (String(cur == null ? "" : cur) === String(v)) op.selected = true; editor.appendChild(op); });
+    } else if (e.type === "checkbox") {
+      editor = document.createElement("input"); editor.type = "checkbox"; editor.className = "o-ein"; editor.style.width = "auto"; editor.checked = !!cur;
+    } else {
+      editor = document.createElement("input"); editor.className = "o-ein"; editor.type = e.type === "number" ? "number" : e.type === "date" ? "date" : "text"; if (e.type === "number") editor.step = "any"; editor.value = (cur == null ? "" : cur);
+    }
+    var prev = td.innerHTML; td.innerHTML = ""; td.appendChild(editor); editor.focus(); try { if (editor.select) editor.select(); } catch (x) { }
+    var done = false;
+    function finish(save) {
+      if (done) return; done = true;
+      if (!save) { td.innerHTML = prev; return; }
+      var val = e.type === "checkbox" ? editor.checked : e.type === "number" ? (editor.value === "" ? null : Number(editor.value)) : (editor.value.trim() === "" ? null : editor.value.trim());
+      if (val === (cur == null ? (e.type === "checkbox" ? false : null) : cur)) { td.innerHTML = prev; return; }
+      saveCellEdit(cfg, id, e.field, val, row, td, col, prev);
+    }
+    editor.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); finish(true); } else if (ev.key === "Escape") { ev.preventDefault(); finish(false); } };
+    if (e.type === "checkbox" || e.type === "select") editor.onchange = function () { finish(true); }; else editor.onblur = function () { finish(true); };
+  }
+  async function saveCellEdit(cfg, id, field, val, row, td, col, prev) {
+    var patch = {}; patch[field] = val;
+    var r = await sb.from(cfg.editTable || cfg.table).update(patch).eq("id", id);
+    if (r.error) { toast("Could not save: " + errMsg(r.error)); td.innerHTML = prev; return; }
+    row[field] = val; td.innerHTML = col.get(row); toast("Saved");
+  }
   // A gallery tile for the thumbnail view: the row photo (where a list attaches one)
   // over the first column as a title and the second as a subtitle; a lettered
   // placeholder when there is no image, so every table has a usable thumbnail view.
@@ -2959,15 +2998,15 @@
     var isCust = kind === "customer";
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
-      title: isCust ? "Customers" : "Vendors", pageSize: 80,
+      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners",
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
-        { label: "Industry", get: function (p) { return '<span class="muted">' + esc(p.industry || "") + '</span>'; } },
-        { label: "Email", get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
-        { label: "City", get: function (p) { return '<span class="muted">' + esc(p.city || "") + '</span>'; } },
-        { label: "Country", get: function (p) { return '<span class="muted">' + esc(p.country || "") + '</span>'; } }
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
+        { label: "Industry", edit: { field: "industry", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.industry || "") + '</span>'; } },
+        { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
+        { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.city || "") + '</span>'; } },
+        { label: "Country", edit: { field: "country", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.country || "") + '</span>'; } }
       ].concat(isCust ? [] : [{ label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } }]),
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
       kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
@@ -3031,12 +3070,12 @@
   function cfgAccounts() {
     var tName = {}; S.types.forEach(function (t) { tName[t.code] = t.name; });
     return {
-      title: "Chart of Accounts", pageSize: 200,
+      title: "Chart of Accounts", pageSize: 200, editTable: "accounts",
       fetch: function () { return sb.from("accounts").select("*").eq("company_id", S.company.id).order("code").then(function (r) { return r.data || []; }); },
       searchText: function (a) { return (a.code || "") + " " + (a.name || ""); },
       columns: [
-        { label: "Code", get: function (a) { return '<span class="num" style="text-align:left">' + esc(a.code) + '</span>'; } },
-        { label: "Name", get: function (a) { return '<b>' + esc(a.name) + '</b>'; } },
+        { label: "Code", edit: { field: "code", type: "text" }, get: function (a) { return '<span class="num" style="text-align:left">' + esc(a.code) + '</span>'; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (a) { return '<b>' + esc(a.name) + '</b>'; } },
         { label: "Type", get: function (a) { return '<span class="muted">' + esc(tName[a.type_code] || a.type_code) + '</span>'; } },
         { label: "Status", get: function (a) { return a.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
       ],
@@ -3159,12 +3198,12 @@
   }
   function cfgTaxes() {
     return {
-      title: "Taxes", pageSize: 50,
+      title: "Taxes", pageSize: 50, editTable: "taxes",
       fetch: function () { return sb.from("taxes").select("*").eq("company_id", S.company.id).order("amount", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (t) { return (t.name || "") + " " + (t.code || ""); },
       columns: [
-        { label: "Name", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } },
-        { label: "Rate", num: true, get: function (t) { return Number(t.amount) + "%"; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (t) { return '<b>' + esc(t.name) + '</b>'; } },
+        { label: "Rate", num: true, edit: { field: "amount", type: "number" }, get: function (t) { return Number(t.amount) + "%"; } },
         { label: "Scope", get: function (t) { return '<span class="muted">' + esc(t.scope || "") + '</span>'; } }
       ],
       groupBy: [{ label: "Scope", get: function (t) { return t.scope || "None"; } }]
@@ -3217,17 +3256,17 @@
   var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
   function cfgProducts() {
     return {
-      title: "Products", pageSize: 80,
+      title: "Products", pageSize: 80, editTable: "products",
       fetch: async function () { var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "product"); return rows; },
       searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
         { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
-        { label: "Reference", get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
-        { label: "Family", get: function (p) { return esc(p.family || ""); } },
+        { label: "Reference", edit: { field: "default_code", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
+        { label: "Family", edit: { field: "family", type: "text" }, get: function (p) { return esc(p.family || ""); } },
         { label: "Form", get: function (p) { return p.material_form && p.material_form !== "generic" ? '<span class="badge">' + esc(matFormLabel(p.material_form)) + '</span>' : ""; } },
-        { label: "Sales Price", num: true, get: function (p) { return money(p.list_price); } },
-        { label: "Cost", num: true, get: function (p) { return money(p.cost_price); } },
+        { label: "Sales Price", num: true, edit: { field: "list_price", type: "number" }, get: function (p) { return money(p.list_price); } },
+        { label: "Cost", num: true, edit: { field: "cost_price", type: "number" }, get: function (p) { return money(p.cost_price); } },
         { label: "Status", get: function (p) { return p.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
@@ -7698,15 +7737,17 @@
   // ============================ CONTACTS (unified directory + tags) ============================
   function cfgContacts() {
     return {
-      title: "Contacts", pageSize: 80,
+      title: "Contacts", pageSize: 80, editTable: "partners",
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
         { label: "Type", get: function (p) { var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
-        { label: "Industry", get: function (p) { return esc(p.industry || ""); } },
+        { label: "Industry", edit: { field: "industry", type: "text" }, get: function (p) { return esc(p.industry || ""); } },
+        { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return esc(p.email || ""); } },
+        { label: "Phone", edit: { field: "phone", type: "text" }, get: function (p) { return esc(p.phone || ""); } },
         { label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } },
-        { label: "City", get: function (p) { return esc(p.city || ""); } }
+        { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return esc(p.city || ""); } }
       ],
       filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }],
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
