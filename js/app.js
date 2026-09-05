@@ -4639,6 +4639,7 @@
       fld("Phone", phoneFieldHTML("p-phone", p), "Dialing code, area code and the number in separate boxes, so numbers stay tidy and consistent.") +
       fld("Mobile", phoneFieldHTML("p-mobile", p, { cc: "mobile_cc", area: "mobile_area", num: "mobile_num", combined: "mobile" }), "The mobile number in the same three boxes: dialing code, area code and number.") +
       fld("Tax / VAT no.", '<input id="p-vat" value="' + esc(p.vat || "") + '">') +
+      fld("Website", '<input id="p-website" value="' + esc(p.website || "") + '" placeholder="https://...">', "The supplier or customer website.") +
       '</div><div>' +
       fld("Street", '<input id="p-street" value="' + esc(p.street || "") + '" placeholder="Street / area">') +
       fld("Building", '<input id="p-building" value="' + esc(p.building || "") + '" placeholder="Building / block">') +
@@ -4656,6 +4657,7 @@
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
       '</div></div>' +
       (showCaps ? capsBlock() : "") +
+      '<div style="margin-top:14px"><div class="o-cf-head">Notes</div><textarea id="p-notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px" placeholder="Anything worth remembering - extra contacts, ratings, catalogue links, terms...">' + esc(p.notes || "") + '</textarea></div>' +
       customFieldsHTML("partner", p) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
       '</div>';
@@ -4701,7 +4703,7 @@
       var ptVal = document.getElementById("p-payterms") ? document.getElementById("p-payterms").value : "";
       var creditVal = gv("p-credit");
       var _pn = collectPhone("p-phone"), _pm = collectPhone("p-mobile");
-      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), tags: (p.tags || null), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
+      var row = { name: name, contact_person: gv("p-contact"), email: gv("p-email"), phone: _pn.combined, phone_cc: _pn.cc, phone_area: _pn.area, phone_num: _pn.num, mobile: _pm.combined, mobile_cc: _pm.cc, mobile_area: _pm.area, mobile_num: _pm.num, vat: gv("p-vat"), street: gv("p-street"), building: gv("p-building"), floor: gv("p-floor"), city: gv("p-city"), country: gv("p-country"), payment_days: ptVal !== "" ? parseInt(ptVal, 10) : null, credit_limit: creditVal !== "" ? parseFloat(creditVal) : null, industry: gv("p-industry"), specialty: gv("p-specialty"), website: gv("p-website"), notes: (document.getElementById("p-notes") ? document.getElementById("p-notes").value.trim() : (p.notes || null)) || null, tags: (p.tags || null), pricelist_id: (document.getElementById("p-pl") && document.getElementById("p-pl").value) || null, intercompany_company_id: (document.getElementById("p-ic") && document.getElementById("p-ic").value) || null };
       var _ck = document.getElementById("p-kind") ? document.getElementById("p-kind").value : "company";
       row.contact_kind = _ck; row.role_title = gv("p-role");
       if (_ck === "company") { row.is_company = true; var _ct = document.getElementById("p-ctype") ? document.getElementById("p-ctype").value : null; row.company_type = _ct; row.employer_id = null; row.is_customer = _ct === "client"; row.is_vendor = _ct === "supplier" || _ct === "subcontractor"; if (!row.is_customer && !row.is_vendor) { if (isCust) row.is_customer = true; else if (!isContact) row.is_vendor = true; } }
