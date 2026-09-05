@@ -883,7 +883,7 @@
       menus: [
         { label: "Contacts", action: "contacts" },
         { label: "Find Duplicates", action: "contact.dedupe" },
-        { label: "Configuration", items: [["Tags", "contact.tags"]] }
+        { label: "Configuration", items: [["Tags", "contact.tags"], ["Services & Products", "contact.caps"]] }
       ]
     },
     calendar: {
@@ -996,7 +996,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
@@ -2277,6 +2277,7 @@
       case "hr.shifttmpl": return renderList(cfgShiftTemplates());
       case "contacts": return renderList(cfgContacts());
       case "contact.tags": return renderList(cfgContactTags());
+      case "contact.caps": return renderCapabilities();
       case "contact.dedupe": return renderContactMerge();
       case "cal.month": return renderCalendar();
       case "cal.agenda": return renderAgenda();
@@ -4609,7 +4610,9 @@
     var CTYPES = ["client", "supplier", "bank", "insurance", "subcontractor", "other"];
     var ctypeDef = p.company_type || (isCust ? "client" : isContact ? "other" : "supplier");
     var indNames = INDUSTRY_SEED.slice(); industries.forEach(function (i) { if (indNames.indexOf(i.name) < 0) indNames.push(i.name); });
-    var capNames = CAP_SEED.slice(); caps.forEach(function (c) { if (capNames.indexOf(c.name) < 0) capNames.push(c.name); });
+    // Use the org's own Services & Products list when it has one; the CAP_SEED is only a
+    // starter suggestion for a brand-new company (otherwise its spellings duplicate the real list).
+    var capNames = caps.length ? caps.map(function (c) { return c.name; }) : CAP_SEED.slice();
     (p.capabilities || []).forEach(function (c) { if (capNames.indexOf(c) < 0) capNames.push(c); });
     var pcaps = p.capabilities || [], showCaps = !isCust;   // vendors + contacts (suppliers), not pure customers
     function countryOpts() { var list = COUNTRIES.slice(); if (p.country && list.indexOf(p.country) < 0) list.unshift(p.country); return '<option value="">(select country)</option>' + list.map(function (c) { return '<option' + (p.country === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join(""); }
@@ -7590,6 +7593,25 @@
       columns: [{ label: "Tag", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } }, { label: "Colour", get: function (t) { return t.color ? '<span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:' + esc(t.color) + ';vertical-align:middle"></span> ' + esc(t.color) : ''; } }],
       onOpen: function (t) { openContactTagModal(t); }, onNew: function () { openContactTagModal(null); }
     };
+  }
+  // Editable master list of the services / products a supplier can offer (the "What they can
+  // supply" ticks on a contact). Rename and delete cascade to every supplier using the value.
+  async function renderCapabilities() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Services & Products") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var org = S.company.org_id;
+    var caps = (await sb.from("capabilities").select("id,name").eq("org_id", org).order("name")).data || [];
+    var parts = (await sb.from("partners").select("capabilities").eq("company_id", S.company.id).not("capabilities", "is", null)).data || [];
+    var count = {}; parts.forEach(function (p) { (p.capabilities || []).forEach(function (c) { count[c] = (count[c] || 0) + 1; }); });
+    var body = document.getElementById("o-body");
+    function rowH(c) { return '<tr data-id="' + c.id + '" data-name="' + esc(c.name) + '"><td><input class="cap-name" value="' + esc(c.name) + '" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit"></td><td class="num muted">' + (count[c.name] || 0) + '</td><td style="white-space:nowrap"><button class="btn sm cap-ren">Rename</button> <button class="btn sm cap-del" style="color:var(--bad)">&times;</button></td></tr>'; }
+    body.innerHTML = '<div style="padding:16px;max-width:640px"><div class="card"><h3 style="margin:0 0 4px">Services &amp; Products a supplier can offer</h3><div class="sub" style="margin-bottom:10px">This is the master list ticked under &ldquo;What they can supply&rdquo; on each supplier. Rename or delete cascades to every supplier using it.</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:10px"><input id="cap-add" placeholder="Add a service or product..." style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit"><button class="btn pri" id="cap-addb" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Name</th><th class="num">Used by</th><th></th></tr></thead><tbody id="cap-body">' + (caps.length ? caps.map(rowH).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No services yet - add some, or they appear here as you tick them on suppliers.</td></tr>') + '</tbody></table></div></div></div>';
+    document.getElementById("cap-addb").onclick = async function () { var v = (gv("cap-add") || "").trim(); if (!v) return; if (caps.some(function (c) { return c.name.toLowerCase() === v.toLowerCase(); })) { toast("Already in the list"); return; } var r = await sb.from("capabilities").insert({ org_id: org, name: v }); if (r.error) { toast(errMsg(r.error)); return; } toast("Added"); renderCapabilities(); };
+    body.querySelectorAll(".cap-ren").forEach(function (b) { b.onclick = async function () { var tr = b.closest("tr"); var id = tr.dataset.id, oldN = tr.dataset.name, newN = (tr.querySelector(".cap-name").value || "").trim(); if (!newN || newN === oldN) { toast("No change"); return; } var r = await sb.from("capabilities").update({ name: newN }).eq("id", id); if (r.error) { toast(errMsg(r.error)); return; } var ps = (await sb.from("partners").select("id,capabilities").eq("company_id", S.company.id).contains("capabilities", [oldN])).data || []; for (var i = 0; i < ps.length; i++) { var arr = (ps[i].capabilities || []).map(function (x) { return x === oldN ? newN : x; }); await sb.from("partners").update({ capabilities: arr }).eq("id", ps[i].id); } toast("Renamed on " + ps.length + " supplier(s)"); renderCapabilities(); }; });
+    body.querySelectorAll(".cap-del").forEach(function (b) { b.onclick = async function () { var tr = b.closest("tr"); var id = tr.dataset.id, nm = tr.dataset.name, used = count[nm] || 0; if (!confirm('Delete "' + nm + '"' + (used ? " and remove it from " + used + " supplier(s)" : "") + "?")) return; var r = await sb.from("capabilities").delete().eq("id", id); if (r.error) { toast(errMsg(r.error)); return; } if (used) { var ps = (await sb.from("partners").select("id,capabilities").eq("company_id", S.company.id).contains("capabilities", [nm])).data || []; for (var i = 0; i < ps.length; i++) { var arr = (ps[i].capabilities || []).filter(function (x) { return x !== nm; }); await sb.from("partners").update({ capabilities: arr.length ? arr : null }).eq("id", ps[i].id); } } toast("Deleted"); renderCapabilities(); }; });
   }
   function openContactTagModal(t) {
     t = t || {};
