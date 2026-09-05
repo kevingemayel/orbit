@@ -903,6 +903,10 @@
       name: "Sign", icon: "✒", color: "#7c3aed", color2: "#6d28d9", home: "sign.list",
       menus: [{ label: "Signature Requests", action: "sign.list" }]
     },
+    website: {
+      name: "Website", icon: "◐", color: "#2563eb", color2: "#1d4ed8", home: "web.sites",
+      menus: [{ label: "Sites", action: "web.sites" }, { label: "Form Submissions", action: "web.subs" }]
+    },
     recruitment: {
       name: "Recruitment", icon: "☺", color: "#db2777", color2: "#be185d", home: "rec.applicants",
       menus: [
@@ -1004,6 +1008,7 @@
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
+    "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
@@ -1119,7 +1124,7 @@
     if (!isSupportView()) return "";
     return '<div class="o-support" role="status"><span class="o-support-dot" aria-hidden="true"></span>Support mode &mdash; you are viewing <b>' + esc(S.company.name) + '</b>, which is not your organisation. Your access is logged.</div>';
   }
-  var SOON = [["Website", "◐", "#2563eb"], ["Point of Sale", "▤", "#7c3aed"]];
+  var SOON = [["Point of Sale", "▤", "#7c3aed"]];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
     counter: '<svg viewBox="0 0 100 100"><rect x="15" y="33" width="55" height="33" rx="5" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="42.5" cy="49.5" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M26 79 H85" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="30" r="7" fill="#2F6BFF"/></svg>',
@@ -2287,6 +2292,8 @@
       case "cal.month": return renderCalendar();
       case "cal.agenda": return renderAgenda();
       case "sign.list": return renderList(cfgSignRequests());
+      case "web.sites": return renderList(cfgSites());
+      case "web.subs": return renderList(cfgSiteSubmissions());
       case "rec.applicants": return renderList(cfgApplicants());
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
@@ -14726,6 +14733,157 @@
   // ---- CUT LIST: import a material-needed list (from dedicated cutting/nesting
   // software), reserve the stock you already have, and turn the shortfall into a
   // draft RFQ. Orbit does not optimize the cut - it handles stock + procurement.
+  // ============================ WEBSITE (site builder + hosting) ============================
+  var WEB_ORIGIN = "https://orbit.spacework.ai";                 // where the preview renderer runs
+  var WEB_SUB_BASE = "sites.spacework.ai";                       // free subdomain zone
+  var WEB_BLOCKS = [["hero", "Hero"], ["heading", "Heading"], ["text", "Text"], ["image", "Image"], ["features", "Feature cards"], ["cta", "Call to action"], ["button", "Button"], ["form", "Contact form"], ["embed", "Embed / HTML"], ["spacer", "Spacer"]];
+  function webSlug(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
+  function webHost(site) { return (site.slug ? site.slug + "." + WEB_SUB_BASE : ""); }
+  function cfgSites() {
+    return {
+      title: "Sites", pageSize: 50, editTable: "sites",
+      fetch: async function () { var rows = (await sb.from("sites").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || []; return rows; },
+      searchText: function (s) { return (s.name || "") + " " + (s.slug || ""); },
+      columns: [
+        { label: "Site", edit: { field: "name", type: "text" }, get: function (s) { return '<b>' + esc(s.name || "") + '</b>'; } },
+        { label: "Address", get: function (s) { return s.slug ? '<span class="muted">' + esc(webHost(s)) + '</span>' : '<span class="badge warn">no subdomain</span>'; } },
+        { label: "Status", get: function (s) { return s.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      onOpen: function (s) { renderSiteForm(s.id); }, onNew: function () { renderSiteForm("new"); }
+    };
+  }
+  function cfgSiteSubmissions() {
+    return {
+      title: "Form Submissions", pageSize: 100,
+      fetch: function () { return sb.from("site_submissions").select("*, sites(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (x) { return JSON.stringify(x.data || {}) + " " + (x.form_key || ""); },
+      columns: [
+        { label: "When", get: function (x) { return '<span class="muted">' + esc((x.created_at || "").slice(0, 16).replace("T", " ")) + '</span>'; } },
+        { label: "Site", get: function (x) { return esc(x.sites ? x.sites.name : ""); } },
+        { label: "Form", get: function (x) { return '<span class="badge">' + esc(x.form_key || "contact") + '</span>'; } },
+        { label: "Details", get: function (x) { var d = x.data || {}; return Object.keys(d).map(function (k) { return '<b>' + esc(k) + ':</b> ' + esc(String(d[k]).slice(0, 80)); }).join(' &middot; '); } }
+      ]
+    };
+  }
+  async function renderSiteForm(id) {
+    var parent = { action: "web.sites", title: "Sites" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New site" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var s = id === "new" ? { theme: {}, homepage_path: "/" } : (await sb.from("sites").select("*").eq("id", id).maybeSingle()).data || {};
+    var th = s.theme || {};
+    var pages = id === "new" ? [] : (await sb.from("site_pages").select("id,path,title,is_published,sort").eq("site_id", id).order("sort").order("path")).data || [];
+    var hosts = id === "new" ? [] : (await sb.from("site_hostnames").select("*").eq("site_id", id).order("created_at")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New site" : (s.name || "Site");
+    var host = webHost(s);
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ws-save">Save</button><button id="ws-discard">Discard</button>' + (id !== "new" ? '<button id="ws-visit">Open live</button>' : '') + '</div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (s.is_published ? "done" : "on") + '">' + (s.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="ws-name" value="' + esc(s.name || "") + '" placeholder="Site name"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Subdomain", '<div style="display:flex;align-items:center;gap:4px"><input id="ws-slug" value="' + esc(s.slug || "") + '" placeholder="acme" style="max-width:160px"><span class="muted">.' + WEB_SUB_BASE + '</span></div>', "Your free address. Letters, numbers and dashes. Must be unique.") +
+      fld("Published", '<select id="ws-pub"><option value="0"' + (!s.is_published ? " selected" : "") + '>Draft (only you)</option><option value="1"' + (s.is_published ? " selected" : "") + '>Published (public)</option></select>', "A published site is live at its address; a draft is private.") +
+      '</div><div>' +
+      fld("Brand colour", '<input id="ws-primary" type="color" value="' + esc(th.primary || "#2f6bff") + '" style="width:56px;height:34px;padding:2px">', "Buttons and links use this colour.") +
+      fld("Background", '<input id="ws-bg" type="color" value="' + esc(th.bg || "#ffffff") + '" style="width:56px;height:34px;padding:2px">') +
+      fld("Font", '<select id="ws-font">' + ["Inter", "Onest", "Poppins", "Roboto", "Montserrat", "Playfair Display", "Lora", "Space Grotesk"].map(function (f) { return '<option' + ((th.font || "Inter") === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select>') +
+      '</div></div>' +
+      ((id !== "new") ? ('<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Pages</div></div><div class="o-nb-pg"><table class="o-list"><thead><tr><th>Title</th><th>Path</th><th>Status</th><th style="width:22px"></th></tr></thead><tbody id="ws-pages">' +
+        (pages.length ? pages.map(function (p) { return '<tr data-pid="' + p.id + '" style="cursor:pointer"><td><b>' + esc(p.title || "(untitled)") + '</b></td><td class="muted">' + esc(p.path) + '</td><td>' + (p.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>') + '</td><td><button class="wp-del" data-pid="' + p.id + '" title="Delete page" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="4" class="muted">No pages yet. Add your first page.</td></tr>') +
+        '</tbody></table><button class="o-addln" id="ws-addpage">+ Add a page</button></div></div>' +
+        '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Custom domain</div></div><div class="o-nb-pg">' +
+        '<div class="sub" style="margin-bottom:8px">Use your own domain (e.g. <b>www.yourbusiness.com</b>) with nothing of ' + WEB_SUB_BASE + ' visible to visitors. Add it here, then point one DNS record at us; SSL is issued automatically.</div>' +
+        '<table class="o-list"><tbody id="ws-hosts">' + (hosts.length ? hosts.map(function (h) { return '<tr><td><b>' + esc(h.hostname) + '</b></td><td>' + (h.status === "active" ? '<span class="badge paid">Live</span>' : '<span class="badge partial">Pending DNS</span>') + '</td><td class="muted">CNAME &rarr; ' + WEB_SUB_BASE + '</td><td><button class="wh-del" data-id="' + h.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : "") + '</tbody></table>' +
+        '<div style="display:flex;gap:6px;margin-top:8px;max-width:420px"><input id="ws-newhost" placeholder="www.yourbusiness.com" style="flex:1"><button class="btn" id="ws-addhost">Add domain</button></div>' +
+        '</div></div>') : '<div class="sub" style="margin-top:12px">Save the site first, then add pages and a custom domain.</div>') +
+      '</div>';
+    document.getElementById("ws-discard").onclick = function () { go("web.sites"); };
+    var vb = document.getElementById("ws-visit"); if (vb) vb.onclick = function () { window.open(WEB_ORIGIN + "/site/?host=" + encodeURIComponent(host) + "&path=/", "_blank"); };
+    document.getElementById("ws-save").onclick = async function () {
+      var row = { name: gv("ws-name") || "My site", slug: webSlug(gv("ws-slug")) || null, is_published: gv("ws-pub") === "1", theme: { primary: gv("ws-primary"), bg: gv("ws-bg"), font: gv("ws-font") } };
+      var sid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("sites").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
+      else { var up = await sb.from("sites").update(row).eq("id", id); if (up.error) { toast(errMsg(up.error)); return; } }
+      toast("Saved"); renderSiteForm(sid);
+    };
+    if (id !== "new") {
+      document.querySelectorAll("#ws-pages tr[data-pid]").forEach(function (tr) { tr.onclick = function (e) { if (e.target.classList.contains("wp-del")) return; renderSitePageForm(id, tr.dataset.pid); }; });
+      document.querySelectorAll(".wp-del").forEach(function (b) { b.onclick = async function (e) { e.stopPropagation(); if (!confirm("Delete this page?")) return; await sb.from("site_pages").delete().eq("id", b.dataset.pid); renderSiteForm(id); }; });
+      document.getElementById("ws-addpage").onclick = function () { renderSitePageForm(id, "new"); };
+      document.getElementById("ws-addhost").onclick = async function () {
+        var hn = (gv("ws-newhost") || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); if (!hn) return;
+        var r = await sb.from("site_hostnames").insert({ company_id: S.company.id, site_id: id, hostname: hn, kind: "custom", status: "pending" }); if (r.error) { toast(errMsg(r.error)); return; }
+        toast("Domain added - now point its DNS CNAME at " + WEB_SUB_BASE + ", then it goes live once verified."); renderSiteForm(id);
+      };
+      document.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = async function () { await sb.from("site_hostnames").delete().eq("id", b.dataset.id); renderSiteForm(id); }; });
+    }
+  }
+  function webBlockFields(type, p) {
+    p = p || {};
+    function t(id, ph, v) { return '<input class="wb-f" data-k="' + id + '" placeholder="' + esc(ph) + '" value="' + esc(v || "") + '">'; }
+    function ta(id, ph, v) { return '<textarea class="wb-f" data-k="' + id + '" rows="3" placeholder="' + esc(ph) + '">' + esc(v || "") + '</textarea>'; }
+    if (type === "hero") return t("eyebrow", "Eyebrow (small label)", p.eyebrow) + t("title", "Big headline", p.title) + ta("subtitle", "Subtitle", p.subtitle) + t("buttonText", "Button text", p.buttonText) + t("buttonHref", "Button link", p.buttonHref) + t("image", "Background image URL (optional)", p.image);
+    if (type === "heading") return t("text", "Heading", p.text) + ta("subtitle", "Subtitle (optional)", p.subtitle);
+    if (type === "text") return ta("text", "Paragraph text", p.text);
+    if (type === "image") return t("src", "Image URL", p.src) + t("alt", "Alt text", p.alt) + t("caption", "Caption (optional)", p.caption);
+    if (type === "features") return t("title", "Section title (optional)", p.title) + ta("_items", "One card per line:  Title | description", (p.items || []).map(function (i) { return (i.title || "") + " | " + (i.text || ""); }).join("\n"));
+    if (type === "cta") return t("title", "Headline", p.title) + ta("text", "Text", p.text) + t("buttonText", "Button text", p.buttonText) + t("buttonHref", "Button link", p.buttonHref);
+    if (type === "button") return t("text", "Button text", p.text) + t("href", "Link", p.href);
+    if (type === "form") return t("title", "Form title (optional)", p.title) + t("submitText", "Button text (e.g. Send)", p.submitText);
+    if (type === "embed") return ta("html", "Paste HTML / embed code", p.html);
+    if (type === "spacer") return t("size", "Height in px (e.g. 48)", p.size);
+    return "";
+  }
+  function webReadBlock(card) {
+    var type = card.dataset.type, p = {};
+    card.querySelectorAll(".wb-f").forEach(function (el) { var k = el.dataset.k, v = el.value; if (v !== "") p[k] = v; });
+    if (type === "features") { var lines = (p._items || "").split("\n").map(function (l) { return l.trim(); }).filter(Boolean); delete p._items; p.items = lines.map(function (l) { var parts = l.split("|"); return { title: (parts[0] || "").trim(), text: (parts[1] || "").trim() }; }); }
+    if (type === "spacer" && p.size) p.size = Number(p.size) || 48;
+    return { type: type, props: p };
+  }
+  async function renderSitePageForm(siteId, pageId) {
+    var site = (await sb.from("sites").select("*").eq("id", siteId).maybeSingle()).data || {};
+    var pg = pageId === "new" ? { path: "/", content: [] } : (await sb.from("site_pages").select("*").eq("id", pageId).maybeSingle()).data || { path: "/", content: [] };
+    var blocks = Array.isArray(pg.content) ? pg.content : [];
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(pg.title || (pageId === "new" ? "New page" : "Page"), { action: "web.sites", title: "Sites" }) + '<div class="gap"></div><button class="o-filtbtn" id="wp-preview">Preview</button></div><div class="o-form-bg"><div class="o-form"></div></div></div>';
+    wireBc();
+    function blockCard(b) {
+      return '<div class="o-matspec wb-card" data-type="' + esc(b.type) + '" style="margin:0 0 10px;padding:12px 14px">' +
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="text-transform:capitalize">' + esc((WEB_BLOCKS.filter(function (x) { return x[0] === b.type; })[0] || [b.type, b.type])[1]) + '</b><div class="gap" style="flex:1"></div>' +
+        '<button class="wb-up" title="Move up" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&uarr;</button><button class="wb-dn" title="Move down" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&darr;</button><button class="wb-del" title="Delete" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;color:var(--bad);cursor:pointer">&times;</button></div>' +
+        '<div class="wb-fields" style="display:grid;gap:8px">' + webBlockFields(b.type, b.props || {}) + '</div></div>';
+    }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="wp-save">Save</button><button id="wp-discard">Back to site</button></div></div>' +
+      '<div class="o-sheet">' +
+      '<div class="o-groups"><div>' + fld("Page title", '<input id="wp-title" value="' + esc(pg.title || "") + '" placeholder="Home">') + fld("Path", '<input id="wp-path" value="' + esc(pg.path || "/") + '" placeholder="/about">', "The address on the site. Use / for the home page.") + '</div><div>' +
+      fld("SEO description", '<input id="wp-desc" value="' + esc((pg.meta || {}).description || "") + '" placeholder="One line for search engines">') +
+      fld("Published", '<select id="wp-pub"><option value="0"' + (!pg.is_published ? " selected" : "") + '>Draft</option><option value="1"' + (pg.is_published ? " selected" : "") + '>Published</option></select>') +
+      '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:16px">Content blocks</div><div id="wp-blocks">' + (blocks.length ? blocks.map(blockCard).join("") : '<div class="o-empty">No blocks yet. Add one below.</div>') + '</div>' +
+      '<div style="display:flex;gap:6px;align-items:center;margin-top:10px"><select id="wp-newtype">' + WEB_BLOCKS.map(function (b) { return '<option value="' + b[0] + '">' + b[1] + '</option>'; }).join("") + '</select><button class="btn" id="wp-addblock">+ Add block</button></div>' +
+      '</div>';
+    function wireBlocks() {
+      var wrap = document.getElementById("wp-blocks");
+      wrap.querySelectorAll(".wb-del").forEach(function (b) { b.onclick = function () { b.closest(".wb-card").remove(); }; });
+      wrap.querySelectorAll(".wb-up").forEach(function (b) { b.onclick = function () { var c = b.closest(".wb-card"); if (c.previousElementSibling) c.parentNode.insertBefore(c, c.previousElementSibling); }; });
+      wrap.querySelectorAll(".wb-dn").forEach(function (b) { b.onclick = function () { var c = b.closest(".wb-card"); if (c.nextElementSibling) c.parentNode.insertBefore(c.nextElementSibling, c); }; });
+    }
+    wireBlocks();
+    document.getElementById("wp-addblock").onclick = function () {
+      var type = document.getElementById("wp-newtype").value, wrap = document.getElementById("wp-blocks");
+      var empty = wrap.querySelector(".o-empty"); if (empty) empty.remove();
+      var div = document.createElement("div"); div.innerHTML = blockCard({ type: type, props: {} }); wrap.appendChild(div.firstChild); wireBlocks();
+    };
+    document.getElementById("wp-discard").onclick = function () { renderSiteForm(siteId); };
+    document.getElementById("wp-preview").onclick = function () { window.open(WEB_ORIGIN + "/site/?host=" + encodeURIComponent(webHost(site)) + "&path=" + encodeURIComponent(gv("wp-path") || "/"), "_blank"); };
+    async function savePage() {
+      var content = Array.prototype.map.call(document.querySelectorAll("#wp-blocks .wb-card"), webReadBlock);
+      var row = { title: gv("wp-title") || null, path: gv("wp-path") || "/", meta: { description: gv("wp-desc") || "" }, content: content, is_published: gv("wp-pub") === "1", updated_at: new Date().toISOString() };
+      if (pageId === "new") { row.company_id = S.company.id; row.site_id = siteId; var ins = await sb.from("site_pages").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } return ins.data.id; }
+      var up = await sb.from("site_pages").update(row).eq("id", pageId); if (up.error) { toast(errMsg(up.error)); return null; } return pageId;
+    }
+    document.getElementById("wp-save").onclick = async function () { var pid = await savePage(); if (pid) { toast("Page saved"); renderSitePageForm(siteId, pid); } };
+  }
+
   // ============================ TRACEABILITY (take-off -> GL) ============================
   async function sha256hex(str) {
     try { var buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str)); return Array.prototype.map.call(new Uint8Array(buf), function (b) { return ("0" + b.toString(16)).slice(-2); }).join(""); }
