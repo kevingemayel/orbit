@@ -3934,6 +3934,49 @@
     var t = Number(d.t || 0), u = d.volunit || "L", factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1);
     return { form: form, isSheet: form === "sheet", kgm2: (t / 1000) * dens, dens: dens, t: t, wpm: Number(d.wpm || 0), liters: (Number(d.vol) || 0) * factor, rlen: Number(d.rlen || 0), rwt: Number(d.rwt || 0), basis: sp.basis || lineDefaultBasis(form), pval: sp.pval };
   }
+  // ---- Typed quantity (audit P0-1) --------------------------------------------
+  // A counted item is not the same as the measure it stands for. A sheet product is
+  // bought and counted in SHEETS but stocked/valued in m2; "3 sheets" must never be
+  // read as "3 m2". packInfo() gives, per product, the count unit (sheet/bar/roll/
+  // container) vs the base measure unit (m2/m/L) and the PER-PRODUCT factor between
+  // them (the item's own area/length/volume - never a global uom factor).
+  function packInfo(product) {
+    var m = prodMat(product), d = (product && product.spec && product.spec.dims) || {};
+    if (m.form === "sheet") { var w = Number(d.w) || 0, h = Number(d.h) || 0, a = w * h / 1e6; return { form: "sheet", count: "sheet", base: "m2", factor: a > 0 ? a : null, wt: a * m.kgm2 }; }
+    if (m.form === "bar") { var L = Number(d.len) || 0; return { form: "bar", count: "bar", base: "m", factor: L > 0 ? L : null, wt: m.wpm * L }; }
+    if (m.form === "liquid") { var v = m.liters; return { form: "liquid", count: "container", base: "L", factor: v > 0 ? v : null, wt: 0 }; }
+    if (m.form === "roll") { var r = m.rlen; return { form: "roll", count: "roll", base: "m", factor: r > 0 ? r : null, wt: m.rwt }; }
+    var u = (product && product.uom) || "Unit"; return { form: "generic", count: u, base: u, factor: 1, wt: 0 };
+  }
+  // Base measure for a COUNT of a product, honouring a line/move's own size when set
+  // (a sheet can be cut to a different W x H than the product default; a bar to a
+  // different length via a "6m" size). Returns null baseQty when dimensions are unset.
+  function baseFor(product, countQty, o) {
+    o = o || {}; var pk = packInfo(product), n = Number(countQty) || 0, f = pk.factor;
+    if (pk.form === "sheet" && (o.width || o.height)) { var a = (Number(o.width) || 0) * (Number(o.height) || 0) / 1e6; if (a > 0) f = a; }
+    else if (pk.form === "bar" && o.size) { var L = parseFloat(o.size) || 0; if (L > 0) f = L; }
+    return { count: n, countUom: pk.count, baseQty: (f && f > 0) ? n * f : null, baseUom: pk.base, factor: (f && f > 0) ? f : null, form: pk.form };
+  }
+  // "3 sheets" / "1 bar" / "5 Unit" - pluralise typed forms only.
+  function countUomLabel(n, pk) { var u = pk.count; if (pk.form !== "generic" && Math.abs(Number(n) || 0) !== 1) u += "s"; return u; }
+  // "= 11.25 m2" readout for a count of a typed product (empty for generic / no dims).
+  function baseMeasureNote(product, countQty, o) { var b = baseFor(product, countQty, o); if (b.form === "generic" || b.baseQty == null) return ""; return "= " + msFmt(b.baseQty, 3) + " " + b.baseUom; }
+  // The typed-qty columns (migration 94) may not be applied yet on a given database.
+  // Probe once so a stock-move insert never fails on an unknown column - it just omits
+  // the base fields until the migration is run. Cached for the session.
+  var __baseCols = null;
+  async function baseColsReady() {
+    if (__baseCols !== null) return __baseCols;
+    try { var r = await sb.from("stock_moves").select("base_qty").limit(1); __baseCols = !r.error; } catch (e) { __baseCols = false; }
+    return __baseCols;
+  }
+  // Typed-qty columns for a stock-move insert (base_qty/base_uom/pack_factor), or {}
+  // when the migration is not yet applied. Merge into the insert row with Object.assign.
+  async function moveBaseCols(product, countQty, o) {
+    if (!(await baseColsReady())) return {};
+    var b = baseFor(product, countQty, o);
+    return { base_qty: b.baseQty, base_uom: b.baseUom, pack_factor: b.factor };
+  }
   // canonical per-unit price (sheet/bar/container/roll/each) + a derived conversion readout, per material form
   function lineCalc(info, d1, d2, priceVal, basis, cc, d3) {
     cc = cc || S.company.currency_code; var pv = Number(priceVal) || 0, f = info.form;
@@ -4337,7 +4380,7 @@
     document.body.appendChild(m);
     document.getElementById("rcv-cancel").onclick = function () { m.remove(); };
     document.getElementById("rcv-do").onclick = async function () {
-      var prods = (await sb.from("products").select("id,type,cost_price,name").eq("company_id", S.company.id)).data || [];
+      var prods = (await sb.from("products").select("id,type,cost_price,name,uom,material_form,spec").eq("company_id", S.company.id)).data || [];
       var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
       var inv = await ensureInventory(), qs = {};
       var recvBy = (document.getElementById("rcv-by") || {}).value || null;
@@ -4358,7 +4401,10 @@
           if (destLoc) {
             // Warehouse/factory receipt is an inventory asset, not a project cost - do not tag
             // it with the project (cost is recognized on issue). See renderReceiptForm.
-            var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pr.id, quantity: take, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
+            var _b = baseFor(pr, take, { width: l.width, height: l.height, size: l.size });
+            var _row = { company_id: S.company.id, product_id: pr.id, quantity: take, uom: _b.countUom, size: l.size || null, width: l.width || null, height: l.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() };
+            if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }
+            var r = await sb.from("stock_moves").insert(_row).select("id").single();
             if (!r.error) { await postStockValue("receive", pr, take, r.data && r.data.id, null, l.unit_price); got++; }
           }
         }
@@ -4443,7 +4489,7 @@
     var fromOrder = preset.order || null, poLines = [];
     if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
     var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
-    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var recvUsers = await companyUsers();
     var inv = await ensureInventory();
@@ -4539,12 +4585,15 @@
             // project cost. Do NOT tag the move with a project - otherwise Job Cost / Project P&L
             // count the receipt as "materials issued". The cost is recognized only when the stock
             // is issued to the project. (Direct-to-site material is handled separately, below.)
-            var mv = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single();
+            var _b = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size });
+            var _row = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() };
+            if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }
+            var mv = await sb.from("stock_moves").insert(_row).select("id").single();
             if (!mv.error) { await postStockValue("receive", pr, qtyBase, mv.data && mv.data.id, null, r.unit_price); got++; }
           }
         } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var srcLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
-          if (srcLoc) { var mv2 = await sb.from("stock_moves").insert({ company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }).select("id").single(); if (!mv2.error) { await postStockValue("deliver", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
+          if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("deliver", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
         }
       }
       toast(got ? ("Receipt saved - " + got + " item(s) " + (isReturn ? "returned" : "added to inventory")) : "Receipt saved");
@@ -4872,27 +4921,27 @@
   function matCompute() {
     var fe = document.getElementById("ms-form"); if (!fe) return;
     var form = fe.value, out = document.getElementById("ms-out"); if (!out) return;
-    var cc = S.company.currency_code, cost = null, html = "";
+    var cc = S.company.currency_code, cost = null, html = "", packNote = "";
     function chip(k, v, u) { return '<span class="ms-chip"><span class="ms-chip-k">' + k + '</span><b>' + v + (u ? " " + u : "") + '</b></span>'; }
     if (form === "bar") {
       var L = msNum("ms-len"), wpm = msNum("ms-wpm"), b = msVal("ms-basis"), pv = msNum("ms-pval"), wpb = wpm * L, pk, pm, pb;
       if (b === "kg") { pk = pv; pm = pv * wpm; pb = pv * wpb; } else if (b === "m") { pm = pv; pk = wpm ? pv / wpm : 0; pb = pv * L; } else { pb = pv; pk = wpb ? pv / wpb : 0; pm = L ? pv / L : 0; }
-      cost = pb; html = chip("Weight/bar", msFmt(wpb), "kg") + chip(cc + "/kg", msFmt(pk)) + chip(cc + "/m", msFmt(pm)) + chip(cc + "/bar", msFmt(pb));
+      cost = pb; html = chip("Weight/bar", msFmt(wpb), "kg") + chip(cc + "/kg", msFmt(pk)) + chip(cc + "/m", msFmt(pm)) + chip(cc + "/bar", msFmt(pb)); if (L > 0) packNote = "Counted in bars · 1 bar = " + msFmt(L, 3) + " m in stock";
     } else if (form === "sheet") {
       var w = msNum("ms-w"), h = msNum("ms-h"), t = msNum("ms-t"), dn = msNum("ms-density"), b2 = msVal("ms-basis"), p2 = msNum("ms-pval");
       var area = w * h / 1e6, wt = area * (t / 1000) * dn, kgm2 = (t / 1000) * dn, pk2, ps, pm2;
       if (b2 === "kg") { pk2 = p2; ps = p2 * wt; pm2 = p2 * kgm2; } else if (b2 === "sheet") { ps = p2; pk2 = wt ? p2 / wt : 0; pm2 = area ? ps / area : 0; } else { pm2 = p2; ps = p2 * area; pk2 = wt ? ps / wt : 0; }
-      cost = ps; html = chip("Area", msFmt(area, 3), "m2") + chip("Weight/sheet", msFmt(wt), "kg") + chip("kg/m2", msFmt(kgm2)) + chip(cc + "/kg", msFmt(pk2)) + chip(cc + "/sheet", msFmt(ps)) + chip(cc + "/m2", msFmt(pm2));
+      cost = ps; html = chip("Area", msFmt(area, 3), "m2") + chip("Weight/sheet", msFmt(wt), "kg") + chip("kg/m2", msFmt(kgm2)) + chip(cc + "/kg", msFmt(pk2)) + chip(cc + "/sheet", msFmt(ps)) + chip(cc + "/m2", msFmt(pm2)); if (area > 0) packNote = "Counted in sheets · 1 sheet = " + msFmt(area, 3) + " m2 in stock";
     } else if (form === "liquid") {
       var vol = msNum("ms-vol"), u = msVal("ms-volunit") || "L", pv3 = msNum("ms-pval");
       var factor = u === "ml" ? 0.001 : (u === "gal" ? 3.78541 : 1), liters = vol * factor, perL = liters ? pv3 / liters : 0;
-      cost = pv3; html = chip("Litres/container", msFmt(liters, 3), "L") + chip(cc + "/L", msFmt(perL)) + chip(cc + "/container", msFmt(pv3));
+      cost = pv3; html = chip("Litres/container", msFmt(liters, 3), "L") + chip(cc + "/L", msFmt(perL)) + chip(cc + "/container", msFmt(pv3)); if (liters > 0) packNote = "Counted in containers · 1 container = " + msFmt(liters, 3) + " L in stock";
     } else if (form === "roll") {
       var L2 = msNum("ms-rlen"), wt2 = msNum("ms-rwt"), b3 = msVal("ms-basis"), pv4 = msNum("ms-pval"), pk3, plm, pr;
       if (b3 === "kg") { pk3 = pv4; plm = L2 ? pv4 * wt2 / L2 : 0; pr = pv4 * wt2; } else if (b3 === "lm") { plm = pv4; pk3 = wt2 ? pv4 * L2 / wt2 : 0; pr = pv4 * L2; } else { pr = pv4; pk3 = wt2 ? pv4 / wt2 : 0; plm = L2 ? pv4 / L2 : 0; }
-      cost = pr; html = chip("Weight", msFmt(wt2), "kg") + chip("Length", msFmt(L2), "m") + chip(cc + "/kg", msFmt(pk3)) + chip(cc + "/lm", msFmt(plm)) + chip(cc + "/roll", msFmt(pr));
+      cost = pr; html = chip("Weight", msFmt(wt2), "kg") + chip("Length", msFmt(L2), "m") + chip(cc + "/kg", msFmt(pk3)) + chip(cc + "/lm", msFmt(plm)) + chip(cc + "/roll", msFmt(pr)); if (L2 > 0) packNote = "Counted in rolls · 1 roll = " + msFmt(L2, 3) + " m in stock";
     } else { out.innerHTML = ""; return; }
-    out.innerHTML = html;
+    out.innerHTML = html + (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "");
     if (cost != null && isFinite(cost) && cost > 0) { var c = document.getElementById("pr-cost"); if (c) c.value = Math.round(cost * 10000) / 10000; }
   }
   function wireMatSpec(p, nodes) {
@@ -11695,7 +11744,7 @@
       '<div class="gap"></div>' + locSel +
       '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     wireInvBtns(prods);
     var ls = document.getElementById("oh-loc"); if (ls) ls.onchange = function () { OH_LOC = this.value; renderOnHand(); };
     var body = document.getElementById("o-body");
@@ -11705,8 +11754,12 @@
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     var list = storable.length ? storable : prods;
     var rows = list.map(function (p) {
-      var q = qOf(p.id), val = q * Number(p.cost_price || 0);
-      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='muted'>" + esc(p.uom || "Unit") + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
+      var q = qOf(p.id), val = q * Number(p.cost_price || 0), pk = packInfo(p);
+      // Honest unit label: a counted item (sheet/bar/roll/container) shows its count
+      // unit + the base measure it holds ("sheets  = 11.25 m2"), so a sheet count is
+      // never read as an area. Generic items keep their single unit.
+      var unitCell = (pk.form !== "generic" && pk.factor) ? (esc(countUomLabel(q, pk)) + "<div class='muted' style='font-size:11px'>= " + msFmt(q * pk.factor, 3) + " " + esc(pk.base) + "</div>") : esc(p.uom || "Unit");
+      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='muted'>" + unitCell + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
     }).join("");
     var totVal = list.reduce(function (s, p) { return s + qOf(p.id) * Number(p.cost_price || 0); }, 0);
     var rules = (await sb.from("reordering_rules").select("product_id,min_qty,location_id").eq("company_id", S.company.id)).data || [];
@@ -11795,7 +11848,10 @@
           if (!confirm(_msg + " Post anyway and allow negative stock?")) return;
         }
       }
-      var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: pid, quantity: q, uom: stockUnit, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() }).select("id").single();
+      var _b = baseFor(product0, q);
+      var _row = { company_id: S.company.id, product_id: pid, quantity: q, uom: stockUnit, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() };
+      if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }
+      var r = await sb.from("stock_moves").insert(_row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (vkind) { var product = prods.filter(function (p) { return p.id === pid; })[0] || {}; await postStockValue(vkind, product, q, r.data && r.data.id, projId); }
       var lotName = document.getElementById("k-lot") ? document.getElementById("k-lot").value.trim() : "";
@@ -12173,7 +12229,7 @@
     wireBc();
     var inv = await ensureInventory();
     var locs = (inv.internal || []).slice();
-    var prods = (await sb.from("products").select("id,name,default_code,type,family,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name,default_code,type,family,uom,cost_price,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     var byLoc = await onHandByLoc();
     var body = document.getElementById("o-body");
@@ -12226,7 +12282,10 @@
         var t = todo[i], product = storable.filter(function (p) { return p.id === t.pid; })[0] || {};
         var src, dest, q, vkind;
         if (t.diff > 0) { src = inv.adjust; dest = loc; q = t.diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -t.diff; vkind = "adjust_down"; }
-        var r = await sb.from("stock_moves").insert({ company_id: S.company.id, product_id: t.pid, quantity: q, uom: product.uom || "Unit", location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() }).select("id").single();
+        var _b = baseFor(product, q);
+        var _row = { company_id: S.company.id, product_id: t.pid, quantity: q, uom: product.uom || "Unit", location_id: src, location_dest_id: dest, state: "done", date: new Date().toISOString() };
+        if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }
+        var r = await sb.from("stock_moves").insert(_row).select("id").single();
         if (r.error) { toast("Line failed: " + errMsg(r.error)); continue; }
         await postStockValue(vkind, product, q, r.data && r.data.id, null);
         done++;
