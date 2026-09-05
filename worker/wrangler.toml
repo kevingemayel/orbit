@@ -1,0 +1,16 @@
+# Orbit Sites Worker - serves every customer website.
+# Deploy from this folder:  npx wrangler deploy   (after `npx wrangler login`)
+name = "orbit-sites"
+main = "index.js"
+compatibility_date = "2024-09-23"
+
+# Free subdomains, served at their own root (name.sites.spacework.ai/...).
+# The fallback-origin route (plain sites.spacework.ai) is what Cloudflare for SaaS
+# custom hostnames point at, so real customer domains hit this same Worker.
+routes = [
+  { pattern = "*.sites.spacework.ai/*", zone_name = "spacework.ai" },
+  { pattern = "sites.spacework.ai/*",   zone_name = "spacework.ai" }
+]
+
+# Supabase URL + anon key are baked into functions/site/render-core.js (public,
+# RLS-safe). Nothing secret lives in this Worker.

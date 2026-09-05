@@ -14739,6 +14739,15 @@
   var WEB_BLOCKS = [["hero", "Hero"], ["heading", "Heading"], ["text", "Text"], ["image", "Image"], ["features", "Feature cards"], ["cta", "Call to action"], ["button", "Button"], ["form", "Contact form"], ["embed", "Embed / HTML"], ["spacer", "Spacer"]];
   function webSlug(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
   function webHost(site) { return (site.slug ? site.slug + "." + WEB_SUB_BASE : ""); }
+  // Call the custom-domain lifecycle endpoint (register / status / remove) as the
+  // signed-in user; the edge function verifies ownership and talks to Cloudflare.
+  async function webDomainApi(action, hostnameId) {
+    var tok = ""; try { tok = (await sb.auth.getSession()).data.session.access_token; } catch (e) { }
+    try {
+      var r = await fetch(WEB_ORIGIN + "/site-domain/" + action, { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + tok }, body: JSON.stringify({ hostname_id: hostnameId }) });
+      return await r.json();
+    } catch (e) { return { error: String(e) }; }
+  }
   function cfgSites() {
     return {
       title: "Sites", pageSize: 50, editTable: "sites",
@@ -14791,7 +14800,7 @@
         '</tbody></table><button class="o-addln" id="ws-addpage">+ Add a page</button></div></div>' +
         '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Custom domain</div></div><div class="o-nb-pg">' +
         '<div class="sub" style="margin-bottom:8px">Use your own domain (e.g. <b>www.yourbusiness.com</b>) with nothing of ' + WEB_SUB_BASE + ' visible to visitors. Add it here, then point one DNS record at us; SSL is issued automatically.</div>' +
-        '<table class="o-list"><tbody id="ws-hosts">' + (hosts.length ? hosts.map(function (h) { return '<tr><td><b>' + esc(h.hostname) + '</b></td><td>' + (h.status === "active" ? '<span class="badge paid">Live</span>' : '<span class="badge partial">Pending DNS</span>') + '</td><td class="muted">CNAME &rarr; ' + WEB_SUB_BASE + '</td><td><button class="wh-del" data-id="' + h.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : "") + '</tbody></table>' +
+        '<table class="o-list"><tbody id="ws-hosts">' + (hosts.length ? hosts.map(function (h) { return '<tr><td><b>' + esc(h.hostname) + '</b></td><td>' + (h.status === "active" ? '<span class="badge paid">Live</span>' : '<span class="badge partial">Pending DNS</span>') + '</td><td class="muted">CNAME &rarr; ' + WEB_SUB_BASE + '</td><td><button class="btn sm wh-verify" data-id="' + h.id + '">Verify</button> <button class="wh-del" data-id="' + h.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : "") + '</tbody></table>' +
         '<div style="display:flex;gap:6px;margin-top:8px;max-width:420px"><input id="ws-newhost" placeholder="www.yourbusiness.com" style="flex:1"><button class="btn" id="ws-addhost">Add domain</button></div>' +
         '</div></div>') : '<div class="sub" style="margin-top:12px">Save the site first, then add pages and a custom domain.</div>') +
       '</div>';
@@ -14810,10 +14819,15 @@
       document.getElementById("ws-addpage").onclick = function () { renderSitePageForm(id, "new"); };
       document.getElementById("ws-addhost").onclick = async function () {
         var hn = (gv("ws-newhost") || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); if (!hn) return;
-        var r = await sb.from("site_hostnames").insert({ company_id: S.company.id, site_id: id, hostname: hn, kind: "custom", status: "pending" }); if (r.error) { toast(errMsg(r.error)); return; }
-        toast("Domain added - now point its DNS CNAME at " + WEB_SUB_BASE + ", then it goes live once verified."); renderSiteForm(id);
+        var r = await sb.from("site_hostnames").insert({ company_id: S.company.id, site_id: id, hostname: hn, kind: "custom", status: "pending" }).select("id").single(); if (r.error) { toast(errMsg(r.error)); return; }
+        var reg = await webDomainApi("register", r.data.id);
+        if (reg.not_configured) toast("Domain saved. Custom-domain SSL is not switched on yet - set the Cloudflare token to activate it (see setup).");
+        else if (reg.error) toast("Domain saved, but registration failed: " + reg.error);
+        else toast("Domain added. At your registrar add a CNAME:  " + hn + "  →  " + WEB_SUB_BASE + " , then click Verify.");
+        renderSiteForm(id);
       };
-      document.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = async function () { await sb.from("site_hostnames").delete().eq("id", b.dataset.id); renderSiteForm(id); }; });
+      document.querySelectorAll(".wh-verify").forEach(function (b) { b.onclick = async function () { b.textContent = "..."; var s = await webDomainApi("status", b.dataset.id); if (s.status === "active") toast("Live - SSL issued for this domain."); else if (s.not_configured) toast("Custom-domain SSL is not configured yet."); else if (s.ownership && s.ownership.name) toast("Add this DNS TXT to verify:  " + s.ownership.name + " = " + s.ownership.value); else toast("Still pending - point the CNAME at " + WEB_SUB_BASE + " and Verify again."); renderSiteForm(id); }; });
+      document.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = async function () { await webDomainApi("remove", b.dataset.id); await sb.from("site_hostnames").delete().eq("id", b.dataset.id); renderSiteForm(id); }; });
     }
   }
   function webBlockFields(type, p) {
