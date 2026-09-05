@@ -4900,6 +4900,49 @@
     var o = document.getElementById("ms-out"); if (o) spec.summary = o.textContent;
     return { material_form: fe.value, family_node_id: deepestSel("fam") || null, type_node_id: deepestSel("typ") || null, spec: spec };
   }
+  var PSP_BASIS = ["each", "sheet", "bar", "roll", "container", "m2", "lm", "m", "kg", "L"];
+  // Supplier price list on a product: who sells it, at what price/unit/MOQ/date.
+  // Self-contained - writes straight to product_supplier_prices, independent of the
+  // product Save button. Flags the cheapest supplier.
+  async function loadSupplierPrices(productId) {
+    var el = document.getElementById("pr-sup"); if (!el) return;
+    var setup = false;
+    var rowsQ = await sb.from("product_supplier_prices").select("*, partners:partner_id(name)").eq("product_id", productId).order("price", { ascending: true });
+    if (rowsQ.error) { if (/product_supplier_prices|does not exist|not find|schema cache/i.test(rowsQ.error.message || "")) setup = true; }
+    if (setup) { el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Suppliers &amp; prices</div><div class="sub">Run <span class="path">supabase/supplier-prices.sql</span> once to enable the supplier price list.</div></div>'; return; }
+    var rows = rowsQ.data || [];
+    var vend = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
+    var cc = S.company.currency_code;
+    var priced = rows.filter(function (r) { return Number(r.price) > 0; }).map(function (r) { return Number(r.price); });
+    var minPrice = priced.length ? Math.min.apply(null, priced) : null;
+    function trOf(r) {
+      var cheap = minPrice != null && Number(r.price) === minPrice && rows.length > 1;
+      var supName = (r.partners && r.partners.name) || r.supplier_name || "(supplier)";
+      return '<tr' + (cheap ? ' style="background:var(--ok-soft)"' : '') + '><td><b>' + esc(supName) + '</b>' + (cheap ? ' <span class="badge paid">best</span>' : '') + '</td><td class="num">' + esc(r.currency_code || cc) + ' ' + money(r.price) + '</td><td>' + esc(r.price_basis || "") + (r.uom ? " / " + esc(r.uom) : "") + '</td><td class="num">' + (r.moq != null ? r.moq : "") + '</td><td class="num">' + (r.lead_days != null ? r.lead_days + "d" : "") + '</td><td class="muted">' + esc(r.price_date || "") + '</td><td><button class="btn sm psp-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>';
+    }
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Suppliers &amp; prices</div><div class="sub" style="margin:-2px 0 9px">Who sells this item, at what price, unit, minimum order and when it was quoted. The cheapest is flagged.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Supplier</th><th class="num">Price</th><th>Basis / unit</th><th class="num">MOQ</th><th class="num">Lead</th><th>Date</th><th></th></tr></thead><tbody id="psp-body">' + (rows.length ? rows.map(trOf).join("") : '<tr><td colspan="7" class="muted" style="padding:10px">No supplier prices yet.</td></tr>') + '</tbody></table></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
+      '<select id="psp-sup" ' + inS + '><option value="">Supplier...</option>' + vend.map(function (v) { return '<option value="' + v.id + '">' + esc(v.name) + '</option>'; }).join("") + '</select>' +
+      '<input id="psp-price" type="number" step="any" placeholder="price" ' + inS + ' style="width:88px">' +
+      '<select id="psp-basis" ' + inS + '>' + PSP_BASIS.map(function (b) { return '<option value="' + b + '">' + b + '</option>'; }).join("") + '</select>' +
+      '<input id="psp-uom" placeholder="uom" ' + inS + ' style="width:58px">' +
+      '<input id="psp-moq" type="number" step="any" placeholder="MOQ" ' + inS + ' style="width:62px">' +
+      '<input id="psp-lead" type="number" placeholder="lead d" ' + inS + ' style="width:66px">' +
+      '<input id="psp-date" type="date" ' + inS + '>' +
+      '<button class="btn sm pri" id="psp-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    el.querySelectorAll(".psp-del").forEach(function (b) { b.onclick = async function () { var r = await sb.from("product_supplier_prices").delete().eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); return; } loadSupplierPrices(productId); }; });
+    document.getElementById("psp-add").onclick = async function () {
+      var sup = document.getElementById("psp-sup").value, price = parseFloat(gv("psp-price"));
+      if (!sup) { toast("Pick a supplier"); return; }
+      if (isNaN(price)) { toast("Enter a price"); return; }
+      var supName = (vend.filter(function (v) { return v.id === sup; })[0] || {}).name || null;
+      var ins = await sb.from("product_supplier_prices").insert({ company_id: S.company.id, product_id: productId, partner_id: sup, supplier_name: supName, price: price, currency_code: S.company.currency_code, price_basis: document.getElementById("psp-basis").value, uom: gv("psp-uom") || null, moq: gv("psp-moq") !== "" ? parseFloat(gv("psp-moq")) : null, lead_days: gv("psp-lead") !== "" ? parseInt(gv("psp-lead"), 10) : null, price_date: gv("psp-date") || null });
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      toast("Supplier price added"); loadSupplierPrices(productId);
+    };
+  }
   async function renderProductForm(id) {
     mediaClearStage();
     var parent = { action: "products", title: "Products" };
@@ -4941,10 +4984,11 @@
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
       fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
-      '</div></div>' + materialSpecHTML(p, clsNodes) + customFieldsHTML("product", p) + '</div>';
+      '</div></div>' + materialSpecHTML(p, clsNodes) + (id !== "new" ? '<div id="pr-sup" style="margin-top:16px"></div>' : '') + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     var prQr = document.getElementById("pr-qr"); if (prQr) prQr.onclick = function () { openQRModal(p.name || "Product", p.barcode || p.default_code || p.id, p.default_code || ""); };
     wireMatSpec(p, clsNodes);
+    if (id !== "new") loadSupplierPrices(id);
     wireAttach("product");
     catPickerAdd("pr-cat");
     var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
