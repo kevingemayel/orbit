@@ -912,6 +912,14 @@
       name: "Website", icon: "◐", color: "#2563eb", color2: "#1d4ed8", home: "web.sites",
       menus: [{ label: "Sites", action: "web.sites" }, { label: "Careers", action: "web.jobs" }, { label: "Applications", action: "web.applications" }, { label: "Form Submissions", action: "web.subs" }, { label: "Connect a site", action: "web.connect" }]
     },
+    service: {
+      name: "Service", icon: "◈", color: "#0891b2", color2: "#0e7490", home: "svc.tickets",
+      menus: [
+        { label: "Tickets", action: "svc.tickets" },
+        { label: "Schedule", action: "svc.schedule" },
+        { label: "Warranties", action: "svc.warranties" }
+      ]
+    },
     recruitment: {
       name: "Recruitment", icon: "☺", color: "#db2777", color2: "#be185d", home: "rec.applicants",
       menus: [
@@ -1014,6 +1022,7 @@
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
+    "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
@@ -2302,6 +2311,9 @@
       case "web.jobs": return renderList(cfgJobs());
       case "web.applications": return renderList(cfgApplications());
       case "web.connect": return renderConnect();
+      case "svc.tickets": return renderList(cfgServiceTickets());
+      case "svc.warranties": return renderList(cfgWarranties());
+      case "svc.schedule": return renderServiceSchedule();
       case "rec.applicants": return renderList(cfgApplicants());
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
@@ -15037,6 +15049,181 @@
     wireBc();
     document.querySelectorAll(".cpy").forEach(function (b) { b.onclick = function () { try { navigator.clipboard.writeText(b.dataset.c); toast("Copied"); } catch (e) { toast("Copy failed - select and copy manually"); } }; });
     var gt = document.querySelector("[data-goto]"); if (gt) gt.onclick = function () { go("web.sites"); };
+  }
+  // ============================ FIELD SERVICE / SERVICE CENTER ============================
+  var SVC_STATUS = [["new", "New"], ["assigned", "Assigned"], ["in_progress", "In progress"], ["on_hold", "On hold"], ["done", "Done"], ["closed", "Closed"], ["cancelled", "Cancelled"]];
+  var SVC_PRIORITY = [["low", "Low"], ["normal", "Normal"], ["high", "High"], ["urgent", "Urgent"]];
+  var SVC_WTYPE = [["company", "Company"], ["manufacturer", "Manufacturer"], ["sla", "Maintenance (SLA)"], ["extended", "Extended"]];
+  var SVC_COVERS = [["both", "Labour & parts"], ["labor", "Labour only"], ["parts", "Parts only"]];
+  function svcLabel(list, v) { var f = list.filter(function (x) { return x[0] === v; })[0]; return f ? f[1] : (v || ""); }
+  function svcStatusBadge(s) {
+    var cls = s === "done" || s === "closed" ? "paid" : s === "cancelled" ? "draft" : (s === "on_hold" ? "warn" : s === "new" ? "draft" : "partial");
+    return '<span class="badge ' + cls + '">' + esc(svcLabel(SVC_STATUS, s)) + '</span>';
+  }
+  async function svcTechnicians() {
+    if (!S.company.org_id) return [];
+    var mem = (await sb.from("org_members").select("user_id").eq("org_id", S.company.org_id)).data || [];
+    var ids = mem.map(function (m) { return m.user_id; }).filter(Boolean);
+    if (!ids.length) return [];
+    var profs = (await sb.from("profiles").select("*").in("id", ids)).data || [];
+    return profs.map(function (p) { return { id: p.id, name: p.full_name || p.name || p.display_name || p.email || "User" }; }).sort(function (a, b) { return a.name > b.name ? 1 : -1; });
+  }
+  function cfgServiceTickets() {
+    return {
+      title: "Tickets", pageSize: 100, editTable: "service_tickets",
+      fetch: function () { return sb.from("service_tickets").select("*, partners:partner_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (t) { return (t.number || "") + " " + (t.title || "") + " " + (t.serial_no || "") + " " + (t.partners ? t.partners.name : "") + " " + (t.problem || ""); },
+      columns: [
+        { label: "Ticket", get: function (t) { return '<b>' + esc(t.number || "(new)") + '</b><div class="muted" style="font-size:11px">' + esc(t.title || "") + '</div>'; } },
+        { label: "Customer", get: function (t) { return esc(t.partners ? t.partners.name : ""); } },
+        { label: "Item", get: function (t) { return esc(t.serial_no || ""); } },
+        { label: "Priority", edit: { field: "priority", type: "select", options: SVC_PRIORITY }, get: function (t) { return '<span class="muted">' + esc(svcLabel(SVC_PRIORITY, t.priority)) + '</span>'; } },
+        { label: "Status", get: function (t) { return svcStatusBadge(t.status); } },
+        { label: "Scheduled", get: function (t) { return t.scheduled_at ? '<span class="muted">' + esc(t.scheduled_at.slice(0, 16).replace("T", " ")) + '</span>' : ""; } }
+      ],
+      filters: [{ label: "Open", test: function (t) { return ["new", "assigned", "in_progress", "on_hold"].indexOf(t.status) >= 0; } }, { label: "Urgent", test: function (t) { return t.priority === "urgent" || t.priority === "high"; } }, { label: "Unassigned", test: function (t) { return !t.assigned_to; } }],
+      groupBy: [{ label: "Status", get: function (t) { return svcLabel(SVC_STATUS, t.status); } }, { label: "Priority", get: function (t) { return svcLabel(SVC_PRIORITY, t.priority); } }],
+      onOpen: function (t) { renderTicketForm(t.id); }, onNew: function () { renderTicketForm("new"); },
+      emptyHint: "Log a repair or service request. Attach the item, check its warranty, add labour and parts, then bill what isn't covered."
+    };
+  }
+  async function renderTicketForm(id) {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New ticket" : "...", { action: "svc.tickets", title: "Tickets" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var t = id === "new" ? { status: "new", priority: "normal", channel: "internal" } : ((await sb.from("service_tickets").select("*").eq("id", id).maybeSingle()).data || {});
+    var lines = id === "new" ? [] : ((await sb.from("service_ticket_lines").select("*").eq("ticket_id", id).order("seq")).data || []);
+    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name,sale_price,cost_price").eq("company_id", S.company.id).order("name")).data || [];
+    var equip = (await sb.from("plant_equipment").select("id,name,code").eq("company_id", S.company.id).order("name")).data || [];
+    var techs = await svcTechnicians();
+    var warrs = (await sb.from("service_warranties").select("*").eq("company_id", S.company.id)).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New ticket" : (t.number || t.title || "Ticket");
+    function opt(list, v, lab) { return '<option value="">' + (lab || "(none)") + '</option>' + list.map(function (o) { return '<option value="' + o.id + '"' + (v === o.id ? " selected" : "") + '>' + esc(o.name || o.code || "") + '</option>'; }).join(""); }
+    function selList(list, v) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (v === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
+    function warrantyFor(pid, serial) { return warrs.filter(function (w) { return (!serial || !w.serial_no || w.serial_no === serial) && (!pid || !w.product_id || w.product_id === pid) && (!w.end_date || w.end_date >= today()); })[0]; }
+    function billTotals() { var bill = 0, cov = 0; lines.forEach(function (l) { var q = l.kind === "labor" ? (Number(l.hours) || 0) : (Number(l.qty) || 0); var amt = q * (Number(l.unit_price) || 0); if (l.covered) cov += amt; else bill += amt; }); return { bill: bill, cov: cov }; }
+    function lineRows() {
+      return lines.map(function (l, i) {
+        return '<tr>' +
+          '<td><select data-i="' + i + '" data-f="kind">' + [["part", "Part"], ["labor", "Labour"], ["expense", "Expense"]].map(function (k) { return '<option value="' + k[0] + '"' + ((l.kind || "part") === k[0] ? " selected" : "") + '>' + k[1] + '</option>'; }).join("") + '</select></td>' +
+          '<td><input data-i="' + i + '" data-f="description" value="' + esc(l.description || "") + '" placeholder="Description" style="min-width:150px"></td>' +
+          '<td><input data-i="' + i + '" data-f="' + (l.kind === "labor" ? "hours" : "qty") + '" type="number" step="0.25" value="' + esc(l.kind === "labor" ? (l.hours || "") : (l.qty || "")) + '" style="width:70px;text-align:right"></td>' +
+          '<td><input data-i="' + i + '" data-f="unit_price" type="number" step="0.01" value="' + esc(l.unit_price || "") + '" style="width:90px;text-align:right"></td>' +
+          '<td style="text-align:center"><input type="checkbox" data-i="' + i + '" data-f="covered"' + (l.covered ? " checked" : "") + ' title="Covered by warranty (not billed)"></td>' +
+          '<td style="text-align:center"><button data-del="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:15px">&times;</button></td></tr>';
+      }).join("");
+    }
+    function paintLines() {
+      var g = document.getElementById("tk-lines"); if (!g) return;
+      g.innerHTML = lineRows() || '<tr><td colspan="6" class="muted" style="padding:8px">No labour or parts yet.</td></tr>';
+      g.querySelectorAll("[data-i]").forEach(function (el) { el.oninput = el.onchange = function () { var l = lines[+el.dataset.i]; l[el.dataset.f] = el.type === "checkbox" ? el.checked : el.value; if (el.dataset.f === "kind") paintLines(); paintTot(); }; });
+      g.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); paintLines(); paintTot(); }; });
+    }
+    function paintTot() { var tt = billTotals(); var e = document.getElementById("tk-tot"); if (e) e.innerHTML = 'Billable <b>' + money(tt.bill) + '</b>' + (tt.cov ? ' &nbsp; <span class="muted">Covered ' + money(tt.cov) + '</span>' : ''); }
+    var w0 = warrantyFor(t.product_id, t.serial_no);
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tk-save">Save</button><button id="tk-disc">Discard</button></div>' +
+      '<div class="o-stages">' + SVC_STATUS.slice(0, 6).map(function (s) { var on = t.status === s[0]; return '<span class="st ' + (on ? "on" : "") + '">' + s[1] + '</span>'; }).join("") + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="tk-title" value="' + esc(t.title || "") + '" placeholder="Short description, e.g. AC not cooling"></div>' +
+      '<div id="tk-warr" style="margin:0 0 10px">' + (w0 ? '<div class="badge paid">Under ' + esc(svcLabel(SVC_WTYPE, w0.wtype)) + ' warranty' + (w0.end_date ? ' until ' + esc(w0.end_date) : '') + ' &middot; covers ' + esc(svcLabel(SVC_COVERS, w0.covers)) + '</div>' : '') + '</div>' +
+      '<div class="o-groups"><div>' +
+      fld("Customer", '<select id="tk-cust">' + opt(custs, t.partner_id, "(pick customer)") + '</select>') +
+      fld("Contact", '<input id="tk-contact" value="' + esc(t.contact || "") + '" placeholder="Who to call">') +
+      fld("Item / product", '<select id="tk-prod">' + opt(prods, t.product_id, "(none)") + '</select>') +
+      fld("Serial no.", '<input id="tk-serial" value="' + esc(t.serial_no || "") + '" placeholder="Serial / IMEI">') +
+      fld("Equipment", '<select id="tk-equip">' + opt(equip, t.equipment_id, "(none)") + '</select>', "If it is one of your tracked plant/equipment units.") +
+      '</div><div>' +
+      fld("Priority", '<select id="tk-priority">' + selList(SVC_PRIORITY, t.priority || "normal") + '</select>') +
+      fld("Status", '<select id="tk-status">' + selList(SVC_STATUS, t.status || "new") + '</select>') +
+      fld("Technician", '<select id="tk-tech"><option value="">(unassigned)</option>' + techs.map(function (m) { return '<option value="' + m.id + '"' + (t.assigned_to === m.id ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("") + '</select>') +
+      fld("Scheduled", '<input id="tk-sched" type="datetime-local" value="' + esc(t.scheduled_at ? t.scheduled_at.slice(0, 16) : "") + '">') +
+      fld("Location", '<select id="tk-loc"><option value="">(none)</option>' + [["site", "On site"], ["workshop", "Workshop"], ["store", "In store"]].map(function (o) { return '<option value="' + o[0] + '"' + (t.location === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>') +
+      '</div></div>' +
+      '<div class="o-groups"><div>' + fld("Problem reported", '<textarea id="tk-problem" rows="3">' + esc(t.problem || "") + '</textarea>') + '</div><div>' + fld("Diagnosis / work done", '<textarea id="tk-diag" rows="3">' + esc(t.diagnosis || "") + '</textarea>') + '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:14px">Labour &amp; parts</div>' +
+      '<div style="overflow-x:auto"><table class="o-list" style="min-width:620px"><thead><tr><th style="width:90px">Type</th><th>Description</th><th class="num" style="width:80px">Qty/Hrs</th><th class="num" style="width:100px">Unit price</th><th style="width:70px">Covered</th><th style="width:34px"></th></tr></thead><tbody id="tk-lines"></tbody></table></div>' +
+      '<button id="tk-addline" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>' +
+      '<div id="tk-tot" style="margin-top:12px;font-size:14px;text-align:right"></div>' +
+      '</div>';
+    paintLines(); paintTot();
+    document.getElementById("tk-disc").onclick = function () { go("svc.tickets"); };
+    document.getElementById("tk-addline").onclick = function () { lines.push({ kind: "part", qty: 1, unit_price: 0 }); paintLines(); paintTot(); };
+    function refreshWarranty() { var w = warrantyFor(document.getElementById("tk-prod").value || null, gv("tk-serial") || ""); document.getElementById("tk-warr").innerHTML = w ? '<div class="badge paid">Under ' + esc(svcLabel(SVC_WTYPE, w.wtype)) + ' warranty' + (w.end_date ? ' until ' + esc(w.end_date) : '') + ' &middot; covers ' + esc(svcLabel(SVC_COVERS, w.covers)) + '</div>' : ''; }
+    document.getElementById("tk-prod").onchange = refreshWarranty;
+    document.getElementById("tk-serial").oninput = refreshWarranty;
+    document.getElementById("tk-save").onclick = async function () {
+      var st = document.getElementById("tk-status").value;
+      var row = { title: gv("tk-title") || "Service ticket", partner_id: document.getElementById("tk-cust").value || null, contact: gv("tk-contact") || null, product_id: document.getElementById("tk-prod").value || null, serial_no: gv("tk-serial") || null, equipment_id: document.getElementById("tk-equip").value || null, priority: document.getElementById("tk-priority").value, status: st, assigned_to: document.getElementById("tk-tech").value || null, scheduled_at: gv("tk-sched") ? new Date(gv("tk-sched")).toISOString() : null, location: document.getElementById("tk-loc").value || null, problem: gv("tk-problem") || null, diagnosis: gv("tk-diag") || null, updated_at: new Date().toISOString() };
+      if (st === "closed" || st === "done") row.closed_at = t.closed_at || new Date().toISOString();
+      var tid = id;
+      if (id === "new") { row.company_id = S.company.id; row.number = "T-" + String(Date.now()).slice(-6); var ins = await sb.from("service_tickets").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } tid = ins.data.id; }
+      else { var up = await sb.from("service_tickets").update(row).eq("id", id); if (up.error) { toast(errMsg(up.error)); return; } }
+      await sb.from("service_ticket_lines").delete().eq("ticket_id", tid);
+      var pls = lines.filter(function (l) { return (Number(l.qty) || Number(l.hours) || 0) !== 0 || l.description; }).map(function (l, i) { return { company_id: S.company.id, ticket_id: tid, kind: l.kind || "part", description: (l.description || "").slice(0, 200), qty: l.kind === "labor" ? 0 : (Number(l.qty) || 0), hours: l.kind === "labor" ? (Number(l.hours) || 0) : 0, unit_price: Number(l.unit_price) || 0, covered: !!l.covered, seq: (i + 1) * 10 }; });
+      if (pls.length) { var li = await sb.from("service_ticket_lines").insert(pls); if (li.error) { toast(errMsg(li.error)); return; } }
+      toast("Saved"); go("svc.tickets");
+    };
+  }
+  function cfgWarranties() {
+    return {
+      title: "Warranties", pageSize: 100, editTable: "service_warranties",
+      fetch: function () { return sb.from("service_warranties").select("*, partners:partner_id(name), products:product_id(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (w) { return (w.serial_no || "") + " " + (w.partners ? w.partners.name : "") + " " + (w.products ? w.products.name : "") + " " + (w.reference || ""); },
+      columns: [
+        { label: "Item", get: function (w) { return '<b>' + esc(w.products ? w.products.name : (w.serial_no || "Item")) + '</b>' + (w.serial_no ? '<div class="muted" style="font-size:11px">' + esc(w.serial_no) + '</div>' : ""); } },
+        { label: "Customer", get: function (w) { return esc(w.partners ? w.partners.name : ""); } },
+        { label: "Type", get: function (w) { return '<span class="muted">' + esc(svcLabel(SVC_WTYPE, w.wtype)) + '</span>'; } },
+        { label: "Covers", get: function (w) { return esc(svcLabel(SVC_COVERS, w.covers)); } },
+        { label: "Valid to", edit: { field: "end_date", type: "date" }, get: function (w) { var over = w.end_date && w.end_date < today(); return '<span class="' + (over ? "badge draft" : "muted") + '">' + esc(w.end_date || "-") + (over ? " (expired)" : "") + '</span>'; } }
+      ],
+      onOpen: function (w) { renderWarrantyForm(w.id); }, onNew: function () { renderWarrantyForm("new"); },
+      emptyHint: "Register a warranty so tickets on that item auto-flag what's covered."
+    };
+  }
+  async function renderWarrantyForm(id) {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New warranty" : "...", { action: "svc.warranties", title: "Warranties" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var w = id === "new" ? { wtype: "company", covers: "both", start_date: today() } : ((await sb.from("service_warranties").select("*").eq("id", id).maybeSingle()).data || {});
+    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New warranty" : (w.reference || w.serial_no || "Warranty");
+    function opt(list, v) { return '<option value="">(none)</option>' + list.map(function (o) { return '<option value="' + o.id + '"' + (v === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join(""); }
+    function sel(list, v) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (v === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="wr-save">Save</button><button id="wr-disc">Discard</button></div></div>' +
+      '<div class="o-sheet"><div class="o-groups"><div>' +
+      fld("Customer", '<select id="wr-cust">' + opt(custs, w.partner_id) + '</select>') +
+      fld("Product", '<select id="wr-prod">' + opt(prods, w.product_id) + '</select>') +
+      fld("Serial no.", '<input id="wr-serial" value="' + esc(w.serial_no || "") + '">') +
+      fld("Reference", '<input id="wr-ref" value="' + esc(w.reference || "") + '" placeholder="Contract / invoice no.">') +
+      '</div><div>' +
+      fld("Type", '<select id="wr-type">' + sel(SVC_WTYPE, w.wtype || "company") + '</select>') +
+      fld("Covers", '<select id="wr-covers">' + sel(SVC_COVERS, w.covers || "both") + '</select>') +
+      fld("Start", '<input id="wr-start" type="date" value="' + esc(w.start_date || today()) + '">') +
+      fld("Valid until", '<input id="wr-end" type="date" value="' + esc(w.end_date || "") + '">') +
+      '</div></div>' + fld("Notes", '<textarea id="wr-notes" rows="2">' + esc(w.notes || "") + '</textarea>') + '</div>';
+    document.getElementById("wr-disc").onclick = function () { go("svc.warranties"); };
+    document.getElementById("wr-save").onclick = async function () {
+      var row = { partner_id: document.getElementById("wr-cust").value || null, product_id: document.getElementById("wr-prod").value || null, serial_no: gv("wr-serial") || null, reference: gv("wr-ref") || null, wtype: document.getElementById("wr-type").value, covers: document.getElementById("wr-covers").value, start_date: gv("wr-start") || null, end_date: gv("wr-end") || null, notes: gv("wr-notes") || null };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("service_warranties").insert(row); } else { r = await sb.from("service_warranties").update(row).eq("id", id); }
+      if (r.error) { toast(errMsg(r.error)); return; } toast("Saved"); go("svc.warranties");
+    };
+  }
+  async function renderServiceSchedule() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var rows = (await sb.from("service_tickets").select("*, partners:partner_id(name)").eq("company_id", S.company.id).not("scheduled_at", "is", null).order("scheduled_at")).data || [];
+    var techs = await svcTechnicians(); var tById = {}; techs.forEach(function (m) { tById[m.id] = m.name; });
+    var body = document.getElementById("o-body");
+    if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Nothing scheduled</div><div class="o-empty2-h">Set a date &amp; technician on a ticket and it appears here.</div></div>'; return; }
+    var byDay = {}; rows.forEach(function (r) { var d = (r.scheduled_at || "").slice(0, 10); (byDay[d] = byDay[d] || []).push(r); });
+    body.innerHTML = '<div style="max-width:820px">' + Object.keys(byDay).sort().map(function (d) {
+      return '<div class="o-cf-head" style="margin:14px 0 6px">' + esc(d) + '</div>' + byDay[d].map(function (r) {
+        return '<div class="o-th-tile" data-id="' + r.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 14px;margin-bottom:6px;cursor:pointer"><span class="mono muted" style="width:52px">' + esc((r.scheduled_at || "").slice(11, 16)) + '</span><b style="flex:1">' + esc(r.title || "") + '</b><span class="muted">' + esc(r.partners ? r.partners.name : "") + '</span><span class="muted">' + esc(tById[r.assigned_to] || "Unassigned") + '</span>' + svcStatusBadge(r.status) + '</div>';
+      }).join("");
+    }).join("") + '</div>';
+    body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { renderTicketForm(el.dataset.id); }; });
   }
   async function renderSiteForm(id) {
     var parent = { action: "web.sites", title: "Sites" };
