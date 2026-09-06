@@ -2587,7 +2587,7 @@
       '</div>';
     wireBc();
     var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -2672,19 +2672,24 @@
   function paintBody() {
     var cfg = L.cfg, rows = applyRows(), body = document.getElementById("o-body");
     var total = rows.length;
+    // nesting: children (e.g. employees) tucked under their parent row in the plain list view
+    var nestOn = !!(cfg.nest && L.view === "list" && L.group == null && L.colGroup == null);
+    var nestData = nestOn ? buildNest(cfg, rows) : null;
+    if (nestOn && !nestData.hasChildren) { nestOn = false; nestData = null; }
+    var punits = nestOn ? nestData.roots.length : total;   // pages count roots, not tucked-in children
     // pager
     var pager = document.getElementById("o-pager");
     if (!body || !pager) return; // navigated away before an async list fetch resolved
     refreshFacets();
     if (L.group != null || L.colGroup != null || L.view === "kanban" || L.view === "tree" || L.view === "org") { pager.innerHTML = total + (total === 1 ? " record" : " records"); }
     else {
-      var from = total ? L.page * L.size + 1 : 0, to = Math.min((L.page + 1) * L.size, total);
-      pager.innerHTML = '<span>' + from + '-' + to + ' / ' + total + '</span>' +
+      var from = punits ? L.page * L.size + 1 : 0, to = Math.min((L.page + 1) * L.size, punits);
+      pager.innerHTML = '<span>' + from + '-' + to + ' / ' + punits + (nestOn && total !== punits ? ' <span class="muted">(' + total + ' incl. people)</span>' : '') + '</span>' +
         '<button id="pgp">&#8249;</button><button id="pgn">&#8250;</button>';
       var pgp = document.getElementById("pgp"), pgn = document.getElementById("pgn");
-      pgp.disabled = L.page === 0; pgn.disabled = to >= total;
+      pgp.disabled = L.page === 0; pgn.disabled = to >= punits;
       pgp.onclick = function () { if (L.page > 0) { L.page--; paintBody(); } };
-      pgn.onclick = function () { if (to < total) { L.page++; paintBody(); } };
+      pgn.onclick = function () { if (to < punits) { L.page++; paintBody(); } };
     }
     if (!total) {
       var noneAtAll = !(L.all && L.all.length);
@@ -2728,6 +2733,16 @@
         groups[k].forEach(function (r) { html += rowHTML(cfg, r); });
       });
       body.innerHTML = html + "</tbody></table>";
+    } else if (nestOn) {
+      ensureNestStyle();
+      var rp = nestData.roots.slice(L.page * L.size, (L.page + 1) * L.size);
+      var nh = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>';
+      rp.forEach(function (r) {
+        var ch = nestData.kids[r.id] || [], coll = !!L.ncoll[r.id];
+        nh += rowHTML(cfg, r, { depth: 0, kids: ch.length, collapsed: coll });
+        for (var i = 0; i < ch.length; i++) nh += rowHTML(cfg, ch[i], { depth: 1, kids: 0, parent: r.id, hidden: coll });
+      });
+      body.innerHTML = nh + '</tbody></table>';
     } else {
       var page = rows.slice(L.page * L.size, (L.page + 1) * L.size);
       body.innerHTML = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>' + page.map(function (r) { return rowHTML(cfg, r); }).join("") + '</tbody></table>';
@@ -2738,6 +2753,7 @@
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
+    if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
@@ -2801,7 +2817,38 @@
     };
     var cfb = dd.querySelector('[data-a="clearf"]'); if (cfb) cfb.onclick = function () { delete L.colFilters[i]; L.page = 0; paintBody(); closeDropdowns(); };
   }
-  function rowHTML(cfg, r) { var et = cfg.editTable || cfg.table; return '<tr data-id="' + r.id + '">' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c, ci) { var ed = et && c.edit && canManageApp(S.app); return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + (ed ? " o-ecell" : "") + '"' + (ed ? ' data-eci="' + ci + '" title="Click to edit"' : "") + '>' + c.get(r) + '</td>'; }).join("") + '</tr>'; }
+  function rowHTML(cfg, r, nest) {
+    var et = cfg.editTable || cfg.table;
+    var clsAttr = (nest && nest.depth) ? ' class="o-nest-child"' : '';
+    var extra = '';
+    if (nest && nest.depth) { extra += ' data-parent="' + esc(nest.parent) + '"'; if (nest.hidden) extra += ' style="display:none"'; }
+    return '<tr data-id="' + r.id + '"' + clsAttr + extra + '>' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c, ci) {
+      var ed = et && c.edit && canManageApp(S.app);
+      var lead = "";
+      if (nest && ci === 0) {
+        var inner = nest.kids ? '<span class="o-nest-caret" data-np="' + r.id + '" title="Show / hide people">' + (nest.collapsed ? "&#9656;" : "&#9662;") + '</span>' : (nest.depth ? '<span class="o-nest-twig">&#8627;</span>' : '<span class="o-nest-caret empty"></span>');
+        lead = '<span class="o-nest-lead" style="padding-left:' + (nest.depth * 20) + 'px">' + inner + '</span>';
+      }
+      return '<td class="' + (c.num ? "num" : "") + (c.cls ? " " + c.cls : "") + (ed ? " o-ecell" : "") + '"' + (ed ? ' data-eci="' + ci + '" title="Click to edit"' : "") + '>' + lead + c.get(r) + '</td>';
+    }).join("") + '</tr>';
+  }
+  // Nesting: tuck child rows (found by cfg.nest.parent -> row.id) directly under their parent
+  // in the plain list view, keeping the real columns, click-to-open and inline editing.
+  function buildNest(cfg, rows) {
+    var pf = cfg.nest.parent, byId = {}, kids = {}, roots = [], hasChildren = false;
+    rows.forEach(function (r) { byId[r.id] = r; });
+    rows.forEach(function (r) {
+      var par = r[pf];
+      if (par && byId[par]) { (kids[par] = kids[par] || []).push(r); hasChildren = true; }
+      else roots.push(r);   // parents, and orphans whose parent is filtered out, stay at top level
+    });
+    return { roots: roots, kids: kids, hasChildren: hasChildren };
+  }
+  var _nestStyled = false;
+  function ensureNestStyle() {
+    if (_nestStyled) return; _nestStyled = true;
+    try { var s = document.createElement("style"); s.textContent = ".o-nest-lead{display:inline-flex;align-items:center;vertical-align:middle}.o-nest-caret{display:inline-block;width:18px;text-align:center;cursor:pointer;color:var(--muted,#7a8699);user-select:none;font-size:11px}.o-nest-caret.empty{cursor:default;opacity:0}.o-nest-twig{display:inline-block;width:18px;text-align:center;color:var(--muted,#7a8699)}.o-list tbody tr.o-nest-child td{background:var(--panel2,#f7f8fa)}"; document.head.appendChild(s); } catch (e) { }
+  }
   // Inline cell editing: click an editable cell to change its value in place and
   // save straight to the row's table - no need to open the record. A column opts in
   // with an `edit:{field,type,options}` descriptor and the cfg names its `editTable`.
@@ -7753,11 +7800,12 @@
   function cfgContacts() {
     return {
       title: "Contacts", pageSize: 80, editTable: "partners",
+      nest: { parent: "employer_id" },   // tuck employees under the company they work at
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
-      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
+      searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + (p.role_title || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
         { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
-        { label: "Type", get: function (p) { var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
+        { label: "Type", get: function (p) { if (p.contact_kind === "employee") return '<span class="muted">' + esc(p.role_title || "Employee") + '</span>'; var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); if (p.contact_kind === "freelancer" && !t.length) t.push("Freelancer"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
         { label: "Industry", edit: { field: "industry", type: "text" }, get: function (p) { return esc(p.industry || ""); } },
         { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return esc(p.email || ""); } },
         { label: "Phone", edit: { field: "phone", type: "text" }, get: function (p) { return esc(p.phone || ""); } },
