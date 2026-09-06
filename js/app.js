@@ -2875,13 +2875,37 @@
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
+      var _selEt = cfg.editTable || cfg.table, _selCanWrite = canManageApp(S.app);
       function updSel() {
         var ids = Object.keys(L.sel).filter(function (k) { return L.sel[k]; });
         if (!ids.length) { selbar.style.display = "none"; return; }
         selbar.style.display = "";
-        selbar.innerHTML = '<span class="o-seln">' + ids.length + ' selected</span><button class="btn sm pri" id="o-selexp" style="background:var(--app);border-color:var(--app)">Export selected</button><button class="btn sm" id="o-selclr">Clear</button>';
+        selbar.innerHTML = '<span class="o-seln">' + ids.length + ' selected</span><button class="btn sm pri" id="o-selexp" style="background:var(--app);border-color:var(--app)">Export selected</button>' +
+          (_selEt && _selCanWrite && cfg.archiveField ? '<button class="btn sm" id="o-selarch">Archive</button>' : '') +
+          (_selEt && _selCanWrite && cfg.deletable !== false ? '<button class="btn sm" id="o-seldel" style="color:var(--bad)">Delete</button>' : '') +
+          '<button class="btn sm" id="o-selclr">Clear</button>';
         document.getElementById("o-selexp").onclick = function () { exportListCsv(true); };
         document.getElementById("o-selclr").onclick = function () { L.sel = {}; paintBody(); };
+        function reload() { L.sel = {}; cfg.fetch().then(function (rows) { L.all = rows || []; paintBody(); }); }
+        var arch = document.getElementById("o-selarch");
+        if (arch) arch.onclick = async function () {
+          if (!confirm("Archive " + ids.length + " " + (ids.length === 1 ? "item" : "items") + "? They stay in the system but are hidden from lists and selections.")) return;
+          var patch = {}; patch[cfg.archiveField] = false;
+          var r = await sb.from(_selEt).update(patch).in("id", ids);
+          if (r.error) { toast(errMsg(r.error)); return; } toast(ids.length + " archived"); reload();
+        };
+        var del = document.getElementById("o-seldel");
+        if (del) del.onclick = async function () {
+          if (!confirm("Permanently delete " + ids.length + " " + (ids.length === 1 ? "item" : "items") + "? This cannot be undone. Items already used in transactions cannot be deleted - archive them instead.")) return;
+          var r = await sb.from(_selEt).delete().in("id", ids);
+          if (r.error) {
+            var m = (r.error.message || "") + (r.error.details || "");
+            if (r.error.code === "23503" || /foreign key|still referenced|violates/i.test(m)) { toast(cfg.archiveField ? "Some of these are used in other records - use Archive instead." : "Some of these are used in other records and can't be deleted."); }
+            else toast(errMsg(r.error));
+            return;
+          }
+          toast(ids.length + " deleted"); reload();
+        };
       }
       body.insertBefore(selbar, body.firstChild);
       updSel();
@@ -3217,7 +3241,7 @@
     var isCust = kind === "customer";
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
-      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners",
+      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners", archiveField: "is_active",
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
@@ -3475,7 +3499,7 @@
   var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
   function cfgProducts() {
     return {
-      title: "Products", pageSize: 80, editTable: "products",
+      title: "Products", pageSize: 80, editTable: "products", archiveField: "is_active",
       fetch: async function () { var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "product"); return rows; },
       searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
@@ -5432,7 +5456,7 @@
     function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
     var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-qr">QR label</button>' : "") + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-qr">QR label</button>' : "") + (id !== "new" && canManageApp(S.app) ? '<button id="pr-del" style="color:var(--bad)">Delete</button>' : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + prSmart + titleRowHTML('<input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name">', "product", id) +
       '<div class="o-groups"><div>' +
       fld("Item code", '<input id="pr-code" value="' + esc(p.default_code || "") + '" placeholder="auto from classification">', "Your code for this item. Built automatically from the classification tree (e.g. AL-EXT-MUL-001); edit it if you want your own.") +
@@ -5454,6 +5478,12 @@
       '</div></div>' + materialSpecHTML(p, clsNodes) + (id !== "new" ? '<div id="pr-variants" style="margin-top:16px"></div><div id="pr-kitc" style="margin-top:16px"></div><div id="pr-barcodes" style="margin-top:16px"></div><div id="pr-sup" style="margin-top:16px"></div>' : '') + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     var prQr = document.getElementById("pr-qr"); if (prQr) prQr.onclick = function () { openQRModal(p.name || "Product", p.barcode || p.default_code || p.id, p.default_code || ""); };
+    var prDel = document.getElementById("pr-del"); if (prDel) prDel.onclick = async function () {
+      if (!confirm("Delete \"" + (p.name || "this product") + "\"? This cannot be undone. If it is used in any order, invoice or stock move it can't be deleted - archive it instead (set Status to Archived).")) return;
+      var r = await sb.from("products").delete().eq("id", id);
+      if (r.error) { var m = (r.error.message || "") + (r.error.details || ""); if (r.error.code === "23503" || /foreign key|still referenced|violates/i.test(m)) { toast("This product is used in transactions - set its Status to Archived instead."); } else { toast(errMsg(r.error)); } return; }
+      toast("Product deleted"); go("products");
+    };
     wireMatSpec(p, clsNodes);
     if (id !== "new") { loadSupplierPrices(id); loadProductBarcodes(id); loadKitComponents(id, p); loadVariants(id, p); }
     var _kitSel = document.getElementById("pr-kit"); if (_kitSel) _kitSel.onchange = function () { loadKitComponents(id, { is_kit: this.value === "1" }); };
@@ -8052,7 +8082,7 @@
   // ============================ CONTACTS (unified directory + tags) ============================
   function cfgContacts() {
     return {
-      title: "Contacts", pageSize: 80, editTable: "partners",
+      title: "Contacts", pageSize: 80, editTable: "partners", archiveField: "is_active",
       nest: { parent: "employer_id" },   // tuck employees under the company they work at
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + (p.role_title || "") + " " + ((p.capabilities || []).join(" ")); },
@@ -13414,7 +13444,7 @@
   }
   function cfgEmployees() {
     return {
-      title: "Employees", pageSize: 80, editTable: "hr_employees",
+      title: "Employees", pageSize: 80, editTable: "hr_employees", archiveField: "is_active",
       fetch: function () {
         return sb.from("hr_employees").select("*, hr_departments(name), hr_jobs(name)").eq("company_id", S.company.id).order("name").then(async function (res) {
           var rows = res.data || [], mm = {}; rows.forEach(function (e) { mm[e.id] = e.name; });
