@@ -14837,6 +14837,96 @@
   var WEB_ORIGIN = "https://orbit.spacework.ai";                 // where the preview renderer runs
   var WEB_SUB_BASE = "sites.spacework.ai";                       // free subdomain zone
   var WEB_BLOCKS = [["hero", "Hero"], ["heading", "Heading"], ["text", "Text"], ["image", "Image"], ["features", "Feature cards"], ["cta", "Call to action"], ["button", "Button"], ["form", "Contact form"], ["embed", "Embed / HTML"], ["spacer", "Spacer"]];
+  // Visual-builder section catalogue: [type, label, bootstrap-icon, group]. Adding a section
+  // = one row here + one entry in the render engine + optional fields in WEB_FIELDS. Nothing else.
+  var WEB_SECTIONS = [
+    ["hero", "Hero", "bi-star", "Headers"],
+    ["heading", "Heading", "bi-type-h2", "Text"],
+    ["text", "Text", "bi-text-paragraph", "Text"],
+    ["mediaText", "Image + text", "bi-layout-split", "Text"],
+    ["features", "Feature cards", "bi-grid-3x3-gap", "Content"],
+    ["steps", "Steps", "bi-list-ol", "Content"],
+    ["stats", "Stats / numbers", "bi-bar-chart", "Content"],
+    ["pricing", "Pricing", "bi-tags", "Content"],
+    ["team", "Team", "bi-people", "Content"],
+    ["testimonials", "Testimonials", "bi-chat-quote", "Content"],
+    ["gallery", "Gallery", "bi-images", "Media"],
+    ["image", "Image", "bi-image", "Media"],
+    ["logos", "Logo strip", "bi-building", "Media"],
+    ["faq", "FAQ", "bi-question-circle", "Content"],
+    ["cta", "Call to action", "bi-megaphone", "Content"],
+    ["contact", "Contact", "bi-envelope", "Forms"],
+    ["form", "Form", "bi-input-cursor-text", "Forms"],
+    ["careers", "Careers (from HR)", "bi-briefcase", "ERP"],
+    ["button", "Button", "bi-hand-index", "Basic"],
+    ["embed", "Embed / HTML", "bi-code-slash", "Basic"],
+    ["spacer", "Spacer", "bi-distribute-vertical", "Basic"]
+  ];
+  // Sensible starter content when a section is dropped in.
+  var WEB_DEFAULTS = {
+    hero: { eyebrow: "Welcome", title: "A bold headline goes here", subtitle: "Say what you do in one clear sentence.", buttonText: "Get started", buttonHref: "#", align: "left" },
+    heading: { text: "Section title", subtitle: "A supporting line under the title.", align: "center" },
+    text: { text: "Write your paragraph here. Click to edit." },
+    mediaText: { eyebrow: "", title: "A section with an image", text: "Explain the detail here.", image: "https://placehold.co/720x520", imageRight: false, buttonText: "" },
+    features: { title: "What we offer", subtitle: "", columns: 3, items: [{ icon: "bi-lightning-charge", title: "Fast", text: "Describe the benefit." }, { icon: "bi-shield-check", title: "Reliable", text: "Describe the benefit." }, { icon: "bi-heart", title: "Loved", text: "Describe the benefit." }] },
+    steps: { title: "How it works", items: [{ title: "Step one", text: "Describe it." }, { title: "Step two", text: "Describe it." }, { title: "Step three", text: "Describe it." }] },
+    stats: { items: [{ value: "500+", label: "Projects" }, { value: "12", label: "Years" }, { value: "98%", label: "Happy clients" }] },
+    pricing: { title: "Pricing", items: [{ name: "Starter", price: "$9", period: "/mo", features: ["Feature one", "Feature two"], buttonText: "Choose" }, { name: "Pro", price: "$29", period: "/mo", featured: true, badge: "Popular", features: ["Everything in Starter", "More power"], buttonText: "Choose" }] },
+    team: { title: "Our team", columns: 4, items: [{ name: "Full name", role: "Role", image: "" }] },
+    testimonials: { title: "What clients say", items: [{ text: "A short quote about the great work.", name: "Client name", role: "Company" }] },
+    gallery: { title: "", columns: 3, items: [{ src: "https://placehold.co/600x450" }, { src: "https://placehold.co/600x450" }, { src: "https://placehold.co/600x450" }] },
+    logos: { title: "Trusted by", items: [{ src: "https://placehold.co/130x40" }, { src: "https://placehold.co/130x40" }, { src: "https://placehold.co/130x40" }] },
+    faq: { title: "FAQ", items: [{ q: "A common question?", a: "The answer." }, { q: "Another question?", a: "The answer." }] },
+    cta: { title: "Ready to start?", text: "A short nudge to act.", buttonText: "Contact us", buttonHref: "#" },
+    contact: { title: "Get in touch", text: "We usually reply within a day.", email: "", phone: "", address: "" },
+    form: { title: "Send us a message", submitText: "Send", formKey: "contact" },
+    careers: { title: "Open positions", subtitle: "Join the team.", limit: "" },
+    button: { text: "Click me", href: "#", align: "left" },
+    embed: { html: "<!-- paste embed code -->" },
+    spacer: { size: 48 }
+  };
+  // Text props that can be edited straight on the page (click to type). Everything else is
+  // in the section's settings panel. Selectors are matched inside each section wrapper.
+  var WEB_TEXTMAP = {
+    hero: [{ sel: "h1", prop: "title" }, { sel: ".fs-5", prop: "subtitle" }],
+    heading: [{ sel: "h2", prop: "text" }, { sel: "p", prop: "subtitle" }],
+    text: [{ sel: ".fs-5", prop: "text" }],
+    mediaText: [{ sel: "h2", prop: "title" }],
+    features: [{ sel: "h2", prop: "title" }],
+    steps: [{ sel: "h2", prop: "title" }],
+    pricing: [{ sel: "h2", prop: "title" }],
+    team: [{ sel: "h2", prop: "title" }],
+    testimonials: [{ sel: "h2", prop: "title" }],
+    faq: [{ sel: "h2", prop: "title" }],
+    cta: [{ sel: "h2", prop: "title" }, { sel: ".fs-5", prop: "text" }],
+    contact: [{ sel: "h2", prop: "title" }],
+    form: [{ sel: "h2", prop: "title" }],
+    careers: [{ sel: "h2", prop: "title" }]
+  };
+  // Settings-panel field descriptors per section type (drives the right sidebar in the builder).
+  var WEB_FIELDS = {
+    hero: [{ k: "eyebrow", l: "Eyebrow", t: "text" }, { k: "title", l: "Headline", t: "text" }, { k: "subtitle", l: "Subtitle", t: "area" }, { k: "align", l: "Align", t: "sel", o: ["left", "center", "right"] }, { k: "buttonText", l: "Button 1 text", t: "text" }, { k: "buttonHref", l: "Button 1 link", t: "text" }, { k: "button2Text", l: "Button 2 text", t: "text" }, { k: "button2Href", l: "Button 2 link", t: "text" }, { k: "image", l: "Background image URL", t: "text" }, { k: "sideImage", l: "Side image URL (split)", t: "text" }],
+    heading: [{ k: "text", l: "Title", t: "text" }, { k: "subtitle", l: "Subtitle", t: "area" }, { k: "align", l: "Align", t: "sel", o: ["center", "left", "right"] }, { k: "bg", l: "Background", t: "sel", o: ["", "light", "dark"] }],
+    text: [{ k: "text", l: "Paragraph", t: "area" }],
+    mediaText: [{ k: "eyebrow", l: "Eyebrow", t: "text" }, { k: "title", l: "Title", t: "text" }, { k: "text", l: "Text", t: "area" }, { k: "image", l: "Image URL", t: "text" }, { k: "imageRight", l: "Image on right", t: "bool" }, { k: "buttonText", l: "Button text", t: "text" }, { k: "buttonHref", l: "Button link", t: "text" }, { k: "bg", l: "Background", t: "sel", o: ["", "light", "dark"] }],
+    features: [{ k: "title", l: "Section title", t: "text" }, { k: "subtitle", l: "Subtitle", t: "area" }, { k: "columns", l: "Columns", t: "sel", o: ["2", "3", "4"] }, { k: "items", l: "Cards", t: "list", of: [{ k: "icon", l: "Icon (bi-... or emoji)", t: "text" }, { k: "title", l: "Title", t: "text" }, { k: "text", l: "Text", t: "area" }] }, { k: "bg", l: "Background", t: "sel", o: ["", "light", "dark"] }],
+    steps: [{ k: "title", l: "Section title", t: "text" }, { k: "items", l: "Steps", t: "list", of: [{ k: "title", l: "Title", t: "text" }, { k: "text", l: "Text", t: "area" }] }],
+    stats: [{ k: "items", l: "Stats", t: "list", of: [{ k: "value", l: "Number", t: "text" }, { k: "label", l: "Label", t: "text" }] }, { k: "bg", l: "Background", t: "sel", o: ["", "light", "dark"] }],
+    pricing: [{ k: "title", l: "Section title", t: "text" }, { k: "items", l: "Plans", t: "list", of: [{ k: "name", l: "Name", t: "text" }, { k: "price", l: "Price", t: "text" }, { k: "period", l: "Period", t: "text" }, { k: "features", l: "Features (one per line)", t: "lines" }, { k: "featured", l: "Highlight", t: "bool" }, { k: "badge", l: "Badge", t: "text" }, { k: "buttonText", l: "Button", t: "text" }, { k: "buttonHref", l: "Button link", t: "text" }] }],
+    team: [{ k: "title", l: "Section title", t: "text" }, { k: "columns", l: "Columns", t: "sel", o: ["3", "4", "2"] }, { k: "items", l: "Members", t: "list", of: [{ k: "name", l: "Name", t: "text" }, { k: "role", l: "Role", t: "text" }, { k: "image", l: "Photo URL", t: "text" }] }],
+    testimonials: [{ k: "title", l: "Section title", t: "text" }, { k: "items", l: "Quotes", t: "list", of: [{ k: "text", l: "Quote", t: "area" }, { k: "name", l: "Name", t: "text" }, { k: "role", l: "Company", t: "text" }] }],
+    gallery: [{ k: "title", l: "Section title", t: "text" }, { k: "columns", l: "Columns", t: "sel", o: ["3", "2", "4"] }, { k: "items", l: "Images", t: "list", of: [{ k: "src", l: "Image URL", t: "text" }, { k: "alt", l: "Alt text", t: "text" }] }],
+    logos: [{ k: "title", l: "Label", t: "text" }, { k: "items", l: "Logos", t: "list", of: [{ k: "src", l: "Logo URL", t: "text" }, { k: "alt", l: "Alt", t: "text" }] }],
+    image: [{ k: "src", l: "Image URL", t: "text" }, { k: "alt", l: "Alt text", t: "text" }, { k: "caption", l: "Caption", t: "text" }],
+    faq: [{ k: "title", l: "Section title", t: "text" }, { k: "items", l: "Questions", t: "list", of: [{ k: "q", l: "Question", t: "text" }, { k: "a", l: "Answer", t: "area" }] }],
+    cta: [{ k: "title", l: "Headline", t: "text" }, { k: "text", l: "Text", t: "area" }, { k: "buttonText", l: "Button 1", t: "text" }, { k: "buttonHref", l: "Button 1 link", t: "text" }, { k: "button2Text", l: "Button 2", t: "text" }, { k: "button2Href", l: "Button 2 link", t: "text" }],
+    contact: [{ k: "title", l: "Title", t: "text" }, { k: "text", l: "Text", t: "area" }, { k: "email", l: "Email", t: "text" }, { k: "phone", l: "Phone", t: "text" }, { k: "address", l: "Address", t: "text" }, { k: "submitText", l: "Button text", t: "text" }],
+    form: [{ k: "title", l: "Title", t: "text" }, { k: "submitText", l: "Button text", t: "text" }, { k: "formKey", l: "Form name (inbox tag)", t: "text" }],
+    careers: [{ k: "title", l: "Title", t: "text" }, { k: "subtitle", l: "Subtitle", t: "area" }, { k: "limit", l: "Max jobs (blank = all)", t: "text" }],
+    button: [{ k: "text", l: "Text", t: "text" }, { k: "href", l: "Link", t: "text" }, { k: "align", l: "Align", t: "sel", o: ["left", "center", "right"] }],
+    embed: [{ k: "html", l: "HTML / embed code", t: "area" }],
+    spacer: [{ k: "size", l: "Height (px)", t: "text" }]
+  };
   function webSlug(s) { return String(s || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
   function webHost(site) { return (site.slug ? site.slug + "." + WEB_SUB_BASE : ""); }
   // Call the custom-domain lifecycle endpoint (register / status / remove) as the
@@ -14914,9 +15004,9 @@
       toast("Saved"); renderSiteForm(sid);
     };
     if (id !== "new") {
-      document.querySelectorAll("#ws-pages tr[data-pid]").forEach(function (tr) { tr.onclick = function (e) { if (e.target.classList.contains("wp-del")) return; renderSitePageForm(id, tr.dataset.pid); }; });
+      document.querySelectorAll("#ws-pages tr[data-pid]").forEach(function (tr) { tr.onclick = function (e) { if (e.target.classList.contains("wp-del")) return; renderSiteBuilder(id, tr.dataset.pid); }; });
       document.querySelectorAll(".wp-del").forEach(function (b) { b.onclick = async function (e) { e.stopPropagation(); if (!confirm("Delete this page?")) return; await sb.from("site_pages").delete().eq("id", b.dataset.pid); renderSiteForm(id); }; });
-      document.getElementById("ws-addpage").onclick = function () { renderSitePageForm(id, "new"); };
+      document.getElementById("ws-addpage").onclick = function () { renderSiteBuilder(id, "new"); };
       document.getElementById("ws-addhost").onclick = async function () {
         var hn = (gv("ws-newhost") || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, ""); if (!hn) return;
         var r = await sb.from("site_hostnames").insert({ company_id: S.company.id, site_id: id, hostname: hn, kind: "custom", status: "pending" }).select("id").single(); if (r.error) { toast(errMsg(r.error)); return; }
@@ -14996,6 +15086,286 @@
       var up = await sb.from("site_pages").update(row).eq("id", pageId); if (up.error) { toast(errMsg(up.error)); return null; } return pageId;
     }
     document.getElementById("wp-save").onclick = async function () { var pid = await savePage(); if (pid) { toast("Page saved"); renderSitePageForm(siteId, pid); } };
+  }
+
+  // ============================ WEBSITE VISUAL BUILDER (edit-on-page) ============================
+  // Full-screen editor. The canvas is an isolated iframe that renders through the EXACT
+  // production engine (js/site-engine.js, loaded in the browser) - so every section is
+  // pixel-identical to the live site and adding a section needs no editor changes.
+  var WB = null;
+  async function wbEngine() {
+    if (window.SiteEngine) return window.SiteEngine;
+    try { await new Promise(function (res, rej) { var s = document.createElement("script"); s.src = "/js/site-engine.js?v=" + Date.now(); s.onload = res; s.onerror = rej; document.head.appendChild(s); }); } catch (e) { }
+    if (!window.SiteEngine) { try { var src = await (await fetch("/js/site-engine.js?v=" + Date.now())).text(); if (src[0] !== "<") new Function(src)(); } catch (e) { } }
+    return window.SiteEngine;
+  }
+  function ensureWbStyle() {
+    if (document.getElementById("wb-style")) return;
+    var s = document.createElement("style"); s.id = "wb-style";
+    s.textContent =
+      ".wb-wrap{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:var(--panel2,#eef1f5)}" +
+      ".wb-top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel,#fff);border-bottom:1px solid var(--line,#dde)}" +
+      ".wb-top input.wb-name{font-weight:600;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:6px;font:inherit;color:var(--ink)}" +
+      ".wb-top input.wb-name:hover,.wb-top input.wb-name:focus{border-color:var(--line);background:var(--panel2)}" +
+      ".wb-top .wb-sp{flex:1}" +
+      ".wb-top button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:6px 11px;cursor:pointer;font:inherit;font-size:13px}" +
+      ".wb-top button.pri{background:var(--app,#2a7);border-color:var(--app,#2a7);color:#fff}" +
+      ".wb-top button.on{background:var(--app,#2a7);border-color:var(--app,#2a7);color:#fff}" +
+      ".wb-dev{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}.wb-dev button{border:0;border-radius:0}" +
+      ".wb-body{flex:1;display:flex;min-height:0}" +
+      ".wb-canvas{flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;background:var(--panel2,#eef1f5)}" +
+      ".wb-frame-wrap{width:100%;max-width:100%;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.1);border-radius:8px;overflow:hidden;transition:max-width .2s}" +
+      ".wb-frame-wrap.mobile{max-width:390px}" +
+      "#wb-frame{width:100%;height:100%;border:0;display:block}" +
+      ".wb-panel{width:320px;flex:none;background:var(--panel,#fff);border-left:1px solid var(--line,#dde);overflow:auto}" +
+      ".wb-p-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}" +
+      ".wb-p-close{border:1px solid var(--line);background:var(--panel2);border-radius:6px;padding:3px 9px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
+      ".wb-p-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px}" +
+      ".wb-fld{display:flex;flex-direction:column;gap:3px}.wb-fld>span{font-size:11px;font-weight:600;color:var(--muted,#889);text-transform:uppercase;letter-spacing:.03em}" +
+      ".wb-i{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);width:100%;box-sizing:border-box}" +
+      "textarea.wb-i{resize:vertical}" +
+      ".wb-bool{display:flex;align-items:center;gap:6px;font-size:13px}.wb-bool .wb-i{width:auto}" +
+      ".wb-list{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:8px}" +
+      ".wb-li{border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel2);display:flex;flex-direction:column;gap:6px}" +
+      ".wb-li-top{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.wb-li-top .sp{flex:1}.wb-li-top button{border:1px solid var(--line);background:var(--panel);border-radius:5px;cursor:pointer;width:22px;height:22px;color:var(--ink)}" +
+      ".wb-li-add,.wb-p-foot button{border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
+      ".wb-p-foot{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}.wb-p-foot .del{color:var(--bad);border-color:var(--bad)}" +
+      ".wb-sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}" +
+      ".wb-gal{display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
+      ".wb-gal button{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:12px 6px;cursor:pointer;color:var(--ink);font:inherit;font-size:12px}" +
+      ".wb-gal button:hover{border-color:var(--app);color:var(--app)}.wb-gal button i{font-size:20px}";
+    document.head.appendChild(s);
+  }
+  async function renderSiteBuilder(siteId, pageId) {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-empty">Opening builder...</div></div>';
+    var site = (await sb.from("sites").select("*").eq("id", siteId).maybeSingle()).data || { theme: {} };
+    var pages = (await sb.from("site_pages").select("id,path,title,is_published,sort").eq("site_id", siteId).order("sort").order("path")).data || [];
+    var pg = pageId === "new" ? { path: "/", title: "Home", content: [], meta: {} } : ((await sb.from("site_pages").select("*").eq("id", pageId).maybeSingle()).data || { path: "/", content: [], meta: {} });
+    WB = {
+      siteId: siteId, pageId: pageId, site: site,
+      page: { path: pg.path || "/", title: pg.title || "", meta: pg.meta || {}, is_published: !!pg.is_published },
+      blocks: Array.isArray(pg.content) ? JSON.parse(JSON.stringify(pg.content)) : [],
+      nav: pages.filter(function (p) { return p.id !== pageId; }).map(function (p) { return { path: p.path, title: p.title || p.path }; }),
+      sel: null, device: "desktop", dirty: false, R: null
+    };
+    ensureWbStyle();
+    window.__WB = {
+      type: function (i) { return (WB.blocks[i] || {}).type || ""; },
+      textmap: function (t) { return WEB_TEXTMAP[t] || []; },
+      tool: function (i, a) { wbTool(i, a); },
+      add: function (at) { wbGallery(at); },
+      select: function (i) { WB.sel = i; wbPaintPanel(); wbHighlight(); },
+      text: function (i, prop, val) { if (WB.blocks[i]) { WB.blocks[i].props[prop] = val; WB.dirty = true; wbDirtyBadge(); wbSyncPanelField(prop, val); } }
+    };
+    main.innerHTML =
+      '<div class="wb-wrap"><div class="wb-top">' +
+      '<button id="wb-back" title="Back to site">&larr; Site</button>' +
+      '<input class="wb-name" id="wb-title" value="' + esc(WB.page.title) + '" placeholder="Page title">' +
+      '<span class="muted" id="wb-path" style="font-size:12px">' + esc(WB.page.path) + '</span>' +
+      '<span class="wb-sp"></span>' +
+      '<span class="wb-dev"><button id="wb-dev-d" class="on" title="Desktop">&#128421;</button><button id="wb-dev-m" title="Mobile">&#128241;</button></span>' +
+      '<button id="wb-preview">Preview</button><button id="wb-save">Save</button><button id="wb-pub" class="pri">' + (WB.page.is_published ? "Published &#10003;" : "Publish") + '</button>' +
+      '</div><div class="wb-body"><div class="wb-canvas"><div class="wb-frame-wrap" id="wb-fw"><iframe id="wb-frame"></iframe></div></div><div class="wb-panel" id="wb-panel"></div></div></div>';
+    document.getElementById("wb-back").onclick = function () { if (WB.dirty && !confirm("Leave the builder? Unsaved changes will be lost.")) return; renderSiteForm(siteId); };
+    document.getElementById("wb-title").oninput = function () { WB.page.title = this.value; WB.dirty = true; wbDirtyBadge(); wbRepaint(); };
+    document.getElementById("wb-dev-d").onclick = function () { WB.device = "desktop"; document.getElementById("wb-fw").classList.remove("mobile"); this.classList.add("on"); document.getElementById("wb-dev-m").classList.remove("on"); };
+    document.getElementById("wb-dev-m").onclick = function () { WB.device = "mobile"; document.getElementById("wb-fw").classList.add("mobile"); this.classList.add("on"); document.getElementById("wb-dev-d").classList.remove("on"); };
+    document.getElementById("wb-preview").onclick = async function () { var pid = await wbSave(); if (pid) window.open(WEB_ORIGIN + "/site/?host=" + encodeURIComponent(webHost(site)) + "&path=" + encodeURIComponent(WB.page.path || "/"), "_blank"); };
+    document.getElementById("wb-save").onclick = function () { wbSave().then(function (pid) { if (pid) toast("Saved"); }); };
+    document.getElementById("wb-pub").onclick = function () { WB.page.is_published = true; WB.site.is_published = true; wbSave(true).then(function (pid) { if (pid) { toast("Published - your page is live"); document.getElementById("wb-pub").innerHTML = "Published &#10003;"; } }); };
+    wbPaintPanel();
+    WB.R = await wbEngine();
+    if (!WB.R) { document.querySelector(".wb-canvas").innerHTML = '<div class="o-empty" style="margin:auto">Could not load the site engine.</div>'; return; }
+    wbInitFrame();
+  }
+  function wbEditorCss() {
+    return ".sw-ed-block{position:relative;outline:2px solid transparent;transition:outline-color .12s;min-height:20px}" +
+      ".sw-ed-block:hover{outline-color:rgba(var(--sw-pri-rgb),.35)}.sw-ed-block.sw-sel{outline-color:var(--sw-pri)}" +
+      ".sw-ed-tools{position:absolute;top:8px;right:8px;z-index:30;display:none;gap:2px;background:#14181d;border-radius:9px;padding:3px}" +
+      ".sw-ed-block:hover>.sw-ed-tools,.sw-ed-block.sw-sel>.sw-ed-tools{display:flex}" +
+      ".sw-ed-tools button{border:0;background:transparent;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1}.sw-ed-tools button:hover{background:#333}" +
+      ".sw-ed-add{position:absolute;left:50%;bottom:-15px;transform:translateX(-50%);z-index:31;width:30px;height:30px;border-radius:50%;border:2px solid #fff;background:var(--sw-pri);color:#fff;cursor:pointer;font-size:17px;line-height:1;opacity:0;transition:opacity .12s;box-shadow:0 2px 10px rgba(0,0,0,.25)}" +
+      ".sw-ed-block:hover>.sw-ed-add{opacity:1}.sw-ed-add-top{opacity:1;top:-15px;bottom:auto}" +
+      "[contenteditable=true]{outline:1px dashed rgba(var(--sw-pri-rgb),.6);outline-offset:3px;border-radius:3px}[contenteditable=true]:focus{outline:2px solid var(--sw-pri);cursor:text}" +
+      ".sw-ed-empty{text-align:center;padding:90px 20px;color:#8a94a2}.sw-ed-empty .sw-ed-add{position:static;opacity:1;transform:none;width:auto;height:auto;border-radius:24px;padding:10px 18px;font-size:14px}";
+  }
+  function wbEditorJs() {
+    return "window.__swWire=function(){var P=parent.__WB;document.querySelectorAll('.sw-ed-block').forEach(function(blk){var bi=+blk.dataset.bi,type=P.type(bi);(P.textmap(type)||[]).forEach(function(m){var el=blk.querySelector(m.sel);if(!el||el.__swb)return;el.__swb=1;el.setAttribute('contenteditable','true');el.addEventListener('input',function(){P.text(bi,m.prop,el.textContent);});el.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();el.blur();}});el.addEventListener('click',function(ev){ev.stopPropagation();});});});};" +
+      "if(!window.__swBound){window.__swBound=1;document.addEventListener('click',function(e){var a=e.target.closest('a');if(a)e.preventDefault();},true);document.addEventListener('click',function(e){var t=e.target.closest('.sw-ed-tools button');if(t){e.preventDefault();e.stopPropagation();parent.__WB.tool(+t.closest('.sw-ed-block').dataset.bi,t.dataset.act);return;}var ad=e.target.closest('.sw-ed-add');if(ad){e.preventDefault();e.stopPropagation();parent.__WB.add(+ad.dataset.at);return;}if(e.target.closest('[contenteditable=true]'))return;var b=e.target.closest('.sw-ed-block');if(b)parent.__WB.select(+b.dataset.bi);},false);}window.__swWire();";
+  }
+  function wbBuildDoc() {
+    var R = WB.R, site = WB.site, font = (site.theme || {}).font || "Inter";
+    return "<!doctype html><html><head><meta charset=utf-8><meta name=viewport content=\"width=device-width,initial-scale=1\">" +
+      '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=' + encodeURIComponent(font) + ':wght@400;500;600;700;800&display=swap">' +
+      '<link rel="stylesheet" href="' + R.BOOTSTRAP_CSS + '"><link rel="stylesheet" href="' + R.BOOTSTRAP_ICONS + '">' +
+      '<style id="sw-theme">' + R.themeCss(site.theme || {}) + wbEditorCss() + '</style></head><body>' +
+      '<div id="sw-nav"></div><main></main><div id="sw-foot"></div>' +
+      '<script src="' + R.BOOTSTRAP_JS + '"><\/script><script>' + wbEditorJs() + '<\/script></body></html>';
+  }
+  function wbMainHtml() {
+    if (!WB.blocks.length) return '<div class="sw-ed-empty"><p class="fs-5">This page is empty.</p><button class="sw-ed-add" data-at="0">+ Add your first section</button></div>';
+    var out = "";
+    WB.blocks.forEach(function (b, i) {
+      out += '<div class="sw-ed-block' + (i === WB.sel ? " sw-sel" : "") + '" data-bi="' + i + '">' +
+        (i === 0 ? '<button class="sw-ed-add sw-ed-add-top" data-at="0" title="Add above">+</button>' : "") +
+        '<div class="sw-ed-tools"><button data-act="up" title="Move up">&#8593;</button><button data-act="down" title="Move down">&#8595;</button><button data-act="dup" title="Duplicate">&#10697;</button><button data-act="settings" title="Settings">&#9881;</button><button data-act="del" title="Delete">&#10005;</button></div>' +
+        WB.R.renderBlock(b) +
+        '<button class="sw-ed-add" data-at="' + (i + 1) + '" title="Add section">+</button></div>';
+    });
+    return out;
+  }
+  function wbFrame() { return document.getElementById("wb-frame"); }
+  function wbInitFrame() {
+    var ifr = wbFrame(); if (!ifr) return;
+    ifr.onload = function () { wbRepaint(); };
+    ifr.srcdoc = wbBuildDoc();
+  }
+  function wbRepaint() {
+    var ifr = wbFrame(); if (!ifr || !ifr.contentDocument) return;
+    var doc = ifr.contentDocument, site = WB.site;
+    var page = { path: WB.page.path || "/", title: WB.page.title || site.name, content: WB.blocks, meta: WB.page.meta || {} };
+    var st = doc.getElementById("sw-theme"); if (st) st.textContent = WB.R.themeCss(site.theme || {}) + wbEditorCss();
+    var navEl = doc.getElementById("sw-nav"); if (navEl) navEl.innerHTML = WB.R.navHTML(site, page, WB.nav || []);
+    var foot = doc.getElementById("sw-foot"); if (foot) foot.innerHTML = WB.R.footerHTML(site, WB.nav || []);
+    var m = doc.querySelector("main"); if (m) m.innerHTML = wbMainHtml();
+    try { if (ifr.contentWindow.__swWire) ifr.contentWindow.__swWire(); } catch (e) { }
+  }
+  function wbHighlight() {
+    var ifr = wbFrame(); if (!ifr || !ifr.contentDocument) return;
+    ifr.contentDocument.querySelectorAll(".sw-ed-block").forEach(function (b) { b.classList.toggle("sw-sel", +b.dataset.bi === WB.sel); });
+  }
+  var _wbT = null;
+  function wbLive() { WB.dirty = true; wbDirtyBadge(); clearTimeout(_wbT); _wbT = setTimeout(wbRepaint, 140); }
+  function wbDirtyBadge() { var b = document.getElementById("wb-save"); if (b && WB.dirty && b.textContent.indexOf("*") < 0) b.textContent = "Save *"; }
+  function wbTool(i, act) {
+    if (act === "up" && i > 0) { var t = WB.blocks[i]; WB.blocks[i] = WB.blocks[i - 1]; WB.blocks[i - 1] = t; WB.sel = i - 1; }
+    else if (act === "down" && i < WB.blocks.length - 1) { var t2 = WB.blocks[i]; WB.blocks[i] = WB.blocks[i + 1]; WB.blocks[i + 1] = t2; WB.sel = i + 1; }
+    else if (act === "dup") { WB.blocks.splice(i + 1, 0, JSON.parse(JSON.stringify(WB.blocks[i]))); WB.sel = i + 1; }
+    else if (act === "del") { WB.blocks.splice(i, 1); WB.sel = null; }
+    else if (act === "settings") { WB.sel = i; wbPaintPanel(); wbHighlight(); return; }
+    WB.dirty = true; wbDirtyBadge(); wbRepaint(); wbPaintPanel();
+  }
+  function wbGallery(at) {
+    var groups = {}; WEB_SECTIONS.forEach(function (s) { (groups[s[3]] = groups[s[3]] || []).push(s); });
+    var body = Object.keys(groups).map(function (g) {
+      return '<div class="wb-sec">' + esc(g) + '</div><div class="wb-gal">' + groups[g].map(function (s) { return '<button data-type="' + s[0] + '"><i class="bi ' + s[2] + '"></i>' + esc(s[1]) + '</button>'; }).join("") + '</div>';
+    }).join("");
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>Add a section</h3><div class="form" style="max-height:60vh;overflow:auto">' + body + '</div><div class="foot"><button class="btn" id="wg-x">Cancel</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector("#wg-x").onclick = function () { m.remove(); };
+    m.querySelectorAll(".wb-gal button").forEach(function (b) {
+      b.onclick = function () {
+        var type = b.dataset.type, def = JSON.parse(JSON.stringify(WEB_DEFAULTS[type] || {}));
+        WB.blocks.splice(at, 0, { type: type, props: def }); WB.sel = at; WB.dirty = true;
+        m.remove(); wbRepaint(); wbPaintPanel(); wbDirtyBadge();
+      };
+    });
+  }
+  // ---- settings panel ----
+  function wbInput(val, attrs, t, o) {
+    if (t === "area") return '<textarea class="wb-i" ' + attrs + ' rows="2">' + esc(val || "") + "</textarea>";
+    if (t === "lines") return '<textarea class="wb-i" ' + attrs + ' data-lines="1" rows="3">' + esc(Array.isArray(val) ? val.join("\n") : (val || "")) + "</textarea>";
+    if (t === "sel") return '<select class="wb-i" ' + attrs + ">" + (o || []).map(function (x) { return '<option value="' + esc(x) + '"' + (String(val == null ? "" : val) === String(x) ? " selected" : "") + ">" + esc(x === "" ? "(default)" : x) + "</option>"; }).join("") + "</select>";
+    if (t === "bool") return '<label class="wb-bool"><input type="checkbox" class="wb-i" ' + attrs + (val ? " checked" : "") + "> Yes</label>";
+    return '<input class="wb-i" ' + attrs + ' value="' + esc(val == null ? "" : val) + '">';
+  }
+  function wbField(props, f) {
+    if (f.t === "list") {
+      var items = Array.isArray(props[f.k]) ? props[f.k] : [];
+      var rows = items.map(function (it, ii) {
+        var subs = f.of.map(function (sub) { return '<div class="wb-fld"><span>' + esc(sub.l) + "</span>" + wbInput(it[sub.k], 'data-li="' + ii + '" data-lk="' + sub.k + '" data-t="' + sub.t + '"', sub.t, sub.o) + "</div>"; }).join("");
+        return '<div class="wb-li" data-li="' + ii + '"><div class="wb-li-top"><span>#' + (ii + 1) + '</span><span class="sp"></span><button data-liact="up" data-li="' + ii + '">&#8593;</button><button data-liact="down" data-li="' + ii + '">&#8595;</button><button data-liact="del" data-li="' + ii + '">&#10005;</button></div>' + subs + "</div>";
+      }).join("");
+      return '<div class="wb-fld"><span>' + esc(f.l) + '</span><div class="wb-list" data-list="' + f.k + '">' + rows + '<button class="wb-li-add" data-addlist="' + f.k + '">+ Add ' + esc(f.l.replace(/s$/, "").toLowerCase()) + "</button></div></div>";
+    }
+    return '<div class="wb-fld"><span>' + esc(f.l) + "</span>" + wbInput(props[f.k], 'data-k="' + f.k + '" data-t="' + f.t + '"', f.t, f.o) + "</div>";
+  }
+  function wbReadVal(el) {
+    var t = el.dataset.t;
+    if (t === "bool") return el.checked;
+    if (t === "lines") return el.value.split("\n").map(function (x) { return x.trim(); }).filter(Boolean);
+    return el.value;
+  }
+  function wbPaintPanel() {
+    var el = document.getElementById("wb-panel"); if (!el) return;
+    if (WB.sel == null || !WB.blocks[WB.sel]) { el.innerHTML = wbPagePanel(); wireWbPage(); return; }
+    var b = WB.blocks[WB.sel], fields = WEB_FIELDS[b.type] || [];
+    var label = (WEB_SECTIONS.filter(function (s) { return s[0] === b.type; })[0] || [b.type, b.type])[1];
+    el.innerHTML = '<div class="wb-p-head"><b>' + esc(label) + '</b><button class="wb-p-close" id="wb-done">Done</button></div>' +
+      '<div class="wb-p-body">' + (fields.length ? fields.map(function (f) { return wbField(b.props, f); }).join("") : '<div class="muted" style="font-size:13px">Edit this section right on the page.</div>') + "</div>" +
+      '<div class="wb-p-foot"><button class="wb-mv" data-d="-1">&#8593; Up</button><button class="wb-mv" data-d="1">&#8595; Down</button><button id="wb-dup2">Duplicate</button><button class="del" id="wb-del2">Delete</button></div>';
+    wireWbPanel();
+  }
+  function wireWbPanel() {
+    var el = document.getElementById("wb-panel"), b = WB.blocks[WB.sel];
+    el.querySelector("#wb-done").onclick = function () { WB.sel = null; wbPaintPanel(); wbHighlight(); };
+    el.querySelectorAll("#wb-panel .wb-mv, .wb-mv").forEach(function () { });
+    el.querySelectorAll(".wb-mv").forEach(function (btn) { btn.onclick = function () { wbTool(WB.sel, btn.dataset.d === "-1" ? "up" : "down"); }; });
+    el.querySelector("#wb-dup2").onclick = function () { wbTool(WB.sel, "dup"); };
+    el.querySelector("#wb-del2").onclick = function () { wbTool(WB.sel, "del"); };
+    function onInput(e) {
+      var el2 = e.target; if (!el2.classList.contains("wb-i")) return;
+      if (el2.dataset.k) { b.props[el2.dataset.k] = wbReadVal(el2); wbLive(); }
+      else if (el2.dataset.lk) { var arr2 = b.props[wbListKeyOf(el2)] = b.props[wbListKeyOf(el2)] || []; var it = arr2[+el2.dataset.li] || (arr2[+el2.dataset.li] = {}); it[el2.dataset.lk] = wbReadVal(el2); wbLive(); }
+    }
+    el.addEventListener("input", onInput);
+    el.addEventListener("change", onInput);
+    el.querySelectorAll("[data-liact]").forEach(function (btn) {
+      btn.onclick = function () {
+        var listKey = btn.closest(".wb-list").dataset.list, arr2 = b.props[listKey] || [], ii = +btn.dataset.li, act = btn.dataset.liact;
+        if (act === "del") arr2.splice(ii, 1);
+        else if (act === "up" && ii > 0) { var t = arr2[ii]; arr2[ii] = arr2[ii - 1]; arr2[ii - 1] = t; }
+        else if (act === "down" && ii < arr2.length - 1) { var t2 = arr2[ii]; arr2[ii] = arr2[ii + 1]; arr2[ii + 1] = t2; }
+        b.props[listKey] = arr2; wbLive(); wbPaintPanel();
+      };
+    });
+    el.querySelectorAll("[data-addlist]").forEach(function (btn) {
+      btn.onclick = function () { var k = btn.dataset.addlist; b.props[k] = b.props[k] || []; b.props[k].push({}); wbLive(); wbPaintPanel(); };
+    });
+  }
+  function wbListKeyOf(el) { var w = el.closest(".wb-list"); return w ? w.dataset.list : "items"; }
+  function wbSyncPanelField(prop, val) {
+    var el = document.getElementById("wb-panel"); if (!el) return;
+    var inp = el.querySelector('.wb-i[data-k="' + prop + '"]'); if (inp && inp.value !== val) inp.value = val;
+  }
+  function wbPagePanel() {
+    var th = WB.site.theme || {};
+    var fonts = ["Inter", "Onest", "Poppins", "Roboto", "Montserrat", "Playfair Display", "Lora", "Space Grotesk"];
+    return '<div class="wb-p-head"><b>Page &amp; design</b></div><div class="wb-p-body">' +
+      '<div class="wb-fld"><span>Page title</span><input class="wb-i" id="wp2-title" value="' + esc(WB.page.title) + '"></div>' +
+      '<div class="wb-fld"><span>Path</span><input class="wb-i" id="wp2-path" value="' + esc(WB.page.path) + '" placeholder="/about"></div>' +
+      '<div class="wb-fld"><span>SEO description</span><textarea class="wb-i" id="wp2-desc" rows="2">' + esc((WB.page.meta || {}).description || "") + '</textarea></div>' +
+      '<div class="wb-fld"><span>Page published</span><select class="wb-i" id="wp2-pub"><option value="0"' + (!WB.page.is_published ? " selected" : "") + '>Draft</option><option value="1"' + (WB.page.is_published ? " selected" : "") + '>Published</option></select></div>' +
+      '<div class="wb-sec">Design (whole site)</div>' +
+      '<div class="wb-fld"><span>Brand colour</span><input class="wb-i" id="wp2-pri" type="color" value="' + esc(th.primary || "#2f6bff") + '" style="height:34px"></div>' +
+      '<div class="wb-fld"><span>Background</span><input class="wb-i" id="wp2-bg" type="color" value="' + esc(th.bg || "#ffffff") + '" style="height:34px"></div>' +
+      '<div class="wb-fld"><span>Font</span><select class="wb-i" id="wp2-font">' + fonts.map(function (f) { return '<option' + ((th.font || "Inter") === f ? " selected" : "") + ">" + f + "</option>"; }).join("") + '</select></div>' +
+      '<div class="wb-fld"><span>Navbar</span><select class="wb-i" id="wp2-nav"><option value="light"' + (th.navbar !== "dark" ? " selected" : "") + '>Light</option><option value="dark"' + (th.navbar === "dark" ? " selected" : "") + '>Dark</option></select></div>' +
+      '</div><div class="wb-p-foot muted" style="font-size:12px">Tip: click any section on the page to edit it, or use the + buttons to add one.</div>';
+  }
+  function wireWbPage() {
+    function g(id) { return document.getElementById(id); }
+    if (g("wp2-title")) g("wp2-title").oninput = function () { WB.page.title = this.value; var t = g("wb-title"); if (t) t.value = this.value; wbLive(); };
+    if (g("wp2-path")) g("wp2-path").oninput = function () { WB.page.path = this.value; var p = g("wb-path"); if (p) p.textContent = this.value; WB.dirty = true; wbDirtyBadge(); };
+    if (g("wp2-desc")) g("wp2-desc").oninput = function () { WB.page.meta = WB.page.meta || {}; WB.page.meta.description = this.value; WB.dirty = true; wbDirtyBadge(); };
+    if (g("wp2-pub")) g("wp2-pub").onchange = function () { WB.page.is_published = this.value === "1"; WB.dirty = true; wbDirtyBadge(); };
+    function theme(k, v) { WB.site.theme = WB.site.theme || {}; WB.site.theme[k] = v; wbLive(); }
+    if (g("wp2-pri")) g("wp2-pri").oninput = function () { theme("primary", this.value); };
+    if (g("wp2-bg")) g("wp2-bg").oninput = function () { theme("bg", this.value); };
+    if (g("wp2-font")) g("wp2-font").onchange = function () { theme("font", this.value); wbInitFrame(); };
+    if (g("wp2-nav")) g("wp2-nav").onchange = function () { theme("navbar", this.value); };
+  }
+  async function wbSave(alsoSite) {
+    var row = { title: WB.page.title || null, path: WB.page.path || "/", meta: WB.page.meta || {}, content: WB.blocks, is_published: !!WB.page.is_published, updated_at: new Date().toISOString() };
+    var pid = WB.pageId;
+    if (WB.pageId === "new") { row.company_id = S.company.id; row.site_id = WB.siteId; var ins = await sb.from("site_pages").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } pid = ins.data.id; WB.pageId = pid; }
+    else { var up = await sb.from("site_pages").update(row).eq("id", WB.pageId); if (up.error) { toast(errMsg(up.error)); return null; } }
+    var siteRow = { theme: WB.site.theme || {} }; if (alsoSite) siteRow.is_published = true;
+    await sb.from("sites").update(siteRow).eq("id", WB.siteId);
+    WB.dirty = false; var sb2 = document.getElementById("wb-save"); if (sb2) sb2.textContent = "Save";
+    return pid;
   }
 
   // ============================ TRACEABILITY (take-off -> GL) ============================
