@@ -11125,6 +11125,7 @@
       fld("Industry", industrySelectHTML("cp-industry", p.industry || ""), "Your line of business.") +
       '</div><div>' +
       fld("Fiscal year starts", '<select id="cp-fystart">' + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(function (nm, ix) { var v = String(ix + 1); return '<option value="' + v + '"' + (String(p.fiscal_year_start || "1") === v ? " selected" : "") + '>' + nm + '</option>'; }).join("") + '</select>', "The month your financial year begins - drives report periods and year-end.") +
+      fld("Default sales markup %", '<div style="display:flex;gap:8px;align-items:center"><input id="cp-markup" type="number" min="0" step="1" style="max-width:110px" value="' + esc(String(p.default_markup_pct != null ? p.default_markup_pct : 30)) + '"><button type="button" class="o-filtbtn" id="cp-markup-apply">Apply to product prices</button></div>', "Selling price = cost x (1 + markup). Apply recomputes every product's sale price from its cost.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
       fld("Address line 1", '<input id="cp-addr" value="' + esc(p.address || "") + '" placeholder="Street, building">') +
@@ -11208,11 +11209,22 @@
     });
     document.querySelectorAll("#o-body input, #o-body textarea, #o-body select").forEach(function (el) { el.addEventListener("input", paintPreview); el.addEventListener("change", paintPreview); });
     document.querySelectorAll(".cp-tpl").forEach(function (l) { l.addEventListener("click", function () { setTimeout(paintPreview, 0); }); });
+    var mkBtn = document.getElementById("cp-markup-apply");
+    if (mkBtn) mkBtn.onclick = async function () {
+      var pct = Number(gv("cp-markup"));
+      if (!(pct >= 0)) { toast("Enter a markup %"); return; }
+      if (!confirm("Set every product's sale price to cost + " + pct + "%? This overwrites current sale prices for items that have a cost.")) return;
+      mkBtn.disabled = true; var was = mkBtn.textContent; mkBtn.textContent = "Applying...";
+      var r = await sb.rpc("apply_catalog_markup", { p_company: S.company.id, p_pct: pct });
+      mkBtn.disabled = false; mkBtn.textContent = was;
+      if (r.error) { toast("Could not apply: " + errMsg(r.error)); return; }
+      toast((r.data || 0) + " product price(s) set at cost + " + pct + "%. Save to keep this as the default.");
+    };
     document.getElementById("cp-save").onclick = async function () {
       if (!gv("cp-city")) { toast("Enter the city"); return; }
       var sv = document.getElementById("cp-save"); sv.disabled = true;
       var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
-      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
