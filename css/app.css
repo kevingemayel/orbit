@@ -1679,3 +1679,6 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .scan-wrap{position:relative;width:100%;aspect-ratio:4/3;background:#000;border-radius:10px;overflow:hidden;margin:4px 0}
 .scan-wrap video{width:100%;height:100%;object-fit:cover;display:block}
 .scan-frame{position:absolute;inset:16% 18%;border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 100vmax rgba(0,0,0,.28)}
+/* Plot inline callout: a small note block on property screens */
+.o-note{background:var(--panel2,#f4f2ec);border:1px solid var(--line);border-radius:9px;padding:9px 12px;font-size:13px;color:var(--ink2)}
+.o-note.warn{background:var(--bad-soft,#fbe7e3);border-color:var(--bad,#c0392b);color:var(--bad,#c0392b)}

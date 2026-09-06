@@ -1034,6 +1034,16 @@
         { label: "Configuration", items: [["Services", "appt.services"], ["Availability", "appt.avail"], ["Settings", "appt.settings"]] }
       ]
     },
+    plot: {
+      name: "Property", icon: "⌂", color: "#0ea66f", color2: "#0b8659", home: "plot.dash",
+      menus: [
+        { label: "Overview", action: "plot.dash" },
+        { label: "Buildings", action: "plot.buildings" },
+        { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"]] },
+        { label: "Money", items: [["Charges", "plot.charges"], ["Billing runs", "plot.runs"], ["Suppliers", "vend"]] },
+        { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"]] }
+      ]
+    },
     help: {
       name: "Help", icon: "?", color: "#0e7490", color2: "#155e63", home: "help.overview",
       menus: HELP_MANUAL.map(function (s) { return { label: s.title, action: "help." + s.key }; })
@@ -1067,7 +1077,8 @@
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
     "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
-    "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint"
+    "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint",
+    "plot.dash": "plot", "plot.buildings": "plot", "plot.units": "plot", "plot.owners": "plot", "plot.tenancies": "plot", "plot.charges": "plot", "plot.runs": "plot", "plot.meetings": "plot", "plot.resolutions": "plot", "plot.notices": "plot", "plot.suggestions": "plot"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // Per-app help: instead of one big standalone Help app, every app carries its own
@@ -2662,6 +2673,17 @@
       case "appt.services": return renderList(cfgApptServices());
       case "appt.avail": return renderApptAvailability();
       case "appt.settings": return renderApptSettings();
+      case "plot.dash": return renderPlotDash();
+      case "plot.buildings": return renderList(cfgProperties());
+      case "plot.units": return renderList(cfgPropertyUnits());
+      case "plot.owners": return renderList(cfgOwnerships());
+      case "plot.tenancies": return renderList(cfgTenancies());
+      case "plot.charges": return renderList(cfgPropertyCharges());
+      case "plot.runs": return renderPlotRuns();
+      case "plot.meetings": return renderList(cfgPlotMeetings());
+      case "plot.resolutions": return renderList(cfgPlotResolutions());
+      case "plot.notices": return renderList(cfgPlotNotices());
+      case "plot.suggestions": return renderList(cfgPlotSuggestions());
       case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -20096,6 +20118,550 @@
       }
       _apptSet = null; await apptLoadSettings(true); toast("Saved"); goApp("appt.cal");
     };
+  }
+
+  // ==========================================================================
+  //  PLOT - property management (buildings, units, owners, charges, governance)
+  //  Building = a record inside the company; money posts into Orbit's ledger;
+  //  owners/tenants are partners. See supabase/119-121 and memory plot-charge-model.
+  // ==========================================================================
+  var PLOT_CAT = ["concierge", "electricity", "generator", "water", "elevator", "cleaning", "maintenance", "security", "salary", "insurance", "other"];
+  function plotCatLabel(c) { return ({ concierge: "Concierge", electricity: "Electricity", generator: "Generator", water: "Water", elevator: "Elevator", cleaning: "Cleaning", maintenance: "Maintenance", security: "Security", salary: "Salary", insurance: "Insurance", other: "Other" })[c] || (c || "Other"); }
+  function plotUnitKind(k) { return ({ apartment: "Apartment", parking: "Parking", storage: "Storage", shop: "Shop", office: "Office", common: "Common" })[k] || (k || "Apartment"); }
+
+  function plotSel(id, list, cur, blank, labelFn) {
+    return '<select id="' + id + '">' + (blank != null ? '<option value="">' + esc(blank) + '</option>' : '') +
+      list.map(function (x) { return '<option value="' + esc(x.id) + '"' + (cur === x.id ? " selected" : "") + '>' + esc(labelFn ? labelFn(x) : x.name) + '</option>'; }).join("") + '</select>';
+  }
+  // Small modal helper matching the app's div.modal.on / .sheet / .form / .foot pattern.
+  function plotModal(title, inner, onSave, wide) {
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"' + (wide ? ' style="max-width:720px"' : '') + '><h3>' + esc(title) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' + inner +
+      '</div><div class="foot"><button class="btn" data-x>Cancel</button><button class="btn pri" data-s style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector("[data-x]").onclick = function () { m.remove(); };
+    m.querySelector("[data-s]").onclick = function () { onSave(m); };
+    return m;
+  }
+  function plotPartners() { return sb.from("partners").select("id,name,is_customer").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); }
+  function plotProps() { return sb.from("properties").select("*").eq("company_id", S.company.id).eq("is_active", true).order("name").then(function (r) { return r.data || []; }); }
+
+  var _plotProp = null;   // currently selected building id
+  function plotGetProp() { if (!_plotProp) { try { _plotProp = localStorage.getItem("orbit_plot_prop_" + S.company.id) || null; } catch (e) { } } return _plotProp; }
+  function plotSetProp(id) { _plotProp = id || null; try { localStorage.setItem("orbit_plot_prop_" + S.company.id, id || ""); } catch (e) { } }
+
+  // ---- The charge split, ported from Plot's budgetCalc (memory plot-charge-model) ----
+  function plotNormMonthly(item) { var a = Number(item.amount || 0); return item.frequency === "yearly" ? a / 12 : item.frequency === "quarterly" ? a / 3 : a; }
+  function plotBudgetCalc(charges, units, reservePct) {
+    var reserve = Number(reservePct || 0);
+    var items = charges.filter(function (r) { return r.is_active !== false; });
+    var base = items.reduce(function (s, r) { return s + plotNormMonthly(r); }, 0);
+    var totalShares = units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
+    var blkGen = {}, blkBlk = {}, blkCount = {};
+    units.forEach(function (u) { var b = (u.block || "").trim(); blkGen[b] = (blkGen[b] || 0) + Number(u.shares || 0); blkBlk[b] = (blkBlk[b] || 0) + Number(u.block_shares || 0); blkCount[b] = (blkCount[b] || 0) + 1; });
+    var rows = units.map(function (u) {
+      var share = Number(u.shares || 0), ub = (u.block || "").trim(), fee = 0;
+      items.forEach(function (r) {
+        var rb = (r.block || "").trim(), monthly = plotNormMonthly(r);
+        if (!rb) fee += totalShares > 0 ? monthly * (share / totalShares) : (units.length ? monthly / units.length : 0);
+        else if (rb === ub) {
+          var useBlk = (blkBlk[rb] || 0) > 0, num = useBlk ? Number(u.block_shares || 0) : share, den = useBlk ? blkBlk[rb] : (blkGen[rb] || 0);
+          fee += den > 0 ? monthly * (num / den) : (blkCount[rb] ? monthly / blkCount[rb] : 0);
+        }
+      });
+      return { unit: u, share: share, fee: fee * (1 + reserve / 100) };
+    });
+    return { base: base, reserve: reserve, required: base * (1 + reserve / 100), totalShares: totalShares, rows: rows };
+  }
+
+  // ---- Overview ----
+  async function renderPlotDash() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Property") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var props = await plotProps();
+    var body = document.getElementById("o-body");
+    if (!props.length) {
+      body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div><div class="o-empty2-h">Add a building, then its units and owners. Charges you set are split across owners by their share, and each building gets its own profit &amp; loss in Accounting.</div><button class="o-new" id="pl-first">Add a building</button></div>';
+      document.getElementById("pl-first").onclick = function () { openPropertyModal(null); };
+      return;
+    }
+    var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) { cur = props[0].id; plotSetProp(cur); }
+    var prop = props.filter(function (p) { return p.id === cur; })[0];
+    var picker = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px"><label style="font-weight:600">Building</label><select id="pl-prop" style="max-width:320px">' +
+      props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + (p.city ? " - " + esc(p.city) : "") + '</option>'; }).join("") + '</select><span class="gap" style="flex:1"></span><button class="o-filtbtn" id="pl-edit">Edit building</button></div>';
+
+    var units = (await sb.from("property_units").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
+    var charges = (await sb.from("property_charges").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
+    var invs = (await sb.from("invoices").select("amount_total,amount_residual,state,move_type").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_invoice")).data || [];
+    var owners = (await sb.from("property_ownerships").select("id").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }).concat(["00000000-0000-0000-0000-000000000000"]))).data || [];
+    var billed = invs.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+    var due = invs.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    var b = plotBudgetCalc(charges, units, prop.reserve_percent);
+    var sug = (await sb.from("property_suggestions").select("id").eq("property_id", cur).eq("status", "new")).data || [];
+    var sharesOk = Math.abs(b.totalShares - Number(prop.shares_total || 1000)) < 0.5 || b.totalShares === 0;
+
+    body.innerHTML = picker +
+      '<div class="o-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px">' +
+      plotStat("Units", units.length, "") +
+      plotStat("Owners on file", owners.length, "") +
+      plotStat("Monthly charges", moneyC(b.required), "billed to owners by share") +
+      plotStat("Billed to date", moneyC(billed), "") +
+      plotStat("Outstanding", moneyC(due), due > 0 ? "warn" : "") +
+      plotStat("New suggestions", sug.length, sug.length ? "warn" : "") +
+      '</div>' +
+      (sharesOk ? "" : '<div class="o-note warn" style="margin:8px 0">Unit shares add up to ' + b.totalShares + ', but this building is set to a total of ' + esc(prop.shares_total) + '. Charges still split proportionally, but the total looks off - check the units.</div>') +
+      '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">' +
+      '<button class="o-new" id="pl-gen">Generate this period\'s charges</button>' +
+      '<button class="o-filtbtn" id="pl-units">Units</button><button class="o-filtbtn" id="pl-charges">Charges</button><button class="o-filtbtn" id="pl-meet">Meetings</button>' +
+      '</div>';
+    document.getElementById("pl-prop").onchange = function () { plotSetProp(this.value); renderPlotDash(); };
+    document.getElementById("pl-edit").onclick = function () { openPropertyModal(prop); };
+    document.getElementById("pl-gen").onclick = function () { openChargeRunModal(prop); };
+    document.getElementById("pl-units").onclick = function () { go("plot.units"); };
+    document.getElementById("pl-charges").onclick = function () { go("plot.charges"); };
+    document.getElementById("pl-meet").onclick = function () { go("plot.meetings"); };
+  }
+  function plotStat(label, val, flag) {
+    var col = flag === "warn" ? "var(--bad)" : "var(--ink)";
+    return '<div class="card" style="padding:14px 16px"><div class="muted" style="font-size:12.5px">' + esc(label) + '</div><div style="font-size:24px;font-weight:700;color:' + col + '">' + esc(val) + '</div>' + (flag && flag !== "warn" ? '<div class="muted" style="font-size:11.5px">' + esc(flag) + '</div>' : '') + '</div>';
+  }
+
+  // ---- Buildings ----
+  function cfgProperties() {
+    return {
+      title: "Buildings", editTable: "properties", archiveField: "is_active",
+      fetch: function () { return sb.from("properties").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (p) { return (p.name || "") + " " + (p.city || "") + " " + (p.code || ""); },
+      columns: [
+        { label: "Building", get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.code ? ' <span class="muted">' + esc(p.code) + '</span>' : ''); } },
+        { label: "Type", get: function (p) { return esc(({ building: "Building", compound: "Compound", villa: "Villa", tower: "Tower", mixed: "Mixed" })[p.kind] || p.kind || ""); } },
+        { label: "City", get: function (p) { return esc(p.city || ""); } },
+        { label: "Shares total", num: true, get: function (p) { return esc(p.shares_total || ""); } },
+        { label: "Reserve", num: true, get: function (p) { return (Number(p.reserve_percent || 0)) + "%"; } }
+      ],
+      emptyHint: "Each building is billed, budgeted and reported on its own. Add one, then its units and owners.",
+      onNew: function () { openPropertyModal(null); },
+      onOpen: function (p) { openPropertyModal(p); }
+    };
+  }
+  async function openPropertyModal(p) {
+    p = p || {};
+    var partners = await plotPartners();
+    var accts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("type_code", "income").order("code")).data || [];
+    var inner =
+      '<div><label>Name</label><input id="pp-name" value="' + esc(p.name || "") + '" placeholder="e.g. Adma 92"></div>' +
+      '<div class="row2"><div><label>Code</label><input id="pp-code" value="' + esc(p.code || "") + '"></div><div><label>Type</label><select id="pp-kind">' +
+      ["building", "compound", "villa", "tower", "mixed"].map(function (k) { return '<option value="' + k + '"' + (p.kind === k ? " selected" : "") + '>' + k.charAt(0).toUpperCase() + k.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>City</label><input id="pp-city" value="' + esc(p.city || "") + '"></div><div><label>Country</label><input id="pp-country" value="' + esc(p.country || "") + '"></div></div>' +
+      '<div><label>Address</label><input id="pp-addr" value="' + esc(p.address || "") + '"></div>' +
+      '<div class="row2"><div><label>Shares total (milliemes)</label><input id="pp-shares" type="number" step="1" value="' + (p.shares_total || 1000) + '"></div><div><label>Reserve fund uplift %</label><input id="pp-reserve" type="number" step="0.5" value="' + (Number(p.reserve_percent || 0)) + '"></div></div>' +
+      '<div class="row2"><div><label>Manager (contact)</label>' + plotSel("pp-mgr", partners, p.manager_partner_id, "(none)") + '</div><div><label>Charges income account</label>' + plotSel("pp-inc", accts, p.income_account_id, "(default)", function (a) { return (a.code ? a.code + " " : "") + a.name; }) + '</div></div>';
+    var m = plotModal(p.id ? "Edit building" : "New building", inner, async function () {
+      var name = gv("pp-name"); if (!name) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null };
+      var r = p.id ? await sb.from("properties").update(row).eq("id", p.id) : await sb.from("properties").insert(row).select("id").single();
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      if (!p.id && r.data) plotSetProp(r.data.id);
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (p.id) plotAddDelete(m, "properties", p.id, p.name);
+  }
+
+  // ---- Units ----
+  function cfgPropertyUnits() {
+    return {
+      title: "Units", editTable: "property_units", archiveField: "is_active",
+      fetch: async function () {
+        var rows = (await sb.from("property_units").select("*, properties(name)").eq("company_id", S.company.id).order("code")).data || [];
+        return rows;
+      },
+      searchText: function (u) { return (u.code || "") + " " + (u.block || "") + " " + ((u.properties && u.properties.name) || ""); },
+      columns: [
+        { label: "Unit", get: function (u) { return '<b>' + esc(u.code) + '</b>'; } },
+        { label: "Building", get: function (u) { return esc((u.properties && u.properties.name) || ""); } },
+        { label: "Type", get: function (u) { return esc(plotUnitKind(u.kind)); } },
+        { label: "Block", get: function (u) { return esc(u.block || ""); } },
+        { label: "Floor", get: function (u) { return esc(u.floor || ""); } },
+        { label: "Area m2", num: true, get: function (u) { return u.area_m2 != null ? esc(u.area_m2) : ""; } },
+        { label: "Shares", num: true, get: function (u) { return esc(u.shares || 0); } }
+      ],
+      groupBy: [{ label: "Building", get: function (u) { return (u.properties && u.properties.name) || "-"; } }, { label: "Block", get: function (u) { return u.block || "(no block)"; } }, { label: "Type", get: function (u) { return plotUnitKind(u.kind); } }],
+      emptyHint: "Add each apartment, parking space or shop with its share of the building. Shares drive how charges are split.",
+      onNew: function () { openUnitModal(null); },
+      onOpen: function (u) { openUnitModal(u); }
+    };
+  }
+  async function openUnitModal(u) {
+    u = u || {};
+    var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = u.property_id || plotGetProp() || props[0].id;
+    var inner =
+      '<div class="row2"><div><label>Building</label>' + plotSel("pu-prop", props, pcur, null) + '</div><div><label>Unit code</label><input id="pu-code" value="' + esc(u.code || "") + '" placeholder="A-12"></div></div>' +
+      '<div class="row2"><div><label>Type</label><select id="pu-kind">' + ["apartment", "parking", "storage", "shop", "office", "common"].map(function (k) { return '<option value="' + k + '"' + (u.kind === k ? " selected" : "") + '>' + plotUnitKind(k) + '</option>'; }).join("") + '</select></div><div><label>Floor</label><input id="pu-floor" value="' + esc(u.floor || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Block / entrance</label><input id="pu-block" value="' + esc(u.block || "") + '" placeholder="optional, e.g. A"></div><div><label>Area (m2)</label><input id="pu-area" type="number" step="0.1" value="' + (u.area_m2 != null ? u.area_m2 : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Shares (milliemes)</label><input id="pu-shares" type="number" step="0.01" value="' + (u.shares != null ? u.shares : "") + '"></div><div><label>Block shares</label><input id="pu-bshares" type="number" step="0.01" value="' + (u.block_shares != null ? u.block_shares : "") + '" placeholder="only if split within a block"></div></div>' +
+      '<div><label>Bedrooms</label><input id="pu-beds" type="number" step="1" value="' + (u.bedrooms != null ? u.bedrooms : "") + '"></div>';
+    var m = plotModal(u.id ? "Edit unit" : "New unit", inner, async function () {
+      var code = gv("pu-code"); if (!code) { toast("Enter a unit code"); return; }
+      var row = { company_id: S.company.id, property_id: gv("pu-prop"), code: code, kind: gv("pu-kind"), floor: gv("pu-floor") || null, block: gv("pu-block") || null, area_m2: gv("pu-area") ? Number(gv("pu-area")) : null, shares: Number(gv("pu-shares")) || 0, block_shares: Number(gv("pu-bshares")) || 0, bedrooms: gv("pu-beds") ? parseInt(gv("pu-beds"), 10) : null };
+      var r = u.id ? await sb.from("property_units").update(row).eq("id", u.id) : await sb.from("property_units").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (u.id) plotAddDelete(m, "property_units", u.id, u.code);
+  }
+
+  // ---- Ownerships ----
+  function cfgOwnerships() {
+    return {
+      title: "Owners", editTable: "property_ownerships",
+      fetch: function () { return sb.from("property_ownerships").select("*, property_units(code, properties(name)), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (o) { return ((o.partners && o.partners.name) || "") + " " + ((o.property_units && o.property_units.code) || ""); },
+      columns: [
+        { label: "Owner", get: function (o) { return '<b>' + esc((o.partners && o.partners.name) || "-") + '</b>'; } },
+        { label: "Unit", get: function (o) { return esc((o.property_units && o.property_units.code) || ""); } },
+        { label: "Building", get: function (o) { return esc((o.property_units && o.property_units.properties && o.property_units.properties.name) || ""); } },
+        { label: "Share of unit", num: true, get: function (o) { return (Number(o.share_pct || 100)) + "%"; } },
+        { label: "Primary", get: function (o) { return o.is_primary ? '<span style="color:var(--good)">Billed</span>' : '<span class="muted">Co-owner</span>'; } }
+      ],
+      emptyHint: "Link each unit to its owner (a contact). The primary owner receives that unit's charges.",
+      onNew: function () { openOwnershipModal(null); },
+      onOpen: function (o) { openOwnershipModal(o); }
+    };
+  }
+  async function openOwnershipModal(o) {
+    o = o || {};
+    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var partners = await plotPartners();
+    var inner =
+      '<div><label>Unit</label>' + plotSel("po-unit", units, o.unit_id, "(pick a unit)", function (u) { return u.code + ((u.properties && u.properties.name) ? " - " + u.properties.name : ""); }) + '</div>' +
+      '<div><label>Owner (contact)</label>' + plotSel("po-partner", partners, o.partner_id, "(pick a contact)") + '<div class="muted" style="font-size:12px;margin-top:3px">Not in the list? Add them in Contacts first.</div></div>' +
+      '<div class="row2"><div><label>Share of this unit %</label><input id="po-pct" type="number" step="0.01" value="' + (o.share_pct != null ? o.share_pct : 100) + '"></div><div><label>Receives the charge?</label><select id="po-primary"><option value="1"' + (o.is_primary !== false ? " selected" : "") + '>Yes, bill this owner</option><option value="0"' + (o.is_primary === false ? " selected" : "") + '>No, co-owner</option></select></div></div>';
+    var m = plotModal(o.id ? "Edit owner" : "Add owner", inner, async function () {
+      var unit = gv("po-unit"), partner = gv("po-partner");
+      if (!unit || !partner) { toast("Pick a unit and a contact"); return; }
+      var row = { company_id: S.company.id, unit_id: unit, partner_id: partner, share_pct: Number(gv("po-pct")) || 100, is_primary: gv("po-primary") === "1" };
+      var r = o.id ? await sb.from("property_ownerships").update(row).eq("id", o.id) : await sb.from("property_ownerships").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    });
+    if (o.id) plotAddDelete(m, "property_ownerships", o.id, "this owner link");
+  }
+
+  // ---- Tenancies ----
+  function cfgTenancies() {
+    return {
+      title: "Tenancies", editTable: "property_tenancies",
+      fetch: function () { return sb.from("property_tenancies").select("*, property_units(code, properties(name)), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (tn) { return ((tn.partners && tn.partners.name) || "") + " " + ((tn.property_units && tn.property_units.code) || ""); },
+      columns: [
+        { label: "Tenant", get: function (tn) { return '<b>' + esc((tn.partners && tn.partners.name) || "-") + '</b>'; } },
+        { label: "Unit", get: function (tn) { return esc((tn.property_units && tn.property_units.code) || ""); } },
+        { label: "Rent", num: true, get: function (tn) { return moneyC(tn.rent_amount) + ' <span class="muted">/' + esc((tn.rent_period || "monthly").slice(0, 2)) + '</span>'; } },
+        { label: "From", get: function (tn) { return esc(tn.start_date || ""); } },
+        { label: "Status", get: function (tn) { return '<span class="badge ' + (tn.status === "active" ? "paid" : "unpaid") + '">' + esc(tn.status || "active") + '</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (tn) { return tn.status === "active"; } }, { label: "Ended", test: function (tn) { return tn.status !== "active"; } }],
+      emptyHint: "Record who rents a unit, so rent and notices go to the tenant while charges stay with the owner.",
+      onNew: function () { openTenancyModal(null); },
+      onOpen: function (tn) { openTenancyModal(tn); }
+    };
+  }
+  async function openTenancyModal(tn) {
+    tn = tn || {};
+    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var partners = await plotPartners();
+    var inner =
+      '<div class="row2"><div><label>Unit</label>' + plotSel("pt-unit", units, tn.unit_id, "(pick a unit)", function (u) { return u.code + ((u.properties && u.properties.name) ? " - " + u.properties.name : ""); }) + '</div><div><label>Tenant (contact)</label>' + plotSel("pt-partner", partners, tn.partner_id, "(pick a contact)") + '</div></div>' +
+      '<div class="row2"><div><label>Rent</label><input id="pt-rent" type="number" step="0.01" value="' + (tn.rent_amount != null ? tn.rent_amount : "") + '"></div><div><label>Period</label><select id="pt-period">' + ["monthly", "quarterly", "yearly"].map(function (f) { return '<option value="' + f + '"' + (tn.rent_period === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Deposit</label><input id="pt-dep" type="number" step="0.01" value="' + (tn.deposit != null ? tn.deposit : "") + '"></div><div><label>Status</label><select id="pt-status">' + ["active", "notice", "ended"].map(function (s) { return '<option value="' + s + '"' + (tn.status === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Start</label><input id="pt-start" type="date" value="' + esc(tn.start_date || "") + '"></div><div><label>End</label><input id="pt-end" type="date" value="' + esc(tn.end_date || "") + '"></div></div>';
+    var m = plotModal(tn.id ? "Edit tenancy" : "New tenancy", inner, async function () {
+      var unit = gv("pt-unit"), partner = gv("pt-partner");
+      if (!unit || !partner) { toast("Pick a unit and a contact"); return; }
+      var row = { company_id: S.company.id, unit_id: unit, partner_id: partner, rent_amount: Number(gv("pt-rent")) || 0, rent_period: gv("pt-period"), deposit: Number(gv("pt-dep")) || 0, status: gv("pt-status"), start_date: gv("pt-start") || null, end_date: gv("pt-end") || null };
+      var r = tn.id ? await sb.from("property_tenancies").update(row).eq("id", tn.id) : await sb.from("property_tenancies").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (tn.id) plotAddDelete(m, "property_tenancies", tn.id, "this tenancy");
+  }
+
+  // ---- Charges (recurring templates) ----
+  function cfgPropertyCharges() {
+    return {
+      title: "Charges", editTable: "property_charges", archiveField: "is_active",
+      fetch: function () { return sb.from("property_charges").select("*, properties(name), partners(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.name || "") + " " + plotCatLabel(c.category) + " " + ((c.properties && c.properties.name) || ""); },
+      columns: [
+        { label: "Charge", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
+        { label: "Building", get: function (c) { return esc((c.properties && c.properties.name) || ""); } },
+        { label: "Category", get: function (c) { return esc(plotCatLabel(c.category)); } },
+        { label: "Scope", get: function (c) { return c.block ? 'Block ' + esc(c.block) : '<span class="muted">Whole building</span>'; } },
+        { label: "Supplier", get: function (c) { return esc((c.partners && c.partners.name) || ""); } },
+        { label: "Frequency", get: function (c) { return esc(c.frequency || "monthly"); } },
+        { label: "Amount", num: true, get: function (c) { return moneyC(c.amount); } }
+      ],
+      groupBy: [{ label: "Building", get: function (c) { return (c.properties && c.properties.name) || "-"; } }, { label: "Category", get: function (c) { return plotCatLabel(c.category); } }],
+      emptyHint: "List the building's running costs (concierge, generator, cleaning...). Each period these are split across owners by share.",
+      onNew: function () { openChargeModal(null); },
+      onOpen: function (c) { openChargeModal(c); }
+    };
+  }
+  async function openChargeModal(c) {
+    c = c || {};
+    var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = c.property_id || plotGetProp() || props[0].id;
+    var partners = await plotPartners();
+    var blocks = [];
+    var inner =
+      '<div class="row2"><div><label>Building</label>' + plotSel("pc-prop", props, pcur, null) + '</div><div><label>Name</label><input id="pc-name" value="' + esc(c.name || "") + '" placeholder="e.g. Concierge salary"></div></div>' +
+      '<div class="row2"><div><label>Category</label><select id="pc-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (c.category === k ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select></div><div><label>Scope (block)</label><input id="pc-block" value="' + esc(c.block || "") + '" placeholder="blank = whole building"></div></div>' +
+      '<div class="row2"><div><label>Amount</label><input id="pc-amt" type="number" step="0.01" value="' + (c.amount != null ? c.amount : "") + '"></div><div><label>Frequency</label><select id="pc-freq">' + ["monthly", "quarterly", "yearly"].map(function (f) { return '<option value="' + f + '"' + (c.frequency === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Supplier (optional)</label>' + plotSel("pc-sup", partners, c.supplier_partner_id, "(none)") + '</div><div><label>Active</label><select id="pc-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>Off</option></select></div></div>';
+    var m = plotModal(c.id ? "Edit charge" : "New charge", inner, async function () {
+      var name = gv("pc-name"); if (!name) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, property_id: gv("pc-prop"), name: name, category: gv("pc-cat"), block: gv("pc-block") || null, amount: Number(gv("pc-amt")) || 0, frequency: gv("pc-freq"), supplier_partner_id: gv("pc-sup") || null, is_active: gv("pc-active") === "1" };
+      var r = c.id ? await sb.from("property_charges").update(row).eq("id", c.id) : await sb.from("property_charges").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (c.id) plotAddDelete(m, "property_charges", c.id, c.name);
+  }
+
+  // ---- Billing runs ----
+  async function renderPlotRuns() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Billing runs") + '<div class="gap"></div><button class="o-filtbtn pri" id="pr-gen">Generate charges</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var runs = (await sb.from("property_charge_runs").select("*, properties(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(200)).data || [];
+    var body = document.getElementById("o-body");
+    document.getElementById("pr-gen").onclick = async function () { var props = await plotProps(); if (!props.length) { toast("Add a building first"); return; } var cur = plotGetProp(); openChargeRunModal(props.filter(function (p) { return p.id === cur; })[0] || props[0]); };
+    if (!runs.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No billing runs yet</div><div class="o-empty2-h">A run creates one invoice per unit for a period, splitting the building\'s charges across owners by share. Press Generate charges to make the first.</div></div>'; return; }
+    body.innerHTML = '<div style="padding:12px 14px"><table class="o-list"><thead><tr><th>Period</th><th>Building</th><th>Issued</th><th class="num">Units</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
+      runs.map(function (r) {
+        return '<tr><td><b>' + esc(r.period) + '</b></td><td>' + esc((r.properties && r.properties.name) || "") + '</td><td>' + esc(r.issue_date || "") + '</td><td class="num">' + (r.units_billed || 0) + '</td><td class="num">' + moneyC(r.amount_total, r.currency_code) + '</td><td class="right"><button class="o-filtbtn pl-run-open" data-id="' + r.id + '">Invoices</button></td></tr>';
+      }).join("") + '</tbody></table></div>';
+    body.querySelectorAll(".pl-run-open").forEach(function (btn) { btn.onclick = function () { go("inv.out"); }; });
+  }
+
+  async function openChargeRunModal(prop) {
+    if (!prop) { toast("Pick a building"); return; }
+    var units = (await sb.from("property_units").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
+    var charges = (await sb.from("property_charges").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
+    if (!units.length) { toast("This building has no units yet"); return; }
+    if (!charges.length) { toast("This building has no charges to bill"); return; }
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
+    var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
+    var b = plotBudgetCalc(charges, units, prop.reserve_percent);
+    var billable = b.rows.filter(function (r) { return r.fee > 0.005; });
+    var missing = billable.filter(function (r) { return !primaryByUnit[r.unit.id]; });
+    var d = new Date(); var period = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
+    var eom = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+    var inner =
+      '<div class="row2"><div><label>Period</label><input id="cr-period" value="' + period + '"></div><div><label>Due date</label><input id="cr-due" type="date" value="' + eom + '"></div></div>' +
+      '<div class="o-note" style="margin:4px 0">Splitting ' + moneyC(b.required) + '/period across <b>' + billable.length + '</b> unit(s) by share' + (Number(prop.reserve_percent) ? ', incl. ' + prop.reserve_percent + '% reserve' : '') + '.</div>' +
+      (missing.length ? '<div class="o-note warn">' + missing.length + ' unit(s) have no owner on file and will be skipped: ' + esc(missing.slice(0, 6).map(function (r) { return r.unit.code; }).join(", ")) + (missing.length > 6 ? "..." : "") + '</div>' : '') +
+      '<div class="table-wrap" style="max-height:240px;overflow:auto"><table class="o-list"><thead><tr><th>Unit</th><th class="num">Share</th><th class="num">Fee</th></tr></thead><tbody>' +
+      billable.map(function (r) { return '<tr><td>' + esc(r.unit.code) + (primaryByUnit[r.unit.id] ? "" : ' <span class="muted">(no owner)</span>') + '</td><td class="num">' + r.share + '</td><td class="num">' + moneyC(r.fee) + '</td></tr>'; }).join("") +
+      '</tbody></table></div>';
+    var m = plotModal("Generate charges - " + prop.name, inner, async function (mm) {
+      var period2 = gv("cr-period") || period, due = gv("cr-due") || null;
+      var toBill = billable.filter(function (r) { return primaryByUnit[r.unit.id]; });
+      if (!toBill.length) { toast("No units with an owner to bill"); return; }
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Generating...";
+      // one run header, then a draft out_invoice + line per unit
+      var runIns = await sb.from("property_charge_runs").insert({ company_id: S.company.id, property_id: prop.id, period: period2, issue_date: today(), due_date: due, reserve_percent: Number(prop.reserve_percent) || 0, units_billed: toBill.length, amount_total: toBill.reduce(function (s, r) { return s + r.fee; }, 0), currency_code: S.company.currency_code, created_by: (S.user && S.user.id) || null }).select("id").single();
+      if (runIns.error) { toast("Could not start the run: " + errMsg(runIns.error)); btn.disabled = false; btn.textContent = "Generate"; return; }
+      var runId = runIns.data.id, made = 0, incAcct = prop.income_account_id || null;
+      for (var i = 0; i < toBill.length; i++) {
+        var r = toBill[i], fee = Math.round(r.fee * 100) / 100;
+        var num = await nextNumber("out_invoice");
+        var inv = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: primaryByUnit[r.unit.id], number: num, invoice_date: today(), due_date: due, currency_code: S.company.currency_code, state: "draft", amount_untaxed: fee, amount_tax: 0, amount_total: fee, amount_residual: fee, property_id: prop.id, property_unit_id: r.unit.id, property_charge_run_id: runId, ref: "Building charges " + period2 }).select("id").single();
+        if (inv.error) continue;
+        await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: inv.data.id, name: prop.name + " - charges " + period2 + " (" + r.unit.code + ")", sequence: 1, quantity: 1, unit_price: fee, discount: 0, account_id: incAcct, price_subtotal: fee, price_total: fee });
+        made++;
+      }
+      m.remove(); toast(made + " draft invoice(s) created - review and post them in Accounting"); go("inv.out");
+    }, true);
+  }
+
+  // ---- Governance: meetings, resolutions, notices, suggestions ----
+  function cfgPlotMeetings() {
+    return {
+      title: "Meetings", editTable: "property_meetings",
+      fetch: function () { return sb.from("property_meetings").select("*, properties(name)").eq("company_id", S.company.id).order("meeting_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (mt) { return (mt.title || "") + " " + ((mt.properties && mt.properties.name) || ""); },
+      columns: [
+        { label: "Meeting", get: function (mt) { return '<b>' + esc(mt.title) + '</b>'; } },
+        { label: "Building", get: function (mt) { return esc((mt.properties && mt.properties.name) || ""); } },
+        { label: "Kind", get: function (mt) { return esc(({ agm: "General assembly", committee: "Committee", extraordinary: "Extraordinary" })[mt.kind] || mt.kind); } },
+        { label: "Date", get: function (mt) { return esc(mt.meeting_date || ""); } },
+        { label: "Status", get: function (mt) { return '<span class="badge ' + (mt.status === "posted" ? "paid" : "draft") + '">' + esc(mt.status || "draft") + '</span>'; } }
+      ],
+      emptyHint: "Record committee meetings and general assemblies, their motions and how owners voted.",
+      onNew: function () { openMeetingModal(null); },
+      onOpen: function (mt) { openMeetingModal(mt); }
+    };
+  }
+  async function openMeetingModal(mt) {
+    mt = mt || {};
+    var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = mt.property_id || plotGetProp() || props[0].id;
+    var inner =
+      '<div class="row2"><div><label>Building</label>' + plotSel("mt-prop", props, pcur, null) + '</div><div><label>Kind</label><select id="mt-kind">' + [["committee", "Committee"], ["agm", "General assembly"], ["extraordinary", "Extraordinary"]].map(function (k) { return '<option value="' + k[0] + '"' + (mt.kind === k[0] ? " selected" : "") + '>' + k[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Title</label><input id="mt-title" value="' + esc(mt.title || "") + '" placeholder="e.g. Annual general assembly 2026"></div>' +
+      '<div class="row2"><div><label>Date</label><input id="mt-date" type="date" value="' + esc(mt.meeting_date || "") + '"></div><div><label>Location</label><input id="mt-loc" value="' + esc(mt.location || "") + '"></div></div>' +
+      '<div><label>Attendees</label><textarea id="mt-att" rows="2">' + esc(mt.attendees || "") + '</textarea></div>' +
+      '<div><label>Agenda</label><textarea id="mt-agenda" rows="3">' + esc(mt.agenda || "") + '</textarea></div>' +
+      '<div><label>Decisions / minutes</label><textarea id="mt-dec" rows="3">' + esc(mt.decisions || "") + '</textarea></div>' +
+      '<div><label>Status</label><select id="mt-status"><option value="draft"' + (mt.status !== "posted" ? " selected" : "") + '>Draft</option><option value="posted"' + (mt.status === "posted" ? " selected" : "") + '>Posted (locked)</option></select></div>';
+    var m = plotModal(mt.id ? "Edit meeting" : "New meeting", inner, async function () {
+      var title = gv("mt-title"); if (!title) { toast("Enter a title"); return; }
+      var status = gv("mt-status");
+      var row = { company_id: S.company.id, property_id: gv("mt-prop"), kind: gv("mt-kind"), title: title, meeting_date: gv("mt-date") || null, location: gv("mt-loc") || null, attendees: gv("mt-att") || null, agenda: gv("mt-agenda") || null, decisions: gv("mt-dec") || null, status: status, posted_at: status === "posted" ? new Date().toISOString() : null };
+      if (!mt.id) row.created_by = (S.user && S.user.id) || null;
+      var r = mt.id ? await sb.from("property_meetings").update(row).eq("id", mt.id) : await sb.from("property_meetings").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (mt.id) plotAddDelete(m, "property_meetings", mt.id, mt.title);
+  }
+
+  function cfgPlotResolutions() {
+    return {
+      title: "Resolutions", editTable: "property_resolutions",
+      fetch: function () { return sb.from("property_resolutions").select("*, properties(name)").eq("company_id", S.company.id).order("decided_at", { ascending: false, nullsFirst: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (rz) { return (rz.title || "") + " " + ((rz.properties && rz.properties.name) || ""); },
+      columns: [
+        { label: "Resolution", get: function (rz) { return '<b>' + esc(rz.title) + '</b>'; } },
+        { label: "Building", get: function (rz) { return esc((rz.properties && rz.properties.name) || ""); } },
+        { label: "Status", get: function (rz) { return '<span class="badge ' + (rz.status === "passed" ? "paid" : rz.status === "rejected" ? "unpaid" : "draft") + '">' + esc(rz.status || "") + '</span>'; } },
+        { label: "Decided", get: function (rz) { return esc((rz.decided_at || "").slice(0, 10)); } }
+      ],
+      emptyHint: "The building's binding decisions and standing rules, usually voted at a general assembly.",
+      onNew: function () { openResolutionModal(null); },
+      onOpen: function (rz) { openResolutionModal(rz); }
+    };
+  }
+  async function openResolutionModal(rz) {
+    rz = rz || {};
+    var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = rz.property_id || plotGetProp() || props[0].id;
+    var inner =
+      '<div><label>Building</label>' + plotSel("rz-prop", props, pcur, null) + '</div>' +
+      '<div><label>Title</label><input id="rz-title" value="' + esc(rz.title || "") + '"></div>' +
+      '<div><label>Text</label><textarea id="rz-body" rows="3">' + esc(rz.body || "") + '</textarea></div>' +
+      '<div><label>Standing rule (optional)</label><textarea id="rz-rule" rows="2" placeholder="A durable rule this resolution sets">' + esc(rz.rule || "") + '</textarea></div>' +
+      '<div class="row2"><div><label>Status</label><select id="rz-status">' + [["proposed", "Proposed"], ["passed", "Passed"], ["rejected", "Rejected"], ["superseded", "Superseded"]].map(function (s) { return '<option value="' + s[0] + '"' + ((rz.status || "passed") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></div><div><label>Decided on</label><input id="rz-date" type="date" value="' + esc((rz.decided_at || "").slice(0, 10)) + '"></div></div>';
+    var m = plotModal(rz.id ? "Edit resolution" : "New resolution", inner, async function () {
+      var title = gv("rz-title"); if (!title) { toast("Enter a title"); return; }
+      var row = { company_id: S.company.id, property_id: gv("rz-prop"), title: title, body: gv("rz-body") || null, rule: gv("rz-rule") || null, status: gv("rz-status"), decided_at: gv("rz-date") ? gv("rz-date") : null };
+      var r = rz.id ? await sb.from("property_resolutions").update(row).eq("id", rz.id) : await sb.from("property_resolutions").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    });
+    if (rz.id) plotAddDelete(m, "property_resolutions", rz.id, rz.title);
+  }
+
+  function cfgPlotNotices() {
+    return {
+      title: "Overdue notices", editTable: "property_notices",
+      fetch: function () { return sb.from("property_notices").select("*, property_units(code), partners(name)").eq("company_id", S.company.id).order("notice_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (n) { return ((n.partners && n.partners.name) || "") + " " + ((n.property_units && n.property_units.code) || ""); },
+      columns: [
+        { label: "Owner", get: function (n) { return '<b>' + esc((n.partners && n.partners.name) || "-") + '</b>'; } },
+        { label: "Unit", get: function (n) { return esc((n.property_units && n.property_units.code) || ""); } },
+        { label: "Stage", get: function (n) { return '<span class="badge ' + (n.stage >= 3 ? "unpaid" : "partial") + '">' + (["", "Reminder", "Warning", "Formal"][n.stage] || ("Stage " + n.stage)) + '</span>'; } },
+        { label: "Date", get: function (n) { return esc(n.notice_date || ""); } },
+        { label: "Amount", num: true, get: function (n) { return moneyC(n.amount); } },
+        { label: "Delivered", get: function (n) { return n.delivered ? '<span style="color:var(--good)">Yes</span>' : '<span class="muted">No</span>'; } }
+      ],
+      emptyHint: "Log the reminder and warning letters you send owners in arrears, so there's a record if it goes legal.",
+      onNew: function () { openNoticeModal(null); },
+      onOpen: function (n) { openNoticeModal(n); }
+    };
+  }
+  async function openNoticeModal(n) {
+    n = n || {};
+    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var partners = await plotPartners();
+    var props = await plotProps();
+    var pcur = n.property_id || plotGetProp() || (props[0] && props[0].id);
+    var inner =
+      '<div class="row2"><div><label>Building</label>' + plotSel("nt-prop", props, pcur, null) + '</div><div><label>Unit</label>' + plotSel("nt-unit", units, n.unit_id, "(optional)", function (u) { return u.code; }) + '</div></div>' +
+      '<div><label>Owner (contact)</label>' + plotSel("nt-partner", partners, n.partner_id, "(pick a contact)") + '</div>' +
+      '<div class="row2"><div><label>Stage</label><select id="nt-stage">' + [[1, "1 - Reminder"], [2, "2 - Warning"], [3, "3 - Formal notice"]].map(function (s) { return '<option value="' + s[0] + '"' + ((n.stage || 1) === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></div><div><label>Date</label><input id="nt-date" type="date" value="' + esc(n.notice_date || today()) + '"></div></div>' +
+      '<div class="row2"><div><label>Amount overdue</label><input id="nt-amt" type="number" step="0.01" value="' + (n.amount != null ? n.amount : "") + '"></div><div><label>Months overdue</label><input id="nt-months" type="number" step="1" value="' + (n.months_overdue != null ? n.months_overdue : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Channel</label><select id="nt-channel">' + [["hand", "By hand"], ["email", "Email"], ["post", "Post"], ["posted_board", "Notice board"]].map(function (c) { return '<option value="' + c[0] + '"' + (n.channel === c[0] ? " selected" : "") + '>' + c[1] + '</option>'; }).join("") + '</select></div><div><label>Delivered?</label><select id="nt-deliv"><option value="0"' + (!n.delivered ? " selected" : "") + '>Not yet</option><option value="1"' + (n.delivered ? " selected" : "") + '>Delivered</option></select></div></div>' +
+      '<div><label>Notes</label><textarea id="nt-notes" rows="2">' + esc(n.notes || "") + '</textarea></div>';
+    var m = plotModal(n.id ? "Edit notice" : "Log a notice", inner, async function () {
+      var partner = gv("nt-partner"); if (!partner) { toast("Pick a contact"); return; }
+      var row = { company_id: S.company.id, property_id: gv("nt-prop") || null, unit_id: gv("nt-unit") || null, partner_id: partner, stage: parseInt(gv("nt-stage"), 10) || 1, notice_date: gv("nt-date") || today(), amount: Number(gv("nt-amt")) || 0, months_overdue: parseInt(gv("nt-months"), 10) || 0, channel: gv("nt-channel"), delivered: gv("nt-deliv") === "1", notes: gv("nt-notes") || null };
+      if (!n.id) row.created_by = (S.user && S.user.id) || null;
+      var r = n.id ? await sb.from("property_notices").update(row).eq("id", n.id) : await sb.from("property_notices").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (n.id) plotAddDelete(m, "property_notices", n.id, "this notice");
+  }
+
+  function cfgPlotSuggestions() {
+    return {
+      title: "Suggestions", editTable: "property_suggestions",
+      fetch: function () { return sb.from("property_suggestions").select("*, properties(name), property_units(code)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (s) { return (s.title || "") + " " + ((s.properties && s.properties.name) || ""); },
+      columns: [
+        { label: "Title", get: function (s) { return '<b>' + esc(s.title) + '</b>'; } },
+        { label: "Building", get: function (s) { return esc((s.properties && s.properties.name) || ""); } },
+        { label: "Type", get: function (s) { return esc(({ suggestion: "Suggestion", complaint: "Complaint", request: "Request" })[s.type] || s.type); } },
+        { label: "From", get: function (s) { return esc(s.submitted_by_name || ((s.property_units && s.property_units.code) || "")); } },
+        { label: "Status", get: function (s) { return '<span class="badge ' + (s.status === "done" || s.status === "accepted" ? "paid" : s.status === "rejected" ? "unpaid" : "draft") + '">' + esc(s.status || "new") + '</span>'; } }
+      ],
+      filters: [{ label: "Open", test: function (s) { return s.status === "new" || s.status === "reviewing"; } }, { label: "Closed", test: function (s) { return s.status === "done" || s.status === "accepted" || s.status === "rejected"; } }],
+      emptyHint: "What owners and residents raise - ideas, complaints, requests - so nothing gets lost and the committee can act on it.",
+      onNew: function () { openSuggestionModal(null); },
+      onOpen: function (s) { openSuggestionModal(s); }
+    };
+  }
+  async function openSuggestionModal(s) {
+    s = s || {};
+    var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = s.property_id || plotGetProp() || props[0].id;
+    var units = (await sb.from("property_units").select("id,code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var inner =
+      '<div class="row2"><div><label>Building</label>' + plotSel("sg-prop", props, pcur, null) + '</div><div><label>Type</label><select id="sg-type">' + [["suggestion", "Suggestion"], ["complaint", "Complaint"], ["request", "Request"]].map(function (tp) { return '<option value="' + tp[0] + '"' + (s.type === tp[0] ? " selected" : "") + '>' + tp[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Unit (optional)</label>' + plotSel("sg-unit", units, s.unit_id, "(none)", function (u) { return u.code; }) + '</div><div><label>From (name)</label><input id="sg-name" value="' + esc(s.submitted_by_name || "") + '"></div></div>' +
+      '<div><label>Title</label><input id="sg-title" value="' + esc(s.title || "") + '"></div>' +
+      '<div><label>Details</label><textarea id="sg-body" rows="3">' + esc(s.body || "") + '</textarea></div>' +
+      '<div class="row2"><div><label>Status</label><select id="sg-status">' + [["new", "New"], ["reviewing", "Reviewing"], ["accepted", "Accepted"], ["rejected", "Rejected"], ["done", "Done"]].map(function (st) { return '<option value="' + st[0] + '"' + ((s.status || "new") === st[0] ? " selected" : "") + '>' + st[1] + '</option>'; }).join("") + '</select></div><div><label>Admin note</label><input id="sg-note" value="' + esc(s.admin_note || "") + '"></div></div>';
+    var m = plotModal(s.id ? "Edit suggestion" : "New suggestion", inner, async function () {
+      var title = gv("sg-title"); if (!title) { toast("Enter a title"); return; }
+      var row = { company_id: S.company.id, property_id: gv("sg-prop"), type: gv("sg-type"), unit_id: gv("sg-unit") || null, submitted_by_name: gv("sg-name") || null, title: title, body: gv("sg-body") || null, status: gv("sg-status"), admin_note: gv("sg-note") || null };
+      var r = s.id ? await sb.from("property_suggestions").update(row).eq("id", s.id) : await sb.from("property_suggestions").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (s.id) plotAddDelete(m, "property_suggestions", s.id, s.title);
+  }
+
+  // Shared Delete button for a Plot modal, FK-safe.
+  function plotAddDelete(m, table, id, label) {
+    var foot = m.querySelector(".foot");
+    var del = document.createElement("button"); del.className = "btn"; del.style.color = "var(--bad)"; del.style.marginRight = "auto"; del.textContent = "Delete";
+    del.onclick = async function () {
+      if (!confirm('Delete "' + (label || "this record") + '"? This cannot be undone.')) return;
+      var r = await sb.from(table).delete().eq("id", id);
+      if (r.error) { var msg = (r.error.message || "") + (r.error.details || ""); if (r.error.code === "23503" || /foreign key|still referenced|violates/i.test(msg)) { toast("This is used elsewhere - archive it instead."); return; } toast("Could not delete: " + errMsg(r.error)); return; }
+      m.remove(); toast("Deleted"); renderView();
+    };
+    foot.insertBefore(del, foot.firstChild);
   }
 
   // ---- start ----
