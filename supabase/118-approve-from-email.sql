@@ -10,8 +10,11 @@
 --     trick api_keys already uses for API credentials
 --   * 32 random bytes, and the RPCs refuse anything that is not 64 hex chars
 --   * expires after 14 days
---   * single use: the hash is cleared the moment a decision lands, so a
---     forwarded email cannot be replayed
+--   * single use: a decided approval is refused, so a forwarded email cannot be
+--     replayed. The hash is deliberately KEPT after the decision so that an
+--     approver who clicks their email twice - which they will - gets "already
+--     approved by you on Tuesday" instead of a dead link. It stays a read
+--     handle on facts the email already showed them, and expiry still ends it.
 --   * the decision is recorded against the approver address the token was
 --     minted for, so the audit trail names a person
 --
@@ -131,13 +134,13 @@ begin
   note := nullif(btrim(coalesce(p_note,'')), '');
   lbl := coalesce(nullif(a.doc_number,''), a.doc_type, 'request');
 
+  -- The hash is kept (see the header): the status check above is what makes this
+  -- single-use, and keeping it lets a second click show a proper answer.
   update public.approvals
      set status = p_decision,
          decided_by = who,
          decided_at = now(),
-         approver_note = coalesce(note, ''),
-         decide_token_hash = null,
-         token_expires_at = null
+         approver_note = coalesce(note, '')
    where id = a.id;
 
   insert into public.notifications (company_id, kind, title, body, link_action, link_id, actor_name, dedupe_key)
