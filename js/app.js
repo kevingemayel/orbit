@@ -6766,22 +6766,54 @@
         // Inline-editable table: edit fields right in the view, then Save.
         function optsFor(list, cur, blank) { return (blank != null ? '<option value="">' + blank + '</option>' : "") + list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur == null ? "" : cur) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
         function tblOptsFor(cur) { return '<option value="">-</option>' + gTables.map(function (t) { return '<option value="' + t.id + '"' + (String(cur || "") === String(t.id) ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
-        body.innerHTML = '<div class="gt-bar"><button class="btn pri" id="g-save" disabled style="background:var(--app);border-color:var(--app)">Save changes</button><span class="muted" id="g-dirty" style="font-size:12.5px"></span><span style="flex:1"></span><span class="muted" style="font-size:12px">Edit any cell, then Save</span></div>' +
-          '<div style="overflow-x:auto"><table class="o-list gtbl"><thead><tr><th>Side</th><th>First name</th><th>Family name</th><th>Category</th><th>Priority</th><th>Stage</th><th>RSVP</th><th class="num">+1</th><th>Table</th><th></th></tr></thead><tbody>' +
+        // Column-driven so guests get the same "choose which columns show and their width"
+        // control as Contacts. Preferences persist per user in orbit_cols under ev.guests.
+        var GCOLS = [
+          { k: "side", label: "Side", cell: function (r) { return '<input class="gce" data-f="side" value="' + esc(r.side || "") + '">'; } },
+          { k: "first_name", label: "First name", cell: function (r) { return '<input class="gce" data-f="first_name" value="' + esc(r.first_name || "") + '">'; } },
+          { k: "family_name", label: "Family name", cell: function (r) { return '<input class="gce" data-f="family_name" value="' + esc(r.family_name || "") + '">'; } },
+          { k: "category", label: "Category", cell: function (r) { return '<input class="gce" data-f="category" value="' + esc(r.category || "") + '">'; } },
+          { k: "priority", label: "Priority", cell: function (r) { return '<select class="gce" data-f="priority">' + optsFor(GUEST_PRIO, r.priority, "-") + '</select>'; } },
+          { k: "invite_stage", label: "Stage", cell: function (r) { return '<select class="gce" data-f="invite_stage">' + optsFor(GUEST_STAGE, r.invite_stage || "longlist", null) + '</select>'; } },
+          { k: "rsvp", label: "RSVP", cell: function (r) { return '<select class="gce" data-f="rsvp">' + optsFor(RSVP_OPTS, r.rsvp || "pending", null) + '</select>'; } },
+          { k: "plus_ones", label: "+1", num: true, cell: function (r) { return '<input class="gce" type="number" min="0" data-f="plus_ones" value="' + (r.plus_ones || 0) + '" style="width:64px">'; } },
+          { k: "table_id", label: "Table", cell: function (r) { return '<select class="gce" data-f="table_id">' + tblOptsFor(r.table_id) + '</select>'; } }
+        ];
+        var gprefs = colPrefs("ev.guests");
+        var gvis = GCOLS.filter(function (c) { return !gprefs.hidden[c.k]; }); if (!gvis.length) gvis = [GCOLS[1]];
+        body.innerHTML = '<div class="gt-bar"><button class="btn pri" id="g-save" disabled style="background:var(--app);border-color:var(--app)">Save changes</button><span class="muted" id="g-dirty" style="font-size:12.5px"></span><span style="flex:1"></span><button class="o-filtbtn" id="g-cols" title="Choose which columns show; drag a column edge to resize">Columns &#9660;</button><span class="muted" style="font-size:12px">Edit any cell, then Save</span></div>' +
+          '<div style="overflow-x:auto"><table class="o-list gtbl"><colgroup>' + gvis.map(function (c) { var w = gprefs.width[c.k]; return '<col' + (w ? ' style="width:' + w + 'px"' : '') + '>'; }).join("") + '<col style="width:34px"></colgroup>' +
+          '<thead><tr>' + gvis.map(function (c) { return '<th data-ck="' + c.k + '"' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '<span class="o-th-rs" data-rs="' + c.k + '"></span></th>'; }).join("") + '<th></th></tr></thead><tbody>' +
           shown.map(function (r) {
             return '<tr data-id="' + r.id + '">' +
-              '<td><input class="gce" data-f="side" value="' + esc(r.side || "") + '"></td>' +
-              '<td><input class="gce" data-f="first_name" value="' + esc(r.first_name || "") + '"></td>' +
-              '<td><input class="gce" data-f="family_name" value="' + esc(r.family_name || "") + '"></td>' +
-              '<td><input class="gce" data-f="category" value="' + esc(r.category || "") + '"></td>' +
-              '<td><select class="gce" data-f="priority">' + optsFor(GUEST_PRIO, r.priority, "-") + '</select></td>' +
-              '<td><select class="gce" data-f="invite_stage">' + optsFor(GUEST_STAGE, r.invite_stage || "longlist", null) + '</select></td>' +
-              '<td><select class="gce" data-f="rsvp">' + optsFor(RSVP_OPTS, r.rsvp || "pending", null) + '</select></td>' +
-              '<td><input class="gce" type="number" min="0" data-f="plus_ones" value="' + (r.plus_ones || 0) + '" style="width:64px"></td>' +
-              '<td><select class="gce" data-f="table_id">' + tblOptsFor(r.table_id) + '</select></td>' +
+              gvis.map(function (c) { return '<td>' + c.cell(r) + '</td>'; }).join("") +
               '<td><button class="gt-open" data-open="' + r.id + '" title="Open full details">&#8942;</button></td>' +
               '</tr>';
           }).join("") + '</tbody></table></div>';
+        // column chooser
+        document.getElementById("g-cols").onclick = function (e) {
+          e.stopPropagation();
+          var old = document.getElementById("g-colsdd"); if (old) { old.remove(); return; }
+          var dd = document.createElement("div"); dd.id = "g-colsdd"; dd.className = "o-dd on";
+          dd.style.cssText = "position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:180px";
+          dd.innerHTML = GCOLS.map(function (c) { return '<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;font-size:13px;cursor:pointer"><input type="checkbox" data-ck="' + c.k + '"' + (gprefs.hidden[c.k] ? '' : ' checked') + '> ' + esc(c.label) + '</label>'; }).join("");
+          document.body.appendChild(dd);
+          var rct = this.getBoundingClientRect(); dd.style.left = Math.max(8, rct.left) + "px"; dd.style.top = (rct.bottom + 4) + "px";
+          dd.querySelectorAll("input[data-ck]").forEach(function (cb) { cb.onchange = function () { if (cb.checked) delete gprefs.hidden[cb.dataset.ck]; else gprefs.hidden[cb.dataset.ck] = 1; saveColPrefs(); dd.remove(); paint(); }; });
+          setTimeout(function () { document.addEventListener("click", function h() { var d = document.getElementById("g-colsdd"); if (d) d.remove(); document.removeEventListener("click", h); }); }, 0);
+        };
+        // drag a column edge to resize
+        body.querySelectorAll(".o-th-rs").forEach(function (grip) {
+          grip.style.cssText = "position:absolute;right:0;top:0;height:100%;width:6px;cursor:col-resize;user-select:none";
+          var th = grip.parentElement; th.style.position = "relative";
+          grip.addEventListener("mousedown", function (ev) {
+            ev.preventDefault(); ev.stopPropagation();
+            var startX = ev.clientX, startW = th.getBoundingClientRect().width, key = grip.dataset.rs;
+            function mv(e2) { var w = Math.max(50, Math.round(startW + (e2.clientX - startX))); gprefs.width[key] = w; var idx = gvis.map(function (c) { return c.k; }).indexOf(key); var cg = body.querySelector("colgroup"); if (cg && cg.children[idx]) cg.children[idx].style.width = w + "px"; }
+            function up() { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); saveColPrefs(); }
+            document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
+          });
+        });
         var gdirty = {};
         function markDirty() { var n = Object.keys(gdirty).length; var sv = document.getElementById("g-save"); if (sv) sv.disabled = n === 0; var dl = document.getElementById("g-dirty"); if (dl) dl.textContent = n ? (n + " row" + (n > 1 ? "s" : "") + " changed") : ""; __dirty = n > 0; }
         body.querySelectorAll(".gce").forEach(function (el) {
