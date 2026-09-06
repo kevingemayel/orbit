@@ -793,7 +793,7 @@
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
-        { label: "Configuration", items: [["Taxes", "taxes"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
+        { label: "Configuration", items: [["Taxes", "taxes"], ["E-invoicing", "acc.einvoice"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
     },
     sales: {
@@ -1023,6 +1023,7 @@
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service",
+    "acc.einvoice": "accounting",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
@@ -2252,6 +2253,7 @@
       case "moves": return renderList(cfgMoves());
       case "companies": return renderList(cfgCompanies());
       case "taxes": return renderList(cfgTaxes());
+      case "acc.einvoice": return renderEinvoice();
       case "products": return renderList(cfgProducts());
       case "so.list": return renderList(cfgOrders("sale"));
       case "po.list": return renderList(cfgOrders("purchase"));
@@ -15066,6 +15068,103 @@
     document.querySelectorAll(".cpy").forEach(function (b) { b.onclick = function () { try { navigator.clipboard.writeText(b.dataset.c); toast("Copied"); } catch (e) { toast("Copy failed - select and copy manually"); } }; });
     var gt = document.querySelector("[data-goto]"); if (gt) gt.onclick = function () { go("web.sites"); };
   }
+  // ============================ E-INVOICING (Peppol BIS / PINT AE) ============================
+  function eiNum(n) { return (Number(n) || 0).toFixed(2); }
+  // Build a Peppol BIS Billing 3.0 UBL Invoice, profiled for UAE PINT AE. The chosen ASP
+  // validates/localises final conformance; this is the structured base every ASP expects.
+  function buildUBL(inv, lines, company, partner, ei) {
+    var cur = inv.currency_code || company.currency_code || "AED";
+    var untaxed = Number(inv.amount_untaxed) || 0, total = Number(inv.amount_total) || 0, tax = total - untaxed;
+    var rate = untaxed > 0 ? Math.round((tax / untaxed) * 10000) / 100 : 0;
+    var sScheme = (ei.peppol_scheme || "0235"), sId = ei.peppol_id || company.tax_id || "";
+    var sellerName = ei.seller_name || company.legal_name || company.name || "";
+    var sellerCountry = (ei.country || company.country || "AE").slice(0, 2).toUpperCase();
+    var buyerCountry = (partner.country || sellerCountry).slice(0, 2).toUpperCase();
+    function party(name, id, scheme, trn, country, city, street, endpoint) {
+      return "<cac:Party>" +
+        (endpoint ? '<cbc:EndpointID schemeID="' + esc(scheme) + '">' + esc(endpoint) + "</cbc:EndpointID>" : "") +
+        "<cac:PartyName><cbc:Name>" + esc(name) + "</cbc:Name></cac:PartyName>" +
+        "<cac:PostalAddress>" + (street ? "<cbc:StreetName>" + esc(street) + "</cbc:StreetName>" : "") + (city ? "<cbc:CityName>" + esc(city) + "</cbc:CityName>" : "") + "<cac:Country><cbc:IdentificationCode>" + esc(country) + "</cbc:IdentificationCode></cac:Country></cac:PostalAddress>" +
+        (trn ? "<cac:PartyTaxScheme><cbc:CompanyID>" + esc(trn) + "</cbc:CompanyID><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:PartyTaxScheme>" : "") +
+        "<cac:PartyLegalEntity><cbc:RegistrationName>" + esc(name) + "</cbc:RegistrationName>" + (trn ? "<cbc:CompanyID>" + esc(trn) + "</cbc:CompanyID>" : "") + "</cac:PartyLegalEntity></cac:Party>";
+    }
+    var lineXml = lines.map(function (l, i) {
+      var q = Number(l.quantity) || 0, net = Number(l.price_subtotal) || 0, unit = q ? net / q : net;
+      return "<cac:InvoiceLine><cbc:ID>" + (i + 1) + "</cbc:ID>" +
+        '<cbc:InvoicedQuantity unitCode="EA">' + eiNum(q) + "</cbc:InvoicedQuantity>" +
+        '<cbc:LineExtensionAmount currencyID="' + cur + '">' + eiNum(net) + "</cbc:LineExtensionAmount>" +
+        "<cac:Item><cbc:Name>" + esc(l.name || "Item") + "</cbc:Name>" +
+        "<cac:ClassifiedTaxCategory><cbc:ID>" + (rate > 0 ? "S" : "Z") + "</cbc:ID><cbc:Percent>" + eiNum(rate) + "</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory></cac:Item>" +
+        '<cac:Price><cbc:PriceAmount currencyID="' + cur + '">' + eiNum(unit) + "</cbc:PriceAmount></cac:Price></cac:InvoiceLine>";
+    }).join("");
+    return '<?xml version="1.0" encoding="UTF-8"?>\n<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2" xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2" xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">' +
+      "<cbc:CustomizationID>urn:peppol:pint:billing-1@ae-1</cbc:CustomizationID><cbc:ProfileID>urn:peppol:bis:billing</cbc:ProfileID>" +
+      "<cbc:ID>" + esc(inv.number || "") + "</cbc:ID><cbc:IssueDate>" + esc((inv.invoice_date || "").slice(0, 10)) + "</cbc:IssueDate><cbc:InvoiceTypeCode>380</cbc:InvoiceTypeCode><cbc:DocumentCurrencyCode>" + esc(cur) + "</cbc:DocumentCurrencyCode>" +
+      "<cac:AccountingSupplierParty>" + party(sellerName, sId, sScheme, company.tax_id, sellerCountry, (company.profile || {}).city, (company.profile || {}).street, sId) + "</cac:AccountingSupplierParty>" +
+      "<cac:AccountingCustomerParty>" + party(partner.name || "", "", sScheme, partner.vat, buyerCountry, partner.city, partner.street, partner.peppol_id) + "</cac:AccountingCustomerParty>" +
+      '<cac:TaxTotal><cbc:TaxAmount currencyID="' + cur + '">' + eiNum(tax) + "</cbc:TaxAmount><cac:TaxSubtotal><cbc:TaxableAmount currencyID=\"" + cur + "\">" + eiNum(untaxed) + '</cbc:TaxableAmount><cbc:TaxAmount currencyID="' + cur + '">' + eiNum(tax) + "</cbc:TaxAmount><cac:TaxCategory><cbc:ID>" + (rate > 0 ? "S" : "Z") + "</cbc:ID><cbc:Percent>" + eiNum(rate) + "</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:TaxCategory></cac:TaxSubtotal></cac:TaxTotal>" +
+      '<cac:LegalMonetaryTotal><cbc:LineExtensionAmount currencyID="' + cur + '">' + eiNum(untaxed) + '</cbc:LineExtensionAmount><cbc:TaxExclusiveAmount currencyID="' + cur + '">' + eiNum(untaxed) + '</cbc:TaxExclusiveAmount><cbc:TaxInclusiveAmount currencyID="' + cur + '">' + eiNum(total) + '</cbc:TaxInclusiveAmount><cbc:PayableAmount currencyID="' + cur + '">' + eiNum(total) + "</cbc:PayableAmount></cac:LegalMonetaryTotal>" +
+      lineXml + "</Invoice>";
+  }
+  function eiDownload(name, text) {
+    try { var b = new Blob([text], { type: "application/xml" }); var u = URL.createObjectURL(b); var a = document.createElement("a"); a.href = u; a.download = name; document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(u); }, 1000); } catch (e) { toast("Download failed"); }
+  }
+  async function renderEinvoice() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("E-invoicing") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var company = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
+    var ei = (company.profile || {}).einvoice || {};
+    var invs = (await sb.from("invoices").select("id,number,invoice_date,amount_total,currency_code,partner_id,partners:partner_id(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted").order("invoice_date", { ascending: false }).limit(50)).data || [];
+    var docs = (await sb.from("einvoice_docs").select("*, invoices:invoice_id(number)").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(50)).data || [];
+    var doneIds = {}; docs.forEach(function (d) { if (d.invoice_id) doneIds[d.invoice_id] = d; });
+    var body = document.getElementById("o-body");
+    function fldrow(l, h) { return '<div class="wb-fld" style="margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase">' + esc(l) + "</span>" + h + "</div>"; }
+    body.innerHTML = '<div style="max-width:900px;display:grid;gap:16px">' +
+      '<div class="card"><h3 style="margin:0 0 4px">E-invoicing setup</h3><div class="sub" style="margin-bottom:10px">UAE FTA mandates Peppol e-invoicing (PINT AE) - Phase 1 go-live 1 Jan 2027. Orbit generates the structured invoice; a certified <b>ASP</b> transmits it onto the Peppol network.</div>' +
+      '<div class="o-groups"><div>' +
+      fldrow("Enabled", '<select id="ei-on" class="wb-i"><option value="0"' + (!ei.enabled ? " selected" : "") + '>Off</option><option value="1"' + (ei.enabled ? " selected" : "") + '>On</option></select>') +
+      fldrow("Seller legal name", '<input id="ei-name" class="wb-i" value="' + esc(ei.seller_name || company.legal_name || company.name || "") + '">') +
+      fldrow("Tax reg. no. (TRN)", '<input id="ei-trn" class="wb-i" value="' + esc(ei.trn || company.tax_id || "") + '">') +
+      fldrow("Country", '<input id="ei-country" class="wb-i" value="' + esc(ei.country || company.country || "AE") + '" maxlength="2" style="max-width:80px">') +
+      '</div><div>' +
+      fldrow("Peppol scheme", '<input id="ei-scheme" class="wb-i" value="' + esc(ei.peppol_scheme || "0235") + '" style="max-width:120px">') +
+      fldrow("Peppol / endpoint ID", '<input id="ei-pid" class="wb-i" value="' + esc(ei.peppol_id || "") + '" placeholder="e.g. 0235:1001230456">') +
+      fldrow("ASP provider", '<input id="ei-asp" class="wb-i" value="' + esc(ei.asp || "") + '" placeholder="Flick / ClearTax / ...">') +
+      fldrow("ASP endpoint", '<input id="ei-endpoint" class="wb-i" value="' + esc(ei.endpoint || "") + '" placeholder="https://...">') +
+      '</div></div><button class="btn pri" id="ei-save" style="background:var(--accent);border-color:var(--accent);margin-top:6px">Save setup</button></div>' +
+
+      '<div class="card"><h3 style="margin:0 0 6px">Posted customer invoices</h3><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
+      (invs.length ? invs.map(function (v) {
+        var d = doneIds[v.id];
+        return '<tr><td><b>' + esc(v.number || "") + '</b></td><td>' + esc(v.partners ? v.partners.name : "") + '</td><td class="muted">' + esc((v.invoice_date || "").slice(0, 10)) + '</td><td class="num">' + money(v.amount_total) + '</td><td style="white-space:nowrap">' + (d ? '<span class="badge paid">' + esc(d.status) + '</span> <button class="btn sm ei-dl" data-doc="' + d.id + '">XML</button>' : '<button class="btn sm ei-gen" data-inv="' + v.id + '">Generate e-invoice</button>') + '</td></tr>';
+      }).join("") : '<tr><td colspan="5" class="muted" style="padding:10px">No posted customer invoices yet.</td></tr>') +
+      '</tbody></table></div></div>' +
+      '</div>';
+    document.getElementById("ei-save").onclick = async function () {
+      var s = { enabled: gv("ei-on") === "1", seller_name: gv("ei-name") || null, trn: gv("ei-trn") || null, country: gv("ei-country") || null, peppol_scheme: gv("ei-scheme") || "0235", peppol_id: gv("ei-pid") || null, asp: gv("ei-asp") || null, endpoint: gv("ei-endpoint") || null };
+      var prof = Object.assign({}, company.profile || {}); prof.einvoice = s;
+      var r = await sb.from("companies").update({ profile: prof }).eq("id", S.company.id); if (r.error) { toast(errMsg(r.error)); return; }
+      company.profile = prof; if (S.company) S.company.profile = prof; toast("Saved");
+    };
+    body.querySelectorAll(".ei-gen").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true; b.textContent = "...";
+        var iid = b.dataset.inv;
+        var inv = (await sb.from("invoices").select("*").eq("id", iid).maybeSingle()).data;
+        var lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", iid).order("id")).data || [];
+        var partner = inv.partner_id ? ((await sb.from("partners").select("*").eq("id", inv.partner_id).maybeSingle()).data || {}) : {};
+        var xml = buildUBL(inv, lines, company, partner, (company.profile || {}).einvoice || {});
+        var ins = await sb.from("einvoice_docs").insert({ company_id: S.company.id, invoice_id: iid, format: "ubl-bis3", status: "generated", doc_ref: inv.number, payload: xml }).select("id").single();
+        if (ins.error) { toast(errMsg(ins.error)); b.disabled = false; b.textContent = "Generate e-invoice"; return; }
+        toast("E-invoice generated"); eiDownload("einvoice-" + (inv.number || iid) + ".xml", xml); renderEinvoice();
+      };
+    });
+    body.querySelectorAll(".ei-dl").forEach(function (b) {
+      b.onclick = async function () { var d = (await sb.from("einvoice_docs").select("payload,doc_ref").eq("id", b.dataset.doc).maybeSingle()).data; if (d) eiDownload("einvoice-" + (d.doc_ref || "doc") + ".xml", d.payload || ""); };
+    });
+  }
+
   // ============================ FIELD SERVICE / SERVICE CENTER ============================
   var SVC_STATUS = [["new", "New"], ["assigned", "Assigned"], ["in_progress", "In progress"], ["on_hold", "On hold"], ["done", "Done"], ["closed", "Closed"], ["cancelled", "Cancelled"]];
   var SVC_PRIORITY = [["low", "Low"], ["normal", "Normal"], ["high", "High"], ["urgent", "Urgent"]];
