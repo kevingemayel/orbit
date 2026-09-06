@@ -15121,7 +15121,7 @@
     }
     document.getElementById("pos-sesstag").textContent = "Register open · opened " + (POS.session.opened_at || "").slice(11, 16);
     document.getElementById("pos-close").onclick = function () { posCloseSession(); };
-    POS.products = (await sb.from("products").select("id,name,price").eq("company_id", S.company.id).order("name").limit(500)).data || [];
+    POS.products = (await sb.from("products").select("id,name,price:list_price").eq("company_id", S.company.id).order("name").limit(500)).data || [];
     POS.cart = []; POS.partner = null;
     wrap.innerHTML = '<div class="pos-wrap"><div class="pos-left"><input id="pos-search" placeholder="Search products..." style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
       '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600">Cart</div><div class="pos-lines" id="pos-cartlines"></div>' +
