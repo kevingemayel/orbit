@@ -917,6 +917,7 @@
       menus: [
         { label: "Tickets", action: "svc.tickets" },
         { label: "Schedule", action: "svc.schedule" },
+        { label: "Maintenance", action: "svc.ppm" },
         { label: "Warranties", action: "svc.warranties" }
       ]
     },
@@ -1032,7 +1033,7 @@
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
-    "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service",
+    "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
     "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
@@ -2327,6 +2328,7 @@
       case "svc.tickets": return renderList(cfgServiceTickets());
       case "svc.warranties": return renderList(cfgWarranties());
       case "svc.schedule": return renderServiceSchedule();
+      case "svc.ppm": return renderMaintenancePlans();
       case "pos.terminal": return renderPOS();
       case "pos.returns": return renderPosReturns();
       case "pos.promos": return renderPromotions();
@@ -15675,7 +15677,10 @@
       fld("Technician", '<select id="tk-tech"><option value="">(unassigned)</option>' + techs.map(function (m) { return '<option value="' + m.id + '"' + (t.assigned_to === m.id ? " selected" : "") + '>' + esc(m.name) + '</option>'; }).join("") + '</select>') +
       fld("Scheduled", '<input id="tk-sched" type="datetime-local" value="' + esc(t.scheduled_at ? t.scheduled_at.slice(0, 16) : "") + '">') +
       fld("Location", '<select id="tk-loc"><option value="">(none)</option>' + [["site", "On site"], ["workshop", "Workshop"], ["store", "In store"]].map(function (o) { return '<option value="' + o[0] + '"' + (t.location === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>') +
+      fld("Bill to", '<select id="tk-billto">' + [["customer", "Customer"], ["manufacturer", "Manufacturer (back-to-back)"], ["dealer", "Dealer"]].map(function (o) { return '<option value="' + o[0] + '"' + ((t.bill_to || "customer") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select>', "Who pays for this job. Manufacturer = back-to-back warranty (RMA) claim.") +
+      fld("RMA no.", '<input id="tk-rma" value="' + esc(t.rma_no || "") + '" placeholder="Return authorisation">', "For a return-to-manufacturer repair under warranty.") +
       '</div></div>' +
+      '<div class="o-groups"><div>' + fld("Customer rating", '<select id="tk-survey"><option value="">Not rated</option>' + [1, 2, 3, 4, 5].map(function (n) { return '<option value="' + n + '"' + (Number(t.survey_score) === n ? " selected" : "") + '>' + n + " / 5</option>"; }).join("") + '</select>', "The satisfaction score for the completed job.") + '</div><div>' + fld("Feedback", '<input id="tk-survcomment" value="' + esc(t.survey_comment || "") + '" placeholder="Optional comment from the customer">') + '</div></div>' +
       '<div class="o-groups"><div>' + fld("Problem reported", '<textarea id="tk-problem" rows="3">' + esc(t.problem || "") + '</textarea>') + '</div><div>' + fld("Diagnosis / work done", '<textarea id="tk-diag" rows="3">' + esc(t.diagnosis || "") + '</textarea>') + '</div></div>' +
       '<div class="o-cf-head" style="margin-top:14px">Labour &amp; parts</div>' +
       '<div style="overflow-x:auto"><table class="o-list" style="min-width:620px"><thead><tr><th style="width:90px">Type</th><th>Description</th><th class="num" style="width:80px">Qty/Hrs</th><th class="num" style="width:100px">Unit price</th><th style="width:70px">Covered</th><th style="width:34px"></th></tr></thead><tbody id="tk-lines"></tbody></table></div>' +
@@ -15690,7 +15695,7 @@
     document.getElementById("tk-serial").oninput = refreshWarranty;
     document.getElementById("tk-save").onclick = async function () {
       var st = document.getElementById("tk-status").value;
-      var row = { title: gv("tk-title") || "Service ticket", partner_id: document.getElementById("tk-cust").value || null, contact: gv("tk-contact") || null, product_id: document.getElementById("tk-prod").value || null, serial_no: gv("tk-serial") || null, equipment_id: document.getElementById("tk-equip").value || null, priority: document.getElementById("tk-priority").value, status: st, assigned_to: document.getElementById("tk-tech").value || null, scheduled_at: gv("tk-sched") ? new Date(gv("tk-sched")).toISOString() : null, location: document.getElementById("tk-loc").value || null, problem: gv("tk-problem") || null, diagnosis: gv("tk-diag") || null, updated_at: new Date().toISOString() };
+      var row = { title: gv("tk-title") || "Service ticket", partner_id: document.getElementById("tk-cust").value || null, contact: gv("tk-contact") || null, product_id: document.getElementById("tk-prod").value || null, serial_no: gv("tk-serial") || null, equipment_id: document.getElementById("tk-equip").value || null, priority: document.getElementById("tk-priority").value, status: st, assigned_to: document.getElementById("tk-tech").value || null, scheduled_at: gv("tk-sched") ? new Date(gv("tk-sched")).toISOString() : null, location: document.getElementById("tk-loc").value || null, bill_to: document.getElementById("tk-billto").value || "customer", rma_no: gv("tk-rma") || null, survey_score: document.getElementById("tk-survey").value ? parseInt(document.getElementById("tk-survey").value, 10) : null, survey_comment: gv("tk-survcomment") || null, problem: gv("tk-problem") || null, diagnosis: gv("tk-diag") || null, updated_at: new Date().toISOString() };
       if (st === "closed" || st === "done") row.closed_at = t.closed_at || new Date().toISOString();
       var tid = id;
       if (id === "new") { row.company_id = S.company.id; row.number = "T-" + String(Date.now()).slice(-6); var ins = await sb.from("service_tickets").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } tid = ins.data.id; }
@@ -15746,21 +15751,87 @@
       if (r.error) { toast(errMsg(r.error)); return; } toast("Saved"); go("svc.warranties");
     };
   }
+  var _svcWeek = null;   // Monday of the shown week
   async function renderServiceSchedule() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:14px"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var rows = (await sb.from("service_tickets").select("*, partners:partner_id(name)").eq("company_id", S.company.id).not("scheduled_at", "is", null).order("scheduled_at")).data || [];
+    if (!_svcWeek) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); _svcWeek = n.toISOString().slice(0, 10); }
+    var start = new Date(_svcWeek + "T00:00:00"); var end = new Date(start); end.setDate(end.getDate() + 7);
     var techs = await svcTechnicians(); var tById = {}; techs.forEach(function (m) { tById[m.id] = m.name; });
+    var rows = (await sb.from("service_tickets").select("id,title,status,priority,partner_id,assigned_to,scheduled_at, partners:partner_id(name)").eq("company_id", S.company.id).gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at")).data || [];
+    var days = []; for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(d.getDate() + i); days.push(d.toISOString().slice(0, 10)); }
+    var lanes = techs.map(function (m) { return { id: m.id, name: m.name }; }); lanes.push({ id: "", name: "Unassigned" });
+    var byKey = {}; rows.forEach(function (r) { var k = (r.assigned_to || "") + "|" + (r.scheduled_at || "").slice(0, 10); (byKey[k] = byKey[k] || []).push(r); });
+    var dfmt = function (s) { var d = new Date(s + "T00:00:00"); return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][(d.getDay() + 6) % 7] + " " + (d.getMonth() + 1) + "/" + d.getDate(); };
     var body = document.getElementById("o-body");
-    if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Nothing scheduled</div><div class="o-empty2-h">Set a date &amp; technician on a ticket and it appears here.</div></div>'; return; }
-    var byDay = {}; rows.forEach(function (r) { var d = (r.scheduled_at || "").slice(0, 10); (byDay[d] = byDay[d] || []).push(r); });
-    body.innerHTML = '<div style="max-width:820px">' + Object.keys(byDay).sort().map(function (d) {
-      return '<div class="o-cf-head" style="margin:14px 0 6px">' + esc(d) + '</div>' + byDay[d].map(function (r) {
-        return '<div class="o-th-tile" data-id="' + r.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 14px;margin-bottom:6px;cursor:pointer"><span class="mono muted" style="width:52px">' + esc((r.scheduled_at || "").slice(11, 16)) + '</span><b style="flex:1">' + esc(r.title || "") + '</b><span class="muted">' + esc(r.partners ? r.partners.name : "") + '</span><span class="muted">' + esc(tById[r.assigned_to] || "Unassigned") + '</span>' + svcStatusBadge(r.status) + '</div>';
-      }).join("");
-    }).join("") + '</div>';
-    body.querySelectorAll("[data-id]").forEach(function (el) { el.onclick = function () { renderTicketForm(el.dataset.id); }; });
+    var head = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:15px">Technician schedule</b><div class="gap" style="flex:1"></div><button class="o-filtbtn" id="sc-prev">&larr;</button><button class="o-filtbtn" id="sc-today">This week</button><button class="o-filtbtn" id="sc-next">&rarr;</button><span class="muted" style="font-size:12px">' + dfmt(days[0]) + ' - ' + dfmt(days[6]) + '</span></div>';
+    var grid = '<div style="overflow-x:auto"><table class="sc-cal" style="border-collapse:collapse;width:100%;min-width:900px"><thead><tr><th style="width:120px;text-align:left;padding:6px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink3)">Technician</th>' + days.map(function (d) { return '<th style="padding:6px;border-bottom:1px solid var(--line);border-left:1px solid var(--line);font-size:12px;color:var(--ink3)">' + dfmt(d) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+      lanes.map(function (ln) { return '<tr><td style="padding:8px 6px;font-weight:600;font-size:13px;vertical-align:top">' + esc(ln.name) + '</td>' + days.map(function (d) {
+        var cell = (byKey[(ln.id || "") + "|" + d] || []); return '<td class="sc-cell" data-tech="' + esc(ln.id) + '" data-day="' + d + '" style="border-left:1px solid var(--line);border-top:1px solid var(--line);vertical-align:top;padding:4px;min-width:110px;height:64px">' +
+          cell.map(function (r) { var pc = r.priority === "urgent" ? "var(--bad)" : r.priority === "high" ? "#c47d10" : "var(--app)"; return '<div class="sc-card" draggable="true" data-id="' + r.id + '" style="background:var(--panel2);border-left:3px solid ' + pc + ';border-radius:6px;padding:5px 7px;margin-bottom:4px;cursor:grab;font-size:12px"><b>' + esc((r.scheduled_at || "").slice(11, 16)) + '</b> ' + esc(r.title || "") + '<div class="muted" style="font-size:11px">' + esc(r.partners ? r.partners.name : "") + '</div></div>'; }).join("") +
+          '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table></div>';
+    body.innerHTML = head + grid + '<div class="sub" style="margin-top:8px">Drag a job to another technician or day to reschedule. Click a card to open the ticket.</div>';
+    document.getElementById("sc-prev").onclick = function () { var d = new Date(start); d.setDate(d.getDate() - 7); _svcWeek = d.toISOString().slice(0, 10); renderServiceSchedule(); };
+    document.getElementById("sc-next").onclick = function () { var d = new Date(start); d.setDate(d.getDate() + 7); _svcWeek = d.toISOString().slice(0, 10); renderServiceSchedule(); };
+    document.getElementById("sc-today").onclick = function () { _svcWeek = null; renderServiceSchedule(); };
+    var dragId = null;
+    body.querySelectorAll(".sc-card").forEach(function (c) {
+      c.addEventListener("dragstart", function (e) { dragId = c.dataset.id; e.dataTransfer.effectAllowed = "move"; });
+      c.addEventListener("click", function () { renderTicketForm(c.dataset.id); });
+    });
+    body.querySelectorAll(".sc-cell").forEach(function (cell) {
+      cell.addEventListener("dragover", function (e) { e.preventDefault(); cell.style.background = "var(--app-soft, rgba(47,91,255,.08))"; });
+      cell.addEventListener("dragleave", function () { cell.style.background = ""; });
+      cell.addEventListener("drop", async function (e) {
+        e.preventDefault(); cell.style.background = ""; if (!dragId) return;
+        var tech = cell.dataset.tech || null, day = cell.dataset.day;
+        var cur = rows.filter(function (r) { return r.id === dragId; })[0]; var tm = (cur && cur.scheduled_at ? cur.scheduled_at.slice(11, 16) : "09:00");
+        var iso = new Date(day + "T" + tm + ":00").toISOString();
+        var up = await sb.from("service_tickets").update({ assigned_to: tech, scheduled_at: iso, status: tech ? "assigned" : "new", updated_at: new Date().toISOString() }).eq("id", dragId);
+        if (up.error) { toast(errMsg(up.error)); return; } dragId = null; renderServiceSchedule();
+      });
+    });
+  }
+  // Planned preventive maintenance: recurring plans that generate tickets when due.
+  async function renderMaintenancePlans() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Maintenance") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var plans = (await sb.from("service_maintenance_plans").select("*, partners:partner_id(name), equip:equipment_id(name)").eq("company_id", S.company.id).order("next_due")).data || [];
+    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var equip = (await sb.from("plant_equipment").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var techs = await svcTechnicians();
+    var due = plans.filter(function (p) { return p.active && p.next_due <= today(); }).length;
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    document.getElementById("o-body").innerHTML = '<div class="card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div><h3 style="margin:0 0 3px">Preventive maintenance</h3><div class="sub" style="margin:0">Recurring plans that raise a service ticket every so often. ' + (due ? '<b style="color:var(--app)">' + due + ' due now.</b>' : 'None due right now.') + '</div></div><div class="gap" style="flex:1"></div>' + (due ? '<button class="btn pri" id="ppm-gen" style="background:var(--app);border-color:var(--app)">Generate ' + due + ' due ticket(s)</button>' : '') + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Plan</th><th>For</th><th>Every</th><th>Next due</th><th>Active</th><th></th></tr></thead><tbody>' +
+      (plans.length ? plans.map(function (p) { var overdue = p.active && p.next_due <= today(); return '<tr><td><b>' + esc(p.title) + '</b></td><td>' + esc((p.partners && p.partners.name) || (p.equip && p.equip.name) || p.serial_no || "-") + '</td><td>' + p.frequency_days + 'd</td><td><span class="' + (overdue ? "badge draft" : "muted") + '">' + esc(p.next_due) + (overdue ? " due" : "") + '</span></td><td>' + (p.active ? "Yes" : "No") + '</td><td><button class="btn sm ppm-del" data-id="' + p.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No maintenance plans yet.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div class="o-cf-head" style="margin-top:14px">Add a plan</div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">' +
+      '<input id="pp-title" placeholder="Title (e.g. AC quarterly service)" ' + inS + ' style="min-width:200px">' +
+      '<select id="pp-cust" ' + inS + '><option value="">Customer...</option>' + custs.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
+      '<select id="pp-equip" ' + inS + '><option value="">Equipment...</option>' + equip.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>' +
+      '<select id="pp-tech" ' + inS + '><option value="">Technician...</option>' + techs.map(function (m) { return '<option value="' + m.id + '">' + esc(m.name) + '</option>'; }).join("") + '</select>' +
+      '<label class="muted" style="font-size:12px">every <input id="pp-freq" type="number" value="90" ' + inS + ' style="width:64px"> days</label>' +
+      '<label class="muted" style="font-size:12px">from <input id="pp-next" type="date" value="' + today() + '" ' + inS + '></label>' +
+      '<button class="btn sm pri" id="pp-add" style="background:var(--app);border-color:var(--app)">Add plan</button></div></div>';
+    var gen = document.getElementById("ppm-gen");
+    if (gen) gen.onclick = async function () {
+      gen.disabled = true; var made = 0;
+      var duePlans = plans.filter(function (p) { return p.active && p.next_due <= today(); });
+      for (var i = 0; i < duePlans.length; i++) {
+        var p = duePlans[i];
+        var ins = await sb.from("service_tickets").insert({ company_id: S.company.id, number: "T-" + String(Date.now()).slice(-6) + "-" + i, title: p.title, partner_id: p.partner_id, product_id: p.product_id, equipment_id: p.equipment_id, serial_no: p.serial_no, assigned_to: p.assigned_to, priority: p.priority || "normal", status: p.assigned_to ? "assigned" : "new", channel: "internal", problem: p.problem, scheduled_at: new Date(p.next_due + "T09:00:00").toISOString(), maintenance_plan_id: p.id });
+        if (!ins.error) { made++; var nd = new Date(p.next_due + "T00:00:00"); nd.setDate(nd.getDate() + (Number(p.frequency_days) || 90)); await sb.from("service_maintenance_plans").update({ next_due: nd.toISOString().slice(0, 10), last_generated_at: new Date().toISOString() }).eq("id", p.id); }
+      }
+      toast(made + " ticket(s) generated"); renderMaintenancePlans();
+    };
+    document.querySelectorAll(".ppm-del").forEach(function (b) { b.onclick = async function () { await sb.from("service_maintenance_plans").delete().eq("id", b.dataset.id); renderMaintenancePlans(); }; });
+    document.getElementById("pp-add").onclick = async function () {
+      var title = gv("pp-title"); if (!title) { toast("Give the plan a title"); return; }
+      var ins = await sb.from("service_maintenance_plans").insert({ company_id: S.company.id, title: title, partner_id: document.getElementById("pp-cust").value || null, equipment_id: document.getElementById("pp-equip").value || null, assigned_to: document.getElementById("pp-tech").value || null, frequency_days: parseInt(gv("pp-freq"), 10) || 90, next_due: gv("pp-next") || today(), active: true });
+      if (ins.error) { toast(errMsg(ins.error)); return; } renderMaintenancePlans();
+    };
   }
   async function renderSiteForm(id) {
     var parent = { action: "web.sites", title: "Sites" };
