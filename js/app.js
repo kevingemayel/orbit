@@ -2499,7 +2499,7 @@
       case "crm.stages": return renderList(cfgCrmStages());
       case "hr.emp": return renderList(cfgEmployees());
       case "hr.dept": return renderList(cfgDepartments());
-      case "hr.jobs": return renderList(cfgJobs());
+      case "hr.jobs": return renderList(cfgJobPositions());
       case "hr.leaves": return renderList(cfgLeaves());
       case "hr.att": return renderList(cfgAttendances());
       case "hr.exp": return renderList(cfgExpenses());
@@ -3241,7 +3241,7 @@
     var isCust = kind === "customer";
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
-      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners", archiveField: "is_active",
+      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners",
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
@@ -3441,7 +3441,7 @@
   }
   function cfgTaxes() {
     return {
-      title: "Taxes", pageSize: 50, editTable: "taxes",
+      title: "Taxes", pageSize: 50, editTable: "taxes", archiveField: "is_active",
       fetch: function () { return sb.from("taxes").select("*").eq("company_id", S.company.id).order("amount", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (t) { return (t.name || "") + " " + (t.code || ""); },
       columns: [
@@ -3449,7 +3449,28 @@
         { label: "Rate", num: true, edit: { field: "amount", type: "number" }, get: function (t) { return Number(t.amount) + "%"; } },
         { label: "Scope", get: function (t) { return '<span class="muted">' + esc(t.scope || "") + '</span>'; } }
       ],
-      groupBy: [{ label: "Scope", get: function (t) { return t.scope || "None"; } }]
+      groupBy: [{ label: "Scope", get: function (t) { return t.scope || "None"; } }],
+      emptyHint: "Add your VAT / sales-tax rates so quotes and invoices calculate the right totals.",
+      onNew: function () { openTaxModal(null); }, onOpen: function (t) { openTaxModal(t); }
+    };
+  }
+  async function openTaxModal(t) {
+    t = t || {};
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Edit tax" : "New tax") + '</h3><div class="form">' +
+      '<div><label>Name</label><input id="tx-name" value="' + esc(t.name || "") + '" placeholder="e.g. VAT 5%"></div>' +
+      '<div class="row2"><div><label>Rate %</label><input id="tx-amt" type="number" step="0.0001" value="' + (t.amount != null ? t.amount : "") + '"></div><div><label>Scope</label><select id="tx-scope"><option value="sale">Sale</option><option value="purchase">Purchase</option><option value="both">Both</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="tx-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="tx-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="tx-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("tx-scope").value = t.scope || "sale";
+    document.getElementById("tx-cancel").onclick = function () { m.remove(); };
+    var del = document.getElementById("tx-del"); if (del) del.onclick = async function () { if (!confirm("Delete this tax? If it is used on any product or document it can't be deleted.")) return; var r = await sb.from("taxes").delete().eq("id", t.id); if (r.error) { toast(/foreign key|violates|23503/i.test((r.error.message || "") + r.error.code) ? "This tax is in use - it can't be deleted." : errMsg(r.error)); return; } m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("tx-save").onclick = async function () {
+      var name = gv("tx-name"); if (!name) { toast("Name the tax"); return; }
+      var amt = parseFloat(gv("tx-amt")); if (isNaN(amt)) { toast("Enter a rate %"); return; }
+      var row = { name: name, amount: amt, amount_type: "percent", scope: document.getElementById("tx-scope").value };
+      var r; if (t.id) r = await sb.from("taxes").update(row).eq("id", t.id); else { row.company_id = S.company.id; row.is_active = true; r = await sb.from("taxes").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
   }
   function cfgRates() {
@@ -3465,7 +3486,7 @@
         { label: "Rate (1 " + "= ? " + esc(ref) + ")", num: true, get: function (r) { return Number(r.rate).toLocaleString("en-US", { maximumFractionDigits: 6 }); } }
       ],
       groupBy: [{ label: "Currency", get: function (r) { return r.code; } }, { label: "Type", get: function (r) { return r.rate_type; } }],
-      onNew: function () { openRateModal(); },
+      onNew: function () { openRateModal(); }, onOpen: function (r) { openRateModal(r); },
       action: {
         label: "↻ Update from market", run: async function (btn) {
           if (btn) { btn.disabled = true; btn.textContent = "Fetching..."; }
@@ -3476,22 +3497,25 @@
       }
     };
   }
-  function openRateModal() {
+  function openRateModal(rate) {
+    rate = rate || {};
     var ref = (S.org && S.org.ref_currency) || "USD";
     var m = document.createElement("div"); m.className = "modal on"; m.id = "ratemodal";
-    m.innerHTML = '<div class="sheet"><h3>New exchange rate</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-      '<div><label>Currency</label>' + fhint("Currency", "The currency you are quoting a rate for. Pick from the list.") + currencySelectHTML("r-code", "EUR") + '</div>' +
-      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + today() + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
-      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09"></div>' +
-      '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button><button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+    m.innerHTML = '<div class="sheet"><h3>' + (rate.id ? "Edit exchange rate" : "New exchange rate") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
+      '<div><label>Currency</label>' + fhint("Currency", "The currency you are quoting a rate for. Pick from the list.") + currencySelectHTML("r-code", rate.code || "EUR") + '</div>' +
+      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + (rate.rate_date || today()) + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
+      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09" value="' + (rate.rate != null ? rate.rate : "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button>' + (rate.id ? '<button class="btn" id="r-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
+    if (rate.rate_type) document.getElementById("r-type").value = rate.rate_type;
     document.getElementById("r-cancel").onclick = function () { m.remove(); };
+    var rdel = document.getElementById("r-del"); if (rdel) rdel.onclick = async function () { if (!confirm("Delete this exchange rate?")) return; var r = await sb.from("currency_rates").delete().eq("id", rate.id); if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("r-save").onclick = async function () {
       var code = (document.getElementById("r-code").value || "").trim().toUpperCase();
-      var rate = parseFloat(document.getElementById("r-rate").value);
-      if (!code || !(rate > 0)) { toast("Enter a currency and a positive rate"); return; }
-      var row = { org_id: S.org.id, code: code, rate_date: document.getElementById("r-date").value, rate: rate, rate_type: document.getElementById("r-type").value };
-      var r = await sb.from("currency_rates").insert(row);
+      var rt = parseFloat(document.getElementById("r-rate").value);
+      if (!code || !(rt > 0)) { toast("Enter a currency and a positive rate"); return; }
+      var row = { org_id: S.org.id, code: code, rate_date: document.getElementById("r-date").value, rate: rt, rate_type: document.getElementById("r-type").value };
+      var r = rate.id ? await sb.from("currency_rates").update(row).eq("id", rate.id) : await sb.from("currency_rates").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Rate saved"); renderView();
     };
@@ -8082,7 +8106,7 @@
   // ============================ CONTACTS (unified directory + tags) ============================
   function cfgContacts() {
     return {
-      title: "Contacts", pageSize: 80, editTable: "partners", archiveField: "is_active",
+      title: "Contacts", pageSize: 80, editTable: "partners",
       nest: { parent: "employer_id" },   // tuck employees under the company they work at
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + (p.role_title || "") + " " + ((p.capabilities || []).join(" ")); },
@@ -10016,7 +10040,7 @@
   // ============================ SALES: PRICELISTS ============================
   function cfgPricelists() {
     return {
-      title: "Pricelists", pageSize: 80,
+      title: "Pricelists", pageSize: 80, table: "pricelists", archiveField: "is_active",
       fetch: function () { return sb.from("pricelists").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (p) { return (p.name || "") + " " + (p.currency_code || ""); },
       columns: [
@@ -10120,7 +10144,7 @@
   // ============================ FIXED ASSETS & DEPRECIATION ============================
   function cfgAssets() {
     return {
-      title: "Assets", pageSize: 80,
+      title: "Assets", pageSize: 80, table: "assets",
       fetch: function () { return sb.from("assets").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (a) { return (a.number || "") + " " + (a.name || "") + " " + (a.category || ""); },
       columns: [
@@ -10261,7 +10285,7 @@
   // ============================ BUDGETS ============================
   function cfgBudgets() {
     return {
-      title: "Budgets", pageSize: 80,
+      title: "Budgets", pageSize: 80, table: "budgets",
       fetch: function () { return sb.from("budgets").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (b) { return (b.name || ""); },
       columns: [
@@ -13315,7 +13339,7 @@
   }
   function cfgLeads() {
     return {
-      title: "Leads", pageSize: 80,
+      title: "Leads", pageSize: 80, table: "crm_leads",
       fetch: function () { return Promise.all([sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }), sb.from("crm_stages").select("id,name").eq("company_id", S.company.id)]).then(function (res) { var sm = {}; (res[1].data || []).forEach(function (s) { sm[s.id] = s.name; }); return (res[0].data || []).map(function (l) { l._stage = sm[l.stage_id]; return l; }); }); },
       searchText: function (l) { return (l.name || "") + " " + (l.contact_name || "") + " " + (l.partners ? l.partners.name : ""); },
       columns: [
@@ -13639,9 +13663,9 @@
       m.remove(); toast("Saved"); renderView();
     };
   }
-  function cfgJobs() {
+  function cfgJobPositions() {
     return {
-      title: "Job Positions", pageSize: 80,
+      title: "Job Positions", pageSize: 80, table: "hr_jobs",
       fetch: function () { return sb.from("hr_jobs").select("*, hr_departments(name)").eq("company_id", S.company.id).order("name").then(function (r) { var rows = r.data || []; return sb.from("hr_employees").select("job_id").eq("company_id", S.company.id).then(function (er) { var cnt = {}; (er.data || []).forEach(function (x) { if (x.job_id) cnt[x.job_id] = (cnt[x.job_id] || 0) + 1; }); rows.forEach(function (j) { j._count = cnt[j.id] || 0; }); return rows; }); }); },
       searchText: function (j) { return (j.name || "") + " " + (j.hr_departments ? j.hr_departments.name : ""); },
       columns: [
@@ -13752,7 +13776,7 @@
   }
   function cfgAttendances() {
     return {
-      title: "Attendances", pageSize: 100,
+      title: "Attendances", pageSize: 100, table: "hr_attendances",
       fetch: function () { return sb.from("hr_attendances").select("*, hr_employees(name)").eq("company_id", S.company.id).order("check_in", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (a) { return a.hr_employees ? a.hr_employees.name : ""; },
       columns: [
@@ -13787,7 +13811,7 @@
   }
   function cfgExpenses() {
     return {
-      title: "Expenses", pageSize: 80,
+      title: "Expenses", pageSize: 80, table: "hr_expenses",
       fetch: function () { return sb.from("hr_expenses").select("*, hr_employees(name)").eq("company_id", S.company.id).order("expense_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (x) { return (x.name || "") + " " + (x.hr_employees ? x.hr_employees.name : ""); },
       columns: [
@@ -13931,7 +13955,7 @@
   // ---- Contracts ----
   function cfgContracts() {
     return {
-      title: "Contracts", pageSize: 80,
+      title: "Contracts", pageSize: 80, table: "hr_contracts",
       fetch: function () { return sb.from("hr_contracts").select("*, hr_employees(name), hr_salary_structures(name)").eq("company_id", S.company.id).order("date_start", { ascending: false, nullsFirst: false }).then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.hr_employees ? c.hr_employees.name : "") + " " + (c.name || ""); },
       columns: [
@@ -14727,7 +14751,7 @@
   // ---- Subcontracts ----
   function cfgSubcontracts() {
     return {
-      title: "Subcontracts", pageSize: 80,
+      title: "Subcontracts", pageSize: 80, table: "subcontracts",
       fetch: function () { return sb.from("subcontracts").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (s) { return (s.number || "") + " " + (s.name || "") + " " + (s.partners ? s.partners.name : ""); },
       columns: [
@@ -17383,7 +17407,7 @@
   // ============================ ESTIMATION / TENDERING ============================
   function cfgTenders() {
     return {
-      title: "Tenders", pageSize: 80,
+      title: "Tenders", pageSize: 80, table: "tenders",
       emptyHint: "A tender is a priced construction bid: build up cost by trade, add margin, and track win/loss. This is the right place for project bids (not Sales quotations). Win one and it becomes a project.",
       fetch: function () { return sb.from("tenders").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (t) { return (t.number || "") + " " + (t.name || "") + " " + (t.partners ? t.partners.name : ""); },
@@ -17850,7 +17874,7 @@
   }
   function cfgBoms() {
     return {
-      title: "Bills of Materials", pageSize: 80,
+      title: "Bills of Materials", pageSize: 80, table: "boms",
       fetch: function () { return sb.from("boms").select("*, products(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (b) { return (b.name || "") + " " + (b.products ? b.products.name : ""); },
       columns: [
@@ -17929,7 +17953,7 @@
   }
   function cfgWorkOrders() {
     return {
-      title: "Work Orders", pageSize: 80,
+      title: "Work Orders", pageSize: 80, table: "work_orders",
       fetch: function () { return sb.from("work_orders").select("*, products(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (w) { return (w.number || "") + " " + (w.products ? w.products.name : "") + " " + (w.projects ? w.projects.name : ""); },
       columns: [
@@ -19132,7 +19156,7 @@
   // ---- payment methods (config) ----
   function cfgPaymentMethods() {
     return {
-      title: "Payment Methods", pageSize: 100,
+      title: "Payment Methods", pageSize: 100, table: "payment_methods", archiveField: "is_active",
       fetch: function () { return sb.from("payment_methods").select("*").eq("company_id", S.company.id).order("sort").order("name").then(function (r) { return r.data || []; }); },
       searchText: function (m) { return (m.name || "") + " " + (m.kind || ""); },
       columns: [
