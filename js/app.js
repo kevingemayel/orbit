@@ -2578,6 +2578,7 @@
       (cfg.filters ? '<button class="o-filtbtn" id="o-fbtn">Filters &#9660;</button>' : '') +
       (cfg.groupBy ? '<button class="o-filtbtn" id="o-gbtn">Group By &#9660;</button>' : '') +
       '<button class="o-filtbtn" id="o-colbtn" title="Choose which columns show; drag a column edge to resize">Columns &#9660;</button>' +
+      '<select class="o-filtbtn o-psize" id="o-psize" title="How many rows to show per page"><option value="25">25 / page</option><option value="50">50 / page</option><option value="100">100 / page</option><option value="200">200 / page</option><option value="500">500 / page</option><option value="1000000">Show all</option></select>' +
       '<div class="gap"></div>' +
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
@@ -2593,7 +2594,8 @@
       '</div>';
     wireBc();
     var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: colPrefs(S.action), kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    var _cp = colPrefs(S.action);   // per-screen prefs: {hidden, width, size}
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -2604,6 +2606,7 @@
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
     document.getElementById("o-colbtn").onclick = function () { openColsDropdown(this); };
+    var _ps = document.getElementById("o-psize"); if (_ps) { _ps.value = String(L.size); _ps.onchange = function () { L.size = +this.value || 100; L.page = 0; _cp.size = L.size; saveColPrefs(); paintBody(); }; }
     document.getElementById("o-export").onclick = function () { exportListCsv(); };
     var _selBtn = document.getElementById("o-selbtn");
     if (_selBtn) _selBtn.onclick = function () { L.selMode = !L.selMode; if (!L.selMode) L.sel = {}; _selBtn.classList.toggle("on", L.selMode); paintBody(); };
