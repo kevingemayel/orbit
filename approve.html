@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Approve or reject</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--paper:#f6f4ef;--card:#fff;--ink:#181a1f;--ink2:#6b6b6b;--line:#e6e2d9;--accent:#2f6bff;--yes:#16a34a;--no:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Onest,system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;max-width:460px;width:100%;padding:34px;box-shadow:0 10px 40px rgba(0,0,0,.06)}
+.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:26px;margin:6px 0 2px;text-wrap:balance}
+.meta{color:var(--ink2);font-size:14px;margin-bottom:22px}
+.amt{font-size:34px;font-weight:800;letter-spacing:-.02em;margin:2px 0 4px;font-variant-numeric:tabular-nums}
+.rows{border-top:1px solid var(--line);margin:18px 0 4px}
+.row{display:flex;justify-content:space-between;gap:14px;padding:9px 0;border-bottom:1px solid var(--line);font-size:14px}
+.row .k{color:var(--ink2)}
+.row .v{font-weight:600;text-align:right}
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:18px 0 0}
+.choice{padding:14px 6px;border:2px solid var(--line);border-radius:14px;background:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer;text-align:center;color:var(--ink)}
+.choice.on[data-v=approved]{border-color:var(--yes);color:var(--yes);background:#f0fdf4}
+.choice.on[data-v=rejected]{border-color:var(--no);color:var(--no);background:#fef2f2}
+label{display:block;font-size:12.5px;font-weight:600;margin:14px 0 5px}
+input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:#fff;color:var(--ink);font:inherit;font-size:15px}
+button.go{width:100%;margin-top:18px;padding:13px;border:none;border-radius:12px;background:var(--ink);color:#fff;font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+button.go:disabled{opacity:.5}
+.big{text-align:center;padding:14px 0}.big .em{font-size:44px}
+.brand{text-align:center;color:var(--ink2);font-size:12px;margin-top:20px}
+.err{color:#c0392b;font-size:13px;margin-top:8px;min-height:1px}
+.note{font-size:12.5px;color:var(--ink2);margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card" id="card"><div class="big"><div class="em">&#9203;</div><p>Loading&hellip;</p></div></div>
+<script src="config.js"></script>
+<script>
+(function(){
+  var sb = window.supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_ANON_KEY);
+  var qs = new URLSearchParams(location.search);
+  var token = qs.get("t");
+  var preset = qs.get("d");            // Approve / Reject pressed straight from the email
+  var card = document.getElementById("card");
+  var choice = (preset === "approved" || preset === "rejected") ? preset : null;
+
+  function esc(s){ return (s==null?"":String(s)).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];}); }
+  function done(em, title, sub){ card.innerHTML='<div class="big"><div class="em">'+em+'</div><h1>'+esc(title)+'</h1>'+(sub?'<p class="meta">'+esc(sub)+'</p>':'')+'</div><div class="brand">Powered by Orbit</div>'; }
+  function fail(msg, sub){ done("&#128577;", msg, sub); }
+  function money(v, cur){ var n=Number(v||0); return (cur?cur+" ":"")+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2}); }
+  // Must match APPR_DOC_LABEL in js/app.js
+  var DOC = { purchase_order:"Purchase order", sales_order:"Sales order", vendor_bill:"Vendor bill", customer_invoice:"Customer invoice", subcontract:"Subcontract", variation:"Variation", expense:"Expense", journal_entry:"Journal entry", payroll:"Payroll run" };
+
+  if(!token){ fail("This link is missing its code.", "Ask for the approval email to be sent again."); return; }
+
+  sb.rpc("approval_lookup",{p_token:token}).then(function(r){
+    if(r.error || !r.data || !r.data.length){ fail("We couldn't find this request.", "The link may have expired, or the request was withdrawn."); return; }
+    render(r.data[0]);
+  });
+
+  function render(a){
+    if(a.status && a.status !== "pending"){
+      var was = a.status === "approved" ? "approved" : "rejected";
+      done(a.status==="approved"?"&#9989;":"&#128683;", "Already " + was,
+        (a.decided_by ? was.charAt(0).toUpperCase()+was.slice(1)+" by "+a.decided_by : "This request has already been decided") + (a.decided_at ? " on "+new Date(a.decided_at).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}) : "") + ".");
+      return;
+    }
+    if(a.expired){ fail("This link has expired.", "Ask for the approval email to be sent again, or decide it inside Orbit."); return; }
+
+    var rows = [
+      ["Document", (DOC[a.doc_type] || a.doc_type || "Document") + (a.doc_number ? " " + a.doc_number : "")],
+      ["Requested by", a.requested_by || "-"],
+      ["Company", a.company_name || "-"],
+      ["Raised", a.created_at ? new Date(a.created_at).toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}) : "-"]
+    ];
+    card.innerHTML =
+      '<div class="eyebrow">Approval needed</div>'+
+      '<h1>'+esc((DOC[a.doc_type]||a.doc_type||"Document")+(a.doc_number?" "+a.doc_number:""))+'</h1>'+
+      (a.doc_amount != null ? '<div class="amt">'+esc(money(a.doc_amount, a.currency_code))+'</div>' : '')+
+      '<div class="meta">'+esc(a.rule_name || "Needs your approval")+'</div>'+
+      '<div class="rows">'+rows.map(function(r){ return '<div class="row"><span class="k">'+esc(r[0])+'</span><span class="v">'+esc(r[1])+'</span></div>'; }).join("")+'</div>'+
+      '<div class="choices">'+
+        '<button class="choice'+(choice==="approved"?" on":"")+'" data-v="approved">Approve</button>'+
+        '<button class="choice'+(choice==="rejected"?" on":"")+'" data-v="rejected">Reject</button>'+
+      '</div>'+
+      '<label>Add a note <span style="font-weight:400;color:var(--ink2)">(optional)</span></label><input id="a-note" placeholder="Anything the requester should know">'+
+      '<div class="err" id="a-err"></div>'+
+      '<button class="go" id="a-go">Confirm my decision</button>'+
+      '<div class="note">You are deciding as <b>'+esc(a.approver_email || "the named approver")+'</b>. This link works once and is recorded against your name.</div>'+
+      '<div class="brand">Powered by Orbit</div>';
+    card.querySelectorAll(".choice").forEach(function(b){ b.onclick=function(){ choice=b.dataset.v; card.querySelectorAll(".choice").forEach(function(x){x.classList.toggle("on",x===b);}); }; });
+    document.getElementById("a-go").onclick = submit;
+  }
+
+  function submit(){
+    if(!choice){ document.getElementById("a-err").textContent="Please choose Approve or Reject."; return; }
+    var btn=document.getElementById("a-go"); btn.disabled=true; btn.textContent="Saving…";
+    var note=(document.getElementById("a-note")||{}).value||"";
+    sb.rpc("approval_decide",{p_token:token,p_decision:choice,p_note:note.trim()}).then(function(r){
+      var out = r.data;
+      if(r.error){ document.getElementById("a-err").textContent="Something went wrong: "+r.error.message; btn.disabled=false; btn.textContent="Confirm my decision"; return; }
+      if(out && out.ok === false){
+        if(out.reason === "already"){ done("&#9989;","Already decided","Someone got there first - this request is already "+esc(out.status)+"."); return; }
+        if(out.reason === "expired"){ fail("This link has expired.","Ask for the approval email to be sent again, or decide it inside Orbit."); return; }
+        fail("We couldn't record that.", "Please decide it inside Orbit instead.");
+        return;
+      }
+      if(choice==="approved") done("&#9989;","Approved","Thank you. The requester has been told and can now post it.");
+      else done("&#128683;","Rejected","Thank you. The requester has been told it will not go ahead.");
+    });
+  }
+})();
+</script>
+</body>
+</html>

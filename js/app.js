@@ -2101,10 +2101,27 @@
     var a = ex[0];
     if (a && a.status === "approved") return "ok";
     if (a && a.status === "pending") { toast("Already awaiting approval"); return "blocked"; }
-    await sb.from("approvals").insert({ company_id: S.company.id, rule_id: rule.id, doc_type: docType, doc_id: docId, doc_number: docNumber || "", doc_amount: Number(amount) || 0, requested_by: (S.user && S.user.email) || "", status: "pending", link_action: backAction || null });
+    var ins = await sb.from("approvals").insert({ company_id: S.company.id, rule_id: rule.id, doc_type: docType, doc_id: docId, doc_number: docNumber || "", doc_amount: Number(amount) || 0, requested_by: (S.user && S.user.email) || "", status: "pending", link_action: backAction || null }).select("id").single();
     notify({ kind: "approval_request", employee_id: rule.approver_employee_id || null, title: "Approval needed: " + (docNumber || APPR_DOC_LABEL[docType] || docType), body: S.company.currency_code + " " + money(amount) + " " + (APPR_DOC_LABEL[docType] || docType), link_action: "approvals.inbox" });
     toast("Sent for approval (" + S.company.currency_code + " " + money(amount) + ")");
+    // Email the approver a one-click Approve / Reject link. Quiet: the document
+    // is already blocked and the bell already fired, so a mail problem must not
+    // read as though the request itself failed.
+    if (ins && ins.data && ins.data.id) sendApprovalEmail(ins.data.id, true);
     return "blocked";
+  }
+  // Ask the server to email the named approver a signed one-click decision link.
+  // The token is minted server-side and never passes through the browser.
+  async function sendApprovalEmail(id, quiet) {
+    try {
+      var sess = (await sb.auth.getSession()).data.session;
+      if (!sess) { if (!quiet) toast("Sign in again to send that."); return false; }
+      var res = await fetch("/api/send-approval", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify({ approval_id: id }) });
+      var j = await res.json().catch(function () { return { error: "Server error (HTTP " + res.status + ")" }; });
+      if (j && j.ok) { if (!quiet) toast("Approval email sent to " + j.to); return true; }
+      if (!quiet) toast(j && j.error ? j.error : "Could not send the approval email.");
+      return false;
+    } catch (e) { if (!quiet) toast("Could not send the approval email: " + (e && e.message)); return false; }
   }
   async function renderApprovalsInbox() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Approvals") + '<div class="gap"></div><button class="o-filtbtn" id="ap-rules">Approval rules</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
@@ -2116,12 +2133,19 @@
     if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No approvals yet</div><div class="o-empty2-h">When a purchase order, invoice or other document crosses a threshold you set, it lands here for sign-off before it can be posted.</div><button class="o-new" id="ap-rules2" style="margin-top:14px">Set up approval rules</button></div>'; document.getElementById("ap-rules2").onclick = function () { go("approvals.rules"); }; return; }
     function card(r, pend) {
       return '<div class="ap-card"><div class="ap-card-main"><div class="ap-doc">' + esc(r.doc_number || (APPR_DOC_LABEL[r.doc_type] || r.doc_type)) + ' <span class="ap-type">' + esc(APPR_DOC_LABEL[r.doc_type] || r.doc_type) + '</span></div><div class="ap-amt">' + esc(S.company.currency_code) + " " + money(r.doc_amount) + '</div><div class="ap-meta">Requested by ' + esc(r.requested_by || "someone") + ' &middot; ' + agWhen(r.created_at) + (r.status !== "pending" ? ' &middot; ' + esc(r.status) + ' by ' + esc(r.decided_by || "") + (r.approver_note ? ' (' + esc(r.approver_note) + ')' : "") : "") + '</div></div>' +
-        (pend ? '<div class="ap-actions">' + (r.link_action ? '<button class="o-filtbtn ap-open" data-act="' + esc(r.link_action) + '">View doc</button>' : "") + '<button class="o-filtbtn ap-reject" data-id="' + r.id + '">Reject</button><button class="o-filtbtn pri ap-approve" data-id="' + r.id + '">Approve</button></div>' : '<div class="ap-badge ' + esc(r.status) + '">' + (r.status === "approved" ? "Approved" : "Rejected") + '</div>') + '</div>';
+        (pend ? '<div class="ap-actions">' + (r.link_action ? '<button class="o-filtbtn ap-open" data-act="' + esc(r.link_action) + '">View doc</button>' : "") + '<button class="o-filtbtn ap-mail" data-id="' + r.id + '" title="' + (r.notified_at ? "Last emailed " + esc(agWhen(r.notified_at)) + ". Sending again replaces the earlier link." : "Email the approver a one-click Approve / Reject link") + '">' + (r.notified_at ? "Email again" : "Email approver") + '</button><button class="o-filtbtn ap-reject" data-id="' + r.id + '">Reject</button><button class="o-filtbtn pri ap-approve" data-id="' + r.id + '">Approve</button></div>' : '<div class="ap-badge ' + esc(r.status) + '">' + (r.status === "approved" ? "Approved" : "Rejected") + '</div>') + '</div>';
     }
     body.innerHTML = '<div style="padding:14px 16px">' + (pending.length ? '<div class="ap-sec-h">Awaiting you (' + pending.length + ')</div>' + pending.map(function (r) { return card(r, true); }).join("") : '<div class="ap-sec-h">Nothing awaiting approval</div>') + (decided.length ? '<div class="ap-sec-h" style="margin-top:24px">History</div>' + decided.map(function (r) { return card(r, false); }).join("") : "") + '</div>';
     document.querySelectorAll(".ap-approve").forEach(function (b) { b.onclick = function () { decideApproval(b.dataset.id, "approved"); }; });
     document.querySelectorAll(".ap-reject").forEach(function (b) { b.onclick = function () { decideApproval(b.dataset.id, "rejected"); }; });
     document.querySelectorAll(".ap-open").forEach(function (b) { b.onclick = function () { if (b.dataset.act) go(b.dataset.act); }; });
+    document.querySelectorAll(".ap-mail").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true; var was = b.textContent; b.textContent = "Sending...";
+        var ok = await sendApprovalEmail(b.dataset.id);
+        if (ok) renderApprovalsInbox(); else { b.disabled = false; b.textContent = was; }
+      };
+    });
   }
   async function decideApproval(id, decision) {
     var appr = (await sb.from("approvals").select("*").eq("id", id).maybeSingle()).data; if (!appr) return;
