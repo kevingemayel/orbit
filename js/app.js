@@ -8944,6 +8944,13 @@
   }
 
   // ============================ SITE OPS: PLANT & EQUIPMENT ============================
+  function plantAlert(p) {
+    var out = [], t = today();
+    function warn(label, d) { if (!d) return; if (d < t) out.push('<span class="badge unpaid" style="font-size:10px">' + label + ' expired</span>'); else { var days = Math.round((new Date(d) - new Date(t)) / 86400000); if (days <= 30) out.push('<span class="badge warn" style="font-size:10px">' + label + ' ' + days + 'd</span>'); } }
+    warn("Reg", p.registration_expiry); warn("Ins", p.insurance_expiry);
+    if (p.next_service_date && p.next_service_date < t) out.push('<span class="badge unpaid" style="font-size:10px">Service due</span>');
+    return out.length ? " " + out.join(" ") : "";
+  }
   function cfgPlant() {
     return {
       title: "Plant & Equipment", pageSize: 100,
@@ -8956,7 +8963,7 @@
         { label: "Ownership", get: function (p) { return p.ownership === "hired" ? '<span class="badge partial">Hired</span>' : '<span class="badge">Owned</span>'; } },
         { label: "On project", get: function (p) { return esc(p.projects ? p.projects.name : ""); } },
         { label: "Day rate", num: true, get: function (p) { return money(p.daily_rate); } },
-        { label: "Status", get: function (p) { return p.status === "on_site" ? '<span class="badge paid">On site</span>' : p.status === "maintenance" ? '<span class="badge unpaid">Maintenance</span>' : p.status === "off_hired" ? '<span class="badge draft">Off-hired</span>' : '<span class="badge partial">Available</span>'; } }
+        { label: "Status", get: function (p) { return (p.status === "on_site" ? '<span class="badge paid">On site</span>' : p.status === "maintenance" ? '<span class="badge unpaid">Maintenance</span>' : p.status === "off_hired" ? '<span class="badge draft">Off-hired</span>' : '<span class="badge partial">Available</span>') + plantAlert(p); } }
       ],
       filters: [{ label: "On site", test: function (p) { return p.status === "on_site"; } }, { label: "Hired", test: function (p) { return p.ownership === "hired"; } }, { label: "Maintenance", test: function (p) { return p.status === "maintenance"; } }],
       groupBy: [{ label: "Category", get: function (p) { return p.category || "None"; } }, { label: "Status", get: function (p) { return p.status; } }, { label: "Ownership", get: function (p) { return p.ownership; } }],
@@ -8974,14 +8981,23 @@
       '<div class="row2"><div><label>Status</label><select id="pl2-status"><option value="available">Available</option><option value="on_site">On site</option><option value="maintenance">Maintenance</option><option value="off_hired">Off-hired</option></select></div><div><label>On project</label><select id="pl2-proj"><option value="">(none)</option>' + projs.map(function (x) { return '<option value="' + x.id + '"' + (p.project_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Location</label><input id="pl2-loc" value="' + esc(p.location || "") + '"></div><div><label>Next service</label><input id="pl2-serv" type="date" value="' + (p.next_service_date || "") + '"></div></div>' +
       '<div class="row2"><div><label>On hire from</label><input id="pl2-start" type="date" value="' + (p.start_date || "") + '"></div><div><label>Off hire</label><input id="pl2-end" type="date" value="' + (p.end_date || "") + '"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '<div class="o-cf-head" style="margin:8px 0 2px">Legal &amp; meter</div>' +
+      '<div class="row2"><div><label>Registration no.</label><input id="pl2-regno" value="' + esc(p.registration_no || "") + '"></div><div><label>Registration expiry</label><input id="pl2-regexp" type="date" value="' + (p.registration_expiry || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Insurance no.</label><input id="pl2-insno" value="' + esc(p.insurance_no || "") + '"></div><div><label>Insurance expiry</label><input id="pl2-insexp" type="date" value="' + (p.insurance_expiry || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Current meter</label><input id="pl2-meter" type="number" step="0.1" value="' + (p.current_hours != null ? p.current_hours : "") + '"></div><div><label>Meter unit</label><select id="pl2-munit"><option value="hours">Hours</option><option value="km">Km</option></select></div></div>' +
+      '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-tkt">Raise service ticket</button>' : '') + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pl2-own").value = p.ownership || "owned";
     document.getElementById("pl2-status").value = p.status || "available";
+    document.getElementById("pl2-munit").value = p.meter_unit || "hours";
     document.getElementById("pl2-cancel").onclick = function () { m.remove(); };
+    var tkt = document.getElementById("pl2-tkt"); if (tkt) tkt.onclick = async function () {
+      var ins = await sb.from("service_tickets").insert({ company_id: S.company.id, equipment_id: p.id, title: "Service: " + (p.name || p.code || "Equipment"), status: "new", priority: "normal", number: "T-" + String(Date.now()).slice(-6) }).select("id").single();
+      if (ins.error) { toast(errMsg(ins.error)); return; } m.remove(); renderTicketForm(ins.data.id);
+    };
     var del = document.getElementById("pl2-del"); if (del) del.onclick = async function () { await sb.from("plant_equipment").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("pl2-save").onclick = async function () {
-      var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null };
+      var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null, registration_no: gv("pl2-regno") || null, registration_expiry: gv("pl2-regexp") || null, insurance_no: gv("pl2-insno") || null, insurance_expiry: gv("pl2-insexp") || null, current_hours: gv("pl2-meter") === "" ? null : parseFloat(gv("pl2-meter")), meter_unit: document.getElementById("pl2-munit").value };
       var r; if (p.id) r = await sb.from("plant_equipment").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("plant_equipment").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
