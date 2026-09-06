@@ -3275,6 +3275,7 @@
       ].concat(isCust ? [] : [{ label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } }]),
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
       kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
+      emptyHint: isCust ? "Add the customers you invoice. Each keeps its own contacts, pricelist and payment terms; you can also add one on the fly from any customer field." : "Add the suppliers and subcontractors you buy from, with what they supply and their prices, so purchasing and RFQs pull from the same list.",
       onOpen: function (p) { renderPartnerForm(p.id, kind); },
       onNew: function () { renderPartnerForm("new", kind); }
     };
@@ -3335,7 +3336,7 @@
   function cfgAccounts() {
     var tName = {}; S.types.forEach(function (t) { tName[t.code] = t.name; });
     return {
-      title: "Chart of Accounts", pageSize: 200, editTable: "accounts",
+      title: "Chart of Accounts", pageSize: 200, editTable: "accounts", archiveField: "is_active",
       fetch: function () { return sb.from("accounts").select("*").eq("company_id", S.company.id).order("code").then(function (r) { return r.data || []; }); },
       searchText: function (a) { return (a.code || "") + " " + (a.name || ""); },
       columns: [
@@ -8615,7 +8616,7 @@
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((a.hr_employees ? a.hr_employees.name : "") + " " + (a.period || ""));
     var done = a.state === "done", dis = done ? " disabled" : "";
-    var btns = done ? '<button id="ap-reopen">Reopen</button>' : '<button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button>' + (id !== "new" ? '<button id="ap-done">Mark done</button>' : '');
+    var btns = (done ? '<button id="ap-reopen">Reopen</button>' : '<button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button>' + (id !== "new" ? '<button id="ap-done">Mark done</button>' : '')) + (id !== "new" && canManageApp(S.app) ? formDelBtn("appraisals", id, "hr.appraisals", "appraisal") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div class="o-stages"><span class="st ' + (done ? "done" : "on") + '">Draft</span><span class="st ' + (done ? "on" : "") + '">Done</span></div></div>' +
       '<div class="o-sheet"><div class="o-groups"><div>' +
@@ -8649,7 +8650,7 @@
   }
   function cfgDeliveryMethods() {
     return {
-      title: "Delivery Methods", pageSize: 60,
+      title: "Delivery Methods", pageSize: 60, table: "delivery_methods", archiveField: "is_active",
       fetch: function () { return sb.from("delivery_methods").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (d) { return (d.name || "") + " " + (d.carrier || ""); },
       columns: [{ label: "Name", get: function (d) { return '<b>' + esc(d.name) + '</b>'; } }, { label: "Carrier", get: function (d) { return esc(d.carrier || ""); } }, { label: "Price", num: true, get: function (d) { return money(d.price); } }, { label: "Active", get: function (d) { return d.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge draft">Off</span>'; } }],
@@ -8896,7 +8897,7 @@
     var typeOpts = SIGN_TYPES.map(function (x) { return '<option value="' + x[0] + '"' + (s.doc_type === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var allSigned = sigs.length && sigs.every(function (g) { return g.signed_at; });
-    var btns = done ? "" : '<button class="pri" id="sg-save">Save</button><button id="sg-discard">Discard</button>';
+    var btns = (done ? "" : '<button class="pri" id="sg-save">Save</button><button id="sg-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("sign_requests", id, "sign.list", "request") : "");
     if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
     if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
@@ -11975,7 +11976,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || s.title || "Submittal");
     var st = s.status || "draft", terminal = st === "superseded", dis = terminal ? " disabled" : "";
-    var btns = terminal ? "" : '<button class="pri" id="sm-save">Save</button><button id="sm-discard">Discard</button>';
+    var btns = (terminal ? "" : '<button class="pri" id="sm-save">Save</button><button id="sm-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("submittals", id, "doc.subs", "submittal") : "");
     if (id !== "new") {
       if (st === "draft") btns += '<button id="sm-submit">Submit to consultant</button>';
       if (st === "submitted") btns += '<button id="sm-approve">Approve</button><button id="sm-approvec">Approve w/ comments</button><button id="sm-reject">Reject</button>';
@@ -13109,7 +13110,7 @@
   var BILLING = { none: "Non-billable", fixed: "Fixed price", tm: "Time & material", milestone: "Milestones" };
   function cfgProjects() {
     return {
-      title: "Projects", pageSize: 80, table: "projects",
+      title: "Projects", pageSize: 80, table: "projects", archiveField: "is_active",
       kanban: { groups: [{ label: "Stage", field: "status", options: PROJECT_STATUS }] },
       fetch: function () {
         return Promise.all([
@@ -13392,6 +13393,7 @@
       ],
       filters: [{ label: "Open", test: function (l) { return l.is_active !== false; } }, { label: "Lost", test: function (l) { return l.is_active === false; } }],
       groupBy: [{ label: "Stage", get: function (l) { return l._stage || "None"; } }],
+      emptyHint: "Track sales opportunities from first contact to won. Move a lead through the stages; winning one can spin up a project or an event automatically.",
       onOpen: function (l) { renderLeadForm(l.id); },
       onNew: function () { renderLeadForm("new"); }
     };
@@ -13534,6 +13536,7 @@
       kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
       orgChart: { parent: "manager_id", label: function (e) { return e.name; }, sub: function (e) { return (e.hr_jobs ? e.hr_jobs.name : "") || (e.hr_departments ? e.hr_departments.name : ""); } },
       action: { label: "Import", run: function () { openEmployeeImport(); } },
+      emptyHint: "Add your team - their details, department and job. Employees drive contracts, payroll, leave, timesheets and task assignments across the app.",
       onOpen: function (e) { renderEmployeeForm(e.id); },
       onNew: function () { renderEmployeeForm("new"); }
     };
@@ -14091,7 +14094,7 @@
   // ---- Shifts + Roster ----
   function cfgShifts() {
     return {
-      title: "Shifts", pageSize: 80,
+      title: "Shifts", pageSize: 80, table: "hr_shifts", archiveField: "is_active",
       fetch: function () { return sb.from("hr_shifts").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (s) { return s.name || ""; },
       columns: [
@@ -14166,7 +14169,7 @@
   // ---- Salary structures + heads ----
   function cfgSalaryStructures() {
     return {
-      title: "Salary Structures", pageSize: 80,
+      title: "Salary Structures", pageSize: 80, table: "hr_salary_structures", archiveField: "is_active",
       fetch: function () { return sb.from("hr_salary_structures").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (s) { return s.name || ""; },
       columns: [{ label: "Structure", get: function (s) { return '<b>' + esc(s.name) + '</b>'; } }, { label: "Status", get: function (s) { return s.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge">Archived</span>'; } }],
@@ -14191,7 +14194,7 @@
   }
   function cfgSalaryHeads() {
     return {
-      title: "Salary Heads", pageSize: 120,
+      title: "Salary Heads", pageSize: 120, table: "hr_salary_heads", archiveField: "is_active",
       fetch: function () { return sb.from("hr_salary_heads").select("*, hr_salary_structures(name)").eq("company_id", S.company.id).order("sequence").then(function (r) { return r.data || []; }); },
       searchText: function (h) { return (h.code || "") + " " + (h.name || ""); },
       columns: [
@@ -14641,7 +14644,7 @@
   // ---- Cost codes (ORB-13): the shared cost dimension used across budget / PO / bill ----
   function cfgCostCodes() {
     return {
-      title: "Cost Codes", pageSize: 300, editTable: "cost_codes",
+      title: "Cost Codes", pageSize: 300, editTable: "cost_codes", archiveField: "is_active",
       fetch: function () { return sb.from("cost_codes").select("*").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.code || "") + " " + (c.name || "") + " " + (c.category || ""); },
       columns: [
@@ -18154,7 +18157,7 @@
     var done = j.status === "done", cc = S.company.currency_code;
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (j.number || j.description || "Job");
     var planned = Number(j.planned_qty || 0), installed = Number(j.installed_qty || 0), pct = planned ? Math.round(installed / planned * 100) : 0;
-    var btns = (done ? "" : '<button class="pri" id="ij-save">Save</button><button id="ij-discard">Discard</button>');
+    var btns = (done ? "" : '<button class="pri" id="ij-save">Save</button><button id="ij-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("install_jobs", id, "inst.jobs", "install job") : "");
     if (id !== "new" && j.status === "draft") btns += '<button id="ij-start">Start</button>';
     if (id !== "new" && !done) btns += '<button id="ij-log">Log installation</button><button id="ij-done">Mark done</button>';
     var stages = '<div class="o-stages"><span class="st ' + (j.status === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (j.status === "in_progress" ? "on" : j.status === "done" ? "done" : "") + '">In progress</span><span class="st ' + (j.status === "done" ? "on" : "") + '">Done</span></div>';
