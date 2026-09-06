@@ -925,7 +925,9 @@
       menus: [
         { label: "Register", action: "pos.terminal" },
         { label: "Sales", action: "pos.orders" },
-        { label: "Sessions", action: "pos.sessions" }
+        { label: "Returns", action: "pos.returns" },
+        { label: "Sessions", action: "pos.sessions" },
+        { label: "Setup", items: [["Promotions", "pos.promos"], ["Vouchers", "pos.vouchers"]] }
       ]
     },
     recruitment: {
@@ -1032,7 +1034,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service",
     "acc.einvoice": "accounting",
-    "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos",
+    "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
@@ -2326,6 +2328,9 @@
       case "svc.warranties": return renderList(cfgWarranties());
       case "svc.schedule": return renderServiceSchedule();
       case "pos.terminal": return renderPOS();
+      case "pos.returns": return renderPosReturns();
+      case "pos.promos": return renderPromotions();
+      case "pos.vouchers": return renderVouchers();
       case "pos.orders": return renderList(cfgPosOrders());
       case "pos.sessions": return renderPosSessions();
       case "rec.applicants": return renderList(cfgApplicants());
@@ -11220,6 +11225,8 @@
       '</div><div>' +
       fld("Fiscal year starts", '<select id="cp-fystart">' + ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"].map(function (nm, ix) { var v = String(ix + 1); return '<option value="' + v + '"' + (String(p.fiscal_year_start || "1") === v ? " selected" : "") + '>' + nm + '</option>'; }).join("") + '</select>', "The month your financial year begins - drives report periods and year-end.") +
       fld("Default sales markup %", '<div style="display:flex;gap:8px;align-items:center"><input id="cp-markup" type="number" min="0" step="1" style="max-width:110px" value="' + esc(String(p.default_markup_pct != null ? p.default_markup_pct : 30)) + '"><button type="button" class="o-filtbtn" id="cp-markup-apply">Apply to product prices</button></div>', "Selling price = cost x (1 + markup). Apply recomputes every product's sale price from its cost.") +
+      fld("Loyalty points per 100 spent", '<input id="cp-loyearn" type="number" min="0" step="1" value="' + esc(String(p.loyalty_earn_pct != null ? p.loyalty_earn_pct : 0)) + '">', "Points a customer earns per 100 of net sale at the register. 0 turns loyalty off.") +
+      fld("Loyalty value per point", '<input id="cp-loyval" type="number" min="0" step="0.01" value="' + esc(String(p.loyalty_point_value != null ? p.loyalty_point_value : 0)) + '">', "What one point is worth when redeemed at checkout.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
       fld("Address line 1", '<input id="cp-addr" value="' + esc(p.address || "") + '" placeholder="Street, building">') +
@@ -11318,7 +11325,7 @@
       if (!gv("cp-city")) { toast("Enter the city"); return; }
       var sv = document.getElementById("cp-save"); sv.disabled = true;
       var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
-      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
@@ -15187,7 +15194,7 @@
     var gt = document.querySelector("[data-goto]"); if (gt) gt.onclick = function () { go("web.sites"); };
   }
   // ============================ POINT OF SALE ============================
-  var POS = { session: null, cart: [], products: [], vat: 0, partner: null };
+  var POS = { session: null, cart: [], products: [], vat: 0, partner: null, promos: [], pricelist: "", plItems: {}, customers: [], voucher: null, redeem: 0 };
   function posStyle() {
     if (document.getElementById("pos-style")) return;
     var s = document.createElement("style"); s.id = "pos-style";
@@ -15227,54 +15234,215 @@
     }
     document.getElementById("pos-sesstag").textContent = "Register open · opened " + (POS.session.opened_at || "").slice(11, 16);
     document.getElementById("pos-close").onclick = function () { posCloseSession(); };
-    POS.products = (await sb.from("products").select("id,name,price:list_price").eq("company_id", S.company.id).order("name").limit(500)).data || [];
-    POS.cart = []; POS.partner = null;
-    wrap.innerHTML = '<div class="pos-wrap"><div class="pos-left"><input id="pos-search" placeholder="Search products..." style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
-      '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600">Cart</div><div class="pos-lines" id="pos-cartlines"></div>' +
-      '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
+    POS.products = (await sb.from("products").select("id,name,price:list_price,category_id").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(1000)).data || [];
+    POS.cart = []; POS.partner = null; POS.voucher = null; POS.redeem = 0;
+    var today = new Date().toISOString().slice(0, 10);
+    POS.promos = (await sb.from("pos_promotions").select("*").eq("company_id", S.company.id).eq("active", true)).data || [];
+    POS.promos = POS.promos.filter(function (pr) { return (!pr.start_date || pr.start_date <= today) && (!pr.end_date || pr.end_date >= today); });
+    var pls = (await sb.from("pricelists").select("*").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    POS.pricelists = pls.filter(function (l) { return (!l.valid_from || l.valid_from <= today) && (!l.valid_to || l.valid_to >= today); });
+    POS.customers = (await sb.from("partners").select("id,name,loyalty_points,pricelist_id").eq("company_id", S.company.id).eq("is_customer", true).order("name").limit(1000)).data || [];
+    POS.pricelist = ""; POS.plItems = {};
+    wrap.innerHTML = '<div class="pos-wrap"><div class="pos-left">' +
+      '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
+      '<select id="pos-cust" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><option value="">Walk-in customer</option>' + POS.customers.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
+      '<select id="pos-pl" style="min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><option value="">Standard price</option>' + POS.pricelists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
+      '<input id="pos-search" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
+      '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between"><span>Cart</span><span id="pos-loyalty" class="muted" style="font-size:11px;font-weight:400"></span></div><div class="pos-lines" id="pos-cartlines"></div>' +
+      '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot" id="pos-discrow" hidden><span>Discount</span><b id="pos-disc" style="color:var(--bad)">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
       '<button class="pos-charge" id="pos-charge" disabled>Charge</button></div></div></div>';
     function paintGrid(q) {
       q = (q || "").toLowerCase();
       var list = POS.products.filter(function (p) { return !q || (p.name || "").toLowerCase().indexOf(q) >= 0; }).slice(0, 120);
-      document.getElementById("pos-grid").innerHTML = list.map(function (p) { return '<button class="pos-tile" data-pid="' + p.id + '"><span class="n">' + esc(p.name || "") + '</span><span class="p">' + money(p.price) + '</span></button>'; }).join("") || '<div class="muted" style="padding:20px">No products.</div>';
+      document.getElementById("pos-grid").innerHTML = list.map(function (p) { var pr = posPrice(p, 1); return '<button class="pos-tile" data-pid="' + p.id + '"><span class="n">' + esc(p.name || "") + '</span><span class="p">' + money(pr) + '</span></button>'; }).join("") || '<div class="muted" style="padding:20px">No products.</div>';
       document.querySelectorAll("#pos-grid .pos-tile").forEach(function (b) { b.onclick = function () { posAdd(b.dataset.pid); }; });
     }
+    async function loadPl(id) { POS.plItems = {}; if (id) { var its = (await sb.from("pricelist_items").select("*").eq("pricelist_id", id)).data || []; its.forEach(function (it) { (POS.plItems[it.product_id] = POS.plItems[it.product_id] || []).push(it); }); } POS.cart.forEach(function (l) { l.price = posPrice(POS.products.filter(function (x) { return x.id === l.product_id; })[0], l.qty); }); paintGrid(gv("pos-search")); posPaintCart(); }
     document.getElementById("pos-search").oninput = function () { paintGrid(this.value); };
+    document.getElementById("pos-cust").onchange = function () { POS.partner = this.value || null; var c = POS.customers.filter(function (x) { return x.id === POS.partner; })[0]; if (c && c.pricelist_id && POS.pricelists.filter(function (l) { return l.id === c.pricelist_id; })[0]) { document.getElementById("pos-pl").value = c.pricelist_id; POS.pricelist = c.pricelist_id; loadPl(c.pricelist_id); } posPaintCart(); };
+    document.getElementById("pos-pl").onchange = function () { POS.pricelist = this.value; loadPl(this.value); };
     document.getElementById("pos-charge").onclick = function () { posCharge(); };
     window.__posPaint = paintGrid; paintGrid("");
     posPaintCart();
   }
-  function posAdd(pid) { var p = POS.products.filter(function (x) { return x.id === pid; })[0]; if (!p) return; var l = POS.cart.filter(function (c) { return c.product_id === pid; })[0]; if (l) l.qty += 1; else POS.cart.push({ product_id: pid, name: p.name, price: Number(p.price) || 0, qty: 1 }); posPaintCart(); }
+  // Resolve a product's unit price: pricelist override (best tier for qty) else list price.
+  function posPrice(p, qty) {
+    if (!p) return 0; var base = Number(p.price != null ? p.price : p.list_price) || 0;
+    var its = POS.plItems[p.id]; if (!its || !its.length) return base;
+    var tier = null; its.forEach(function (it) { var mq = Number(it.min_qty) || 0; if ((qty || 1) >= mq && (!tier || mq >= (Number(tier.min_qty) || 0))) tier = it; });
+    if (!tier) return base;
+    if (tier.fixed_price != null && Number(tier.fixed_price) > 0) return Number(tier.fixed_price);
+    if (tier.percent_off != null) return base * (1 - Number(tier.percent_off) / 100);
+    return base;
+  }
+  // Auto-apply active promotions to the cart, writing each line's discount. Returns total discount.
+  function posApplyPromos() {
+    var total = 0;
+    POS.cart.forEach(function (l) {
+      l.discount = 0; l.promo = "";
+      var p = POS.products.filter(function (x) { return x.id === l.product_id; })[0]; if (!p) return;
+      POS.promos.forEach(function (pr) {
+        var hit = pr.scope_type === "all" || (pr.scope_type === "category" && p.category_id === pr.scope_id) || (pr.scope_type === "product" && p.id === pr.scope_id);
+        if (!hit) return; var pm = pr.params || {};
+        if (pr.kind === "percent_off") { var d = l.price * l.qty * (Number(pm.pct) || 0) / 100; if (d > l.discount) { l.discount = d; l.promo = pr.name; } }
+        else if (pr.kind === "qty_tier") { if (l.qty >= (Number(pm.min_qty) || 0)) { var d2 = l.price * l.qty * (Number(pm.pct) || 0) / 100; if (d2 > l.discount) { l.discount = d2; l.promo = pr.name; } } }
+        else if (pr.kind === "bxgy") { var bq = Number(pm.buy_qty) || 0, gq = Number(pm.get_qty) || 0; if (bq > 0 && l.qty >= bq + gq) { var free = Math.floor(l.qty / (bq + gq)) * gq; var d3 = free * l.price; if (d3 > l.discount) { l.discount = d3; l.promo = pr.name; } } }
+      });
+      total += l.discount;
+    });
+    return total;
+  }
+  function posAdd(pid) { var p = POS.products.filter(function (x) { return x.id === pid; })[0]; if (!p) return; var l = POS.cart.filter(function (c) { return c.product_id === pid; })[0]; if (l) { l.qty += 1; l.price = posPrice(p, l.qty); } else POS.cart.push({ product_id: pid, name: p.name, price: posPrice(p, 1), qty: 1, discount: 0 }); posPaintCart(); }
+  function posTotals() {
+    POS.cart.forEach(function (l) { var p = POS.products.filter(function (x) { return x.id === l.product_id; })[0]; if (p) l.price = posPrice(p, l.qty); });
+    var promoDisc = posApplyPromos();
+    var voucherDisc = 0; var gross = POS.cart.reduce(function (a, l) { return a + l.price * l.qty; }, 0);
+    var afterPromo = gross - promoDisc;
+    if (POS.voucher) { voucherDisc = POS.voucher.kind === "percent" ? afterPromo * (Number(POS.voucher.value) || 0) / 100 : Math.min(Number(POS.voucher.value) || 0, afterPromo); }
+    var ptVal = Number((S.company.profile || {}).loyalty_point_value) || 0;
+    var redeemDisc = Math.min((Number(POS.redeem) || 0) * ptVal, Math.max(0, afterPromo - voucherDisc));
+    var discount = promoDisc + voucherDisc + redeemDisc;
+    var sub = gross - discount; if (sub < 0) sub = 0;
+    var tax = sub * POS.vat / 100, tot = sub + tax;
+    return { gross: gross, discount: discount, promoDisc: promoDisc, voucherDisc: voucherDisc, redeemDisc: redeemDisc, sub: sub, tax: tax, tot: tot };
+  }
   function posPaintCart() {
     var el = document.getElementById("pos-cartlines"); if (!el) return;
-    el.innerHTML = POS.cart.length ? POS.cart.map(function (l, i) { return '<div class="pos-line"><span class="nm">' + esc(l.name) + '<div class="muted" style="font-size:11px">' + money(l.price) + '</div></span><span class="qty"><button data-dec="' + i + '">&minus;</button><span>' + l.qty + '</span><button data-inc="' + i + '">+</button></span><span class="amt">' + money(l.price * l.qty) + '</span><button data-rm="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:15px">&times;</button></div>'; }).join("") : '<div class="muted" style="padding:24px 0;text-align:center">Tap a product to add it.</div>';
-    var sub = POS.cart.reduce(function (a, l) { return a + l.price * l.qty; }, 0), tax = sub * POS.vat / 100, tot = sub + tax;
-    document.getElementById("pos-sub").textContent = money(sub); document.getElementById("pos-tax").textContent = money(tax); document.getElementById("pos-total").textContent = money(tot);
-    document.getElementById("pos-charge").disabled = POS.cart.length === 0; document.getElementById("pos-charge").textContent = POS.cart.length ? "Charge " + money(tot) : "Charge";
+    var t = posTotals();
+    el.innerHTML = POS.cart.length ? POS.cart.map(function (l, i) { return '<div class="pos-line"><span class="nm">' + esc(l.name) + '<div class="muted" style="font-size:11px">' + money(l.price) + (l.discount > 0 ? ' &middot; <span style="color:var(--bad)">-' + money(l.discount) + (l.promo ? " " + esc(l.promo) : "") + '</span>' : '') + '</div></span><span class="qty"><button data-dec="' + i + '">&minus;</button><span>' + l.qty + '</span><button data-inc="' + i + '">+</button></span><span class="amt">' + money(l.price * l.qty - (l.discount || 0)) + '</span><button data-rm="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:15px">&times;</button></div>'; }).join("") : '<div class="muted" style="padding:24px 0;text-align:center">Tap a product to add it.</div>';
+    document.getElementById("pos-sub").textContent = money(t.gross);
+    var dr = document.getElementById("pos-discrow"); if (dr) { dr.hidden = t.discount <= 0; document.getElementById("pos-disc").textContent = "-" + money(t.discount); }
+    document.getElementById("pos-tax").textContent = money(t.tax); document.getElementById("pos-total").textContent = money(t.tot);
+    document.getElementById("pos-charge").disabled = POS.cart.length === 0; document.getElementById("pos-charge").textContent = POS.cart.length ? "Charge " + money(t.tot) : "Charge";
+    var ly = document.getElementById("pos-loyalty"); if (ly) { var c = POS.customers.filter(function (x) { return x.id === POS.partner; })[0]; ly.textContent = c ? (Number(c.loyalty_points) || 0) + " pts" : ""; }
     el.querySelectorAll("[data-inc]").forEach(function (b) { b.onclick = function () { POS.cart[+b.dataset.inc].qty++; posPaintCart(); }; });
     el.querySelectorAll("[data-dec]").forEach(function (b) { b.onclick = function () { var l = POS.cart[+b.dataset.dec]; l.qty--; if (l.qty <= 0) POS.cart.splice(+b.dataset.dec, 1); posPaintCart(); }; });
     el.querySelectorAll("[data-rm]").forEach(function (b) { b.onclick = function () { POS.cart.splice(+b.dataset.rm, 1); posPaintCart(); }; });
   }
   function posCharge() {
-    var sub = POS.cart.reduce(function (a, l) { return a + l.price * l.qty; }, 0), tax = sub * POS.vat / 100, tot = sub + tax;
+    var cust = POS.customers.filter(function (x) { return x.id === POS.partner; })[0];
+    var prof = S.company.profile || {}; var ptVal = Number(prof.loyalty_point_value) || 0; var earnPct = Number(prof.loyalty_earn_pct) || 0;
     var m = document.createElement("div"); m.className = "modal on";
-    m.innerHTML = '<div class="sheet"><h3>Take payment &middot; ' + money(tot) + '</h3><div class="form">' +
+    m.innerHTML = '<div class="sheet"><h3>Take payment</h3><div class="form">' +
+      '<div style="display:flex;gap:8px"><div style="flex:1"><label>Voucher code</label><input id="pos-vcode" placeholder="optional"></div><button class="btn" id="pos-vapply" style="align-self:flex-end">Apply</button></div><div id="pos-vmsg" class="muted" style="font-size:12px;margin-top:-4px"></div>' +
+      (cust && ptVal > 0 && Number(cust.loyalty_points) > 0 ? '<div><label>Redeem points (' + (Number(cust.loyalty_points) || 0) + ' available &middot; ' + money(ptVal) + '/pt)</label><input id="pos-redeem" type="number" min="0" step="1" value="0"></div>' : '') +
       '<div><label>Method</label><select id="pos-method"><option value="cash">Cash</option><option value="card">Card</option><option value="transfer">Transfer</option></select></div>' +
-      '<div id="pos-cashwrap"><label>Cash received</label><input id="pos-tendered" type="number" step="0.01" value="' + tot.toFixed(2) + '"><div id="pos-change" class="muted" style="margin-top:6px"></div></div>' +
+      '<div id="pos-cashwrap"><label>Cash received</label><input id="pos-tendered" type="number" step="0.01"><div id="pos-change" class="muted" style="margin-top:6px"></div></div>' +
+      '<div class="sub" id="pos-summary" style="margin-top:4px"></div>' +
       '</div><div class="foot"><button class="btn" id="pos-x">Cancel</button><button class="btn pri" id="pos-done" style="background:var(--app);border-color:var(--app)">Complete sale</button></div></div>';
     document.body.appendChild(m);
-    function upd() { var meth = document.getElementById("pos-method").value; document.getElementById("pos-cashwrap").style.display = meth === "cash" ? "" : "none"; if (meth === "cash") { var ch = (parseFloat(gv("pos-tendered")) || 0) - tot; document.getElementById("pos-change").textContent = ch >= 0 ? "Change: " + money(ch) : "Short " + money(-ch); } }
-    document.getElementById("pos-method").onchange = upd; document.getElementById("pos-tendered").oninput = upd; upd();
-    document.getElementById("pos-x").onclick = function () { m.remove(); };
+    function refresh() {
+      POS.redeem = parseFloat(gv("pos-redeem")) || 0;
+      var t = posTotals();
+      document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span style="color:var(--bad)">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && earnPct > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnPct / 100) + ' pts' : '');
+      var meth = document.getElementById("pos-method").value; document.getElementById("pos-cashwrap").style.display = meth === "cash" ? "" : "none";
+      var tend = document.getElementById("pos-tendered"); if (meth === "cash") { if (!tend.value) tend.value = t.tot.toFixed(2); var ch = (parseFloat(tend.value) || 0) - t.tot; document.getElementById("pos-change").textContent = ch >= 0 ? "Change: " + money(ch) : "Short " + money(-ch); }
+    }
+    document.getElementById("pos-vapply").onclick = async function () {
+      var code = gv("pos-vcode"); var msg = document.getElementById("pos-vmsg"); if (!code) { POS.voucher = null; msg.textContent = ""; refresh(); return; }
+      var v = (await sb.from("pos_vouchers").select("*").eq("company_id", S.company.id).eq("code", code).eq("active", true).maybeSingle()).data;
+      if (!v) { POS.voucher = null; msg.textContent = "No active voucher with that code."; msg.style.color = "var(--bad)"; }
+      else if (v.used_at) { POS.voucher = null; msg.textContent = "That voucher was already used."; msg.style.color = "var(--bad)"; }
+      else if (v.expiry && v.expiry < new Date().toISOString().slice(0, 10)) { POS.voucher = null; msg.textContent = "That voucher has expired."; msg.style.color = "var(--bad)"; }
+      else { POS.voucher = v; msg.textContent = "Voucher applied: " + (v.kind === "percent" ? v.value + "%" : money(v.value)); msg.style.color = "var(--good)"; }
+      refresh();
+    };
+    var rd = document.getElementById("pos-redeem"); if (rd) rd.oninput = refresh;
+    document.getElementById("pos-method").onchange = refresh; document.getElementById("pos-tendered").oninput = refresh; refresh();
+    document.getElementById("pos-x").onclick = function () { POS.voucher = null; POS.redeem = 0; m.remove(); };
     document.getElementById("pos-done").onclick = async function () {
-      var meth = document.getElementById("pos-method").value;
-      var ins = await sb.from("pos_orders").insert({ company_id: S.company.id, session_id: POS.session.id, number: "POS-" + String(Date.now()).slice(-7), partner_id: POS.partner || null, subtotal: sub, tax: tax, total: tot, status: "paid", created_by: S.user.id }).select("id").single();
+      var meth = document.getElementById("pos-method").value; var t = posTotals();
+      var earned = cust && earnPct > 0 ? Math.floor(t.sub * earnPct / 100) : 0;
+      var redeemedPts = ptVal > 0 ? Math.round(t.redeemDisc / ptVal) : 0;
+      var ins = await sb.from("pos_orders").insert({ company_id: S.company.id, session_id: POS.session.id, number: "POS-" + String(Date.now()).slice(-7), partner_id: POS.partner || null, subtotal: t.sub, tax: t.tax, total: t.tot, discount: t.discount, voucher_code: POS.voucher ? POS.voucher.code : null, loyalty_earned: earned, loyalty_redeemed: redeemedPts, status: "paid", created_by: S.user.id }).select("id").single();
       if (ins.error) { toast(errMsg(ins.error)); return; }
       var oid = ins.data.id;
-      var lines = POS.cart.map(function (l, i) { return { company_id: S.company.id, order_id: oid, product_id: l.product_id, name: l.name, qty: l.qty, unit_price: l.price, tax_rate: POS.vat, line_total: l.price * l.qty, seq: (i + 1) * 10 }; });
+      var lines = POS.cart.map(function (l, i) { return { company_id: S.company.id, order_id: oid, product_id: l.product_id, name: l.name, qty: l.qty, unit_price: l.price, tax_rate: POS.vat, discount: l.discount || 0, line_total: l.price * l.qty - (l.discount || 0), seq: (i + 1) * 10 }; });
       await sb.from("pos_order_lines").insert(lines);
-      await sb.from("pos_payments").insert({ company_id: S.company.id, order_id: oid, method: meth, amount: tot });
-      m.remove(); POS.cart = []; posPaintCart(); toast("Sale complete · " + money(tot));
+      await sb.from("pos_payments").insert({ company_id: S.company.id, order_id: oid, method: meth, amount: t.tot });
+      if (POS.voucher) await sb.from("pos_vouchers").update({ used_at: new Date().toISOString(), used_order_id: oid }).eq("id", POS.voucher.id);
+      if (cust && (earned || redeemedPts)) { var newPts = (Number(cust.loyalty_points) || 0) + earned - redeemedPts; await sb.from("partners").update({ loyalty_points: newPts }).eq("id", cust.id); cust.loyalty_points = newPts; }
+      m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; posPaintCart(); toast("Sale complete · " + money(t.tot) + (earned ? " · +" + earned + " pts" : ""));
+    };
+  }
+  // POS returns: pick a paid order and refund it (creates a negative refund order + reverses loyalty).
+  async function renderPosReturns() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Returns") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var orders = (await sb.from("pos_orders").select("*, partners:partner_id(name)").eq("company_id", S.company.id).eq("status", "paid").order("created_at", { ascending: false }).limit(200)).data || [];
+    document.getElementById("o-body").innerHTML = '<div class="card"><div class="sub" style="margin:0 0 10px">Pick a sale to refund. A refund records a negative order + payment and reverses any loyalty points earned.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Number</th><th>When</th><th>Customer</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
+      (orders.length ? orders.map(function (o) { return '<tr><td><b>' + esc(o.number || "") + '</b></td><td class="muted">' + esc((o.created_at || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc((o.partners && o.partners.name) || "Walk-in") + '</td><td class="num">' + money(o.total) + '</td><td><button class="btn sm por-ref" data-id="' + o.id + '" data-num="' + esc(o.number || "") + '" data-tot="' + o.total + '" data-pid="' + (o.partner_id || "") + '" data-earn="' + (o.loyalty_earned || 0) + '">Refund</button></td></tr>'; }).join("") : '<tr><td colspan="5" class="muted" style="padding:12px">No sales to refund.</td></tr>') +
+      '</tbody></table></div></div>';
+    document.querySelectorAll(".por-ref").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("Refund sale " + b.dataset.num + " for " + money(b.dataset.tot) + "?")) return;
+        var open = (await sb.from("pos_sessions").select("id").eq("company_id", S.company.id).eq("status", "open").limit(1).maybeSingle()).data;
+        var oldLines = (await sb.from("pos_order_lines").select("*").eq("order_id", b.dataset.id)).data || [];
+        var tot = Number(b.dataset.tot) || 0;
+        var ref = await sb.from("pos_orders").insert({ company_id: S.company.id, session_id: open ? open.id : null, number: "REF-" + String(Date.now()).slice(-7), partner_id: b.dataset.pid || null, subtotal: -(oldLines.reduce(function (a, l) { return a + (Number(l.line_total) || 0); }, 0)), tax: 0, total: -tot, status: "refunded", refund_of: b.dataset.id, created_by: S.user.id }).select("id").single();
+        if (ref.error) { toast(errMsg(ref.error)); return; }
+        var roid = ref.data.id;
+        if (oldLines.length) await sb.from("pos_order_lines").insert(oldLines.map(function (l, i) { return { company_id: S.company.id, order_id: roid, product_id: l.product_id, name: l.name, qty: -(Number(l.qty) || 0), unit_price: l.unit_price, tax_rate: l.tax_rate, line_total: -(Number(l.line_total) || 0), seq: (i + 1) * 10 }; }));
+        await sb.from("pos_payments").insert({ company_id: S.company.id, order_id: roid, method: "cash", amount: -tot });
+        await sb.from("pos_orders").update({ status: "refunded" }).eq("id", b.dataset.id);
+        var earn = Number(b.dataset.earn) || 0; if (b.dataset.pid && earn) { var c = (await sb.from("partners").select("loyalty_points").eq("id", b.dataset.pid).maybeSingle()).data; if (c) await sb.from("partners").update({ loyalty_points: (Number(c.loyalty_points) || 0) - earn }).eq("id", b.dataset.pid); }
+        toast("Refunded " + money(tot)); renderPosReturns();
+      };
+    });
+  }
+  // Promotions config.
+  async function renderPromotions() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Promotions") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var rows = (await sb.from("pos_promotions").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Promotions</h3><div class="sub" style="margin:0 0 10px">Discounts the register applies automatically. Percent-off, quantity tier (buy N+, get % off), or buy-X-get-Y free.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Name</th><th>Type</th><th>Applies to</th><th>Rule</th><th>Active</th><th></th></tr></thead><tbody id="promo-body">' +
+      (rows.length ? rows.map(function (r) { var pm = r.params || {}; var rule = r.kind === "percent_off" ? (pm.pct || 0) + "% off" : r.kind === "qty_tier" ? "buy " + (pm.min_qty || 0) + "+ , " + (pm.pct || 0) + "% off" : "buy " + (pm.buy_qty || 0) + " get " + (pm.get_qty || 0) + " free"; var scope = r.scope_type === "all" ? "All products" : r.scope_type === "category" ? "Category" : "Product"; return '<tr><td><b>' + esc(r.name) + '</b></td><td>' + esc(r.kind) + '</td><td>' + scope + '</td><td>' + esc(rule) + '</td><td>' + (r.active ? "Yes" : "No") + '</td><td><button class="btn sm promo-del" data-id="' + r.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No promotions yet.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px">' +
+      '<input id="pm-name" placeholder="Name" ' + inS + '>' +
+      '<select id="pm-kind" ' + inS + '><option value="percent_off">Percent off</option><option value="qty_tier">Quantity tier</option><option value="bxgy">Buy X get Y</option></select>' +
+      '<select id="pm-scope" ' + inS + '><option value="all">All products</option><option value="category">Category</option></select>' +
+      '<select id="pm-cat" ' + inS + ' style="display:none"><option value="">Category...</option>' + cats.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
+      '<input id="pm-pct" type="number" placeholder="% off" ' + inS + ' style="width:72px">' +
+      '<input id="pm-min" type="number" placeholder="min qty" ' + inS + ' style="width:78px;display:none">' +
+      '<input id="pm-buy" type="number" placeholder="buy" ' + inS + ' style="width:64px;display:none"><input id="pm-get" type="number" placeholder="get free" ' + inS + ' style="width:78px;display:none">' +
+      '<button class="btn sm pri" id="pm-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    function pmToggle() { var k = document.getElementById("pm-kind").value; document.getElementById("pm-pct").style.display = (k === "percent_off" || k === "qty_tier") ? "" : "none"; document.getElementById("pm-min").style.display = k === "qty_tier" ? "" : "none"; document.getElementById("pm-buy").style.display = k === "bxgy" ? "" : "none"; document.getElementById("pm-get").style.display = k === "bxgy" ? "" : "none"; document.getElementById("pm-cat").style.display = document.getElementById("pm-scope").value === "category" ? "" : "none"; }
+    document.getElementById("pm-kind").onchange = pmToggle; document.getElementById("pm-scope").onchange = pmToggle; pmToggle();
+    document.querySelectorAll(".promo-del").forEach(function (b) { b.onclick = async function () { await sb.from("pos_promotions").delete().eq("id", b.dataset.id); renderPromotions(); }; });
+    document.getElementById("pm-add").onclick = async function () {
+      var name = gv("pm-name"); if (!name) { toast("Name the promotion"); return; }
+      var kind = document.getElementById("pm-kind").value, scope = document.getElementById("pm-scope").value;
+      var params = kind === "percent_off" ? { pct: parseFloat(gv("pm-pct")) || 0 } : kind === "qty_tier" ? { min_qty: parseFloat(gv("pm-min")) || 0, pct: parseFloat(gv("pm-pct")) || 0 } : { buy_qty: parseFloat(gv("pm-buy")) || 0, get_qty: parseFloat(gv("pm-get")) || 0 };
+      var ins = await sb.from("pos_promotions").insert({ company_id: S.company.id, name: name, kind: kind, scope_type: scope, scope_id: scope === "category" ? (document.getElementById("pm-cat").value || null) : null, params: params, active: true });
+      if (ins.error) { toast(errMsg(ins.error)); return; } renderPromotions();
+    };
+  }
+  // Vouchers config.
+  async function renderVouchers() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vouchers") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var rows = (await sb.from("pos_vouchers").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var cc = S.company.currency_code; var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Gift &amp; cashback vouchers</h3><div class="sub" style="margin:0 0 10px">Codes a cashier can redeem at checkout for a fixed amount or a percentage off.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Code</th><th>Value</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (r) { return '<tr><td class="mono"><b>' + esc(r.code) + '</b></td><td>' + (r.kind === "percent" ? r.value + "%" : esc(cc) + " " + money(r.value)) + '</td><td class="muted">' + esc(r.expiry || "") + '</td><td>' + (r.used_at ? "Used" : "Active") + '</td><td><button class="btn sm vch-del" data-id="' + r.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="5" class="muted" style="padding:10px">No vouchers yet.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px">' +
+      '<input id="vc-code" placeholder="CODE" ' + inS + ' style="width:130px">' +
+      '<select id="vc-kind" ' + inS + '><option value="fixed">Fixed amount</option><option value="percent">Percent</option></select>' +
+      '<input id="vc-val" type="number" step="any" placeholder="value" ' + inS + ' style="width:90px">' +
+      '<input id="vc-exp" type="date" ' + inS + '>' +
+      '<button class="btn sm pri" id="vc-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    document.querySelectorAll(".vch-del").forEach(function (b) { b.onclick = async function () { await sb.from("pos_vouchers").delete().eq("id", b.dataset.id); renderVouchers(); }; });
+    document.getElementById("vc-add").onclick = async function () {
+      var code = gv("vc-code"); if (!code) { toast("Enter a code"); return; }
+      var ins = await sb.from("pos_vouchers").insert({ company_id: S.company.id, code: code, kind: document.getElementById("vc-kind").value, value: parseFloat(gv("vc-val")) || 0, expiry: gv("vc-exp") || null, active: true });
+      if (ins.error) { toast(errMsg(ins.error)); return; } renderVouchers();
     };
   }
   async function posCloseSession() {
