@@ -11398,6 +11398,8 @@
       fld("Default sales markup %", '<div style="display:flex;gap:8px;align-items:center"><input id="cp-markup" type="number" min="0" step="1" style="max-width:110px" value="' + esc(String(p.default_markup_pct != null ? p.default_markup_pct : 30)) + '"><button type="button" class="o-filtbtn" id="cp-markup-apply">Apply to product prices</button></div>', "Selling price = cost x (1 + markup). Apply recomputes every product's sale price from its cost.") +
       fld("Loyalty points per 100 spent", '<input id="cp-loyearn" type="number" min="0" step="1" value="' + esc(String(p.loyalty_earn_pct != null ? p.loyalty_earn_pct : 0)) + '">', "Points a customer earns per 100 of net sale at the register. 0 turns loyalty off.") +
       fld("Loyalty value per point", '<input id="cp-loyval" type="number" min="0" step="0.01" value="' + esc(String(p.loyalty_point_value != null ? p.loyalty_point_value : 0)) + '">', "What one point is worth when redeemed at checkout.") +
+      fld("WPS employer ID", '<input id="cp-wpseid" value="' + esc(p.wps_employer_id || "") + '" placeholder="MOL / establishment ID">', "For the payroll WPS salary file (GCC). Your Ministry of Labour / establishment number.") +
+      fld("WPS employer bank code", '<input id="cp-wpsbank" value="' + esc(p.wps_bank_code || "") + '" placeholder="Bank / agent routing code">', "The routing code of your salary-paying bank, used in the WPS file header.") +
       '</div></div></div>' +
       '<div class="card"><h3 class="cp-sec">Contact</h3><div class="o-groups"><div>' +
       fld("Address line 1", '<input id="cp-addr" value="' + esc(p.address || "") + '" placeholder="Street, building">') +
@@ -11496,7 +11498,7 @@
       if (!gv("cp-city")) { toast("Enter the city"); return; }
       var sv = document.getElementById("cp-save"); sv.disabled = true;
       var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
-      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, wps_employer_id: gv("cp-wpseid") || "", wps_bank_code: gv("cp-wpsbank") || "", social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
@@ -13472,6 +13474,9 @@
       fld("Hire date", '<input id="e-hire" type="date" value="' + esc(e.hire_date || "") + '">') +
       fld("Work location", '<input id="e-loc" value="' + esc(e.work_location || "") + '">') +
       fld("Bank account", '<input id="e-bank" value="' + esc(e.bank_account || "") + '">') +
+      fld("IBAN", '<input id="e-iban" value="' + esc(e.iban || "") + '" placeholder="for WPS salary file">', "Bank IBAN used in the WPS salary file (GCC payroll).") +
+      fld("WPS person ID", '<input id="e-wpsid" value="' + esc(e.wps_person_id || "") + '" placeholder="labour card / MOL no.">', "The employee's labour-card / Ministry of Labour personal number for WPS.") +
+      fld("WPS routing code", '<input id="e-route" value="' + esc(e.routing_code || "") + '" placeholder="employee bank routing">', "The routing / agent code of the employee's bank for WPS.") +
       fld("Status", '<select id="e-active"><option value="1"' + (e.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!e.is_active ? " selected" : "") + '>Archived</option></select>', "Active employees appear in selections; archived ones are hidden.") +
       '</div></div>' +
       fld("Notes", '<textarea id="e-notes" style="width:100%;min-height:58px">' + esc(e.notes || "") + '</textarea>') +
@@ -13494,6 +13499,7 @@
         department_id: document.getElementById("e-dept").value || null, job_id: document.getElementById("e-job").value || null,
         manager_id: document.getElementById("e-mgr").value || null, employee_type: document.getElementById("e-type").value,
         hire_date: gv("e-hire") || null, work_location: gv("e-loc") || null, bank_account: gv("e-bank") || null,
+        iban: gv("e-iban") || null, wps_person_id: gv("e-wpsid") || null, routing_code: gv("e-route") || null,
         notes: gv("e-notes") || null, is_active: document.getElementById("e-active").value === "1"
       };
       var r; if (id === "new") { row.company_id = S.company.id; var _ei = await sb.from("hr_employees").insert(row).select("id").single(); if (_ei.error) { toast("Could not save: " + errMsg(_ei.error)); return; } await mediaFlush("employee", _ei.data.id); assignEmployeeNo(_ei.data.id); } else { r = await sb.from("hr_employees").update(row).eq("id", id); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } }
@@ -14109,7 +14115,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (run.name || "Run");
     var slipRows = slips.map(function (s) { return '<tr data-slip="' + s.id + '" style="cursor:pointer"><td>' + esc(s.hr_employees ? s.hr_employees.name : "") + '</td><td class="num">' + Number(s.worked_days || 0) + '</td><td class="num">' + Number(s.ot_hours || 0) + '</td><td class="num">' + money(s.gross) + '</td><td class="num">' + money(s.total_deductions) + '</td><td class="num"><b>' + money(s.net) + '</b></td></tr>'; }).join("");
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-gen">Generate payslips</button><button id="pr-postall">Post all</button><button id="pr-bank">Bank file</button>' : "") + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-gen">Generate payslips</button><button id="pr-postall">Post all</button><button id="pr-bank">Bank file</button><button id="pr-wps">WPS SIF</button>' : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="pr-name" value="' + esc(run.name || "") + '" placeholder="e.g. August 2026"></div>' +
       '<div class="o-groups"><div>' +
       fld("Period From", '<input id="pr-from" type="date" value="' + (run.date_from || "") + '">', "First day of the pay period.") +
@@ -14170,6 +14176,29 @@
       var a = document.createElement("a"); a.href = url; a.download = ("bank_file_" + (run.name || "run")).replace(/[^\w]+/g, "_").toLowerCase() + ".csv";
       document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
       toast(sl.length + " payment line(s) exported");
+    };
+    var wps = document.getElementById("pr-wps"); if (wps) wps.onclick = async function () {
+      var sl = (await sb.from("hr_payslips").select("net,gross, hr_employees(name,wps_person_id,iban,routing_code,bank_account)").eq("company_id", S.company.id).eq("run_id", id)).data || [];
+      if (!sl.length) { toast("No payslips to export"); return; }
+      var prof = S.company.profile || {};
+      var missingCfg = !prof.wps_employer_id || !prof.wps_bank_code;
+      var pad2 = function (n) { return ("0" + n).slice(-2); };
+      var now = new Date(), createDate = now.getFullYear() + pad2(now.getMonth() + 1) + pad2(now.getDate()), createTime = pad2(now.getHours()) + pad2(now.getMinutes());
+      var mo = (run.date_to || run.date_from || today()); var monthYear = mo.slice(5, 7) + mo.slice(0, 4);
+      var totalNet = sl.reduce(function (s, x) { return s + (Number(x.net) || 0); }, 0);
+      var cur = (S.company.currency_code || "AED");
+      // SCR employer header: record type, employer EID, bank code, creation date, time, salary month(MMYYYY), records, total, currency
+      var lines = ["SCR," + csvCell(prof.wps_employer_id || "") + "," + csvCell(prof.wps_bank_code || "") + "," + createDate + "," + createTime + "," + monthYear + "," + sl.length + "," + totalNet.toFixed(2) + "," + cur];
+      var noWps = 0;
+      sl.forEach(function (s) {
+        var e = s.hr_employees || {}; if (!e.wps_person_id || !e.iban) noWps++;
+        // EDR employee detail: type, person id, routing code, IBAN, frequency, net, basic(gross), variable, leave days
+        lines.push(["EDR", csvCell(e.wps_person_id || ""), csvCell(e.routing_code || ""), csvCell(e.iban || e.bank_account || ""), "M", (Number(s.net) || 0).toFixed(2), (Number(s.gross) || 0).toFixed(2), "0.00", "0"].join(","));
+      });
+      var sif = lines.join("\r\n"), blob = new Blob([sif], { type: "text/csv;charset=utf-8" }), url = URL.createObjectURL(blob);
+      var a = document.createElement("a"); a.href = url; a.download = ("wps_sif_" + (run.name || "run")).replace(/[^\w]+/g, "_").toLowerCase() + ".sif";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+      toast("WPS SIF exported" + (missingCfg ? " - set the employer WPS ID + bank code in Company Profile" : (noWps ? " - " + noWps + " employee(s) missing WPS ID/IBAN" : "")));
     };
   }
   function cfgPayslips() {
