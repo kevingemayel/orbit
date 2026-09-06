@@ -988,7 +988,9 @@
     insights: {
       name: "Insights", icon: "▬", color: "#0891b2", color2: "#0e7490", home: "dash.home",
       menus: [
-        { label: "Dashboard", action: "dash.home" }
+        { label: "Dashboard", action: "dash.home" },
+        { label: "Forecast", action: "dash.forecast" },
+        { label: "Scheduled reports", action: "dash.schedules" }
       ]
     },
     events: {
@@ -1045,7 +1047,7 @@
     "acc.einvoice": "accounting",
     "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
-    "dash.home": "insights",
+    "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
     "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
@@ -2163,11 +2165,20 @@
       dims: { "": { label: "(single total)" }, stage: { label: "Stage", get: function (r) { return agStageLabel(r.board_stage || "backlog"); } }, priority: { label: "Priority", get: function (r) { return (TASK_PRIO[r.priority] || TASK_PRIO.medium).label; } } } }
   };
   var RPT_CHART = { kpi: "Single number", bar: "Bar chart", line: "Line (over time)", table: "Table" };
+  // How a drilled-into record is shown and opened, per data source.
+  var RPT_DRILL = {
+    inv_out: { title: function (r) { return r.number || "(draft)"; }, sub: function (r) { return ((r.partners ? r.partners.name : "") + " · " + (r.invoice_date || "")).trim(); }, amount: function (r) { return r.amount_total; }, open: function (r) { renderInvoiceForm(r.id, "out_invoice"); } },
+    po: { title: function (r) { return r.number || "(draft)"; }, sub: function (r) { return ((r.partners ? r.partners.name : "") + " · " + (r.date_order || "")).trim(); }, amount: function (r) { return r.amount_total; }, open: function (r) { renderOrderForm(r.id, "purchase"); } },
+    projects: { title: function (r) { return r.name || "(project)"; }, sub: function (r) { return (r.partners ? r.partners.name : "") || ""; }, amount: function (r) { return r.contract_value; }, open: function (r) { renderProjectForm(r.id); } },
+    tasks: { title: function (r) { return r.name || "(task)"; }, sub: function (r) { return agStageLabel(r.board_stage || "backlog"); }, amount: function (r) { return null; }, open: function (r) { openTaskPanel(r.id, r.project_id, function () { renderInsights(); }); } }
+  };
+  var _rptCache = {};   // report id -> { rows, src, meas, dim, srcKey } so a tile can drill into its own data
   async function computeReport(rep) {
     var src = RPT_SOURCES[rep.source]; if (!src) return null;
     var meas = src.measures[rep.measure] || src.measures.count;
     var dimKey = rep.group_by || "", dim = src.dims[dimKey];
     var rows = (await src.base(sb.from(src.table).select(src.select).eq("company_id", S.company.id))).data || [];
+    if (rep.id) _rptCache[rep.id] = { rows: rows, src: src, meas: meas, dim: (dimKey && dim && dim.get) ? dim : null, srcKey: rep.source };
     if (meas.money) await loadFxRates();
     // money measures convert each row to the home currency before summing (rows in a
     // foreign currency would otherwise be added as if they were home-currency amounts)
@@ -2185,18 +2196,160 @@
   function rptFmt(v, meas) { return meas.money ? (S.company.currency_code + " " + money(v)) : (Math.round(v * 100) / 100).toLocaleString(); }
   function widgetBody(rep, data) {
     if (!data) return '<div class="muted">No data</div>';
-    if (data.single || rep.chart === "kpi") { return '<div class="rw-kpi">' + rptFmt(data.total, data.meas) + '</div><div class="rw-kpi-sub">' + esc(data.meas.label) + '</div>'; }
+    var dz = ' data-drill="' + esc(rep.id || "") + '"';   // click a figure to see the records behind it
+    if (data.single || rep.chart === "kpi") { return '<div class="rw-kpi rw-click"' + dz + ' title="Click to see the records behind this">' + rptFmt(data.total, data.meas) + '</div><div class="rw-kpi-sub">' + esc(data.meas.label) + '</div>'; }
     var entries = data.entries || []; if (!entries.length) return '<div class="muted" style="padding:10px 0">No data yet</div>';
     var max = Math.max.apply(null, entries.map(function (e) { return e.value; }).concat([1]));
-    if (rep.chart === "table") { return '<table class="rw-tbl"><tbody>' + entries.map(function (e) { return '<tr><td>' + esc(e.label) + '</td><td class="num">' + rptFmt(e.value, data.meas) + '</td></tr>'; }).join("") + '</tbody></table>'; }
+    if (rep.chart === "table") { return '<table class="rw-tbl"><tbody>' + entries.map(function (e) { return '<tr class="rw-click"' + dz + ' data-bucket="' + esc(e.label) + '"><td>' + esc(e.label) + '</td><td class="num">' + rptFmt(e.value, data.meas) + '</td></tr>'; }).join("") + '</tbody></table>'; }
     if (rep.chart === "line") {
       var w = 280, h = 90, pad = 6, n = entries.length;
       var pts = entries.map(function (e, i) { var x = pad + (n <= 1 ? 0 : (i / (n - 1)) * (w - 2 * pad)); var y = h - pad - (e.value / max) * (h - 2 * pad); return (Math.round(x * 10) / 10) + "," + (Math.round(y * 10) / 10); });
       var area = "M" + pad + "," + (h - pad) + " L" + pts.join(" L") + " L" + (w - pad) + "," + (h - pad) + " Z";
       return '<div class="o-rt-wrap"><svg class="rw-line" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none"><path d="' + area + '" fill="var(--accent-soft)"/><polyline points="' + pts.join(" ") + '" fill="none" stroke="var(--accent)" stroke-width="2"/></svg></div><div class="rw-line-x">' + entries.map(function (e) { return '<span>' + esc(e.label.slice(5) || e.label) + '</span>'; }).join("") + '</div>';
     }
-    return '<div class="rw-bars">' + entries.slice(0, 8).map(function (e) { var pc = Math.round(e.value / max * 100); return '<div class="rw-bar-row"><span class="rw-bar-l" title="' + esc(e.label) + '">' + esc(e.label) + '</span><span class="rw-bar-track"><span class="rw-bar-fill" style="width:' + pc + '%"></span></span><span class="rw-bar-v">' + rptFmt(e.value, data.meas) + '</span></div>'; }).join("") + '</div>';
+    return '<div class="rw-bars">' + entries.slice(0, 8).map(function (e) { var pc = Math.round(e.value / max * 100); return '<div class="rw-bar-row rw-click"' + dz + ' data-bucket="' + esc(e.label) + '" title="Click to see the records behind this"><span class="rw-bar-l">' + esc(e.label) + '</span><span class="rw-bar-track"><span class="rw-bar-fill" style="width:' + pc + '%"></span></span><span class="rw-bar-v">' + rptFmt(e.value, data.meas) + '</span></div>'; }).join("") + '</div>';
   }
+  // Drilldown: show the actual records behind a figure, and open any of them.
+  function openDrillModal(repId, bucket) {
+    var c = _rptCache[repId]; if (!c) { toast("Open the dashboard again to drill into this"); return; }
+    var rows = c.rows || [];
+    if (bucket != null && c.dim && c.dim.get) rows = rows.filter(function (r) { return (c.dim.get(r) || "None") === bucket; });
+    var d = RPT_DRILL[c.srcKey] || {};
+    var cc = S.company.currency_code;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet" style="max-width:620px"><h3>' + esc(bucket != null ? String(bucket) : "All records") + ' <span class="muted" style="font-weight:400;font-size:13px">' + rows.length + ' record' + (rows.length === 1 ? '' : 's') + '</span></h3>' +
+      '<div class="form" style="max-height:60vh;overflow:auto">' +
+      (rows.length ? '<table class="o-lines"><tbody>' + rows.slice(0, 300).map(function (r, i) {
+        var amt = d.amount ? d.amount(r) : null;
+        return '<tr class="dr-row" data-i="' + i + '" style="cursor:pointer"><td><b>' + esc(d.title ? d.title(r) : (r.name || r.number || r.id)) + '</b>' + (d.sub && d.sub(r) ? '<div class="muted" style="font-size:11px">' + esc(d.sub(r)) + '</div>' : '') + '</td><td class="num">' + (amt != null && amt !== "" ? esc(cc) + " " + money(amt) : "") + '</td></tr>';
+      }).join("") + '</tbody></table>' + (rows.length > 300 ? '<div class="muted" style="padding:8px">Showing the first 300.</div>' : '') : '<div class="muted" style="padding:10px">No records in this group.</div>') +
+      '</div><div class="foot"><button class="btn" id="dr-x">Close</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("dr-x").onclick = function () { m.remove(); };
+    m.querySelectorAll(".dr-row").forEach(function (tr) {
+      tr.onclick = function () { var r = rows[+tr.dataset.i]; if (!r) return; m.remove(); try { if (d.open) d.open(r); else toast("No detail view for this record"); } catch (e) { toast("Could not open that record"); } };
+    });
+  }
+  // ============================ SCHEDULED REPORTS ============================
+  // A report tile + a cadence + who gets it. The database scheduler (hourly) hands
+  // due ones to /api/run-report-schedules, which emails them.
+  var RS_DOW = [["0", "Sunday"], ["1", "Monday"], ["2", "Tuesday"], ["3", "Wednesday"], ["4", "Thursday"], ["5", "Friday"], ["6", "Saturday"]];
+  async function renderReportSchedules() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Scheduled reports") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var q = await sb.from("report_schedules").select("*, reports:report_id(name)").eq("company_id", S.company.id).order("created_at");
+    if (q.error && /report_schedules|does not exist|schema cache/i.test(q.error.message || "")) {
+      document.getElementById("o-body").innerHTML = '<div class="card"><div class="sub">Run <span class="path">supabase/114-report-scheduler.sql</span> once to enable scheduled reports.</div></div>'; return;
+    }
+    var rows = q.data || [];
+    var reports = (await sb.from("reports").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    function cadLabel(r) { return r.cadence === "daily" ? "Every day" : r.cadence === "monthly" ? ("Day " + (r.day_of_month || 1) + " each month") : ("Every " + ((RS_DOW.filter(function (d) { return d[0] === String(r.day_of_week); })[0] || RS_DOW[1])[1])); }
+    document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Scheduled reports</h3>' +
+      '<div class="sub" style="margin:0 0 12px">Pick a dashboard report and Orbit emails it on your schedule - nobody has to remember to run it. Times are UTC.</div>' +
+      (reports.length ? '' : '<div class="sub" style="color:var(--bad);margin-bottom:10px">Create a report tile on the Dashboard first, then you can schedule it.</div>') +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Name</th><th>Report</th><th>When</th><th>Recipients</th><th>Last sent</th><th></th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (r) {
+        return '<tr><td><b>' + esc(r.name) + '</b>' + (r.active ? '' : ' <span class="badge draft">Off</span>') + '</td><td>' + esc(r.reports ? r.reports.name : "(report deleted)") + '</td><td>' + esc(cadLabel(r)) + ' at ' + String(r.hour).padStart(2, "0") + ':00</td><td class="muted">' + esc(r.recipients || "") + '</td><td class="muted">' + esc((r.last_sent_at || "").slice(0, 16).replace("T", " ")) + '</td>' +
+          '<td style="text-align:right;white-space:nowrap"><button class="btn sm rs-tog" data-id="' + r.id + '" data-on="' + (r.active ? "1" : "0") + '">' + (r.active ? "Pause" : "Resume") + '</button> <button class="btn sm rs-del" data-id="' + r.id + '" style="color:var(--bad)">&times;</button></td></tr>';
+      }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No scheduled reports yet.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div class="o-cf-head" style="margin-top:14px">Add a schedule</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">' +
+      '<input id="rs-name" placeholder="Name (e.g. Monday sales)" ' + inS + ' style="min-width:170px">' +
+      '<select id="rs-report" ' + inS + '><option value="">Report...</option>' + reports.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select>' +
+      '<select id="rs-cad" ' + inS + '><option value="weekly">Weekly</option><option value="daily">Daily</option><option value="monthly">Monthly</option></select>' +
+      '<select id="rs-dow" ' + inS + '>' + RS_DOW.map(function (d) { return '<option value="' + d[0] + '"' + (d[0] === "1" ? " selected" : "") + '>' + d[1] + '</option>'; }).join("") + '</select>' +
+      '<input id="rs-dom" type="number" min="1" max="28" value="1" ' + inS + ' style="width:64px;display:none" title="Day of month">' +
+      '<label class="muted" style="font-size:12px">at <input id="rs-hour" type="number" min="0" max="23" value="7" ' + inS + ' style="width:60px"> :00 UTC</label>' +
+      '<input id="rs-to" placeholder="emails, comma separated" ' + inS + ' style="min-width:210px">' +
+      '<button class="btn sm pri" id="rs-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    function cadToggle() { var c = document.getElementById("rs-cad").value; document.getElementById("rs-dow").style.display = c === "weekly" ? "" : "none"; document.getElementById("rs-dom").style.display = c === "monthly" ? "" : "none"; }
+    document.getElementById("rs-cad").onchange = cadToggle; cadToggle();
+    document.querySelectorAll(".rs-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Delete this schedule? The report itself stays on the dashboard.")) return; await sb.from("report_schedules").delete().eq("id", b.dataset.id); renderReportSchedules(); }; });
+    document.querySelectorAll(".rs-tog").forEach(function (b) { b.onclick = async function () { await sb.from("report_schedules").update({ active: b.dataset.on !== "1" }).eq("id", b.dataset.id); renderReportSchedules(); }; });
+    document.getElementById("rs-add").onclick = async function () {
+      var rep = document.getElementById("rs-report").value, to = gv("rs-to").trim();
+      if (!rep) { toast("Pick a report to send"); return; }
+      if (!to || to.indexOf("@") < 0) { toast("Enter at least one email address"); return; }
+      var cad = document.getElementById("rs-cad").value;
+      var ins = await sb.from("report_schedules").insert({ company_id: S.company.id, report_id: rep, name: gv("rs-name") || "Scheduled report", cadence: cad, day_of_week: parseInt(document.getElementById("rs-dow").value, 10), day_of_month: parseInt(gv("rs-dom"), 10) || 1, hour: Math.max(0, Math.min(23, parseInt(gv("rs-hour"), 10) || 7)), recipients: to, active: true });
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      toast("Scheduled"); renderReportSchedules();
+    };
+  }
+
+  // ============================ FORECASTING ============================
+  // Projects the next few months of sales and purchases from your own posted history
+  // using a least-squares trend line, so you can plan cash and stock ahead.
+  function _fcMonths(back) {
+    var out = [], d = new Date(); d.setDate(1);
+    for (var i = back - 1; i >= 0; i--) { var x = new Date(d.getFullYear(), d.getMonth() - i, 1); out.push(x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2)); }
+    return out;
+  }
+  function _fcNext(keys, n) {
+    var out = [], last = keys[keys.length - 1].split("-"), y = +last[0], mo = +last[1];
+    for (var i = 1; i <= n; i++) { var x = new Date(y, mo - 1 + i, 1); out.push(x.getFullYear() + "-" + ("0" + (x.getMonth() + 1)).slice(-2)); }
+    return out;
+  }
+  function _fcTrend(ys, ahead) {
+    var n = ys.length; if (!n) return [];
+    var si = 0, sy = 0, sii = 0, siy = 0;
+    for (var i = 0; i < n; i++) { si += i; sy += ys[i]; sii += i * i; siy += i * ys[i]; }
+    var den = n * sii - si * si;
+    var slope = den ? (n * siy - si * sy) / den : 0, inter = (sy - slope * si) / n;
+    var out = [];
+    for (var k = 0; k < ahead; k++) { var v = inter + slope * (n + k); out.push(v > 0 ? v : 0); }
+    return out;
+  }
+  async function renderForecast() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Forecast") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    await loadFxRates();
+    var keys = _fcMonths(12), ahead = 3, since = keys[0] + "-01";
+    var inv = (await sb.from("invoices").select("invoice_date,amount_total,currency_code,move_type,state").eq("company_id", S.company.id).eq("state", "posted").gte("invoice_date", since)).data || [];
+    var sales = {}, buys = {};
+    keys.forEach(function (k) { sales[k] = 0; buys[k] = 0; });
+    inv.forEach(function (r) {
+      var k = (r.invoice_date || "").slice(0, 7); if (!(k in sales)) return;
+      var v = fxHomeConvert(Number(r.amount_total) || 0, r.currency_code);
+      if (r.move_type === "out_invoice") sales[k] += v; else if (r.move_type === "in_invoice") buys[k] += v;
+    });
+    var sy = keys.map(function (k) { return sales[k]; }), by = keys.map(function (k) { return buys[k]; });
+    var fk = _fcNext(keys, ahead), fs = _fcTrend(sy, ahead), fb = _fcTrend(by, ahead);
+    var cc = S.company.currency_code;
+    var totS = fs.reduce(function (a, b) { return a + b; }, 0), totB = fb.reduce(function (a, b) { return a + b; }, 0);
+    var avgS = sy.reduce(function (a, b) { return a + b; }, 0) / (sy.length || 1);
+    var lastS = sy[sy.length - 1] || 0, trendUp = fs[0] >= lastS;
+    var allMax = Math.max.apply(null, sy.concat(by, fs, fb, [1]));
+    function bars(vals, fvals) {
+      return vals.map(function (v, i) { return '<div class="fc-col" title="' + esc(keys[i]) + ': ' + esc(cc) + ' ' + money(v) + '"><span class="fc-fill" style="height:' + Math.round(v / allMax * 100) + '%"></span></div>'; }).join("") +
+        fvals.map(function (v, i) { return '<div class="fc-col fc-fc" title="' + esc(fk[i]) + ' (forecast): ' + esc(cc) + ' ' + money(v) + '"><span class="fc-fill" style="height:' + Math.round(v / allMax * 100) + '%"></span></div>'; }).join("");
+    }
+    var body = document.getElementById("o-body");
+    body.innerHTML =
+      '<style>.fc-chart{display:flex;align-items:flex-end;gap:4px;height:130px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.fc-col{flex:1;display:flex;align-items:flex-end;height:100%}.fc-fill{width:100%;background:var(--app,#2f5bff);border-radius:3px 3px 0 0;min-height:2px}.fc-fc .fc-fill{background:repeating-linear-gradient(45deg,var(--app,#2f5bff),var(--app,#2f5bff) 4px,transparent 4px,transparent 8px);opacity:.75}.fc-x{display:flex;gap:4px;margin-top:4px}.fc-x span{flex:1;text-align:center;font-size:10px;color:var(--ink3)}</style>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">' +
+      '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800">' + esc(cc) + ' ' + money(totS) + '</div><div class="muted" style="font-size:12px">Forecast sales, next ' + ahead + ' months</div></div>' +
+      '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800">' + esc(cc) + ' ' + money(totB) + '</div><div class="muted" style="font-size:12px">Forecast purchases</div></div>' +
+      '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800;color:' + (totS - totB >= 0 ? "var(--good)" : "var(--bad)") + '">' + esc(cc) + ' ' + money(totS - totB) + '</div><div class="muted" style="font-size:12px">Projected net</div></div>' +
+      '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800">' + (trendUp ? "&#9650;" : "&#9660;") + '</div><div class="muted" style="font-size:12px">Trend vs last month (avg ' + esc(cc) + ' ' + money(avgS) + '/mo)</div></div>' +
+      '</div>' +
+      '<div class="card"><h3 style="margin:0 0 4px">Sales</h3><div class="sub" style="margin:0 0 8px">Solid = invoiced (posted). Striped = forecast from your trend.</div>' +
+      '<div class="fc-chart">' + bars(sy, fs) + '</div><div class="fc-x">' + keys.concat(fk).map(function (k) { return '<span>' + esc(k.slice(2)) + '</span>'; }).join("") + '</div></div>' +
+      '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Purchases</h3><div class="sub" style="margin:0 0 8px">Vendor bills posted, with the same trend projection.</div>' +
+      '<div class="fc-chart">' + bars(by, fb) + '</div><div class="fc-x">' + keys.concat(fk).map(function (k) { return '<span>' + esc(k.slice(2)) + '</span>'; }).join("") + '</div></div>' +
+      '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 8px">Month by month</h3><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Month</th><th class="num">Sales</th><th class="num">Purchases</th><th class="num">Net</th><th></th></tr></thead><tbody>' +
+      keys.map(function (k, i) { return '<tr><td>' + esc(k) + '</td><td class="num">' + money(sy[i]) + '</td><td class="num">' + money(by[i]) + '</td><td class="num">' + money(sy[i] - by[i]) + '</td><td class="muted">actual</td></tr>'; }).join("") +
+      fk.map(function (k, i) { return '<tr style="opacity:.8"><td><b>' + esc(k) + '</b></td><td class="num">' + money(fs[i]) + '</td><td class="num">' + money(fb[i]) + '</td><td class="num">' + money(fs[i] - fb[i]) + '</td><td><span class="badge partial">forecast</span></td></tr>'; }).join("") +
+      '</tbody></table></div><div class="sub" style="margin-top:8px">Forecast is a least-squares trend over the last 12 months of posted invoices. It is a planning guide, not a commitment - short or seasonal histories will swing it.</div></div>';
+  }
+
+  var _drillStyled = false;
+  function ensureDrillStyle() { if (_drillStyled) return; _drillStyled = true; try { var s = document.createElement("style"); s.textContent = ".rw-click{cursor:pointer;border-radius:6px}.rw-click:hover{background:var(--panel2,#f2f4f7);outline:1px solid var(--line,#dde)}"; document.head.appendChild(s); } catch (e) { } }
+  function wireDrill(el) { el.querySelectorAll(".rw-click").forEach(function (n) { n.onclick = function (e) { e.stopPropagation(); openDrillModal(n.getAttribute("data-drill"), n.getAttribute("data-bucket")); }; }); }
   async function renderInsights() {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '<div class="gap"></div><button class="o-filtbtn pri" id="rw-new">+ New report</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
@@ -2205,7 +2358,8 @@
     var body = document.getElementById("o-body");
     if (!reports.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Build your dashboard</div><div class="o-empty2-h">Create report tiles from your live data (invoices, orders, projects, tasks) as KPIs, bar or line charts. They refresh every time you open this page.</div><button class="o-new" id="rw-new2" style="margin-top:14px">+ New report</button></div>'; document.getElementById("rw-new2").onclick = function () { openReportModal(null); }; return; }
     body.innerHTML = '<div class="rw-grid">' + reports.map(function (r) { return '<div class="rw-card"><div class="rw-head"><div class="rw-title">' + esc(r.name) + '</div><button class="rw-edit" data-id="' + r.id + '">Edit</button></div><div class="rw-body" id="rwb-' + r.id + '"><div class="muted">Loading...</div></div></div>'; }).join("") + '</div>';
-    reports.forEach(function (rep) { computeReport(rep).then(function (data) { var el = document.getElementById("rwb-" + rep.id); if (el) el.innerHTML = widgetBody(rep, data); }).catch(function () { var el = document.getElementById("rwb-" + rep.id); if (el) el.innerHTML = '<div class="muted">Could not load</div>'; }); });
+    ensureDrillStyle();
+    reports.forEach(function (rep) { computeReport(rep).then(function (data) { var el = document.getElementById("rwb-" + rep.id); if (el) { el.innerHTML = widgetBody(rep, data); wireDrill(el); } }).catch(function () { var el = document.getElementById("rwb-" + rep.id); if (el) el.innerHTML = '<div class="muted">Could not load</div>'; }); });
     document.querySelectorAll(".rw-edit").forEach(function (b) { b.onclick = function () { openReportModal(reports.filter(function (r) { return r.id === b.dataset.id; })[0]); }; });
   }
   function openReportModal(rep) {
@@ -2444,6 +2598,8 @@
       case "approvals.inbox": return renderApprovalsInbox();
       case "approvals.rules": return renderList(cfgApprovalRules());
       case "dash.home": return renderInsights();
+      case "dash.forecast": return renderForecast();
+      case "dash.schedules": return renderReportSchedules();
       case "events.list": return renderList(cfgEvents());
       case "events.new": return renderEventForm("new");
       case "cash.desk": return renderCashDesk();
