@@ -175,7 +175,7 @@ function formInner(p) {
 // Placeholder rendered server-side; embed.js fills it in-browser from the public ERP endpoint.
 function erpWidget(kind, p) {
   return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) +
-    '<div class="sw-erp" data-widget="' + esc(kind) + '"' + (p.limit ? ' data-limit="' + esc(p.limit) + '"' : "") + '><div class="text-center text-body-secondary py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div></div></div></section>';
+    '<div class="sw-erp" data-widget="' + esc(kind) + '"' + (p.company ? ' data-company="' + esc(p.company) + '"' : "") + (p.limit ? ' data-limit="' + esc(p.limit) + '"' : "") + ' data-origin="https://orbit.spacework.ai"><div class="text-center text-body-secondary py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div></div></div></section>';
 }
 
 function renderBlock(b) {
@@ -235,7 +235,7 @@ function pageHTML(data, host) {
     "fetch(SUPA+'/rest/v1/rpc/site_form_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':'Bearer '+ANON},body:JSON.stringify({p_host:HOST,p_form:f.getAttribute('data-form'),p_data:d})}).then(function(r){return r.json();}).then(function(){f.reset();if(m){m.hidden=false;m.className='sw-form-msg small mt-2 text-success';m.textContent='Thanks - your message was sent.';}}).catch(function(){if(m){m.hidden=false;m.className='sw-form-msg small mt-2 text-danger';m.textContent='Sorry, that did not send. Please try again.';}}).finally(function(){if(btn)btn.disabled=false;});});});" +
     "})();</script>" +
     // ERP widgets (careers etc.) hydrate from the public read endpoint on the same origin.
-    (blocks.indexOf('class="sw-erp"') >= 0 ? '<script src="/embed/erp.js" data-host="' + esc(host) + '"></script>' : "") +
+    (blocks.indexOf('class="sw-erp"') >= 0 ? '<script src="https://orbit.spacework.ai/embed/erp.js"></script>' : "") +
     "</body></html>";
 }
 

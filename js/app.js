@@ -910,7 +910,7 @@
     },
     website: {
       name: "Website", icon: "◐", color: "#2563eb", color2: "#1d4ed8", home: "web.sites",
-      menus: [{ label: "Sites", action: "web.sites" }, { label: "Form Submissions", action: "web.subs" }]
+      menus: [{ label: "Sites", action: "web.sites" }, { label: "Careers", action: "web.jobs" }, { label: "Applications", action: "web.applications" }, { label: "Form Submissions", action: "web.subs" }, { label: "Connect a site", action: "web.connect" }]
     },
     recruitment: {
       name: "Recruitment", icon: "☺", color: "#db2777", color2: "#be185d", home: "rec.applicants",
@@ -1013,7 +1013,7 @@
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
-    "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website",
+    "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
@@ -2299,6 +2299,9 @@
       case "sign.list": return renderList(cfgSignRequests());
       case "web.sites": return renderList(cfgSites());
       case "web.subs": return renderList(cfgSiteSubmissions());
+      case "web.jobs": return renderList(cfgJobs());
+      case "web.applications": return renderList(cfgApplications());
+      case "web.connect": return renderConnect();
       case "rec.applicants": return renderList(cfgApplicants());
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
@@ -14964,6 +14967,77 @@
       ]
     };
   }
+  function cfgJobs() {
+    return {
+      title: "Careers", pageSize: 60, editTable: "job_postings",
+      fetch: function () { return sb.from("job_postings").select("*").eq("company_id", S.company.id).order("sort").order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (j) { return (j.title || "") + " " + (j.location || "") + " " + (j.department || ""); },
+      columns: [
+        { label: "Position", edit: { field: "title", type: "text" }, get: function (j) { return '<b>' + esc(j.title || "") + '</b>'; } },
+        { label: "Location", edit: { field: "location", type: "text" }, get: function (j) { return esc(j.location || ""); } },
+        { label: "Type", edit: { field: "employment_type", type: "text" }, get: function (j) { return esc(j.employment_type || ""); } },
+        { label: "Status", get: function (j) { return j.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>'; } }
+      ],
+      filters: [{ label: "Published", test: function (j) { return j.is_published; } }],
+      onOpen: function (j) { renderJobForm(j.id); }, onNew: function () { renderJobForm("new"); },
+      emptyHint: "Post an open position. It shows on your careers page and any site you embed it in (Connect a site)."
+    };
+  }
+  async function renderJobForm(id) {
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New position" : "...", { action: "web.jobs", title: "Careers" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var j = id === "new" ? {} : ((await sb.from("job_postings").select("*").eq("id", id).maybeSingle()).data || {});
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New position" : (j.title || "Position");
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="jb-save">Save</button><button id="jb-disc">Discard</button></div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (j.is_published ? "done" : "on") + '">' + (j.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="jb-title" value="' + esc(j.title || "") + '" placeholder="Job title, e.g. Site Engineer"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Location", '<input id="jb-loc" value="' + esc(j.location || "") + '" placeholder="City / Remote">') +
+      fld("Employment type", '<input id="jb-type" value="' + esc(j.employment_type || "") + '" placeholder="Full-time">') +
+      fld("Department", '<input id="jb-dept" value="' + esc(j.department || "") + '" placeholder="Operations">') +
+      '</div><div>' +
+      fld("Published", '<select id="jb-pub"><option value="0"' + (!j.is_published ? " selected" : "") + '>Draft</option><option value="1"' + (j.is_published ? " selected" : "") + '>Published</option></select>', "Published jobs show on your careers page and embeds.") +
+      fld("External apply link", '<input id="jb-apply" value="' + esc(j.apply_url || "") + '" placeholder="https://... (optional)">', "If set, Apply links here instead of the built-in form.") +
+      '</div></div>' +
+      fld("Description", '<textarea id="jb-desc" rows="8" placeholder="Role, responsibilities, requirements...">' + esc(j.description || "") + '</textarea>') +
+      '</div>';
+    document.getElementById("jb-disc").onclick = function () { go("web.jobs"); };
+    document.getElementById("jb-save").onclick = async function () {
+      var row = { title: gv("jb-title") || "Untitled role", location: gv("jb-loc") || null, employment_type: gv("jb-type") || null, department: gv("jb-dept") || null, description: gv("jb-desc") || null, apply_url: gv("jb-apply") || null, is_published: gv("jb-pub") === "1", updated_at: new Date().toISOString() };
+      var r; if (id === "new") { row.company_id = S.company.id; r = await sb.from("job_postings").insert(row).select("id").single(); } else { r = await sb.from("job_postings").update(row).eq("id", id); }
+      if (r.error) { toast(errMsg(r.error)); return; } toast("Saved"); go("web.jobs");
+    };
+  }
+  function cfgApplications() {
+    return {
+      title: "Applications", pageSize: 100,
+      fetch: function () { return sb.from("job_applications").select("*, job_postings(title)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.name || "") + " " + (a.email || "") + " " + JSON.stringify(a.data || {}); },
+      columns: [
+        { label: "When", get: function (a) { return '<span class="muted">' + esc((a.created_at || "").slice(0, 16).replace("T", " ")) + '</span>'; } },
+        { label: "Name", get: function (a) { return '<b>' + esc(a.name || "") + '</b>'; } },
+        { label: "For", get: function (a) { return esc(a.job_postings ? a.job_postings.title : ""); } },
+        { label: "Email", get: function (a) { return esc(a.email || ""); } },
+        { label: "CV", get: function (a) { return a.cv_url ? '<a href="' + esc(a.cv_url) + '" target="_blank" rel="noopener">Link</a>' : ""; } },
+        { label: "Message", get: function (a) { return esc((a.message || "").slice(0, 90)); } }
+      ],
+      emptyHint: "Applications from your careers page and embeds land here."
+    };
+  }
+  function renderConnect() {
+    var origin = WEB_ORIGIN, cid = S.company.id;
+    var careers = '<script src="' + origin + '/embed/erp.js" data-orbit-widget="careers" data-company="' + cid + '"></' + 'script>';
+    var portal = '<script src="' + origin + '/embed/erp.js" data-orbit-widget="portal" data-company="' + cid + '"></' + 'script>';
+    function snip(code) { return '<pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;margin:6px 0">' + esc(code) + '</pre><button class="btn sm cpy" data-c="' + esc(code) + '" style="margin-bottom:6px">Copy snippet</button>'; }
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Connect a site") + '</div><div class="o-body" style="padding:18px"><div style="max-width:820px"><div class="card"><h3 style="margin:0 0 4px">Add Orbit to a website you already have</h3><div class="sub" style="margin-bottom:14px">Paste a snippet into your existing site where you want it. It pulls live from Orbit - no rebuild, and it restyles to your site.</div>' +
+      '<h4 style="margin:0 0 2px">Careers page</h4><div class="sub">Shows your published jobs (from <b>Careers</b>) with an Apply form; applications land in <b>Applications</b>.</div>' + snip(careers) +
+      '<h4 style="margin:18px 0 2px">Employee / customer portal buttons</h4><div class="sub">Login buttons to the Orbit portal.</div>' + snip(portal) +
+      '<h4 style="margin:18px 0 2px">Need a whole website?</h4><div class="sub">Build one visually in <a data-goto="web.sites" style="cursor:pointer;color:var(--accent)">Sites</a> - then use its own address or your domain.</div>' +
+      '</div></div></div></div>';
+    wireBc();
+    document.querySelectorAll(".cpy").forEach(function (b) { b.onclick = function () { try { navigator.clipboard.writeText(b.dataset.c); toast("Copied"); } catch (e) { toast("Copy failed - select and copy manually"); } }; });
+    var gt = document.querySelector("[data-goto]"); if (gt) gt.onclick = function () { go("web.sites"); };
+  }
   async function renderSiteForm(id) {
     var parent = { action: "web.sites", title: "Sites" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New site" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
@@ -15258,6 +15332,7 @@
     m.querySelectorAll(".wb-gal button").forEach(function (b) {
       b.onclick = function () {
         var type = b.dataset.type, def = JSON.parse(JSON.stringify(WEB_DEFAULTS[type] || {}));
+        if (type === "careers") def.company = S.company.id;   // wire the ERP widget to this company
         WB.blocks.splice(at, 0, { type: type, props: def }); WB.sel = at; WB.dirty = true;
         m.remove(); wbRepaint(); wbPaintPanel(); wbDirtyBadge();
       };
