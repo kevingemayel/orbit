@@ -5214,6 +5214,7 @@
   function msNum(id) { var e = document.getElementById(id); return e ? (parseFloat(e.value) || 0) : 0; }
   function msVal(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function msFmt(x, dp) { if (!isFinite(x)) return "-"; var f = dp == null ? 2 : dp; return (Math.round(x * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString("en-US", { minimumFractionDigits: (f === 2 ? 2 : 0), maximumFractionDigits: f }); }
+  var _msHidePrice = false;   // true only in the product form: price lives in Suppliers & prices, not the material spec
   function materialSpecHTML(p, nodes) {
     nodes = nodes || [];
     var sp = (p && p.spec) || {}, form = p.material_form || "generic";
@@ -5237,8 +5238,8 @@
   function matDimsHTML(form, sp) {
     var d = sp.dims || {};
     function f(id, label, val, unit) { return '<div class="ms-f"><label>' + label + (unit ? ' <span class="muted">(' + unit + ')</span>' : "") + '</label><input id="' + id + '" type="number" step="any" value="' + (val != null ? val : "") + '"></div>'; }
-    function basis(id, opts, cur) { return '<div class="ms-f"><label>Priced by</label><select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>'; }
-    var pval = f("ms-pval", "Price value", sp.pval, S.company.currency_code), out = '<div class="ms-out" id="ms-out"></div>';
+    function basis(id, opts, cur) { if (_msHidePrice) return ""; return '<div class="ms-f"><label>Priced by</label><select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>'; }
+    var pval = _msHidePrice ? "" : f("ms-pval", "Price value", sp.pval, S.company.currency_code), out = '<div class="ms-out" id="ms-out"></div>';
     if (form === "bar") {
       return '<div class="ms-grid">' + f("ms-len", "Length per bar", d.len, "m") + f("ms-wpm", "Weight", d.wpm, "kg/m") +
         basis("ms-basis", [["kg", "Price per kg"], ["m", "Price per metre"], ["bar", "Price per bar"]], sp.basis || "kg") + pval + '</div>' + out;
@@ -5263,7 +5264,7 @@
       var units = [["L", "L"], ["ml", "ml"], ["gal", "Gallon"]];
       return '<div class="ms-grid">' + f("ms-vol", "Container size", d.vol) +
         '<div class="ms-f"><label>Unit</label><select id="ms-volunit">' + units.map(function (u) { return '<option value="' + u[0] + '"' + ((d.volunit || "L") === u[0] ? " selected" : "") + '>' + u[1] + '</option>'; }).join("") + '</select></div>' +
-        f("ms-batch", "Batch size", d.batch, "units") + f("ms-pval", "Price per container", sp.pval, S.company.currency_code) + '</div>' + out;
+        f("ms-batch", "Batch size", d.batch, "units") + (_msHidePrice ? "" : f("ms-pval", "Price per container", sp.pval, S.company.currency_code)) + '</div>' + out;
     }
     if (form === "roll") {
       return '<div class="ms-grid">' + f("ms-rlen", "Roll length", d.rlen, "m") + f("ms-rwt", "Roll weight", d.rwt, "kg") +
@@ -5303,6 +5304,7 @@
       if (b3 === "kg") { pk3 = pv4; plm = L2 ? pv4 * wt2 / L2 : 0; pr = pv4 * wt2; } else if (b3 === "lm") { plm = pv4; pk3 = wt2 ? pv4 * L2 / wt2 : 0; pr = pv4 * L2; } else { pr = pv4; pk3 = wt2 ? pv4 / wt2 : 0; plm = L2 ? pv4 / L2 : 0; }
       cost = pr; html = chip("Weight", msFmt(wt2), "kg") + chip("Length", msFmt(L2), "m") + chip(cc + "/kg", msFmt(pk3)) + chip(cc + "/lm", msFmt(plm)) + chip(cc + "/roll", msFmt(pr)); if (L2 > 0) packNote = "Counted in rolls · 1 roll = " + msFmt(L2, 3) + " m in stock";
     } else { out.innerHTML = ""; return; }
+    if (_msHidePrice) { out.innerHTML = (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "") + '<div class="sub" style="margin-top:6px;font-size:12px">Price is set per supplier in <b>Suppliers &amp; prices</b> below.</div>'; return; }
     out.innerHTML = html + (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "");
     if (cost != null && isFinite(cost) && cost > 0) { var c = document.getElementById("pr-cost"); if (c) c.value = Math.round(cost * 10000) / 10000; }
   }
@@ -5490,6 +5492,7 @@
     };
   }
   async function renderProductForm(id) {
+    _msHidePrice = true;   // product form: price comes from Suppliers & prices, not the material spec
     mediaClearStage();
     var parent = { action: "products", title: "Products" };
     var main = document.getElementById("o-main");
@@ -6033,6 +6036,7 @@
     };
   }
   async function renderProjectItemForm(id, seed) {
+    _msHidePrice = false;   // job take-off items keep their own price
     mediaClearStage();
     var parent = { action: "proj.materials", title: "Project Materials" };
     var main = document.getElementById("o-main");
