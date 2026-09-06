@@ -6569,7 +6569,7 @@
       title: "Events", pageSize: 60, table: "event_events",
       kanban: { groups: [{ label: "Status", field: "status", options: EVENT_STATUS }, { label: "Type", field: "event_type", options: EVENT_TYPES }] },
       emptyHint: "Create an event to plan guests, seating, suppliers, budget, payments and tasks in one place. Great for weddings, company events and organizers.",
-      fetch: async function () { var rows = (await sb.from("event_events").select("*").order("event_date", { ascending: false, nullsFirst: false })).data || []; await attachThumbs(rows, "event"); return rows; },
+      fetch: async function () { var rows = (await sb.from("event_events").select("*").eq("company_id", S.company.id).order("event_date", { ascending: false, nullsFirst: false })).data || []; await attachThumbs(rows, "event"); return rows; },
       searchText: function (e) { return (e.name || "") + " " + (e.venue || "") + " " + (e.event_type || "") + " " + (e.location || ""); },
       columns: [
         { label: "", cls: "thumbcol", get: function (e) { return thumbCell(e); } },
