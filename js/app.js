@@ -898,6 +898,12 @@
         { label: "Configuration", items: [["Services & Products", "contact.caps"]] }
       ]
     },
+    desk: {
+      name: "My Desk", icon: "◱", color: "#16a34a", color2: "#15803d", home: "desk",
+      menus: [
+        { label: "My Desk", action: "desk" }
+      ]
+    },
     calendar: {
       name: "Calendar", icon: "◷", color: "#0891b2", color2: "#0e7490", home: "cal.month",
       menus: [
@@ -1032,7 +1038,7 @@
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
-    "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
+    "desk": "desk", "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
@@ -1113,7 +1119,7 @@
   }
   function canView(mod) { return permFor(mod).v; }
   function canManage(mod) { return permFor(mod).m; }
-  function canViewApp(appKey) { return (appKey === "help" || appKey === "activity") ? true : canView(modKey(appKey)); }
+  function canViewApp(appKey) { return (appKey === "help" || appKey === "activity" || appKey === "desk") ? true : canView(modKey(appKey)); }
   function canManageApp(appKey) { return canManage(modKey(appKey)); }
   function featureAllowed(action) {
     var fa = FEATURE_ACTIONS[action]; if (!fa) return true;
@@ -1442,7 +1448,7 @@
     { title: "Procurement & Finance", apps: ["purchase", "inventory", "accounting", "counter"] },
     { title: "Execution", apps: ["project", "manufacturing", "site"] },
     { title: "People", apps: ["hr", "recruitment"] },
-    { title: "Workspace", apps: ["documents", "calendar", "sign", "knowledge", "insights", "activity"] },
+    { title: "Workspace", apps: ["desk", "documents", "calendar", "sign", "knowledge", "insights", "activity"] },
     { title: "Specialty", apps: ["events", "appoint"] },
     { title: "Admin", apps: ["settings"] }
   ];
@@ -1509,6 +1515,34 @@
     applyFontScale();
     setupBannerInject();
     invitesBannerInject();
+  }
+  // Personal work-desk: my open tasks, upcoming calendar, my alerts, quick actions.
+  async function renderWorkdesk() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Desk") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var hr = new Date().getHours(); var greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
+    var myEmp = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("user_id", S.user.id).maybeSingle()).data;
+    var tasks = [];
+    if (myEmp) tasks = (await sb.from("project_tasks").select("id,name,project_id,date_deadline,board_stage,priority, projects:project_id(name)").eq("company_id", S.company.id).eq("assignee_id", myEmp.id).neq("board_stage", "done").is("completed_at", null).order("date_deadline", { ascending: true, nullsFirst: false }).limit(12)).data || [];
+    var soon = isoShift(14);
+    var events = (await sb.from("calendar_events").select("id,title,event_date,start_time,location,done,assigned_to").eq("company_id", S.company.id).gte("event_date", today()).lte("event_date", soon).neq("done", true).order("event_date").order("start_time").limit(12)).data || [];
+    var notifs = (await sb.from("notifications").select("*").eq("company_id", S.company.id).or("user_id.eq." + S.user.id + ",user_id.is.null").order("created_at", { ascending: false }).limit(8)).data || [];
+    var body = document.getElementById("o-body");
+    function card(title, inner, extra) { return '<div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3 style="margin:0;font-size:15px">' + title + '</h3>' + (extra || "") + '</div>' + inner + '</div>'; }
+    var taskInner = tasks.length ? '<div class="o-rt-wrap"><table class="o-lines"><tbody>' + tasks.map(function (t) { var over = t.date_deadline && t.date_deadline < today(); return '<tr class="wd-task" data-id="' + t.id + '" data-proj="' + t.project_id + '" style="cursor:pointer"><td><b>' + esc(t.name) + '</b><div class="muted" style="font-size:11px">' + esc(t.projects ? t.projects.name : "") + '</div></td><td class="num"><span class="' + (over ? "badge draft" : "muted") + '">' + esc(t.date_deadline || "-") + '</span></td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="muted" style="padding:6px">' + (myEmp ? "No open tasks assigned to you." : "Link your user to an employee record to see your tasks here.") + '</div>';
+    var evInner = events.length ? '<div class="o-rt-wrap"><table class="o-lines"><tbody>' + events.map(function (e) { return '<tr class="wd-ev" data-id="' + e.id + '" style="cursor:pointer"><td style="width:92px" class="muted">' + esc(e.event_date) + (e.start_time ? " " + esc(String(e.start_time).slice(0, 5)) : "") + '</td><td><b>' + esc(e.title) + '</b>' + (e.location ? ' <span class="muted">' + esc(e.location) + '</span>' : '') + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="muted" style="padding:6px">Nothing scheduled in the next two weeks.</div>';
+    var alertInner = notifs.length ? notifs.map(function (n) { return '<div class="wd-alert" data-action="' + esc(n.link_action || "") + '" data-id="' + esc(n.link_id || "") + '" style="padding:7px 0;border-bottom:1px solid var(--line);cursor:' + (n.link_action ? "pointer" : "default") + '"><b style="font-size:13px">' + esc(n.title || "") + '</b>' + (n.body ? '<div class="muted" style="font-size:12px">' + esc(n.body) + '</div>' : '') + '</div>'; }).join("") : '<div class="muted" style="padding:6px">No alerts. All clear.</div>';
+    var qa = [["New quotation", "so.list", "sales"], ["New invoice", "inv.out", "sales"], ["Service ticket", "svc.tickets", "service"], ["Open register", "pos.terminal", "pos"], ["Calendar", "cal.month", "calendar"], ["Contacts", "contacts", "crm"]];
+    var qaInner = '<div style="display:flex;flex-wrap:wrap;gap:8px">' + qa.map(function (q) { return '<button class="o-filtbtn wd-qa" data-go="' + q[1] + '" data-app="' + q[2] + '">' + esc(q[0]) + '</button>'; }).join("") + '</div>';
+    body.innerHTML = '<div style="margin-bottom:14px"><div style="font-family:Archivo,sans-serif;font-size:22px;font-weight:800">' + greet + (myEmp && myEmp.name ? ", " + esc(myEmp.name.split(" ")[0]) : "") + '</div><div class="muted">' + new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + '</div></div>' +
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">' +
+      '<div style="display:flex;flex-direction:column;gap:14px">' + card("My tasks", taskInner) + card("Upcoming", evInner) + '</div>' +
+      '<div style="display:flex;flex-direction:column;gap:14px">' + card("Alerts", alertInner) + card("Quick actions", qaInner) + '</div>' +
+      '</div>';
+    body.querySelectorAll(".wd-task").forEach(function (r) { r.onclick = function () { try { AGS.proj = r.dataset.proj; } catch (e) { } openTaskPanel(r.dataset.id, r.dataset.proj, function () { renderWorkdesk(); }); }; });
+    body.querySelectorAll(".wd-ev").forEach(function (r) { r.onclick = function () { S.app = "calendar"; applyAppColor(); go("cal.month"); }; });
+    body.querySelectorAll(".wd-alert").forEach(function (r) { r.onclick = function () { if (r.dataset.action) go(r.dataset.action); }; });
+    body.querySelectorAll(".wd-qa").forEach(function (b) { b.onclick = function () { S.app = b.dataset.app; applyAppColor(); go(b.dataset.go); }; });
   }
   function renderAppStore() {
     S.app = null; S.action = null;
@@ -2350,6 +2384,7 @@
       case "contact.tags": return renderList(cfgContactTags());
       case "contact.caps": return renderCapabilities();
       case "contact.dedupe": return renderContactMerge();
+      case "desk": return renderWorkdesk();
       case "cal.month": return renderCalendar();
       case "cal.agenda": return renderAgenda();
       case "sign.list": return renderList(cfgSignRequests());
