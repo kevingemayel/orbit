@@ -5241,6 +5241,95 @@
       toast("Supplier price added"); loadSupplierPrices(productId);
     };
   }
+
+  // Equivalent / additional barcodes for a product (the primary barcode stays on the product row).
+  async function loadProductBarcodes(productId) {
+    var el = document.getElementById("pr-barcodes"); if (!el) return;
+    var q = await sb.from("product_barcodes").select("*").eq("product_id", productId).order("created_at");
+    if (q.error) { if (/product_barcodes|does not exist|schema cache/i.test(q.error.message || "")) el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Extra barcodes</div><div class="sub">Run <span class="path">supabase/104-inventory-depth.sql</span> once to enable multiple barcodes.</div></div>'; return; }
+    var rows = q.data || [];
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Extra barcodes</div><div class="sub" style="margin:-2px 0 9px">Additional / equivalent barcodes that also scan to this item (supplier packs, old codes, inner vs outer).</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Barcode</th><th>Label</th><th></th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (r) { return '<tr><td class="mono">' + esc(r.barcode) + '</td><td>' + esc(r.label || "") + '</td><td><button class="btn sm pbc-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No extra barcodes.</td></tr>') +
+      '</tbody></table></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
+      '<input id="pbc-code" placeholder="barcode" ' + inS + ' style="width:150px"><input id="pbc-label" placeholder="label (optional)" ' + inS + ' style="width:150px"><button class="btn sm pri" id="pbc-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    el.querySelectorAll(".pbc-del").forEach(function (b) { b.onclick = async function () { await sb.from("product_barcodes").delete().eq("id", b.dataset.id); loadProductBarcodes(productId); }; });
+    document.getElementById("pbc-add").onclick = async function () {
+      var code = gv("pbc-code"); if (!code) { toast("Enter a barcode"); return; }
+      var ins = await sb.from("product_barcodes").insert({ company_id: S.company.id, product_id: productId, barcode: code, label: gv("pbc-label") || "" });
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      loadProductBarcodes(productId);
+    };
+  }
+
+  // Kit / bundle components. Only shown when the item is flagged as a kit.
+  async function loadKitComponents(productId, p) {
+    var el = document.getElementById("pr-kitc"); if (!el) return;
+    if (!(p && p.is_kit)) { el.innerHTML = ""; return; }
+    var q = await sb.from("product_kit_components").select("*, comp:component_product_id(name,default_code,cost_price,list_price)").eq("kit_product_id", productId).order("seq");
+    if (q.error) { if (/product_kit_components|does not exist|schema cache/i.test(q.error.message || "")) el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Kit components</div><div class="sub">Run <span class="path">supabase/104-inventory-depth.sql</span> once to enable kits.</div></div>'; return; }
+    var rows = q.data || [];
+    var prods = (await sb.from("products").select("id,name,default_code,cost_price,list_price").eq("company_id", S.company.id).eq("is_active", true).neq("id", productId).neq("is_kit", true).order("name").limit(1000)).data || [];
+    var cc = S.company.currency_code;
+    var sumCost = rows.reduce(function (a, r) { return a + (Number((r.comp || {}).cost_price) || 0) * (Number(r.qty) || 0); }, 0);
+    var sumList = rows.reduce(function (a, r) { return a + (Number((r.comp || {}).list_price) || 0) * (Number(r.qty) || 0); }, 0);
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Kit components</div><div class="sub" style="margin:-2px 0 9px">What goes into this kit. Selling the kit can draw each component from stock. Component totals: cost <b>' + esc(cc) + ' ' + money(sumCost) + '</b> &middot; list <b>' + esc(cc) + ' ' + money(sumList) + '</b>.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Component</th><th class="num">Qty</th><th></th></tr></thead><tbody>' +
+      (rows.length ? rows.map(function (r) { var c = r.comp || {}; return '<tr><td><b>' + esc(c.name || "(deleted)") + '</b>' + (c.default_code ? ' <span class="muted">' + esc(c.default_code) + '</span>' : '') + '</td><td class="num">' + (Number(r.qty) || 0) + '</td><td><button class="btn sm pkc-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No components yet.</td></tr>') +
+      '</tbody></table></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
+      '<select id="pkc-prod" ' + inS + ' style="min-width:200px"><option value="">Component...</option>' + prods.map(function (x) { return '<option value="' + x.id + '">' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join("") + '</select>' +
+      '<input id="pkc-qty" type="number" step="any" value="1" ' + inS + ' style="width:72px"><button class="btn sm pri" id="pkc-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
+    el.querySelectorAll(".pkc-del").forEach(function (b) { b.onclick = async function () { await sb.from("product_kit_components").delete().eq("id", b.dataset.id); loadKitComponents(productId, p); }; });
+    document.getElementById("pkc-add").onclick = async function () {
+      var cid = document.getElementById("pkc-prod").value; if (!cid) { toast("Pick a component"); return; }
+      var ins = await sb.from("product_kit_components").insert({ company_id: S.company.id, kit_product_id: productId, component_product_id: cid, qty: parseFloat(gv("pkc-qty")) || 1, seq: (rows.length + 1) * 10 });
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      loadKitComponents(productId, p);
+    };
+  }
+
+  // Variant matrix: define axes (e.g. Size, Color) then generate a child product per combination.
+  async function loadVariants(productId, p) {
+    var el = document.getElementById("pr-variants"); if (!el) return;
+    if (p && p.parent_product_id) { el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Variant</div><div class="sub" style="margin:0">This item is a variant of another product. <a href="#" id="pv-parent">Open the parent</a> to manage the full set.</div></div>'; var pl = document.getElementById("pv-parent"); if (pl) pl.onclick = function (e) { e.preventDefault(); renderProductForm(p.parent_product_id); }; return; }
+    var attrs = (p && p.variant_attrs && typeof p.variant_attrs === "object") ? p.variant_attrs : {};
+    var kids = (await sb.from("products").select("id,name,default_code,is_active").eq("parent_product_id", productId).order("name")).data || [];
+    var axes = Object.keys(attrs);
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Variants</div><div class="sub" style="margin:-2px 0 9px">Sell this item in variations (e.g. Size &times; Colour). Define the axes, then generate a product for each combination.</div>' +
+      '<div id="pv-axes">' + (axes.length ? axes.map(function (k) { return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px"><b style="min-width:90px">' + esc(k) + '</b><span class="muted">' + esc((attrs[k] || []).join(", ")) + '</span> <button class="btn sm pv-axdel" data-k="' + esc(k) + '">&times;</button></div>'; }).join("") : '<div class="muted" style="margin-bottom:6px">No axes yet.</div>') + '</div>' +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 4px">' +
+      '<input id="pv-name" placeholder="axis (e.g. Colour)" ' + inS + ' style="width:150px"><input id="pv-vals" placeholder="values comma-separated (Black, White)" ' + inS + ' style="width:230px"><button class="btn sm" id="pv-axadd">Add axis</button>' +
+      (axes.length ? '<button class="btn sm pri" id="pv-gen" style="background:var(--app);border-color:var(--app)">Generate variants</button>' : '') + '</div>' +
+      (kids.length ? '<div class="sub" style="margin:8px 0 4px"><b>' + kids.length + '</b> variant(s):</div><div class="o-rt-wrap"><table class="o-lines"><tbody>' + kids.map(function (k) { return '<tr><td><b>' + esc(k.name) + '</b> <span class="muted">' + esc(k.default_code || "") + '</span></td><td><button class="btn sm pv-open" data-id="' + k.id + '">Open</button></td></tr>'; }).join("") + '</tbody></table></div>' : "") +
+      '</div>';
+    function saveAttrs(next) { return sb.from("products").update({ variant_attrs: next }).eq("id", productId); }
+    document.getElementById("pv-axadd").onclick = async function () {
+      var nm = gv("pv-name").trim(); var vals = gv("pv-vals").split(",").map(function (s) { return s.trim(); }).filter(Boolean);
+      if (!nm || !vals.length) { toast("Enter an axis name and at least one value"); return; }
+      var next = Object.assign({}, attrs); next[nm] = vals; var r = await saveAttrs(next); if (r.error) { toast(errMsg(r.error)); return; }
+      loadVariants(productId, Object.assign({}, p, { variant_attrs: next }));
+    };
+    el.querySelectorAll(".pv-axdel").forEach(function (b) { b.onclick = async function () { var next = Object.assign({}, attrs); delete next[b.dataset.k]; await saveAttrs(next); loadVariants(productId, Object.assign({}, p, { variant_attrs: next })); }; });
+    el.querySelectorAll(".pv-open").forEach(function (b) { b.onclick = function () { renderProductForm(b.dataset.id); }; });
+    var gen = document.getElementById("pv-gen");
+    if (gen) gen.onclick = async function () {
+      var keys = Object.keys(attrs); if (!keys.length) return;
+      var combos = [{}]; keys.forEach(function (k) { var out = []; combos.forEach(function (c) { (attrs[k] || []).forEach(function (v) { var n = Object.assign({}, c); n[k] = v; out.push(n); }); }); combos = out; });
+      var existing = {}; kids.forEach(function (k) { existing[k.name] = true; });
+      var made = 0;
+      for (var i = 0; i < combos.length; i++) {
+        var combo = combos[i]; var suffix = keys.map(function (k) { return combo[k]; }).join(" / ");
+        var vname = (p.name || "Item") + " - " + suffix; if (existing[vname]) continue;
+        var vspec = Object.assign({}, p.spec || {}); vspec.variant = combo;
+        var row = { company_id: S.company.id, name: vname, type: p.type || "storable", uom: p.uom || null, category_id: p.category_id || null, list_price: p.list_price || 0, cost_price: p.cost_price || 0, sale_tax_id: p.sale_tax_id || null, purchase_tax_id: p.purchase_tax_id || null, income_account_id: p.income_account_id || null, expense_account_id: p.expense_account_id || null, stock_account_id: p.stock_account_id || null, family: p.family || null, material_form: p.material_form || null, spec: vspec, parent_product_id: productId, is_active: true, default_code: (p.default_code ? p.default_code + "-" + suffix.replace(/[^A-Za-z0-9]+/g, "").toUpperCase().slice(0, 8) : "") };
+        var r = await sb.from("products").insert(row); if (!r.error) made++;
+      }
+      toast(made + " variant(s) generated"); loadVariants(productId, p);
+    };
+  }
   async function renderProductForm(id) {
     mediaClearStage();
     var parent = { action: "products", title: "Products" };
@@ -5282,11 +5371,14 @@
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
       fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
-      '</div></div>' + materialSpecHTML(p, clsNodes) + (id !== "new" ? '<div id="pr-sup" style="margin-top:16px"></div>' : '') + customFieldsHTML("product", p) + '</div>';
+      fld("Consignment stock", '<select id="pr-consign"><option value="0"' + (!p.is_consignment ? " selected" : "") + '>Owned stock</option><option value="1"' + (p.is_consignment ? " selected" : "") + '>Consignment (supplier-owned until sold)</option></select>', "Consignment stock sits in your store but is owned by the supplier until you sell it - you only owe them once it moves.") +
+      fld("Kit / bundle", '<select id="pr-kit"><option value="0"' + (!p.is_kit ? " selected" : "") + '>Simple item</option><option value="1"' + (p.is_kit ? " selected" : "") + '>Kit - sold as one, made of components</option></select>', "A kit is a sellable product built from other products (e.g. a door set). Define the components below; selling the kit can draw the parts from stock.") +
+      '</div></div>' + materialSpecHTML(p, clsNodes) + (id !== "new" ? '<div id="pr-variants" style="margin-top:16px"></div><div id="pr-kitc" style="margin-top:16px"></div><div id="pr-barcodes" style="margin-top:16px"></div><div id="pr-sup" style="margin-top:16px"></div>' : '') + customFieldsHTML("product", p) + '</div>';
     document.getElementById("pr-discard").onclick = function () { go("products"); };
     var prQr = document.getElementById("pr-qr"); if (prQr) prQr.onclick = function () { openQRModal(p.name || "Product", p.barcode || p.default_code || p.id, p.default_code || ""); };
     wireMatSpec(p, clsNodes);
-    if (id !== "new") loadSupplierPrices(id);
+    if (id !== "new") { loadSupplierPrices(id); loadProductBarcodes(id); loadKitComponents(id, p); loadVariants(id, p); }
+    var _kitSel = document.getElementById("pr-kit"); if (_kitSel) _kitSel.onchange = function () { loadKitComponents(id, { is_kit: this.value === "1" }); };
     wireAttach("product");
     catPickerAdd("pr-cat");
     var _pc = document.getElementById("pr-code"); if (_pc) _pc.oninput = function () { _prCodeAuto = false; };   // once edited, stop auto-building
@@ -5301,7 +5393,9 @@
         list_price: parseFloat(gv("pr-price")) || 0, cost_price: parseFloat(gv("pr-cost")) || 0,
         income_account_id: document.getElementById("pr-inc").value || null, expense_account_id: document.getElementById("pr-exp").value || null,
         sale_tax_id: document.getElementById("pr-stax").value || null, purchase_tax_id: document.getElementById("pr-ptax").value || null,
-        is_active: document.getElementById("pr-active").value === "1"
+        is_active: document.getElementById("pr-active").value === "1",
+        is_consignment: (document.getElementById("pr-consign") || {}).value === "1",
+        is_kit: (document.getElementById("pr-kit") || {}).value === "1"
       };
       var cerrPr = customError("product"); if (cerrPr) { toast(cerrPr); return; }
       row.custom = collectCustom("product");
