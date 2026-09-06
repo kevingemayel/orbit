@@ -3292,6 +3292,7 @@
         { label: "Amount", num: true, get: function (p) { return moneyC(p.amount, p.currency_code); } }
       ],
       groupBy: [{ label: "Partner", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Month", get: function (p) { return (p.date || "").slice(0, 7); } }],
+      emptyHint: "Record money received from customers or paid to suppliers, and match it against their invoices. Payments also flow in from the bank reconciliation.",
       onOpen: function (p) { openPaymentView(p); }
     };
   }
@@ -3347,6 +3348,7 @@
       ],
       filters: [{ label: "Active", test: function (a) { return a.is_active; } }, { label: "Archived", test: function (a) { return !a.is_active; } }],
       groupBy: [{ label: "Type", get: function (a) { return tName[a.type_code] || a.type_code; } }, { label: "Class", get: function (a) { return TYPE_LABEL((a.type_code || "").split("_")[0]); } }],
+      emptyHint: "Your chart of accounts - the ledger every transaction posts to. Apply a country pack in Company Profile to seed a standard chart, or add accounts here.",
       onOpen: function (a) { renderAccountForm(a.id); },
       onNew: function () { renderAccountForm("new"); }
     };
@@ -3365,6 +3367,7 @@
       ],
       filters: [{ label: "Posted", test: function (m) { return m.state === "posted"; } }, { label: "Draft", test: function (m) { return m.state !== "posted"; } }],
       groupBy: [{ label: "Journal", get: function (m) { return m.journals ? m.journals.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }],
+      emptyHint: "Manual double-entry journals. Most postings come from invoices, bills and payments automatically; add a journal here for adjustments and opening balances.",
       onOpen: function (m) { renderJournalEntryForm(m.id); },
       onNew: canManageApp("accounting") ? function () { renderJournalEntryForm("new"); } : null
     };
@@ -3596,6 +3599,7 @@
       ],
       groupBy: [{ label: isSale ? "Customer" : "Vendor", get: function (o) { return o.partners ? o.partners.name : "None"; } }, { label: "Status", get: function (o) { return o.state; } }],
       kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + moneyC(o.amount_total, o.currency_code) + '</b></div>'; },
+      emptyHint: "Orders you place with suppliers and receive from customers. Raise one from a requisition or quotation, or start it here; receiving and billing follow.",
       onOpen: function (o) { renderOrderForm(o.id, kind); },
       onNew: function () { renderOrderForm("new", kind); }
     };
@@ -5892,7 +5896,7 @@
   function toolStatusBadge(t) { var map = { in_stock: ["Available", "paid"], issued: ["Issued", "partial"], repair: ["In repair", "unpaid"], retired: ["Retired", "draft"] }, m = map[t.status] || ["", "draft"]; return '<span class="badge ' + m[1] + '">' + m[0] + '</span>'; }
   function cfgTools() {
     return {
-      title: "Tools & Equipment", pageSize: 80, table: "tools",
+      title: "Tools & Equipment", pageSize: 80, table: "tools", archiveField: "is_active",
       kanban: { groups: [{ label: "Status", field: "status", options: TOOL_STATUS }, { label: "Condition", field: "condition", options: TOOL_COND }] },
       fetch: async function () { var rows = (await sb.from("tools").select("*, partners:holder_partner_id(name), projects:project_id(name)").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "tool"); return rows; },
       searchText: function (t) { return (t.name || "") + " " + (t.code || "") + " " + (t.category || "") + " " + (t.brand || "") + " " + (t.serial || "") + " " + (t.holder_name || "") + " " + (t.location || "") + " " + (t.shelf_location || ""); },
@@ -10199,6 +10203,7 @@
       ],
       filters: [{ label: "Running", test: function (a) { return a.state === "running"; } }, { label: "Draft", test: function (a) { return a.state === "draft"; } }, { label: "Closed", test: function (a) { return a.state === "closed"; } }],
       groupBy: [{ label: "Category", get: function (a) { return a.category || "None"; } }, { label: "Status", get: function (a) { return a.state; } }],
+      emptyHint: "Your fixed assets - equipment, vehicles, fit-out. Each depreciates on a schedule that posts to the ledger; dispose of one to book the gain or loss.",
       onOpen: function (a) { renderAssetForm(a.id); }, onNew: function () { renderAssetForm("new"); }
     };
   }
@@ -10335,6 +10340,7 @@
         { label: "From", get: function (b) { return '<span class="muted">' + esc(b.date_start || "") + '</span>'; } },
         { label: "To", get: function (b) { return '<span class="muted">' + esc(b.date_end || "") + '</span>'; } }
       ],
+      emptyHint: "Set a planned figure per account for a period, then track budget vs actual as real transactions post.",
       onOpen: function (b) { renderBudgetForm(b.id); }, onNew: function () { renderBudgetForm("new"); }
     };
   }
@@ -12817,7 +12823,7 @@
   }
   function cfgWarehouses() {
     return {
-      title: "Warehouses", pageSize: 50, editTable: "warehouses",
+      title: "Warehouses", pageSize: 50, editTable: "warehouses", archiveField: "is_active",
       fetch: function () { return sb.from("warehouses").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (w) { return (w.name || "") + " " + (w.code || ""); },
       columns: [
@@ -12843,7 +12849,7 @@
   }
   function cfgLocations() {
     return {
-      title: "Locations", pageSize: 100, editTable: "stock_locations",
+      title: "Locations", pageSize: 100, editTable: "stock_locations", archiveField: "is_active",
       fetch: function () {
         return Promise.all([
           sb.from("stock_locations").select("*").eq("company_id", S.company.id).order("name"),
@@ -15446,7 +15452,7 @@
   }
   function cfgSites() {
     return {
-      title: "Sites", pageSize: 50, editTable: "sites",
+      title: "Sites", pageSize: 50, editTable: "sites", archiveField: "is_active",
       fetch: async function () { var rows = (await sb.from("sites").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || []; return rows; },
       searchText: function (s) { return (s.name || "") + " " + (s.slug || ""); },
       columns: [
@@ -15472,7 +15478,7 @@
   }
   function cfgJobs() {
     return {
-      title: "Careers", pageSize: 60, editTable: "job_postings",
+      title: "Careers", pageSize: 60, editTable: "job_postings", archiveField: "is_active",
       fetch: function () { return sb.from("job_postings").select("*").eq("company_id", S.company.id).order("sort").order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (j) { return (j.title || "") + " " + (j.location || "") + " " + (j.department || ""); },
       columns: [
@@ -17926,6 +17932,7 @@
         { label: "Produces", get: function (b) { return esc(b.products ? b.products.name : "-"); } },
         { label: "Output qty", num: true, get: function (b) { return Number(b.output_qty || 1); } }
       ],
+      emptyHint: "Define what a finished product is made of. A work order then consumes the components and books the finished goods into stock.",
       onOpen: function (b) { renderBomForm(b.id); }, onNew: function () { renderBomForm("new"); }
     };
   }
