@@ -1,51 +1,59 @@
 # Website module - going live (Cloudflare setup)
 
-The code is done and deployed. Everything below is one-time Cloudflare config on the
-`spacework.ai` zone. After it, every customer site is live at its own clean address.
+Live progress + the exact remaining steps. Account `c40488d42e7e15a69ff7fdb4a39a0ac9`,
+zone `spacework.ai`, **Zone ID `6774b0a25a80fcb62533be8056820d6b`** (public, = `CF_ZONE_ID`).
 
-## What already works (no setup needed)
-- Build sites in **Orbit -> Website**: sites, pages, blocks, publish, form inbox.
-- The renderer is live. Preview any published site at:
-  `https://orbit.spacework.ai/site/?host=<slug>.sites.spacework.ai&path=/`
-  (verified: the `algeco-demo` site renders fully).
+## DONE + verified
+- **Step 1 - Wildcard DNS.** Two **proxied** CNAMEs on `spacework.ai`, live:
+  - `*.sites`  -> `spacework.ai`  (Proxied)
+  - `sites`    -> `spacework.ai`  (Proxied, the fallback-origin host)
+- **Worker `orbit-sites` + real code DEPLOYED.** Verified: `orbit-sites.kevingemayel.workers.dev`
+  returns the render-engine 404 page (not "Hello World"), so the engine is live on the Worker.
+- **Worker routes.** Both bound to `orbit-sites` (added from the Worker's Domains tab):
+  - `*.sites.spacework.ai/*`
+  - `sites.spacework.ai/*`
+  (Whole-zone `*.spacework.ai/*` was deliberately NOT created - it would hijack orbit/plot/www.)
 
-## Step 1 - Wildcard subdomain (free addresses, `name.sites.spacework.ai`)
-In Cloudflare **DNS** for `spacework.ai`, add a **proxied** record so the wildcard
-resolves and Cloudflare answers it:
-- Type `CNAME`, Name `*.sites`, Target `spacework.ai`, Proxy **ON** (orange cloud).
-- Also add `CNAME  sites  ->  spacework.ai`, Proxy **ON** (this is the fallback origin).
+## BLOCKER found: SSL for the nested wildcard
+`slug.sites.spacework.ai` over HTTPS fails with `ERR_SSL_VERSION_OR_CIPHER_MISMATCH`.
+Cause: Cloudflare's **free Universal SSL covers `spacework.ai` + `*.spacework.ai` only (ONE
+level)**, not the two-level `*.sites.spacework.ai`. Fix options:
+- **Advanced Certificate Manager (~$10/mo/zone)** - order an advanced cert for
+  `sites.spacework.ai` + `*.sites.spacework.ai`. Auto-renews, covers unlimited sub-sites.
+  (SSL/TLS -> Edge Certificates -> Order an advanced certificate.) Recommended.
+- **Free but manual:** get a Let's Encrypt `*.sites.spacework.ai` wildcard via DNS-01,
+  Upload a custom certificate; re-upload every ~90 days.
+- **Avoid it entirely:** don't offer free subdomains - use only customer custom domains
+  (Cloudflare for SaaS issues their certs), reachable at a clean CNAME to `sites.spacework.ai`.
 
-## Step 2 - Deploy the site Worker
-The Worker (`worker/`) serves those hostnames at their own root. From the repo:
-```
-cd worker
-npx wrangler login
-npx wrangler deploy
-```
-`wrangler.toml` already declares the routes `*.sites.spacework.ai/*` and
-`sites.spacework.ai/*`. After deploy, `algeco-demo.sites.spacework.ai` serves the
-site at its root (no `/site/` path). Subdomains are now fully live.
+## REMAINING (need your browser / billing / a token - I don't do these)
 
-## Step 3 - Custom domains (customer's own domain, SSL auto)
-Turn on **Cloudflare for SaaS** so customers can use their own domain with a cert
-issued for *their* name (spacework.ai invisible to visitors):
-1. Zone `spacework.ai` -> **SSL/TLS -> Custom Hostnames** -> enable, and set the
-   **Fallback Origin** to `sites.spacework.ai` (the Worker serves it).
-2. Create an **API token** (My Profile -> API Tokens) scoped to this zone with
-   permission **SSL and Certificates: Edit** (and Zone: Read).
-3. In the **orbit Pages project -> Settings -> Environment variables** add two
-   encrypted vars used by `functions/site-domain`:
-   - `CF_API_TOKEN` = the token from step 2
-   - `CF_ZONE_ID`   = the `spacework.ai` zone id (Overview page, right sidebar)
-4. Redeploy the Pages project (push any commit, or "Retry deployment").
+### A. DONE - real code pasted into orbit-sites and deployed (verified on workers.dev).
+Only the SSL blocker above stands between this and live HTTPS subdomains.
 
-Now in **Website -> a site -> Custom domain**: a customer types `www.theirbiz.com`,
-Orbit registers it with Cloudflare, shows the CNAME to add at their registrar
-(`www.theirbiz.com -> sites.spacework.ai`), and **Verify** flips it to Live once the
-cert issues. Nothing of spacework.ai is visible on their site.
+### B. Custom domains - Cloudflare for SaaS  (only needed for customer-owned domains)
+1. Zone `spacework.ai` -> **SSL/TLS -> Custom Hostnames -> Enable Cloudflare for SaaS**.
+   This now opens a **billing checkout**: it wants a billing address, Terms-of-Service
+   acceptance, and card-on-file authorization (100 custom hostnames are free; you only
+   pay past that). You have to complete this - it is a legal/billing step.
+2. After activation, set the **Fallback Origin** to `sites.spacework.ai`.
+
+### C. Wire the app's "Add custom domain" button to Cloudflare
+In the **orbit Pages project -> Settings -> Environment variables**, add two encrypted
+vars used by `functions/site-domain`:
+- `CF_API_TOKEN` = an API token you create (My Profile -> API Tokens) scoped to zone
+  `spacework.ai` with **SSL and Certificates: Edit** (+ Zone: Read). Paste it straight
+  into the dashboard field - never through the assistant.
+- `CF_ZONE_ID`   = `6774b0a25a80fcb62533be8056820d6b`
+Then redeploy the Pages project (push any commit or "Retry deployment").
+
+## What works after each step
+- After **A**: free subdomains `slug.sites.spacework.ai` are fully live.
+- After **B + C**: customers can add their own domain; cert issues for THEIR name; no
+  spacework.ai shown to their visitors.
 
 ## Notes
-- Supabase URL + anon key are baked into `functions/site/render-core.js` (public,
-  RLS-safe). No secret lives in the Worker.
-- To brand even the CNAME target, point custom hostnames at an unbranded domain you
-  own instead of `sites.spacework.ai` and set that as the fallback origin.
+- Supabase URL + anon key are baked into `render-core.js` (public, RLS-safe). No secret
+  lives in the Worker itself.
+- The renderer is already live for testing at
+  `https://orbit.spacework.ai/site/?host=<slug>.sites.spacework.ai&path=/`.
