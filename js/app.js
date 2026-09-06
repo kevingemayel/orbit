@@ -791,7 +791,7 @@
         { label: "Cockpit", action: "cockpit" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Recurring Invoices", "inv.recurring"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
-        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
+        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Asset dashboard", "assets.dash"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
         { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
         { label: "Configuration", items: [["Taxes", "taxes"], ["E-invoicing", "acc.einvoice"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
@@ -1022,7 +1022,7 @@
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "project", "var.list": "project", "sc.list": "project", "proj.pnl": "project", "proj.retention": "project", "proj.wip": "project", "proj.jobcost": "project", "cost.codes": "project", "proj.labels": "project", "acc.payterms": "accounting",
@@ -1934,6 +1934,37 @@
       run: async function (cid, days) {
         var rows = (await sb.from("sale_orders").select("id,number,date_order,partners(name)").eq("company_id", cid).eq("state", "draft").lte("date_order", isoShift(-days)).limit(50)).data || [];
         return rows.map(function (o) { return { entity: o.id, title: "Follow up on quotation " + (o.number || ""), body: (o.partners ? o.partners.name + " - " : "") + "from " + (o.date_order || ""), link_action: "so.list", link_id: o.id }; });
+      } },
+    { key: "low_stock", name: "Low stock alert", desc: "Warn when an item's on-hand falls to or below its reorder minimum.", pkey: "buffer", plabel: "Extra buffer qty", pdef: 0,
+      run: async function (cid, buffer) {
+        var rules = (await sb.from("reordering_rules").select("product_id,min_qty, products:product_id(name)").eq("company_id", cid).gt("min_qty", 0)).data || [];
+        if (!rules.length) return [];
+        var oh = {}; try { oh = await onHandMap(); } catch (e) { oh = {}; }
+        return rules.filter(function (r) { return (Number(oh[r.product_id]) || 0) <= (Number(r.min_qty) || 0) + (Number(buffer) || 0); }).slice(0, 50).map(function (r) { return { entity: r.product_id, title: "Low stock: " + ((r.products && r.products.name) || "item"), body: "On hand " + (Number(oh[r.product_id]) || 0) + ", reorder minimum " + (Number(r.min_qty) || 0), link_action: "inv.reorder", link_id: null }; });
+      } },
+    { key: "credit_limit", name: "Customer over credit limit", desc: "Flag a customer whose unpaid balance has passed a share of their credit limit.", pkey: "pct", plabel: "Alert at % of limit", pdef: 100,
+      run: async function (cid, pct) {
+        var partners = (await sb.from("partners").select("id,name,credit_limit").eq("company_id", cid).gt("credit_limit", 0).limit(300)).data || [];
+        var out = [];
+        for (var i = 0; i < partners.length; i++) {
+          var p = partners[i];
+          var inv = (await sb.from("invoices").select("amount_residual").eq("company_id", cid).eq("partner_id", p.id).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0.005)).data || [];
+          var bal = inv.reduce(function (a, x) { return a + (Number(x.amount_residual) || 0); }, 0);
+          if (bal >= (Number(p.credit_limit) || 0) * (Number(pct) || 100) / 100) out.push({ entity: p.id, title: "Over credit limit: " + p.name, body: "Unpaid balance has passed the set credit limit", link_action: "contacts", link_id: p.id });
+        }
+        return out.slice(0, 50);
+      } },
+    { key: "doc_expiry", name: "Document / warranty expiry", desc: "Remind you when equipment registration, insurance or a warranty is about to expire.", pkey: "days", plabel: "Days ahead", pdef: 30,
+      run: async function (cid, days) {
+        var out = [];
+        var eq = (await sb.from("plant_equipment").select("id,name,registration_expiry,insurance_expiry").eq("company_id", cid).limit(300)).data || [];
+        eq.forEach(function (e) {
+          if (e.registration_expiry && e.registration_expiry >= today() && e.registration_expiry <= isoShift(days)) out.push({ entity: e.id + ":reg", title: "Registration expiring: " + (e.name || "unit"), body: "Registration due " + e.registration_expiry, link_action: "site.plant", link_id: e.id });
+          if (e.insurance_expiry && e.insurance_expiry >= today() && e.insurance_expiry <= isoShift(days)) out.push({ entity: e.id + ":ins", title: "Insurance expiring: " + (e.name || "unit"), body: "Insurance due " + e.insurance_expiry, link_action: "site.plant", link_id: e.id });
+        });
+        var w = (await sb.from("service_warranties").select("id,serial_no,end_date, products:product_id(name)").eq("company_id", cid).not("end_date", "is", null).gte("end_date", today()).lte("end_date", isoShift(days)).limit(50)).data || [];
+        w.forEach(function (x) { out.push({ entity: x.id, title: "Warranty expiring: " + ((x.products && x.products.name) || x.serial_no || "item"), body: "Ends " + x.end_date, link_action: "svc.warranties", link_id: x.id }); });
+        return out.slice(0, 50);
       } }
   ];
   // The engine: runs each enabled rule and inserts a notification per match, deduped by a
@@ -2297,6 +2328,7 @@
       case "rep.collections": return renderCollections();
       case "cockpit": return renderCockpit();
       case "assets.list": return renderList(cfgAssets());
+      case "assets.dash": return renderAssetsDash();
       case "budget.list": return renderList(cfgBudgets());
       case "fu.levels": return renderList(cfgFollowupLevels());
       case "sale.pricelists": return renderList(cfgPricelists());
@@ -9956,7 +9988,7 @@
     var dueCount = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); }).length;
     var btns = closed ? "" : '<button class="pri" id="as-save">Save</button><button id="as-discard">Discard</button>';
     if (id !== "new" && a.state === "draft") btns += '<button id="as-confirm">Confirm &amp; schedule</button>';
-    if (id !== "new" && running) btns += '<button id="as-post">Post depreciation' + (dueCount ? " (" + dueCount + " due)" : "") + '</button><button id="as-close">Close</button>';
+    if (id !== "new" && running) btns += '<button id="as-post">Post depreciation' + (dueCount ? " (" + dueCount + " due)" : "") + '</button><button id="as-dispose">Dispose</button><button id="as-close">Close</button>';
     var stages = '<div class="o-stages"><span class="st ' + (a.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (running ? "on" : (closed ? "done" : "")) + '">Running</span><span class="st ' + (closed ? "on" : "") + '">Closed</span></div>';
     var smart = '<div class="o-smart"><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(a.acquisition_value) + '</span><span class="k">Cost</span></button><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(postedTot) + '</span><span class="k">Depreciated</span></button><button class="sb" style="cursor:default"><span class="v">' + cc + " " + money(bookNow) + '</span><span class="k">Book value</span></button></div>';
     var sched = lines.length ? lines : assetSchedule(a);
@@ -10007,6 +10039,49 @@
       toast("Posted " + n + " depreciation " + (n === 1 ? "entry" : "entries")); renderAssetForm(id);
     };
     var cl = document.getElementById("as-close"); if (cl) cl.onclick = async function () { await sb.from("assets").update({ state: "closed" }).eq("id", id); toast("Closed"); renderAssetForm(id); };
+    var dp = document.getElementById("as-dispose"); if (dp) dp.onclick = function () {
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet"><h3>Dispose asset</h3><div class="sub" style="margin:-6px 0 8px">Net book value now: <b>' + cc + ' ' + money(bookNow) + '</b></div><div class="form">' +
+        '<div class="row2"><div><label>Type</label><select id="dp-type"><option value="sale">Sale</option><option value="scrap">Scrap</option><option value="writeoff">Write-off</option></select></div><div><label>Date</label><input id="dp-date" type="date" value="' + today() + '"></div></div>' +
+        '<div><label>Proceeds received</label><input id="dp-val" type="number" step="0.01" value="0"><div id="dp-gl" class="muted" style="margin-top:6px"></div></div>' +
+        '<div class="sub">This closes the asset. Record the disposal journal (remove cost + accumulated depreciation, book the ' + '<span id="dp-glword">gain/loss</span>' + ' and any proceeds) from Journal Entries.</div>' +
+        '</div><div class="foot"><button class="btn" id="dp-x">Cancel</button><button class="btn pri" id="dp-do" style="background:var(--app);border-color:var(--app)">Dispose &amp; close</button></div></div>';
+      document.body.appendChild(m);
+      function gl() { var v = parseFloat(gv("dp-val")) || 0; var g = v - bookNow; document.getElementById("dp-gl").innerHTML = (g >= 0 ? 'Gain on disposal: <b style="color:var(--good)">' + cc + ' ' + money(g) + '</b>' : 'Loss on disposal: <b style="color:var(--bad)">' + cc + ' ' + money(-g) + '</b>'); document.getElementById("dp-glword").textContent = g >= 0 ? "gain" : "loss"; return g; }
+      document.getElementById("dp-val").oninput = gl; gl();
+      document.getElementById("dp-x").onclick = function () { m.remove(); };
+      document.getElementById("dp-do").onclick = async function () {
+        var v = parseFloat(gv("dp-val")) || 0; var g = v - bookNow;
+        var up = await sb.from("assets").update({ disposed: true, state: "closed", disposal_date: gv("dp-date") || today(), disposal_type: document.getElementById("dp-type").value, disposal_value: v, disposal_gain: g }).eq("id", id);
+        if (up.error) { toast(errMsg(up.error)); return; }
+        m.remove(); toast("Asset disposed"); renderAssetForm(id);
+      };
+    };
+  }
+  // Fixed-asset register dashboard: totals, by-category book value, and disposals.
+  async function renderAssetsDash() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Asset dashboard") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var assets = (await sb.from("assets").select("*").eq("company_id", S.company.id)).data || [];
+    var posted = (await sb.from("asset_lines").select("asset_id,depreciation,posted").eq("company_id", S.company.id).eq("posted", true)).data || [];
+    var deprBy = {}; posted.forEach(function (l) { deprBy[l.asset_id] = (deprBy[l.asset_id] || 0) + (Number(l.depreciation) || 0); });
+    var cc = S.company.currency_code;
+    var live = assets.filter(function (a) { return !a.disposed; });
+    var cost = live.reduce(function (s, a) { return s + (Number(a.acquisition_value) || 0); }, 0);
+    var depr = live.reduce(function (s, a) { return s + (deprBy[a.id] || 0); }, 0);
+    var nbv = cost - depr;
+    var disposals = assets.filter(function (a) { return a.disposed; });
+    var dispGain = disposals.reduce(function (s, a) { return s + (Number(a.disposal_gain) || 0); }, 0);
+    var byCat = {}; live.forEach(function (a) { var c = a.category || "Uncategorized"; var b = byCat[c] = byCat[c] || { cost: 0, depr: 0 }; b.cost += Number(a.acquisition_value) || 0; b.depr += deprBy[a.id] || 0; });
+    var body = document.getElementById("o-body");
+    function tile(v, k, col) { return '<div class="card" style="flex:1;min-width:150px"><div style="font-family:Archivo,sans-serif;font-size:26px;font-weight:800' + (col ? ";color:" + col : "") + '">' + esc(v) + '</div><div class="muted" style="font-size:12px;margin-top:2px">' + esc(k) + '</div></div>'; }
+    body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">' +
+      tile(cc + " " + money(cost), "Gross cost (live)") + tile(cc + " " + money(depr), "Accumulated depreciation") + tile(cc + " " + money(nbv), "Net book value") + tile(String(live.length), "Live assets") + tile(cc + " " + money(dispGain), "Disposal gain/loss", dispGain >= 0 ? "var(--good)" : "var(--bad)") +
+      '</div>' +
+      '<div class="card"><h3 style="margin:0 0 8px">Net book value by category</h3><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Category</th><th class="num">Cost</th><th class="num">Depreciated</th><th class="num">Book value</th></tr></thead><tbody>' +
+      (Object.keys(byCat).length ? Object.keys(byCat).sort().map(function (c) { var b = byCat[c]; return '<tr><td><b>' + esc(c) + '</b></td><td class="num">' + money(b.cost) + '</td><td class="num">' + money(b.depr) + '</td><td class="num">' + money(b.cost - b.depr) + '</td></tr>'; }).join("") : '<tr><td colspan="4" class="muted" style="padding:10px">No live assets.</td></tr>') +
+      '</tbody></table></div></div>' +
+      (disposals.length ? '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 8px">Disposals</h3><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Asset</th><th>Type</th><th>Date</th><th class="num">Proceeds</th><th class="num">Gain/Loss</th></tr></thead><tbody>' + disposals.map(function (a) { return '<tr><td><b>' + esc(a.name) + '</b> <span class="muted">' + esc(a.number || "") + '</span></td><td>' + esc(a.disposal_type || "") + '</td><td class="muted">' + esc(a.disposal_date || "") + '</td><td class="num">' + money(a.disposal_value) + '</td><td class="num" style="color:' + ((Number(a.disposal_gain) || 0) >= 0 ? "var(--good)" : "var(--bad)") + '">' + money(a.disposal_gain) + '</td></tr>'; }).join("") + '</tbody></table></div></div>' : '');
   }
 
   // ============================ BUDGETS ============================
