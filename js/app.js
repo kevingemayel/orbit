@@ -2284,19 +2284,40 @@
   // Unsaved-changes guard: any edit inside a form (.o-form) marks the page dirty; clicking a
   // form action (Save/Discard/Confirm live in .o-sb-btns) clears it; navigating away via the
   // sidebar/breadcrumb/app switch or closing the tab while dirty prompts first.
-  var __dirty = false;
+  var __dirty = false, __modalDirty = false;
+  function __topModal() { var ms = document.querySelectorAll(".modal"); return ms.length ? ms[ms.length - 1] : null; }
+  function __closeModal(m) { if (!m) return false; if (__modalDirty && !confirm("Discard your changes?")) return false; __modalDirty = false; m.remove(); return true; }
   if (!window.__dirtyGuard) {
     window.__dirtyGuard = true;
-    document.addEventListener("input", function (e) { if (e.target && e.target.closest && e.target.closest(".o-form")) __dirty = true; }, true);
-    document.addEventListener("change", function (e) { if (e.target && e.target.closest && e.target.closest(".o-form")) __dirty = true; }, true);
-    document.addEventListener("click", function (e) { if (e.target && e.target.closest && e.target.closest(".o-sb-btns")) __dirty = false; }, true);
-    window.addEventListener("beforeunload", function (e) { if (__dirty) { e.preventDefault(); e.returnValue = ""; } });
+    document.addEventListener("input", function (e) { var t = e.target; if (!t || !t.closest) return; if (t.closest(".o-form")) __dirty = true; else if (t.closest(".modal")) __modalDirty = true; }, true);
+    document.addEventListener("change", function (e) { var t = e.target; if (!t || !t.closest) return; if (t.closest(".o-form")) __dirty = true; else if (t.closest(".modal")) __modalDirty = true; }, true);
+    document.addEventListener("click", function (e) { var t = e.target; if (!t || !t.closest) return; if (t.closest(".o-sb-btns")) __dirty = false; if (t.closest(".modal .foot")) __modalDirty = false; }, true);
+    // Any modal is dismissible by Esc or a click on the backdrop; if it has unsaved edits, confirm first.
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") { var m = __topModal(); if (m) { e.preventDefault(); __closeModal(m); } } });
+    document.addEventListener("click", function (e) { if (e.target && e.target.classList && e.target.classList.contains("modal")) __closeModal(e.target); }, false);
+    window.addEventListener("beforeunload", function (e) { if (__dirty || __modalDirty) { e.preventDefault(); e.returnValue = ""; } });
+    // Shared, foreign-key-safe delete for any full-page form: drop formDelBtn() into its
+    // status bar and this one handler does the confirm, delete, error message and navigation.
+    document.addEventListener("click", async function (e) {
+      var b = e.target && e.target.closest && e.target.closest(".o-del"); if (!b || b.disabled) return;
+      var tbl = b.getAttribute("data-del-table"), id = b.getAttribute("data-del-id"), back = b.getAttribute("data-del-back"), label = b.getAttribute("data-del-label") || "record";
+      if (!tbl || !id) return;
+      if (!confirm("Delete this " + label + "? This cannot be undone. If it is used in other records it can't be deleted - archive it instead.")) return;
+      b.disabled = true;
+      var r = await sb.from(tbl).delete().eq("id", id);
+      b.disabled = false;
+      if (r.error) { var msg = (r.error.message || "") + " " + (r.error.details || "") + " " + (r.error.code || ""); if (/23503|foreign key|still referenced|violates/i.test(msg)) toast("This " + label + " is used in other records - it can't be deleted. Archive it instead."); else toast(errMsg(r.error)); return; }
+      __dirty = false; toast(label.charAt(0).toUpperCase() + label.slice(1) + " deleted"); if (back) go(back);
+    }, false);
   }
+  // Delete button for a form status bar; the global handler above does the work.
+  function formDelBtn(table, id, back, label) { return '<button class="o-del" data-del-table="' + esc(table) + '" data-del-id="' + esc(id) + '" data-del-back="' + esc(back || "") + '" data-del-label="' + esc(label || "record") + '" style="color:var(--bad)">Delete</button>'; }
   function go(action) {
     if (action === "settings.roles" && !canManageRoles()) { toast("Only owners and super admins can manage roles"); if (!S.app) renderHome(); return; }
     if (!canGo(action)) { toast("You do not have access to that"); if (!S.app) renderHome(); return; }
-    if (__dirty && action !== S.action) { if (!confirm("You have unsaved changes on this page. Leave without saving?")) return; }
-    __dirty = false;
+    if ((__dirty || __modalDirty) && action !== S.action) { if (!confirm("You have unsaved changes. Leave without saving?")) return; }
+    __dirty = false; __modalDirty = false;
+    document.querySelectorAll(".modal").forEach(function (m) { m.remove(); });   // don't leave an orphaned modal over the new view
     S.action = action;
     if (!S.app) { S.app = ACTION_APP[action] || "accounting"; applyAppColor(); }
     if (!document.getElementById("o-main")) renderShell();
@@ -10062,7 +10083,7 @@
     function prodOpts(sel) { return '<option value="">(any product)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="pi-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="pi-min" type="number" step="0.01" value="' + (l.min_qty || 1) + '" style="width:70px;text-align:right"></td><td><input class="pi-fixed" type="number" step="0.01" value="' + (l.fixed_price != null ? l.fixed_price : "") + '" placeholder="fixed" style="width:90px;text-align:right"></td><td><input class="pi-off" type="number" step="0.01" value="' + (l.percent_off || 0) + '" style="width:70px;text-align:right"></td><td><button class="pi-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pl-save">Save</button><button id="pl-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pl-save">Save</button><button id="pl-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("pricelists", id, "sale.pricelists", "pricelist") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="pl-name" value="' + esc(p.name || "") + '" placeholder="Pricelist name"></div>' +
       '<div class="o-groups"><div>' + fld("Currency", '<input id="pl-cur" value="' + esc(p.currency_code || S.company.currency_code) + '">', "Currency this pricelist prices in.") + '</div><div>' + fld("Active", '<select id="pl-active"><option value="1"' + (p.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (p.is_active === false ? " selected" : "") + '>Archived</option></select>') + '</div></div>' +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Price rules</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th style="text-align:right">Min qty</th><th style="text-align:right">Fixed price</th><th style="text-align:right">% off</th><th></th></tr></thead><tbody id="pl-lines">' + (items.length ? items.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="pl-add" class="o-addln">+ Add rule</button></div></div>' +
@@ -10104,7 +10125,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "Template");
     function prodOpts(sel) { return '<option value="">(free text)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="qt-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="qt-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="qt-qty" type="number" step="0.01" value="' + (l.quantity || 1) + '" style="width:64px;text-align:right"></td><td><input class="qt-price" type="number" step="0.01" value="' + (l.unit_price || 0) + '" style="width:90px;text-align:right"></td><td><button class="qt-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
-    var btns = '<button class="pri" id="qt-save">Save</button><button id="qt-discard">Discard</button>' + (id !== "new" ? '<button id="qt-quote">Create quotation</button>' : '');
+    var btns = '<button class="pri" id="qt-save">Save</button><button id="qt-discard">Discard</button>' + (id !== "new" ? '<button id="qt-quote">Create quotation</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("quote_templates", id, "sale.qtempl", "template") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="qt-tname" value="' + esc(t.name || "") + '" placeholder="Template name"></div>' +
@@ -10184,7 +10205,7 @@
     var postedTot = lines.filter(function (l) { return l.posted; }).reduce(function (s, l) { return s + Number(l.depreciation || 0); }, 0);
     var bookNow = Number(a.acquisition_value || 0) - postedTot;
     var dueCount = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); }).length;
-    var btns = closed ? "" : '<button class="pri" id="as-save">Save</button><button id="as-discard">Discard</button>';
+    var btns = (closed ? "" : '<button class="pri" id="as-save">Save</button><button id="as-discard">Discard</button>') + (id !== "new" && !closed && canManageApp(S.app) ? formDelBtn("assets", id, "assets.list", "asset") : "");
     if (id !== "new" && a.state === "draft") btns += '<button id="as-confirm">Confirm &amp; schedule</button>';
     if (id !== "new" && running) btns += '<button id="as-post">Post depreciation' + (dueCount ? " (" + dueCount + " due)" : "") + '</button><button id="as-dispose">Dispose</button><button id="as-close">Close</button>';
     var stages = '<div class="o-stages"><span class="st ' + (a.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (running ? "on" : (closed ? "done" : "")) + '">Running</span><span class="st ' + (closed ? "on" : "") + '">Closed</span></div>';
@@ -10307,7 +10328,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (b.name || "Budget");
     function acctOpts(sel) { return accts.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt" type="number" step="0.01" value="' + (l.planned || 0) + '" style="text-align:right"></td><td><button class="bl-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
-    var btns = '<button class="pri" id="bg-save">Save</button><button id="bg-discard">Discard</button>' + (id !== "new" ? '<button id="bg-report">Budget vs actual</button>' : '');
+    var btns = '<button class="pri" id="bg-save">Save</button><button id="bg-discard">Discard</button>' + (id !== "new" ? '<button id="bg-report">Budget vs actual</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("budgets", id, "budget.list", "budget") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="bg-name" value="' + esc(b.name || "") + '" placeholder="Budget name (e.g. 2026 Operating)"></div>' +
@@ -13370,7 +13391,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
     var stageBar = '<div class="o-stages">' + stages.map(function (s) { return '<span class="st ' + (l.stage_id === s.id ? "on" : "") + '" data-stage="' + s.id + '">' + esc(s.name) + '</span>'; }).join("") + '</div>';
     var custOpts = '<option value="">(none yet)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (l.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
-    var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>';
+    var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("crm_leads", id, "crm.pipe", "lead") : "");
     if (id !== "new" && !l.partner_id) btns += '<button id="ld-tocust">Create Customer</button>';
     if (id !== "new") btns += '<button id="ld-tender">Create Tender</button><button id="ld-quote">Create Quotation</button>';
     if (id !== "new") btns += (l.event_id ? '<button id="ld-openevent">Open Event</button>' : '<button id="ld-event">Create Event</button>');
@@ -14011,7 +14032,7 @@
     function opt(list, cur) { return '<option value="">None</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="ct-sm-slip"><span class="v">' + slipCount + '</span><span class="k">Payslips</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ct-save">Save</button><button id="ct-discard">Discard</button></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ct-save">Save</button><button id="ct-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("hr_contracts", id, "hr.contracts", "contract") : "") + '</div>' +
       '<div class="o-stages"><span class="st ' + (c.state === "draft" || !c.state ? "on" : "done") + '">Draft</span><span class="st ' + (c.state === "running" ? "on" : "") + '">Running</span></div></div>' +
       '<div class="o-sheet">' + smart + '<div class="o-title">Employment contract</div>' +
       '<div class="o-groups"><div>' +
@@ -17667,7 +17688,7 @@
     var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || t.name || "Tender");
     function num(v) { return parseFloat(v) || 0; }
-    var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button><button id="tn-print">Print</button>';
+    var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button><button id="tn-print">Print</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("tenders", id, "est.list", "tender") : "");
     if (id !== "new" && t.status === "draft") btns += '<button id="tn-submit">Mark Submitted</button>';
     if (id !== "new" && (t.status === "draft" || t.status === "submitted")) btns += '<button id="tn-won">Mark Won</button><button id="tn-lost">Mark Lost</button>';
     if (t.status === "won" && t.project_id) btns += '<button id="tn-goproj">Open project</button>';
@@ -17811,7 +17832,7 @@
     var projOpts = '<option value="">(none)</option>' + projs.map(function (x) { return '<option value="' + x.id + '"' + (p.project_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
     var prodOpts = '<option value="">(none)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (p.product_id === x.id ? " selected" : "") + '>' + esc((x.default_code ? "[" + x.default_code + "] " : "") + x.name) + '</option>'; }).join("");
     var woOpts = '<option value="">(none)</option>' + wos.map(function (x) { return '<option value="' + x.id + '"' + (p.work_order_id === x.id ? " selected" : "") + '>' + esc(x.number || "") + '</option>'; }).join("");
-    var btns = '<button class="pri" id="pn-save">Save</button><button id="pn-discard">Discard</button>';
+    var btns = '<button class="pri" id="pn-save">Save</button><button id="pn-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("panels", id, "mfg.panels", "panel") : "");
     if (id !== "new") {
       btns += '<button id="pn-qr">QR label</button>';
       if (st === "fabrication") btns += '<button id="pn-ready">Mark ready</button>';
@@ -17911,7 +17932,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (bom.name || "BOM");
     function prodOpts(sel) { return '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="bm-save">Save</button><button id="bm-discard">Discard</button></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="bm-save">Save</button><button id="bm-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("boms", id, "mfg.boms", "BOM") : "") + '</div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="bm-name" value="' + esc(bom.name || "") + '" placeholder="BOM name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Finished product", '<select id="bm-prod">' + prodOpts(bom.product_id) + '</select>', "The fabricated unit this BOM produces.") +
@@ -17990,7 +18011,7 @@
     var matCost = blines.reduce(function (s, l) { return s + Number(l.quantity || 0) * factor * Number(l.products ? l.products.cost_price : 0); }, 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (wo.number || "Work order");
     var cc = S.company.currency_code;
-    var btns = (done ? "" : '<button class="pri" id="wo-save">Save</button><button id="wo-discard">Discard</button>');
+    var btns = (done ? "" : '<button class="pri" id="wo-save">Save</button><button id="wo-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("work_orders", id, "mfg.wo", "work order") : "");
     if (id !== "new" && wo.state === "draft") btns += '<button id="wo-start">Start</button>';
     if (id !== "new" && (wo.state === "draft" || wo.state === "in_progress")) btns += '<button class="pri" id="wo-complete">Complete &amp; consume</button>';
     var stages = '<div class="o-stages"><span class="st ' + (wo.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (wo.state === "in_progress" ? "on" : wo.state === "done" ? "done" : "") + '">In progress</span><span class="st ' + (wo.state === "done" ? "on" : "") + '">Done</span></div>';
