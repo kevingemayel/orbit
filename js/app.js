@@ -21,6 +21,11 @@
   var S = { user: null, profile: null, org: null, companies: [], company: null, app: null, action: null, types: [], ui: loadUI() };
   var L = null; // current list state
   var LIST_VIEW = {}; // per-screen (keyed by S.action) view prefs: {view, kanbanGroupIdx, kwidth} - keeps list/kanban/thumb sticky per screen
+  // Per-screen column prefs (which columns show + their widths), remembered across sessions.
+  var COL_PREFS = {}; try { COL_PREFS = JSON.parse(localStorage.getItem("orbit_cols") || "{}") || {}; } catch (e) { COL_PREFS = {}; }
+  function colPrefs(action) { var p = COL_PREFS[action || "_"] || {}; if (!p.hidden) p.hidden = {}; if (!p.width) p.width = {}; COL_PREFS[action || "_"] = p; return p; }
+  function saveColPrefs() { try { localStorage.setItem("orbit_cols", JSON.stringify(COL_PREFS)); } catch (e) { } }
+  function colKey(c, i) { return c && c.label ? "L:" + c.label : "#" + i; }
   var STMT_PRESET_PARTNER = null; // one-shot: preselect this partner when the statement screen next opens
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
   function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
@@ -2572,6 +2577,7 @@
       '<div class="o-search"><span style="display:flex">' + SEARCH_SVG + '</span><span id="o-facets"></span><input id="o-q" placeholder="Search..."></div>' +
       (cfg.filters ? '<button class="o-filtbtn" id="o-fbtn">Filters &#9660;</button>' : '') +
       (cfg.groupBy ? '<button class="o-filtbtn" id="o-gbtn">Group By &#9660;</button>' : '') +
+      '<button class="o-filtbtn" id="o-colbtn" title="Choose which columns show; drag a column edge to resize">Columns &#9660;</button>' +
       '<div class="gap"></div>' +
       '<span class="o-pager" id="o-pager"></span>' +
       '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
@@ -2587,7 +2593,7 @@
       '</div>';
     wireBc();
     var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: cfg.pageSize || 80, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: colPrefs(S.action), kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -2597,6 +2603,7 @@
     });
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
+    document.getElementById("o-colbtn").onclick = function () { openColsDropdown(this); };
     document.getElementById("o-export").onclick = function () { exportListCsv(); };
     var _selBtn = document.getElementById("o-selbtn");
     if (_selBtn) _selBtn.onclick = function () { L.selMode = !L.selMode; if (!L.selMode) L.sel = {}; _selBtn.classList.toggle("on", L.selMode); paintBody(); };
@@ -2727,16 +2734,16 @@
       if (L.colGroup != null && cfg.columns[L.colGroup]) { var gc = cfg.columns[L.colGroup]; keyFn = function (r) { return colText(gc, r) || "None"; }; }
       else { var g = cfg.groupBy[L.group]; keyFn = function (r) { return g.get(r) || "None"; }; }
       rows.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
-      var html = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>';
+      var html = listTableOpen(cfg);
       Object.keys(groups).sort().forEach(function (k) {
-        html += '<tr class="o-grp"><td colspan="' + (cfg.columns.length + (L.selMode ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
+        html += '<tr class="o-grp"><td colspan="' + (visibleCols(cfg).length + (L.selMode ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
         groups[k].forEach(function (r) { html += rowHTML(cfg, r); });
       });
       body.innerHTML = html + "</tbody></table>";
     } else if (nestOn) {
       ensureNestStyle();
       var rp = nestData.roots.slice(L.page * L.size, (L.page + 1) * L.size);
-      var nh = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>';
+      var nh = listTableOpen(cfg);
       rp.forEach(function (r) {
         var ch = nestData.kids[r.id] || [], coll = !!L.ncoll[r.id];
         nh += rowHTML(cfg, r, { depth: 0, kids: ch.length, collapsed: coll });
@@ -2745,7 +2752,7 @@
       body.innerHTML = nh + '</tbody></table>';
     } else {
       var page = rows.slice(L.page * L.size, (L.page + 1) * L.size);
-      body.innerHTML = '<table class="o-list"><thead>' + headRow(cfg) + '</thead><tbody>' + page.map(function (r) { return rowHTML(cfg, r); }).join("") + '</tbody></table>';
+      body.innerHTML = listTableOpen(cfg) + page.map(function (r) { return rowHTML(cfg, r); }).join("") + '</tbody></table>';
     }
     body.querySelectorAll("[data-id]").forEach(function (el) {
       var open = function () { var r = rows.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
@@ -2754,6 +2761,7 @@
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
+    wireColResize(cfg);
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
@@ -2773,12 +2781,51 @@
       if (selAll) selAll.onclick = function (e) { e.stopPropagation(); var on = selAll.checked; body.querySelectorAll(".o-selrow").forEach(function (cb) { cb.checked = on; if (on) L.sel[cb.dataset.sid] = true; else delete L.sel[cb.dataset.sid]; }); updSel(); };
     }
   }
+  // Columns the user has chosen to show (in original order, keeping their real index for
+  // sort/group/filter/edit which key by index). Never returns empty.
+  function visibleCols(cfg) { var h = L.cols.hidden || {}, out = []; cfg.columns.forEach(function (c, i) { if (!h[colKey(c, i)]) out.push({ c: c, i: i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
+  function colgroupHTML(cfg) {
+    var w = L.cols.width || {}, cols = (L.selMode ? '<col style="width:34px">' : "");
+    cols += visibleCols(cfg).map(function (o) { var ww = w[colKey(o.c, o.i)]; return '<col' + (ww ? ' style="width:' + ww + 'px"' : "") + '>'; }).join("");
+    return '<colgroup>' + cols + '</colgroup>';
+  }
+  function listTableOpen(cfg) { ensureColStyle(); return '<table class="o-list">' + colgroupHTML(cfg) + '<thead>' + headRow(cfg) + '</thead><tbody>'; }
   function headRow(cfg) {
-    return '<tr>' + (L.selMode ? '<th class="o-selcol"><input type="checkbox" class="o-selall" title="Select all on this page"></th>' : "") + cfg.columns.map(function (c, i) {
+    return '<tr>' + (L.selMode ? '<th class="o-selcol"><input type="checkbox" class="o-selall" title="Select all on this page"></th>' : "") + visibleCols(cfg).map(function (o) {
+      var c = o.c, i = o.i;
       var srt = (L.sort && L.sort.i === i) ? ' <span class="o-th-sort">' + (L.sort.dir > 0 ? "↑" : "↓") + '</span>' : "";
       var on = (L.sort && L.sort.i === i) || (L.colGroup === i) || (L.colFilters[i] && Object.keys(L.colFilters[i]).length);
-      return '<th class="' + (c.num ? "num" : "") + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span></th>';
+      return '<th class="' + (c.num ? "num" : "") + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span><span class="o-th-rs" data-ci="' + i + '" title="Drag to resize"></span></th>';
     }).join("") + '</tr>';
+  }
+  var _colStyled = false;
+  function ensureColStyle() { if (_colStyled) return; _colStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-list th{position:relative}.o-th-rs{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none;touch-action:none}.o-th-rs:hover,.o-th-rs.drag{background:var(--app,#2a7);opacity:.35}"; document.head.appendChild(s); } catch (e) { } }
+  function openColsDropdown(btn) {
+    closeDropdowns();
+    var cfg = L.cfg, r = btn.getBoundingClientRect();
+    var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1"; dd.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 240)) + "px";
+    dd.innerHTML = '<div class="sec">Show columns</div>' + cfg.columns.map(function (c, i) { var vis = !L.cols.hidden[colKey(c, i)]; return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
+    dd.querySelectorAll("[data-ci]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.ci, k = colKey(cfg.columns[i], i), hiding = !L.cols.hidden[k]; if (hiding && visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); return; } if (hiding) L.cols.hidden[k] = 1; else delete L.cols.hidden[k]; saveColPrefs(); paintBody(); openColsDropdown(btn); }; });
+    dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; saveColPrefs(); paintBody(); closeDropdowns(); };
+    document.body.appendChild(dd);
+  }
+  function wireColResize(cfg) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var table = body.querySelector("table.o-list"); if (!table) return;
+    var cg = table.querySelector("colgroup"), vis = visibleCols(cfg);
+    body.querySelectorAll(".o-th-rs").forEach(function (gr) {
+      gr.onmousedown = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var th = gr.closest("th"), ci = +gr.dataset.ci, pos = -1;
+        for (var j = 0; j < vis.length; j++) { if (vis[j].i === ci) { pos = j; break; } }
+        var colEl = cg ? cg.children[(L.selMode ? 1 : 0) + pos] : null;
+        var startX = e.clientX, startW = th.getBoundingClientRect().width, w = startW;
+        gr.classList.add("drag"); document.body.style.cursor = "col-resize";
+        function mm(ev) { w = Math.max(48, startW + (ev.clientX - startX)); if (colEl) colEl.style.width = w + "px"; th.style.width = w + "px"; }
+        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); document.body.style.cursor = ""; gr.classList.remove("drag"); L.cols.width[colKey(cfg.columns[ci], ci)] = Math.round(w); saveColPrefs(); }
+        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+      };
+    });
   }
   function openColMenu(i, btn) {
     closeDropdowns();
@@ -2797,6 +2844,7 @@
       ((L.sort && L.sort.i === i) ? '<button class="it" data-a="nosort">Clear sort</button>' : '') +
       '<div class="sep"></div>' +
       '<button class="it" data-a="group">' + (isG ? "✓ Grouped &ndash; ungroup" : "Group by this column") + '</button>' +
+      '<button class="it" data-a="hide">Hide this column</button>' +
       '<div class="sep"></div><div class="sec">Filter values</div>' +
       '<div class="o-colf-tools"><input class="o-colf-q" placeholder="Search values..."><button class="o-colf-all" data-a="selall">All</button><button class="o-colf-all" data-a="selnone">None</button></div>' +
       '<div class="o-colf-list">' + order.map(function (v) { var ck = !cf || cf[v]; return '<label class="o-colf-row"><input type="checkbox" data-v="' + esc(v) + '"' + (ck ? " checked" : "") + '><span>' + (v === "" ? "<i>(empty)</i>" : esc(v)) + '</span><span class="o-colf-n">' + vals[v] + '</span></label>'; }).join("") + '</div>' +
@@ -2806,6 +2854,7 @@
     dd.querySelector('[data-a="desc"]').onclick = function () { L.sort = { i: i, dir: -1 }; L.page = 0; paintBody(); closeDropdowns(); };
     var ns = dd.querySelector('[data-a="nosort"]'); if (ns) ns.onclick = function () { L.sort = null; paintBody(); closeDropdowns(); };
     dd.querySelector('[data-a="group"]').onclick = function () { L.colGroup = (L.colGroup === i ? null : i); L.group = null; L.page = 0; paintBody(); closeDropdowns(); };
+    dd.querySelector('[data-a="hide"]').onclick = function () { if (visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); closeDropdowns(); return; } L.cols.hidden[colKey(c, i)] = 1; saveColPrefs(); paintBody(); closeDropdowns(); };
     var q = dd.querySelector(".o-colf-q"); q.oninput = function () { var t = this.value.toLowerCase(); dd.querySelectorAll(".o-colf-row").forEach(function (row) { row.style.display = row.textContent.toLowerCase().indexOf(t) >= 0 ? "" : "none"; }); };
     dd.querySelector('[data-a="selall"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = true; }); };
     dd.querySelector('[data-a="selnone"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = false; }); };
@@ -2822,10 +2871,10 @@
     var clsAttr = (nest && nest.depth) ? ' class="o-nest-child"' : '';
     var extra = '';
     if (nest && nest.depth) { extra += ' data-parent="' + esc(nest.parent) + '"'; if (nest.hidden) extra += ' style="display:none"'; }
-    return '<tr data-id="' + r.id + '"' + clsAttr + extra + '>' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + cfg.columns.map(function (c, ci) {
-      var ed = et && c.edit && canManageApp(S.app);
+    return '<tr data-id="' + r.id + '"' + clsAttr + extra + '>' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + visibleCols(cfg).map(function (o, vi) {
+      var c = o.c, ci = o.i, ed = et && c.edit && canManageApp(S.app);
       var lead = "";
-      if (nest && ci === 0) {
+      if (nest && vi === 0) {
         var inner = nest.kids ? '<span class="o-nest-caret" data-np="' + r.id + '" title="Show / hide people">' + (nest.collapsed ? "&#9656;" : "&#9662;") + '</span>' : (nest.depth ? '<span class="o-nest-twig">&#8627;</span>' : '<span class="o-nest-caret empty"></span>');
         lead = '<span class="o-nest-lead" style="padding-left:' + (nest.depth * 20) + 'px">' + inner + '</span>';
       }
