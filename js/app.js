@@ -884,6 +884,7 @@
         { label: "Inspections", action: "site.insp" },
         { label: "Inspection Checklists", action: "site.inspt" },
         { label: "Plant & Equipment", action: "site.plant" },
+        { label: "Equipment utilization", action: "site.plantutil" },
         { label: "Tools & Equipment", action: "tools.list" },
         { label: "Site Diary", action: "site.diary" },
         { label: "Incidents", action: "site.incidents" }
@@ -1036,7 +1037,7 @@
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
     "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
-    "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
+    "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
     "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
@@ -2450,6 +2451,7 @@
       case "site.insp": return renderList(cfgInspections());
       case "site.inspt": return renderList(cfgInspectionTemplates());
       case "site.plant": return renderList(cfgPlant());
+      case "site.plantutil": return renderEquipmentUtilization();
       case "tools.list": return renderList(cfgTools());
       case "proj.materials": return renderList(cfgProjectItems());
       case "mfg.runs": return renderList(cfgRuns());
@@ -9132,8 +9134,10 @@
       '<div class="row2"><div><label>Registration no.</label><input id="pl2-regno" value="' + esc(p.registration_no || "") + '"></div><div><label>Registration expiry</label><input id="pl2-regexp" type="date" value="' + (p.registration_expiry || "") + '"></div></div>' +
       '<div class="row2"><div><label>Insurance no.</label><input id="pl2-insno" value="' + esc(p.insurance_no || "") + '"></div><div><label>Insurance expiry</label><input id="pl2-insexp" type="date" value="' + (p.insurance_expiry || "") + '"></div></div>' +
       '<div class="row2"><div><label>Current meter</label><input id="pl2-meter" type="number" step="0.1" value="' + (p.current_hours != null ? p.current_hours : "") + '"></div><div><label>Meter unit</label><select id="pl2-munit"><option value="hours">Hours</option><option value="km">Km</option></select></div></div>' +
+      (p.id ? '<div id="pl2-events" style="margin-top:8px"></div>' : '') +
       '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-tkt">Raise service ticket</button>' : '') + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
+    if (p.id) loadEquipmentEvents(p);
     document.getElementById("pl2-own").value = p.ownership || "owned";
     document.getElementById("pl2-status").value = p.status || "available";
     document.getElementById("pl2-munit").value = p.meter_unit || "hours";
@@ -9148,6 +9152,61 @@
       var r; if (p.id) r = await sb.from("plant_equipment").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("plant_equipment").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
     };
+  }
+  // Movements & readings on an equipment unit: transfers, meter logs, rental out/return.
+  async function loadEquipmentEvents(p) {
+    var el = document.getElementById("pl2-events"); if (!el) return;
+    var q = await sb.from("equipment_events").select("*, partners:partner_id(name), projects:project_id(name)").eq("equipment_id", p.id).order("event_date", { ascending: false }).limit(10);
+    if (q.error) { if (/equipment_events|does not exist|schema cache/i.test(q.error.message || "")) el.innerHTML = '<div class="o-cf-head">Movements</div><div class="sub">Run <span class="path">supabase/108-equipment-depth.sql</span> once to enable equipment movements.</div>'; return; }
+    var rows = q.data || [];
+    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name").limit(500)).data || [];
+    var inS = 'style="padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12px"';
+    var kindLabel = { transfer: "Transfer", meter: "Meter", rental_out: "Rented out", rental_return: "Returned", service: "Service" };
+    el.innerHTML = '<div class="o-cf-head">Movements &amp; readings</div>' +
+      '<div class="o-rt-wrap" style="max-height:150px;overflow:auto"><table class="o-lines"><tbody>' +
+      (rows.length ? rows.map(function (r) { var detail = r.kind === "meter" ? (r.meter_reading != null ? r.meter_reading + " " + (p.meter_unit || "hours") : "") : r.kind === "transfer" ? ((r.to_location || (r.projects && r.projects.name) || "")) : (r.kind === "rental_out" || r.kind === "rental_return") ? ((r.partners && r.partners.name) || "") + (r.amount ? " &middot; " + money(r.amount) : "") : (r.note || ""); return '<tr><td class="muted" style="width:78px">' + esc(r.event_date) + '</td><td><b>' + esc(kindLabel[r.kind] || r.kind) + '</b></td><td>' + esc(detail) + '</td></tr>'; }).join("") : '<tr><td class="muted" style="padding:6px">No movements yet.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:6px">' +
+      '<select id="ee-kind" ' + inS + '><option value="transfer">Transfer</option><option value="meter">Meter reading</option><option value="rental_out">Rent out</option><option value="rental_return">Return</option></select>' +
+      '<input id="ee-date" type="date" value="' + today() + '" ' + inS + '>' +
+      '<input id="ee-to" placeholder="to location" ' + inS + ' style="width:110px">' +
+      '<input id="ee-meter" type="number" step="0.1" placeholder="meter" ' + inS + ' style="width:74px;display:none">' +
+      '<select id="ee-cust" ' + inS + ' style="width:130px;display:none"><option value="">Customer...</option>' + custs.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
+      '<input id="ee-rate" type="number" step="0.01" placeholder="rate/day" ' + inS + ' style="width:80px;display:none"><input id="ee-days" type="number" step="0.5" placeholder="days" ' + inS + ' style="width:62px;display:none">' +
+      '<button class="btn sm pri" id="ee-add" style="background:var(--app);border-color:var(--app)">Log</button></div>';
+    function eeToggle() { var k = document.getElementById("ee-kind").value; document.getElementById("ee-to").style.display = k === "transfer" ? "" : "none"; document.getElementById("ee-meter").style.display = k === "meter" ? "" : "none"; document.getElementById("ee-cust").style.display = (k === "rental_out" || k === "rental_return") ? "" : "none"; document.getElementById("ee-rate").style.display = k === "rental_out" ? "" : "none"; document.getElementById("ee-days").style.display = k === "rental_out" ? "" : "none"; }
+    document.getElementById("ee-kind").onchange = eeToggle; eeToggle();
+    document.getElementById("ee-add").onclick = async function () {
+      var k = document.getElementById("ee-kind").value;
+      var row = { company_id: S.company.id, equipment_id: p.id, kind: k, event_date: gv("ee-date") || today(), created_by: S.user.id };
+      if (k === "transfer") { row.from_location = p.location || null; row.to_location = gv("ee-to") || null; }
+      else if (k === "meter") { row.meter_reading = parseFloat(gv("ee-meter")) || 0; }
+      else if (k === "rental_out") { row.partner_id = document.getElementById("ee-cust").value || null; row.rate = parseFloat(gv("ee-rate")) || 0; row.days = parseFloat(gv("ee-days")) || 0; row.amount = (parseFloat(gv("ee-rate")) || 0) * (parseFloat(gv("ee-days")) || 0); }
+      else if (k === "rental_return") { row.partner_id = document.getElementById("ee-cust").value || null; }
+      var ins = await sb.from("equipment_events").insert(row); if (ins.error) { toast(errMsg(ins.error)); return; }
+      var upd = {}; if (k === "transfer" && row.to_location) upd.location = row.to_location; if (k === "meter") upd.current_hours = row.meter_reading; if (k === "rental_out") upd.status = "on_site"; if (k === "rental_return") upd.status = "available";
+      if (Object.keys(upd).length) { await sb.from("plant_equipment").update(upd).eq("id", p.id); Object.assign(p, upd); }
+      toast("Logged"); loadEquipmentEvents(p);
+    };
+  }
+  // Equipment utilization report: per unit rental revenue, days, latest meter, status.
+  async function renderEquipmentUtilization() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Equipment utilization") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var units = (await sb.from("plant_equipment").select("*").eq("company_id", S.company.id).order("name")).data || [];
+    var events = (await sb.from("equipment_events").select("equipment_id,kind,days,amount,meter_reading,event_date").eq("company_id", S.company.id)).data || [];
+    var agg = {}; events.forEach(function (e) { var a = agg[e.equipment_id] = agg[e.equipment_id] || { days: 0, rev: 0, meter: null, last: "" }; if (e.kind === "rental_out") { a.days += Number(e.days) || 0; a.rev += Number(e.amount) || 0; } if (e.kind === "meter" && e.meter_reading != null) a.meter = e.meter_reading; if (e.event_date > a.last) a.last = e.event_date; });
+    var cc = S.company.currency_code;
+    var totRev = units.reduce(function (s, u) { return s + ((agg[u.id] || {}).rev || 0); }, 0);
+    var onHire = units.filter(function (u) { return u.status === "on_site"; }).length;
+    var body = document.getElementById("o-body");
+    body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">' +
+      '<div class="card" style="flex:1;min-width:150px"><div style="font-family:Archivo,sans-serif;font-size:26px;font-weight:800">' + units.length + '</div><div class="muted" style="font-size:12px">Units</div></div>' +
+      '<div class="card" style="flex:1;min-width:150px"><div style="font-family:Archivo,sans-serif;font-size:26px;font-weight:800">' + onHire + '</div><div class="muted" style="font-size:12px">Currently deployed</div></div>' +
+      '<div class="card" style="flex:1;min-width:150px"><div style="font-family:Archivo,sans-serif;font-size:26px;font-weight:800">' + esc(cc) + ' ' + money(totRev) + '</div><div class="muted" style="font-size:12px">Rental revenue logged</div></div></div>' +
+      '<div class="card"><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Unit</th><th>Status</th><th class="num">Rental days</th><th class="num">Rental revenue</th><th class="num">Latest meter</th><th>Last activity</th></tr></thead><tbody>' +
+      (units.length ? units.map(function (u) { var a = agg[u.id] || {}; return '<tr><td><b>' + esc(u.name) + '</b> <span class="muted">' + esc(u.code || "") + '</span></td><td>' + esc(u.status || "") + '</td><td class="num">' + (a.days || 0) + '</td><td class="num">' + money(a.rev || 0) + '</td><td class="num">' + (a.meter != null ? a.meter + " " + (u.meter_unit || "hrs") : (u.current_hours != null ? u.current_hours + " " + (u.meter_unit || "hrs") : "-")) + '</td><td class="muted">' + esc(a.last || "") + '</td></tr>'; }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No equipment yet.</td></tr>') +
+      '</tbody></table></div></div>';
   }
 
   // ============================ SITE OPS: SITE DIARY ============================
