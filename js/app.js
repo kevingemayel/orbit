@@ -3262,11 +3262,12 @@
     var isCust = kind === "customer";
     var flag = isCust ? "is_customer" : "is_vendor";
     return {
-      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners",
+      title: isCust ? "Customers" : "Vendors", pageSize: 80, editTable: "partners", archiveField: "is_active",
+      filters: [{ label: "Archived", test: function (p) { return p.is_active === false; } }],
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).eq(flag, true).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.is_active === false ? ' <span class="badge draft">Archived</span>' : '') + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
         { label: "Industry", edit: { field: "industry", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.industry || "") + '</span>'; } },
         { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.email || "") + '</span>'; } },
         { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.city || "") + '</span>'; } },
@@ -3560,6 +3561,7 @@
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
       groupBy: [{ label: "Family", get: function (p) { return p.family || "Unclassified"; } }, { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } }, { label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
       kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
+      emptyHint: "Add the materials and products you buy and sell. Set each one's classification, unit and suppliers so quotes, POs and stock all use the same catalogue.",
       onOpen: function (p) { renderProductForm(p.id); },
       onNew: function () { renderProductForm("new"); }
     };
@@ -5022,7 +5024,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? '<button id="p-arch">' + (p.is_active === false ? "Restore" : "Archive") + '</button>' + formDelBtn("partners", id, backAction, isContact ? "contact" : (isCust ? "customer" : "vendor")) : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart +
       titleRowHTML('<input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name">', "partner", id) +
       '<div class="o-groups"><div>' +
@@ -5087,6 +5089,7 @@
     }
     (function () { var kEl = document.getElementById("p-kind"); if (kEl) kEl.onchange = function () { var v = this.value, cw = document.getElementById("p-ctype-wrap"), ew = document.getElementById("p-employer-wrap"); if (cw) cw.style.display = v === "company" ? "" : "none"; if (ew) ew.style.display = v === "employee" ? "" : "none"; }; })();
     document.getElementById("p-discard").onclick = function () { go(backAction); };
+    var pArch = document.getElementById("p-arch"); if (pArch) pArch.onclick = async function () { var next = !(p.is_active === false); var r = await sb.from("partners").update({ is_active: !next ? true : false }).eq("id", id); if (r.error) { toast(errMsg(r.error)); return; } toast(next ? "Archived" : "Restored"); go(backAction); };
     (function () {
       var isel = document.getElementById("p-industry");
       if (!isel) return;
@@ -8143,12 +8146,12 @@
   // ============================ CONTACTS (unified directory + tags) ============================
   function cfgContacts() {
     return {
-      title: "Contacts", pageSize: 80, editTable: "partners",
+      title: "Contacts", pageSize: 80, editTable: "partners", archiveField: "is_active",
       nest: { parent: "employer_id" },   // tuck employees under the company they work at
       fetch: async function () { var rows = (await sb.from("partners").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "partner"); return rows; },
       searchText: function (p) { return (p.name || "") + " " + (p.email || "") + " " + (p.city || "") + " " + (p.country || "") + " " + (p.industry || "") + " " + (p.specialty || "") + " " + (p.role_title || "") + " " + ((p.capabilities || []).join(" ")); },
       columns: [
-        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
+        { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + (p.is_active === false ? ' <span class="badge draft">Archived</span>' : '') + (p.specialty ? '<div class="muted" style="font-size:11px">' + esc(p.specialty) + '</div>' : ""); } },
         { label: "Type", get: function (p) { if (p.contact_kind === "employee") return '<span class="muted">' + esc(p.role_title || "Employee") + '</span>'; var t = []; if (p.is_customer) t.push("Customer"); if (p.is_vendor) t.push("Vendor"); if (p.contact_kind === "freelancer" && !t.length) t.push("Freelancer"); return '<span class="muted">' + (t.join(" / ") || "Contact") + '</span>'; } },
         { label: "Industry", edit: { field: "industry", type: "text" }, get: function (p) { return esc(p.industry || ""); } },
         { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return esc(p.email || ""); } },
@@ -8156,8 +8159,9 @@
         { label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } },
         { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return esc(p.city || ""); } }
       ],
-      filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }],
+      filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }, { label: "Archived", test: function (p) { return p.is_active === false; } }],
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
+      emptyHint: "Add the people and companies you work with - customers, suppliers, subcontractors and their staff. You can also add one instantly from any contact dropdown.",
       onOpen: function (p) { renderPartnerForm(p.id, "contact"); }, onNew: function () { renderPartnerForm("new", "contact"); }
     };
   }
@@ -8990,7 +8994,7 @@
     var stageBtns = APP_STAGES.filter(function (x) { return x[0] !== a.stage; }).map(function (x) { return '<button id="ap-stage-' + x[0] + '">' + (x[0] === "hired" ? "Hire" : x[0] === "rejected" ? "Reject" : "Move to " + x[1]) + '</button>'; }).join("");
     var stages = '<div class="o-stages">' + APP_STAGES.filter(function (x) { return x[0] !== "rejected"; }).map(function (x) { var idx = APP_STAGES.map(function (z) { return z[0]; }).indexOf(a.stage), cur = APP_STAGES.map(function (z) { return z[0]; }).indexOf(x[0]); return '<span class="st ' + (a.stage === x[0] ? "on" : (cur < idx ? "done" : "")) + '">' + x[1] + '</span>'; }).join("") + '</div>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button></div>' + stages + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("applicants", id, "rec.applicants", "applicant") : "") + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="ap-name" value="' + esc(a.name || "") + '" placeholder="Applicant name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Email", '<input id="ap-email" value="' + esc(a.email || "") + '">') +
@@ -9041,7 +9045,7 @@
     var a = id === "new" ? { is_published: true } : (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data || {};
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.title || "Article");
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button><button id="kb-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button><button id="kb-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("articles", id, "kb.articles", "article") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="kb-title" value="' + esc(a.title || "") + '" placeholder="Article title"></div>' +
       '<div class="o-groups"><div>' + fld("Category", '<input id="kb-cat" value="' + esc(a.category || "") + '" placeholder="e.g. Method statements, HR, Safety">', "Group articles by topic.") + '</div><div>' + fld("Status", '<select id="kb-pub"><option value="1"' + (a.is_published !== false ? " selected" : "") + '>Published</option><option value="0"' + (a.is_published === false ? " selected" : "") + '>Draft</option></select>') + '</div></div>' +
       fld("Body", '<textarea id="kb-body" rows="16" style="font-family:inherit;line-height:1.6">' + esc(a.body || "") + '</textarea>', "Write the procedure / notes. Plain text.") +
@@ -9410,7 +9414,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.diary_date || "Diary");
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sd-save">Save</button><button id="sd-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sd-save">Save</button><button id="sd-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("site_diaries", id, "site.diary", "diary entry") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-groups"><div>' +
       fld("Project / site", '<select id="sd-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>') +
       fld("Date", '<input id="sd-date" type="date" value="' + (d.diary_date || today()) + '">') +
@@ -10865,7 +10869,7 @@
     var canReceive = id !== "new" && (s.status === "arrived" || s.status === "cleared");
     var moneyF = '<input type="number" step="any" ';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sh-save">Save</button><button id="sh-discard">Discard</button>' + (canReceive ? '<button id="sh-receive">Create goods receipt</button>' : "") + '</div>' + stages + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sh-save">Save</button><button id="sh-discard">Discard</button>' + (canReceive ? '<button id="sh-receive">Create goods receipt</button>' : "") + (id !== "new" && canManageApp(S.app) ? formDelBtn("shipments", id, "shp.list", "shipment") : "") + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="sh-number" value="' + esc(s.number || "") + '" placeholder="Shipment ref (e.g. SHP-0007 / container no)"></div>' +
       '<div class="o-groups"><div>' +
       fld("Supplier", '<select id="sh-sup">' + supOpts + '</select>', "Who the goods are coming from.") +
@@ -11881,7 +11885,7 @@
       ? '<div class="sub" style="margin-top:16px">Save the drawing first, then add revisions (Rev A, B, C ...) with their files here.</div>'
       : '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Revisions &amp; version history</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th style="width:60px">Rev</th><th>Status</th><th>Purpose</th><th>Issued</th><th>Files</th><th></th></tr></thead><tbody id="dw-revs">' + (revs.length ? revs.map(revRow).join("") : '<tr><td colspan="6" class="muted">No revisions yet.</td></tr>') + '</tbody></table><button id="dw-addrev" class="o-addln">+ New revision</button></div></div>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dw-save">Save</button><button id="dw-discard">Discard</button></div><div>' + (d.current_revision ? '<span class="muted">Current rev</span> <b>' + esc(d.current_revision) + '</b>' : '') + '</div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dw-save">Save</button><button id="dw-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("drawings", id, "doc.drawings", "drawing") : "") + '</div><div>' + (d.current_revision ? '<span class="muted">Current rev</span> <b>' + esc(d.current_revision) + '</b>' : '') + '</div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="dw-title" value="' + esc(d.title || "") + '" placeholder="Drawing title"></div>' +
       '<div class="o-groups"><div>' +
       fld("Drawing / sheet no.", '<input id="dw-number" value="' + esc(d.number || "") + '" placeholder="auto-numbered if blank">', "Sheet number. Leave blank to auto-number (DWG/...).") +
@@ -12050,7 +12054,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.number || r.subject || "RFI");
     var st = r.status || "open";
-    var btns = '<button class="pri" id="rf-save">Save</button><button id="rf-discard">Discard</button>';
+    var btns = '<button class="pri" id="rf-save">Save</button><button id="rf-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("rfis", id, "doc.rfis", "RFI") : "");
     if (id !== "new" && st === "open") btns += '<button id="rf-answer">Mark answered</button>';
     if (id !== "new" && st === "answered") btns += '<button id="rf-close">Close</button><button id="rf-reopen">Reopen</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "open" ? "on" : "done") + '">Open</span><span class="st ' + (st === "answered" ? "on" : (st === "closed" ? "done" : "")) + '">Answered</span><span class="st ' + (st === "closed" ? "on" : "") + '">Closed</span></div>';
@@ -12112,7 +12116,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || "Transmittal");
     function rowHtml(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Document"></td><td><input class="ti-ref" value="' + esc(it.doc_ref || "") + '" placeholder="Ref"></td><td><input class="ti-rev" value="' + esc(it.revision || "") + '" placeholder="Rev" style="width:60px"></td><td><input class="ti-cop" type="number" value="' + (it.copies || 1) + '" style="width:70px"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
-    var btns = '<button class="pri" id="tr-save">Save</button><button id="tr-discard">Discard</button>' + (id !== "new" ? '<button id="tr-print">Print</button>' : '');
+    var btns = '<button class="pri" id="tr-save">Save</button><button id="tr-discard">Discard</button>' + (id !== "new" ? '<button id="tr-print">Print</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("transmittals", id, "doc.trans", "transmittal") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="tr-to" value="' + esc(t.to_party || "") + '" placeholder="Recipient (consultant / client)"></div>' +
@@ -13157,7 +13161,7 @@
     var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-exec">Execution board</button>' : '') + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pf-save">Save</button><button id="pf-discard">Discard</button>' + (id !== "new" ? '<button id="pf-exec">Execution board</button>' : '') + (id !== "new" ? '<button id="pf-time">Log time</button>' : '') + (unbilledHours > 0.001 ? '<button id="pf-bill">Bill ' + unbilledHours.toFixed(1) + 'h</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("projects", id, "proj.list", "project") : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart + titleRowHTML('<input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name">', "project", id) +
       (srcTender ? '<div class="sub" style="margin:-2px 0 8px"><b>From tender:</b> <button class="lnk" id="pf-fromtender">' + esc(srcTender.number || srcTender.name || "tender") + '</button> &middot; budget &amp; BOQ carried from the estimate</div>' : '') +
       '<div class="o-groups"><div>' +
@@ -16184,7 +16188,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New site" : (s.name || "Site");
     var host = webHost(s);
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ws-save">Save</button><button id="ws-discard">Discard</button>' + (id !== "new" ? '<button id="ws-visit">Open live</button>' : '') + '</div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (s.is_published ? "done" : "on") + '">' + (s.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ws-save">Save</button><button id="ws-discard">Discard</button>' + (id !== "new" ? '<button id="ws-visit">Open live</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("sites", id, "web.sites", "site") : "") + '</div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (s.is_published ? "done" : "on") + '">' + (s.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="ws-name" value="' + esc(s.name || "") + '" placeholder="Site name"></div>' +
       '<div class="o-groups"><div>' +
       fld("Subdomain", '<div style="display:flex;align-items:center;gap:4px"><input id="ws-slug" value="' + esc(s.slug || "") + '" placeholder="acme" style="max-width:160px"><span class="muted">.' + WEB_SUB_BASE + '</span></div>', "Your free address. Letters, numbers and dashes. Must be unique.") +
@@ -16917,7 +16921,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Take-off");
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
     var btns = ordered ? '<button id="mr-discard">Back</button>' :
-      ('<button class="pri" id="mr-save">Save</button>' + (id !== "new" ? '<button id="mr-rfq">Create RFQ</button><button id="mr-po">Create Purchase Order</button>' : "") + '<button id="mr-discard">Discard</button>');
+      ('<button class="pri" id="mr-save">Save</button>' + (id !== "new" ? '<button id="mr-rfq">Create RFQ</button><button id="mr-po">Create Purchase Order</button>' : "") + '<button id="mr-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("material_requisitions", id, "pur.req", "requisition") : ""));
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' +
       '<div class="o-stages"><span class="st ' + (!ordered ? "on" : "done") + '">Draft</span><span class="st ' + (req.state === "approved" ? "on" : ordered ? "done" : "") + '">Approved</span><span class="st ' + (ordered ? "on" : "") + '">Ordered</span></div></div>' +
