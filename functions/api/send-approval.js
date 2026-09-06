@@ -63,7 +63,9 @@ export async function onRequestPost(context) {
     stage = "send";
     const from = (env.INVITE_FROM || "Space Work Orbit <invites@spacework.ai>").trim();
     const origin = new URL(request.url).origin;
-    const link = origin + "/approve.html?t=" + encodeURIComponent(minted.token);
+    // Extensionless: Cloudflare Pages 308s /approve.html to /approve, and a
+    // redirect hop is one more thing for a mail scanner to mangle.
+    const link = origin + "/approve?t=" + encodeURIComponent(minted.token);
     const send = await tfetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: "Bearer " + String(env.RESEND_API_KEY).trim(), "Content-Type": "application/json" },
