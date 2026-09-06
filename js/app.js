@@ -3544,7 +3544,7 @@
   var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
   function cfgProducts() {
     return {
-      title: "Products", pageSize: 80, editTable: "products", archiveField: "is_active",
+      title: "Products", pageSize: 80, editTable: "products", archiveField: "is_active", nest: { parent: "parent_product_id" },
       fetch: async function () { var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "product"); return rows; },
       searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
       columns: [
@@ -5363,10 +5363,10 @@
     function trOf(r) {
       var cheap = minPrice != null && Number(r.price) === minPrice && rows.length > 1;
       var supName = (r.partners && r.partners.name) || r.supplier_name || "(supplier)";
-      return '<tr' + (cheap ? ' style="background:var(--ok-soft)"' : '') + '><td><b>' + esc(supName) + '</b>' + (cheap ? ' <span class="badge paid">best</span>' : '') + '</td><td class="num">' + esc(r.currency_code || cc) + ' ' + money(r.price) + '</td><td>' + esc(r.price_basis || "") + (r.uom ? " / " + esc(r.uom) : "") + '</td><td class="num">' + (r.moq != null ? r.moq : "") + '</td><td class="num">' + (r.lead_days != null ? r.lead_days + "d" : "") + '</td><td class="muted">' + esc(r.price_date || "") + '</td><td><button class="btn sm psp-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>';
+      return '<tr' + (cheap ? ' style="background:var(--ok-soft)"' : '') + '><td><b>' + esc(supName) + '</b>' + (cheap ? ' <span class="badge paid">best</span>' : '') + '</td><td class="num">' + esc(r.currency_code || cc) + ' ' + money(r.price) + '</td><td>' + esc(r.price_basis || "") + (r.uom ? " / " + esc(r.uom) : "") + '</td><td class="num">' + (r.moq != null ? r.moq : "") + '</td><td class="num">' + (r.lead_days != null ? r.lead_days + "d" : "") + '</td><td class="muted">' + esc(r.price_date || "") + '</td><td style="text-align:right;white-space:nowrap"><button class="btn sm psp-use" data-price="' + r.price + '" title="Set this as the item cost">Use</button> <button class="btn sm psp-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>';
     }
     var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
-    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Suppliers &amp; prices</div><div class="sub" style="margin:-2px 0 9px">Who sells this item, at what price, unit, minimum order and when it was quoted. The cheapest is flagged.</div>' +
+    el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Suppliers &amp; prices</div><div class="sub" style="margin:-2px 0 9px">Enter each supplier\'s price (per unit) here to compare them for the same item. The cheapest is flagged and sets this item\'s <b>Cost</b> above; press <b>Use</b> to pick a different supplier.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Supplier</th><th class="num">Price</th><th>Basis / unit</th><th class="num">MOQ</th><th class="num">Lead</th><th>Date</th><th></th></tr></thead><tbody id="psp-body">' + (rows.length ? rows.map(trOf).join("") : '<tr><td colspan="7" class="muted" style="padding:10px">No supplier prices yet.</td></tr>') + '</tbody></table></div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
       '<select id="psp-sup" ' + inS + '><option value="">Supplier...</option>' + vend.map(function (v) { return '<option value="' + v.id + '">' + esc(v.name) + '</option>'; }).join("") + '</select>' +
@@ -5378,6 +5378,10 @@
       '<input id="psp-date" type="date" ' + inS + '>' +
       '<button class="btn sm pri" id="psp-add" style="background:var(--app);border-color:var(--app)">Add</button></div></div>';
     el.querySelectorAll(".psp-del").forEach(function (b) { b.onclick = async function () { var r = await sb.from("product_supplier_prices").delete().eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); return; } loadSupplierPrices(productId); }; });
+    // Supplier prices are the price source: seed the item Cost from the cheapest when it's unset.
+    var costEl0 = document.getElementById("pr-cost");
+    if (costEl0 && minPrice != null && !(parseFloat(costEl0.value) > 0)) costEl0.value = minPrice;
+    el.querySelectorAll(".psp-use").forEach(function (b) { b.onclick = function () { var c = document.getElementById("pr-cost"); if (c) { c.value = b.dataset.price; toast("Item cost set from this supplier"); } }; });
     document.getElementById("psp-add").onclick = async function () {
       var sup = document.getElementById("psp-sup").value, price = parseFloat(gv("psp-price"));
       if (!sup) { toast("Pick a supplier"); return; }
@@ -5443,6 +5447,7 @@
     if (p && p.parent_product_id) { el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Variant</div><div class="sub" style="margin:0">This item is a variant of another product. <a href="#" id="pv-parent">Open the parent</a> to manage the full set.</div></div>'; var pl = document.getElementById("pv-parent"); if (pl) pl.onclick = function (e) { e.preventDefault(); renderProductForm(p.parent_product_id); }; return; }
     var attrs = (p && p.variant_attrs && typeof p.variant_attrs === "object") ? p.variant_attrs : {};
     var kids = (await sb.from("products").select("id,name,default_code,is_active").eq("parent_product_id", productId).order("name")).data || [];
+    var cands = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).is("parent_product_id", null).neq("id", productId).neq("is_kit", true).order("name").limit(1000)).data || [];
     var axes = Object.keys(attrs);
     var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Variants</div><div class="sub" style="margin:-2px 0 9px">Sell this item in variations (e.g. Size &times; Colour). Define the axes, then generate a product for each combination.</div>' +
@@ -5450,7 +5455,8 @@
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 4px">' +
       '<input id="pv-name" placeholder="axis (e.g. Colour)" ' + inS + ' style="width:150px"><input id="pv-vals" placeholder="values comma-separated (Black, White)" ' + inS + ' style="width:230px"><button class="btn sm" id="pv-axadd">Add axis</button>' +
       (axes.length ? '<button class="btn sm pri" id="pv-gen" style="background:var(--app);border-color:var(--app)">Generate variants</button>' : '') + '</div>' +
-      (kids.length ? '<div class="sub" style="margin:8px 0 4px"><b>' + kids.length + '</b> variant(s):</div><div class="o-rt-wrap"><table class="o-lines"><tbody>' + kids.map(function (k) { return '<tr><td><b>' + esc(k.name) + '</b> <span class="muted">' + esc(k.default_code || "") + '</span></td><td><button class="btn sm pv-open" data-id="' + k.id + '">Open</button></td></tr>'; }).join("") + '</tbody></table></div>' : "") +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:4px 0 2px"><span class="muted" style="font-size:12px">or link an existing product:</span><select id="pv-link" ' + inS + ' style="min-width:190px"><option value="">Pick a product...</option>' + cands.map(function (c) { return '<option value="' + c.id + '">' + esc((c.default_code ? c.default_code + " " : "") + c.name) + '</option>'; }).join("") + '</select><button class="btn sm" id="pv-linkbtn">Link as variant</button></div>' +
+      (kids.length ? '<div class="sub" style="margin:8px 0 4px"><b>' + kids.length + '</b> variant(s):</div><div class="o-rt-wrap"><table class="o-lines"><tbody>' + kids.map(function (k) { return '<tr><td><b>' + esc(k.name) + '</b> <span class="muted">' + esc(k.default_code || "") + '</span></td><td style="text-align:right"><button class="btn sm pv-open" data-id="' + k.id + '">Open</button> <button class="btn sm pv-unlink" data-id="' + k.id + '" title="Detach from this parent">Unlink</button></td></tr>'; }).join("") + '</tbody></table></div>' : "") +
       '</div>';
     function saveAttrs(next) { return sb.from("products").update({ variant_attrs: next }).eq("id", productId); }
     document.getElementById("pv-axadd").onclick = async function () {
@@ -5461,6 +5467,12 @@
     };
     el.querySelectorAll(".pv-axdel").forEach(function (b) { b.onclick = async function () { var next = Object.assign({}, attrs); delete next[b.dataset.k]; await saveAttrs(next); loadVariants(productId, Object.assign({}, p, { variant_attrs: next })); }; });
     el.querySelectorAll(".pv-open").forEach(function (b) { b.onclick = function () { renderProductForm(b.dataset.id); }; });
+    el.querySelectorAll(".pv-unlink").forEach(function (b) { b.onclick = async function () { if (!confirm("Detach this variant from its parent? The product stays, it just becomes a standalone item.")) return; var r = await sb.from("products").update({ parent_product_id: null }).eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); return; } toast("Unlinked"); loadVariants(productId, p); }; });
+    var lb = document.getElementById("pv-linkbtn"); if (lb) lb.onclick = async function () {
+      var cid = document.getElementById("pv-link").value; if (!cid) { toast("Pick a product to link"); return; }
+      var r = await sb.from("products").update({ parent_product_id: productId }).eq("id", cid); if (r.error) { toast(errMsg(r.error)); return; }
+      toast("Linked as a variant"); loadVariants(productId, p);
+    };
     var gen = document.getElementById("pv-gen");
     if (gen) gen.onclick = async function () {
       var keys = Object.keys(attrs); if (!keys.length) return;
