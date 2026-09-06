@@ -8953,10 +8953,13 @@
     if (p.next_service_date && p.next_service_date < t) out.push('<span class="badge unpaid" style="font-size:10px">Service due</span>');
     return out.length ? " " + out.join(" ") : "";
   }
+  // Extra equipment fields (legal docs + meter) live in companies.profile.equip_meta
+  // keyed by equipment id - no schema change needed.
+  async function equipMetaAll() { var c = (await sb.from("companies").select("profile").eq("id", S.company.id).maybeSingle()).data || {}; return (c.profile || {}).equip_meta || {}; }
   function cfgPlant() {
     return {
       title: "Plant & Equipment", pageSize: 100,
-      fetch: function () { return sb.from("plant_equipment").select("*, projects(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      fetch: async function () { var rows = (await sb.from("plant_equipment").select("*, projects(name)").eq("company_id", S.company.id).order("name")).data || []; var meta = await equipMetaAll(); rows.forEach(function (r) { var m = meta[r.id]; if (m) Object.keys(m).forEach(function (k) { if (r[k] == null) r[k] = m[k]; }); }); return rows; },
       searchText: function (p) { return (p.code || "") + " " + (p.name || "") + " " + (p.category || "") + " " + (p.supplier || ""); },
       columns: [
         { label: "Code", get: function (p) { return '<b>' + esc(p.code || "") + '</b>'; } },
@@ -8999,9 +9002,15 @@
     };
     var del = document.getElementById("pl2-del"); if (del) del.onclick = async function () { await sb.from("plant_equipment").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
     document.getElementById("pl2-save").onclick = async function () {
-      var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null, registration_no: gv("pl2-regno") || null, registration_expiry: gv("pl2-regexp") || null, insurance_no: gv("pl2-insno") || null, insurance_expiry: gv("pl2-insexp") || null, current_hours: gv("pl2-meter") === "" ? null : parseFloat(gv("pl2-meter")), meter_unit: document.getElementById("pl2-munit").value };
-      var r; if (p.id) r = await sb.from("plant_equipment").update(row).eq("id", p.id); else { row.company_id = S.company.id; r = await sb.from("plant_equipment").insert(row); }
-      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
+      var row = { code: gv("pl2-code"), name: gv("pl2-name") || "Equipment", category: gv("pl2-cat"), ownership: document.getElementById("pl2-own").value, supplier: gv("pl2-sup"), daily_rate: parseFloat(gv("pl2-rate")) || 0, status: document.getElementById("pl2-status").value, project_id: document.getElementById("pl2-proj").value || null, location: gv("pl2-loc"), next_service_date: gv("pl2-serv") || null, start_date: gv("pl2-start") || null, end_date: gv("pl2-end") || null };
+      var meta = { registration_no: gv("pl2-regno") || null, registration_expiry: gv("pl2-regexp") || null, insurance_no: gv("pl2-insno") || null, insurance_expiry: gv("pl2-insexp") || null, current_hours: gv("pl2-meter") === "" ? null : parseFloat(gv("pl2-meter")), meter_unit: document.getElementById("pl2-munit").value };
+      var eid = p.id;
+      if (p.id) { var up = await sb.from("plant_equipment").update(row).eq("id", p.id); if (up.error) { toast(errMsg(up.error)); return; } }
+      else { row.company_id = S.company.id; var ins = await sb.from("plant_equipment").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } eid = ins.data.id; }
+      var c = (await sb.from("companies").select("profile").eq("id", S.company.id).maybeSingle()).data || {};
+      var prof = Object.assign({}, c.profile || {}); prof.equip_meta = Object.assign({}, prof.equip_meta || {}); prof.equip_meta[eid] = meta;
+      await sb.from("companies").update({ profile: prof }).eq("id", S.company.id); if (S.company) S.company.profile = prof;
+      m.remove(); toast("Saved"); renderView();
     };
   }
 
@@ -15116,8 +15125,6 @@
     var company = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
     var ei = (company.profile || {}).einvoice || {};
     var invs = (await sb.from("invoices").select("id,number,invoice_date,amount_total,currency_code,partner_id,partners:partner_id(name)").eq("company_id", S.company.id).eq("move_type", "out_invoice").eq("state", "posted").order("invoice_date", { ascending: false }).limit(50)).data || [];
-    var docs = (await sb.from("einvoice_docs").select("*, invoices:invoice_id(number)").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(50)).data || [];
-    var doneIds = {}; docs.forEach(function (d) { if (d.invoice_id) doneIds[d.invoice_id] = d; });
     var body = document.getElementById("o-body");
     function fldrow(l, h) { return '<div class="wb-fld" style="margin-bottom:8px"><span style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase">' + esc(l) + "</span>" + h + "</div>"; }
     body.innerHTML = '<div style="max-width:900px;display:grid;gap:16px">' +
@@ -15134,10 +15141,9 @@
       fldrow("ASP endpoint", '<input id="ei-endpoint" class="wb-i" value="' + esc(ei.endpoint || "") + '" placeholder="https://...">') +
       '</div></div><button class="btn pri" id="ei-save" style="background:var(--accent);border-color:var(--accent);margin-top:6px">Save setup</button></div>' +
 
-      '<div class="card"><h3 style="margin:0 0 6px">Posted customer invoices</h3><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
+      '<div class="card"><h3 style="margin:0 0 6px">Posted customer invoices</h3><div class="sub" style="margin-bottom:8px">Generate the structured e-invoice (UBL / PINT AE) for any posted invoice and download it. Once you connect an ASP, the same document transmits onto Peppol.</div><div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Invoice</th><th>Customer</th><th>Date</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
       (invs.length ? invs.map(function (v) {
-        var d = doneIds[v.id];
-        return '<tr><td><b>' + esc(v.number || "") + '</b></td><td>' + esc(v.partners ? v.partners.name : "") + '</td><td class="muted">' + esc((v.invoice_date || "").slice(0, 10)) + '</td><td class="num">' + money(v.amount_total) + '</td><td style="white-space:nowrap">' + (d ? '<span class="badge paid">' + esc(d.status) + '</span> <button class="btn sm ei-dl" data-doc="' + d.id + '">XML</button>' : '<button class="btn sm ei-gen" data-inv="' + v.id + '">Generate e-invoice</button>') + '</td></tr>';
+        return '<tr><td><b>' + esc(v.number || "") + '</b></td><td>' + esc(v.partners ? v.partners.name : "") + '</td><td class="muted">' + esc((v.invoice_date || "").slice(0, 10)) + '</td><td class="num">' + money(v.amount_total) + '</td><td style="white-space:nowrap"><button class="btn sm ei-gen" data-inv="' + v.id + '">Generate &amp; download</button></td></tr>';
       }).join("") : '<tr><td colspan="5" class="muted" style="padding:10px">No posted customer invoices yet.</td></tr>') +
       '</tbody></table></div></div>' +
       '</div>';
@@ -15155,13 +15161,9 @@
         var lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", iid).order("id")).data || [];
         var partner = inv.partner_id ? ((await sb.from("partners").select("*").eq("id", inv.partner_id).maybeSingle()).data || {}) : {};
         var xml = buildUBL(inv, lines, company, partner, (company.profile || {}).einvoice || {});
-        var ins = await sb.from("einvoice_docs").insert({ company_id: S.company.id, invoice_id: iid, format: "ubl-bis3", status: "generated", doc_ref: inv.number, payload: xml }).select("id").single();
-        if (ins.error) { toast(errMsg(ins.error)); b.disabled = false; b.textContent = "Generate e-invoice"; return; }
-        toast("E-invoice generated"); eiDownload("einvoice-" + (inv.number || iid) + ".xml", xml); renderEinvoice();
+        eiDownload("einvoice-" + (inv.number || iid) + ".xml", xml);
+        toast("E-invoice generated"); b.disabled = false; b.textContent = "Generate & download";
       };
-    });
-    body.querySelectorAll(".ei-dl").forEach(function (b) {
-      b.onclick = async function () { var d = (await sb.from("einvoice_docs").select("payload,doc_ref").eq("id", b.dataset.doc).maybeSingle()).data; if (d) eiDownload("einvoice-" + (d.doc_ref || "doc") + ".xml", d.payload || ""); };
     });
   }
 
