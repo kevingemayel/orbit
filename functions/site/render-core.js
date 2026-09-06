@@ -1,115 +1,246 @@
 // Shared website render engine - imported by BOTH the Pages preview function
 // (functions/site/[[path]].js) and the dedicated site Worker (worker/index.js).
-// It resolves a hostname+path to a published page via the site_render() RPC and
-// renders the block tree to a themed HTML page. Pure + dependency-free.
+// Resolves a hostname+path to a published page via site_render() and renders the
+// block tree to a themed, responsive Bootstrap 5 page. Pure + dependency-free.
+//
+// SCALABILITY: sections live in the BLOCKS registry (type -> function). Adding a new
+// section = one entry here + one field set in the app editor. No schema change ever
+// (pages are a jsonb block tree). One Worker serves every tenant; Bootstrap + fonts
+// come from a CDN so nothing per-site is stored.
 export const SUPA = "https://hlkwzbkgkwywomuvilwe.supabase.co";
 export const ANON = "sb_publishable_lp-wGR9RM2Ws-BvA-Z5XpQ_F_YZk1SW";
+export const BOOTSTRAP_CSS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css";
+export const BOOTSTRAP_JS = "https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js";
+export const BOOTSTRAP_ICONS = "https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const raw = (s) => String(s == null ? "" : s);   // owner-authored HTML (richtext/embed), passed through like a Webflow embed
+const arr = (x) => (Array.isArray(x) ? x : []);
+function hexRgb(h) { h = String(h || "").replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); const n = parseInt(/^[0-9a-f]{6}$/i.test(h) ? h : "2f6bff", 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 
-function btn(text, href, kind) {
-  if (!text) return "";
-  return `<a class="b-btn${kind === "ghost" ? " ghost" : ""}" href="${esc(href || "#")}">${esc(text)}</a>`;
+// An icon token is either a Bootstrap Icons name ("bi-lightning") or a literal emoji/char.
+function icon(tok, cls) {
+  tok = String(tok || "").trim(); if (!tok) return "";
+  if (/^bi[-\s]/i.test(tok) || /^bi$/i.test(tok)) return '<i class="bi ' + esc(tok.replace(/\s+/, "-")) + ' ' + (cls || "") + '"></i>';
+  return '<span class="' + (cls || "") + '">' + esc(tok) + '</span>';
+}
+function btn(b, variant, size) {
+  if (!b || !b.text) return "";
+  const v = variant || "primary", sz = size ? " btn-" + size : "";
+  return '<a class="btn btn-' + v + sz + '" href="' + esc(b.href || "#") + '"' + (/^https?:/i.test(b.href || "") ? ' rel="noopener"' : "") + '>' + esc(b.text) + '</a>';
+}
+function heroBtns(p, onImg) {
+  const a = p.buttonText ? btn({ text: p.buttonText, href: p.buttonHref }, "primary", "lg") : "";
+  const b = p.button2Text ? btn({ text: p.button2Text, href: p.button2Href }, onImg ? "light" : "outline-primary", "lg") : "";
+  return (a || b) ? '<div class="d-flex flex-wrap gap-2 mt-4 ' + (p.align === "center" ? "justify-content-center" : p.align === "right" ? "justify-content-end" : "") + '">' + a + b + "</div>" : "";
+}
+function alignClass(a) { return a === "center" ? "text-center" : a === "right" ? "text-end" : ""; }
+function sectionPad(p) { return p.pad === "sm" ? "py-4" : p.pad === "lg" ? "py-6" : "py-5"; }
+function bgStyle(p) { return p.bg === "light" ? ' style="background:var(--sw-soft)"' : p.bg === "dark" ? ' class="text-bg-dark"' : ""; }
+
+// -------- section renderers (the template library) --------
+const BLOCKS = {
+  hero(p) {
+    const onImg = !!p.image, split = !onImg && !!p.sideImage;
+    const inner =
+      (p.eyebrow ? '<div class="text-uppercase fw-semibold small mb-2" style="letter-spacing:.12em;color:var(--sw-pri)">' + esc(p.eyebrow) + "</div>" : "") +
+      '<h1 class="display-4 fw-bold lh-1 mb-3">' + esc(p.title || "") + "</h1>" +
+      (p.subtitle ? '<p class="fs-5 ' + (onImg ? "text-white-50" : "text-body-secondary") + ' mb-0" style="max-width:44ch">' + esc(p.subtitle) + "</p>" : "") +
+      heroBtns(p, onImg);
+    if (split) {
+      return '<section class="py-5 py-lg-6"><div class="container"><div class="row align-items-center g-5"><div class="col-lg-6">' + inner +
+        '</div><div class="col-lg-6"><img src="' + esc(p.sideImage) + '" alt="" class="img-fluid rounded-4 shadow-sm"></div></div></div></section>';
+    }
+    const style = onImg ? ' style="background:linear-gradient(rgba(0,0,0,.5),rgba(0,0,0,.5)),url(\'' + esc(p.image).replace(/'/g, "%27") + "') center/cover\"" : "";
+    return '<section class="py-6' + (onImg ? " text-white" : "") + '"' + style + '><div class="container"><div class="' + (p.align === "center" ? "mx-auto text-center" : alignClass(p.align)) + '" style="max-width:' + (p.align === "center" ? "760px" : "640px") + '">' + inner + "</div></div></section>";
+  },
+  heading(p) {
+    const a = p.align || "center";
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container ' + alignClass(a) + '"><h2 class="fw-bold mb-2">' + esc(p.text || "") + "</h2>" +
+      (p.subtitle ? '<p class="fs-5 text-body-secondary ' + (a === "center" ? "mx-auto" : "") + ' mb-0" style="max-width:60ch">' + esc(p.subtitle) + "</p>" : "") + "</div></section>";
+  },
+  richtext(p) { return '<section class="' + sectionPad(p) + '"><div class="container"><div class="mx-auto" style="max-width:760px">' + raw(p.html || "") + "</div></div></section>"; },
+  text(p) { return '<section class="' + sectionPad(p) + '"><div class="container"><div class="mx-auto fs-5" style="max-width:720px">' + esc(p.text || "").split("\n").map((l) => "<p>" + esc(l) + "</p>").join("") + "</div></div></section>"; },
+  image(p) {
+    return '<section class="' + sectionPad(p) + '"><div class="container text-center"><figure class="figure">' +
+      (p.src ? '<img src="' + esc(p.src) + '" alt="' + esc(p.alt || "") + '" class="figure-img img-fluid rounded-4" loading="lazy">' : "") +
+      (p.caption ? '<figcaption class="figure-caption">' + esc(p.caption) + "</figcaption>" : "") + "</figure></div></section>";
+  },
+  features(p) {
+    const items = arr(p.items), n = Math.max(1, Math.min(4, Number(p.columns) || (items.length % 4 === 0 ? 4 : 3)));
+    const col = "col-sm-6 col-lg-" + (12 / n);
+    const cards = items.map((it) => '<div class="' + col + '"><div class="h-100 p-4 rounded-4 border bg-body-tertiary">' +
+      (it.icon ? '<div class="fs-2 mb-2" style="color:var(--sw-pri)">' + icon(it.icon) + "</div>" : "") +
+      (it.title ? '<h3 class="h5 fw-semibold">' + esc(it.title) + "</h3>" : "") +
+      (it.text ? '<p class="text-body-secondary mb-0">' + esc(it.text) + "</p>" : "") + "</div></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-4">' + cards + "</div></div></section>";
+  },
+  mediaText(p) {
+    const media = '<div class="col-lg-6">' + (p.image ? '<img src="' + esc(p.image) + '" alt="" class="img-fluid rounded-4 shadow-sm">' : "") + "</div>";
+    const text = '<div class="col-lg-6">' +
+      (p.eyebrow ? '<div class="text-uppercase fw-semibold small mb-2" style="letter-spacing:.12em;color:var(--sw-pri)">' + esc(p.eyebrow) + "</div>" : "") +
+      (p.title ? '<h2 class="fw-bold mb-3">' + esc(p.title) + "</h2>" : "") +
+      (p.text ? '<div class="fs-5 text-body-secondary">' + esc(p.text).split("\n").map((l) => "<p>" + esc(l) + "</p>").join("") + "</div>" : "") +
+      (p.buttonText ? btn({ text: p.buttonText, href: p.buttonHref }, "primary") : "") + "</div>";
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container"><div class="row g-5 align-items-center">' + (p.imageRight ? text + media : media + text) + "</div></div></section>";
+  },
+  stats(p) {
+    const items = arr(p.items);
+    const cells = items.map((it) => '<div class="col"><div class="display-5 fw-bold" style="color:var(--sw-pri)">' + esc(it.value || "") + '</div><div class="text-body-secondary">' + esc(it.label || "") + "</div></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container"><div class="row row-cols-2 row-cols-md-' + Math.min(4, items.length || 1) + ' g-4 text-center">' + cells + "</div></div></section>";
+  },
+  pricing(p) {
+    const items = arr(p.items), n = Math.max(1, Math.min(4, items.length || 3));
+    const cards = items.map((pl) => '<div class="col-lg-' + (12 / n) + '"><div class="h-100 p-4 rounded-4 border ' + (pl.featured ? "border-2 shadow" : "") + '" ' + (pl.featured ? 'style="border-color:var(--sw-pri)!important"' : "") + ">" +
+      (pl.featured ? '<span class="badge mb-2" style="background:var(--sw-pri)">' + esc(pl.badge || "Popular") + "</span>" : "") +
+      '<h3 class="h5 fw-semibold">' + esc(pl.name || "") + "</h3>" +
+      '<div class="my-2"><span class="display-6 fw-bold">' + esc(pl.price || "") + '</span> <span class="text-body-secondary">' + esc(pl.period || "") + "</span></div>" +
+      '<ul class="list-unstyled small mb-3">' + arr(pl.features).map((f) => '<li class="mb-1"><i class="bi bi-check2 me-1" style="color:var(--sw-pri)"></i>' + esc(f) + "</li>").join("") + "</ul>" +
+      (pl.buttonText ? btn({ text: pl.buttonText, href: pl.buttonHref }, pl.featured ? "primary" : "outline-primary") + "" : "") + "</div></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-4 justify-content-center">' + cards + "</div></div></section>";
+  },
+  team(p) {
+    const items = arr(p.items), n = Math.max(2, Math.min(4, Number(p.columns) || 4));
+    const cards = items.map((m) => '<div class="col-6 col-lg-' + (12 / n) + ' text-center">' +
+      (m.image ? '<img src="' + esc(m.image) + '" alt="" class="rounded-circle mb-2" width="112" height="112" style="object-fit:cover">' : '<div class="rounded-circle bg-body-tertiary mx-auto mb-2 d-flex align-items-center justify-content-center" style="width:112px;height:112px;font-size:2rem;color:var(--sw-pri)"><i class="bi bi-person"></i></div>') +
+      '<div class="fw-semibold">' + esc(m.name || "") + "</div>" + (m.role ? '<div class="small text-body-secondary">' + esc(m.role) + "</div>" : "") + "</div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-4">' + cards + "</div></div></section>";
+  },
+  testimonials(p) {
+    const items = arr(p.items), n = Math.max(1, Math.min(3, items.length >= 3 ? 3 : items.length || 1));
+    const cards = items.map((q) => '<div class="col-lg-' + (12 / n) + '"><figure class="h-100 p-4 rounded-4 border bg-body-tertiary mb-0">' +
+      '<blockquote class="blockquote fs-6">' + '<i class="bi bi-quote fs-3" style="color:var(--sw-pri)"></i><p>' + esc(q.text || "") + "</p></blockquote>" +
+      '<figcaption class="blockquote-footer mb-0">' + esc(q.name || "") + (q.role ? ' <cite>' + esc(q.role) + "</cite>" : "") + "</figcaption></figure></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-4">' + cards + "</div></div></section>";
+  },
+  gallery(p) {
+    const items = arr(p.items), n = Math.max(2, Math.min(4, Number(p.columns) || 3));
+    const cells = items.map((g) => '<div class="col-6 col-md-' + (12 / n) + '"><img src="' + esc(g.src || g) + '" alt="' + esc(g.alt || "") + '" class="img-fluid rounded-3 w-100" style="aspect-ratio:4/3;object-fit:cover" loading="lazy"></div>').join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-3">' + cells + "</div></div></section>";
+  },
+  logos(p) {
+    const items = arr(p.items);
+    const cells = items.map((g) => '<div class="col"><img src="' + esc(g.src || g) + '" alt="' + esc(g.alt || "") + '" style="height:34px;max-width:130px;object-fit:contain;filter:grayscale(1);opacity:.7"></div>').join("");
+    return '<section class="py-4"' + bgStyle(p) + '><div class="container">' + (p.title ? '<p class="text-center text-body-secondary small text-uppercase mb-3" style="letter-spacing:.1em">' + esc(p.title) + "</p>" : "") + '<div class="row row-cols-2 row-cols-md-' + Math.min(6, items.length || 1) + ' g-4 align-items-center justify-content-center text-center">' + cells + "</div></div></section>";
+  },
+  faq(p) {
+    const items = arr(p.items), id = "faq" + Math.random().toString(36).slice(2, 7);
+    const rows = items.map((f, i) => '<div class="accordion-item"><h3 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#' + id + i + '">' + esc(f.q || "") + '</button></h3><div id="' + id + i + '" class="accordion-collapse collapse" data-bs-parent="#' + id + '"><div class="accordion-body text-body-secondary">' + esc(f.a || "") + "</div></div></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="mx-auto" style="max-width:760px"><div class="accordion" id="' + id + '">' + rows + "</div></div></div></section>";
+  },
+  steps(p) {
+    const items = arr(p.items), n = Math.max(2, Math.min(4, items.length || 3));
+    const cells = items.map((s, i) => '<div class="col-md-' + (12 / n) + '"><div class="d-inline-flex align-items-center justify-content-center rounded-circle fw-bold mb-2 text-white" style="width:44px;height:44px;background:var(--sw-pri)">' + (i + 1) + "</div>" +
+      '<h3 class="h6 fw-semibold">' + esc(s.title || "") + "</h3><p class=\"text-body-secondary small\">" + esc(s.text || "") + "</p></div>").join("");
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) + '<div class="row g-4 text-center">' + cells + "</div></div></section>";
+  },
+  cta(p) {
+    return '<section class="py-6" style="background:var(--sw-soft)"><div class="container text-center"><h2 class="fw-bold mb-2">' + esc(p.title || "") + "</h2>" +
+      (p.text ? '<p class="fs-5 text-body-secondary mx-auto mb-4" style="max-width:56ch">' + esc(p.text) + "</p>" : "") +
+      '<div class="d-flex justify-content-center gap-2 flex-wrap">' + (p.buttonText ? btn({ text: p.buttonText, href: p.buttonHref }, "primary", "lg") : "") + (p.button2Text ? btn({ text: p.button2Text, href: p.button2Href }, "outline-primary", "lg") : "") + "</div></div></section>";
+  },
+  button(p) { return '<section class="' + sectionPad(p) + '"><div class="container ' + alignClass(p.align) + '">' + btn({ text: p.text, href: p.href }, "primary", "lg") + "</div></section>"; },
+  contact(p) {
+    const info = '<div class="col-lg-5">' + (p.title ? '<h2 class="fw-bold mb-3">' + esc(p.title) + "</h2>" : "") + (p.text ? '<p class="text-body-secondary">' + esc(p.text) + "</p>" : "") +
+      '<ul class="list-unstyled">' +
+      (p.email ? '<li class="mb-2"><i class="bi bi-envelope me-2" style="color:var(--sw-pri)"></i>' + esc(p.email) + "</li>" : "") +
+      (p.phone ? '<li class="mb-2"><i class="bi bi-telephone me-2" style="color:var(--sw-pri)"></i>' + esc(p.phone) + "</li>" : "") +
+      (p.address ? '<li class="mb-2"><i class="bi bi-geo-alt me-2" style="color:var(--sw-pri)"></i>' + esc(p.address) + "</li>" : "") + "</ul></div>";
+    return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container"><div class="row g-5">' + info + '<div class="col-lg-7">' + formInner(p) + "</div></div></div></section>";
+  },
+  form(p) { return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container"><div class="mx-auto" style="max-width:560px">' + secHead(p) + formInner(p) + "</div></div></section>"; },
+  embed(p) { return '<section class="' + sectionPad(p) + '"><div class="container">' + raw(p.html || "") + "</div></section>"; },
+  html(p) { return BLOCKS.embed(p); },
+  columns(p) { return BLOCKS.features(p); },   // legacy alias
+  spacer(p) { return '<div style="height:' + Math.max(0, Math.min(240, Number(p.size) || 48)) + 'px"></div>'; },
+  // ERP-backed sections resolve on the client from a published, read-only endpoint (see embed.js).
+  careers(p) { return erpWidget("careers", p); },
+  jobs(p) { return erpWidget("careers", p); },
+};
+function secHead(p) {
+  if (!p.title && !p.subtitle) return "";
+  return '<div class="text-center mb-5"><h2 class="fw-bold mb-2">' + esc(p.title || "") + "</h2>" + (p.subtitle ? '<p class="fs-5 text-body-secondary mx-auto mb-0" style="max-width:60ch">' + esc(p.subtitle) + "</p>" : "") + "</div>";
+}
+function formInner(p) {
+  const fields = arr(p.fields).length ? p.fields : [{ name: "name", label: "Name", type: "text", required: true }, { name: "email", label: "Email", type: "email", required: true }, { name: "message", label: "Message", type: "textarea" }];
+  const rows = fields.map((f) => {
+    const nm = esc(f.name || "field"), lb = esc(f.label || f.name || "");
+    const ctl = f.type === "textarea"
+      ? '<textarea class="form-control" name="' + nm + '" rows="4"' + (f.required ? " required" : "") + "></textarea>"
+      : '<input class="form-control" name="' + nm + '" type="' + esc(f.type || "text") + '"' + (f.required ? " required" : "") + ">";
+    return '<div class="mb-3"><label class="form-label">' + lb + (f.required ? " *" : "") + "</label>" + ctl + "</div>";
+  }).join("");
+  return '<form class="sw-form" data-form="' + esc(p.formKey || "contact") + '">' + rows + '<button type="submit" class="btn btn-primary">' + esc(p.submitText || "Send") + '</button><div class="sw-form-msg small mt-2" hidden></div></form>';
+}
+// Placeholder rendered server-side; embed.js fills it in-browser from the public ERP endpoint.
+function erpWidget(kind, p) {
+  return '<section class="' + sectionPad(p) + '"' + bgStyle(p) + '><div class="container">' + secHead(p) +
+    '<div class="sw-erp" data-widget="' + esc(kind) + '"' + (p.limit ? ' data-limit="' + esc(p.limit) + '"' : "") + '><div class="text-center text-body-secondary py-4"><span class="spinner-border spinner-border-sm me-2"></span>Loading…</div></div></div></section>';
 }
 
 function renderBlock(b) {
-  const p = (b && b.props) || {};
-  switch (b && b.type) {
-    case "hero":
-      return `<section class="b-hero${p.image ? " has-img" : ""}"${p.image ? ` style="background-image:linear-gradient(rgba(0,0,0,.45),rgba(0,0,0,.45)),url('${esc(p.image)}')"` : ""}><div class="b-wrap b-hero-in b-align-${esc(p.align || "center")}">${p.eyebrow ? `<div class="b-eyebrow">${esc(p.eyebrow)}</div>` : ""}<h1>${esc(p.title || "")}</h1>${p.subtitle ? `<p class="b-lede">${esc(p.subtitle)}</p>` : ""}${p.buttonText ? `<div class="b-btns">${btn(p.buttonText, p.buttonHref)}${p.button2Text ? btn(p.button2Text, p.button2Href, "ghost") : ""}</div>` : ""}</div></section>`;
-    case "heading":
-      return `<section class="b-sec"><div class="b-wrap b-align-${esc(p.align || "left")}"><h2 class="b-h2">${esc(p.text || "")}</h2>${p.subtitle ? `<p class="b-lede">${esc(p.subtitle)}</p>` : ""}</div></section>`;
-    case "richtext":
-      return `<section class="b-sec"><div class="b-wrap b-rich">${raw(p.html || "")}</div></section>`;
-    case "text":
-      return `<section class="b-sec"><div class="b-wrap b-rich"><p>${esc(p.text || "").replace(/\n/g, "<br>")}</p></div></section>`;
-    case "image":
-      return `<section class="b-sec"><div class="b-wrap"><figure class="b-fig">${p.src ? `<img src="${esc(p.src)}" alt="${esc(p.alt || "")}" loading="lazy">` : ""}${p.caption ? `<figcaption>${esc(p.caption)}</figcaption>` : ""}</figure></div></section>`;
-    case "features":
-    case "columns": {
-      const items = Array.isArray(p.items) ? p.items : [];
-      const n = Math.max(1, Math.min(4, Number(p.columns) || (items.length >= 3 ? 3 : items.length || 3)));
-      const cards = items.map((it) => `<div class="b-card">${it.icon ? `<div class="b-card-ic">${esc(it.icon)}</div>` : ""}${it.title ? `<h3>${esc(it.title)}</h3>` : ""}${it.text ? `<p>${esc(it.text)}</p>` : ""}</div>`).join("");
-      return `<section class="b-sec"><div class="b-wrap">${p.title ? `<h2 class="b-h2 b-align-center">${esc(p.title)}</h2>` : ""}<div class="b-grid" style="--cols:${n}">${cards}</div></div></section>`;
-    }
-    case "cta":
-      return `<section class="b-sec b-cta"><div class="b-wrap b-align-center"><h2 class="b-h2">${esc(p.title || "")}</h2>${p.text ? `<p class="b-lede">${esc(p.text)}</p>` : ""}${p.buttonText ? `<div class="b-btns">${btn(p.buttonText, p.buttonHref)}</div>` : ""}</div></section>`;
-    case "button":
-      return `<section class="b-sec"><div class="b-wrap b-align-${esc(p.align || "left")}">${btn(p.text, p.href)}</div></section>`;
-    case "form": {
-      const fields = Array.isArray(p.fields) && p.fields.length ? p.fields : [{ name: "name", label: "Name", type: "text" }, { name: "email", label: "Email", type: "email" }, { name: "message", label: "Message", type: "textarea" }];
-      const rows = fields.map((f) => {
-        const nm = esc(f.name || "field"), lb = esc(f.label || f.name || "");
-        const input = (f.type === "textarea") ? `<textarea name="${nm}" rows="4"${f.required ? " required" : ""}></textarea>` : `<input name="${nm}" type="${esc(f.type || "text")}"${f.required ? " required" : ""}>`;
-        return `<label class="b-fld"><span>${lb}${f.required ? " *" : ""}</span>${input}</label>`;
-      }).join("");
-      return `<section class="b-sec"><div class="b-wrap b-formwrap">${p.title ? `<h2 class="b-h2 b-align-center">${esc(p.title)}</h2>` : ""}<form class="b-form" data-form="${esc(p.formKey || "contact")}">${rows}<button type="submit" class="b-btn">${esc(p.submitText || "Send")}</button><p class="b-form-msg" hidden></p></form></div></section>`;
-    }
-    case "spacer":
-      return `<div style="height:${Math.max(0, Math.min(240, Number(p.size) || 48))}px"></div>`;
-    case "embed":
-    case "html":
-      return `<section class="b-sec"><div class="b-wrap">${raw(p.html || "")}</div></section>`;
-    default:
-      return "";
-  }
+  const fn = b && BLOCKS[b.type];
+  return fn ? fn(b.props || {}) : "";
+}
+
+function themeCss(theme) {
+  const primary = theme.primary || "#2f6bff", bg = theme.bg || "#ffffff", ink = theme.ink || "#1b1f24";
+  const font = theme.font || "Inter", radius = theme.radius != null ? theme.radius : 12;
+  const [r, g, bl] = hexRgb(primary);
+  return ":root{--sw-pri:" + primary + ";--sw-pri-rgb:" + r + "," + g + "," + bl + ";--bs-primary:" + primary + ";--bs-primary-rgb:" + r + "," + g + "," + bl + ";--bs-body-bg:" + bg + ";--bs-body-color:" + ink + ";--bs-border-radius:" + Number(radius) + "px;--bs-link-color:" + primary + ";--bs-link-hover-color:color-mix(in srgb," + primary + " 80%,#000);--sw-soft:color-mix(in srgb," + primary + " 6%," + bg + ")}"
+    + "body{font-family:'" + font + "',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif}"
+    + ".py-6{padding-top:6rem;padding-bottom:6rem}"
+    + "a{color:var(--sw-pri)}"
+    + ".btn-primary{--bs-btn-bg:var(--sw-pri);--bs-btn-border-color:var(--sw-pri);--bs-btn-hover-bg:color-mix(in srgb,var(--sw-pri) 85%,#000);--bs-btn-hover-border-color:color-mix(in srgb,var(--sw-pri) 85%,#000);--bs-btn-active-bg:color-mix(in srgb,var(--sw-pri) 75%,#000);--bs-btn-disabled-bg:var(--sw-pri);--bs-btn-disabled-border-color:var(--sw-pri)}"
+    + ".btn-outline-primary{--bs-btn-color:var(--sw-pri);--bs-btn-border-color:var(--sw-pri);--bs-btn-hover-bg:var(--sw-pri);--bs-btn-hover-border-color:var(--sw-pri);--bs-btn-active-bg:var(--sw-pri);--bs-btn-active-border-color:var(--sw-pri)}"
+    + ".accordion{--bs-accordion-active-bg:var(--sw-soft);--bs-accordion-active-color:var(--sw-pri);--bs-accordion-btn-focus-box-shadow:none}"
+    + ".navbar{--bs-navbar-active-color:var(--sw-pri)}";
+}
+
+function navHTML(site, page, nav) {
+  const dark = (site.theme || {}).navbar === "dark";
+  const brand = site.logo ? '<img src="' + esc(site.logo) + '" alt="' + esc(site.name || "") + '" height="30">' : esc(site.name || "");
+  const links = nav.map((n) => '<li class="nav-item"><a class="nav-link' + (n.path === page.path ? " active" : "") + '" href="' + esc(n.path === "/" ? "/" : n.path) + '">' + esc(n.title || n.path) + "</a></li>").join("");
+  const cta = site.nav_cta_text ? '<a class="btn btn-primary ms-lg-3" href="' + esc(site.nav_cta_href || "#") + '">' + esc(site.nav_cta_text) + "</a>" : "";
+  return '<nav class="navbar navbar-expand-lg sticky-top border-bottom ' + (dark ? "navbar-dark text-bg-dark" : "navbar-light") + '" style="' + (dark ? "" : "background:var(--bs-body-bg)") + '"><div class="container">' +
+    '<a class="navbar-brand fw-bold" href="/">' + brand + "</a>" +
+    '<button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#swnav" aria-label="Menu"><span class="navbar-toggler-icon"></span></button>' +
+    '<div class="collapse navbar-collapse" id="swnav"><ul class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">' + links + "</ul>" + cta + "</div></div></nav>";
+}
+function footerHTML(site, nav) {
+  const links = nav.map((n) => '<a class="link-secondary text-decoration-none me-3" href="' + esc(n.path === "/" ? "/" : n.path) + '">' + esc(n.title || n.path) + "</a>").join("");
+  return '<footer class="py-5 border-top mt-0"><div class="container d-md-flex justify-content-between align-items-center"><div class="fw-semibold mb-2 mb-md-0">' + esc(site.name || "") + "</div><div>" + links + '</div><div class="text-body-secondary small mt-2 mt-md-0">&copy; ' + new Date().getFullYear() + " " + esc(site.name || "") + "</div></div></footer>";
 }
 
 function pageHTML(data, host) {
-  const site = data.site || {}, page = data.page || {}, nav = Array.isArray(data.nav) ? data.nav : [];
-  const meta = page.meta || {}, theme = site.theme || {};
-  const primary = theme.primary || "#2f6bff", bg = theme.bg || "#ffffff", ink = theme.ink || "#16171c";
-  const font = theme.font || "Inter", radius = theme.radius != null ? theme.radius : 12;
-  const fontLink = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(font)}:wght@400;500;600;700;800&display=swap`;
-  const blocks = (Array.isArray(page.content) ? page.content : []).map(renderBlock).join("");
-  const navHtml = nav.map((n) => `<a href="${esc(n.path === "/" ? "/" : n.path)}"${n.path === page.path ? ' class="on"' : ""}>${esc(n.title || n.path)}</a>`).join("");
-  const title = esc(page.title || site.name || "");
-  const desc = esc(meta.description || "");
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>${desc ? `<meta name="description" content="${desc}">` : ""}
-<meta property="og:title" content="${title}">${desc ? `<meta property="og:description" content="${desc}">` : ""}${meta.ogImage ? `<meta property="og:image" content="${esc(meta.ogImage)}">` : ""}
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="${fontLink}">
-<style>
-:root{--pri:${esc(primary)};--bg:${esc(bg)};--ink:${esc(ink)};--rad:${Number(radius)}px;--muted:color-mix(in srgb,var(--ink) 60%,var(--bg))}
-*{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--ink);font-family:'${esc(font)}',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
-img{max-width:100%;display:block}a{color:var(--pri)}
-.b-wrap{max-width:1080px;margin:0 auto;padding:0 22px}
-.b-nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid color-mix(in srgb,var(--ink) 10%,var(--bg))}
-.b-nav-in{display:flex;align-items:center;gap:20px;height:62px}
-.b-nav .b-brand{font-weight:800;font-size:19px;letter-spacing:-.02em;margin-right:auto;color:var(--ink);text-decoration:none}
-.b-nav a{color:var(--ink);text-decoration:none;font-weight:500;font-size:15px;opacity:.8}.b-nav a:hover,.b-nav a.on{opacity:1;color:var(--pri)}
-.b-sec{padding:52px 0}.b-hero{padding:96px 0;color:var(--ink)}.b-hero.has-img{color:#fff}
-.b-hero-in h1{font-size:clamp(34px,6vw,60px);line-height:1.05;letter-spacing:-.03em;margin:0 0 14px;font-weight:800;text-wrap:balance}
-.b-lede{font-size:clamp(16px,2.2vw,20px);color:var(--muted);max-width:60ch;margin:0 auto 8px}.b-hero.has-img .b-lede{color:rgba(255,255,255,.9)}
-.b-align-center{text-align:center;margin-left:auto;margin-right:auto}.b-align-center .b-lede{margin-left:auto;margin-right:auto}.b-align-right{text-align:right}
-.b-eyebrow{font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--pri);margin-bottom:12px}
-.b-btns{display:flex;gap:12px;margin-top:24px;flex-wrap:wrap}.b-align-center .b-btns{justify-content:center}
-.b-btn{display:inline-block;background:var(--pri);color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:var(--rad);border:1px solid var(--pri)}
-.b-btn.ghost{background:transparent;color:var(--ink)}.b-hero.has-img .b-btn.ghost{color:#fff;border-color:#fff}
-.b-h2{font-size:clamp(26px,4vw,40px);letter-spacing:-.02em;margin:0 0 10px;font-weight:700;text-wrap:balance}
-.b-grid{display:grid;grid-template-columns:repeat(var(--cols,3),1fr);gap:18px;margin-top:26px}
-@media(max-width:760px){.b-grid{grid-template-columns:1fr}}
-.b-card{background:color-mix(in srgb,var(--ink) 3%,var(--bg));border:1px solid color-mix(in srgb,var(--ink) 10%,var(--bg));border-radius:var(--rad);padding:22px}
-.b-card-ic{font-size:26px;margin-bottom:10px}.b-card h3{margin:0 0 6px;font-size:18px}.b-card p{margin:0;color:var(--muted)}
-.b-cta{background:color-mix(in srgb,var(--pri) 8%,var(--bg))}
-.b-rich{max-width:72ch;margin:0 auto}.b-fig{margin:0}.b-fig figcaption{color:var(--muted);font-size:13px;margin-top:8px;text-align:center}
-.b-formwrap{max-width:560px;margin:0 auto}.b-form{display:grid;gap:14px}.b-fld{display:grid;gap:6px;font-size:14px;font-weight:500}
-.b-fld input,.b-fld textarea{font:inherit;padding:11px 13px;border:1px solid color-mix(in srgb,var(--ink) 20%,var(--bg));border-radius:var(--rad);background:var(--bg);color:var(--ink)}
-.b-form-msg{margin:0;font-size:14px;color:var(--pri)}
-.b-foot{padding:40px 0;border-top:1px solid color-mix(in srgb,var(--ink) 10%,var(--bg));color:var(--muted);font-size:13px}
-</style></head><body>
-<nav class="b-nav"><div class="b-wrap b-nav-in"><a class="b-brand" href="/">${esc(site.name || "")}</a>${navHtml}</div></nav>
-<main>${blocks || `<section class="b-sec"><div class="b-wrap"><p class="b-lede">This page has no content yet.</p></div></section>`}</main>
-<footer class="b-foot"><div class="b-wrap">&copy; ${new Date().getFullYear()} ${esc(site.name || "")}</div></footer>
-<script>(function(){var SUPA=${JSON.stringify(SUPA)},ANON=${JSON.stringify(ANON)},HOST=${JSON.stringify(host)};
-document.querySelectorAll('form.b-form').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v;});var msg=f.querySelector('.b-form-msg');
-fetch(SUPA+'/rest/v1/rpc/site_form_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':'Bearer '+ANON},body:JSON.stringify({p_host:HOST,p_form:f.getAttribute('data-form'),p_data:d})}).then(function(r){return r.json();}).then(function(){f.reset();if(msg){msg.hidden=false;msg.textContent='Thanks - your message was sent.';}}).catch(function(){if(msg){msg.hidden=false;msg.textContent='Sorry, that did not send. Please try again.';}});});});})();</script>
-</body></html>`;
+  const site = data.site || {}, page = data.page || {}, nav = arr(data.nav);
+  const theme = site.theme || {}, meta = page.meta || {};
+  const font = theme.font || "Inter";
+  const fontLink = "https://fonts.googleapis.com/css2?family=" + encodeURIComponent(font) + ":wght@400;500;600;700;800&display=swap";
+  const blocks = arr(page.content).map(renderBlock).join("");
+  const title = esc(page.title || site.name || ""), desc = esc(meta.description || "");
+  const hideChrome = page.chrome === false || meta.chrome === false;
+  return "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">" +
+    "<title>" + title + "</title>" + (desc ? '<meta name="description" content="' + desc + '">' : "") +
+    '<meta property="og:title" content="' + title + '">' + (desc ? '<meta property="og:description" content="' + desc + '">' : "") + (meta.ogImage ? '<meta property="og:image" content="' + esc(meta.ogImage) + '">' : "") +
+    '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>' +
+    '<link rel="stylesheet" href="' + fontLink + '"><link rel="stylesheet" href="' + BOOTSTRAP_CSS + '"><link rel="stylesheet" href="' + BOOTSTRAP_ICONS + '">' +
+    "<style>" + themeCss(theme) + "</style></head><body>" +
+    (hideChrome ? "" : navHTML(site, page, nav)) +
+    "<main>" + (blocks || '<section class="py-6"><div class="container text-center text-body-secondary">This page has no content yet.</div></section>') + "</main>" +
+    (hideChrome ? "" : footerHTML(site, nav)) +
+    '<script src="' + BOOTSTRAP_JS + '"></script>' +
+    "<script>(function(){var SUPA=" + JSON.stringify(SUPA) + ",ANON=" + JSON.stringify(ANON) + ",HOST=" + JSON.stringify(host) + ";" +
+    "document.querySelectorAll('form.sw-form').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v;});var m=f.querySelector('.sw-form-msg');var btn=f.querySelector('button[type=submit]');if(btn)btn.disabled=true;" +
+    "fetch(SUPA+'/rest/v1/rpc/site_form_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':'Bearer '+ANON},body:JSON.stringify({p_host:HOST,p_form:f.getAttribute('data-form'),p_data:d})}).then(function(r){return r.json();}).then(function(){f.reset();if(m){m.hidden=false;m.className='sw-form-msg small mt-2 text-success';m.textContent='Thanks - your message was sent.';}}).catch(function(){if(m){m.hidden=false;m.className='sw-form-msg small mt-2 text-danger';m.textContent='Sorry, that did not send. Please try again.';}}).finally(function(){if(btn)btn.disabled=false;});});});" +
+    "})();</script>" +
+    // ERP widgets (careers etc.) hydrate from the public read endpoint on the same origin.
+    (blocks.indexOf('class="sw-erp"') >= 0 ? '<script src="/embed/erp.js" data-host="' + esc(host) + '"></script>' : "") +
+    "</body></html>";
 }
 
 function notFound(host) {
-  return `<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Not found</title><body style="font-family:system-ui;display:grid;place-items:center;height:90vh;margin:0;color:#444;text-align:center"><div><h1 style="font-size:60px;margin:0">404</h1><p>No published page here${host ? " for <b>" + esc(host) + "</b>" : ""}.</p></div></body>`;
+  return '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Not found</title><body style="font-family:system-ui;display:grid;place-items:center;height:90vh;margin:0;color:#444;text-align:center"><div><h1 style="font-size:60px;margin:0">404</h1><p>No published page here' + (host ? " for <b>" + esc(host) + "</b>" : "") + ".</p></div></body>";
 }
 
 // The one entry point: resolve host+path and return a ready Response.
