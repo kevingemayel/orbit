@@ -861,6 +861,7 @@
         { label: "Panel Tracking", action: "mfg.panels" },
         { label: "Production Runs", action: "mfg.runs" },
         { label: "Bills of Materials", action: "mfg.boms" },
+        { label: "Dies", action: "mfg.dies" },
         { label: "Delivery Notes", action: "dn.list" },
         { label: "Products", action: "products" }
       ]
@@ -1045,7 +1046,7 @@
     "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights",
-    "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "dn.list": "inventory",
+    "tools.list": "site", "proj.materials": "project", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
     "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint"
@@ -2490,6 +2491,7 @@
       case "tools.list": return renderList(cfgTools());
       case "proj.materials": return renderList(cfgProjectItems());
       case "mfg.runs": return renderList(cfgRuns());
+      case "mfg.dies": return renderList(cfgDies());
       case "dn.list": return renderList(cfgDeliveryNotes());
       case "site.diary": return renderList(cfgSiteDiary());
       case "crm.pipe": return renderPipeline();
@@ -9244,6 +9246,54 @@
       '</tbody></table></div></div>';
   }
 
+  // ============================ MANUFACTURING: DIES ============================
+  function cfgDies() {
+    return {
+      title: "Dies", pageSize: 100,
+      fetch: function () { return sb.from("dies").select("*, products:product_id(name)").eq("company_id", S.company.id).order("die_no").then(function (r) { return r.data || []; }); },
+      searchText: function (d) { return (d.die_no || "") + " " + (d.name || "") + " " + (d.products ? d.products.name : "") + " " + (d.supplier || ""); },
+      columns: [
+        { label: "Die no.", get: function (d) { return '<b>' + esc(d.die_no || "/") + '</b>'; } },
+        { label: "Name", get: function (d) { return esc(d.name); } },
+        { label: "Profile", get: function (d) { return esc(d.products ? d.products.name : ""); } },
+        { label: "Cavities", num: true, get: function (d) { return d.cavities || 0; } },
+        { label: "Shots", num: true, get: function (d) { return Number(d.total_shots || 0); } },
+        { label: "Status", get: function (d) { return d.status === "retired" ? '<span class="badge draft">Retired</span>' : d.status === "repair" ? '<span class="badge unpaid">Repair</span>' : '<span class="badge paid">Active</span>'; } }
+      ],
+      filters: [{ label: "Active", test: function (d) { return (d.status || "active") === "active"; } }, { label: "In repair", test: function (d) { return d.status === "repair"; } }],
+      onOpen: function (d) { openDieModal(d); }, onNew: function () { openDieModal(null); }
+    };
+  }
+  async function openDieModal(d) {
+    d = d || {};
+    var prods = (await sb.from("products").select("id,name").eq("company_id", S.company.id).order("name").limit(1000)).data || [];
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>' + (d.id ? "Edit die" : "New die") + '</h3><div class="form">' +
+      '<div class="row2"><div><label>Die no.</label><input id="di-no" value="' + esc(d.die_no || "") + '" placeholder="e.g. D-1024"></div><div><label>Name</label><input id="di-name" value="' + esc(d.name || "") + '"></div></div>' +
+      '<div><label>Profile produced</label><select id="di-prod"><option value="">(none)</option>' + prods.map(function (p) { return '<option value="' + p.id + '"' + (d.product_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Cavities</label><input id="di-cav" type="number" value="' + (d.cavities != null ? d.cavities : 1) + '"></div><div><label>Weight per metre (kg)</label><input id="di-wpm" type="number" step="0.001" value="' + (d.weight_per_m || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Status</label><select id="di-status"><option value="active">Active</option><option value="repair">In repair</option><option value="retired">Retired</option></select></div><div><label>Total shots</label><input id="di-shots" type="number" step="1" value="' + (d.total_shots || 0) + '"></div></div>' +
+      '<div class="row2"><div><label>Location</label><input id="di-loc" value="' + esc(d.location || "") + '"></div><div><label>Supplier</label><input id="di-sup" value="' + esc(d.supplier || "") + '"></div></div>' +
+      (d.id ? '<div class="o-cf-head" style="margin:8px 0 2px">Log a production run</div><div class="row2"><div><label>Shots to add</label><input id="di-addshots" type="number" step="1" placeholder="e.g. 120"></div><div style="display:flex;align-items:flex-end"><button class="btn" id="di-logrun" style="width:100%">Add shots &amp; mark used today</button></div></div>' : '') +
+      '<div><label>Notes</label><textarea id="di-notes" rows="2">' + esc(d.notes || "") + '</textarea></div>' +
+      '</div><div class="foot"><button class="btn" id="di-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="di-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="di-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("di-status").value = d.status || "active";
+    document.getElementById("di-cancel").onclick = function () { m.remove(); };
+    var lr = document.getElementById("di-logrun"); if (lr) lr.onclick = async function () {
+      var add = parseFloat(gv("di-addshots")) || 0; if (!add) { toast("Enter shots to add"); return; }
+      var next = (Number(d.total_shots) || 0) + add;
+      await sb.from("dies").update({ total_shots: next, last_used_date: today() }).eq("id", d.id); d.total_shots = next;
+      document.getElementById("di-shots").value = next; document.getElementById("di-addshots").value = ""; toast("Logged " + add + " shots");
+    };
+    var del = document.getElementById("di-del"); if (del) del.onclick = async function () { await sb.from("dies").delete().eq("id", d.id); m.remove(); toast("Deleted"); renderView(); };
+    document.getElementById("di-save").onclick = async function () {
+      var row = { die_no: gv("di-no"), name: gv("di-name") || "Die", product_id: document.getElementById("di-prod").value || null, cavities: parseInt(gv("di-cav"), 10) || 1, weight_per_m: parseFloat(gv("di-wpm")) || 0, status: document.getElementById("di-status").value, total_shots: parseFloat(gv("di-shots")) || 0, location: gv("di-loc"), supplier: gv("di-sup"), notes: gv("di-notes") };
+      var r; if (d.id) r = await sb.from("dies").update(row).eq("id", d.id); else { row.company_id = S.company.id; r = await sb.from("dies").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView();
+    };
+  }
+
   // ============================ SITE OPS: SITE DIARY ============================
   function cfgSiteDiary() {
     return {
@@ -15954,13 +16004,14 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:14px"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    if (!_svcWeek) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); _svcWeek = n.toISOString().slice(0, 10); }
+    function _lym(dt) { return dt.getFullYear() + "-" + ("0" + (dt.getMonth() + 1)).slice(-2) + "-" + ("0" + dt.getDate()).slice(-2); }
+    if (!_svcWeek) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); _svcWeek = _lym(n); }
     var start = new Date(_svcWeek + "T00:00:00"); var end = new Date(start); end.setDate(end.getDate() + 7);
     var techs = await svcTechnicians(); var tById = {}; techs.forEach(function (m) { tById[m.id] = m.name; });
     var rows = (await sb.from("service_tickets").select("id,title,status,priority,partner_id,assigned_to,scheduled_at, partners:partner_id(name)").eq("company_id", S.company.id).gte("scheduled_at", start.toISOString()).lt("scheduled_at", end.toISOString()).order("scheduled_at")).data || [];
-    var days = []; for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(d.getDate() + i); days.push(d.toISOString().slice(0, 10)); }
+    var days = []; for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(d.getDate() + i); days.push(_lym(d)); }
     var lanes = techs.map(function (m) { return { id: m.id, name: m.name }; }); lanes.push({ id: "", name: "Unassigned" });
-    var byKey = {}; rows.forEach(function (r) { var k = (r.assigned_to || "") + "|" + (r.scheduled_at || "").slice(0, 10); (byKey[k] = byKey[k] || []).push(r); });
+    var byKey = {}; rows.forEach(function (r) { var k = (r.assigned_to || "") + "|" + (r.scheduled_at ? _lym(new Date(r.scheduled_at)) : ""); (byKey[k] = byKey[k] || []).push(r); });
     var dfmt = function (s) { var d = new Date(s + "T00:00:00"); return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][(d.getDay() + 6) % 7] + " " + (d.getMonth() + 1) + "/" + d.getDate(); };
     var body = document.getElementById("o-body");
     var head = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b style="font-size:15px">Technician schedule</b><div class="gap" style="flex:1"></div><button class="o-filtbtn" id="sc-prev">&larr;</button><button class="o-filtbtn" id="sc-today">This week</button><button class="o-filtbtn" id="sc-next">&rarr;</button><span class="muted" style="font-size:12px">' + dfmt(days[0]) + ' - ' + dfmt(days[6]) + '</span></div>';
@@ -15970,8 +16021,8 @@
           cell.map(function (r) { var pc = r.priority === "urgent" ? "var(--bad)" : r.priority === "high" ? "#c47d10" : "var(--app)"; return '<div class="sc-card" draggable="true" data-id="' + r.id + '" style="background:var(--panel2);border-left:3px solid ' + pc + ';border-radius:6px;padding:5px 7px;margin-bottom:4px;cursor:grab;font-size:12px"><b>' + esc((r.scheduled_at || "").slice(11, 16)) + '</b> ' + esc(r.title || "") + '<div class="muted" style="font-size:11px">' + esc(r.partners ? r.partners.name : "") + '</div></div>'; }).join("") +
           '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table></div>';
     body.innerHTML = head + grid + '<div class="sub" style="margin-top:8px">Drag a job to another technician or day to reschedule. Click a card to open the ticket.</div>';
-    document.getElementById("sc-prev").onclick = function () { var d = new Date(start); d.setDate(d.getDate() - 7); _svcWeek = d.toISOString().slice(0, 10); renderServiceSchedule(); };
-    document.getElementById("sc-next").onclick = function () { var d = new Date(start); d.setDate(d.getDate() + 7); _svcWeek = d.toISOString().slice(0, 10); renderServiceSchedule(); };
+    document.getElementById("sc-prev").onclick = function () { var d = new Date(start); d.setDate(d.getDate() - 7); _svcWeek = _lym(d); renderServiceSchedule(); };
+    document.getElementById("sc-next").onclick = function () { var d = new Date(start); d.setDate(d.getDate() + 7); _svcWeek = _lym(d); renderServiceSchedule(); };
     document.getElementById("sc-today").onclick = function () { _svcWeek = null; renderServiceSchedule(); };
     var dragId = null;
     body.querySelectorAll(".sc-card").forEach(function (c) {
