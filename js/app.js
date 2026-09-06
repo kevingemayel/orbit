@@ -3727,23 +3727,47 @@
     };
   }
   var PTYPE = { service: "Service", consumable: "Consumable", storable: "Storable Product" };
+  // A classification path (["Technal","Soleal","Fy 55"]) as one cell: leaf in bold, ancestors above it.
+  function clsCell(path) {
+    if (!path || !path.length) return '<span class="muted">-</span>';
+    var leaf = path[path.length - 1], up = path.slice(0, -1);
+    return (up.length ? '<div class="muted" style="font-size:11px">' + esc(up.join(" › ")) + '</div>' : "") + esc(leaf);
+  }
   function cfgProducts() {
     return {
       title: "Products", pageSize: 80, editTable: "products", archiveField: "is_active", nest: { parent: "parent_product_id" },
-      fetch: async function () { var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || []; await attachThumbs(rows, "product"); return rows; },
-      searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p.family || "") + " " + (s.material || "") + " " + (s.brand || "") + " " + (s.color || ""); },
+      fetch: async function () {
+        var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || [];
+        // Attach the classification paths so the list can show and group by them.
+        var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,tree").eq("org_id", S.company.org_id)).data || [];
+        var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; });
+        function path(id) { var out = [], cur = byId[id], g = 0; while (cur && g++ < 8) { out.unshift(cur.name); cur = cur.parent_id ? byId[cur.parent_id] : null; } return out; }
+        rows.forEach(function (p) { p._fam = path(p.family_node_id); p._typ = path(p.type_node_id); });
+        await attachThumbs(rows, "product"); return rows;
+      },
+      searchText: function (p) { var s = p.spec || {}; return (p.name || "") + " " + (p.default_code || "") + " " + (p.supplier_code || "") + " " + (p._fam || []).join(" ") + " " + (p._typ || []).join(" ") + " " + (s.material || "") + " " + (s.color || "") + " " + (p.origin_country || ""); },
       columns: [
         { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
         { label: "Reference", edit: { field: "default_code", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.default_code || "") + '</span>'; } },
         { label: "Name", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>' + ((p.spec && p.spec.material) ? '<div class="muted" style="font-size:11px">' + esc(p.spec.material) + ((p.spec.color) ? " &middot; " + esc(p.spec.color) : "") + '</div>' : ""); } },
-        { label: "Family", edit: { field: "family", type: "text" }, get: function (p) { return esc(p.family || ""); } },
+        { label: "Family (brand)", get: function (p) { return clsCell(p._fam); } },
+        { label: "Type", get: function (p) { return clsCell(p._typ); } },
         { label: "Form", get: function (p) { return p.material_form && p.material_form !== "generic" ? '<span class="badge">' + esc(matFormLabel(p.material_form)) + '</span>' : ""; } },
+        { label: "Origin", get: function (p) { return '<span class="muted">' + esc(p.origin_country || "") + '</span>'; } },
         { label: "Sales Price", num: true, edit: { field: "list_price", type: "number" }, get: function (p) { return money(p.list_price); } },
         { label: "Cost", num: true, edit: { field: "cost_price", type: "number" }, get: function (p) { return money(p.cost_price); } },
         { label: "Status", get: function (p) { return p.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
-      groupBy: [{ label: "Family", get: function (p) { return p.family || "Unclassified"; } }, { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } }, { label: "Type", get: function (p) { return PTYPE[p.type] || p.type; } }],
+      groupBy: [
+        { label: "Family (brand)", get: function (p) { return (p._fam || [])[0] || "Unclassified"; } },
+        { label: "Series", get: function (p) { return (p._fam || []).slice(0, 2).join(" › ") || "Unclassified"; } },
+        { label: "Type", get: function (p) { return (p._typ || [])[0] || "Unclassified"; } },
+        { label: "Subtype", get: function (p) { return (p._typ || []).slice(0, 2).join(" › ") || "Unclassified"; } },
+        { label: "Origin", get: function (p) { return p.origin_country || "Not set"; } },
+        { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } },
+        { label: "Goods / service", get: function (p) { return PTYPE[p.type] || p.type; } }
+      ],
       kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
       emptyHint: "Add the materials and products you buy and sell. Set each one's classification, unit and suppliers so quotes, POs and stock all use the same catalogue.",
       onOpen: function (p) { renderProductForm(p.id); },
@@ -4262,6 +4286,7 @@
   function sugSeedList(key) {
     if (key === "material") return (typeof MATERIAL_DENSITY === "object") ? Object.keys(MATERIAL_DENSITY) : [];
     if (key === "color") return ["RAL 9016", "RAL 9005", "RAL 7016", "RAL 9006", "Anodised silver", "Anodised bronze", "Clear", "Mill finish"];
+    if (key === "origin") return ["China", "Germany", "France", "Italy", "Spain", "Turkey", "India", "United Arab Emirates", "Saudi Arabia", "Lebanon", "United States", "United Kingdom"];
     return [];
   }
   function sugValues(key) {
@@ -4415,7 +4440,7 @@
   // ============================ SALES / PURCHASE ORDER FORM ============================
   // ---- searchable product picker (finds items by name, code, supplier code, classification, spec) ----
   function prodLabel(p) { return (p && p.default_code ? "[" + p.default_code + "] " : "") + (p ? p.name : ""); }
-  function prodSearchText(p) { var s = p.spec || {}; return [p.name, p.default_code, p.supplier_code, p.family, s.material, s.color, s.type, s.subtype, s.subfamily, s.brand, s.supplier].filter(Boolean).join(" ").toLowerCase(); }
+  function prodSearchText(p) { var s = p.spec || {}; return [p.name, p.default_code, p.supplier_code, p.family, p.origin_country, s.material, s.color, s.type, s.subtype, s.subfamily, s.brand, s.supplier].filter(Boolean).join(" ").toLowerCase(); }
   function prodComboHTML(cls, selected) {
     return '<div class="o-combo"><input class="o-combo-in" autocomplete="off" placeholder="Search item..." value="' + esc(selected ? prodLabel(selected) : "") + '"><input type="hidden" class="' + cls + '" value="' + (selected ? selected.id : "") + '"><div class="o-combo-menu" hidden></div></div>';
   }
@@ -5396,13 +5421,14 @@
   function rebuildItemCode(nodes) {
     var el = document.getElementById("pr-code"); if (!el || !_prCodeAuto) return;
     var codes = [];
-    ["fam", "typ"].forEach(function (pfx) { var leaf = deepestSel(pfx); if (leaf) nodePath(nodes, leaf).forEach(function (n) { if (n.code) codes.push(n.code); }); });
+    // Node codes already carry their ancestors (TEC-SOL-FY55), so take the deepest one per tree.
+    ["fam", "typ"].forEach(function (pfx) { var leaf = deepestSel(pfx); if (!leaf) return; var path = nodePath(nodes, leaf); var last = path[path.length - 1]; if (last && last.code) codes.push(last.code); });
     el.value = codes.join("-");
   }
   function msNum(id) { var e = document.getElementById(id); return e ? (parseFloat(e.value) || 0) : 0; }
   function msVal(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
   function msFmt(x, dp) { if (!isFinite(x)) return "-"; var f = dp == null ? 2 : dp; return (Math.round(x * Math.pow(10, f)) / Math.pow(10, f)).toLocaleString("en-US", { minimumFractionDigits: (f === 2 ? 2 : 0), maximumFractionDigits: f }); }
-  var _msHidePrice = false;   // true only in the product form: price lives in Suppliers & prices, not the material spec
+  var _msProductForm = false;   // true only in the product form (false for job take-off items): price lives in Suppliers & prices, and origin is a product-level field
   function materialSpecHTML(p, nodes) {
     nodes = nodes || [];
     var sp = (p && p.spec) || {}, form = p.material_form || "generic";
@@ -5410,15 +5436,16 @@
     var formSel = '<select id="ms-form">' + MATERIAL_FORMS.map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
     var noTree = !nodes.length ? '<div class="sub" style="margin:2px 0 10px">No classification tree yet. Build it in <b>Settings &rsaquo; Classification</b>, then choose from it here.</div>' : "";
     return '<div class="o-matspec"><div class="o-cf-head">Classification</div>' + noTree +
-      '<div class="ms-grid">' + treeSelects(nodes, "family", p.family_node_id, "fam", ["Family", "Subfamily", "Sub-subfamily"]) + '</div>' +
+      '<div class="sub" style="margin:2px 0 8px"><b>Family</b> is who makes it (brand &rsaquo; series &rsaquo; model). <b>Type</b> is what it is (material &rsaquo; group &rsaquo; part).</div>' +
+      '<div class="ms-grid">' + treeSelects(nodes, "family", p.family_node_id, "fam", ["Family (brand)", "Series", "Model"]) + '</div>' +
       '<div class="ms-grid" style="margin-top:10px">' + treeSelects(nodes, "type", p.type_node_id, "typ", ["Type", "Subtype", "Sub-subtype"]) + '</div>' +
       '<div class="o-cf-head" style="margin-top:16px">Material &amp; attributes</div>' +
       '<div class="o-groups"><div>' +
       fld("Material", '<select id="ms-material">' + matOpts + '</select>', "The substance it is made of; sets the density used to work out weight.") +
       fld("Colour", sug("ms-color", sp.color, "color", "e.g. RAL 9016"), "") +
       '</div><div>' +
-      fld("Brand", sug("ms-brand", sp.brand, "brand"), "") +
       fld("Supplier", sug("ms-supplier", sp.supplier, "supplier"), "") +
+      (_msProductForm ? fld("Country of origin", sug("pr-origin", p.origin_country, "origin", "e.g. Germany"), "Where the item is made. Useful for customs, for tenders that ask for origin, and for telling two otherwise identical items apart.") : "") +
       '</div></div>' +
       '<div class="ms-formrow"><label for="ms-form">Material form</label>' + formSel + '<span class="muted" style="font-size:12px">Pick the shape so the right measurements and price conversions appear.</span></div>' +
       '<div id="ms-dims"></div></div>';
@@ -5426,8 +5453,8 @@
   function matDimsHTML(form, sp) {
     var d = sp.dims || {};
     function f(id, label, val, unit) { return '<div class="ms-f"><label>' + label + (unit ? ' <span class="muted">(' + unit + ')</span>' : "") + '</label><input id="' + id + '" type="number" step="any" value="' + (val != null ? val : "") + '"></div>'; }
-    function basis(id, opts, cur) { if (_msHidePrice) return ""; return '<div class="ms-f"><label>Priced by</label><select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>'; }
-    var pval = _msHidePrice ? "" : f("ms-pval", "Price value", sp.pval, S.company.currency_code), out = '<div class="ms-out" id="ms-out"></div>';
+    function basis(id, opts, cur) { if (_msProductForm) return ""; return '<div class="ms-f"><label>Priced by</label><select id="' + id + '">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div>'; }
+    var pval = _msProductForm ? "" : f("ms-pval", "Price value", sp.pval, S.company.currency_code), out = '<div class="ms-out" id="ms-out"></div>';
     if (form === "bar") {
       return '<div class="ms-grid">' + f("ms-len", "Length per bar", d.len, "m") + f("ms-wpm", "Weight", d.wpm, "kg/m") +
         basis("ms-basis", [["kg", "Price per kg"], ["m", "Price per metre"], ["bar", "Price per bar"]], sp.basis || "kg") + pval + '</div>' + out;
@@ -5452,7 +5479,7 @@
       var units = [["L", "L"], ["ml", "ml"], ["gal", "Gallon"]];
       return '<div class="ms-grid">' + f("ms-vol", "Container size", d.vol) +
         '<div class="ms-f"><label>Unit</label><select id="ms-volunit">' + units.map(function (u) { return '<option value="' + u[0] + '"' + ((d.volunit || "L") === u[0] ? " selected" : "") + '>' + u[1] + '</option>'; }).join("") + '</select></div>' +
-        f("ms-batch", "Batch size", d.batch, "units") + (_msHidePrice ? "" : f("ms-pval", "Price per container", sp.pval, S.company.currency_code)) + '</div>' + out;
+        f("ms-batch", "Batch size", d.batch, "units") + (_msProductForm ? "" : f("ms-pval", "Price per container", sp.pval, S.company.currency_code)) + '</div>' + out;
     }
     if (form === "roll") {
       return '<div class="ms-grid">' + f("ms-rlen", "Roll length", d.rlen, "m") + f("ms-rwt", "Roll weight", d.rwt, "kg") +
@@ -5492,7 +5519,7 @@
       if (b3 === "kg") { pk3 = pv4; plm = L2 ? pv4 * wt2 / L2 : 0; pr = pv4 * wt2; } else if (b3 === "lm") { plm = pv4; pk3 = wt2 ? pv4 * L2 / wt2 : 0; pr = pv4 * L2; } else { pr = pv4; pk3 = wt2 ? pv4 / wt2 : 0; plm = L2 ? pv4 / L2 : 0; }
       cost = pr; html = chip("Weight", msFmt(wt2), "kg") + chip("Length", msFmt(L2), "m") + chip(cc + "/kg", msFmt(pk3)) + chip(cc + "/lm", msFmt(plm)) + chip(cc + "/roll", msFmt(pr)); if (L2 > 0) packNote = "Counted in rolls · 1 roll = " + msFmt(L2, 3) + " m in stock";
     } else { out.innerHTML = ""; return; }
-    if (_msHidePrice) { out.innerHTML = (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "") + '<div class="sub" style="margin-top:6px;font-size:12px">Price is set per supplier in <b>Suppliers &amp; prices</b> below.</div>'; return; }
+    if (_msProductForm) { out.innerHTML = (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "") + '<div class="sub" style="margin-top:6px;font-size:12px">Price is set per supplier in <b>Suppliers &amp; prices</b> below.</div>'; return; }
     out.innerHTML = html + (packNote ? '<div class="ms-pack" style="margin-top:6px;font-size:12px;color:var(--ink2)">' + packNote + '</div>' : "");
     if (cost != null && isFinite(cost) && cost > 0) { var c = document.getElementById("pr-cost"); if (c) c.value = Math.round(cost * 10000) / 10000; }
   }
@@ -5516,7 +5543,7 @@
   }
   function collectMatSpec() {
     var fe = document.getElementById("ms-form"); if (!fe) return { material_form: null, family_node_id: null, type_node_id: null, spec: {} };
-    var spec = { material: msVal("ms-material"), color: msVal("ms-color"), brand: msVal("ms-brand"), supplier: msVal("ms-supplier") };
+    var spec = { material: msVal("ms-material"), color: msVal("ms-color"), supplier: msVal("ms-supplier") };   // brand is the Family tree now, not free text
     var dims = {};
     ["len", "wpm", "w", "h", "t", "density", "vol", "batch", "rlen", "rwt"].forEach(function (k) { var e = document.getElementById("ms-" + k); if (e && e.value !== "") dims[k] = parseFloat(e.value); });
     var vu = document.getElementById("ms-volunit"); if (vu) dims.volunit = vu.value;
@@ -5680,7 +5707,7 @@
     };
   }
   async function renderProductForm(id) {
-    _msHidePrice = true;   // product form: price comes from Suppliers & prices, not the material spec
+    _msProductForm = true;   // product form: price comes from Suppliers & prices, not the material spec
     mediaClearStage();
     var parent = { action: "products", title: "Products" };
     var main = document.getElementById("o-main");
@@ -5758,6 +5785,7 @@
       row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
       row.supplier_code = gv("pr-suppcode") || null;
       row.shelf_location = gv("pr-shelf") || null;
+      row.origin_country = gv("pr-origin") || null;
       var msp = collectMatSpec(); row.material_form = msp.material_form; row.spec = msp.spec;
       row.family_node_id = msp.family_node_id; row.type_node_id = msp.type_node_id;
       // denormalise the classification names onto the row/spec (so lists & reports need no join)
@@ -5770,7 +5798,7 @@
         var prefix = gv("pr-code");
         if (prefix) { var cnt = (await sb.from("products").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).ilike("default_code", prefix + "-%")).count || 0; row.default_code = prefix + "-" + ("00" + (cnt + 1)).slice(-3); }
       }
-      var _sp = msp.spec || {}; sugRemember("color", _sp.color); sugRemember("brand", _sp.brand); sugRemember("supplier", _sp.supplier);
+      var _sp = msp.spec || {}; sugRemember("color", _sp.color); sugRemember("supplier", _sp.supplier); sugRemember("origin", row.origin_country);
       var r;
       if (id === "new") { row.company_id = S.company.id; var _pins = await sb.from("products").insert(row).select("id").single(); if (_pins.error) { toast("Could not save: " + errMsg(_pins.error)); return; } await mediaFlush("product", _pins.data.id); }
       else { var gu = await guardedUpdate("products", row, id, p && p.updated_at); if (gu.conflict) { conflictToast("product"); return; } if (gu.error) { toast("Could not save: " + errMsg(gu.error)); return; } }
@@ -6224,7 +6252,7 @@
     };
   }
   async function renderProjectItemForm(id, seed) {
-    _msHidePrice = false;   // job take-off items keep their own price
+    _msProductForm = false;   // job take-off items keep their own price
     mediaClearStage();
     var parent = { action: "proj.materials", title: "Project Materials" };
     var main = document.getElementById("o-main");
@@ -11950,7 +11978,8 @@
       await loadTenantConfig(); toast("Terminology saved"); renderShell(); go("settings.terminology");
     };
   }
-  // ORB material classification: two managed 3-level trees (Family, Type). Products pick a
+  // ORB product classification: two managed 3-level trees. Family = who makes it
+  // (brand > series > model), Type = what it is (material > group > part). Products pick a
   // leaf in each; item codes are built from the node codes. This is the tree-view manager.
   async function renderClassification() {
     var main = document.getElementById("o-main");
@@ -11968,12 +11997,13 @@
     }
     function treeBox(tree, title) {
       var roots = kids(tree, null);
-      return '<div class="card" style="max-width:640px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">' + title + '</h3>' + (canEdit ? '<button class="o-filtbtn cls-addroot" data-tree="' + tree + '" style="margin-left:auto">+ Add ' + (tree === "family" ? "family" : "type") + '</button>' : '') + '</div>' +
-        (roots.length ? '<div class="cls-tree">' + roots.map(function (r) { return row(r, 0); }).join("") + '</div>' : '<div class="muted" style="padding:12px 0">Nothing here yet. Add the first ' + (tree === "family" ? "family" : "type") + '.</div>') + '</div>';
+      var word = tree === "family" ? "brand" : "type";
+      return '<div class="card" style="max-width:640px"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">' + title + '</h3>' + (canEdit ? '<button class="o-filtbtn cls-addroot" data-tree="' + tree + '" style="margin-left:auto">+ Add ' + word + '</button>' : '') + '</div>' +
+        (roots.length ? '<div class="cls-tree">' + roots.map(function (r) { return row(r, 0); }).join("") + '</div>' : '<div class="muted" style="padding:12px 0">Nothing here yet. Add the first ' + word + '.</div>') + '</div>';
     }
     document.getElementById("o-body").innerHTML = '<div style="padding:16px">' +
-      '<div class="sub" style="max-width:64ch;margin-bottom:14px">Two trees describe every product. The <b>Family</b> tree is what a thing is made of or belongs to (Aluminium &rsaquo; Extrusion &rsaquo; Mullion); the <b>Type</b> tree is a second axis you define. Give each node a short <b>code</b> - a product picks a leaf in each tree, and its item code is built from those codes. Products can then only choose from this tree, keeping everything tidy for reporting.</div>' +
-      treeBox("family", "Family tree") + '<div style="height:14px"></div>' + treeBox("type", "Type tree") + '</div>';
+      '<div class="sub" style="max-width:64ch;margin-bottom:14px">Two trees describe every product, and each answers a different question. <b>Family</b> is <b>who makes it</b>: brand &rsaquo; series &rsaquo; model, for example Technal &rsaquo; Soleal &rsaquo; Fy 55. <b>Type</b> is <b>what it is</b>: material &rsaquo; group &rsaquo; part, for example Aluminium &rsaquo; Aluminium Profiles &rsaquo; Glazing Bead. Give each node a short <b>code</b> - a product picks a leaf in each tree and its item code is built from those codes. Because a product can only choose from these trees, everyone enters the same thing the same way and the reports add up.</div>' +
+      treeBox("family", "Family tree (brand &rsaquo; series &rsaquo; model)") + '<div style="height:14px"></div>' + treeBox("type", "Type tree (what the item is)") + '</div>';
     function reload() { renderClassification(); }
     document.querySelectorAll(".cls-addroot").forEach(function (b) { b.onclick = function () { openNodeModal(null, b.dataset.tree, null, 0, reload); }; });
     document.querySelectorAll(".cls-add").forEach(function (b) { b.onclick = function () { openNodeModal(null, b.dataset.tree, b.dataset.parent, parseInt(b.dataset.depth, 10), reload); }; });
