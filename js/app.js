@@ -1254,8 +1254,16 @@
     manufacturing: ["manufacturing"], documents: ["documents"], site: ["site"], hr: ["hr"],
     insights: ["insights"], settings: ["settings"], contacts: ["start"], counter: ["accounting"],
     calendar: ["more"], sign: ["more"], recruitment: ["more"], knowledge: ["more"],
-    events: ["more"], appoint: ["more"]
+    events: ["more"], appoint: ["more"], plot: ["property"]
   };
+  // Anything not mapped above falls back to the generic overview chapter. That is
+  // fine for an app with no chapter of its own (pos, service, website, desk), but
+  // a MISSING entry for an app that HAS a chapter silently hides it - which is
+  // exactly what happened to Property. Guard it so it cannot happen again.
+  (function () {
+    var chapters = {}; HELP_MANUAL.forEach(function (s) { chapters[s.key] = 1; });
+    Object.keys(APPS).forEach(function (k) { if (!APP_HELP[k] && chapters[k]) APP_HELP[k] = [k]; });
+  })();
   Object.keys(APPS).forEach(function (k) {
     if (k === "help") return;
     var a = APPS[k]; if (!a || !a.menus) return;
