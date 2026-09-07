@@ -1042,7 +1042,9 @@
         { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"], ["Resident portal access", "portal.admin"]] },
         { label: "Money", items: [["Charges", "plot.charges"], ["Billing runs", "plot.runs"], ["Arrears", "plot.arrears"], ["Expenses", "plot.expenses"], ["Annual budget", "plot.budget"], ["Suppliers", "vend"]] },
         { label: "Works", items: [["Capital projects", "plot.projects"], ["Tasks", "plot.tasks"], ["Checklist", "plot.checklist"], ["Check-in log", "plot.checkins"]] },
-        { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"], ["Announcements", "plot.announce"], ["Documents", "plot.docs"]] }
+        { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"], ["Announcements", "plot.announce"], ["Documents", "plot.docs"], ["Committee &amp; roles", "plot.members"]] },
+        { label: "People", items: [["Residents", "plot.residents"], ["Resident portal access", "portal.admin"]] },
+        { label: "Reports", items: [["Building reports", "plot.reports"], ["Committee view", "plot.committee"], ["Activity log", "plot.activity"], ["Archive", "plot.archive"]] }
       ]
     },
     help: {
@@ -1080,7 +1082,8 @@
     "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint",
     "plot.dash": "plot", "plot.buildings": "plot", "plot.units": "plot", "plot.owners": "plot", "plot.tenancies": "plot", "plot.charges": "plot", "plot.runs": "plot", "plot.meetings": "plot", "plot.resolutions": "plot", "plot.notices": "plot", "plot.suggestions": "plot",
-    "plot.arrears": "plot", "plot.expenses": "plot", "plot.budget": "plot", "plot.projects": "plot", "plot.tasks": "plot", "plot.checklist": "plot", "plot.checkins": "plot", "plot.announce": "plot", "plot.docs": "plot"
+    "plot.arrears": "plot", "plot.expenses": "plot", "plot.budget": "plot", "plot.projects": "plot", "plot.tasks": "plot", "plot.checklist": "plot", "plot.checkins": "plot", "plot.announce": "plot", "plot.docs": "plot",
+    "plot.members": "plot", "plot.residents": "plot", "plot.reports": "plot", "plot.committee": "plot", "plot.activity": "plot", "plot.archive": "plot"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // Per-app help: instead of one big standalone Help app, every app carries its own
@@ -2695,6 +2698,12 @@
       case "plot.checkins": return renderList(cfgPlotCheckins());
       case "plot.announce": return renderList(cfgPlotAnnouncements());
       case "plot.docs": return renderList(cfgPlotDocuments());
+      case "plot.members": return renderList(cfgPlotMembers());
+      case "plot.residents": return renderList(cfgPlotResidents());
+      case "plot.reports": return renderPlotReports();
+      case "plot.committee": return renderPlotCommittee();
+      case "plot.activity": return renderList(cfgPlotActivity());
+      case "plot.archive": return renderPlotArchive();
       case "portal.admin": return renderList(cfgPortalAccess());
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
@@ -20216,15 +20225,15 @@
     var picker = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:16px"><label style="font-weight:600">Building</label><select id="pl-prop" style="max-width:320px">' +
       props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + (p.city ? " - " + esc(p.city) : "") + '</option>'; }).join("") + '</select><span class="gap" style="flex:1"></span><button class="o-filtbtn" id="pl-edit">Edit building</button></div>';
 
-    var units = (await sb.from("property_units").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
-    var charges = (await sb.from("property_charges").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
+    var units = (await sb.from("property_units").select("*").is("deleted_at", null).eq("property_id", cur).eq("is_active", true)).data || [];
+    var charges = (await sb.from("property_charges").select("*").is("deleted_at", null).eq("property_id", cur).eq("is_active", true)).data || [];
     // Posted only: a charge run creates drafts, and a draft is not money yet.
     var allInvs = (await sb.from("invoices").select("amount_total,amount_residual,state,move_type").eq("company_id", S.company.id).eq("property_id", cur).in("move_type", ["out_invoice", "out_refund"])).data || [];
     var invs = allInvs.filter(function (i) { return i.state === "posted" && i.move_type === "out_invoice"; });
     var draftCount = allInvs.filter(function (i) { return i.state === "draft" && i.move_type === "out_invoice"; }).length;
     var credits = allInvs.filter(function (i) { return i.state === "posted" && i.move_type === "out_refund"; }).reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
     // distinct owners, not ownership rows (a unit with co-owners is not 3 owners)
-    var ownRows = (await sb.from("property_ownerships").select("partner_id").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }).concat(["00000000-0000-0000-0000-000000000000"]))).data || [];
+    var ownRows = (await sb.from("property_ownerships").select("partner_id").is("deleted_at", null).eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }).concat(["00000000-0000-0000-0000-000000000000"]))).data || [];
     var ownerSet = {}; ownRows.forEach(function (o) { if (o.partner_id) ownerSet[o.partner_id] = 1; });
     var owners = Object.keys(ownerSet);
     var billed = invs.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
@@ -20237,7 +20246,7 @@
     var payablesDue = paidBills.reduce(function (s, x) { return s + Number(x.amount_residual || 0); }, 0);
     var fund = cashIn - cashOut;
     var b = plotBudgetCalc(charges, units, prop.reserve_percent);
-    var sug = (await sb.from("property_suggestions").select("id").eq("property_id", cur).eq("status", "new")).data || [];
+    var sug = (await sb.from("property_suggestions").select("id").is("deleted_at", null).eq("property_id", cur).eq("status", "new")).data || [];
     var sharesOk = Math.abs(b.totalShares - Number(prop.shares_total || 1000)) < 0.5 || b.totalShares === 0;
 
     body.innerHTML = picker +
@@ -20333,7 +20342,7 @@
     return {
       title: "Units", editTable: "property_units", archiveField: "is_active",
       fetch: async function () {
-        var rows = (await sb.from("property_units").select("*, properties(name)").eq("company_id", S.company.id).order("code")).data || [];
+        var rows = (await sb.from("property_units").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("code")).data || [];
         return rows;
       },
       searchText: function (u) { return (u.code || "") + " " + (u.block || "") + " " + ((u.properties && u.properties.name) || ""); },
@@ -20365,22 +20374,42 @@
       '<div class="row2"><div><label>Shares (milliemes)</label><input id="pu-shares" type="number" step="0.01" value="' + (u.shares != null ? u.shares : "") + '"></div><div><label>Block shares</label><input id="pu-bshares" type="number" step="0.01" value="' + (u.block_shares != null ? u.block_shares : "") + '" placeholder="only if split within a block"></div></div>' +
       '<div class="row2"><div><label>Bedrooms</label><input id="pu-beds" type="number" step="1" value="' + (u.bedrooms != null ? u.bedrooms : "") + '"></div><div><label>Lot number</label><input id="pu-lot" value="' + esc(u.lot_number || "") + '" placeholder="cadastral lot"></div></div>' +
       '<div><label>Voting</label><select id="pu-vote"><option value="0"' + (!u.voting_excluded ? " selected" : "") + '>Votes normally</option><option value="1"' + (u.voting_excluded ? " selected" : "") + '>Excluded from voting</option></select><div class="muted" style="font-size:12px;margin-top:3px">An excluded unit still pays charges but carries no weight in owner votes.</div></div>' +
-      '<div><label>Notes</label><textarea id="pu-notes" rows="2">' + esc(u.notes || "") + '</textarea></div>';
+      '<div><label>Notes</label><textarea id="pu-notes" rows="2">' + esc(u.notes || "") + '</textarea></div>' +
+      (u.id ? '<div id="pu-hist" style="margin-top:6px"></div>' : '');
     var m = plotModal(u.id ? "Edit unit" : "New unit", inner, async function () {
       var code = gv("pu-code"); if (!code) { toast("Enter a unit code"); return; }
       var row = { company_id: S.company.id, property_id: gv("pu-prop"), code: code, kind: gv("pu-kind"), floor: gv("pu-floor") || null, block: gv("pu-block") || null, area_m2: gv("pu-area") ? Number(gv("pu-area")) : null, shares: Number(gv("pu-shares")) || 0, block_shares: Number(gv("pu-bshares")) || 0, bedrooms: gv("pu-beds") ? parseInt(gv("pu-beds"), 10) : null, lot_number: gv("pu-lot") || null, voting_excluded: gv("pu-vote") === "1", notes: gv("pu-notes") || null };
       var r = u.id ? await sb.from("property_units").update(row).eq("id", u.id) : await sb.from("property_units").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      m.remove(); toast("Saved"); renderView();
+      m.remove(); toast("Saved"); plotLog(u.id ? "updated" : "created", "property_units", u.id, code); renderView();
     }, true);
-    if (u.id) plotAddDelete(m, "property_units", u.id, u.code);
+    if (u.id) { plotAddDelete(m, "property_units", u.id, u.code); loadUnitHistory(u, m); }
+  }
+  // Who has owned and rented this unit, and the button to sell it on.
+  async function loadUnitHistory(u, modal) {
+    var box = document.getElementById("pu-hist"); if (!box) return;
+    var owns = (await sb.from("property_ownerships").select("*, partners(name)").is("deleted_at", null).eq("unit_id", u.id).order("start_date", { ascending: false, nullsFirst: false })).data || [];
+    var tens = (await sb.from("property_tenancies").select("*, partners(name)").is("deleted_at", null).eq("unit_id", u.id).order("start_date", { ascending: false, nullsFirst: false })).data || [];
+    box.innerHTML = '<div class="o-cf-head">Ownership history</div>' +
+      (owns.length ? '<table class="o-list" style="margin-bottom:8px"><tbody>' + owns.map(function (o) {
+        var current = !o.end_date;
+        return '<tr><td><b>' + esc((o.partners && o.partners.name) || "-") + '</b>' + (o.is_primary && current ? ' <span class="badge paid">billed</span>' : '') + '</td>' +
+          '<td>' + esc(o.start_date || "-") + ' &rarr; ' + (current ? '<b>present</b>' : esc(o.end_date)) + '</td>' +
+          '<td class="num">' + (Number(o.share_pct || 100)) + '%</td>' +
+          '<td class="muted">' + esc(o.notes || "") + '</td></tr>';
+      }).join("") + '</tbody></table>' : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">No owner recorded yet.</div>') +
+      (tens.length ? '<div class="o-cf-head">Tenancies</div><table class="o-list" style="margin-bottom:8px"><tbody>' + tens.map(function (t) {
+        return '<tr><td><b>' + esc((t.partners && t.partners.name) || "-") + '</b></td><td>' + esc(t.start_date || "-") + ' &rarr; ' + esc(t.end_date || "present") + '</td><td class="num">' + moneyC(t.rent_amount) + '</td><td>' + esc(t.status) + '</td></tr>';
+      }).join("") + '</tbody></table>' : '') +
+      '<button class="o-filtbtn" id="pu-transfer">Sell / transfer this unit</button>';
+    document.getElementById("pu-transfer").onclick = function () { modal.remove(); openTransferModal(u); };
   }
 
   // ---- Ownerships ----
   function cfgOwnerships() {
     return {
       title: "Owners", editTable: "property_ownerships",
-      fetch: function () { return sb.from("property_ownerships").select("*, property_units(code, properties(name)), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_ownerships").select("*, property_units(code, properties(name)), partners(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (o) { return ((o.partners && o.partners.name) || "") + " " + ((o.property_units && o.property_units.code) || ""); },
       columns: [
         { label: "Owner", get: function (o) { return '<b>' + esc((o.partners && o.partners.name) || "-") + '</b>'; } },
@@ -20396,7 +20425,7 @@
   }
   async function openOwnershipModal(o) {
     o = o || {};
-    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var units = (await sb.from("property_units").select("id,code,properties(name)").is("deleted_at", null).eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var partners = await plotPartners();
     var inner =
       '<div><label>Unit</label>' + plotSel("po-unit", units, o.unit_id, "(pick a unit)", function (u) { return u.code + ((u.properties && u.properties.name) ? " - " + u.properties.name : ""); }) + '</div>' +
@@ -20417,7 +20446,7 @@
   function cfgTenancies() {
     return {
       title: "Tenancies", editTable: "property_tenancies",
-      fetch: function () { return sb.from("property_tenancies").select("*, property_units(code, properties(name)), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_tenancies").select("*, property_units(code, properties(name)), partners(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (tn) { return ((tn.partners && tn.partners.name) || "") + " " + ((tn.property_units && tn.property_units.code) || ""); },
       columns: [
         { label: "Tenant", get: function (tn) { return '<b>' + esc((tn.partners && tn.partners.name) || "-") + '</b>'; } },
@@ -20434,7 +20463,7 @@
   }
   async function openTenancyModal(tn) {
     tn = tn || {};
-    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var units = (await sb.from("property_units").select("id,code,properties(name)").is("deleted_at", null).eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var partners = await plotPartners();
     var inner =
       '<div class="row2"><div><label>Unit</label>' + plotSel("pt-unit", units, tn.unit_id, "(pick a unit)", function (u) { return u.code + ((u.properties && u.properties.name) ? " - " + u.properties.name : ""); }) + '</div><div><label>Tenant (contact)</label>' + plotSel("pt-partner", partners, tn.partner_id, "(pick a contact)") + '</div></div>' +
@@ -20457,7 +20486,7 @@
   function cfgPropertyCharges() {
     return {
       title: "Charges", editTable: "property_charges", archiveField: "is_active",
-      fetch: function () { return sb.from("property_charges").select("*, properties(name), partners(name)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_charges").select("*, properties(name), partners(name)").is("deleted_at", null).eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.name || "") + " " + plotCatLabel(c.category) + " " + ((c.properties && c.properties.name) || ""); },
       columns: [
         { label: "Charge", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
@@ -20482,7 +20511,7 @@
     var partners = await plotPartners();
     // real blocks from the units, so a scoped charge can never point at a block
     // that does not exist (which would bill nobody, silently)
-    var bu = (await sb.from("property_units").select("block").eq("property_id", pcur).eq("is_active", true)).data || [];
+    var bu = (await sb.from("property_units").select("block").is("deleted_at", null).eq("property_id", pcur).eq("is_active", true)).data || [];
     var blocks = []; bu.forEach(function (u) { var v = (u.block || "").trim(); if (v && blocks.indexOf(v) < 0) blocks.push(v); });
     blocks.sort();
     if (c.block && blocks.indexOf(c.block) < 0) blocks.push(c.block);
@@ -20509,7 +20538,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Billing runs") + '<div class="gap"></div><button class="o-filtbtn pri" id="pr-gen">Generate charges</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var runs = (await sb.from("property_charge_runs").select("*, properties(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(200)).data || [];
+    var runs = (await sb.from("property_charge_runs").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(200)).data || [];
     var body = document.getElementById("o-body");
     document.getElementById("pr-gen").onclick = async function () { var props = await plotProps(); if (!props.length) { toast("Add a building first"); return; } var cur = plotGetProp(); openChargeRunModal(props.filter(function (p) { return p.id === cur; })[0] || props[0]); };
     if (!runs.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No billing runs yet</div><div class="o-empty2-h">A run creates one invoice per unit for a period, splitting the building\'s charges across owners by share. Press Generate charges to make the first.</div></div>'; return; }
@@ -20522,11 +20551,11 @@
 
   async function openChargeRunModal(prop) {
     if (!prop) { toast("Pick a building"); return; }
-    var units = (await sb.from("property_units").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
-    var charges = (await sb.from("property_charges").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
+    var units = (await sb.from("property_units").select("*").is("deleted_at", null).eq("property_id", prop.id).eq("is_active", true)).data || [];
+    var charges = (await sb.from("property_charges").select("*").is("deleted_at", null).eq("property_id", prop.id).eq("is_active", true)).data || [];
     if (!units.length) { toast("This building has no units yet"); return; }
     if (!charges.length) { toast("This building has no charges to bill"); return; }
-    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").is("deleted_at", null).eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
     var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
     var b = plotBudgetCalc(charges, units, prop.reserve_percent);
     var billable = b.rows.filter(function (r) { return r.fee > 0.005; });
@@ -20545,7 +20574,7 @@
       var toBill = billable.filter(function (r) { return primaryByUnit[r.unit.id]; });
       if (!toBill.length) { toast("No units with an owner to bill"); return; }
       // guard against billing the same period twice
-      var dupe = (await sb.from("property_charge_runs").select("id,units_billed").eq("property_id", prop.id).eq("period", period2)).data || [];
+      var dupe = (await sb.from("property_charge_runs").select("id,units_billed").is("deleted_at", null).eq("property_id", prop.id).eq("period", period2)).data || [];
       if (dupe.length && !confirm(prop.name + " has already been billed for " + period2 + " (" + (dupe[0].units_billed || 0) + " unit(s)).\n\nGenerate a SECOND set of invoices for the same period?")) return;
       var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Generating...";
       // one run header, then a draft out_invoice + line per unit
@@ -20568,7 +20597,7 @@
   function cfgPlotMeetings() {
     return {
       title: "Meetings", editTable: "property_meetings",
-      fetch: function () { return sb.from("property_meetings").select("*, properties(name)").eq("company_id", S.company.id).order("meeting_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_meetings").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("meeting_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (mt) { return (mt.title || "") + " " + ((mt.properties && mt.properties.name) || ""); },
       columns: [
         { label: "Meeting", get: function (mt) { return '<b>' + esc(mt.title) + '</b>'; } },
@@ -20613,11 +20642,11 @@
   var PLOT_AUTH = { info: "For information", simple_majority: "Simple majority", two_thirds: "Two thirds", unanimous: "Unanimous" };
   async function loadMeetingItems(mt) {
     var box = document.getElementById("mt-items"); if (!box) return;
-    var items = (await sb.from("property_meeting_items").select("*").eq("meeting_id", mt.id).order("sort")).data || [];
+    var items = (await sb.from("property_meeting_items").select("*").is("deleted_at", null).eq("meeting_id", mt.id).order("sort")).data || [];
     var ids = items.map(function (i) { return i.id; });
     var votes = ids.length ? ((await sb.from("property_meeting_votes").select("item_id,choice,shares,voter_name").in("item_id", ids)).data || []) : [];
     // total voting weight in this building (units excluded from voting carry none)
-    var units = (await sb.from("property_units").select("shares,voting_excluded").eq("property_id", mt.property_id).eq("is_active", true)).data || [];
+    var units = (await sb.from("property_units").select("shares,voting_excluded").is("deleted_at", null).eq("property_id", mt.property_id).eq("is_active", true)).data || [];
     var totalShares = units.reduce(function (s, u) { return s + (u.voting_excluded ? 0 : Number(u.shares || 0)); }, 0);
     var byItem = {};
     votes.forEach(function (v) {
@@ -20680,7 +20709,7 @@
   function cfgPlotResolutions() {
     return {
       title: "Resolutions", editTable: "property_resolutions",
-      fetch: function () { return sb.from("property_resolutions").select("*, properties(name)").eq("company_id", S.company.id).order("decided_at", { ascending: false, nullsFirst: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_resolutions").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("decided_at", { ascending: false, nullsFirst: false }).then(function (r) { return r.data || []; }); },
       searchText: function (rz) { return (rz.title || "") + " " + ((rz.properties && rz.properties.name) || ""); },
       columns: [
         { label: "Resolution", get: function (rz) { return '<b>' + esc(rz.title) + '</b>'; } },
@@ -20717,7 +20746,7 @@
   function cfgPlotNotices() {
     return {
       title: "Overdue notices", editTable: "property_notices",
-      fetch: function () { return sb.from("property_notices").select("*, property_units(code), partners(name)").eq("company_id", S.company.id).order("notice_date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_notices").select("*, property_units(code), partners(name)").is("deleted_at", null).eq("company_id", S.company.id).order("notice_date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (n) { return ((n.partners && n.partners.name) || "") + " " + ((n.property_units && n.property_units.code) || ""); },
       columns: [
         { label: "Owner", get: function (n) { return '<b>' + esc((n.partners && n.partners.name) || "-") + '</b>'; } },
@@ -20734,7 +20763,7 @@
   }
   async function openNoticeModal(n) {
     n = n || {};
-    var units = (await sb.from("property_units").select("id,code,properties(name)").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var units = (await sb.from("property_units").select("id,code,properties(name)").is("deleted_at", null).eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var partners = await plotPartners();
     var props = await plotProps();
     var pcur = n.property_id || plotGetProp() || (props[0] && props[0].id);
@@ -20772,7 +20801,7 @@
   function cfgPlotSuggestions() {
     return {
       title: "Suggestions", editTable: "property_suggestions",
-      fetch: function () { return sb.from("property_suggestions").select("*, properties(name), property_units(code)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_suggestions").select("*, properties(name), property_units(code)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (s) { return (s.title || "") + " " + ((s.properties && s.properties.name) || ""); },
       columns: [
         { label: "Title", get: function (s) { return '<b>' + esc(s.title) + '</b>'; } },
@@ -20792,7 +20821,7 @@
     var props = await plotProps();
     if (!props.length) { toast("Add a building first"); return; }
     var pcur = s.property_id || plotGetProp() || props[0].id;
-    var units = (await sb.from("property_units").select("id,code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var units = (await sb.from("property_units").select("id,code").is("deleted_at", null).eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var inner =
       '<div class="row2"><div><label>Building</label>' + plotSel("sg-prop", props, pcur, null) + '</div><div><label>Type</label><select id="sg-type">' + [["suggestion", "Suggestion"], ["complaint", "Complaint"], ["request", "Request"]].map(function (tp) { return '<option value="' + tp[0] + '"' + (s.type === tp[0] ? " selected" : "") + '>' + tp[1] + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Unit (optional)</label>' + plotSel("sg-unit", units, s.unit_id, "(none)", function (u) { return u.code; }) + '</div><div><label>From (name)</label><input id="sg-name" value="' + esc(s.submitted_by_name || "") + '"></div></div>' +
@@ -20813,7 +20842,7 @@
   function cfgPlotAnnouncements() {
     return {
       title: "Announcements", editTable: "property_announcements",
-      fetch: function () { return sb.from("property_announcements").select("*, properties(name)").eq("company_id", S.company.id).order("pinned", { ascending: false }).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_announcements").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("pinned", { ascending: false }).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (a) { return (a.title || "") + " " + (a.body || ""); },
       columns: [
         { label: "Announcement", get: function (a) { return (a.pinned ? "&#128204; " : "") + '<b>' + esc(a.title) + '</b>'; } },
@@ -20846,7 +20875,7 @@
   function cfgPlotProjects() {
     return {
       title: "Capital projects", editTable: "property_projects",
-      fetch: function () { return sb.from("property_projects").select("*, properties(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_projects").select("*, properties(name), partners(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (p) { return (p.title || "") + " " + (p.description || ""); },
       columns: [
         { label: "Project", get: function (p) { return '<b>' + esc(p.title) + '</b>' + (p.is_public ? ' <span class="badge">Public</span>' : ''); } },
@@ -20885,7 +20914,7 @@
   }
   async function loadPlotBids(p, vendors) {
     var box = document.getElementById("pj-bids"); if (!box) return;
-    var bids = (await sb.from("property_bids").select("*, partners(name)").eq("project_id", p.id).order("amount")).data || [];
+    var bids = (await sb.from("property_bids").select("*, partners(name)").is("deleted_at", null).eq("project_id", p.id).order("amount")).data || [];
     box.innerHTML = '<div class="o-cf-head">Contractor bids</div>' +
       (bids.length ? '<table class="o-list" style="margin-bottom:8px"><thead><tr><th>Bidder</th><th class="num">Amount</th><th class="num">Days</th><th>Status</th><th></th></tr></thead><tbody>' +
         bids.map(function (b) {
@@ -20904,7 +20933,7 @@
     };
     box.querySelectorAll(".pj-award-btn").forEach(function (b) {
       b.onclick = async function () {
-        await sb.from("property_bids").update({ status: "rejected" }).eq("project_id", p.id);
+        await sb.from("property_bids").update({ status: "rejected" }).is("deleted_at", null).eq("project_id", p.id);
         await sb.from("property_bids").update({ status: "awarded" }).eq("id", b.dataset.id);
         await sb.from("property_projects").update({ status: "awarded", awarded_partner_id: b.dataset.partner || null, awarded_amount: Number(b.dataset.amt) || null }).eq("id", p.id);
         toast("Awarded"); loadPlotBids(p, vendors);
@@ -20912,14 +20941,14 @@
         var am = document.getElementById("pj-amt"); if (am) am.value = b.dataset.amt;
       };
     });
-    box.querySelectorAll(".pj-bid-del").forEach(function (b) { b.onclick = async function () { await sb.from("property_bids").delete().eq("id", b.dataset.id); loadPlotBids(p, vendors); }; });
+    box.querySelectorAll(".pj-bid-del").forEach(function (b) { b.onclick = async function () { await sb.from("property_bids").update({ deleted_at: new Date().toISOString(), deleted_by: (S.user && S.user.email) || "" }).eq("id", b.dataset.id); loadPlotBids(p, vendors); }; });
   }
 
   // ---- Committee tasks ----
   function cfgPlotTasks() {
     return {
       title: "Tasks", editTable: "property_tasks",
-      fetch: function () { return sb.from("property_tasks").select("*, properties(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_tasks").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (t) { return (t.title || "") + " " + (t.assignee_name || ""); },
       columns: [
         { label: "Task", get: function (t) { return '<b>' + esc(t.title) + '</b>'; } },
@@ -20958,7 +20987,7 @@
   function cfgPlotChecklist() {
     return {
       title: "Checklist", editTable: "property_checklist_items", archiveField: "is_active",
-      fetch: function () { return sb.from("property_checklist_items").select("*, properties(name)").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_checklist_items").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
       searchText: function (c) { return c.title || ""; },
       columns: [
         { label: "Item", get: function (c) { return '<b>' + esc(c.title) + '</b>'; } },
@@ -21009,7 +21038,7 @@
   function cfgPlotCheckins() {
     return {
       title: "Check-in log", editTable: "property_checkins",
-      fetch: function () { return sb.from("property_checkins").select("*, property_checklist_items(title), properties(name)").eq("company_id", S.company.id).order("done_at", { ascending: false }).limit(400).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_checkins").select("*, property_checklist_items(title), properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("done_at", { ascending: false }).limit(400).then(function (r) { return r.data || []; }); },
       searchText: function (c) { return (c.actor_name || "") + " " + ((c.property_checklist_items && c.property_checklist_items.title) || ""); },
       columns: [
         { label: "When", get: function (c) { return esc((c.done_at || "").slice(0, 16).replace("T", " ")); } },
@@ -21028,7 +21057,7 @@
   function cfgPlotDocuments() {
     return {
       title: "Documents", editTable: "property_documents",
-      fetch: function () { return sb.from("property_documents").select("*, properties(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("property_documents").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (d) { return (d.title || "") + " " + (d.category || ""); },
       columns: [
         { label: "Document", get: function (d) { return '<b>' + esc(d.title) + '</b>' + (d.is_public ? ' <span class="badge">Residents</span>' : ''); } },
@@ -21094,8 +21123,8 @@
   // as draft credit notes for review. Mirrors Plot's give-back.
   async function openGivebackModal(prop) {
     if (!prop) { toast("Pick a building"); return; }
-    var units = (await sb.from("property_units").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
-    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
+    var units = (await sb.from("property_units").select("*").is("deleted_at", null).eq("property_id", prop.id).eq("is_active", true)).data || [];
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").is("deleted_at", null).eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
     var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
     var totalShares = units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
     // Work out the surplus the way Plot did, instead of asking for a number:
@@ -21169,7 +21198,7 @@
     // credits already issued to an owner reduce what they really owe
     var refunds = (await sb.from("invoices").select("amount_residual,partner_id").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_refund").eq("state", "posted")).data || [];
     var creditBy = {}; refunds.forEach(function (r) { creditBy[r.partner_id] = (creditBy[r.partner_id] || 0) + Number(r.amount_residual || 0); });
-    var notices = (await sb.from("property_notices").select("partner_id,stage").eq("property_id", cur)).data || [];
+    var notices = (await sb.from("property_notices").select("partner_id,stage").is("deleted_at", null).eq("property_id", cur)).data || [];
     var lastStage = {}, noticeCount = {};
     notices.forEach(function (n) { lastStage[n.partner_id] = Math.max(lastStage[n.partner_id] || 0, n.stage || 0); noticeCount[n.partner_id] = (noticeCount[n.partner_id] || 0) + 1; });
     // group per UNIT: a debt belongs to a unit, and a notice names a unit
@@ -21250,7 +21279,7 @@
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
     var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
     var yr = new Date().getFullYear();
-    var buds = (await sb.from("property_budgets").select("*").eq("property_id", cur).order("year", { ascending: false })).data || [];
+    var buds = (await sb.from("property_budgets").select("*").is("deleted_at", null).eq("property_id", cur).order("year", { ascending: false })).data || [];
     // honour the year the user picked, instead of always snapping to the newest
     var bud = (_plotBudId && buds.filter(function (x) { return x.id === _plotBudId; })[0]) || buds[0];
     // the two toolbar buttons only make sense once a budget exists
@@ -21268,7 +21297,7 @@
       return;
     }
     var locked = bud.status === "approved";
-    var lines = (await sb.from("property_budget_lines").select("*").eq("budget_id", bud.id).order("sort").order("label")).data || [];
+    var lines = (await sb.from("property_budget_lines").select("*").is("deleted_at", null).eq("budget_id", bud.id).order("sort").order("label")).data || [];
     // actuals: posted bills for this property in the budget year
     var bills = (await sb.from("invoices").select("amount_total,invoice_date,property_category").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "in_invoice").gte("invoice_date", bud.year + "-01-01").lte("invoice_date", bud.year + "-12-31")).data || [];
     // actual spend per category, so each budget line gets a real variance
@@ -21313,7 +21342,7 @@
     document.getElementById("bd-line").onclick = function () { if (locked) { toast("This budget is approved - reopen it first"); return; } openBudgetLineModal(bud, null); };
     document.getElementById("bd-seed").onclick = async function () {
       if (locked) { toast("This budget is approved - reopen it first"); return; }
-      var charges = (await sb.from("property_charges").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
+      var charges = (await sb.from("property_charges").select("*").is("deleted_at", null).eq("property_id", cur).eq("is_active", true)).data || [];
       if (!charges.length) { toast("This building has no charges to copy"); return; }
       // don't duplicate lines that are already here
       var have = {}; lines.forEach(function (l) { have[(l.label || "").toLowerCase()] = true; });
@@ -21341,18 +21370,423 @@
     });
   }
 
-  // Shared Delete button for a Plot modal, FK-safe.
+  // ---- Building reports: the numbers a treasurer is asked for, printable
+  //      and exportable, computed from the building's own records.
+  async function plotReportData(propId) {
+    var prop = (await sb.from("properties").select("*").eq("id", propId).maybeSingle()).data || {};
+    var units = (await sb.from("property_units").select("*").is("deleted_at", null).eq("property_id", propId).eq("is_active", true).order("code")).data || [];
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary,partners(name)").is("deleted_at", null).eq("company_id", S.company.id).is("end_date", null)).data || [];
+    var ownerByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !ownerByUnit[o.unit_id]) ownerByUnit[o.unit_id] = (o.partners && o.partners.name) || ""; });
+    var inv = (await sb.from("invoices").select("number,invoice_date,due_date,amount_total,amount_residual,state,move_type,partner_id,property_unit_id,property_category,ref,partners(name),property_units(code)").eq("company_id", S.company.id).eq("property_id", propId)).data || [];
+    var pays = (await sb.from("payments").select("date,amount,method,payer_name,payer_type,memo").eq("company_id", S.company.id).eq("payment_type", "inbound").order("date", { ascending: false })).data || [];
+    var charges = (await sb.from("property_charges").select("*").is("deleted_at", null).eq("property_id", propId).eq("is_active", true)).data || [];
+    return { prop: prop, units: units, ownerByUnit: ownerByUnit, inv: inv, pays: pays, charges: charges };
+  }
+  async function renderPlotReports() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Building reports") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var props = await plotProps(), body = document.getElementById("o-body");
+    if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
+    var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
+    var REPS = [
+      ["statement", "Owner statement", "Every charge and payment for one owner, ready to send."],
+      ["collections", "Collections", "Who has paid and who has not, unit by unit."],
+      ["receivables", "Receivables ageing", "What is owed, grouped by how overdue it is."],
+      ["income", "Income & expenditure", "What came in and what went out over a period."],
+      ["expenses", "Expenses by category", "Where the building's money went."],
+      ["fund", "Fund movement", "Opening balance, receipts, payments, closing balance."],
+      ["budget", "Budget vs actual", "Each budget line against real spend."],
+      ["shares", "Units & shares", "The share register: every unit, owner and millieme."],
+      ["charges", "Charge schedule", "What each unit pays each period and why."],
+      ["arrears", "Arrears & notices", "Overdue balances with the notice stage reached."],
+      ["suppliers", "Supplier spend", "What was paid to whom."],
+      ["annual", "Annual summary", "One page for the general assembly."]
+    ];
+    body.innerHTML = '<div style="padding:12px 14px">' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><label style="font-weight:600">Building</label><select id="rp-prop" style="max-width:280px">' +
+      props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' +
+      '<label style="font-weight:600;margin-left:10px">From</label><input id="rp-from" type="date" value="' + (new Date().getFullYear() + "-01-01") + '" style="max-width:150px">' +
+      '<label style="font-weight:600">To</label><input id="rp-to" type="date" value="' + today() + '" style="max-width:150px"></div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">' +
+      REPS.map(function (r) {
+        return '<div class="card" style="padding:13px 15px"><div style="font-weight:700">' + esc(r[1]) + '</div><div class="muted" style="font-size:12.5px;margin:3px 0 9px">' + esc(r[2]) + '</div>' +
+          '<button class="o-filtbtn rp-run" data-k="' + r[0] + '" data-t="' + esc(r[1]) + '">Open</button>' +
+          '<button class="o-filtbtn rp-csv" data-k="' + r[0] + '" data-t="' + esc(r[1]) + '">Export CSV</button></div>';
+      }).join("") + '</div></div>';
+    document.getElementById("rp-prop").onchange = function () { plotSetProp(this.value); renderPlotReports(); };
+    function range() { return { from: gv("rp-from") || "1900-01-01", to: gv("rp-to") || today() }; }
+    body.querySelectorAll(".rp-run").forEach(function (b) { b.onclick = async function () { var d = await plotReportData(cur); plotShowReport(b.dataset.k, b.dataset.t, d, range()); }; });
+    body.querySelectorAll(".rp-csv").forEach(function (b) { b.onclick = async function () { var d = await plotReportData(cur); plotReportCsv(b.dataset.k, b.dataset.t, d, range()); }; });
+  }
+  // Build one report as {head:[], rows:[[]], totals:[]}
+  function plotReportBuild(kind, d, rg) {
+    var inRange = function (dt) { return dt && dt >= rg.from && dt <= rg.to; };
+    var out = { head: [], rows: [], note: "" };
+    var posted = d.inv.filter(function (i) { return i.state === "posted"; });
+    var sales = posted.filter(function (i) { return i.move_type === "out_invoice"; });
+    var bills = posted.filter(function (i) { return i.move_type === "in_invoice"; });
+    if (kind === "shares") {
+      out.head = ["Unit", "Owner", "Floor", "Block", "Area m2", "Shares", "Votes"];
+      out.rows = d.units.map(function (u) { return [u.code, d.ownerByUnit[u.id] || "", u.floor || "", u.block || "", u.area_m2 || "", u.shares || 0, u.voting_excluded ? "excluded" : "yes"]; });
+      out.note = "Total shares " + (Math.round(d.units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0) * 1000) / 1000) + " of " + (d.prop.shares_total || "");
+    } else if (kind === "charges") {
+      var b = plotBudgetCalc(d.charges, d.units, d.prop.reserve_percent);
+      out.head = ["Unit", "Owner", "Shares", "Charge per period"];
+      out.rows = b.rows.map(function (r) { return [r.unit.code, d.ownerByUnit[r.unit.id] || "", r.share, money(r.fee)]; });
+      out.note = "Building total " + moneyC(b.required) + " per period, including " + (d.prop.reserve_percent || 0) + "% reserve";
+    } else if (kind === "collections") {
+      var byUnit = {};
+      sales.forEach(function (i) { var k = i.property_unit_id || "?"; var t = byUnit[k] || (byUnit[k] = { billed: 0, out: 0, unit: (i.property_units && i.property_units.code) || "-", who: (i.partners && i.partners.name) || "" }); t.billed += Number(i.amount_total || 0); t.out += Number(i.amount_residual || 0); });
+      out.head = ["Unit", "Owner", "Billed", "Paid", "Outstanding", "Collected %"];
+      out.rows = Object.keys(byUnit).map(function (k) { var t = byUnit[k]; var paid = t.billed - t.out; return [t.unit, t.who, money(t.billed), money(paid), money(t.out), (t.billed > 0 ? Math.round(paid / t.billed * 100) : 0) + "%"]; });
+    } else if (kind === "receivables" || kind === "arrears") {
+      var td = today();
+      out.head = ["Unit", "Owner", "Invoice", "Due", "Outstanding", "Days overdue", "Bucket"];
+      out.rows = sales.filter(function (i) { return Number(i.amount_residual || 0) > 0.005; }).map(function (i) {
+        var days = i.due_date ? Math.floor((new Date(td) - new Date(i.due_date)) / 86400000) : 0;
+        var bucket = days <= 0 ? "Not due" : days <= 30 ? "1-30" : days <= 60 ? "31-60" : days <= 90 ? "61-90" : "90+";
+        return [(i.property_units && i.property_units.code) || "-", (i.partners && i.partners.name) || "", i.number, i.due_date || "", money(i.amount_residual), days > 0 ? days : 0, bucket];
+      });
+    } else if (kind === "income") {
+      var inc = sales.filter(function (i) { return inRange(i.invoice_date); }).reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+      var exp = bills.filter(function (i) { return inRange(i.invoice_date); }).reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+      out.head = ["Line", "Amount"];
+      out.rows = [["Charges billed to owners", money(inc)], ["Building expenses", money(exp)], ["Net", money(inc - exp)]];
+    } else if (kind === "expenses" || kind === "suppliers") {
+      var key = kind === "expenses" ? "property_category" : "partner";
+      var by = {};
+      bills.filter(function (i) { return inRange(i.invoice_date); }).forEach(function (i) {
+        var k = kind === "expenses" ? plotCatLabel(i.property_category) : ((i.partners && i.partners.name) || "(no supplier)");
+        by[k] = (by[k] || 0) + Number(i.amount_total || 0);
+      });
+      out.head = [kind === "expenses" ? "Category" : "Supplier", "Spent"];
+      out.rows = Object.keys(by).sort(function (a, b2) { return by[b2] - by[a]; }).map(function (k) { return [k, money(by[k])]; });
+    } else if (kind === "fund") {
+      var receipts = d.pays.filter(function (p) { return inRange(p.date); }).reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+      var paidOut = bills.reduce(function (s, i) { return s + (Number(i.amount_total || 0) - Number(i.amount_residual || 0)); }, 0);
+      out.head = ["Line", "Amount"];
+      out.rows = [["Opening balance", money(d.prop.opening_balance || 0)], ["Receipts from owners", money(receipts)], ["Paid to suppliers", money(paidOut)], ["Closing balance", money(Number(d.prop.opening_balance || 0) + receipts - paidOut)]];
+    } else if (kind === "statement") {
+      out.head = ["Date", "Unit", "Owner", "Document", "Charge", "Outstanding"];
+      out.rows = sales.sort(function (a, b2) { return (a.invoice_date || "") > (b2.invoice_date || "") ? 1 : -1; }).map(function (i) { return [i.invoice_date || "", (i.property_units && i.property_units.code) || "", (i.partners && i.partners.name) || "", i.number, money(i.amount_total), money(i.amount_residual)]; });
+      out.note = "Filter by owner in the CSV, or use the resident portal for an individual statement.";
+    } else if (kind === "budget") {
+      out.head = ["Category", "Spent"];
+      var byc = {}; bills.filter(function (i) { return inRange(i.invoice_date); }).forEach(function (i) { var k = plotCatLabel(i.property_category); byc[k] = (byc[k] || 0) + Number(i.amount_total || 0); });
+      out.rows = Object.keys(byc).map(function (k) { return [k, money(byc[k])]; });
+      out.note = "Compare against the lines on Money > Annual budget.";
+    } else if (kind === "annual") {
+      var incA = sales.filter(function (i) { return inRange(i.invoice_date); }).reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+      var expA = bills.filter(function (i) { return inRange(i.invoice_date); }).reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+      var outA = sales.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+      var bA = plotBudgetCalc(d.charges, d.units, d.prop.reserve_percent);
+      out.head = ["Line", "Amount"];
+      out.rows = [["Units", d.units.length], ["Total shares", Math.round(d.units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0) * 1000) / 1000],
+      ["Charge per period", money(bA.required)], ["Billed in period", money(incA)], ["Spent in period", money(expA)],
+      ["Still outstanding", money(outA)], ["Opening balance", money(d.prop.opening_balance || 0)]];
+    }
+    return out;
+  }
+  function plotShowReport(kind, title, d, rg) {
+    var rep = plotReportBuild(kind, d, rg);
+    var inner = '<div style="max-width:900px;margin:0 auto">' +
+      '<div style="border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:16px"><div style="font-size:20px;font-weight:800">' + esc(d.prop.name || "") + '</div>' +
+      '<div style="color:#555;font-size:13px">' + esc(title) + ' &middot; ' + esc(rg.from) + ' to ' + esc(rg.to) + '</div></div>' +
+      (rep.rows.length ? '<table style="border-collapse:collapse;width:100%;font-size:12.5px"><thead><tr>' + rep.head.map(function (h) { return '<th style="text-align:left;border-bottom:1px solid #333;padding:6px 8px">' + esc(h) + '</th>'; }).join("") + '</tr></thead><tbody>' +
+        rep.rows.map(function (r) { return '<tr>' + r.map(function (c) { return '<td style="border-bottom:1px solid #eee;padding:6px 8px">' + esc(c) + '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table>'
+        : '<p>Nothing to show for this period.</p>') +
+      (rep.note ? '<p style="color:#555;font-size:12.5px;margin-top:12px">' + esc(rep.note) + '</p>' : '') +
+      '<div style="margin-top:26px;color:#555;font-size:12px">Issued ' + esc(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })) + (d.prop.profile && d.prop.profile.treasurer_name ? ' &middot; ' + esc(d.prop.profile.treasurer_name) + ', treasurer' : '') + '</div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:30px;color:#16171c}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},300);}</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+  function plotReportCsv(kind, title, d, rg) {
+    var rep = plotReportBuild(kind, d, rg);
+    var esc2 = function (v) { var s = String(v == null ? "" : v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    var csv = [rep.head.map(esc2).join(",")].concat(rep.rows.map(function (r) { return r.map(esc2).join(","); })).join("\n");
+    var blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+    var a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = ((d.prop.name || "building") + "-" + title).replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    toast("CSV downloaded");
+  }
+
+  // ---- Committee view: the building's money without exposing a neighbour ----
+  async function renderPlotCommittee() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Committee view") + '<div class="gap"></div><button class="o-filtbtn" id="cm-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var props = await plotProps(), body = document.getElementById("o-body");
+    if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
+    var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
+    var d = await plotReportData(cur);
+    var posted = d.inv.filter(function (i) { return i.state === "posted"; });
+    var sales = posted.filter(function (i) { return i.move_type === "out_invoice"; });
+    var bills = posted.filter(function (i) { return i.move_type === "in_invoice"; });
+    var billed = sales.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
+    var outst = sales.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    var receipts = d.pays.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+    var paidOut = bills.reduce(function (s, i) { return s + (Number(i.amount_total || 0) - Number(i.amount_residual || 0)); }, 0);
+    var payable = bills.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    var fund = Number(d.prop.opening_balance || 0) + receipts - paidOut;
+    var b = plotBudgetCalc(d.charges, d.units, d.prop.reserve_percent);
+    var byCat = {}; bills.forEach(function (i) { var k = plotCatLabel(i.property_category); byCat[k] = (byCat[k] || 0) + Number(i.amount_total || 0); });
+    body.innerHTML = '<div style="padding:12px 14px">' +
+      '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><label style="font-weight:600">Building</label><select id="cm-prop" style="max-width:280px">' +
+      props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="o-note" style="margin-bottom:12px">Totals for the whole building. Individual owners\' balances are deliberately not shown here - use Arrears for that.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px">' +
+      plotStat("Fund balance", moneyC(fund), fund < 0 ? "warn" : "") +
+      plotStat("Collected", moneyC(receipts), "") +
+      plotStat("Still owed by owners", moneyC(outst), outst > 0 ? "warn" : "") +
+      plotStat("Owed to suppliers", moneyC(payable), payable > 0 ? "warn" : "") +
+      plotStat("Collection rate", (billed > 0 ? Math.round((billed - outst) / billed * 100) : 0) + "%", "") +
+      plotStat("Charge per period", moneyC(b.required), "") +
+      '</div>' +
+      '<div class="o-cf-head">Where the money went</div>' +
+      (Object.keys(byCat).length ? '<table class="o-list"><thead><tr><th>Category</th><th class="num">Spent</th></tr></thead><tbody>' +
+        Object.keys(byCat).sort(function (a, b2) { return byCat[b2] - byCat[a]; }).map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="num">' + moneyC(byCat[k]) + '</td></tr>'; }).join("") +
+        '</tbody></table>' : '<div class="muted" style="font-size:12.5px">No expenses recorded yet.</div>') + '</div>';
+    document.getElementById("cm-prop").onchange = function () { plotSetProp(this.value); renderPlotCommittee(); };
+    document.getElementById("cm-print").onclick = function () { window.print(); };
+  }
+
+  // ---- Committee & roles (per building, which company roles cannot express) ----
+  var PLOT_ROLE = { head: "Committee head", treasurer: "Treasurer", secretary: "Secretary", committee: "Committee member", property_manager: "Property manager", concierge: "Concierge", worker: "Worker", resident: "Resident" };
+  function cfgPlotMembers() {
+    return {
+      title: "Committee & roles", editTable: "property_members", archiveField: "is_active",
+      fetch: function () { return sb.from("property_members").select("*, properties(name), partners(name)").eq("company_id", S.company.id).order("role").then(function (r) { return r.data || []; }); },
+      searchText: function (m) { return (m.name || "") + " " + (m.role || "") + " " + ((m.partners && m.partners.name) || ""); },
+      columns: [
+        { label: "Person", get: function (m) { return '<b>' + esc((m.partners && m.partners.name) || m.name || "-") + '</b>'; } },
+        { label: "Role", get: function (m) { return '<span class="badge">' + esc(PLOT_ROLE[m.role] || m.role) + '</span>'; } },
+        { label: "Building", get: function (m) { return esc((m.properties && m.properties.name) || ""); } },
+        { label: "Term", get: function (m) { return esc((m.start_date || "") + (m.end_date ? " to " + m.end_date : "")); } },
+        { label: "Active", get: function (m) { return m.is_active ? '<span style="color:var(--good)">Active</span>' : '<span class="muted">Past</span>'; } }
+      ],
+      groupBy: [{ label: "Building", get: function (m) { return (m.properties && m.properties.name) || "-"; } }, { label: "Role", get: function (m) { return PLOT_ROLE[m.role] || m.role; } }],
+      emptyHint: "Who holds which office in this building - head, treasurer, secretary, concierge. Terms are kept so you can show who was responsible when.",
+      onNew: function () { openMemberModal(null); }, onOpen: function (m) { openMemberModal(m); }
+    };
+  }
+  async function openMemberModal(mb) {
+    mb = mb || {}; var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var partners = await plotPartners();
+    var inner = '<div class="row2"><div><label>Building</label>' + plotSel("mb-prop", props, mb.property_id || plotGetProp() || props[0].id, null) + '</div><div><label>Role</label><select id="mb-role">' +
+      Object.keys(PLOT_ROLE).map(function (k) { return '<option value="' + k + '"' + (mb.role === k ? " selected" : "") + '>' + PLOT_ROLE[k] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Person (contact)</label>' + plotSel("mb-partner", partners, mb.partner_id, "(or just type a name below)") + '</div>' +
+      '<div class="row2"><div><label>Name</label><input id="mb-name" value="' + esc(mb.name || "") + '"></div><div><label>Email</label><input id="mb-email" value="' + esc(mb.email || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Term from</label><input id="mb-start" type="date" value="' + esc(mb.start_date || "") + '"></div><div><label>Term to</label><input id="mb-end" type="date" value="' + esc(mb.end_date || "") + '"></div></div>' +
+      '<div><label>Notes</label><input id="mb-notes" value="' + esc(mb.notes || "") + '"></div>';
+    var m = plotModal(mb.id ? "Edit role" : "Add committee role", inner, async function () {
+      if (!gv("mb-partner") && !gv("mb-name")) { toast("Pick a contact or type a name"); return; }
+      var row = { company_id: S.company.id, property_id: gv("mb-prop"), partner_id: gv("mb-partner") || null, name: gv("mb-name") || null, email: gv("mb-email") || null, role: gv("mb-role"), start_date: gv("mb-start") || null, end_date: gv("mb-end") || null, notes: gv("mb-notes") || null };
+      var r = mb.id ? await sb.from("property_members").update(row).eq("id", mb.id) : await sb.from("property_members").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      plotLog(mb.id ? "updated" : "created", "property_members", mb.id, row.name || PLOT_ROLE[row.role]);
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (mb.id) plotAddDelete(m, "property_members", mb.id, mb.name || "this role");
+  }
+
+  // ---- Resident records ----
+  function cfgPlotResidents() {
+    return {
+      title: "Residents", editTable: "property_residents", archiveField: "is_active",
+      fetch: function () { return sb.from("property_residents").select("*, properties(name), property_units(code)").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
+      searchText: function (r) { return (r.name || "") + " " + (r.phone || "") + " " + (r.vehicle_plate || "") + " " + ((r.property_units && r.property_units.code) || ""); },
+      columns: [
+        { label: "Resident", get: function (r) { return '<b>' + esc(r.name || "-") + '</b>'; } },
+        { label: "Unit", get: function (r) { return esc((r.property_units && r.property_units.code) || ""); } },
+        { label: "Type", get: function (r) { return '<span class="badge">' + esc(r.resident_type || "") + '</span>'; } },
+        { label: "Phone", get: function (r) { return esc(r.phone || r.whatsapp || ""); } },
+        { label: "Occupants", num: true, get: function (r) { return r.occupants != null ? esc(r.occupants) : ""; } },
+        { label: "Vehicle", get: function (r) { return '<span class="muted">' + esc(r.vehicle_plate || "") + (r.parking_spot ? " / " + esc(r.parking_spot) : "") + '</span>'; } },
+        { label: "Moved in", get: function (r) { return esc(r.move_in || ""); } }
+      ],
+      groupBy: [{ label: "Building", get: function (r) { return (r.properties && r.properties.name) || "-"; } }, { label: "Type", get: function (r) { return r.resident_type || "-"; } }],
+      emptyHint: "Who actually lives in each unit, with an emergency contact and vehicle - what a concierge needs and an owner list cannot tell you.",
+      onNew: function () { openResidentModal(null); }, onOpen: function (r) { openResidentModal(r); }
+    };
+  }
+  async function openResidentModal(rs) {
+    rs = rs || {}; var props = await plotProps();
+    if (!props.length) { toast("Add a building first"); return; }
+    var pcur = rs.property_id || plotGetProp() || props[0].id;
+    var units = (await sb.from("property_units").select("id,code").is("deleted_at", null).eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var partners = await plotPartners();
+    var inner = '<div class="row2"><div><label>Building</label>' + plotSel("rs-prop", props, pcur, null) + '</div><div><label>Unit</label>' + plotSel("rs-unit", units, rs.unit_id, "(none)", function (u) { return u.code; }) + '</div></div>' +
+      '<div class="row2"><div><label>Name</label><input id="rs-name" value="' + esc(rs.name || "") + '"></div><div><label>They are the</label><select id="rs-type">' +
+      [["owner", "Owner"], ["tenant", "Tenant"], ["family", "Family member"], ["staff", "Staff"]].map(function (t) { return '<option value="' + t[0] + '"' + ((rs.resident_type || "owner") === t[0] ? " selected" : "") + '>' + t[1] + '</option>'; }).join("") + '</select></div></div>' +
+      '<div><label>Linked contact (optional)</label>' + plotSel("rs-partner", partners, rs.partner_id, "(none)") + '</div>' +
+      '<div class="row2"><div><label>Phone</label><input id="rs-phone" value="' + esc(rs.phone || "") + '"></div><div><label>WhatsApp</label><input id="rs-wa" value="' + esc(rs.whatsapp || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Email</label><input id="rs-email" value="' + esc(rs.email || "") + '"></div><div><label>People living there</label><input id="rs-occ" type="number" step="1" value="' + (rs.occupants != null ? rs.occupants : "") + '"></div></div>' +
+      '<div class="row2"><div><label>Moved in</label><input id="rs-in" type="date" value="' + esc(rs.move_in || "") + '"></div><div><label>Moved out</label><input id="rs-out" type="date" value="' + esc(rs.move_out || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Vehicle plate</label><input id="rs-plate" value="' + esc(rs.vehicle_plate || "") + '"></div><div><label>Parking spot</label><input id="rs-spot" value="' + esc(rs.parking_spot || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Emergency contact</label><input id="rs-en" value="' + esc(rs.emergency_name || "") + '"></div><div><label>Emergency phone</label><input id="rs-ep" value="' + esc(rs.emergency_phone || "") + '"></div></div>' +
+      '<div><label>Notes</label><textarea id="rs-notes" rows="2">' + esc(rs.notes || "") + '</textarea></div>';
+    var m = plotModal(rs.id ? "Edit resident" : "New resident", inner, async function () {
+      var nm = gv("rs-name"); if (!nm) { toast("Enter a name"); return; }
+      var row = { company_id: S.company.id, property_id: gv("rs-prop"), unit_id: gv("rs-unit") || null, partner_id: gv("rs-partner") || null, name: nm, resident_type: gv("rs-type"), phone: gv("rs-phone") || null, whatsapp: gv("rs-wa") || null, email: gv("rs-email") || null, occupants: gv("rs-occ") ? parseInt(gv("rs-occ"), 10) : null, move_in: gv("rs-in") || null, move_out: gv("rs-out") || null, vehicle_plate: gv("rs-plate") || null, parking_spot: gv("rs-spot") || null, emergency_name: gv("rs-en") || null, emergency_phone: gv("rs-ep") || null, notes: gv("rs-notes") || null };
+      var r = rs.id ? await sb.from("property_residents").update(row).eq("id", rs.id) : await sb.from("property_residents").insert(row);
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      plotLog(rs.id ? "updated" : "created", "property_residents", rs.id, nm);
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+    if (rs.id) plotAddDelete(m, "property_residents", rs.id, rs.name);
+  }
+
+  // ---- Sell / transfer a unit: close the old ownership, open the new one,
+  //      and settle who carries the arrears. Without this a sale overwrites the
+  //      past owner and the building loses its history.
+  async function openTransferModal(unit) {
+    var owners = (await sb.from("property_ownerships").select("*, partners(name)").is("deleted_at", null).eq("unit_id", unit.id).is("end_date", null)).data || [];
+    var cur = owners[0];
+    var partners = await plotPartners();
+    var debtRows = (await sb.from("invoices").select("amount_residual").eq("company_id", S.company.id).eq("property_unit_id", unit.id).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0)).data || [];
+    var debt = debtRows.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    var inner =
+      '<div class="o-note">Transferring <b>' + esc(unit.code) + '</b>' + (cur && cur.partners ? ' from <b>' + esc(cur.partners.name) + '</b>' : '') + '. The current owner is closed off with a sale date and kept in the history.</div>' +
+      '<div class="row2"><div><label>New owner</label>' + plotSel("tr-to", partners, null, "(pick a contact)") + '</div><div><label>Sale date</label><input id="tr-date" type="date" value="' + today() + '"></div></div>' +
+      '<div class="row2"><div><label>Sale price (optional)</label><input id="tr-price" type="number" step="0.01"></div><div><label>Outstanding on this unit</label><input value="' + esc(moneyC(debt)) + '" disabled></div></div>' +
+      (debt > 0.005 ? '<div><label>Who carries the ' + esc(moneyC(debt)) + ' outstanding?</label><select id="tr-debt"><option value="seller">The seller clears it (recommended)</option><option value="buyer">It passes to the buyer</option></select></div>' : '') +
+      '<div><label>Note</label><input id="tr-note" placeholder="e.g. sold, inherited"></div>';
+    var m = plotModal("Transfer unit " + unit.code, inner, async function (mm) {
+      var to = gv("tr-to"); if (!to) { toast("Pick the new owner"); return; }
+      var d = gv("tr-date") || today();
+      var carries = document.getElementById("tr-debt") ? gv("tr-debt") : "seller";
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Transferring...";
+      // close every current ownership on this unit
+      for (var i = 0; i < owners.length; i++) {
+        await sb.from("property_ownerships").update({ end_date: d, is_primary: false, sale_price: gv("tr-price") ? Number(gv("tr-price")) : null, notes: gv("tr-note") || null }).eq("id", owners[i].id);
+      }
+      var ins = await sb.from("property_ownerships").insert({ company_id: S.company.id, unit_id: unit.id, partner_id: to, share_pct: 100, is_primary: true, start_date: d, notes: gv("tr-note") || null });
+      if (ins.error) { toast(errMsg(ins.error)); btn.disabled = false; btn.textContent = "Save"; return; }
+      // if the debt passes to the buyer, re-point the unpaid invoices
+      if (carries === "buyer" && debt > 0.005) {
+        await sb.from("invoices").update({ partner_id: to }).eq("company_id", S.company.id).eq("property_unit_id", unit.id).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0);
+      }
+      plotLog("transferred", "property_units", unit.id, unit.code, "to " + ((partners.filter(function (p) { return p.id === to; })[0] || {}).name || "") + (debt > 0.005 ? "; " + moneyC(debt) + " carried by the " + carries : ""));
+      m.remove(); toast("Transferred");
+      plotClearanceDoc(unit, cur && cur.partners ? cur.partners.name : "", (partners.filter(function (p) { return p.id === to; })[0] || {}).name || "", d, carries === "seller" ? 0 : debt);
+      renderView();
+    }, true);
+  }
+  // The clearance certificate a buyer asks for: this unit owes nothing.
+  function plotClearanceDoc(unit, seller, buyer, dt, remaining) {
+    var c = S.company || {}, pr = (window.__plotProp || {});
+    var when = new Date(dt || today()).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    var clear = !(remaining > 0.005);
+    var inner = '<div style="max-width:640px;margin:0 auto">' +
+      '<div style="border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:22px"><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div></div>' +
+      '<h1 style="font-size:19px;margin:0 0 14px">Certificate of clearance</h1>' +
+      '<p>This is to certify that in respect of unit <b>' + esc(unit.code) + '</b>' + (unit.lot_number ? ' (lot ' + esc(unit.lot_number) + ')' : '') + ', transferred on <b>' + esc(when) + '</b>' +
+      (seller ? ' from <b>' + esc(seller) + '</b>' : '') + (buyer ? ' to <b>' + esc(buyer) + '</b>' : '') + ':</p>' +
+      (clear
+        ? '<p style="font-size:15px"><b>All building charges due on this unit have been settled in full.</b> The unit carries no outstanding balance to the syndicate as at the date of transfer.</p>'
+        : '<p style="font-size:15px"><b>An outstanding balance of ' + esc(moneyC(remaining)) + ' remains on this unit</b> and, by agreement recorded at transfer, passes to the incoming owner.</p>') +
+      '<p style="color:#333">This certificate is issued for the purpose of the transfer above and reflects the syndicate\'s records as at the date of issue.</p>' +
+      '<div style="margin-top:40px;display:flex;justify-content:space-between">' +
+      '<div><div style="border-top:1px solid #333;width:200px;padding-top:6px;color:#555;font-size:12.5px">Committee head</div></div>' +
+      '<div><div style="border-top:1px solid #333;width:200px;padding-top:6px;color:#555;font-size:12.5px">Treasurer</div></div></div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>Certificate of clearance</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.65}p{margin:10px 0}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+
+  // ---- Archive: restore or permanently remove what was deleted ----
+  var PLOT_SOFT = ["property_units", "property_ownerships", "property_tenancies", "property_charges", "property_meetings",
+    "property_resolutions", "property_notices", "property_suggestions", "property_announcements", "property_budgets",
+    "property_projects", "property_bids", "property_checklist_items", "property_documents", "property_tasks"];
+  var PLOT_TBL_LABEL = {
+    property_units: "Unit", property_ownerships: "Owner link", property_tenancies: "Tenancy", property_charges: "Charge",
+    property_meetings: "Meeting", property_resolutions: "Resolution", property_notices: "Notice", property_suggestions: "Suggestion",
+    property_announcements: "Announcement", property_budgets: "Budget", property_projects: "Project", property_bids: "Bid",
+    property_checklist_items: "Checklist item", property_documents: "Document", property_tasks: "Task"
+  };
+  function plotRowLabel(t, r) { return r.title || r.name || r.code || r.label || r.doc_number || ("record " + String(r.id).slice(0, 8)); }
+  async function renderPlotArchive() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Archive") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body"), out = [];
+    for (var i = 0; i < PLOT_SOFT.length; i++) {
+      var t = PLOT_SOFT[i];
+      var rows = (await sb.from(t).select("*").eq("company_id", S.company.id).not("deleted_at", "is", null).order("deleted_at", { ascending: false }).limit(100)).data || [];
+      rows.forEach(function (r) { out.push({ t: t, r: r }); });
+    }
+    out.sort(function (a, b) { return (b.r.deleted_at || "") > (a.r.deleted_at || "") ? 1 : -1; });
+    if (!out.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">Nothing in the archive</div><div class="o-empty2-h">Deleted property records are kept here so you can put them back. Nothing has been deleted yet.</div></div>'; return; }
+    body.innerHTML = '<div style="padding:12px 14px"><div class="o-note" style="margin-bottom:12px">Deleted records are kept so the building keeps its history. Restore puts one back; removing it permanently cannot be undone.</div>' +
+      '<table class="o-list"><thead><tr><th>What</th><th>Record</th><th>Deleted</th><th>By</th><th></th></tr></thead><tbody>' +
+      out.map(function (x) {
+        return '<tr><td>' + esc(PLOT_TBL_LABEL[x.t] || x.t) + '</td><td><b>' + esc(plotRowLabel(x.t, x.r)) + '</b></td><td>' + esc((x.r.deleted_at || "").slice(0, 16).replace("T", " ")) + '</td><td class="muted">' + esc(x.r.deleted_by || "") + '</td>' +
+          '<td class="right"><button class="o-filtbtn ar-restore" data-t="' + x.t + '" data-id="' + x.r.id + '">Restore</button><button class="o-filtbtn ar-purge" data-t="' + x.t + '" data-id="' + x.r.id + '" data-l="' + esc(plotRowLabel(x.t, x.r)) + '" style="color:var(--bad)">Remove for good</button></td></tr>';
+      }).join("") + '</tbody></table></div>';
+    body.querySelectorAll(".ar-restore").forEach(function (b) {
+      b.onclick = async function () {
+        var r = await sb.from(b.dataset.t).update({ deleted_at: null, deleted_by: null }).eq("id", b.dataset.id);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        plotLog("restored", b.dataset.t, b.dataset.id, null); toast("Restored"); renderPlotArchive();
+      };
+    });
+    body.querySelectorAll(".ar-purge").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm('Permanently remove "' + b.dataset.l + '"?\n\nThis cannot be undone.')) return;
+        var r = await sb.from(b.dataset.t).delete().eq("id", b.dataset.id);
+        if (r.error) { var msg = (r.error.message || "") + (r.error.details || ""); toast(/foreign key|referenced/i.test(msg) ? "Still used by other records - leave it archived." : errMsg(r.error)); return; }
+        plotLog("purged", b.dataset.t, b.dataset.id, b.dataset.l); toast("Removed"); renderPlotArchive();
+      };
+    });
+  }
+  function cfgPlotActivity() {
+    return {
+      title: "Activity log", pageSize: 200,
+      fetch: function () { return sb.from("property_activity").select("*, properties(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(500).then(function (r) { return r.data || []; }); },
+      searchText: function (a) { return (a.actor || "") + " " + (a.action || "") + " " + (a.label || "") + " " + (a.entity || ""); },
+      columns: [
+        { label: "When", get: function (a) { return esc((a.created_at || "").slice(0, 16).replace("T", " ")); } },
+        { label: "Who", get: function (a) { return esc(a.actor || ""); } },
+        { label: "Did", get: function (a) { return '<b>' + esc(a.action) + '</b>'; } },
+        { label: "What", get: function (a) { return esc(PLOT_TBL_LABEL[a.entity] || a.entity) + (a.label ? ' <span class="muted">' + esc(a.label) + '</span>' : ''); } },
+        { label: "Building", get: function (a) { return esc((a.properties && a.properties.name) || ""); } },
+        { label: "Detail", get: function (a) { return '<span class="muted">' + esc(a.detail || "") + '</span>'; } }
+      ],
+      emptyHint: "A running record of who changed what in the property module - useful when the committee is asked to account for a decision.",
+      onOpen: function () { toast("The activity log is a record and cannot be edited."); }
+    };
+  }
+
+  // Every Plot change is logged, so a committee can show who did what.
+  async function plotLog(action, entity, entityId, label, detail, propertyId) {
+    try {
+      await sb.from("property_activity").insert({
+        company_id: S.company.id, property_id: propertyId || plotGetProp() || null,
+        actor: (S.user && S.user.email) || "", action: action, entity: entity,
+        entity_id: entityId || null, label: label || null, detail: detail || null
+      });
+    } catch (e) { }
+  }
+  // Shared Delete for a Plot modal. Soft delete: the row is hidden and can be
+  // restored from the Archive, because a syndic has to be able to show history.
   function plotAddDelete(m, table, id, label) {
     var foot = m.querySelector(".foot");
     var del = document.createElement("button"); del.className = "btn"; del.style.color = "var(--bad)"; del.style.marginRight = "auto"; del.textContent = "Delete";
     del.onclick = async function () {
-      if (!confirm('Delete "' + (label || "this record") + '"? This cannot be undone.')) return;
-      var r = await sb.from(table).delete().eq("id", id);
-      if (r.error) { var msg = (r.error.message || "") + (r.error.details || ""); if (r.error.code === "23503" || /foreign key|still referenced|violates/i.test(msg)) { toast("This is used elsewhere - archive it instead."); return; } toast("Could not delete: " + errMsg(r.error)); return; }
-      m.remove(); toast("Deleted"); renderView();
+      if (!confirm('Delete "' + (label || "this record") + '"?\n\nIt is moved to the Archive, where you can restore it.')) return;
+      var r = await sb.from(table).update({ deleted_at: new Date().toISOString(), deleted_by: (S.user && S.user.email) || "" }).eq("id", id);
+      if (r.error) { toast("Could not delete: " + errMsg(r.error)); return; }
+      plotLog("deleted", table, id, label);
+      m.remove(); toast("Deleted - you can restore it from the Archive"); renderView();
     };
     foot.insertBefore(del, foot.firstChild);
   }
+  // Every Plot list must hide soft-deleted rows.
+  function plotLive(q) { return q.is("deleted_at", null); }
 
   // ---- start ----
   applyTheme();
