@@ -1,0 +1,119 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Orbit accessibility layer</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;background:#fbfbfa;color:#16171c}
+  h1{font-size:19px;margin:0 0 4px}
+  .sum{font-size:13px;margin:0 0 18px;font-weight:700}
+  .c{border:1px solid #e5e5e2;border-left:3px solid #ccc;border-radius:10px;padding:10px 14px;margin:7px 0;background:#fff}
+  .c.ok{border-left-color:#16a34a} .c.no{border-left-color:#dc2626;background:#fef4f4}
+  .n{font-weight:600} .d{font-size:12.5px;color:#555;font-family:ui-monospace,monospace;margin-top:2px}
+  .tag{float:right;font-size:11px;font-weight:700} .ok .tag{color:#16a34a} .no .tag{color:#dc2626}
+  #stage{position:absolute;left:-9999px;top:0}
+</style>
+<h1>Accessibility layer, running for real</h1>
+<p class="sum" id="sum">loading app.js...</p>
+<div id="out"></div>
+<div id="stage"></div>
+
+<!-- app.js needs these two before it will run at all -->
+<script>
+  window.cfg = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "test" };
+  var _noop = function () { return _chain; };
+  var _chain = new Proxy(function () { return _chain; }, {
+    get: function (t, k) {
+      if (k === "then") return function (res) { return Promise.resolve({ data: [], error: null, count: 0 }).then(res); };
+      return _chain;
+    },
+    apply: function () { return _chain; }
+  });
+  window.supabase = { createClient: function () { return _chain; } };
+</script>
+<script src="../js/app.js"></script>
+<script>
+(function () {
+  var results = [];
+  function t(name, fn) {
+    var r; try { r = fn(); } catch (e) { r = { ok: false, detail: e.message }; }
+    results.push({ name: name, ok: r.ok, detail: r.detail || "" });
+  }
+  var stage = document.getElementById("stage");
+  function mk(tag) { var e = document.createElement(tag); stage.appendChild(e); return e; }
+
+  t("a plain div given onclick becomes a button", function () {
+    var d = mk("div"); d.textContent = "Do the thing"; d.onclick = function () { };
+    return { ok: d.getAttribute("role") === "button" && d.getAttribute("tabindex") === "0",
+             detail: "role=" + d.getAttribute("role") + " tabindex=" + d.getAttribute("tabindex") };
+  });
+
+  t("Enter activates it", function () {
+    var d = mk("div"), fired = 0; d.textContent = "x"; d.onclick = function () { fired++; };
+    d.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    return { ok: fired === 1, detail: "handler fired " + fired + " time(s)" };
+  });
+
+  t("Space activates it", function () {
+    var d = mk("div"), fired = 0; d.textContent = "x"; d.onclick = function () { fired++; };
+    d.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    return { ok: fired === 1, detail: "handler fired " + fired + " time(s)" };
+  });
+
+  t("a real <button> is left alone", function () {
+    var b = mk("button"); b.textContent = "Save"; b.onclick = function () { };
+    return { ok: !b.getAttribute("role") && !b.hasAttribute("tabindex"),
+             detail: "role=" + b.getAttribute("role") + " tabindex=" + b.getAttribute("tabindex") };
+  });
+
+  t("an icon-only control borrows its title as a name", function () {
+    var d = mk("div"); d.setAttribute("title", "Change language"); d.onclick = function () { };
+    return { ok: d.getAttribute("aria-label") === "Change language", detail: "aria-label=" + d.getAttribute("aria-label") };
+  });
+
+  t("typing inside a promoted container is not hijacked", function () {
+    var d = mk("div"), fired = 0; d.textContent = "row"; d.onclick = function () { fired++; };
+    var i = document.createElement("input"); d.appendChild(i);
+    i.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    return { ok: fired === 0, detail: "outer handler fired " + fired + " time(s) (must be 0)" };
+  });
+
+  t("the onclick handler still works normally", function () {
+    var d = mk("div"), fired = 0; d.onclick = function () { fired++; };
+    var readBack = typeof d.onclick === "function";
+    d.click();
+    return { ok: fired === 1 && readBack, detail: "fired=" + fired + " readable=" + readBack };
+  });
+
+  t("a modal gets a dialog role, and Escape closes it", function (){ return { ok: false, detail: "async" }; });
+
+  function render() {
+    var pass = results.filter(function (r) { return r.ok; }).length;
+    var s = document.getElementById("sum");
+    s.textContent = pass + " of " + results.length + " passed";
+    s.style.color = pass === results.length ? "#16a34a" : "#dc2626";
+    document.getElementById("out").innerHTML = results.map(function (r) {
+      return '<div class="c ' + (r.ok ? "ok" : "no") + '"><span class="tag">' + (r.ok ? "PASS" : "FAIL") +
+        '</span><div class="n">' + r.name + '</div><div class="d">' + r.detail + '</div></div>';
+    }).join("");
+  }
+
+  // the modal check needs the MutationObserver to fire, so it finishes async
+  var m = document.createElement("div"); m.className = "modal on";
+  var closed = 0;
+  m.innerHTML = '<div class="sheet"><h3>Test dialog</h3><div class="form"><input id="tst-in"></div>' +
+                '<div class="foot"><button id="tst-cancel">Cancel</button></div></div>';
+  document.body.appendChild(m);
+  document.getElementById("tst-cancel").onclick = function () { closed++; m.remove(); };
+  setTimeout(function () {
+    var sheet = m.querySelector(".sheet");
+    var roled = sheet && sheet.getAttribute("role") === "dialog" && sheet.getAttribute("aria-modal") === "true";
+    var labelled = sheet && !!sheet.getAttribute("aria-labelledby");
+    m.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    var i = results.findIndex(function (r) { return r.name.indexOf("modal") >= 0; });
+    results[i] = { name: "a modal gets a dialog role, and Escape closes it", ok: roled && labelled && closed === 1,
+                   detail: "role/aria-modal=" + roled + " labelled=" + labelled + " escapeClosed=" + closed };
+    if (m.parentNode) m.remove();
+    render();
+  }, 120);
+  render();
+})();
+</script>

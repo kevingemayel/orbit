@@ -1,0 +1,21 @@
+name: checks
+
+# Runs on every push and pull request. No dependencies, no install step, no
+# secrets and no network: it only reads js/app.js and asserts structural
+# invariants, so it finishes in seconds and can never touch production.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Structural checks
+        run: node --test tests/

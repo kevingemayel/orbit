@@ -103,6 +103,109 @@
     document.getElementById("gt-x").onclick = function () { panel.style.display = "none"; };
     panel.querySelectorAll(".gt-lang").forEach(function (b) { b.onclick = function () { setLang(b.getAttribute("data-lang")); }; });
   }
+  // ===========================================================================
+  // ACCESSIBILITY LAYER
+  //
+  // Orbit builds most of its UI by assigning `el.onclick` to plain divs and
+  // spans. A mouse user gets a button; a keyboard or screen-reader user gets
+  // nothing at all - no tab stop, no role, no way to activate it. There are
+  // over a thousand such handlers, so rather than rewrite every call site this
+  // fixes them where they are created: assigning onclick is intercepted once on
+  // the prototype, and every element that gets a handler is promoted to a real
+  // button in the same breath. Natively interactive elements are left alone.
+  //
+  // The same layer gives modals a dialog role, a focus trap and Escape, and
+  // adds the skip link, because those are also single shared code paths.
+  // ===========================================================================
+  var A11Y_NATIVE = { BUTTON: 1, A: 1, INPUT: 1, SELECT: 1, TEXTAREA: 1, SUMMARY: 1, LABEL: 1, OPTION: 1, DETAILS: 1 };
+  function a11yPromote(el) {
+    try {
+      if (!el || el.nodeType !== 1 || el.__a11y) return;
+      if (A11Y_NATIVE[el.nodeName] || el.getAttribute("aria-hidden") === "true") return;
+      el.__a11y = 1;
+      if (!el.getAttribute("role")) el.setAttribute("role", "button");
+      if (!el.hasAttribute("tabindex")) el.setAttribute("tabindex", "0");
+      // An icon-only control has no accessible name; borrow the tooltip.
+      if (!el.getAttribute("aria-label") && !(el.textContent || "").trim()) {
+        var t = el.getAttribute("title"); if (t) el.setAttribute("aria-label", t);
+      }
+      el.addEventListener("keydown", function (e) {
+        if (e.target !== el) return;                       // let inner fields keep their keys
+        if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") { e.preventDefault(); el.click(); }
+      });
+    } catch (e) { }
+  }
+  (function () {
+    try {
+      var d = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "onclick");
+      if (!d || !d.set) return;
+      Object.defineProperty(HTMLElement.prototype, "onclick", {
+        configurable: true, enumerable: d.enumerable,
+        get: function () { return d.get.call(this); },
+        set: function (fn) { d.set.call(this, fn); if (fn) a11yPromote(this); }
+      });
+    } catch (e) { }
+  })();
+  // Modals: a dialog role, focus moved in and handed back, Tab kept inside, Escape out.
+  var A11Y_FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
+  function a11yDialog(m) {
+    if (!m || m.__a11yDlg) return;
+    m.__a11yDlg = 1;
+    var sheet = m.querySelector(".sheet") || m;
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    var h = sheet.querySelector("h3,h2");
+    if (h) { if (!h.id) h.id = "dlgh-" + Math.random().toString(36).slice(2, 8); sheet.setAttribute("aria-labelledby", h.id); }
+    var prev = document.activeElement;
+    var first = sheet.querySelector(A11Y_FOCUSABLE);
+    if (first) setTimeout(function () { try { first.focus(); } catch (e) { } }, 30);
+    function closer() {
+      var bs = sheet.querySelectorAll("button");
+      for (var i = 0; i < bs.length; i++) {
+        var id = bs[i].id || "", tx = (bs[i].textContent || "").trim().toLowerCase();
+        if (/-(cancel|close|x)$/.test(id) || tx === "cancel" || tx === "close") return bs[i];
+      }
+      return null;
+    }
+    m.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") { var c = closer(); if (c) { e.preventDefault(); c.click(); } return; }
+      if (e.key !== "Tab") return;
+      var f = [].filter.call(sheet.querySelectorAll(A11Y_FOCUSABLE), function (x) { return x.offsetParent !== null; });
+      if (!f.length) return;
+      var a = f[0], z = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); }
+      else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+    });
+    // hand focus back to whatever opened the dialog
+    var mo = new MutationObserver(function () {
+      if (!document.body.contains(m)) { mo.disconnect(); try { if (prev && prev.focus) prev.focus(); } catch (e) { } }
+    });
+    mo.observe(document.body, { childList: true, subtree: true });
+  }
+  (function a11yInit() {
+    function go() {
+      try {
+        // Skip link, so a keyboard user is not tabbed through the whole menu first.
+        if (!document.getElementById("o-skip")) {
+          var s = document.createElement("button");
+          s.id = "o-skip"; s.className = "o-skip"; s.textContent = "Skip to content";
+          s.onclick = function () { var m = document.getElementById("o-main"); if (m) { m.focus(); m.scrollIntoView(); } };
+          document.body.insertBefore(s, document.body.firstChild);
+        }
+        new MutationObserver(function (muts) {
+          for (var i = 0; i < muts.length; i++) {
+            var an = muts[i].addedNodes;
+            for (var j = 0; j < an.length; j++) {
+              var n = an[j]; if (!n || n.nodeType !== 1) continue;
+              if (n.classList && n.classList.contains("modal")) a11yDialog(n);
+              else if (n.querySelector) { var inner = n.querySelector(".modal"); if (inner) a11yDialog(inner); }
+            }
+          }
+        }).observe(document.body, { childList: true, subtree: true });
+      } catch (e) { }
+    }
+    if (document.body) go(); else document.addEventListener("DOMContentLoaded", go);
+  })();
   function orbitLockup() { return '<svg viewBox="0 0 285 110" role="img" aria-label="Orbit"><g transform="translate(0 5)"><path d="M 75.5 38.3 L 87.2 50 L 50 87.2 L 12.8 50 L 50 12.8 L 61.3 24.1" fill="none" stroke="currentColor" stroke-width="13" stroke-linejoin="miter"></path><rect x="42" y="42" width="16" height="16" fill="currentColor" transform="rotate(45 50 50)"></rect></g><text x="88" y="92" font-family="Onest, sans-serif" font-weight="800" font-size="98" letter-spacing="-2" fill="currentColor">rb&#305;t</text><circle cx="207" cy="18" r="10" fill="#2f6bff"></circle></svg>'; }
   var esc = function (s) { return (s == null ? "" : "" + s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); };
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
@@ -227,7 +330,9 @@
   var fmtD = function (d) { return d.getFullYear() + "-" + ("0" + (d.getMonth() + 1)).slice(-2) + "-" + ("0" + d.getDate()).slice(-2); };
   var parseD = function (s) { if (!s) return null; var p = String(s).slice(0, 10).split("-"); return new Date(+p[0], (+p[1]) - 1, +p[2]); };
   var isLocked = function (dateStr) { var ld = S.company && S.company.lock_date; return !!(ld && dateStr && String(dateStr).slice(0, 10) <= ld); };
-  function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
+  // aria-live so a screen reader hears the confirmation or error too - toasts are
+  // often the only feedback that a save worked.
+  function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.setAttribute("aria-live", "polite"); t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
   // ORB-16: turn raw database / API errors into plain language for toasts
   function errMsg(e) {
     var m = (e && (e.message || e.msg)) || (typeof e === "string" ? e : "") || "Something went wrong.";
@@ -2970,7 +3075,7 @@
   function defaultKanbanCard(cfg, r) {
     var cols = cfg.columns.filter(function (c) { return c.cls !== "thumbcol"; });
     var title = cols[0] ? htmlToText(cols[0].get(r)) : (r.name || r.number || r.id || "");
-    var img = r._thumb ? '<div class="o-card-img"><img src="' + r._thumb + '"></div>' : "";
+    var img = r._thumb ? '<div class="o-card-img"><img alt="" src="' + r._thumb + '"></div>' : "";
     var rows = "";
     cols.slice(1, 5).forEach(function (c) { var v = c.get(r); if (htmlToText(v)) rows += '<div class="r"><span class="k">' + esc(c.label) + '</span><span>' + v + '</span></div>'; });
     return img + '<div class="t">' + esc(title || "(untitled)") + '</div>' + rows;
@@ -3512,7 +3617,7 @@
     var cols = cfg.columns.filter(function (c) { return c.cls !== "thumbcol"; });
     var title = cols[0] ? htmlToText(cols[0].get(r)) : (r.name || r.number || "");
     var sub = cols[1] ? htmlToText(cols[1].get(r)) : "";
-    var img = r._thumb ? '<div class="o-th-img"><img src="' + r._thumb + '" alt=""></div>' : '<div class="o-th-img o-th-ph">' + esc((title || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "•") + '</div>';
+    var img = r._thumb ? '<div class="o-th-img"><img alt="" src="' + r._thumb + '" alt=""></div>' : '<div class="o-th-img o-th-ph">' + esc((title || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "•") + '</div>';
     return '<div class="o-th-tile" data-id="' + r.id + '">' + img + '<div class="o-th-cap"><div class="o-th-t">' + esc(title) + '</div>' + (sub ? '<div class="o-th-s">' + esc(sub) + '</div>' : "") + '</div></div>';
   }
 
@@ -3688,7 +3793,7 @@
         { label: "Country", edit: { field: "country", type: "text" }, get: function (p) { return '<span class="muted">' + esc(p.country || "") + '</span>'; } }
       ].concat(isCust ? [] : [{ label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } }]),
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "City", get: function (p) { return p.city || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
-      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img alt="" src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.email || "") + '</div><div class="r"><span>' + esc(p.city || "") + '</span><span>' + esc(p.country || "") + '</span></div>'; },
       emptyHint: isCust ? "Add the customers you invoice. Each keeps its own contacts, pricelist and payment terms; you can also add one on the fly from any customer field." : "Add the suppliers and subcontractors you buy from, with what they supply and their prices, so purchasing and RFQs pull from the same list.",
       onOpen: function (p) { renderPartnerForm(p.id, kind); },
       onNew: function () { renderPartnerForm("new", kind); }
@@ -4002,7 +4107,7 @@
         { label: "Form", get: function (p) { return matFormLabel(p.material_form) || "General"; } },
         { label: "Goods / service", get: function (p) { return PTYPE[p.type] || p.type; } }
       ],
-      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img alt="" src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.default_code || "") + '</div><div class="r"><span class="k">Price</span><b>' + S.company.currency_code + " " + money(p.list_price) + '</b></div>'; },
       emptyHint: "Add the materials and products you buy and sell. Set each one's classification, unit and suppliers so quotes, POs and stock all use the same catalogue.",
       onOpen: function (p) { renderProductForm(p.id); },
       onNew: function () { renderProductForm("new"); }
@@ -4588,7 +4693,7 @@
   // Pulls the logo + company details from the Company Profile so every document is branded.
   function pdocHead(docTitle, docNum) {
     var t = printTplData();
-    var logo = (t.show_logo && t.logo) ? '<img class="plogo" src="' + t.logo + '">' : "";
+    var logo = (t.show_logo && t.logo) ? '<img alt="" class="plogo" src="' + t.logo + '">' : "";
     var lines = [pfAddr(t), pfContact(t)].filter(Boolean).join("<br>");
     if (t.vat) lines += (lines ? "<br>" : "") + (t.taxLabel || "VAT") + ": " + esc(t.vat);
     return '<div class="phead"><div class="pfrom">' + logo + '<div class="pfrom-txt"><div class="pname">' + esc(pfDisplayName(t)) + '</div>' + (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
@@ -6105,7 +6210,7 @@
     try { var sg = await sb.storage.from(MEDIA_BUCKET).createSignedUrls(paths, 3600); (sg.data || []).forEach(function (s) { if (s.signedUrl) urlByPath[s.path] = s.signedUrl; }); } catch (e) { }
     rows.forEach(function (r) { var p = byId[r.id]; if (p && urlByPath[p]) r._thumb = urlByPath[p]; });
   }
-  function thumbCell(r) { return r._thumb ? '<span class="o-rowthumb"><img src="' + r._thumb + '"></span>' : '<span class="o-rowthumb none"></span>'; }
+  function thumbCell(r) { return r._thumb ? '<span class="o-rowthumb"><img alt="" src="' + r._thumb + '"></span>' : '<span class="o-rowthumb none"></span>'; }
   // reusable attachments panel. entity is a short key ("product","tool","partner"...);
   // on a new record leave entityId empty and call mediaFlush(entity,newId) after insert.
   var UPLOAD_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="m7 10 5-5 5 5"/><path d="M4 19h16"/></svg>';
@@ -6124,7 +6229,7 @@
     return '<div class="o-titlerow"><div class="o-title">' + titleInputHtml + '</div>' + attachBlockHTML(entity, id === "new" ? "" : id, { slot: true }) + '</div>';
   }
   function mediaThumbHTML(m, url) {
-    if (m.kind === "image" && url) return '<div class="o-att-thumb"><img src="' + url + '" data-open="' + m.id + '"><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
+    if (m.kind === "image" && url) return '<div class="o-att-thumb"><img alt="Attachment" src="' + url + '" data-open="' + m.id + '"><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
     return '<div class="o-att-thumb doc" data-open="' + m.id + '"><div class="o-att-doc">' + (m.kind === "pdf" ? "PDF" : "FILE") + '</div><div class="o-att-cap">' + esc((m.caption || "").slice(0, 22)) + '</div><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
   }
   async function renderAttachGrid(entity) {
@@ -6133,7 +6238,7 @@
     var existing = eid ? await mediaList(entity, eid) : [], html = "";
     for (var i = 0; i < existing.length; i++) { var m = existing[i], u = m.kind === "image" ? await mediaSignedUrl(m.path) : ""; html += mediaThumbHTML(m, u); }
     _mediaStage.filter(function (s) { return s.entity === entity; }).forEach(function (s) {
-      html += '<div class="o-att-thumb' + (s.kind === "image" ? "" : " doc") + '">' + (s.kind === "image" ? '<img src="' + s.url + '">' : '<div class="o-att-doc">FILE</div><div class="o-att-cap">' + esc((s.file.name || "").slice(0, 22)) + '</div>') + '<button class="o-att-x" data-stage="' + s.uid + '" title="Remove">&times;</button></div>';
+      html += '<div class="o-att-thumb' + (s.kind === "image" ? "" : " doc") + '">' + (s.kind === "image" ? '<img alt="" src="' + s.url + '">' : '<div class="o-att-doc">FILE</div><div class="o-att-cap">' + esc((s.file.name || "").slice(0, 22)) + '</div>') + '<button class="o-att-x" data-stage="' + s.uid + '" title="Remove">&times;</button></div>';
     });
     if (!document.getElementById("att-grid-" + entity)) return;
     var isSlot = wrap && wrap.dataset.slot === "1";
@@ -6876,7 +6981,7 @@
         { label: "Status", get: function (e) { return eventStatusBadge(e.status); } }
       ],
       groupBy: [{ label: "Status", get: function (e) { return evLabel(EVENT_STATUS, e.status); } }, { label: "Type", get: function (e) { return evLabel(EVENT_TYPES, e.event_type); } }],
-      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.event_date || "") + (e.venue ? " &middot; " + esc(e.venue) : "") + '</div><div class="r"><span>' + esc(evLabel(EVENT_TYPES, e.event_type)) + '</span>' + eventStatusBadge(e.status) + '</div>'; },
+      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img alt="" src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.event_date || "") + (e.venue ? " &middot; " + esc(e.venue) : "") + '</div><div class="r"><span>' + esc(evLabel(EVENT_TYPES, e.event_type)) + '</span>' + eventStatusBadge(e.status) + '</div>'; },
       onOpen: function (e) { renderEventWorkspace(e.id, "overview"); },
       onNew: function () { renderEventForm("new"); }
     };
@@ -6938,7 +7043,7 @@
       '<div class="gap"></div><button class="o-filtbtn" id="ev-edit">Edit event</button></div>' +
       '<div class="ev-wrap">' +
       '<div class="ev-head">' +
-      '<div class="ev-cover">' + (cover ? '<img src="' + cover + '">' : '<span class="ev-cover-x">' + esc((ev.name || "?").slice(0, 1)) + '</span>') + '</div>' +
+      '<div class="ev-cover">' + (cover ? '<img alt="" src="' + cover + '">' : '<span class="ev-cover-x">' + esc((ev.name || "?").slice(0, 1)) + '</span>') + '</div>' +
       '<div class="ev-head-main"><div class="ev-title-row"><h1>' + esc(ev.name) + '</h1>' + eventStatusBadge(ev.status) + '</div>' +
       '<div class="ev-meta">' + esc(evLabel(EVENT_TYPES, ev.event_type)) + (ev.event_date ? ' &middot; ' + esc(ev.event_date) : "") + (ev.venue ? ' &middot; ' + esc(ev.venue) : "") + (ev.location ? ", " + esc(ev.location) : "") + (evClient ? ' &middot; <b>' + esc(evClient) + '</b>' : "") + '</div>' +
       '<div class="ev-stats" id="ev-stats">' + (days != null ? '<div class="ev-stat"><span class="v">' + (days >= 0 ? days : "-") + '</span><span class="k">' + (days >= 0 ? "days to go" : "past") + '</span></div>' : "") + '</div>' +
@@ -9388,7 +9493,7 @@
     if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
     if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
-    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
+    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="sg-title" value="' + esc(s.title || "") + '" placeholder="What is being signed"' + (done ? " disabled" : "") + '></div>' +
@@ -11876,7 +11981,7 @@
   function pfContact(t) { var a = []; if (t.phone) a.push("Tel " + t.phone + (t.phone2 ? " / " + t.phone2 : "")); if (t.email) a.push(t.email); if (t.website) a.push(t.website); return a.map(esc).join(" &middot; "); }
   function pfAddr(t) { var a = []; if (t.address) a.push(esc(t.address).replace(/\n/g, "<br>")); var cc = [t.city, t.country].filter(Boolean).map(esc).join(", "); if (cc) a.push(cc); return a.join("<br>"); }
   function buildPrintHeader(t, title) {
-    var logo = (t.show_logo && t.logo) ? '<img class="ph-logo" src="' + t.logo + '">' : "";
+    var logo = (t.show_logo && t.logo) ? '<img alt="" class="ph-logo" src="' + t.logo + '">' : "";
     var nm = esc(pfDisplayName(t)), date = esc(new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
     var addrContact = [addr, contact].filter(Boolean).join(" &middot; ");
     var tmpl = t.template || 1;
@@ -12081,7 +12186,7 @@
     }
     function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Sample Document") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
     function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
-    function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
+    function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img alt="Company logo" src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
     paintLogo(); paintPreview();
     var locState = (c.profile && c.profile.localization) ? c.profile.localization : null;
     function paintLoc() {
@@ -13622,7 +13727,7 @@
       ],
       filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Closed", test: function (p) { return !p.is_active; } }],
       groupBy: [{ label: "Stage", get: function (p) { var m = {}; PROJECT_STATUS.forEach(function (s) { m[s[0]] = s[1]; }); return m[p.status] || p.status || "None"; } }, { label: "Customer", get: function (p) { return p.partners ? p.partners.name : "None"; } }, { label: "Billing", get: function (p) { return BILLING[p.billing_type] || p.billing_type; } }],
-      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.partners ? p.partners.name : "") + '</div><div class="r"><span>' + esc(p.date_deadline || "") + '</span><b>' + Number(p._hours).toFixed(1) + ' h</b></div>'; },
+      kanbanCard: function (p) { return (p._thumb ? '<div class="o-card-img"><img alt="" src="' + p._thumb + '"></div>' : "") + '<div class="t">' + esc(p.name) + '</div><div class="muted">' + esc(p.partners ? p.partners.name : "") + '</div><div class="r"><span>' + esc(p.date_deadline || "") + '</span><b>' + Number(p._hours).toFixed(1) + ' h</b></div>'; },
       onOpen: function (p) { renderProjectForm(p.id); },
       onNew: function () { renderProjectForm("new"); }
     };
@@ -14024,7 +14129,7 @@
       ],
       filters: [{ label: "Active", test: function (e) { return e.is_active; } }, { label: "Archived", test: function (e) { return !e.is_active; } }, { label: "Missing contract", test: function (e) { return e.is_active && e._noContract; } }],
       groupBy: [{ label: "Department", get: function (e) { return e.hr_departments ? e.hr_departments.name : "None"; } }, { label: "Job Position", get: function (e) { return e.hr_jobs ? e.hr_jobs.name : "None"; } }],
-      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
+      kanbanCard: function (e) { return (e._thumb ? '<div class="o-card-img"><img alt="" src="' + e._thumb + '"></div>' : "") + '<div class="t">' + esc(e.name) + '</div><div class="muted">' + esc(e.hr_jobs ? e.hr_jobs.name : "") + '</div><div class="r"><span>' + esc(e.hr_departments ? e.hr_departments.name : "") + '</span><span>' + esc(e.work_email || "") + '</span></div>'; },
       orgChart: { parent: "manager_id", label: function (e) { return e.name; }, sub: function (e) { return (e.hr_jobs ? e.hr_jobs.name : "") || (e.hr_departments ? e.hr_departments.name : ""); } },
       action: { label: "Import", run: function () { openEmployeeImport(); } },
       emptyHint: "Add your team - their details, department and job. Employees drive contracts, payroll, leave, timesheets and task assignments across the app.",
@@ -19880,7 +19985,7 @@
   }
   function printCashReceipt(m) {
     var t = printTplData();
-    var logo = (t.show_logo && t.logo) ? '<img src="' + t.logo + '" style="max-height:54px;display:block">' : "";
+    var logo = (t.show_logo && t.logo) ? '<img alt="" src="' + t.logo + '" style="max-height:54px;display:block">' : "";
     var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.reference], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
     var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
     var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<table style="font-size:13px;margin:-8px 0 4px"><tr><td style="color:#666;padding:2px 16px 2px 0">Cash tendered</td><td style="font-weight:600">' + esc(moneyC(m.tendered, m.currency_code)) + '</td></tr><tr><td style="color:#666;padding:2px 16px 2px 0">Change given</td><td style="font-weight:600">' + esc(moneyC(m.change_given, m.currency_code)) + '</td></tr></table>' : '';
