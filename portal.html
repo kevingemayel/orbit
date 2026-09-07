@@ -119,9 +119,11 @@
       async function renderPortal(ctx){
         app.innerHTML = '<div class="center">Loading your information...</div>';
         CUR = ctx.currency || "";
-        var res = await Promise.all([ sb.rpc("portal_projects"), sb.rpc("portal_invoices"), sb.rpc("portal_orders") ]);
+        var res = await Promise.all([ sb.rpc("portal_projects"), sb.rpc("portal_invoices"), sb.rpc("portal_orders"), sb.rpc("portal_property_summary") ]);
         var projects = res[0].data || [], invoices = res[1].data || [], orders = res[2].data || [];
-        var roleLabel = ctx.role==="subcontractor" ? "Subcontractor" : ctx.role==="supplier" ? "Supplier" : "Client";
+        var prop = (res[3] && res[3].data) || null;
+        var isResident = !!(prop && prop.units && prop.units.length);
+        var roleLabel = isResident ? (ctx.role==="tenant" ? "Tenant" : "Owner") : ctx.role==="subcontractor" ? "Subcontractor" : ctx.role==="supplier" ? "Supplier" : "Client";
 
         var html = '<header><div class="wrap hdr">' + MARK +
           '<div class="brand">Space Work<small>' + esc(ctx.company||"") + ' portal</small></div>' +
@@ -155,14 +157,94 @@
             '</tbody></table></div></div>';
         }
 
-        if(!projects.length && !invoices.length && !orders.length){
+        if(isResident) html += propertySection(prop);
+
+        if(!projects.length && !invoices.length && !orders.length && !isResident){
           html += '<div class="sec"><div class="tbl-wrap"><div class="empty">Nothing has been shared with you yet. Your Space Work project manager will add documents here as work progresses.</div></div></div>';
         }
 
         html += '</div></main>';
         app.innerHTML = html;
         document.getElementById("signout").onclick = async function(){ await sb.auth.signOut(); location.href = window.location.origin + "/portal"; };
+        if(isResident) wireProperty(prop);
       }
+
+      function propertySection(prop){
+        var unit = (prop.units[0]||{});
+        var buildings = [].concat.apply([], prop.units.map(function(u){return [u.building];})).filter(function(v,i,a){return a.indexOf(v)===i;}).join(", ");
+        var h = '<div class="sec"><div class="sec-h">My building</div><div class="cards">' +
+          '<div class="card"><div class="t">' + esc(buildings) + '</div>' +
+          '<div class="kv"><span>My unit(s)</span><b>' + esc(prop.units.map(function(u){return u.code;}).join(", ")) + '</b></div>' +
+          '<div class="kv"><span>Billed to date</span><b>' + cur(prop.billed) + '</b></div>' +
+          '<div class="kv"><span>Outstanding</span><b style="color:' + (Number(prop.outstanding)>0.005?'var(--bad,#b3311f)':'#0a7a52') + '">' + cur(prop.outstanding) + '</b></div></div></div></div>';
+
+        // announcements
+        if(prop.announcements && prop.announcements.length){
+          h += '<div class="sec"><div class="sec-h">Announcements</div><div class="cards">' + prop.announcements.map(function(a){
+            return '<div class="card"><div class="t">' + (a.pinned?'📌 ':'') + esc(a.title) + '</div><div class="pagesub" style="margin:2px 0 0">' + esc(a.body||"") + '</div></div>';
+          }).join("") + '</div></div>';
+        }
+
+        // open motions to vote on
+        if(prop.motions && prop.motions.length){
+          h += '<div class="sec"><div class="sec-h">Open votes</div><div class="cards">' + prop.motions.map(function(m){
+            var voted = m.my_vote;
+            var btns = ['for','against','abstain'].map(function(c){
+              var on = voted===c;
+              var lbl = c==='for'?'For':c==='against'?'Against':'Abstain';
+              return '<button class="btn '+(on?'pri':'ghost')+' vote-btn" data-item="'+esc(m.id)+'" data-choice="'+c+'" style="margin-right:6px">'+lbl+'</button>';
+            }).join("");
+            return '<div class="card"><div class="t">' + esc(m.title) + '</div>' +
+              (m.description?'<div class="pagesub" style="margin:2px 0 8px">' + esc(m.description) + '</div>':'') +
+              '<div style="font-size:12px;color:var(--ink3);margin-bottom:8px">' + esc(m.meeting||"") + (m.authority?' · needs '+esc(m.authority.replace(/_/g,' ')):'') + (voted?' · you voted <b>'+esc(voted)+'</b>':'') + '</div>' +
+              '<div>' + btns + '</div></div>';
+          }).join("") + '</div></div>';
+        }
+
+        // my invoices
+        if(prop.invoices && prop.invoices.length){
+          h += '<div class="sec"><div class="sec-h">My charges</div><div class="tbl-wrap"><table><thead><tr><th>Number</th><th>Date</th><th>Due</th><th class="num">Total</th><th class="num">Outstanding</th><th>Status</th></tr></thead><tbody>' +
+            prop.invoices.map(function(i){
+              var pill = (Number(i.residual)<=0.005)?'<span class="pill paid">Paid</span>':(i.due && i.due<today())?'<span class="pill over">Overdue</span>':'<span class="pill open">Open</span>';
+              return '<tr><td><b>'+esc(i.number||"")+'</b></td><td>'+fdate(i.date)+'</td><td>'+fdate(i.due)+'</td><td class="num">'+cur(i.total)+'</td><td class="num">'+cur(i.residual)+'</td><td>'+pill+'</td></tr>';
+            }).join("") + '</tbody></table></div></div>';
+        }
+
+        // raise a suggestion
+        var propId = prop.property_id || "";
+        h += '<div class="sec"><div class="sec-h">Raise something with the committee</div><div class="card">' +
+          '<div style="display:grid;gap:10px">' +
+          '<select id="sg-type" class="btn ghost" style="text-align:left"><option value="suggestion">Suggestion</option><option value="complaint">Complaint</option><option value="request">Request</option></select>' +
+          '<input id="sg-title" placeholder="Short title" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit">' +
+          '<textarea id="sg-body" rows="3" placeholder="Details (optional)" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit"></textarea>' +
+          '<div><button class="btn pri" id="sg-send">Send to the committee</button></div>' +
+          '<div id="sg-msg" style="font-size:13px;color:#0a7a52"></div>' +
+          '</div></div></div>';
+        return h;
+      }
+
+      function wireProperty(prop){
+        document.querySelectorAll(".vote-btn").forEach(function(b){
+          b.onclick = async function(){
+            var item=b.dataset.item, choice=b.dataset.choice;
+            document.querySelectorAll('.vote-btn[data-item="'+item+'"]').forEach(function(x){ x.disabled=true; });
+            var r = await sb.rpc("portal_property_vote",{ p_item:item, p_choice:choice });
+            if(r.data && r.data.ok){ boot(); } else { document.querySelectorAll('.vote-btn[data-item="'+item+'"]').forEach(function(x){ x.disabled=false; }); alert("Could not record your vote: "+((r.data&&r.data.reason)||(r.error&&r.error.message)||"try again")); }
+          };
+        });
+        var send=document.getElementById("sg-send");
+        if(send) send.onclick = async function(){
+          var title=(document.getElementById("sg-title").value||"").trim();
+          if(!title){ document.getElementById("sg-msg").textContent="Please add a title."; document.getElementById("sg-msg").style.color="var(--bad,#b3311f)"; return; }
+          send.disabled=true; send.textContent="Sending...";
+          var propId = getPropIdFrom(prop);
+          var r = await sb.rpc("portal_property_suggest",{ p_property:propId, p_title:title, p_type:document.getElementById("sg-type").value, p_body:(document.getElementById("sg-body").value||"").trim() });
+          if(r.data && r.data.ok){ document.getElementById("sg-msg").style.color="#0a7a52"; document.getElementById("sg-msg").textContent="Sent. The committee will see it."; document.getElementById("sg-title").value=""; document.getElementById("sg-body").value=""; setTimeout(boot,1200); }
+          else { send.disabled=false; send.textContent="Send to the committee"; document.getElementById("sg-msg").style.color="var(--bad,#b3311f)"; document.getElementById("sg-msg").textContent="Could not send: "+((r.data&&r.data.reason)||(r.error&&r.error.message)||"try again"); }
+        };
+      }
+      // the summary returns motions/announcements without a bare property id; derive it from a vote/suggest scope call
+      function getPropIdFrom(prop){ return (prop && prop.property_id) || (prop && prop._pid) || ""; }
 
       async function boot(){
         var sess = (await sb.auth.getSession()).data.session;

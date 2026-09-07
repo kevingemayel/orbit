@@ -1039,7 +1039,7 @@
       menus: [
         { label: "Overview", action: "plot.dash" },
         { label: "Buildings", action: "plot.buildings" },
-        { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"]] },
+        { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"], ["Resident portal access", "portal.admin"]] },
         { label: "Money", items: [["Charges", "plot.charges"], ["Billing runs", "plot.runs"], ["Suppliers", "vend"]] },
         { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"]] }
       ]
@@ -2447,7 +2447,7 @@
   }
 
   // ============================ PORTAL ACCESS (admin) ============================
-  var PORTAL_ROLE = { client: "Client", subcontractor: "Subcontractor", supplier: "Supplier" };
+  var PORTAL_ROLE = { client: "Client", subcontractor: "Subcontractor", supplier: "Supplier", owner: "Property owner", tenant: "Property tenant" };
   function cfgPortalAccess() {
     return {
       title: "Portal Access", pageSize: 80,
