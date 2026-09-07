@@ -97,7 +97,7 @@ begin
   if mt.status <> 'open' then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
 
   -- the owner's total shares + a unit id in this building (must own here)
-  select coalesce(sum(u.shares),0), min(u.id) into sh, uid
+  select coalesce(sum(u.shares),0), (array_agg(u.id))[1] into sh, uid
     from public.property_ownerships o join public.property_units u on u.id = o.unit_id
    where o.company_id = co and o.partner_id = me and u.property_id = mt.property_id;
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'not an owner here'); end if;

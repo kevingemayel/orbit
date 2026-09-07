@@ -20213,11 +20213,13 @@
       (sharesOk ? "" : '<div class="o-note warn" style="margin:8px 0">Unit shares add up to ' + b.totalShares + ', but this building is set to a total of ' + esc(prop.shares_total) + '. Charges still split proportionally, but the total looks off - check the units.</div>') +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">' +
       '<button class="o-new" id="pl-gen">Generate this period\'s charges</button>' +
+      '<button class="o-filtbtn" id="pl-give">Give back to owners</button>' +
       '<button class="o-filtbtn" id="pl-units">Units</button><button class="o-filtbtn" id="pl-charges">Charges</button><button class="o-filtbtn" id="pl-meet">Meetings</button>' +
       '</div>';
     document.getElementById("pl-prop").onchange = function () { plotSetProp(this.value); renderPlotDash(); };
     document.getElementById("pl-edit").onclick = function () { openPropertyModal(prop); };
     document.getElementById("pl-gen").onclick = function () { openChargeRunModal(prop); };
+    document.getElementById("pl-give").onclick = function () { openGivebackModal(prop); };
     document.getElementById("pl-units").onclick = function () { go("plot.units"); };
     document.getElementById("pl-charges").onclick = function () { go("plot.charges"); };
     document.getElementById("pl-meet").onclick = function () { go("plot.meetings"); };
@@ -20609,6 +20611,19 @@
       m.remove(); toast("Saved"); renderView();
     }, true);
     if (n.id) plotAddDelete(m, "property_notices", n.id, "this notice");
+    // Print letter button (reads the current field values)
+    var foot = m.querySelector(".foot");
+    var pr = document.createElement("button"); pr.className = "btn"; pr.textContent = "Print letter";
+    pr.onclick = function () {
+      var uSel = document.getElementById("nt-unit"), pSel = document.getElementById("nt-partner");
+      plotPrintNotice({
+        stage: parseInt(gv("nt-stage"), 10) || 1, amount: Number(gv("nt-amt")) || 0, months: parseInt(gv("nt-months"), 10) || 0,
+        ownerName: pSel && pSel.options[pSel.selectedIndex] ? pSel.options[pSel.selectedIndex].text : "",
+        unitCode: uSel && uSel.value && uSel.options[uSel.selectedIndex] ? uSel.options[uSel.selectedIndex].text : "",
+        buildingName: (props.filter(function (p) { return p.id === gv("nt-prop"); })[0] || {}).name || ""
+      });
+    };
+    foot.insertBefore(pr, foot.querySelector("[data-s]"));
   }
 
   function cfgPlotSuggestions() {
@@ -20649,6 +20664,72 @@
       m.remove(); toast("Saved"); renderView();
     }, true);
     if (s.id) plotAddDelete(m, "property_suggestions", s.id, s.title);
+  }
+
+  // A formal overdue-payment letter for a notice, opened ready to print.
+  function plotPrintNotice(d) {
+    var c = S.company || {}, cur = c.currency_code || "";
+    var amt = (cur ? cur + " " : "") + money(d.amount || 0);
+    var stageBody = {
+      1: '<p>Our records show that the maintenance charges for your unit are currently overdue. This is a friendly reminder to settle the outstanding balance at your earliest convenience.</p>',
+      2: '<p>Despite our earlier reminder, the maintenance charges for your unit remain unpaid. We ask that you settle the outstanding balance without further delay. Continued non-payment affects the whole building, as shared services are funded by these contributions.</p>',
+      3: '<p>This is a formal notice regarding the maintenance charges for your unit, which remain unpaid despite previous reminders. Please settle the full outstanding balance within fifteen (15) days of the date of this letter. Should payment not be received, the syndicate reserves the right to pursue the amount due through all means available under the applicable joint-ownership law, including legal action, at your cost.</p>'
+    }[d.stage || 1];
+    var title = { 1: "Payment reminder", 2: "Second notice - overdue charges", 3: "Formal notice of arrears" }[d.stage || 1];
+    var when = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    var inner = '<div style="max-width:640px;margin:0 auto">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:22px">' +
+      '<div><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div>' + (d.buildingName ? '<div style="color:#555;font-size:13px">' + esc(d.buildingName) + '</div>' : '') + '</div>' +
+      '<div style="text-align:right;color:#555;font-size:12.5px">' + esc(when) + '</div></div>' +
+      '<div style="font-size:13px;color:#333;margin-bottom:4px">To</div>' +
+      '<div style="font-weight:700">' + esc(d.ownerName || "Unit owner") + '</div>' +
+      (d.unitCode ? '<div style="color:#555;font-size:13px;margin-bottom:16px">Unit ' + esc(d.unitCode) + '</div>' : '<div style="margin-bottom:16px"></div>') +
+      '<h1 style="font-size:18px;margin:8px 0 12px">' + esc(title) + '</h1>' +
+      stageBody +
+      '<table style="border-collapse:collapse;margin:14px 0;font-size:13px"><tr><td style="padding:6px 18px 6px 0;color:#555">Amount outstanding</td><td style="font-weight:800;font-size:16px">' + esc(amt) + '</td></tr>' +
+      (d.months ? '<tr><td style="padding:6px 18px 6px 0;color:#555">Months overdue</td><td style="font-weight:600">' + esc(d.months) + '</td></tr>' : '') + '</table>' +
+      '<p style="color:#333">If you have already made this payment, please disregard this letter and accept our thanks. For any question about your account, please contact the building management.</p>' +
+      '<div style="margin-top:34px;color:#333"><div>Respectfully,</div><div style="font-weight:700;margin-top:26px">' + esc(c.name || "The Syndicate") + '</div><div style="color:#555;font-size:12.5px">Building management</div></div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.6}p{margin:10px 0}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+
+  // Reserve give-back: refund a surplus to owners in proportion to their shares,
+  // as draft credit notes for review. Mirrors Plot's give-back.
+  async function openGivebackModal(prop) {
+    if (!prop) { toast("Pick a building"); return; }
+    var units = (await sb.from("property_units").select("*").eq("property_id", prop.id).eq("is_active", true)).data || [];
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
+    var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
+    var totalShares = units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
+    var inner =
+      '<div class="o-note">A give-back returns surplus funds to owners in proportion to their shares. Enter the total to distribute; Orbit splits it by share and creates a <b>draft credit note</b> per owner for you to review and post.</div>' +
+      '<div><label>Total to give back (' + esc(S.company.currency_code) + ')</label><input id="gb-amt" type="number" step="0.01" placeholder="e.g. 5000"></div>' +
+      '<div id="gb-preview" class="muted" style="font-size:12.5px"></div>';
+    var m = plotModal("Give back to owners - " + prop.name, inner, async function (mm) {
+      var total = Number(gv("gb-amt")) || 0;
+      if (total <= 0) { toast("Enter an amount"); return; }
+      if (totalShares <= 0) { toast("Units have no shares to split by"); return; }
+      var rows = units.map(function (u) { return { unit: u, partner: primaryByUnit[u.id], amt: Math.round(total * (Number(u.shares || 0) / totalShares) * 100) / 100 }; }).filter(function (r) { return r.partner && r.amt > 0.005; });
+      if (!rows.length) { toast("No owners to give back to"); return; }
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Creating...";
+      var incAcct = prop.income_account_id || null, made = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], num = await nextNumber("out_refund");
+        var inv = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_refund", partner_id: r.partner, number: num, invoice_date: today(), currency_code: S.company.currency_code, state: "draft", amount_untaxed: r.amt, amount_tax: 0, amount_total: r.amt, amount_residual: r.amt, property_id: prop.id, property_unit_id: r.unit.id, ref: "Reserve give-back" }).select("id").single();
+        if (inv.error) continue;
+        await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: inv.data.id, name: prop.name + " - reserve give-back (" + r.unit.code + ")", sequence: 1, quantity: 1, unit_price: r.amt, discount: 0, account_id: incAcct, price_subtotal: r.amt, price_total: r.amt });
+        made++;
+      }
+      m.remove(); toast(made + " draft credit note(s) created - review and post them"); go("inv.outr");
+    });
+    var amtEl = document.getElementById("gb-amt");
+    if (amtEl) amtEl.oninput = function () {
+      var total = Number(this.value) || 0, prev = document.getElementById("gb-preview");
+      if (total > 0 && totalShares > 0) { var withOwner = units.filter(function (u) { return primaryByUnit[u.id]; }).length; prev.textContent = "Splits across " + withOwner + " owner(s) by share; largest unit gets about " + S.company.currency_code + " " + money(total * (Math.max.apply(null, units.map(function (u) { return Number(u.shares || 0); })) / totalShares)) + "."; }
+      else prev.textContent = "";
+    };
   }
 
   // Shared Delete button for a Plot modal, FK-safe.
