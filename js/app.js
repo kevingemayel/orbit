@@ -20620,21 +20620,89 @@
       '<div class="row2"><div><label>Building</label>' + plotSel("mt-prop", props, pcur, null) + '</div><div><label>Kind</label><select id="mt-kind">' + [["committee", "Committee"], ["agm", "General assembly"], ["extraordinary", "Extraordinary"]].map(function (k) { return '<option value="' + k[0] + '"' + (mt.kind === k[0] ? " selected" : "") + '>' + k[1] + '</option>'; }).join("") + '</select></div></div>' +
       '<div><label>Title</label><input id="mt-title" value="' + esc(mt.title || "") + '" placeholder="e.g. Annual general assembly 2026"></div>' +
       '<div class="row2"><div><label>Date</label><input id="mt-date" type="date" value="' + esc(mt.meeting_date || "") + '"></div><div><label>Location</label><input id="mt-loc" value="' + esc(mt.location || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Notice given on</label><input id="mt-notice" type="date" value="' + esc(mt.notice_date || "") + '"><div class="muted" style="font-size:12px;margin-top:3px">A general assembly must normally be called at least 10 days ahead.</div></div><div><label>Session</label><select id="mt-session"><option value="1"' + ((mt.session_no || 1) === 1 ? " selected" : "") + '>First call</option><option value="2"' + (mt.session_no === 2 ? " selected" : "") + '>Second call</option></select><div class="muted" style="font-size:12px;margin-top:3px">A second call can usually proceed whatever the attendance.</div></div></div>' +
+      '<div id="mt-noticewarn"></div>' +
       '<div><label>Attendees</label><textarea id="mt-att" rows="2">' + esc(mt.attendees || "") + '</textarea></div>' +
       '<div><label>Agenda</label><textarea id="mt-agenda" rows="3">' + esc(mt.agenda || "") + '</textarea></div>' +
       '<div><label>Decisions / minutes</label><textarea id="mt-dec" rows="3">' + esc(mt.decisions || "") + '</textarea></div>' +
       '<div><label>Status</label><select id="mt-status"><option value="draft"' + (mt.status !== "posted" ? " selected" : "") + '>Draft</option><option value="posted"' + (mt.status === "posted" ? " selected" : "") + '>Posted (locked)</option></select></div>' +
-      (mt.id ? '<div id="mt-items" style="margin-top:6px"></div>' : '<div class="muted" style="font-size:12.5px">Save the meeting first, then add its agenda items and motions.</div>');
+      (mt.id ? '<div id="mt-items" style="margin-top:6px"></div>' + attachBlockHTML("propmeeting", mt.id, { label: "Signed minutes & attachments" })
+        : '<div class="muted" style="font-size:12.5px">Save the meeting first, then add its agenda items and motions.</div>' + attachBlockHTML("propmeeting", null, { label: "Attachments" }));
+    mediaClearStage();
     var m = plotModal(mt.id ? "Edit meeting" : "New meeting", inner, async function () {
       var title = gv("mt-title"); if (!title) { toast("Enter a title"); return; }
+      if (mt.locked) { toast("These minutes are posted and locked"); return; }
       var status = gv("mt-status");
-      var row = { company_id: S.company.id, property_id: gv("mt-prop"), kind: gv("mt-kind"), title: title, meeting_date: gv("mt-date") || null, location: gv("mt-loc") || null, attendees: gv("mt-att") || null, agenda: gv("mt-agenda") || null, decisions: gv("mt-dec") || null, status: status, posted_at: status === "posted" ? new Date().toISOString() : null };
+      var row = { company_id: S.company.id, property_id: gv("mt-prop"), kind: gv("mt-kind"), title: title, meeting_date: gv("mt-date") || null, location: gv("mt-loc") || null, attendees: gv("mt-att") || null, agenda: gv("mt-agenda") || null, decisions: gv("mt-dec") || null, status: status, notice_date: gv("mt-notice") || null, session_no: parseInt(gv("mt-session"), 10) || 1, posted_at: status === "posted" ? new Date().toISOString() : null, locked: status === "posted" };
       if (!mt.id) row.created_by = (S.user && S.user.id) || null;
-      var r = mt.id ? await sb.from("property_meetings").update(row).eq("id", mt.id) : await sb.from("property_meetings").insert(row);
+      var r = mt.id ? await sb.from("property_meetings").update(row).eq("id", mt.id) : await sb.from("property_meetings").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      m.remove(); toast("Saved"); renderView();
+      var mid = mt.id || (r.data && r.data.id);
+      if (!mt.id && mid) await mediaFlush("propmeeting", mid);
+      // posting the minutes turns the agreed actions into real tasks, once
+      if (status === "posted" && !mt.locked) await plotPostMinutes(Object.assign({}, mt, row, { id: mid }));
+      plotLog(status === "posted" ? "posted" : (mt.id ? "updated" : "created"), "property_meetings", mid, title);
+      m.remove(); toast(status === "posted" ? "Minutes posted and locked" : "Saved"); renderView();
     }, true);
+    wireAttach("propmeeting");
+    // warn if a general assembly is called with less than 10 days' notice
+    function noticeCheck() {
+      var box = document.getElementById("mt-noticewarn"); if (!box) return;
+      var nd = gv("mt-notice"), md = gv("mt-date"), kind = gv("mt-kind");
+      if (!nd || !md || kind === "committee") { box.innerHTML = ""; return; }
+      var days = Math.floor((new Date(md) - new Date(nd)) / 86400000);
+      box.innerHTML = days < 10
+        ? '<div class="o-note warn">Only ' + days + ' day(s) between the notice and the meeting. A general assembly normally needs at least 10 days, or its decisions can be challenged.</div>'
+        : '<div class="o-note">' + days + ' days\' notice given.</div>';
+    }
+    ["mt-notice", "mt-date", "mt-kind"].forEach(function (id) { var el = document.getElementById(id); if (el) el.onchange = noticeCheck; });
+    noticeCheck();
     if (mt.id) { plotAddDelete(m, "property_meetings", mt.id, mt.title); loadMeetingItems(mt); }
+    if (mt.locked) {
+      var foot2 = m.querySelector(".foot");
+      var pr2 = document.createElement("button"); pr2.className = "btn"; pr2.textContent = "Print minutes";
+      pr2.onclick = function () { plotPrintMinutes(mt); };
+      foot2.insertBefore(pr2, foot2.querySelector("[data-s]"));
+      var unl = document.createElement("button"); unl.className = "btn"; unl.textContent = "Unlock";
+      unl.onclick = async function () { await sb.from("property_meetings").update({ locked: false, status: "draft" }).eq("id", mt.id); plotLog("unlocked", "property_meetings", mt.id, mt.title); m.remove(); toast("Unlocked"); renderView(); };
+      foot2.insertBefore(unl, foot2.querySelector("[data-s]"));
+      m.querySelector("[data-s]").disabled = true;
+    }
+  }
+  // Posting minutes fans the agreed actions out into real tasks, so a decision
+  // does not stay buried in a textarea.
+  async function plotPostMinutes(mt) {
+    var made = 0;
+    var lines = String(mt.decisions || "").split(/\n+/).map(function (s) { return s.replace(/^[-*•\s]+/, "").trim(); }).filter(function (s) { return s.length > 3; });
+    for (var i = 0; i < lines.length; i++) {
+      await sb.from("property_tasks").insert({ company_id: S.company.id, property_id: mt.property_id, title: lines[i].slice(0, 160), status: "todo", priority: "medium", source_meeting_id: mt.id });
+      made++;
+    }
+    // carried motions become resolutions if they have not already
+    var items = (await sb.from("property_meeting_items").select("*").is("deleted_at", null).eq("meeting_id", mt.id).eq("status", "carried")).data || [];
+    for (var j = 0; j < items.length; j++) {
+      if (items[j].resolution_id) continue;
+      var res = await sb.from("property_resolutions").insert({ company_id: S.company.id, property_id: mt.property_id, meeting_id: mt.id, title: items[j].title, body: items[j].description || null, status: "passed", decided_at: new Date().toISOString() }).select("id").single();
+      if (res.data) await sb.from("property_meeting_items").update({ resolution_id: res.data.id }).eq("id", items[j].id);
+    }
+    if (made) toast(made + " action(s) became tasks");
+  }
+  function plotPrintMinutes(mt) {
+    var c = S.company || {};
+    var when = mt.meeting_date ? new Date(mt.meeting_date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+    var sec = function (h, b) { return b ? '<h3 style="font-size:14px;margin:16px 0 4px">' + esc(h) + '</h3><div style="white-space:pre-wrap">' + esc(b) + '</div>' : ""; };
+    var inner = '<div style="max-width:660px;margin:0 auto">' +
+      '<div style="border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:18px"><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div></div>' +
+      '<h1 style="font-size:19px;margin:0 0 4px">' + esc(mt.title || "Minutes") + '</h1>' +
+      '<div style="color:#555;font-size:13px;margin-bottom:14px">' + esc(({ agm: "General assembly", committee: "Committee meeting", extraordinary: "Extraordinary meeting" })[mt.kind] || "") +
+      (when ? ' &middot; ' + esc(when) : '') + (mt.location ? ' &middot; ' + esc(mt.location) : '') + (mt.session_no === 2 ? ' &middot; second call' : '') + '</div>' +
+      sec("Present", mt.attendees) + sec("Agenda", mt.agenda) + sec("Decisions", mt.decisions) + sec("Notes", mt.notes) +
+      '<div style="margin-top:44px;display:flex;justify-content:space-between">' +
+      '<div><div style="border-top:1px solid #333;width:200px;padding-top:6px;color:#555;font-size:12.5px">Chair</div></div>' +
+      '<div><div style="border-top:1px solid #333;width:200px;padding-top:6px;color:#555;font-size:12.5px">Secretary</div></div></div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>' + esc(mt.title || "Minutes") + '</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.6}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.close();
   }
 
   // Agenda items and motions inside a meeting, with the owner-vote tally.
@@ -20686,13 +20754,26 @@
       '<select id="mi-kind" style="max-width:120px"><option value="agenda">Agenda item</option><option value="motion">Motion (vote)</option><option value="action">Action</option></select>' +
       '<input id="mi-title" placeholder="Title" style="flex:1;min-width:150px">' +
       '<select id="mi-auth" style="max-width:150px">' + Object.keys(PLOT_AUTH).map(function (k) { return '<option value="' + k + '"' + (k === "simple_majority" ? " selected" : "") + '>' + PLOT_AUTH[k] + '</option>'; }).join("") + '</select>' +
-      '<button class="o-filtbtn" id="mi-add">Add</button></div>' +
+      '<button class="o-filtbtn" id="mi-add">Add</button>' +
+      '<button class="o-filtbtn" id="mi-pull">Pull open suggestions</button></div>' +
       '<div class="muted" style="font-size:12px;margin-top:5px">Owners vote on open motions from their resident portal. Total voting weight in this building: ' + esc(Math.round(totalShares * 1000) / 1000) + '.</div>';
     document.getElementById("mi-add").onclick = async function () {
       var t = gv("mi-title"); if (!t) { toast("Enter a title"); return; }
       var r = await sb.from("property_meeting_items").insert({ company_id: S.company.id, meeting_id: mt.id, kind: gv("mi-kind"), title: t, authority: gv("mi-auth"), status: "open", sort: items.length });
       if (r.error) { toast(errMsg(r.error)); return; }
       loadMeetingItems(mt);
+    };
+    document.getElementById("mi-pull").onclick = async function () {
+      var open = (await sb.from("property_suggestions").select("id,title,body").is("deleted_at", null).eq("property_id", mt.property_id).in("status", ["new", "reviewing"])).data || [];
+      if (!open.length) { toast("No open suggestions to bring in"); return; }
+      var already = {}; items.forEach(function (i) { if (i.source_suggestion_id) already[i.source_suggestion_id] = 1; });
+      var add = open.filter(function (s) { return !already[s.id]; });
+      if (!add.length) { toast("They are already on the agenda"); return; }
+      var ins = add.map(function (s, i) { return { company_id: S.company.id, meeting_id: mt.id, kind: "motion", title: s.title, description: s.body || null, authority: "simple_majority", status: "open", source_suggestion_id: s.id, sort: items.length + i }; });
+      var r = await sb.from("property_meeting_items").insert(ins);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      await sb.from("property_suggestions").update({ status: "reviewing", meeting_id: mt.id }).in("id", add.map(function (s) { return s.id; }));
+      toast(add.length + " suggestion(s) added to the agenda"); loadMeetingItems(mt);
     };
     box.querySelectorAll(".mi-del").forEach(function (b) { b.onclick = async function () { await sb.from("property_meeting_votes").delete().eq("item_id", b.dataset.id); await sb.from("property_meeting_items").delete().eq("id", b.dataset.id); loadMeetingItems(mt); }; });
     box.querySelectorAll(".mi-reject").forEach(function (b) { b.onclick = async function () { await sb.from("property_meeting_items").update({ status: "rejected" }).eq("id", b.dataset.id); toast("Recorded"); loadMeetingItems(mt); }; });
@@ -20827,15 +20908,42 @@
       '<div class="row2"><div><label>Unit (optional)</label>' + plotSel("sg-unit", units, s.unit_id, "(none)", function (u) { return u.code; }) + '</div><div><label>From (name)</label><input id="sg-name" value="' + esc(s.submitted_by_name || "") + '"></div></div>' +
       '<div><label>Title</label><input id="sg-title" value="' + esc(s.title || "") + '"></div>' +
       '<div><label>Details</label><textarea id="sg-body" rows="3">' + esc(s.body || "") + '</textarea></div>' +
-      '<div class="row2"><div><label>Status</label><select id="sg-status">' + [["new", "New"], ["reviewing", "Reviewing"], ["accepted", "Accepted"], ["rejected", "Rejected"], ["done", "Done"]].map(function (st) { return '<option value="' + st[0] + '"' + ((s.status || "new") === st[0] ? " selected" : "") + '>' + st[1] + '</option>'; }).join("") + '</select></div><div><label>Admin note</label><input id="sg-note" value="' + esc(s.admin_note || "") + '"></div></div>';
-    var m = plotModal(s.id ? "Edit suggestion" : "New suggestion", inner, async function () {
+      '<div class="row2"><div><label>Status</label><select id="sg-status">' + [["new", "New"], ["reviewing", "Reviewing"], ["accepted", "Accepted"], ["rejected", "Rejected"], ["done", "Done"]].map(function (st) { return '<option value="' + st[0] + '"' + ((s.status || "new") === st[0] ? " selected" : "") + '>' + st[1] + '</option>'; }).join("") + '</select></div><div><label>Admin note</label><input id="sg-note" value="' + esc(s.admin_note || "") + '"></div></div>' +
+      (s.id ? '<div class="o-cf-head" style="margin-top:8px">Committee decision</div>' +
+        '<div><label>Decision note (the resident sees the outcome)</label><input id="sg-dec" value="' + esc(s.decision_note || "") + '"></div>' +
+        '<div><label>Decided at meeting</label><select id="sg-meet"><option value="">(not at a meeting)</option></select></div>' +
+        '<div><label><input type="checkbox" id="sg-task" checked> Create a task when accepting</label></div>' +
+        '<div style="display:flex;gap:8px"><button class="o-filtbtn" id="sg-accept" style="color:var(--good)">Accept</button><button class="o-filtbtn" id="sg-reject" style="color:var(--bad)">Reject</button></div>'
+        : '');
+    var m = plotModal(s.id ? "Suggestion" : "New suggestion", inner, async function () {
       var title = gv("sg-title"); if (!title) { toast("Enter a title"); return; }
       var row = { company_id: S.company.id, property_id: gv("sg-prop"), type: gv("sg-type"), unit_id: gv("sg-unit") || null, submitted_by_name: gv("sg-name") || null, title: title, body: gv("sg-body") || null, status: gv("sg-status"), admin_note: gv("sg-note") || null };
+      if (document.getElementById("sg-dec")) row.decision_note = gv("sg-dec") || null;
       var r = s.id ? await sb.from("property_suggestions").update(row).eq("id", s.id) : await sb.from("property_suggestions").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      plotLog(s.id ? "updated" : "created", "property_suggestions", s.id, title);
       m.remove(); toast("Saved"); renderView();
     }, true);
-    if (s.id) plotAddDelete(m, "property_suggestions", s.id, s.title);
+    if (s.id) {
+      plotAddDelete(m, "property_suggestions", s.id, s.title);
+      // meetings this could be tied to
+      var mts = (await sb.from("property_meetings").select("id,title,meeting_date").is("deleted_at", null).eq("property_id", s.property_id || pcur).order("meeting_date", { ascending: false }).limit(30)).data || [];
+      var msel = document.getElementById("sg-meet");
+      mts.forEach(function (x) { var o = document.createElement("option"); o.value = x.id; o.textContent = x.title + (x.meeting_date ? " (" + x.meeting_date + ")" : ""); if (s.meeting_id === x.id) o.selected = true; msel.appendChild(o); });
+      async function decide(outcome) {
+        var upd = { status: outcome === "accepted" ? "accepted" : "rejected", decision_note: gv("sg-dec") || null, meeting_id: gv("sg-meet") || null, decided_at: new Date().toISOString() };
+        var r2 = await sb.from("property_suggestions").update(upd).eq("id", s.id);
+        if (r2.error) { toast(errMsg(r2.error)); return; }
+        if (outcome === "accepted" && document.getElementById("sg-task").checked) {
+          await sb.from("property_tasks").insert({ company_id: S.company.id, property_id: s.property_id || pcur, title: s.title, description: s.body || null, status: "todo", priority: "medium", source_suggestion_id: s.id, source_meeting_id: gv("sg-meet") || null });
+          toast("Accepted - a task was created");
+        } else toast(outcome === "accepted" ? "Accepted" : "Rejected");
+        plotLog("decided", "property_suggestions", s.id, s.title, outcome);
+        m.remove(); renderView();
+      }
+      document.getElementById("sg-accept").onclick = function () { decide("accepted"); };
+      document.getElementById("sg-reject").onclick = function () { decide("rejected"); };
+    }
   }
 
   // ---- Announcements (residents see these in the portal) ----
@@ -20967,20 +21075,42 @@
   async function openPlotTaskModal(t) {
     t = t || {}; var props = await plotProps();
     if (!props.length) { toast("Add a building first"); return; }
+    // committee members of this building make the natural assignee list
+    var mem = (await sb.from("property_members").select("partner_id,name,partners(name)").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    mem = mem.filter(function (x) { return x.partner_id; }).map(function (x) { return { id: x.partner_id, name: (x.partners && x.partners.name) || x.name || "" }; });
     var inner = '<div class="row2"><div><label>Building</label>' + plotSel("tk-prop", props, t.property_id || plotGetProp() || props[0].id, null) + '</div><div><label>Status</label><select id="tk-status">' +
       [["todo", "To do"], ["doing", "Doing"], ["done", "Done"]].map(function (s) { return '<option value="' + s[0] + '"' + ((t.status || "todo") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></div></div>' +
       '<div><label>Task</label><input id="tk-title" value="' + esc(t.title || "") + '"></div>' +
       '<div><label>Details</label><textarea id="tk-desc" rows="2">' + esc(t.description || "") + '</textarea></div>' +
       '<div class="row2"><div><label>Priority</label><select id="tk-prio">' + [["low", "Low"], ["medium", "Medium"], ["high", "High"]].map(function (s) { return '<option value="' + s[0] + '"' + ((t.priority || "medium") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></div><div><label>Due</label><input id="tk-due" type="date" value="' + esc(t.due_date || "") + '"></div></div>' +
-      '<div><label>Who is doing it</label><input id="tk-who" value="' + esc(t.assignee_name || "") + '"></div>';
+      '<div class="row2"><div><label>Who is doing it</label>' + plotSel("tk-partner", mem, t.assignee_partner_id, "(or type a name)") + '</div><div><label>Name</label><input id="tk-who" value="' + esc(t.assignee_name || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Repeat</label><select id="tk-recur"><option value="">Does not repeat</option>' +
+      [["weekly", "Weekly"], ["monthly", "Monthly"], ["quarterly", "Quarterly"], ["yearly", "Yearly"]].map(function (s) { return '<option value="' + s[0] + '"' + (t.recur === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Remind by email</label><input id="tk-email" value="' + esc(t.remind_email || "") + '" placeholder="who to remind"></div></div>' +
+      '<div class="muted" style="font-size:12px">A repeating task rolls its due date forward when you mark it done, and the reminder email goes out on the day it is due.</div>';
     var m = plotModal(t.id ? "Edit task" : "New task", inner, async function () {
       var ti = gv("tk-title"); if (!ti) { toast("Enter the task"); return; }
-      var row = { company_id: S.company.id, property_id: gv("tk-prop"), title: ti, description: gv("tk-desc") || null, status: gv("tk-status"), priority: gv("tk-prio"), due_date: gv("tk-due") || null, assignee_name: gv("tk-who") || null };
+      var due = gv("tk-due") || null, rec = gv("tk-recur") || null;
+      var row = { company_id: S.company.id, property_id: gv("tk-prop"), title: ti, description: gv("tk-desc") || null, status: gv("tk-status"), priority: gv("tk-prio"), due_date: due, assignee_partner_id: gv("tk-partner") || null, assignee_name: gv("tk-who") || null, recur: rec, recur_next: rec ? (due || today()) : null, remind_email: gv("tk-email") || null };
+      // a repeating task that is being closed rolls forward instead of ending
+      if (t.id && rec && gv("tk-status") === "done") {
+        row.status = "todo"; row.due_date = plotNextDue(due || today(), rec); row.recur_next = row.due_date;
+        toast("Done - rolled forward to " + row.due_date);
+      }
       var r = t.id ? await sb.from("property_tasks").update(row).eq("id", t.id) : await sb.from("property_tasks").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      m.remove(); toast("Saved"); renderView();
+      plotLog(t.id ? "updated" : "created", "property_tasks", t.id, ti);
+      m.remove(); if (!(t.id && rec && gv("tk-status") === "done")) toast("Saved"); renderView();
     }, true);
     if (t.id) plotAddDelete(m, "property_tasks", t.id, t.title);
+  }
+  function plotNextDue(from, recur) {
+    var d = new Date(from);
+    if (recur === "weekly") d.setDate(d.getDate() + 7);
+    else if (recur === "monthly") d.setMonth(d.getMonth() + 1);
+    else if (recur === "quarterly") d.setMonth(d.getMonth() + 3);
+    else d.setFullYear(d.getFullYear() + 1);
+    return d.toISOString().slice(0, 10);
   }
 
   // ---- Concierge checklist + check-in log ----
@@ -21008,17 +21138,21 @@
   // Log a checklist item as done. Without this the checklist can never be
   // completed and the check-in log stays empty forever.
   function openCheckinModal(ctx) {
-    var inner = '<div class="o-note">Recording <b>' + esc(ctx.title) + '</b> as done today.</div>' +
+    var inner = '<div class="o-note">Recording <b>' + esc(ctx.title) + '</b> as done today.' + (ctx.requires_photo ? ' <b>This item needs a photo.</b>' : '') + '</div>' +
       '<div><label>Who did it</label><input id="ci-who" value="' + esc((S.user && S.user.email) || "") + '"></div>' +
-      (ctx.requires_photo ? '<div><label>Photo link <span style="color:var(--bad)">(required for this item)</span></label><input id="ci-photo" placeholder="https://..."></div>' : '<div><label>Photo link (optional)</label><input id="ci-photo" placeholder="https://..."></div>') +
-      '<div><label>Note</label><input id="ci-note" placeholder="Anything worth recording"></div>';
-    var m = plotModal("Mark done", inner, async function () {
-      var photo = gv("ci-photo");
-      if (ctx.requires_photo && !photo) { toast("This item needs a photo"); return; }
-      var r = await sb.from("property_checkins").insert({ company_id: S.company.id, property_id: ctx.property_id, item_id: ctx.item_id, kind: "concierge", actor_name: gv("ci-who") || null, photo_url: photo || null, note: gv("ci-note") || null });
-      if (r.error) { toast("Could not record: " + errMsg(r.error)); return; }
+      '<div><label>Note</label><input id="ci-note" placeholder="Anything worth recording"></div>' +
+      attachBlockHTML("propcheckin", null, { label: ctx.requires_photo ? "Photo (required)" : "Photo (optional)", accept: "image/*" });
+    mediaClearStage();
+    var m = plotModal("Mark done", inner, async function (mm) {
+      if (ctx.requires_photo && !_mediaStage.filter(function (s) { return s.entity === "propcheckin"; }).length) { toast("This item needs a photo before it can be signed off"); return; }
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Saving...";
+      var r = await sb.from("property_checkins").insert({ company_id: S.company.id, property_id: ctx.property_id, item_id: ctx.item_id, kind: "concierge", actor_name: gv("ci-who") || null, note: gv("ci-note") || null }).select("id").single();
+      if (r.error) { toast("Could not record: " + errMsg(r.error)); btn.disabled = false; btn.textContent = "Save"; return; }
+      await mediaFlush("propcheckin", r.data.id);
+      plotLog("checked in", "property_checkins", r.data.id, ctx.title, null, ctx.property_id);
       m.remove(); toast("Recorded"); renderView();
     });
+    wireAttach("propcheckin");
   }
   async function openChecklistModal(c) {
     c = c || {}; var props = await plotProps();
@@ -21077,16 +21211,22 @@
     var inner = '<div class="row2"><div><label>Building</label>' + plotSel("dc-prop", props, d.property_id || plotGetProp() || props[0].id, null) + '</div><div><label>Category</label><select id="dc-cat">' +
       ["general", "minutes", "contract", "insurance", "legal", "plan", "statement"].map(function (k) { return '<option value="' + k + '"' + (d.category === k ? " selected" : "") + '>' + k.charAt(0).toUpperCase() + k.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
       '<div><label>Title</label><input id="dc-title" value="' + esc(d.title || "") + '"></div>' +
-      '<div><label>Link to the file</label><input id="dc-url" value="' + esc(d.file_url || "") + '" placeholder="https://..."></div>' +
+      '<div><label>Or paste a link</label><input id="dc-url" value="' + esc(d.file_url || "") + '" placeholder="https://..."></div>' +
       '<div><label>Notes</label><textarea id="dc-notes" rows="2">' + esc(d.notes || "") + '</textarea></div>' +
-      '<div><label>Visible to residents</label><select id="dc-pub"><option value="0"' + (!d.is_public ? " selected" : "") + '>Committee only</option><option value="1"' + (d.is_public ? " selected" : "") + '>Residents can see it</option></select></div>';
+      '<div><label>Visible to residents</label><select id="dc-pub"><option value="0"' + (!d.is_public ? " selected" : "") + '>Committee only</option><option value="1"' + (d.is_public ? " selected" : "") + '>Residents can see it</option></select></div>' +
+      attachBlockHTML("propdoc", d.id, { label: "Upload the file" });
+    mediaClearStage();
     var m = plotModal(d.id ? "Edit document" : "Add document", inner, async function () {
       var t = gv("dc-title"); if (!t) { toast("Enter a title"); return; }
       var row = { company_id: S.company.id, property_id: gv("dc-prop"), title: t, category: gv("dc-cat"), file_url: gv("dc-url") || null, notes: gv("dc-notes") || null, is_public: gv("dc-pub") === "1" };
-      var r = d.id ? await sb.from("property_documents").update(row).eq("id", d.id) : await sb.from("property_documents").insert(row);
+      var r = d.id ? await sb.from("property_documents").update(row).eq("id", d.id) : await sb.from("property_documents").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      var newId = d.id || (r.data && r.data.id);
+      if (!d.id && newId) await mediaFlush("propdoc", newId);
+      plotLog(d.id ? "updated" : "created", "property_documents", newId, t);
       m.remove(); toast("Saved"); renderView();
     }, true);
+    wireAttach("propdoc");
     if (d.id) plotAddDelete(m, "property_documents", d.id, d.title);
   }
 
