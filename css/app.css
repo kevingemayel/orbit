@@ -325,6 +325,37 @@ button{font-family:inherit}
 .man-mock-col-h{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--ink3)}
 .man-mock-card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:6px 8px;font-size:11.5px;color:var(--ink);box-shadow:0 1px 2px rgba(20,22,28,.05)}
 @media(max-width:560px){.man-cmp{grid-template-columns:1fr}.man-mock-cols{grid-template-columns:repeat(2,1fr)}}
+/* guided tutorial: steps that tick themselves off against the user's own data */
+.man-tutbtn{display:inline-flex;align-items:center;gap:7px;background:var(--accent);color:#fff;border:0;border-radius:9px;padding:8px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;margin-top:4px}
+.man-tutbtn:hover{filter:brightness(1.06)}
+.tut-head{display:flex;align-items:center;gap:12px;margin:0 0 20px;flex-wrap:wrap}
+.tut-bar{flex:1;min-width:140px;height:7px;border-radius:999px;background:var(--panel2);border:1px solid var(--line);overflow:hidden}
+.tut-bar i{display:block;height:100%;width:0;background:var(--good);transition:width .35s ease}
+.tut-prog{font-size:12.5px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.tut-recheck{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink2);cursor:pointer}
+.tut-recheck:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.tut-recheck:disabled{opacity:.55;cursor:default}
+.tut-list{display:flex;flex-direction:column;gap:12px}
+.tut-s{display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:start;border:1px solid var(--line);border-left:3px solid var(--line);border-radius:12px;background:var(--panel2);padding:14px 16px}
+.tut-s.done{border-left-color:var(--good);background:var(--good-s)}
+.tut-s-n{width:38px;height:38px;border-radius:10px;background:var(--panel);border:1px solid var(--line);color:var(--accent);display:flex;align-items:center;justify-content:center}
+.tut-s-n svg{width:19px;height:19px}
+.tut-s.done .tut-s-n{color:var(--good);border-color:var(--good)}
+.tut-s-b{min-width:0}
+.tut-s-h{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:6px 0 6px}
+.tut-s-t{font-size:15px;font-weight:700;color:var(--ink);letter-spacing:-.01em}
+.tut-tag{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--ink3);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:2px 9px}
+.tut-s-b p{font-size:13.5px;line-height:1.6;color:var(--ink2);margin:0 0 9px}
+.tut-s-b p b{color:var(--ink)}
+.tut-see{font-size:13px;line-height:1.55;color:var(--ink2);border-left:2px solid var(--line);padding:1px 0 1px 11px;margin:10px 0}
+.tut-see b{color:var(--ink3);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:2px}
+.tut-acts{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:11px}
+.tut-go{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 13px;font:inherit;font-size:12.5px;font-weight:600;color:var(--ink);cursor:pointer}
+.tut-go:hover{border-color:var(--accent);color:var(--accent)}
+.tut-note{font-size:12px;color:var(--ink3);font-variant-numeric:tabular-nums}
+.tut-s.done .tut-note{color:var(--good);font-weight:600}
+.tut-link{color:var(--accent);cursor:pointer;text-decoration:underline}
+@media(max-width:560px){.tut-s{grid-template-columns:1fr}.tut-s-n{display:none}}
 /* material take-off roll-up summary strip */
 .mr-summary{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 14px}
 .mr-summary:empty{display:none}
