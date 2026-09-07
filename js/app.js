@@ -1088,7 +1088,7 @@
         { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"], ["Resident portal access", "portal.admin"]] },
         { label: "Money", items: [["Charges", "plot.charges"], ["Billing runs", "plot.runs"], ["Arrears", "plot.arrears"], ["Expenses", "plot.expenses"], ["Annual budget", "plot.budget"], ["Suppliers", "vend"]] },
         { label: "Works", items: [["Capital projects", "plot.projects"], ["Tasks", "plot.tasks"], ["Today's round", "plot.concierge"], ["Checklist", "plot.checklist"], ["Check-in log", "plot.checkins"]] },
-        { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"], ["Announcements", "plot.announce"], ["Documents", "plot.docs"], ["Committee &amp; roles", "plot.members"]] },
+        { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"], ["Announcements", "plot.announce"], ["Documents", "plot.docs"], ["Committee and roles", "plot.members"]] },
         { label: "People", items: [["Residents", "plot.residents"], ["Resident portal access", "portal.admin"]] },
         { label: "Reports", items: [["Building reports", "plot.reports"], ["Committee view", "plot.committee"], ["Activity log", "plot.activity"], ["Archive", "plot.archive"]] }
       ]
