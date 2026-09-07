@@ -96,8 +96,10 @@ begin
   if not found then return jsonb_build_object('ok', false, 'reason', 'not found'); end if;
   if mt.status <> 'open' then return jsonb_build_object('ok', false, 'reason', 'closed'); end if;
 
-  -- the owner's total shares + a unit id in this building (must own here)
-  select coalesce(sum(u.shares),0), (array_agg(u.id))[1] into sh, uid
+  -- The owner's voting weight + a unit id in this building (must own here).
+  -- Units flagged voting_excluded carry no weight (joint-ownership rules), but
+  -- still identify the owner, so exclusion is applied to shares only.
+  select coalesce(sum(case when u.voting_excluded then 0 else u.shares end),0), (array_agg(u.id))[1] into sh, uid
     from public.property_ownerships o join public.property_units u on u.id = o.unit_id
    where o.company_id = co and o.partner_id = me and u.property_id = mt.property_id;
   if uid is null then return jsonb_build_object('ok', false, 'reason', 'not an owner here'); end if;

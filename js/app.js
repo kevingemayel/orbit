@@ -20297,7 +20297,8 @@
         { label: "Block", get: function (u) { return esc(u.block || ""); } },
         { label: "Floor", get: function (u) { return esc(u.floor || ""); } },
         { label: "Area m2", num: true, get: function (u) { return u.area_m2 != null ? esc(u.area_m2) : ""; } },
-        { label: "Shares", num: true, get: function (u) { return esc(u.shares || 0); } }
+        { label: "Shares", num: true, get: function (u) { return esc(u.shares || 0) + (u.voting_excluded ? ' <span class="badge unpaid" title="Excluded from owner votes">no vote</span>' : ''); } },
+        { label: "Lot", get: function (u) { return '<span class="muted">' + esc(u.lot_number || "") + '</span>'; } }
       ],
       groupBy: [{ label: "Building", get: function (u) { return (u.properties && u.properties.name) || "-"; } }, { label: "Block", get: function (u) { return u.block || "(no block)"; } }, { label: "Type", get: function (u) { return plotUnitKind(u.kind); } }],
       emptyHint: "Add each apartment, parking space or shop with its share of the building. Shares drive how charges are split.",
@@ -20315,10 +20316,12 @@
       '<div class="row2"><div><label>Type</label><select id="pu-kind">' + ["apartment", "parking", "storage", "shop", "office", "common"].map(function (k) { return '<option value="' + k + '"' + (u.kind === k ? " selected" : "") + '>' + plotUnitKind(k) + '</option>'; }).join("") + '</select></div><div><label>Floor</label><input id="pu-floor" value="' + esc(u.floor || "") + '"></div></div>' +
       '<div class="row2"><div><label>Block / entrance</label><input id="pu-block" value="' + esc(u.block || "") + '" placeholder="optional, e.g. A"></div><div><label>Area (m2)</label><input id="pu-area" type="number" step="0.1" value="' + (u.area_m2 != null ? u.area_m2 : "") + '"></div></div>' +
       '<div class="row2"><div><label>Shares (milliemes)</label><input id="pu-shares" type="number" step="0.01" value="' + (u.shares != null ? u.shares : "") + '"></div><div><label>Block shares</label><input id="pu-bshares" type="number" step="0.01" value="' + (u.block_shares != null ? u.block_shares : "") + '" placeholder="only if split within a block"></div></div>' +
-      '<div><label>Bedrooms</label><input id="pu-beds" type="number" step="1" value="' + (u.bedrooms != null ? u.bedrooms : "") + '"></div>';
+      '<div class="row2"><div><label>Bedrooms</label><input id="pu-beds" type="number" step="1" value="' + (u.bedrooms != null ? u.bedrooms : "") + '"></div><div><label>Lot number</label><input id="pu-lot" value="' + esc(u.lot_number || "") + '" placeholder="cadastral lot"></div></div>' +
+      '<div><label>Voting</label><select id="pu-vote"><option value="0"' + (!u.voting_excluded ? " selected" : "") + '>Votes normally</option><option value="1"' + (u.voting_excluded ? " selected" : "") + '>Excluded from voting</option></select><div class="muted" style="font-size:12px;margin-top:3px">An excluded unit still pays charges but carries no weight in owner votes.</div></div>' +
+      '<div><label>Notes</label><textarea id="pu-notes" rows="2">' + esc(u.notes || "") + '</textarea></div>';
     var m = plotModal(u.id ? "Edit unit" : "New unit", inner, async function () {
       var code = gv("pu-code"); if (!code) { toast("Enter a unit code"); return; }
-      var row = { company_id: S.company.id, property_id: gv("pu-prop"), code: code, kind: gv("pu-kind"), floor: gv("pu-floor") || null, block: gv("pu-block") || null, area_m2: gv("pu-area") ? Number(gv("pu-area")) : null, shares: Number(gv("pu-shares")) || 0, block_shares: Number(gv("pu-bshares")) || 0, bedrooms: gv("pu-beds") ? parseInt(gv("pu-beds"), 10) : null };
+      var row = { company_id: S.company.id, property_id: gv("pu-prop"), code: code, kind: gv("pu-kind"), floor: gv("pu-floor") || null, block: gv("pu-block") || null, area_m2: gv("pu-area") ? Number(gv("pu-area")) : null, shares: Number(gv("pu-shares")) || 0, block_shares: Number(gv("pu-bshares")) || 0, bedrooms: gv("pu-beds") ? parseInt(gv("pu-beds"), 10) : null, lot_number: gv("pu-lot") || null, voting_excluded: gv("pu-vote") === "1", notes: gv("pu-notes") || null };
       var r = u.id ? await sb.from("property_units").update(row).eq("id", u.id) : await sb.from("property_units").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
@@ -20390,11 +20393,12 @@
       '<div class="row2"><div><label>Unit</label>' + plotSel("pt-unit", units, tn.unit_id, "(pick a unit)", function (u) { return u.code + ((u.properties && u.properties.name) ? " - " + u.properties.name : ""); }) + '</div><div><label>Tenant (contact)</label>' + plotSel("pt-partner", partners, tn.partner_id, "(pick a contact)") + '</div></div>' +
       '<div class="row2"><div><label>Rent</label><input id="pt-rent" type="number" step="0.01" value="' + (tn.rent_amount != null ? tn.rent_amount : "") + '"></div><div><label>Period</label><select id="pt-period">' + ["monthly", "quarterly", "yearly"].map(function (f) { return '<option value="' + f + '"' + (tn.rent_period === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Deposit</label><input id="pt-dep" type="number" step="0.01" value="' + (tn.deposit != null ? tn.deposit : "") + '"></div><div><label>Status</label><select id="pt-status">' + ["active", "notice", "ended"].map(function (s) { return '<option value="' + s + '"' + (tn.status === s ? " selected" : "") + '>' + s + '</option>'; }).join("") + '</select></div></div>' +
-      '<div class="row2"><div><label>Start</label><input id="pt-start" type="date" value="' + esc(tn.start_date || "") + '"></div><div><label>End</label><input id="pt-end" type="date" value="' + esc(tn.end_date || "") + '"></div></div>';
+      '<div class="row2"><div><label>Start</label><input id="pt-start" type="date" value="' + esc(tn.start_date || "") + '"></div><div><label>End</label><input id="pt-end" type="date" value="' + esc(tn.end_date || "") + '"></div></div>' +
+      '<div><label>Who pays the building charges?</label><select id="pt-pays"><option value="0"' + (!tn.pays_charges ? " selected" : "") + '>The owner</option><option value="1"' + (tn.pays_charges ? " selected" : "") + '>The tenant</option></select></div>';
     var m = plotModal(tn.id ? "Edit tenancy" : "New tenancy", inner, async function () {
       var unit = gv("pt-unit"), partner = gv("pt-partner");
       if (!unit || !partner) { toast("Pick a unit and a contact"); return; }
-      var row = { company_id: S.company.id, unit_id: unit, partner_id: partner, rent_amount: Number(gv("pt-rent")) || 0, rent_period: gv("pt-period"), deposit: Number(gv("pt-dep")) || 0, status: gv("pt-status"), start_date: gv("pt-start") || null, end_date: gv("pt-end") || null };
+      var row = { company_id: S.company.id, unit_id: unit, partner_id: partner, rent_amount: Number(gv("pt-rent")) || 0, rent_period: gv("pt-period"), deposit: Number(gv("pt-dep")) || 0, status: gv("pt-status"), start_date: gv("pt-start") || null, end_date: gv("pt-end") || null, pays_charges: gv("pt-pays") === "1" };
       var r = tn.id ? await sb.from("property_tenancies").update(row).eq("id", tn.id) : await sb.from("property_tenancies").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
@@ -21066,11 +21070,15 @@
     }
     var lines = (await sb.from("property_budget_lines").select("*").eq("budget_id", bud.id).order("sort").order("label")).data || [];
     // actuals: posted bills for this property in the budget year
-    var bills = (await sb.from("invoices").select("amount_total,invoice_date,ref").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "in_invoice").gte("invoice_date", bud.year + "-01-01").lte("invoice_date", bud.year + "-12-31")).data || [];
-    var actualByCat = {}; bills.forEach(function (b) { var k = (b.ref || "").toLowerCase(); actualByCat._total = (actualByCat._total || 0) + Number(b.amount_total || 0); });
+    var bills = (await sb.from("invoices").select("amount_total,invoice_date,property_category").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "in_invoice").gte("invoice_date", bud.year + "-01-01").lte("invoice_date", bud.year + "-12-31")).data || [];
+    // actual spend per category, so each budget line gets a real variance
+    var actualByCat = {}, totalActual = 0;
+    bills.forEach(function (b) { var k = (b.property_category || "other"); var v = Number(b.amount_total || 0); actualByCat[k] = (actualByCat[k] || 0) + v; totalActual += v; });
     var totalBudget = lines.reduce(function (s, l) { return s + Number(l.amount || 0); }, 0);
-    var totalActual = actualByCat._total || 0;
     var pct = totalBudget > 0 ? Math.round(totalActual / totalBudget * 100) : 0;
+    // spend in categories with no budget line still has to show up somewhere
+    var budgetedCats = {}; lines.forEach(function (l) { budgetedCats[l.category] = true; });
+    var unbudgeted = Object.keys(actualByCat).filter(function (k) { return !budgetedCats[k]; });
     var picker = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><label style="font-weight:600">Building</label><select id="bd-prop" style="max-width:280px">' +
       props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' +
       '<select id="bd-year" style="max-width:120px">' + buds.map(function (b) { return '<option value="' + b.id + '"' + (b.id === bud.id ? " selected" : "") + '>' + b.year + '</option>'; }).join("") + '</select>' +
@@ -21080,9 +21088,18 @@
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">' +
       plotStat("Budgeted " + bud.year, moneyC(totalBudget), "") + plotStat("Actually spent", moneyC(totalActual), "") +
       plotStat("Used", pct + "%", pct > 100 ? "warn" : "") + '</div>' +
-      (lines.length ? '<table class="o-list"><thead><tr><th>Line</th><th>Category</th><th class="num">Budgeted</th><th></th></tr></thead><tbody>' +
-        lines.map(function (l) { return '<tr><td><b>' + esc(l.label || "") + '</b></td><td>' + esc(plotCatLabel(l.category)) + '</td><td class="num">' + moneyC(l.amount) + '</td><td class="right"><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad)">&times;</button></td></tr>'; }).join("") +
-        '<tr style="font-weight:700"><td colspan="2">Total</td><td class="num">' + moneyC(totalBudget) + '</td><td></td></tr></tbody></table>'
+      (lines.length ? '<table class="o-list"><thead><tr><th>Line</th><th>Category</th><th class="num">Budgeted</th><th class="num">Actual</th><th class="num">Left</th><th>Used</th><th></th></tr></thead><tbody>' +
+        lines.map(function (l) {
+          var act = actualByCat[l.category] || 0, bud2 = Number(l.amount || 0), left = bud2 - act, lp = bud2 > 0 ? Math.round(act / bud2 * 100) : 0;
+          return '<tr><td><b>' + esc(l.label || "") + '</b></td><td>' + esc(plotCatLabel(l.category)) + '</td><td class="num">' + moneyC(bud2) + '</td><td class="num">' + moneyC(act) + '</td>' +
+            '<td class="num" style="color:' + (left < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(left) + '</td>' +
+            '<td><span class="badge ' + (lp > 100 ? "unpaid" : lp > 85 ? "partial" : "paid") + '">' + lp + '%</span></td>' +
+            '<td class="right"><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad)">&times;</button></td></tr>';
+        }).join("") +
+        unbudgeted.map(function (k) {
+          return '<tr style="opacity:.8"><td><i>Unbudgeted spend</i></td><td>' + esc(plotCatLabel(k)) + '</td><td class="num">-</td><td class="num">' + moneyC(actualByCat[k]) + '</td><td class="num" style="color:var(--bad)">' + moneyC(-actualByCat[k]) + '</td><td><span class="badge unpaid">n/a</span></td><td></td></tr>';
+        }).join("") +
+        '<tr style="font-weight:700"><td colspan="2">Total</td><td class="num">' + moneyC(totalBudget) + '</td><td class="num">' + moneyC(totalActual) + '</td><td class="num" style="color:' + ((totalBudget - totalActual) < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(totalBudget - totalActual) + '</td><td><span class="badge ' + (pct > 100 ? "unpaid" : "paid") + '">' + pct + '%</span></td><td></td></tr></tbody></table>'
         : '<div class="o-empty2"><div class="o-empty2-t">No budget lines yet</div><div class="o-empty2-h">Add lines, or press <b>Fill from charges</b> to turn the building\'s recurring charges into a yearly budget.</div></div>') + '</div>';
     document.getElementById("bd-prop").onchange = function () { plotSetProp(this.value); renderPlotBudget(); };
     document.getElementById("bd-year").onchange = function () { renderPlotBudget(); };
