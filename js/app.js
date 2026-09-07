@@ -20265,6 +20265,9 @@
       (b.orphans && b.orphans.length ? '<div class="o-note warn" style="margin:8px 0"><b>' + b.orphans.length + ' charge(s) are scoped to a block that no unit belongs to</b> (' + esc(b.orphans.map(function (o) { return o.name + " - block " + o.block; }).join(", ")) + '), so they are billed to nobody and are excluded from the figures above. Fix the block on the charge or on the units.</div>' : "") +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">' +
       '<button class="o-new" id="pl-gen">Generate this period\'s charges</button>' +
+      '<button class="o-filtbtn" id="pl-pay">Record a payment</button>' +
+      '<button class="o-filtbtn" id="pl-assess">Special assessment</button>' +
+      '<button class="o-filtbtn" id="pl-stmt">Owner statement</button>' +
       '<button class="o-filtbtn" id="pl-give">Give back to owners</button>' +
       '<button class="o-filtbtn" id="pl-units">Units</button><button class="o-filtbtn" id="pl-charges">Charges</button><button class="o-filtbtn" id="pl-meet">Meetings</button>' +
       '</div>';
@@ -20272,6 +20275,9 @@
     document.getElementById("pl-edit").onclick = function () { openPropertyModal(prop); };
     document.getElementById("pl-gen").onclick = function () { openChargeRunModal(prop); };
     document.getElementById("pl-give").onclick = function () { openGivebackModal(prop); };
+    document.getElementById("pl-pay").onclick = function () { openPlotPaymentModal(cur); };
+    document.getElementById("pl-assess").onclick = function () { openAssessmentModal(prop); };
+    document.getElementById("pl-stmt").onclick = function () { openOwnerStatement(cur); };
     document.getElementById("pl-units").onclick = function () { go("plot.units"); };
     document.getElementById("pl-charges").onclick = function () { go("plot.charges"); };
     document.getElementById("pl-meet").onclick = function () { go("plot.meetings"); };
@@ -20301,6 +20307,7 @@
   }
   async function openPropertyModal(p) {
     p = p || {};
+    var pf = p.profile || {};
     var partners = await plotPartners();
     var accts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("type_code", "income").order("code")).data || [];
     var inner =
@@ -20311,10 +20318,17 @@
       '<div><label>Address</label><input id="pp-addr" value="' + esc(p.address || "") + '"></div>' +
       '<div class="row2"><div><label>Shares total (milliemes)</label><input id="pp-shares" type="number" step="1" value="' + (p.shares_total || 1000) + '"></div><div><label>Reserve fund uplift %</label><input id="pp-reserve" type="number" step="0.5" value="' + (Number(p.reserve_percent || 0)) + '"></div></div>' +
       '<div class="row2"><div><label>Opening balance</label><input id="pp-open" type="number" step="0.01" value="' + (Number(p.opening_balance || 0)) + '"><div class="muted" style="font-size:12px;margin-top:3px">Cash the building already held before Orbit.</div></div><div><label>Reserve to keep on hand</label><input id="pp-limit" type="number" step="0.01" value="' + (p.cash_limit != null ? p.cash_limit : "") + '"><div class="muted" style="font-size:12px;margin-top:3px">Anything above this is offered as a give-back.</div></div></div>' +
-      '<div class="row2"><div><label>Manager (contact)</label>' + plotSel("pp-mgr", partners, p.manager_partner_id, "(none)") + '</div><div><label>Charges income account</label>' + plotSel("pp-inc", accts, p.income_account_id, "(default)", function (a) { return (a.code ? a.code + " " : "") + a.name; }) + '</div></div>';
+      '<div class="row2"><div><label>Manager (contact)</label>' + plotSel("pp-mgr", partners, p.manager_partner_id, "(none)") + '</div><div><label>Charges income account</label>' + plotSel("pp-inc", accts, p.income_account_id, "(default)", function (a) { return (a.code ? a.code + " " : "") + a.name; }) + '</div></div>' +
+      '<div class="o-cf-head" style="margin-top:8px">Officers &amp; documents</div>' +
+      '<div class="row2"><div><label>Committee head</label><input id="pp-head" value="' + esc(pf.committee_head || "") + '"></div><div><label>Treasurer</label><input id="pp-treas" value="' + esc(pf.treasurer_name || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Property number</label><input id="pp-propno" value="' + esc(pf.property_number || "") + '"></div><div><label>Cadastral zone</label><input id="pp-cad" value="' + esc(pf.cadastral_zone || "") + '"></div></div>' +
+      '<div><label>Bylaws reference</label><input id="pp-bylaws" value="' + esc(pf.bylaws_ref || "") + '"></div>' +
+      '<div><label>How owners pay</label><textarea id="pp-payinfo" rows="2" placeholder="Bank details or where to hand cash in - printed on notices">' + esc(pf.payment_instructions || "") + '</textarea></div>' +
+      '<div><label>Footer / disclaimer on documents</label><textarea id="pp-disc" rows="2">' + esc(pf.disclaimer || "") + '</textarea></div>';
     var m = plotModal(p.id ? "Edit building" : "New building", inner, async function () {
       var name = gv("pp-name"); if (!name) { toast("Enter a name"); return; }
-      var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null, opening_balance: Number(gv("pp-open")) || 0, cash_limit: gv("pp-limit") ? Number(gv("pp-limit")) : null };
+      var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null, opening_balance: Number(gv("pp-open")) || 0, cash_limit: gv("pp-limit") ? Number(gv("pp-limit")) : null,
+        profile: Object.assign({}, pf, { committee_head: gv("pp-head") || null, treasurer_name: gv("pp-treas") || null, property_number: gv("pp-propno") || null, cadastral_zone: gv("pp-cad") || null, bylaws_ref: gv("pp-bylaws") || null, payment_instructions: gv("pp-payinfo") || null, disclaimer: gv("pp-disc") || null }) };
       var r = p.id ? await sb.from("properties").update(row).eq("id", p.id) : await sb.from("properties").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (!p.id && r.data) plotSetProp(r.data.id);
@@ -20869,11 +20883,13 @@
     var pr = document.createElement("button"); pr.className = "btn"; pr.textContent = "Print letter";
     pr.onclick = function () {
       var uSel = document.getElementById("nt-unit"), pSel = document.getElementById("nt-partner");
+      var theProp = props.filter(function (p) { return p.id === gv("nt-prop"); })[0] || {};
       plotPrintNotice({
         stage: parseInt(gv("nt-stage"), 10) || 1, amount: Number(gv("nt-amt")) || 0, months: parseInt(gv("nt-months"), 10) || 0,
+        partner_id: gv("nt-partner") || null, property_id: gv("nt-prop") || null, propProfile: theProp.profile || {},
         ownerName: pSel && pSel.options[pSel.selectedIndex] ? pSel.options[pSel.selectedIndex].text : "",
         unitCode: uSel && uSel.value && uSel.options[uSel.selectedIndex] ? uSel.options[uSel.selectedIndex].text : "",
-        buildingName: (props.filter(function (p) { return p.id === gv("nt-prop"); })[0] || {}).name || ""
+        buildingName: theProp.name || ""
       });
     };
     foot.insertBefore(pr, foot.querySelector("[data-s]"));
@@ -21230,10 +21246,29 @@
     if (d.id) plotAddDelete(m, "property_documents", d.id, d.title);
   }
 
-  // A formal overdue-payment letter for a notice, opened ready to print.
-  function plotPrintNotice(d) {
+  // A formal overdue-payment letter, with the schedule of unpaid charges it
+  // relies on. A stage-3 letter that makes a legal claim has to show its working.
+  async function plotPrintNotice(d) {
     var c = S.company || {}, cur = c.currency_code || "";
     var amt = (cur ? cur + " " : "") + money(d.amount || 0);
+    // the actual unpaid invoices behind the figure
+    var sched = [];
+    if (d.partner_id) {
+      var q = sb.from("invoices").select("number,invoice_date,due_date,amount_total,amount_residual,ref,property_units(code)").eq("company_id", S.company.id).eq("partner_id", d.partner_id).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0);
+      if (d.property_id) q = q.eq("property_id", d.property_id);
+      sched = (await q.order("due_date")).data || [];
+    }
+    var prof = (d.propProfile || {});
+    var schedHTML = sched.length
+      ? '<h3 style="font-size:14px;margin:20px 0 6px">Schedule of unpaid charges</h3>' +
+      '<table style="border-collapse:collapse;width:100%;font-size:12.5px"><thead><tr>' +
+      ["Document", "Unit", "Issued", "Due", "Outstanding"].map(function (h) { return '<th style="text-align:' + (h === "Outstanding" ? "right" : "left") + ';border-bottom:1px solid #333;padding:5px 7px">' + h + '</th>'; }).join("") +
+      '</tr></thead><tbody>' + sched.map(function (i) {
+        return '<tr><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.number || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc((i.property_units && i.property_units.code) || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.invoice_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.due_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee;text-align:right">' + money(i.amount_residual) + '</td></tr>';
+      }).join("") +
+      '<tr><td colspan="4" style="padding:6px 7px;font-weight:700">Total</td><td style="padding:6px 7px;text-align:right;font-weight:700">' + money(sched.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0)) + '</td></tr>' +
+      '</tbody></table><p style="font-size:12.5px;color:#555">This schedule forms an integral part of this notice.</p>'
+      : '';
     var stageBody = {
       1: '<p>Our records show that the maintenance charges for your unit are currently overdue. This is a friendly reminder to settle the outstanding balance at your earliest convenience.</p>',
       2: '<p>Despite our earlier reminder, the maintenance charges for your unit remain unpaid. We ask that you settle the outstanding balance without further delay. Continued non-payment affects the whole building, as shared services are funded by these contributions.</p>',
@@ -21252,8 +21287,17 @@
       stageBody +
       '<table style="border-collapse:collapse;margin:14px 0;font-size:13px"><tr><td style="padding:6px 18px 6px 0;color:#555">Amount outstanding</td><td style="font-weight:800;font-size:16px">' + esc(amt) + '</td></tr>' +
       (d.months ? '<tr><td style="padding:6px 18px 6px 0;color:#555">Months overdue</td><td style="font-weight:600">' + esc(d.months) + '</td></tr>' : '') + '</table>' +
+      schedHTML +
+      (prof.payment_instructions ? '<h3 style="font-size:14px;margin:18px 0 4px">How to pay</h3><div style="white-space:pre-wrap;font-size:13px">' + esc(prof.payment_instructions) + '</div>' : '') +
       '<p style="color:#333">If you have already made this payment, please disregard this letter and accept our thanks. For any question about your account, please contact the building management.</p>' +
-      '<div style="margin-top:34px;color:#333"><div>Respectfully,</div><div style="font-weight:700;margin-top:26px">' + esc(c.name || "The Syndicate") + '</div><div style="color:#555;font-size:12.5px">Building management</div></div></div>';
+      ((prof.property_number || prof.cadastral_zone || prof.bylaws_ref) ?
+        '<p style="font-size:12px;color:#555">' + [prof.property_number ? "Property no. " + prof.property_number : "", prof.cadastral_zone ? "cadastral zone " + prof.cadastral_zone : "", prof.bylaws_ref ? "bylaws ref. " + prof.bylaws_ref : ""].filter(Boolean).map(esc).join(" &middot; ") + '</p>' : '') +
+      '<div style="margin-top:34px;color:#333"><div>Respectfully,</div>' +
+      '<div style="margin-top:30px;display:flex;gap:60px">' +
+      '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.committee_head || "Committee head") + '</div></div>' +
+      '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.treasurer_name || "Treasurer") + '</div></div></div>' +
+      '<div style="font-weight:700;margin-top:18px">' + esc(c.name || "The Syndicate") + '</div></div>' +
+      (prof.disclaimer ? '<p style="font-size:11.5px;color:#777;margin-top:18px;border-top:1px solid #ddd;padding-top:8px">' + esc(prof.disclaimer) + '</p>' : '') + '</div>';
     var w = window.open("", "_blank");
     w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.6}p{margin:10px 0}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
     w.document.close();
@@ -21691,6 +21735,142 @@
         '</tbody></table>' : '<div class="muted" style="font-size:12.5px">No expenses recorded yet.</div>') + '</div>';
     document.getElementById("cm-prop").onchange = function () { plotSetProp(this.value); renderPlotCommittee(); };
     document.getElementById("cm-print").onclick = function () { window.print(); };
+  }
+
+  // ---- One-off assessment: a special levy outside the recurring charges
+  //      (a lift repair, a facade job), split by share or equally.
+  async function openAssessmentModal(prop) {
+    if (!prop) { toast("Pick a building"); return; }
+    var units = (await sb.from("property_units").select("*").is("deleted_at", null).eq("property_id", prop.id).eq("is_active", true)).data || [];
+    if (!units.length) { toast("This building has no units"); return; }
+    var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").is("deleted_at", null).eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
+    var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
+    var blocks = []; units.forEach(function (u) { var v = (u.block || "").trim(); if (v && blocks.indexOf(v) < 0) blocks.push(v); });
+    var eom = new Date(); eom = new Date(eom.getFullYear(), eom.getMonth() + 1, 0).toISOString().slice(0, 10);
+    var inner =
+      '<div class="o-note">A one-off levy on top of the regular charges. Enter the total the building needs to raise; it is split across the units and each owner gets a draft invoice.</div>' +
+      '<div class="row2"><div><label>What is it for</label><input id="as-name" placeholder="e.g. Lift motor replacement"></div><div><label>Total to raise</label><input id="as-amt" type="number" step="0.01"></div></div>' +
+      '<div class="row2"><div><label>Split</label><select id="as-basis"><option value="share">By share (milliemes)</option><option value="equal">Equally per unit</option></select></div><div><label>Due date</label><input id="as-due" type="date" value="' + eom + '"></div></div>' +
+      (blocks.length ? '<div><label>Only one block?</label><select id="as-block"><option value="">Whole building</option>' + blocks.map(function (b) { return '<option value="' + esc(b) + '">Block ' + esc(b) + '</option>'; }).join("") + '</select></div>' : '') +
+      '<div id="as-prev" class="muted" style="font-size:12.5px"></div>';
+    function calc() {
+      var total = Number(gv("as-amt")) || 0, basis = gv("as-basis"), blk = document.getElementById("as-block") ? gv("as-block") : "";
+      var pool = units.filter(function (u) { return !blk || (u.block || "").trim() === blk; });
+      var tot = pool.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
+      return pool.map(function (u) {
+        var amt = basis === "equal" ? (pool.length ? total / pool.length : 0) : (tot > 0 ? total * (Number(u.shares || 0) / tot) : 0);
+        return { unit: u, partner: primaryByUnit[u.id], amt: Math.round(amt * 100) / 100 };
+      });
+    }
+    var m = plotModal("Special assessment - " + prop.name, inner, async function (mm) {
+      var name = gv("as-name"), total = Number(gv("as-amt")) || 0;
+      if (!name) { toast("Say what the levy is for"); return; }
+      if (total <= 0) { toast("Enter the total to raise"); return; }
+      var rows = calc().filter(function (r) { return r.partner && r.amt > 0.005; });
+      if (!rows.length) { toast("No units with an owner to bill"); return; }
+      // rounding remainder onto the largest, so the levy raises exactly the total
+      var sum = rows.reduce(function (s, r) { return s + r.amt; }, 0), rem = Math.round((total - sum) * 100) / 100;
+      if (Math.abs(rem) >= 0.01) { var big = rows.reduce(function (a, r) { return r.amt > a.amt ? r : a; }, rows[0]); big.amt = Math.round((big.amt + rem) * 100) / 100; }
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Raising...";
+      var run = await sb.from("property_charge_runs").insert({ company_id: S.company.id, property_id: prop.id, period: name.slice(0, 60), issue_date: today(), due_date: gv("as-due") || null, units_billed: rows.length, amount_total: total, currency_code: S.company.currency_code, kind: "assessment", basis: gv("as-basis"), note: name, created_by: (S.user && S.user.id) || null }).select("id").single();
+      if (run.error) { toast(errMsg(run.error)); btn.disabled = false; btn.textContent = "Save"; return; }
+      var made = 0;
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i], num = await nextNumber("out_invoice");
+        var inv = await sb.from("invoices").insert({ company_id: S.company.id, move_type: "out_invoice", partner_id: r.partner, number: num, invoice_date: today(), due_date: gv("as-due") || null, currency_code: S.company.currency_code, state: "draft", amount_untaxed: r.amt, amount_tax: 0, amount_total: r.amt, amount_residual: r.amt, property_id: prop.id, property_unit_id: r.unit.id, property_charge_run_id: run.data.id, ref: name }).select("id").single();
+        if (inv.error) continue;
+        await sb.from("invoice_lines").insert({ company_id: S.company.id, invoice_id: inv.data.id, name: name + " (" + r.unit.code + ")", sequence: 1, quantity: 1, unit_price: r.amt, discount: 0, account_id: prop.income_account_id || null, price_subtotal: r.amt, price_total: r.amt });
+        made++;
+      }
+      plotLog("billed", "property_charge_runs", run.data.id, name, made + " assessment invoice(s)", prop.id);
+      m.remove(); toast(made + " draft invoice(s) raised"); go("inv.out");
+    }, true);
+    function preview() {
+      var rows = calc(), p = document.getElementById("as-prev");
+      var n = rows.filter(function (r) { return r.partner; }).length;
+      p.innerHTML = n ? "Across " + n + " unit(s). Largest share pays " + moneyC(Math.max.apply(null, rows.map(function (r) { return r.amt; }))) + "." : "";
+    }
+    ["as-amt", "as-basis", "as-block"].forEach(function (id) { var el = document.getElementById(id); if (el) { el.oninput = preview; el.onchange = preview; } });
+  }
+
+  // ---- Record a receipt against an owner's charges (owner or tenant paying) ----
+  async function openPlotPaymentModal(propId) {
+    var owed = (await sb.from("invoices").select("id,number,invoice_date,due_date,amount_total,amount_residual,partner_id,property_unit_id,partners(name),property_units(code)").eq("company_id", S.company.id).eq("property_id", propId).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0).order("due_date")).data || [];
+    if (!owed.length) { toast("Nothing outstanding on this building"); return; }
+    var inner = '<div><label>Charge being paid</label><select id="pp-inv">' + owed.map(function (i) {
+      return '<option value="' + i.id + '" data-res="' + Number(i.amount_residual) + '" data-p="' + esc(i.partner_id || "") + '" data-n="' + esc((i.partners && i.partners.name) || "") + '">' +
+        esc((i.property_units && i.property_units.code) || "") + " - " + esc((i.partners && i.partners.name) || "") + " - " + esc(i.number) + " (" + money(i.amount_residual) + " left)</option>";
+    }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Amount received</label><input id="pp-amt" type="number" step="0.01"></div><div><label>Date</label><input id="pp-date" type="date" value="' + today() + '"></div></div>' +
+      '<div class="row2"><div><label>Paid by</label><select id="pp-ptype"><option value="owner">The owner</option><option value="tenant">The tenant</option><option value="other">Someone else</option></select></div><div><label>Their name</label><input id="pp-pname"></div></div>' +
+      '<div class="row2"><div><label>How</label><select id="pp-method">' + [["cash", "Cash"], ["bank", "Bank transfer"], ["cheque", "Cheque"], ["card", "Card"], ["other", "Other"]].map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join("") + '</select></div><div><label>Reference</label><input id="pp-ref"></div></div>';
+    var m = plotModal("Record a payment", inner, async function (mm) {
+      var sel = document.getElementById("pp-inv"), opt = sel.options[sel.selectedIndex];
+      var amt = Number(gv("pp-amt")) || 0, res = Number(opt.dataset.res) || 0;
+      if (amt <= 0) { toast("Enter the amount received"); return; }
+      if (amt > res + 0.005 && !confirm("That is more than the " + moneyC(res) + " outstanding on this charge. Continue?")) return;
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true;
+      var pay = await sb.from("payments").insert({ company_id: S.company.id, partner_id: opt.dataset.p || null, payment_type: "inbound", date: gv("pp-date") || today(), amount: amt, currency_code: S.company.currency_code, amount_company: amt, memo: "Building charges " + opt.textContent.slice(0, 60), reference: gv("pp-ref") || null, state: "posted", method: gv("pp-method"), payer_type: gv("pp-ptype"), payer_name: gv("pp-pname") || opt.dataset.n || null }).select("id").single();
+      if (pay.error) { toast(errMsg(pay.error)); btn.disabled = false; return; }
+      var left = Math.max(0, Math.round((res - amt) * 100) / 100);
+      await sb.from("invoices").update({ amount_residual: left, payment_state: left <= 0.005 ? "paid" : "partial" }).eq("id", sel.value);
+      plotLog("received", "payments", pay.data.id, moneyC(amt), "from " + (gv("pp-pname") || opt.dataset.n || ""), propId);
+      m.remove(); toast("Payment recorded");
+      plotReceiptDoc({ amount: amt, date: gv("pp-date") || today(), who: gv("pp-pname") || opt.dataset.n || "", method: gv("pp-method"), ref: gv("pp-ref"), doc: opt.textContent, left: left });
+      renderView();
+    }, true);
+    document.getElementById("pp-inv").onchange = function () { var o = this.options[this.selectedIndex]; document.getElementById("pp-amt").value = o.dataset.res; document.getElementById("pp-pname").value = o.dataset.n || ""; };
+    document.getElementById("pp-inv").onchange();
+  }
+  function plotReceiptDoc(p) {
+    var c = S.company || {};
+    var when = new Date(p.date).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+    var inner = '<div style="max-width:520px;margin:0 auto">' +
+      '<div style="border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:18px"><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div><div style="color:#555;font-size:13px">Receipt</div></div>' +
+      '<p>Received with thanks from <b>' + esc(p.who || "the owner") + '</b> the sum of</p>' +
+      '<div style="font-size:30px;font-weight:800;margin:6px 0 14px">' + esc(moneyC(p.amount)) + '</div>' +
+      '<table style="border-collapse:collapse;font-size:13px"><tr><td style="padding:4px 16px 4px 0;color:#555">Date</td><td>' + esc(when) + '</td></tr>' +
+      '<tr><td style="padding:4px 16px 4px 0;color:#555">For</td><td>' + esc(p.doc || "building charges") + '</td></tr>' +
+      '<tr><td style="padding:4px 16px 4px 0;color:#555">Method</td><td>' + esc(p.method || "") + (p.ref ? " - " + esc(p.ref) : "") + '</td></tr>' +
+      '<tr><td style="padding:4px 16px 4px 0;color:#555">Balance remaining</td><td>' + esc(moneyC(p.left)) + '</td></tr></table>' +
+      '<div style="margin-top:40px"><div style="border-top:1px solid #333;width:210px;padding-top:6px;color:#555;font-size:12.5px">For the syndicate</div></div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>Receipt</title><style>body{font-family:Georgia,serif;padding:40px;color:#16171c;line-height:1.6}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.close();
+  }
+
+  // ---- Owner statement: every charge and payment for one owner ----
+  async function openOwnerStatement(propId) {
+    var owns = (await sb.from("property_ownerships").select("partner_id,partners(name)").is("deleted_at", null).eq("company_id", S.company.id).is("end_date", null)).data || [];
+    var seen = {}, list = [];
+    owns.forEach(function (o) { if (o.partner_id && !seen[o.partner_id]) { seen[o.partner_id] = 1; list.push({ id: o.partner_id, name: (o.partners && o.partners.name) || "" }); } });
+    if (!list.length) { toast("No owners on file"); return; }
+    list.sort(function (a, b) { return a.name > b.name ? 1 : -1; });
+    var inner = '<div><label>Owner</label>' + plotSel("st-owner", list, null, null) + '</div>';
+    var m = plotModal("Owner statement", inner, async function () {
+      var pid = gv("st-owner"); if (!pid) return;
+      var who = (list.filter(function (x) { return x.id === pid; })[0] || {}).name || "";
+      var inv = (await sb.from("invoices").select("number,invoice_date,due_date,amount_total,amount_residual,ref,move_type,property_units(code)").eq("company_id", S.company.id).eq("property_id", propId).eq("partner_id", pid).eq("state", "posted").order("invoice_date")).data || [];
+      var pays = (await sb.from("payments").select("date,amount,method,reference").eq("company_id", S.company.id).eq("partner_id", pid).eq("payment_type", "inbound").order("date")).data || [];
+      m.remove(); plotStatementDoc(who, inv, pays);
+    });
+  }
+  function plotStatementDoc(who, inv, pays) {
+    var c = S.company || {}, bal = 0;
+    var rows = [];
+    inv.forEach(function (i) { var sign = i.move_type === "out_refund" ? -1 : 1; rows.push({ d: i.invoice_date, t: (sign < 0 ? "Credit note " : "Charge ") + (i.number || ""), r: i.ref || ((i.property_units && i.property_units.code) || ""), dr: sign > 0 ? Number(i.amount_total || 0) : 0, cr: sign < 0 ? Number(i.amount_total || 0) : 0 }); });
+    pays.forEach(function (p) { rows.push({ d: p.date, t: "Payment received", r: (p.method || "") + (p.reference ? " " + p.reference : ""), dr: 0, cr: Number(p.amount || 0) }); });
+    rows.sort(function (a, b) { return (a.d || "") > (b.d || "") ? 1 : -1; });
+    var body = rows.map(function (r) { bal += r.dr - r.cr; return '<tr><td style="padding:5px 8px;border-bottom:1px solid #eee">' + esc(r.d || "") + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee">' + esc(r.t) + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;color:#555">' + esc(r.r) + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right">' + (r.dr ? money(r.dr) : "") + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right">' + (r.cr ? money(r.cr) : "") + '</td><td style="padding:5px 8px;border-bottom:1px solid #eee;text-align:right">' + money(bal) + '</td></tr>'; }).join("");
+    var inner = '<div style="max-width:760px;margin:0 auto">' +
+      '<div style="border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:16px"><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div><div style="color:#555;font-size:13px">Statement of account</div></div>' +
+      '<div style="margin-bottom:12px"><b>' + esc(who) + '</b><div style="color:#555;font-size:12.5px">As at ' + esc(new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })) + '</div></div>' +
+      '<table style="border-collapse:collapse;width:100%;font-size:12.5px"><thead><tr>' +
+      ["Date", "Item", "Reference", "Charged", "Paid", "Balance"].map(function (h) { return '<th style="text-align:' + (["Charged", "Paid", "Balance"].indexOf(h) >= 0 ? "right" : "left") + ';border-bottom:1px solid #333;padding:6px 8px">' + h + '</th>'; }).join("") + '</tr></thead><tbody>' + body + '</tbody></table>' +
+      '<div style="margin-top:14px;font-size:15px;text-align:right"><b>Balance due: ' + esc(moneyC(bal)) + '</b></div></div>';
+    var w = window.open("", "_blank");
+    w.document.write('<html><head><title>Statement - ' + esc(who) + '</title><style>body{font-family:Arial,Helvetica,sans-serif;padding:32px;color:#16171c}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.close();
   }
 
   // ---- Committee & roles (per building, which company roles cannot express) ----
