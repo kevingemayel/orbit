@@ -3948,6 +3948,9 @@
       ? '<select id="f-partner">' + opt(partners, inv ? inv.partner_id : null, function (p) { return p.id; }, function (p) { return p.name; }) + '</select>'
       : '<span class="v">' + esc(inv && inv.partners ? inv.partners.name : "") + '</span>';
     var invCosts = isSale ? [] : (((await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data) || []);
+    // Buildings, so a bill can be tagged to one. Without this a building has no
+    // expenses, no budget actuals and no P&L of its own.
+    var invProps = (((await sb.from("properties").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || []);
     var groups =
       '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
@@ -3959,6 +3962,9 @@
       fld("Due Date", editable ? '<input id="f-due" type="date" value="' + (inv ? inv.due_date || "" : new Date(Date.now() + 2592e6).toISOString().slice(0, 10)) + '">' : '<span class="v">' + esc(inv.due_date || "") + '</span>', "When payment is expected. Set automatically from the payment terms; you can override it.") +
       fld("Project", editable ? '<select id="f-proj"><option value="">(none)</option>' + projects.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((projects.filter(function (pr) { return inv && pr.id === inv.project_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a project/site so its cost and revenue roll up in the Project P&L.") +
       (isSale ? "" : fld("Cost Code", editable ? '<select id="f-costcode"><option value="">(none)</option>' + invCosts.map(function (c) { return '<option value="' + c.id + '"' + ((inv && inv.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((invCosts.filter(function (c) { return inv && c.id === inv.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing - this bill rolls up under this code in the Job Cost report.")) +
+      (invProps.length ? fld("Building", editable ? '<select id="f-prop"><option value="">(none)</option>' + invProps.map(function (pr) { return '<option value="' + pr.id + '"' + ((inv && inv.property_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((invProps.filter(function (pr) { return inv && pr.id === inv.property_id; })[0] || {}).name || "-") + '</span>', "Tag this " + (isSale ? "invoice" : "bill") + " to a building so it appears in that building's expenses, budget and profit &amp; loss.") : "") +
+      (invProps.length && !isSale ? fld("Building cost type", editable ? '<select id="f-propcat"><option value="">(none)</option>' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + ((inv && inv.property_category === k) ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(plotCatLabel(inv && inv.property_category) || "-") + '</span>', "Which building cost this is, so it counts against the right line of the annual budget.") : "") +
+      (invProps.length && !isSale ? fld("Block", editable ? '<input id="f-propblock" value="' + esc((inv && inv.property_block) || "") + '" placeholder="only if it is one block\'s cost">' : '<span class="v">' + esc((inv && inv.property_block) || "-") + '</span>', "Leave blank for a whole-building cost.") : "") +
       '</div></div>';
 
     // notebook
@@ -4097,6 +4103,9 @@
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
         project_id: document.getElementById("f-proj") ? (document.getElementById("f-proj").value || null) : null,
         cost_code_id: document.getElementById("f-costcode") ? (document.getElementById("f-costcode").value || null) : null,
+        property_id: document.getElementById("f-prop") ? (document.getElementById("f-prop").value || null) : null,
+        property_category: document.getElementById("f-propcat") ? (document.getElementById("f-propcat").value || null) : null,
+        property_block: document.getElementById("f-propblock") ? (document.getElementById("f-propblock").value.trim() || null) : null,
         amount_untaxed: untax, amount_tax: taxTot, amount_total: untax + taxTot, amount_residual: untax + taxTot
       };
       hdr.currency_code = document.getElementById("f-cur") ? document.getElementById("f-cur").value : docCcy;
@@ -20165,11 +20174,16 @@
   function plotNormMonthly(item) { var a = Number(item.amount || 0); return item.frequency === "yearly" ? a / 12 : item.frequency === "quarterly" ? a / 3 : a; }
   function plotBudgetCalc(charges, units, reservePct) {
     var reserve = Number(reservePct || 0);
-    var items = charges.filter(function (r) { return r.is_active !== false; });
-    var base = items.reduce(function (s, r) { return s + plotNormMonthly(r); }, 0);
+    var all = charges.filter(function (r) { return r.is_active !== false; });
     var totalShares = units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
     var blkGen = {}, blkBlk = {}, blkCount = {};
     units.forEach(function (u) { var b = (u.block || "").trim(); blkGen[b] = (blkGen[b] || 0) + Number(u.shares || 0); blkBlk[b] = (blkBlk[b] || 0) + Number(u.block_shares || 0); blkCount[b] = (blkCount[b] || 0) + 1; });
+    // A block-scoped charge whose block matches no unit can never be billed to
+    // anyone. Counting it in the total would overstate what the building
+    // collects, so separate it out and report it instead of losing it silently.
+    var orphans = all.filter(function (r) { var rb = (r.block || "").trim(); return rb && !blkCount.hasOwnProperty(rb); });
+    var items = all.filter(function (r) { return orphans.indexOf(r) < 0; });
+    var base = items.reduce(function (s, r) { return s + plotNormMonthly(r); }, 0);
     var rows = units.map(function (u) {
       var share = Number(u.shares || 0), ub = (u.block || "").trim(), fee = 0;
       items.forEach(function (r) {
@@ -20182,7 +20196,7 @@
       });
       return { unit: u, share: share, fee: fee * (1 + reserve / 100) };
     });
-    return { base: base, reserve: reserve, required: base * (1 + reserve / 100), totalShares: totalShares, rows: rows };
+    return { base: base, reserve: reserve, required: base * (1 + reserve / 100), totalShares: totalShares, rows: rows, orphans: orphans };
   }
 
   // ---- Overview ----
@@ -20204,24 +20218,42 @@
 
     var units = (await sb.from("property_units").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
     var charges = (await sb.from("property_charges").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
-    var invs = (await sb.from("invoices").select("amount_total,amount_residual,state,move_type").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_invoice")).data || [];
-    var owners = (await sb.from("property_ownerships").select("id").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }).concat(["00000000-0000-0000-0000-000000000000"]))).data || [];
+    // Posted only: a charge run creates drafts, and a draft is not money yet.
+    var allInvs = (await sb.from("invoices").select("amount_total,amount_residual,state,move_type").eq("company_id", S.company.id).eq("property_id", cur).in("move_type", ["out_invoice", "out_refund"])).data || [];
+    var invs = allInvs.filter(function (i) { return i.state === "posted" && i.move_type === "out_invoice"; });
+    var draftCount = allInvs.filter(function (i) { return i.state === "draft" && i.move_type === "out_invoice"; }).length;
+    var credits = allInvs.filter(function (i) { return i.state === "posted" && i.move_type === "out_refund"; }).reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    // distinct owners, not ownership rows (a unit with co-owners is not 3 owners)
+    var ownRows = (await sb.from("property_ownerships").select("partner_id").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }).concat(["00000000-0000-0000-0000-000000000000"]))).data || [];
+    var ownerSet = {}; ownRows.forEach(function (o) { if (o.partner_id) ownerSet[o.partner_id] = 1; });
+    var owners = Object.keys(ownerSet);
     var billed = invs.reduce(function (s, i) { return s + Number(i.amount_total || 0); }, 0);
-    var due = invs.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
+    var due = Math.max(0, invs.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0) - credits);
+    // fund balance: what the building started with, plus receipts, less what it paid out
+    var recv = (await sb.from("payments").select("amount").eq("company_id", S.company.id).eq("payment_type", "inbound")).data || [];
+    var paidBills = (await sb.from("invoices").select("amount_total,amount_residual").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "in_invoice").eq("state", "posted")).data || [];
+    var cashIn = recv.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0) + Number(prop.opening_balance || 0);
+    var cashOut = paidBills.reduce(function (s, x) { return s + (Number(x.amount_total || 0) - Number(x.amount_residual || 0)); }, 0);
+    var payablesDue = paidBills.reduce(function (s, x) { return s + Number(x.amount_residual || 0); }, 0);
+    var fund = cashIn - cashOut;
     var b = plotBudgetCalc(charges, units, prop.reserve_percent);
     var sug = (await sb.from("property_suggestions").select("id").eq("property_id", cur).eq("status", "new")).data || [];
     var sharesOk = Math.abs(b.totalShares - Number(prop.shares_total || 1000)) < 0.5 || b.totalShares === 0;
 
     body.innerHTML = picker +
       '<div class="o-cards" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:8px">' +
+      plotStat("Fund balance", moneyC(fund), fund < 0 ? "warn" : "opening + receipts - paid out") +
       plotStat("Units", units.length, "") +
-      plotStat("Owners on file", owners.length, "") +
+      plotStat("Owners", owners.length, "") +
       plotStat("Monthly charges", moneyC(b.required), "billed to owners by share") +
-      plotStat("Billed to date", moneyC(billed), "") +
+      plotStat("Billed (posted)", moneyC(billed), draftCount ? draftCount + " draft(s) not counted" : "") +
       plotStat("Outstanding", moneyC(due), due > 0 ? "warn" : "") +
+      plotStat("Payables due", moneyC(payablesDue), payablesDue > 0 ? "warn" : "") +
       plotStat("New suggestions", sug.length, sug.length ? "warn" : "") +
       '</div>' +
-      (sharesOk ? "" : '<div class="o-note warn" style="margin:8px 0">Unit shares add up to ' + b.totalShares + ', but this building is set to a total of ' + esc(prop.shares_total) + '. Charges still split proportionally, but the total looks off - check the units.</div>') +
+      (draftCount ? '<div class="o-note" style="margin:8px 0">' + draftCount + ' charge invoice(s) are still <b>draft</b> and are not counted above. Post them in Accounting so they become real receivables.</div>' : "") +
+      (sharesOk ? "" : '<div class="o-note warn" style="margin:8px 0">Unit shares add up to ' + (Math.round(b.totalShares * 1000) / 1000) + ', but this building is set to a total of ' + esc(prop.shares_total) + '. Charges still split proportionally, but the total looks off - check the units.</div>') +
+      (b.orphans && b.orphans.length ? '<div class="o-note warn" style="margin:8px 0"><b>' + b.orphans.length + ' charge(s) are scoped to a block that no unit belongs to</b> (' + esc(b.orphans.map(function (o) { return o.name + " - block " + o.block; }).join(", ")) + '), so they are billed to nobody and are excluded from the figures above. Fix the block on the charge or on the units.</div>' : "") +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">' +
       '<button class="o-new" id="pl-gen">Generate this period\'s charges</button>' +
       '<button class="o-filtbtn" id="pl-give">Give back to owners</button>' +
@@ -20269,16 +20301,31 @@
       '<div class="row2"><div><label>City</label><input id="pp-city" value="' + esc(p.city || "") + '"></div><div><label>Country</label><input id="pp-country" value="' + esc(p.country || "") + '"></div></div>' +
       '<div><label>Address</label><input id="pp-addr" value="' + esc(p.address || "") + '"></div>' +
       '<div class="row2"><div><label>Shares total (milliemes)</label><input id="pp-shares" type="number" step="1" value="' + (p.shares_total || 1000) + '"></div><div><label>Reserve fund uplift %</label><input id="pp-reserve" type="number" step="0.5" value="' + (Number(p.reserve_percent || 0)) + '"></div></div>' +
+      '<div class="row2"><div><label>Opening balance</label><input id="pp-open" type="number" step="0.01" value="' + (Number(p.opening_balance || 0)) + '"><div class="muted" style="font-size:12px;margin-top:3px">Cash the building already held before Orbit.</div></div><div><label>Reserve to keep on hand</label><input id="pp-limit" type="number" step="0.01" value="' + (p.cash_limit != null ? p.cash_limit : "") + '"><div class="muted" style="font-size:12px;margin-top:3px">Anything above this is offered as a give-back.</div></div></div>' +
       '<div class="row2"><div><label>Manager (contact)</label>' + plotSel("pp-mgr", partners, p.manager_partner_id, "(none)") + '</div><div><label>Charges income account</label>' + plotSel("pp-inc", accts, p.income_account_id, "(default)", function (a) { return (a.code ? a.code + " " : "") + a.name; }) + '</div></div>';
     var m = plotModal(p.id ? "Edit building" : "New building", inner, async function () {
       var name = gv("pp-name"); if (!name) { toast("Enter a name"); return; }
-      var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null };
+      var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null, opening_balance: Number(gv("pp-open")) || 0, cash_limit: gv("pp-limit") ? Number(gv("pp-limit")) : null };
       var r = p.id ? await sb.from("properties").update(row).eq("id", p.id) : await sb.from("properties").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (!p.id && r.data) plotSetProp(r.data.id);
       m.remove(); toast("Saved"); renderView();
     }, true);
-    if (p.id) plotAddDelete(m, "properties", p.id, p.name);
+    // Deliberately NOT plotAddDelete: every child table cascades from properties,
+    // so a hard delete would take the units, charges, meetings, notices, budgets
+    // and the property tag on every invoice with it, behind one confirm.
+    if (p.id) {
+      var foot = m.querySelector(".foot");
+      var arch = document.createElement("button"); arch.className = "btn"; arch.style.marginRight = "auto";
+      arch.textContent = p.is_active === false ? "Restore building" : "Archive building";
+      arch.onclick = async function () {
+        var on = p.is_active === false;
+        var r = await sb.from("properties").update({ is_active: on }).eq("id", p.id);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        m.remove(); toast(on ? "Restored" : "Archived - its history is kept"); renderView();
+      };
+      foot.insertBefore(arch, foot.firstChild);
+    }
   }
 
   // ---- Units ----
@@ -20433,10 +20480,18 @@
     if (!props.length) { toast("Add a building first"); return; }
     var pcur = c.property_id || plotGetProp() || props[0].id;
     var partners = await plotPartners();
-    var blocks = [];
+    // real blocks from the units, so a scoped charge can never point at a block
+    // that does not exist (which would bill nobody, silently)
+    var bu = (await sb.from("property_units").select("block").eq("property_id", pcur).eq("is_active", true)).data || [];
+    var blocks = []; bu.forEach(function (u) { var v = (u.block || "").trim(); if (v && blocks.indexOf(v) < 0) blocks.push(v); });
+    blocks.sort();
+    if (c.block && blocks.indexOf(c.block) < 0) blocks.push(c.block);
+    var blockSel = blocks.length
+      ? '<select id="pc-block"><option value="">Whole building</option>' + blocks.map(function (bk) { return '<option value="' + esc(bk) + '"' + (c.block === bk ? " selected" : "") + '>Block ' + esc(bk) + '</option>'; }).join("") + '</select>'
+      : '<input id="pc-block" value="' + esc(c.block || "") + '" placeholder="no blocks defined on the units yet" disabled>';
     var inner =
       '<div class="row2"><div><label>Building</label>' + plotSel("pc-prop", props, pcur, null) + '</div><div><label>Name</label><input id="pc-name" value="' + esc(c.name || "") + '" placeholder="e.g. Concierge salary"></div></div>' +
-      '<div class="row2"><div><label>Category</label><select id="pc-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (c.category === k ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select></div><div><label>Scope (block)</label><input id="pc-block" value="' + esc(c.block || "") + '" placeholder="blank = whole building"></div></div>' +
+      '<div class="row2"><div><label>Category</label><select id="pc-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (c.category === k ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select></div><div><label>Scope</label>' + blockSel + '</div></div>' +
       '<div class="row2"><div><label>Amount</label><input id="pc-amt" type="number" step="0.01" value="' + (c.amount != null ? c.amount : "") + '"></div><div><label>Frequency</label><select id="pc-freq">' + ["monthly", "quarterly", "yearly"].map(function (f) { return '<option value="' + f + '"' + (c.frequency === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Supplier (optional)</label>' + plotSel("pc-sup", partners, c.supplier_partner_id, "(none)") + '</div><div><label>Active</label><select id="pc-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>Off</option></select></div></div>';
     var m = plotModal(c.id ? "Edit charge" : "New charge", inner, async function () {
@@ -20489,6 +20544,9 @@
       var period2 = gv("cr-period") || period, due = gv("cr-due") || null;
       var toBill = billable.filter(function (r) { return primaryByUnit[r.unit.id]; });
       if (!toBill.length) { toast("No units with an owner to bill"); return; }
+      // guard against billing the same period twice
+      var dupe = (await sb.from("property_charge_runs").select("id,units_billed").eq("property_id", prop.id).eq("period", period2)).data || [];
+      if (dupe.length && !confirm(prop.name + " has already been billed for " + period2 + " (" + (dupe[0].units_billed || 0) + " unit(s)).\n\nGenerate a SECOND set of invoices for the same period?")) return;
       var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Generating...";
       // one run header, then a draft out_invoice + line per unit
       var runIns = await sb.from("property_charge_runs").insert({ company_id: S.company.id, property_id: prop.id, period: period2, issue_date: today(), due_date: due, reserve_percent: Number(prop.reserve_percent) || 0, units_billed: toBill.length, amount_total: toBill.reduce(function (s, r) { return s + r.fee; }, 0), currency_code: S.company.currency_code, created_by: (S.user && S.user.id) || null }).select("id").single();
@@ -20906,11 +20964,32 @@
         { label: "Item", get: function (c) { return '<b>' + esc(c.title) + '</b>'; } },
         { label: "Building", get: function (c) { return esc((c.properties && c.properties.name) || ""); } },
         { label: "Photo needed", get: function (c) { return c.requires_photo ? '<span class="badge">Photo</span>' : '<span class="muted">-</span>'; } },
-        { label: "Active", get: function (c) { return c.is_active ? '<span style="color:var(--good)">Active</span>' : '<span class="muted">Off</span>'; } }
+        { label: "Active", get: function (c) { return c.is_active ? '<span style="color:var(--good)">Active</span>' : '<span class="muted">Off</span>'; } },
+        { label: "Today", get: function (c) { return c._doneToday ? '<span class="badge paid">Done</span>' : '<button class="o-filtbtn ck-do" data-id="' + c.id + '" data-prop="' + esc(c.property_id) + '" data-photo="' + (c.requires_photo ? 1 : 0) + '" data-title="' + esc(c.title) + '">Mark done</button>'; } }
       ],
+      rowWire: function (root) {
+        root.querySelectorAll(".ck-do").forEach(function (b) {
+          b.onclick = function (e) { e.stopPropagation(); openCheckinModal({ item_id: b.dataset.id, property_id: b.dataset.prop, requires_photo: b.dataset.photo === "1", title: b.dataset.title }); };
+        });
+      },
       emptyHint: "The recurring jobs the concierge signs off - bins out, lobby cleaned, generator checked.",
       onNew: function () { openChecklistModal(null); }, onOpen: function (c) { openChecklistModal(c); }
     };
+  }
+  // Log a checklist item as done. Without this the checklist can never be
+  // completed and the check-in log stays empty forever.
+  function openCheckinModal(ctx) {
+    var inner = '<div class="o-note">Recording <b>' + esc(ctx.title) + '</b> as done today.</div>' +
+      '<div><label>Who did it</label><input id="ci-who" value="' + esc((S.user && S.user.email) || "") + '"></div>' +
+      (ctx.requires_photo ? '<div><label>Photo link <span style="color:var(--bad)">(required for this item)</span></label><input id="ci-photo" placeholder="https://..."></div>' : '<div><label>Photo link (optional)</label><input id="ci-photo" placeholder="https://..."></div>') +
+      '<div><label>Note</label><input id="ci-note" placeholder="Anything worth recording"></div>';
+    var m = plotModal("Mark done", inner, async function () {
+      var photo = gv("ci-photo");
+      if (ctx.requires_photo && !photo) { toast("This item needs a photo"); return; }
+      var r = await sb.from("property_checkins").insert({ company_id: S.company.id, property_id: ctx.property_id, item_id: ctx.item_id, kind: "concierge", actor_name: gv("ci-who") || null, photo_url: photo || null, note: gv("ci-note") || null });
+      if (r.error) { toast("Could not record: " + errMsg(r.error)); return; }
+      m.remove(); toast("Recorded"); renderView();
+    });
   }
   async function openChecklistModal(c) {
     c = c || {}; var props = await plotProps();
@@ -21019,16 +21098,42 @@
     var owns = (await sb.from("property_ownerships").select("unit_id,partner_id,is_primary").eq("company_id", S.company.id).in("unit_id", units.map(function (u) { return u.id; }))).data || [];
     var primaryByUnit = {}; owns.forEach(function (o) { if (o.is_primary || !primaryByUnit[o.unit_id]) primaryByUnit[o.unit_id] = o.partner_id; });
     var totalShares = units.reduce(function (s, u) { return s + Number(u.shares || 0); }, 0);
+    // Work out the surplus the way Plot did, instead of asking for a number:
+    // cash on hand, less the reserve you want to keep, less what has already
+    // been given back. Blocked while suppliers are still owed money.
+    var recvG = (await sb.from("payments").select("amount").eq("company_id", S.company.id).eq("payment_type", "inbound")).data || [];
+    var billsG = (await sb.from("invoices").select("amount_total,amount_residual").eq("company_id", S.company.id).eq("property_id", prop.id).eq("move_type", "in_invoice").eq("state", "posted")).data || [];
+    var givenG = (await sb.from("invoices").select("amount_total").eq("company_id", S.company.id).eq("property_id", prop.id).eq("move_type", "out_refund")).data || [];
+    var cashIn = recvG.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0) + Number(prop.opening_balance || 0);
+    var cashOut = billsG.reduce(function (s, x) { return s + (Number(x.amount_total || 0) - Number(x.amount_residual || 0)); }, 0);
+    var payables = billsG.reduce(function (s, x) { return s + Number(x.amount_residual || 0); }, 0);
+    var already = givenG.reduce(function (s, x) { return s + Number(x.amount_total || 0); }, 0);
+    var cash = cashIn - cashOut, keep = Number(prop.cash_limit || 0);
+    var surplus = Math.max(0, cash - keep - already);
     var inner =
-      '<div class="o-note">A give-back returns surplus funds to owners in proportion to their shares. Enter the total to distribute; Orbit splits it by share and creates a <b>draft credit note</b> per owner for you to review and post.</div>' +
-      '<div><label>Total to give back (' + esc(S.company.currency_code) + ')</label><input id="gb-amt" type="number" step="0.01" placeholder="e.g. 5000"></div>' +
+      '<div class="o-note">A give-back returns surplus funds to owners in proportion to their shares, as a <b>draft credit note</b> each for you to review and post.</div>' +
+      '<table class="o-list" style="margin:2px 0 6px"><tbody>' +
+      '<tr><td>Cash on hand</td><td class="num"><b>' + moneyC(cash) + '</b></td></tr>' +
+      '<tr><td>Reserve to keep</td><td class="num">' + moneyC(keep) + '</td></tr>' +
+      '<tr><td>Already given back</td><td class="num">' + moneyC(already) + '</td></tr>' +
+      '<tr style="font-weight:700"><td>Surplus available</td><td class="num">' + moneyC(surplus) + '</td></tr></tbody></table>' +
+      (payables > 0.009 ? '<div class="o-note warn">This building still owes suppliers ' + moneyC(payables) + '. Settle the payables before giving money back.</div>' : '') +
+      '<div><label>Amount to give back (' + esc(S.company.currency_code) + ')</label><input id="gb-amt" type="number" step="0.01" value="' + (payables > 0.009 ? "" : (Math.round(surplus * 100) / 100)) + '"></div>' +
+      (keep <= 0 ? '<div class="muted" style="font-size:12px">Tip: set a <b>reserve to keep</b> on the building so the surplus is worked out for you.</div>' : '') +
       '<div id="gb-preview" class="muted" style="font-size:12.5px"></div>';
     var m = plotModal("Give back to owners - " + prop.name, inner, async function (mm) {
       var total = Number(gv("gb-amt")) || 0;
       if (total <= 0) { toast("Enter an amount"); return; }
       if (totalShares <= 0) { toast("Units have no shares to split by"); return; }
+      if (payables > 0.009 && !confirm("This building still owes suppliers " + moneyC(payables) + ".\n\nGive money back anyway?")) return;
+      if (total > surplus + 0.005 && !confirm("You are giving back " + moneyC(total) + " but the surplus is only " + moneyC(surplus) + ".\n\nContinue?")) return;
       var rows = units.map(function (u) { return { unit: u, partner: primaryByUnit[u.id], amt: Math.round(total * (Number(u.shares || 0) / totalShares) * 100) / 100 }; }).filter(function (r) { return r.partner && r.amt > 0.005; });
       if (!rows.length) { toast("No owners to give back to"); return; }
+      // push the rounding remainder onto the largest allocation so the credit
+      // notes sum to exactly what was authorised
+      var sum = rows.reduce(function (s, r) { return s + r.amt; }, 0);
+      var rem = Math.round((total - sum) * 100) / 100;
+      if (Math.abs(rem) >= 0.01) { var big = rows.reduce(function (a, r) { return r.amt > a.amt ? r : a; }, rows[0]); big.amt = Math.round((big.amt + rem) * 100) / 100; }
       var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Creating...";
       var incAcct = prop.income_account_id || null, made = 0;
       for (var i = 0; i < rows.length; i++) {
@@ -21057,24 +21162,40 @@
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
     var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
     var prop = props.filter(function (p) { return p.id === cur; })[0];
-    var invs = (await sb.from("invoices").select("amount_residual,due_date,partner_id,property_unit_id,partners(name),property_units(code)").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_invoice").gt("amount_residual", 0)).data || [];
-    var notices = (await sb.from("property_notices").select("partner_id,stage").eq("property_id", cur)).data || [];
-    var lastStage = {}; notices.forEach(function (n) { lastStage[n.partner_id] = Math.max(lastStage[n.partner_id] || 0, n.stage || 0); });
-    var byOwner = {};
     var td = today();
+    // Posted and actually past due only. Drafts are not debts, and an invoice
+    // due next week is not arrears.
+    var invs = (await sb.from("invoices").select("amount_residual,due_date,partner_id,property_unit_id,partners(name),property_units(code)").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_invoice").eq("state", "posted").gt("amount_residual", 0).not("due_date", "is", null).lt("due_date", td)).data || [];
+    // credits already issued to an owner reduce what they really owe
+    var refunds = (await sb.from("invoices").select("amount_residual,partner_id").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "out_refund").eq("state", "posted")).data || [];
+    var creditBy = {}; refunds.forEach(function (r) { creditBy[r.partner_id] = (creditBy[r.partner_id] || 0) + Number(r.amount_residual || 0); });
+    var notices = (await sb.from("property_notices").select("partner_id,stage").eq("property_id", cur)).data || [];
+    var lastStage = {}, noticeCount = {};
+    notices.forEach(function (n) { lastStage[n.partner_id] = Math.max(lastStage[n.partner_id] || 0, n.stage || 0); noticeCount[n.partner_id] = (noticeCount[n.partner_id] || 0) + 1; });
+    // group per UNIT: a debt belongs to a unit, and a notice names a unit
+    var byUnit = {};
     invs.forEach(function (i) {
-      var k = i.partner_id || "none";
-      if (!byOwner[k]) byOwner[k] = { partner_id: i.partner_id, name: (i.partners && i.partners.name) || "(no owner)", unit: (i.property_units && i.property_units.code) || "", amt: 0, oldest: null, n: 0 };
-      byOwner[k].amt += Number(i.amount_residual || 0); byOwner[k].n++;
-      if (i.due_date && (!byOwner[k].oldest || i.due_date < byOwner[k].oldest)) byOwner[k].oldest = i.due_date;
+      var k = i.property_unit_id || ("p:" + i.partner_id);
+      if (!byUnit[k]) byUnit[k] = { unit_id: i.property_unit_id, partner_id: i.partner_id, name: (i.partners && i.partners.name) || "(no owner)", unit: (i.property_units && i.property_units.code) || "-", amt: 0, oldest: null, n: 0 };
+      byUnit[k].amt += Number(i.amount_residual || 0); byUnit[k].n++;
+      if (i.due_date && (!byUnit[k].oldest || i.due_date < byUnit[k].oldest)) byUnit[k].oldest = i.due_date;
     });
-    var rows = Object.keys(byOwner).map(function (k) { return byOwner[k]; }).sort(function (a, b) { return b.amt - a.amt; });
-    // months overdue from the oldest unpaid due date -> suggested stage
+    var rows = Object.keys(byUnit).map(function (k) { return byUnit[k]; });
+    // months overdue from the oldest past-due date -> suggested stage (Plot: 3 / 2)
     rows.forEach(function (r) {
-      r.months = r.oldest ? Math.max(0, Math.floor((new Date(td) - new Date(r.oldest)) / 2592000000)) : 0;
-      r.stage = r.months >= 6 ? 3 : r.months >= 3 ? 2 : 1;
+      var d0 = new Date(r.oldest), d1 = new Date(td);
+      r.months = r.oldest ? Math.max(0, (d1.getFullYear() - d0.getFullYear()) * 12 + (d1.getMonth() - d0.getMonth())) : 0;
+      r.stage = r.months >= 3 ? 3 : r.months >= 2 ? 2 : 1;
       r.sent = lastStage[r.partner_id] || 0;
+      r.notices = noticeCount[r.partner_id] || 0;
     });
+    // apply each owner's credit notes across their units, largest debt first
+    rows.sort(function (a, b) { return b.amt - a.amt; });
+    rows.forEach(function (r) {
+      var c = creditBy[r.partner_id] || 0;
+      if (c > 0) { var use = Math.min(c, r.amt); r.amt -= use; creditBy[r.partner_id] = c - use; }
+    });
+    rows = rows.filter(function (r) { return r.amt > 0.005; }).sort(function (a, b) { return b.amt - a.amt; });
     var total = rows.reduce(function (s, r) { return s + r.amt; }, 0);
     var picker = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><label style="font-weight:600">Building</label><select id="ar-prop" style="max-width:300px">' +
       props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select><span style="flex:1"></span><b>' + moneyC(total) + ' outstanding</b></div>';
@@ -21084,14 +21205,14 @@
           var stName = ["", "Reminder", "Warning", "Formal"][r.stage];
           return '<tr><td><b>' + esc(r.name) + '</b></td><td>' + esc(r.unit) + '</td><td class="num">' + moneyC(r.amt) + '</td><td class="num">' + r.n + '</td><td class="num">' + r.months + '</td>' +
             '<td><span class="badge ' + (r.stage >= 3 ? "unpaid" : "partial") + '">' + stName + '</span></td>' +
-            '<td>' + (r.sent ? ["", "Reminder", "Warning", "Formal"][r.sent] : '<span class="muted">none</span>') + '</td>' +
-            '<td class="right"><button class="o-filtbtn ar-notice" data-p="' + esc(r.partner_id || "") + '" data-amt="' + r.amt + '" data-m="' + r.months + '" data-s="' + r.stage + '" data-name="' + esc(r.name) + '" data-unit="' + esc(r.unit) + '">Notice</button></td></tr>';
+            '<td>' + (r.sent ? ["", "Reminder", "Warning", "Formal"][r.sent] + (r.notices > 1 ? ' <span class="muted">(' + r.notices + ')</span>' : '') : '<span class="muted">none</span>') + '</td>' +
+            '<td class="right"><button class="o-filtbtn ar-notice" data-p="' + esc(r.partner_id || "") + '" data-u="' + esc(r.unit_id || "") + '" data-amt="' + r.amt + '" data-m="' + r.months + '" data-s="' + r.stage + '" data-name="' + esc(r.name) + '" data-unit="' + esc(r.unit) + '">Notice</button></td></tr>';
         }).join("") + '</tbody></table>'
         : '<div class="o-empty2"><div class="o-empty2-t">Nobody is in arrears</div><div class="o-empty2-h">Every owner is up to date on this building.</div></div>') + '</div>';
     document.getElementById("ar-prop").onchange = function () { plotSetProp(this.value); renderPlotArrears(); };
     body.querySelectorAll(".ar-notice").forEach(function (b) {
       b.onclick = function () {
-        openNoticeModal({ property_id: cur, partner_id: b.dataset.p, stage: parseInt(b.dataset.s, 10), amount: Number(b.dataset.amt), months_overdue: parseInt(b.dataset.m, 10), notice_date: today() });
+        openNoticeModal({ property_id: cur, partner_id: b.dataset.p, unit_id: b.dataset.u || null, stage: parseInt(b.dataset.s, 10), amount: Number(b.dataset.amt), months_overdue: parseInt(b.dataset.m, 10), notice_date: today() });
       };
     });
   }
