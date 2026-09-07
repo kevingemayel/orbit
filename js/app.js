@@ -20600,7 +20600,7 @@
       '<input id="mi-title" placeholder="Title" style="flex:1;min-width:150px">' +
       '<select id="mi-auth" style="max-width:150px">' + Object.keys(PLOT_AUTH).map(function (k) { return '<option value="' + k + '"' + (k === "simple_majority" ? " selected" : "") + '>' + PLOT_AUTH[k] + '</option>'; }).join("") + '</select>' +
       '<button class="o-filtbtn" id="mi-add">Add</button></div>' +
-      '<div class="muted" style="font-size:12px;margin-top:5px">Owners vote on open motions from their resident portal. Total voting weight in this building: ' + esc(totalShares) + '.</div>';
+      '<div class="muted" style="font-size:12px;margin-top:5px">Owners vote on open motions from their resident portal. Total voting weight in this building: ' + esc(Math.round(totalShares * 1000) / 1000) + '.</div>';
     document.getElementById("mi-add").onclick = async function () {
       var t = gv("mi-title"); if (!t) { toast("Enter a title"); return; }
       var r = await sb.from("property_meeting_items").insert({ company_id: S.company.id, meeting_id: mt.id, kind: gv("mi-kind"), title: t, authority: gv("mi-auth"), status: "open", sort: items.length });
