@@ -20536,7 +20536,8 @@
       '<div><label>Attendees</label><textarea id="mt-att" rows="2">' + esc(mt.attendees || "") + '</textarea></div>' +
       '<div><label>Agenda</label><textarea id="mt-agenda" rows="3">' + esc(mt.agenda || "") + '</textarea></div>' +
       '<div><label>Decisions / minutes</label><textarea id="mt-dec" rows="3">' + esc(mt.decisions || "") + '</textarea></div>' +
-      '<div><label>Status</label><select id="mt-status"><option value="draft"' + (mt.status !== "posted" ? " selected" : "") + '>Draft</option><option value="posted"' + (mt.status === "posted" ? " selected" : "") + '>Posted (locked)</option></select></div>';
+      '<div><label>Status</label><select id="mt-status"><option value="draft"' + (mt.status !== "posted" ? " selected" : "") + '>Draft</option><option value="posted"' + (mt.status === "posted" ? " selected" : "") + '>Posted (locked)</option></select></div>' +
+      (mt.id ? '<div id="mt-items" style="margin-top:6px"></div>' : '<div class="muted" style="font-size:12.5px">Save the meeting first, then add its agenda items and motions.</div>');
     var m = plotModal(mt.id ? "Edit meeting" : "New meeting", inner, async function () {
       var title = gv("mt-title"); if (!title) { toast("Enter a title"); return; }
       var status = gv("mt-status");
@@ -20546,7 +20547,76 @@
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
     }, true);
-    if (mt.id) plotAddDelete(m, "property_meetings", mt.id, mt.title);
+    if (mt.id) { plotAddDelete(m, "property_meetings", mt.id, mt.title); loadMeetingItems(mt); }
+  }
+
+  // Agenda items and motions inside a meeting, with the owner-vote tally.
+  // Without this the portal has nothing to vote on and no result is ever shown.
+  var PLOT_AUTH = { info: "For information", simple_majority: "Simple majority", two_thirds: "Two thirds", unanimous: "Unanimous" };
+  async function loadMeetingItems(mt) {
+    var box = document.getElementById("mt-items"); if (!box) return;
+    var items = (await sb.from("property_meeting_items").select("*").eq("meeting_id", mt.id).order("sort")).data || [];
+    var ids = items.map(function (i) { return i.id; });
+    var votes = ids.length ? ((await sb.from("property_meeting_votes").select("item_id,choice,shares,voter_name").in("item_id", ids)).data || []) : [];
+    // total voting weight in this building (units excluded from voting carry none)
+    var units = (await sb.from("property_units").select("shares,voting_excluded").eq("property_id", mt.property_id).eq("is_active", true)).data || [];
+    var totalShares = units.reduce(function (s, u) { return s + (u.voting_excluded ? 0 : Number(u.shares || 0)); }, 0);
+    var byItem = {};
+    votes.forEach(function (v) {
+      var t = byItem[v.item_id] || (byItem[v.item_id] = { for: 0, against: 0, abstain: 0, n: 0 });
+      t[v.choice] = (t[v.choice] || 0) + Number(v.shares || 0); t.n++;
+    });
+    function verdict(it) {
+      var t = byItem[it.id] || { for: 0, against: 0, abstain: 0, n: 0 };
+      var cast = t.for + t.against + t.abstain;
+      var quorum = totalShares > 0 && cast > totalShares / 2;
+      var decided = t.for + t.against;
+      var pass;
+      if (it.authority === "unanimous") pass = cast > 0 && t.for === cast;
+      else if (it.authority === "two_thirds") pass = decided > 0 && t.for >= decided * 2 / 3;
+      else pass = t.for > t.against;
+      return { t: t, cast: cast, quorum: quorum, pass: pass, pct: totalShares > 0 ? Math.round(cast / totalShares * 100) : 0 };
+    }
+    box.innerHTML = '<div class="o-cf-head">Agenda &amp; motions</div>' +
+      (items.length ? items.map(function (it) {
+        var v = verdict(it), isMotion = it.kind === "motion";
+        return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px">' +
+          '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>' + esc(it.title) + '</b>' +
+          '<span class="badge">' + esc(it.kind) + '</span>' +
+          (isMotion ? '<span class="badge">' + esc(PLOT_AUTH[it.authority] || it.authority || "") + '</span>' : '') +
+          '<span class="badge ' + (it.status === "carried" ? "paid" : it.status === "rejected" ? "unpaid" : "draft") + '">' + esc(it.status) + '</span>' +
+          '<span style="flex:1"></span><button class="o-filtbtn mi-del" data-id="' + it.id + '" style="color:var(--bad)">&times;</button></div>' +
+          (it.description ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + esc(it.description) + '</div>' : '') +
+          (isMotion ? '<div style="font-size:12.5px;margin-top:6px">' +
+            'For <b>' + esc(v.t.for.toFixed(2)) + '</b> &middot; Against <b>' + esc(v.t.against.toFixed(2)) + '</b> &middot; Abstain <b>' + esc(v.t.abstain.toFixed(2)) + '</b> ' +
+            '<span class="muted">(' + v.t.n + ' owner(s), ' + v.pct + '% of shares cast)</span><br>' +
+            '<span class="badge ' + (v.quorum ? "paid" : "unpaid") + '">' + (v.quorum ? "Quorum met" : "No quorum") + '</span> ' +
+            '<span class="badge ' + (v.pass ? "paid" : "unpaid") + '">' + (v.pass ? "Would carry" : "Would fail") + '</span>' +
+            (it.status === "open" ? ' <button class="o-filtbtn mi-carry" data-id="' + it.id + '" data-title="' + esc(it.title) + '" data-body="' + esc(it.description || "") + '">Record as carried</button><button class="o-filtbtn mi-reject" data-id="' + it.id + '">Record as rejected</button>' : '') +
+            '</div>' : '') + '</div>';
+      }).join("") : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">Nothing on the agenda yet.</div>') +
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' +
+      '<select id="mi-kind" style="max-width:120px"><option value="agenda">Agenda item</option><option value="motion">Motion (vote)</option><option value="action">Action</option></select>' +
+      '<input id="mi-title" placeholder="Title" style="flex:1;min-width:150px">' +
+      '<select id="mi-auth" style="max-width:150px">' + Object.keys(PLOT_AUTH).map(function (k) { return '<option value="' + k + '"' + (k === "simple_majority" ? " selected" : "") + '>' + PLOT_AUTH[k] + '</option>'; }).join("") + '</select>' +
+      '<button class="o-filtbtn" id="mi-add">Add</button></div>' +
+      '<div class="muted" style="font-size:12px;margin-top:5px">Owners vote on open motions from their resident portal. Total voting weight in this building: ' + esc(totalShares) + '.</div>';
+    document.getElementById("mi-add").onclick = async function () {
+      var t = gv("mi-title"); if (!t) { toast("Enter a title"); return; }
+      var r = await sb.from("property_meeting_items").insert({ company_id: S.company.id, meeting_id: mt.id, kind: gv("mi-kind"), title: t, authority: gv("mi-auth"), status: "open", sort: items.length });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      loadMeetingItems(mt);
+    };
+    box.querySelectorAll(".mi-del").forEach(function (b) { b.onclick = async function () { await sb.from("property_meeting_votes").delete().eq("item_id", b.dataset.id); await sb.from("property_meeting_items").delete().eq("id", b.dataset.id); loadMeetingItems(mt); }; });
+    box.querySelectorAll(".mi-reject").forEach(function (b) { b.onclick = async function () { await sb.from("property_meeting_items").update({ status: "rejected" }).eq("id", b.dataset.id); toast("Recorded"); loadMeetingItems(mt); }; });
+    box.querySelectorAll(".mi-carry").forEach(function (b) {
+      b.onclick = async function () {
+        // a carried motion becomes a standing resolution, the way Plot did it
+        var res = await sb.from("property_resolutions").insert({ company_id: S.company.id, property_id: mt.property_id, meeting_id: mt.id, title: b.dataset.title, body: b.dataset.body || null, status: "passed", decided_at: new Date().toISOString() }).select("id").single();
+        await sb.from("property_meeting_items").update({ status: "carried", resolution_id: res.data ? res.data.id : null }).eq("id", b.dataset.id);
+        toast("Carried - a resolution was recorded"); loadMeetingItems(mt);
+      };
+    });
   }
 
   function cfgPlotResolutions() {
