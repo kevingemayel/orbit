@@ -21241,6 +21241,7 @@
   }
 
   // ---- Annual budget vs actual ----
+  var _plotBudId = null;   // which budget year the user is looking at
   async function renderPlotBudget() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Annual budget") + '<div class="gap"></div><button class="o-filtbtn" id="bd-seed">Fill from charges</button><button class="o-filtbtn pri" id="bd-line">Add line</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
@@ -21250,15 +21251,23 @@
     var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
     var yr = new Date().getFullYear();
     var buds = (await sb.from("property_budgets").select("*").eq("property_id", cur).order("year", { ascending: false })).data || [];
-    var bud = buds[0];
+    // honour the year the user picked, instead of always snapping to the newest
+    var bud = (_plotBudId && buds.filter(function (x) { return x.id === _plotBudId; })[0]) || buds[0];
+    // the two toolbar buttons only make sense once a budget exists
+    async function newBudgetYear(y) {
+      if (buds.some(function (x) { return x.year === y; })) { toast("There is already a " + y + " budget"); return; }
+      var r = await sb.from("property_budgets").insert({ company_id: S.company.id, property_id: cur, year: y, status: "draft" }).select("id").single();
+      if (r.error) { toast(errMsg(r.error)); return; }
+      _plotBudId = r.data ? r.data.id : null; renderPlotBudget();
+    }
     if (!bud) {
+      document.getElementById("bd-seed").style.display = "none";
+      document.getElementById("bd-line").style.display = "none";
       body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No budget yet</div><div class="o-empty2-h">Set out what the building expects to spend this year, then track it against what actually goes out.</div><button class="o-new" id="bd-create" style="margin-top:14px">Start a ' + yr + ' budget</button></div>';
-      document.getElementById("bd-create").onclick = async function () {
-        var r = await sb.from("property_budgets").insert({ company_id: S.company.id, property_id: cur, year: yr, status: "draft" });
-        if (r.error) { toast(errMsg(r.error)); return; } renderPlotBudget();
-      };
+      document.getElementById("bd-create").onclick = function () { newBudgetYear(yr); };
       return;
     }
+    var locked = bud.status === "approved";
     var lines = (await sb.from("property_budget_lines").select("*").eq("budget_id", bud.id).order("sort").order("label")).data || [];
     // actuals: posted bills for this property in the budget year
     var bills = (await sb.from("invoices").select("amount_total,invoice_date,property_category").eq("company_id", S.company.id).eq("property_id", cur).eq("move_type", "in_invoice").gte("invoice_date", bud.year + "-01-01").lte("invoice_date", bud.year + "-12-31")).data || [];
@@ -21273,8 +21282,10 @@
     var picker = '<div style="display:flex;gap:10px;align-items:center;margin-bottom:14px"><label style="font-weight:600">Building</label><select id="bd-prop" style="max-width:280px">' +
       props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' +
       '<select id="bd-year" style="max-width:120px">' + buds.map(function (b) { return '<option value="' + b.id + '"' + (b.id === bud.id ? " selected" : "") + '>' + b.year + '</option>'; }).join("") + '</select>' +
-      '<span class="badge ' + (bud.status === "approved" ? "paid" : "draft") + '">' + esc(bud.status) + '</span><span style="flex:1"></span>' +
-      (bud.status !== "approved" ? '<button class="o-filtbtn" id="bd-approve">Approve budget</button>' : '') + '</div>';
+      '<button class="o-filtbtn" id="bd-newyear">+ ' + (Math.max.apply(null, buds.map(function (x) { return x.year; })) + 1) + '</button>' +
+      '<span class="badge ' + (locked ? "paid" : "draft") + '">' + esc(bud.status) + '</span><span style="flex:1"></span>' +
+      (locked ? '<button class="o-filtbtn" id="bd-reopen">Reopen</button>' : '<button class="o-filtbtn" id="bd-approve">Approve budget</button>') + '</div>' +
+      (locked ? '<div class="o-note" style="margin-bottom:12px">This budget is approved, so its lines are locked. Reopen it to make changes.</div>' : '');
     body.innerHTML = '<div style="padding:12px 14px">' + picker +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:14px">' +
       plotStat("Budgeted " + bud.year, moneyC(totalBudget), "") + plotStat("Actually spent", moneyC(totalActual), "") +
@@ -21285,36 +21296,48 @@
           return '<tr><td><b>' + esc(l.label || "") + '</b></td><td>' + esc(plotCatLabel(l.category)) + '</td><td class="num">' + moneyC(bud2) + '</td><td class="num">' + moneyC(act) + '</td>' +
             '<td class="num" style="color:' + (left < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(left) + '</td>' +
             '<td><span class="badge ' + (lp > 100 ? "unpaid" : lp > 85 ? "partial" : "paid") + '">' + lp + '%</span></td>' +
-            '<td class="right"><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad)">&times;</button></td></tr>';
+            '<td class="right">' + (locked ? '' : '<button class="o-filtbtn bd-edit" data-id="' + l.id + '" data-label="' + esc(l.label || "") + '" data-cat="' + esc(l.category) + '" data-amt="' + Number(l.amount || 0) + '">Edit</button><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad)">&times;</button>') + '</td></tr>';
         }).join("") +
         unbudgeted.map(function (k) {
           return '<tr style="opacity:.8"><td><i>Unbudgeted spend</i></td><td>' + esc(plotCatLabel(k)) + '</td><td class="num">-</td><td class="num">' + moneyC(actualByCat[k]) + '</td><td class="num" style="color:var(--bad)">' + moneyC(-actualByCat[k]) + '</td><td><span class="badge unpaid">n/a</span></td><td></td></tr>';
         }).join("") +
         '<tr style="font-weight:700"><td colspan="2">Total</td><td class="num">' + moneyC(totalBudget) + '</td><td class="num">' + moneyC(totalActual) + '</td><td class="num" style="color:' + ((totalBudget - totalActual) < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(totalBudget - totalActual) + '</td><td><span class="badge ' + (pct > 100 ? "unpaid" : "paid") + '">' + pct + '%</span></td><td></td></tr></tbody></table>'
         : '<div class="o-empty2"><div class="o-empty2-t">No budget lines yet</div><div class="o-empty2-h">Add lines, or press <b>Fill from charges</b> to turn the building\'s recurring charges into a yearly budget.</div></div>') + '</div>';
-    document.getElementById("bd-prop").onchange = function () { plotSetProp(this.value); renderPlotBudget(); };
-    document.getElementById("bd-year").onchange = function () { renderPlotBudget(); };
+    document.getElementById("bd-prop").onchange = function () { _plotBudId = null; plotSetProp(this.value); renderPlotBudget(); };
+    document.getElementById("bd-year").onchange = function () { _plotBudId = this.value; renderPlotBudget(); };
+    document.getElementById("bd-newyear").onclick = function () { newBudgetYear(Math.max.apply(null, buds.map(function (x) { return x.year; })) + 1); };
     var ap = document.getElementById("bd-approve");
-    if (ap) ap.onclick = async function () { await sb.from("property_budgets").update({ status: "approved", approved_at: new Date().toISOString() }).eq("id", bud.id); toast("Budget approved"); renderPlotBudget(); };
-    document.getElementById("bd-line").onclick = function () { openBudgetLineModal(bud); };
+    if (ap) ap.onclick = async function () { await sb.from("property_budgets").update({ status: "approved", approved_at: new Date().toISOString() }).eq("id", bud.id); toast("Budget approved and locked"); renderPlotBudget(); };
+    var ro = document.getElementById("bd-reopen");
+    if (ro) ro.onclick = async function () { await sb.from("property_budgets").update({ status: "draft", approved_at: null }).eq("id", bud.id); toast("Reopened"); renderPlotBudget(); };
+    document.getElementById("bd-line").onclick = function () { if (locked) { toast("This budget is approved - reopen it first"); return; } openBudgetLineModal(bud, null); };
     document.getElementById("bd-seed").onclick = async function () {
+      if (locked) { toast("This budget is approved - reopen it first"); return; }
       var charges = (await sb.from("property_charges").select("*").eq("property_id", cur).eq("is_active", true)).data || [];
       if (!charges.length) { toast("This building has no charges to copy"); return; }
-      var ins = charges.map(function (c, i) { return { company_id: S.company.id, budget_id: bud.id, category: c.category, label: c.name, amount: plotNormMonthly(c) * 12, sort: i }; });
+      // don't duplicate lines that are already here
+      var have = {}; lines.forEach(function (l) { have[(l.label || "").toLowerCase()] = true; });
+      var ins = charges.filter(function (c) { return !have[(c.name || "").toLowerCase()]; })
+        .map(function (c, i) { return { company_id: S.company.id, budget_id: bud.id, category: c.category, label: c.name, amount: plotNormMonthly(c) * 12, sort: lines.length + i }; });
+      if (!ins.length) { toast("Every charge is already a budget line"); return; }
       var r = await sb.from("property_budget_lines").insert(ins);
       if (r.error) { toast(errMsg(r.error)); return; }
       toast(ins.length + " line(s) added from charges"); renderPlotBudget();
     };
-    body.querySelectorAll(".bd-del").forEach(function (b) { b.onclick = async function () { await sb.from("property_budget_lines").delete().eq("id", b.dataset.id); renderPlotBudget(); }; });
+    body.querySelectorAll(".bd-edit").forEach(function (b) { b.onclick = function () { openBudgetLineModal(bud, { id: b.dataset.id, label: b.dataset.label, category: b.dataset.cat, amount: Number(b.dataset.amt) }); }; });
+    body.querySelectorAll(".bd-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this budget line?")) return; await sb.from("property_budget_lines").delete().eq("id", b.dataset.id); renderPlotBudget(); }; });
   }
-  function openBudgetLineModal(bud) {
-    var inner = '<div><label>Label</label><input id="bl-label" placeholder="e.g. Lift maintenance contract"></div>' +
-      '<div class="row2"><div><label>Category</label><select id="bl-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '">' + plotCatLabel(k) + '</option>'; }).join("") + '</select></div><div><label>Amount for the year</label><input id="bl-amt" type="number" step="0.01"></div></div>';
-    var m = plotModal("Add budget line", inner, async function () {
+  function openBudgetLineModal(bud, line) {
+    line = line || {};
+    var inner = '<div><label>Label</label><input id="bl-label" value="' + esc(line.label || "") + '" placeholder="e.g. Lift maintenance contract"></div>' +
+      '<div class="row2"><div><label>Category</label><select id="bl-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (line.category === k ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select><div class="muted" style="font-size:12px;margin-top:3px">Spend on bills with this cost type counts against this line.</div></div><div><label>Amount for the year</label><input id="bl-amt" type="number" step="0.01" value="' + (line.amount != null ? line.amount : "") + '"></div></div>';
+    var m = plotModal(line.id ? "Edit budget line" : "Add budget line", inner, async function () {
       var l = gv("bl-label"); if (!l) { toast("Enter a label"); return; }
-      var r = await sb.from("property_budget_lines").insert({ company_id: S.company.id, budget_id: bud.id, label: l, category: gv("bl-cat"), amount: Number(gv("bl-amt")) || 0 });
+      var row = { label: l, category: gv("bl-cat"), amount: Number(gv("bl-amt")) || 0 };
+      var r = line.id ? await sb.from("property_budget_lines").update(row).eq("id", line.id)
+        : await sb.from("property_budget_lines").insert(Object.assign({ company_id: S.company.id, budget_id: bud.id }, row));
       if (r.error) { toast(errMsg(r.error)); return; }
-      m.remove(); toast("Added"); renderPlotBudget();
+      m.remove(); toast("Saved"); renderPlotBudget();
     });
   }
 

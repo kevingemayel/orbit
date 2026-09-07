@@ -73,7 +73,18 @@ begin
   return jsonb_build_object(
     'currency', coalesce(cur,''), 'units', units, 'billed', billed, 'outstanding', outstanding,
     'invoices', invs, 'announcements', anns, 'motions', motions, 'suggestions', suggs,
-    'property_id', (case when array_length(props,1) > 0 then props[1] else null end));
+    'property_id', (case when array_length(props,1) > 0 then props[1] else null end),
+    -- the buildings this owner belongs to, so a multi-building owner can pick
+    'buildings', (select coalesce(jsonb_agg(jsonb_build_object('id', p.id, 'name', p.name) order by p.name), '[]'::jsonb)
+                    from public.properties p where p.id = any(props)),
+    -- what the committee has chosen to share with residents
+    'documents', (select coalesce(jsonb_agg(jsonb_build_object('title', d.title, 'category', d.category, 'url', d.file_url) order by d.created_at desc), '[]'::jsonb)
+                    from public.property_documents d where d.company_id = co and d.property_id = any(props) and d.is_public),
+    'projects', (select coalesce(jsonb_agg(jsonb_build_object('title', pj.title, 'status', pj.status, 'budget', pj.budget_estimate, 'progress', pj.progress) order by pj.created_at desc), '[]'::jsonb)
+                    from public.property_projects pj where pj.company_id = co and pj.property_id = any(props) and pj.is_public),
+    -- what the building costs to run, so the charge is not a mystery
+    'charges', (select coalesce(jsonb_agg(jsonb_build_object('name', c.name, 'category', c.category, 'amount', c.amount, 'frequency', c.frequency) order by c.name), '[]'::jsonb)
+                    from public.property_charges c where c.company_id = co and c.property_id = any(props) and c.is_active));
 end $fn$;
 
 -- Cast (or change) this owner's vote on a motion, weighted by their unit shares

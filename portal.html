@@ -210,10 +210,48 @@
             }).join("") + '</tbody></table></div></div>';
         }
 
+        // what the building spends, so the charge is not a mystery
+        if(prop.charges && prop.charges.length){
+          var per = function(c){ var a=Number(c.amount||0); return c.frequency==='yearly'?a/12:c.frequency==='quarterly'?a/3:a; };
+          var monthly = prop.charges.reduce(function(s,c){ return s+per(c); },0);
+          h += '<div class="sec"><div class="sec-h">What the building spends</div><div class="tbl-wrap"><table><thead><tr><th>Cost</th><th>How often</th><th class="num">Per month</th></tr></thead><tbody>' +
+            prop.charges.map(function(c){ return '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.frequency||'monthly')+'</td><td class="num">'+cur(per(c))+'</td></tr>'; }).join("") +
+            '<tr style="font-weight:700"><td colspan="2">Total each month</td><td class="num">'+cur(monthly)+'</td></tr></tbody></table></div></div>';
+        }
+
+        // works the committee has made public
+        if(prop.projects && prop.projects.length){
+          h += '<div class="sec"><div class="sec-h">Works in the building</div><div class="cards">' + prop.projects.map(function(p){
+            return '<div class="card"><div class="t">'+esc(p.title)+'</div>'+
+              '<div class="kv"><span>Status</span><b>'+esc(String(p.status||'').replace(/_/g,' '))+'</b></div>'+
+              '<div class="kv"><span>Budget</span><b>'+cur(p.budget)+'</b></div>'+
+              '<div class="prog"><i style="width:'+(Math.max(0,Math.min(100,Number(p.progress)||0)))+'%"></i></div>'+
+              '<div class="kv" style="margin-top:6px"><span>'+(Number(p.progress)||0)+'% done</span></div></div>';
+          }).join("") + '</div></div>';
+        }
+
+        // documents shared with residents
+        if(prop.documents && prop.documents.length){
+          h += '<div class="sec"><div class="sec-h">Building documents</div><div class="tbl-wrap"><table><thead><tr><th>Document</th><th>Category</th><th></th></tr></thead><tbody>' +
+            prop.documents.map(function(d){ return '<tr><td><b>'+esc(d.title)+'</b></td><td>'+esc(d.category||'')+'</td><td>'+(d.url?'<a href="'+esc(d.url)+'" target="_blank" rel="noopener">Open</a>':'')+'</td></tr>'; }).join("") +
+            '</tbody></table></div></div>';
+        }
+
+        // what this resident has already raised (previously fetched and thrown away)
+        if(prop.suggestions && prop.suggestions.length){
+          h += '<div class="sec"><div class="sec-h">What you have raised</div><div class="tbl-wrap"><table><thead><tr><th>Title</th><th>Type</th><th>Raised</th><th>Status</th></tr></thead><tbody>' +
+            prop.suggestions.map(function(s){
+              var st=String(s.status||'new');
+              var cls = (st==='done'||st==='accepted')?'paid':(st==='rejected')?'over':'open';
+              return '<tr><td><b>'+esc(s.title)+'</b></td><td>'+esc(s.type||'')+'</td><td>'+fdate(s.date)+'</td><td><span class="pill '+cls+'">'+esc(st)+'</span></td></tr>';
+            }).join("") + '</tbody></table></div></div>';
+        }
+
         // raise a suggestion
-        var propId = prop.property_id || "";
+        var blds = (prop.buildings && prop.buildings.length) ? prop.buildings : [];
         h += '<div class="sec"><div class="sec-h">Raise something with the committee</div><div class="card">' +
           '<div style="display:grid;gap:10px">' +
+          (blds.length > 1 ? '<select id="sg-prop" class="btn ghost" style="text-align:left">' + blds.map(function(b){ return '<option value="'+esc(b.id)+'">'+esc(b.name)+'</option>'; }).join("") + '</select>' : '') +
           '<select id="sg-type" class="btn ghost" style="text-align:left"><option value="suggestion">Suggestion</option><option value="complaint">Complaint</option><option value="request">Request</option></select>' +
           '<input id="sg-title" placeholder="Short title" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit">' +
           '<textarea id="sg-body" rows="3" placeholder="Details (optional)" style="padding:11px 13px;border:1px solid var(--line);border-radius:10px;font:inherit"></textarea>' +
@@ -237,14 +275,13 @@
           var title=(document.getElementById("sg-title").value||"").trim();
           if(!title){ document.getElementById("sg-msg").textContent="Please add a title."; document.getElementById("sg-msg").style.color="var(--bad,#b3311f)"; return; }
           send.disabled=true; send.textContent="Sending...";
-          var propId = getPropIdFrom(prop);
+          var sel=document.getElementById("sg-prop");
+          var propId = sel ? sel.value : (prop.property_id || "");
           var r = await sb.rpc("portal_property_suggest",{ p_property:propId, p_title:title, p_type:document.getElementById("sg-type").value, p_body:(document.getElementById("sg-body").value||"").trim() });
           if(r.data && r.data.ok){ document.getElementById("sg-msg").style.color="#0a7a52"; document.getElementById("sg-msg").textContent="Sent. The committee will see it."; document.getElementById("sg-title").value=""; document.getElementById("sg-body").value=""; setTimeout(boot,1200); }
           else { send.disabled=false; send.textContent="Send to the committee"; document.getElementById("sg-msg").style.color="var(--bad,#b3311f)"; document.getElementById("sg-msg").textContent="Could not send: "+((r.data&&r.data.reason)||(r.error&&r.error.message)||"try again"); }
         };
       }
-      // the summary returns motions/announcements without a bare property id; derive it from a vote/suggest scope call
-      function getPropIdFrom(prop){ return (prop && prop.property_id) || (prop && prop._pid) || ""; }
 
       async function boot(){
         var sess = (await sb.auth.getSession()).data.session;
