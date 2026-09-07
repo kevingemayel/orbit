@@ -467,6 +467,20 @@
       { t: "Forecasting the next few months", h: "<p><b>Insights &rsaquo; Forecast</b> looks at the last 12 months of posted invoices and projects the next three, for both what you sell and what you buy.</p><p>You get the forecast total for sales, for purchases, and the <b>projected net</b> between them, plus a chart where solid bars are what really happened and striped bars are the projection. Underneath, a month-by-month table marks each row <i>actual</i> or <i>forecast</i>.</p><p>It is worked out with a trend line through your own history - no guessing, and nothing to configure. Use it to plan cash and stock a quarter ahead.</p><div class=\"man-cal warn\"><b>Read it as a guide, not a promise.</b> A short history, a one-off big job, or a seasonal business will swing the line. It answers &ldquo;if we carry on like this&rdquo;, not &ldquo;this is what will happen&rdquo;.</div>" },
       { t: "Getting reports emailed automatically", h: "<p>The best report is the one that arrives without anyone remembering to run it. <b>Insights &rsaquo; Scheduled reports</b> does that.</p><ol class=\"man-steps\"><li class=\"man-step\">Build the tile you want on the Dashboard first.</li><li class=\"man-step\">Open <b>Scheduled reports</b>, give the schedule a name and pick that report.</li><li class=\"man-step\">Choose <b>daily</b>, <b>weekly</b> (pick the day) or <b>monthly</b> (pick the date), and the hour.</li><li class=\"man-step\">Type the email addresses, separated by commas, and press <b>Add</b>.</li></ol><p>From then on Orbit builds the figures and emails them on its own. You can <b>Pause</b> a schedule and resume it later, and the list shows when each one last went out.</p><div class=\"man-cal note\"><b>Times are UTC</b>, so pick the hour with that in mind. Everyone on the list gets the same email; there is nothing for them to log in to.</div>" }
     ] },
+    {
+      key: "property", title: "Running a building (Property)", articles: [
+        { t: "What the Property app is for", h: "<p>The <b>Property</b> app runs a building the way a syndic or a committee actually runs one: it holds the units and who owns them, works out what each owner pays, chases what is unpaid, records what the committee decides, and lets residents see their own account.</p><p>The one idea everything rests on is the <b>share</b>. Each unit carries a share of the building (milliemes, or a percentage). Every cost the building has is divided across the units in proportion to those shares, so the split is never argued about - it falls out of the register.</p><div class=\"man-cal key\"><b>A building lives inside a company.</b> One company can hold many buildings, so a syndic managing thirty of them switches between them with the picker at the top of the Property overview rather than logging in thirty times. Each building still gets its own charges, budget and profit &amp; loss.</div>" },
+        { t: "Setting a building up", h: "<p>The fastest way is <b>Set up a building</b> on the Property overview when you have none yet. It asks for three things in one screen:</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">The building - its name and how its shares are counted. Use <b>100</b> if owners think in percentages, <b>1000</b> for milliemes.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">The units, each with its owner and its share. A running total tells you whether the shares add up.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">What the building costs to run each month - concierge, electricity, generator, cleaning.</div></div></div><p>That is enough to bill from. Owners are created as normal contacts, so they can be invoiced, chased and given portal access like anyone else.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:percent}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The reserve</div><p>If the building collects a little more than it spends to build a fund, set a <b>reserve uplift</b> on the building. Every owner's charge goes up by that percentage.</p></div></div>" },
+        { t: "How a charge is worked out", h: "<p>Each <b>charge</b> is a running cost with an amount and how often it falls due. Orbit converts them all to a monthly figure (a yearly cost divided by twelve, a quarterly one by three), adds them up, adds the reserve, and splits the result across the units by share.</p><p>A charge can be scoped to a <b>block</b> if a building has separate entrances and some costs belong to only one of them. Then only that block's units share it, using the block's own share column if you have set one.</p><div class=\"man-cal warn\"><b>If a charge names a block no unit belongs to</b>, nobody can be billed for it. Orbit leaves it out of the totals and says so on the overview rather than quietly inflating what the building thinks it collects.</div><p>Press <b>Generate this period's charges</b> to turn the split into one draft invoice per owner. They are drafts on purpose - review them, then post them in Accounting, and only then do they count as money owed.</p>" },
+        { t: "Chasing what is unpaid", h: "<p><b>Money &rsaquo; Arrears</b> lists only what is genuinely late: posted invoices that are past their due date, per unit, with any credit notes already deducted. It works out how many months late the oldest one is and suggests a stage - a reminder, a warning, or a formal notice.</p><p><b>Notice</b> opens a letter pre-filled with the owner, the unit and the amount. Printing it attaches the <b>schedule of unpaid charges</b> behind the figure, so the letter shows its working, and signs it from the committee head and treasurer.</p><div class=\"man-cal key\"><b>Put the building's details on the building first.</b> The property number, cadastral zone, bylaws reference and how to pay all live on the building record, and the notice quotes them. Without them a formal notice makes a claim it cannot support.</div>" },
+        { t: "Money in, and money back out", h: "<p><b>Record a payment</b> takes a receipt against a specific charge: the amount defaults to what is still owed, you say whether the <b>owner or the tenant</b> actually paid and how, and a printable receipt comes out. The invoice balance updates as you save.</p><p><b>Special assessment</b> raises a one-off levy - a lift motor, a facade repair - outside the regular charges. Enter the total the building needs, choose to split it by share or equally, and every owner gets a draft invoice. The rounding is pushed onto the largest share so the levy raises exactly the total.</p><p><b>Give back to owners</b> is the reverse. It works out the surplus from the cash on hand, less the reserve you want to keep, less anything already given back, and refuses politely while suppliers are still owed money. Each owner gets a credit note for their share.</p>" },
+        { t: "The budget, and where the money went", h: "<p><b>Money &rsaquo; Annual budget</b> sets out what the building expects to spend for the year, line by line, and shows each line against what was actually spent. <b>Fill from charges</b> turns the recurring costs into a year's budget in one press.</p><p>The actual figures come from <b>bills tagged to the building</b>. When you enter a supplier bill, set <b>Building</b> and <b>Building cost type</b> on it - that is what makes it appear in the building's expenses, count against the right budget line, and land in that building's profit &amp; loss.</p><div class=\"man-cal warn\"><b>An untagged bill is invisible to the building.</b> If a building's expenses look empty, it is almost always because the bills were entered without the Building field set.</div><p>Approving a budget locks its lines. Reopen it if the assembly changes something.</p>" },
+        { t: "Meetings, votes and resolutions", h: "<p>A meeting holds the agenda, who came, and what was decided. Add <b>agenda items</b>, <b>motions</b> to be voted on, and <b>actions</b>. A motion carries the majority it needs - simple, two thirds, or unanimous.</p><p>Owners vote from their <b>resident portal</b>, and each vote is weighted by that owner's shares. A unit marked <i>excluded from voting</i> carries no weight. The meeting shows the live tally: for, against, abstain, how much of the building has voted, whether <b>quorum</b> is met, and whether the motion would carry under its own rule.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:calendar}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Give proper notice</div><p>Record the date notice was given. A general assembly called on less than ten days' notice is flagged, because its decisions can be challenged.</p></div></div><p><b>Posting</b> the minutes locks them, turns each agreed action into a task, and promotes any carried motion into a standing <b>resolution</b> - the building's binding decisions, kept in one place.</p>" },
+        { t: "Owners, tenants and selling a unit", h: "<p>A unit keeps its full <b>history</b>: everyone who has owned it and everyone who has rented it, with dates. Open a unit to see it.</p><p><b>Sell / transfer this unit</b> does the handover properly: it closes the outgoing owner with a sale date, opens the incoming one, and asks the question that always comes up - does the seller clear the arrears, or do they pass to the buyer? Either way it prints a <b>certificate of clearance</b>, which is what a buyer's notary asks for.</p><p><b>Tenancies</b> record who rents a unit and, importantly, whether the <b>tenant or the owner</b> pays the building charges. <b>Residents</b> is the human list a concierge needs: who actually lives there, how many people, their car, and an emergency contact.</p>" },
+        { t: "The resident portal", h: "<p>Owners and tenants sign in at your portal with an emailed link - no password. Invite them from <b>Property &rsaquo; Register &rsaquo; Resident portal access</b>.</p><p>They see only their own building: their balance and charges, the building's announcements, what the building spends each month, any works and documents the committee has made public, the suggestions they have raised and how they were answered, and any <b>open motions</b> to vote on.</p><div class=\"man-cal key\"><b>They can never see a neighbour's account.</b> Everything a resident sees is scoped to their own units. For the committee's own read-only view of the building's totals - without exposing any individual - use <b>Reports &rsaquo; Committee view</b>.</div>" },
+        { t: "The daily round, and keeping a record", h: "<p><b>Works &rsaquo; Today's round</b> is the concierge's whole screen: today's jobs, one big button each. If an item is marked as needing a photo it cannot be signed off without one, and every sign-off is timestamped into the <b>check-in log</b> - which is what you show an owner who asks whether something was actually done.</p><p><b>Reports &rsaquo; Activity log</b> records who changed what across the whole module, and <b>Archive</b> holds anything deleted so it can be put back. Nothing in Property is destroyed by a single click.</p><p><b>Reports &rsaquo; Building reports</b> has the twelve documents a treasurer gets asked for - owner statements, collections, receivables ageing, income and expenditure, fund movement, the share register and an annual summary - each printable on the building's letterhead or exportable as a spreadsheet.</p>" }
+      ]
+    },
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
@@ -759,6 +773,38 @@
       { i: "layers", n: "Payroll Consolidation", l: "Payroll", d: "Totals across payslip runs." },
       { i: "receipt", n: "Expenses", l: "Expenses", d: "Out-of-pocket claims to reimburse." }
     ] },
+    property: {
+      intro: "Every screen in the <b>Property</b> app:", list: [
+        { i: "gauge", n: "Overview", l: "Overview", d: "One building at a time: fund balance, what is billed and owed, and the actions you use most." },
+        { i: "building", n: "Buildings", l: "Buildings", d: "Each building, its share basis, reserve, opening balance and legal details." },
+        { i: "grid", n: "Units", l: "Register", d: "Every apartment, parking space and shop with its share of the building." },
+        { i: "person", n: "Owners", l: "Register", d: "Who owns which unit, and who receives its charges." },
+        { i: "people", n: "Tenancies", l: "Register", d: "Who rents a unit, the rent, and whether tenant or owner pays the charges." },
+        { i: "door", n: "Resident portal access", l: "Register", d: "Invite an owner or tenant to sign in and see their own account." },
+        { i: "receipt", n: "Charges", l: "Money", d: "The building's running costs, which get split across owners by share." },
+        { i: "refresh", n: "Billing runs", l: "Money", d: "Each period you billed, and the invoices it produced." },
+        { i: "alert", n: "Arrears", l: "Money", d: "Who is genuinely late, how late, and the notice to send." },
+        { i: "coin", n: "Expenses", l: "Money", d: "What this building spent, from the bills tagged to it." },
+        { i: "chartBar", n: "Annual budget", l: "Money", d: "What you planned to spend against what actually went out." },
+        { i: "hardhat", n: "Capital projects", l: "Works", d: "Bigger works, contractor bids, and who won." },
+        { i: "clipboardCheck", n: "Tasks", l: "Works", d: "What the committee agreed to do, and who is doing it." },
+        { i: "check", n: "Today's round", l: "Works", d: "The concierge's screen: today's jobs, signed off with a photo." },
+        { i: "list", n: "Checklist", l: "Works", d: "The recurring jobs that get signed off each day." },
+        { i: "history", n: "Check-in log", l: "Works", d: "A dated record of the round being done, with photos." },
+        { i: "people", n: "Meetings", l: "Governance", d: "Agenda, motions, owner voting with quorum, and locked minutes." },
+        { i: "shield", n: "Resolutions", l: "Governance", d: "The building's binding decisions and standing rules." },
+        { i: "alert", n: "Notices", l: "Governance", d: "The reminder and warning letters sent to owners in arrears." },
+        { i: "star", n: "Suggestions", l: "Governance", d: "What residents raise, and the committee's decision on each." },
+        { i: "bell", n: "Announcements", l: "Governance", d: "Notices to everyone, shown on the resident portal." },
+        { i: "folder", n: "Documents", l: "Governance", d: "Bylaws, insurance, contracts and signed minutes." },
+        { i: "award", n: "Committee & roles", l: "Governance", d: "Who holds which office in this building, and for how long." },
+        { i: "person", n: "Residents", l: "People", d: "Who actually lives in each unit, with emergency contacts." },
+        { i: "chartLine", n: "Building reports", l: "Reports", d: "Twelve reports a treasurer gets asked for, printable and exportable." },
+        { i: "org", n: "Committee view", l: "Reports", d: "The building's totals without exposing any individual owner." },
+        { i: "clock", n: "Activity log", l: "Reports", d: "Who changed what, and when." },
+        { i: "box", n: "Archive", l: "Reports", d: "Deleted records, ready to restore." }
+      ]
+    },
     insights: { intro: "The <b>Insights</b> app turns the data you already enter into answers:", list: [
       { i: "gauge", n: "Dashboard", l: "Dashboard", d: "Your own report tiles, built from live data. Click any figure to see the records behind it." },
       { i: "chartLine", n: "Forecast", l: "Forecast", d: "Projects the next three months of sales and purchases from your own trend." },
@@ -1041,7 +1087,7 @@
         { label: "Buildings", action: "plot.buildings" },
         { label: "Register", items: [["Units", "plot.units"], ["Owners", "plot.owners"], ["Tenancies", "plot.tenancies"], ["Resident portal access", "portal.admin"]] },
         { label: "Money", items: [["Charges", "plot.charges"], ["Billing runs", "plot.runs"], ["Arrears", "plot.arrears"], ["Expenses", "plot.expenses"], ["Annual budget", "plot.budget"], ["Suppliers", "vend"]] },
-        { label: "Works", items: [["Capital projects", "plot.projects"], ["Tasks", "plot.tasks"], ["Checklist", "plot.checklist"], ["Check-in log", "plot.checkins"]] },
+        { label: "Works", items: [["Capital projects", "plot.projects"], ["Tasks", "plot.tasks"], ["Today's round", "plot.concierge"], ["Checklist", "plot.checklist"], ["Check-in log", "plot.checkins"]] },
         { label: "Governance", items: [["Meetings", "plot.meetings"], ["Resolutions", "plot.resolutions"], ["Notices", "plot.notices"], ["Suggestions", "plot.suggestions"], ["Announcements", "plot.announce"], ["Documents", "plot.docs"], ["Committee &amp; roles", "plot.members"]] },
         { label: "People", items: [["Residents", "plot.residents"], ["Resident portal access", "portal.admin"]] },
         { label: "Reports", items: [["Building reports", "plot.reports"], ["Committee view", "plot.committee"], ["Activity log", "plot.activity"], ["Archive", "plot.archive"]] }
@@ -1083,7 +1129,7 @@
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint",
     "plot.dash": "plot", "plot.buildings": "plot", "plot.units": "plot", "plot.owners": "plot", "plot.tenancies": "plot", "plot.charges": "plot", "plot.runs": "plot", "plot.meetings": "plot", "plot.resolutions": "plot", "plot.notices": "plot", "plot.suggestions": "plot",
     "plot.arrears": "plot", "plot.expenses": "plot", "plot.budget": "plot", "plot.projects": "plot", "plot.tasks": "plot", "plot.checklist": "plot", "plot.checkins": "plot", "plot.announce": "plot", "plot.docs": "plot",
-    "plot.members": "plot", "plot.residents": "plot", "plot.reports": "plot", "plot.committee": "plot", "plot.activity": "plot", "plot.archive": "plot"
+    "plot.concierge": "plot", "plot.members": "plot", "plot.residents": "plot", "plot.reports": "plot", "plot.committee": "plot", "plot.activity": "plot", "plot.archive": "plot"
   };
   HELP_MANUAL.forEach(function (s) { ACTION_APP["help." + s.key] = "help"; });
   // Per-app help: instead of one big standalone Help app, every app carries its own
@@ -2694,6 +2740,7 @@
       case "plot.budget": return renderPlotBudget();
       case "plot.projects": return renderList(cfgPlotProjects());
       case "plot.tasks": return renderList(cfgPlotTasks());
+      case "plot.concierge": return renderPlotConcierge();
       case "plot.checklist": return renderList(cfgPlotChecklist());
       case "plot.checkins": return renderList(cfgPlotCheckins());
       case "plot.announce": return renderList(cfgPlotAnnouncements());
@@ -20216,8 +20263,9 @@
     var props = await plotProps();
     var body = document.getElementById("o-body");
     if (!props.length) {
-      body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div><div class="o-empty2-h">Add a building, then its units and owners. Charges you set are split across owners by their share, and each building gets its own profit &amp; loss in Accounting.</div><button class="o-new" id="pl-first">Add a building</button></div>';
+      body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div><div class="o-empty2-h">Set a building up in one go - its units, who owns them, and what it costs to run. Charges are then split across owners by their share, and the building gets its own profit &amp; loss.</div><button class="o-new" id="pl-wizard">Set up a building</button><button class="o-filtbtn" id="pl-first" style="margin-left:8px">Just add it manually</button></div>';
       document.getElementById("pl-first").onclick = function () { openPropertyModal(null); };
+      document.getElementById("pl-wizard").onclick = function () { openPlotWizard(); };
       return;
     }
     var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) { cur = props[0].id; plotSetProp(cur); }
@@ -20323,12 +20371,13 @@
       '<div class="row2"><div><label>Committee head</label><input id="pp-head" value="' + esc(pf.committee_head || "") + '"></div><div><label>Treasurer</label><input id="pp-treas" value="' + esc(pf.treasurer_name || "") + '"></div></div>' +
       '<div class="row2"><div><label>Property number</label><input id="pp-propno" value="' + esc(pf.property_number || "") + '"></div><div><label>Cadastral zone</label><input id="pp-cad" value="' + esc(pf.cadastral_zone || "") + '"></div></div>' +
       '<div><label>Bylaws reference</label><input id="pp-bylaws" value="' + esc(pf.bylaws_ref || "") + '"></div>' +
+      '<div class="row2"><div><label>Also show amounts in</label><input id="pp-cur2" value="' + esc(pf.second_currency || "") + '" placeholder="e.g. LBP - leave blank for none"></div><div><label>at this rate</label><input id="pp-fx" type="number" step="0.0001" value="' + esc(pf.exchange_rate || "") + '" placeholder="per ' + esc(S.company.currency_code) + '"></div></div>' +
       '<div><label>How owners pay</label><textarea id="pp-payinfo" rows="2" placeholder="Bank details or where to hand cash in - printed on notices">' + esc(pf.payment_instructions || "") + '</textarea></div>' +
       '<div><label>Footer / disclaimer on documents</label><textarea id="pp-disc" rows="2">' + esc(pf.disclaimer || "") + '</textarea></div>';
     var m = plotModal(p.id ? "Edit building" : "New building", inner, async function () {
       var name = gv("pp-name"); if (!name) { toast("Enter a name"); return; }
       var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null, opening_balance: Number(gv("pp-open")) || 0, cash_limit: gv("pp-limit") ? Number(gv("pp-limit")) : null,
-        profile: Object.assign({}, pf, { committee_head: gv("pp-head") || null, treasurer_name: gv("pp-treas") || null, property_number: gv("pp-propno") || null, cadastral_zone: gv("pp-cad") || null, bylaws_ref: gv("pp-bylaws") || null, payment_instructions: gv("pp-payinfo") || null, disclaimer: gv("pp-disc") || null }) };
+        profile: Object.assign({}, pf, { committee_head: gv("pp-head") || null, treasurer_name: gv("pp-treas") || null, property_number: gv("pp-propno") || null, cadastral_zone: gv("pp-cad") || null, bylaws_ref: gv("pp-bylaws") || null, payment_instructions: gv("pp-payinfo") || null, disclaimer: gv("pp-disc") || null, second_currency: (gv("pp-cur2") || "").toUpperCase() || null, exchange_rate: gv("pp-fx") ? Number(gv("pp-fx")) : null }) };
       var r = p.id ? await sb.from("properties").update(row).eq("id", p.id) : await sb.from("properties").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (!p.id && r.data) plotSetProp(r.data.id);
@@ -20525,6 +20574,7 @@
     var partners = await plotPartners();
     // real blocks from the units, so a scoped charge can never point at a block
     // that does not exist (which would bill nobody, silently)
+    var chAccts = ((await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("type_code", "income").order("code")).data) || [];
     var bu = (await sb.from("property_units").select("block").is("deleted_at", null).eq("property_id", pcur).eq("is_active", true)).data || [];
     var blocks = []; bu.forEach(function (u) { var v = (u.block || "").trim(); if (v && blocks.indexOf(v) < 0) blocks.push(v); });
     blocks.sort();
@@ -20536,10 +20586,11 @@
       '<div class="row2"><div><label>Building</label>' + plotSel("pc-prop", props, pcur, null) + '</div><div><label>Name</label><input id="pc-name" value="' + esc(c.name || "") + '" placeholder="e.g. Concierge salary"></div></div>' +
       '<div class="row2"><div><label>Category</label><select id="pc-cat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (c.category === k ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select></div><div><label>Scope</label>' + blockSel + '</div></div>' +
       '<div class="row2"><div><label>Amount</label><input id="pc-amt" type="number" step="0.01" value="' + (c.amount != null ? c.amount : "") + '"></div><div><label>Frequency</label><select id="pc-freq">' + ["monthly", "quarterly", "yearly"].map(function (f) { return '<option value="' + f + '"' + (c.frequency === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select></div></div>' +
-      '<div class="row2"><div><label>Supplier (optional)</label>' + plotSel("pc-sup", partners, c.supplier_partner_id, "(none)") + '</div><div><label>Active</label><select id="pc-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>Off</option></select></div></div>';
+      '<div class="row2"><div><label>Supplier (optional)</label>' + plotSel("pc-sup", partners, c.supplier_partner_id, "(none)") + '</div><div><label>Active</label><select id="pc-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>Off</option></select></div></div>' +
+      '<div><label>Income account for this charge</label>' + plotSel("pc-acct", chAccts, c.income_account_id, "(use the building's default)", function (a) { return (a.code ? a.code + " " : "") + a.name; }) + '</div>';
     var m = plotModal(c.id ? "Edit charge" : "New charge", inner, async function () {
       var name = gv("pc-name"); if (!name) { toast("Enter a name"); return; }
-      var row = { company_id: S.company.id, property_id: gv("pc-prop"), name: name, category: gv("pc-cat"), block: gv("pc-block") || null, amount: Number(gv("pc-amt")) || 0, frequency: gv("pc-freq"), supplier_partner_id: gv("pc-sup") || null, is_active: gv("pc-active") === "1" };
+      var row = { company_id: S.company.id, property_id: gv("pc-prop"), name: name, category: gv("pc-cat"), block: gv("pc-block") || null, amount: Number(gv("pc-amt")) || 0, frequency: gv("pc-freq"), supplier_partner_id: gv("pc-sup") || null, is_active: gv("pc-active") === "1", income_account_id: gv("pc-acct") || null };
       var r = c.id ? await sb.from("property_charges").update(row).eq("id", c.id) : await sb.from("property_charges").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Saved"); renderView();
@@ -20574,15 +20625,20 @@
     var b = plotBudgetCalc(charges, units, prop.reserve_percent);
     var billable = b.rows.filter(function (r) { return r.fee > 0.005; });
     var missing = billable.filter(function (r) { return !primaryByUnit[r.unit.id]; });
+    // optional second currency shown alongside (Lebanon bills in USD and LBP)
+    var pf2 = prop.profile || {};
+    var fx = (Number(pf2.exchange_rate) > 0 && (pf2.second_currency || "LBP") !== S.company.currency_code)
+      ? { code: pf2.second_currency || "LBP", rate: Number(pf2.exchange_rate) } : null;
     var d = new Date(); var period = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0");
     var eom = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
     var inner =
       '<div class="row2"><div><label>Period</label><input id="cr-period" value="' + period + '"></div><div><label>Due date</label><input id="cr-due" type="date" value="' + eom + '"></div></div>' +
       '<div class="o-note" style="margin:4px 0">Splitting ' + moneyC(b.required) + '/period across <b>' + billable.length + '</b> unit(s) by share' + (Number(prop.reserve_percent) ? ', incl. ' + prop.reserve_percent + '% reserve' : '') + '.</div>' +
       (missing.length ? '<div class="o-note warn">' + missing.length + ' unit(s) have no owner on file and will be skipped: ' + esc(missing.slice(0, 6).map(function (r) { return r.unit.code; }).join(", ")) + (missing.length > 6 ? "..." : "") + '</div>' : '') +
-      '<div class="table-wrap" style="max-height:240px;overflow:auto"><table class="o-list"><thead><tr><th>Unit</th><th class="num">Share</th><th class="num">Fee</th></tr></thead><tbody>' +
-      billable.map(function (r) { return '<tr><td>' + esc(r.unit.code) + (primaryByUnit[r.unit.id] ? "" : ' <span class="muted">(no owner)</span>') + '</td><td class="num">' + r.share + '</td><td class="num">' + moneyC(r.fee) + '</td></tr>'; }).join("") +
-      '</tbody></table></div>';
+      '<div class="table-wrap" style="max-height:240px;overflow:auto"><table class="o-list"><thead><tr><th>Unit</th><th class="num">Share</th><th class="num">Fee</th>' + (fx ? '<th class="num">' + esc(fx.code) + '</th>' : '') + '</tr></thead><tbody>' +
+      billable.map(function (r) { return '<tr><td>' + esc(r.unit.code) + (primaryByUnit[r.unit.id] ? "" : ' <span class="muted">(no owner)</span>') + '</td><td class="num">' + r.share + '</td><td class="num">' + moneyC(r.fee) + '</td>' + (fx ? '<td class="num">' + money(r.fee * fx.rate) + '</td>' : '') + '</tr>'; }).join("") +
+      '</tbody></table></div>' +
+      (fx ? '<div class="muted" style="font-size:12px">Second column shown in ' + esc(fx.code) + ' at ' + esc(fx.rate) + ' per ' + esc(S.company.currency_code) + ', from the building settings. Invoices are raised in ' + esc(S.company.currency_code) + '.</div>' : '');
     var m = plotModal("Generate charges - " + prop.name, inner, async function (mm) {
       var period2 = gv("cr-period") || period, due = gv("cr-due") || null;
       var toBill = billable.filter(function (r) { return primaryByUnit[r.unit.id]; });
@@ -21735,6 +21791,107 @@
         '</tbody></table>' : '<div class="muted" style="font-size:12.5px">No expenses recorded yet.</div>') + '</div>';
     document.getElementById("cm-prop").onchange = function () { plotSetProp(this.value); renderPlotCommittee(); };
     document.getElementById("cm-print").onclick = function () { window.print(); };
+  }
+
+  // ---- Concierge screen: today's list, big touch targets, camera capture.
+  //      This is the whole app for whoever actually does the rounds.
+  async function renderPlotConcierge() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Today's round") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    var props = await plotProps(), body = document.getElementById("o-body");
+    if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
+    var cur = plotGetProp(); if (!cur || !props.some(function (p) { return p.id === cur; })) cur = props[0].id;
+    var items = (await sb.from("property_checklist_items").select("*").is("deleted_at", null).eq("property_id", cur).eq("is_active", true).order("sort")).data || [];
+    var td = today();
+    var done = (await sb.from("property_checkins").select("item_id").eq("property_id", cur).eq("done_date", td)).data || [];
+    var doneSet = {}; done.forEach(function (d) { if (d.item_id) doneSet[d.item_id] = 1; });
+    var left = items.filter(function (i) { return !doneSet[i.id]; }).length;
+    body.innerHTML = '<div style="padding:12px 14px;max-width:620px">' +
+      (props.length > 1 ? '<select id="cn-prop" style="width:100%;margin-bottom:12px">' + props.map(function (p) { return '<option value="' + p.id + '"' + (p.id === cur ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '') +
+      '<div class="o-note" style="margin-bottom:12px">' + (left ? left + ' job(s) left today.' : 'Everything on today\'s list is done. Thank you.') + '</div>' +
+      (items.length ? items.map(function (i) {
+        var isDone = !!doneSet[i.id];
+        return '<div class="card" style="padding:14px 16px;margin-bottom:10px;display:flex;align-items:center;gap:12px">' +
+          '<div style="flex:1"><div style="font-weight:700;font-size:15px">' + esc(i.title) + '</div>' +
+          (i.requires_photo ? '<div class="muted" style="font-size:12.5px">Photo required</div>' : '') + '</div>' +
+          (isDone ? '<span class="badge paid">Done</span>' : '<button class="o-new cn-do" data-id="' + i.id + '" data-photo="' + (i.requires_photo ? 1 : 0) + '" data-title="' + esc(i.title) + '" style="padding:12px 18px">Mark done</button>') +
+          '</div>';
+      }).join("") : '<div class="o-empty2"><div class="o-empty2-t">Nothing on the list</div><div class="o-empty2-h">The committee has not set up a checklist for this building yet.</div></div>') + '</div>';
+    var ps = document.getElementById("cn-prop"); if (ps) ps.onchange = function () { plotSetProp(this.value); renderPlotConcierge(); };
+    body.querySelectorAll(".cn-do").forEach(function (b) {
+      b.onclick = function () { openCheckinModal({ item_id: b.dataset.id, property_id: cur, requires_photo: b.dataset.photo === "1", title: b.dataset.title }); };
+    });
+  }
+
+  // ---- Guided setup: units and shares, then the running costs, then the
+  //      first bill - so a new building is usable in one sitting.
+  function openPlotWizard() {
+    var unitRow = function () {
+      return '<tr class="wz-u"><td><input class="wz-code" placeholder="A-1"></td><td><input class="wz-owner" placeholder="Owner name"></td><td style="max-width:110px"><input class="wz-share" type="number" step="0.01" placeholder="share"></td><td class="right"><button type="button" class="o-filtbtn wz-udel">&times;</button></td></tr>';
+    };
+    var costRow = function (n, c) {
+      return '<tr class="wz-c"><td><input class="wz-cname" value="' + esc(n || "") + '"></td><td><select class="wz-ccat">' + PLOT_CAT.map(function (k) { return '<option value="' + k + '"' + (k === c ? " selected" : "") + '>' + plotCatLabel(k) + '</option>'; }).join("") + '</select></td><td style="max-width:120px"><input class="wz-camt" type="number" step="0.01" placeholder="per month"></td><td class="right"><button type="button" class="o-filtbtn wz-cdel">&times;</button></td></tr>';
+    };
+    var inner =
+      '<div class="o-note">Set the building up in one go. You can change any of it later.</div>' +
+      '<div class="o-cf-head">1 &middot; The building</div>' +
+      '<div class="row2"><div><label>Name</label><input id="wz-name" placeholder="e.g. Cedar Heights"></div><div><label>City</label><input id="wz-city"></div></div>' +
+      '<div class="row2"><div><label>Shares total</label><input id="wz-shares" type="number" step="1" value="100"><div class="muted" style="font-size:12px;margin-top:3px">100 for percentages, 1000 for milliemes.</div></div><div><label>Reserve uplift %</label><input id="wz-reserve" type="number" step="0.5" value="0"></div></div>' +
+      '<div class="o-cf-head" style="margin-top:10px">2 &middot; Units and shares</div>' +
+      '<div class="table-wrap" style="max-height:200px;overflow:auto"><table class="o-list"><thead><tr><th>Unit</th><th>Owner</th><th>Share</th><th></th></tr></thead><tbody id="wz-units">' + unitRow() + unitRow() + unitRow() + '</tbody></table></div>' +
+      '<div style="display:flex;gap:8px;align-items:center"><button type="button" class="o-filtbtn" id="wz-addu">Add unit</button><span id="wz-sharehint" class="muted" style="font-size:12.5px"></span></div>' +
+      '<div class="o-cf-head" style="margin-top:10px">3 &middot; What it costs to run, each month</div>' +
+      '<div class="table-wrap" style="max-height:180px;overflow:auto"><table class="o-list"><thead><tr><th>Cost</th><th>Category</th><th>Per month</th><th></th></tr></thead><tbody id="wz-costs">' +
+      costRow("Concierge", "concierge") + costRow("Electricity", "electricity") + costRow("Generator", "generator") + costRow("Cleaning", "cleaning") + '</tbody></table></div>' +
+      '<button type="button" class="o-filtbtn" id="wz-addc">Add cost</button>';
+    var m = plotModal("Set up a building", inner, async function (mm) {
+      var name = gv("wz-name"); if (!name) { toast("Name the building"); return; }
+      var units = [].slice.call(m.querySelectorAll(".wz-u")).map(function (tr) {
+        return { code: tr.querySelector(".wz-code").value.trim(), owner: tr.querySelector(".wz-owner").value.trim(), share: Number(tr.querySelector(".wz-share").value) || 0 };
+      }).filter(function (u) { return u.code; });
+      if (!units.length) { toast("Add at least one unit"); return; }
+      var costs = [].slice.call(m.querySelectorAll(".wz-c")).map(function (tr) {
+        return { name: tr.querySelector(".wz-cname").value.trim(), cat: tr.querySelector(".wz-ccat").value, amt: Number(tr.querySelector(".wz-camt").value) || 0 };
+      }).filter(function (c) { return c.name && c.amt > 0; });
+      var btn = mm.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Setting up...";
+      var co = (await sb.from("companies").select("org_id").eq("id", S.company.id).single()).data;
+      var acct = (await sb.from("accounts").select("id").eq("company_id", S.company.id).eq("type_code", "income").order("code").limit(1)).data;
+      var pIns = await sb.from("properties").insert({ company_id: S.company.id, name: name, city: gv("wz-city") || null, shares_total: Number(gv("wz-shares")) || 100, reserve_percent: Number(gv("wz-reserve")) || 0, income_account_id: acct && acct[0] ? acct[0].id : null }).select("id").single();
+      if (pIns.error) { toast(errMsg(pIns.error)); btn.disabled = false; btn.textContent = "Save"; return; }
+      var pid = pIns.data.id;
+      for (var i = 0; i < units.length; i++) {
+        var u = units[i];
+        var uIns = await sb.from("property_units").insert({ company_id: S.company.id, property_id: pid, code: u.code, kind: "apartment", shares: u.share }).select("id").single();
+        if (uIns.error || !u.owner) continue;
+        // reuse a contact of the same name if there is one, otherwise create it
+        var ex = (await sb.from("partners").select("id").eq("company_id", S.company.id).ilike("name", u.owner).limit(1)).data;
+        var pid2 = ex && ex[0] ? ex[0].id : null;
+        if (!pid2) { var np = await sb.from("partners").insert({ company_id: S.company.id, org_id: co.org_id, name: u.owner, is_customer: true }).select("id").single(); pid2 = np.data ? np.data.id : null; }
+        if (pid2) await sb.from("property_ownerships").insert({ company_id: S.company.id, unit_id: uIns.data.id, partner_id: pid2, share_pct: 100, is_primary: true, start_date: today() });
+      }
+      for (var j = 0; j < costs.length; j++) {
+        await sb.from("property_charges").insert({ company_id: S.company.id, property_id: pid, name: costs[j].name, category: costs[j].cat, amount: costs[j].amt, frequency: "monthly", is_active: true });
+      }
+      plotSetProp(pid);
+      plotLog("created", "properties", pid, name, units.length + " unit(s), " + costs.length + " charge(s)", pid);
+      m.remove(); toast(name + " is set up with " + units.length + " unit(s)");
+      go("plot.dash");
+    }, true);
+    function shareHint() {
+      var tot = 0; m.querySelectorAll(".wz-share").forEach(function (i) { tot += Number(i.value) || 0; });
+      var target = Number(gv("wz-shares")) || 100;
+      var el = document.getElementById("wz-sharehint");
+      el.innerHTML = "Shares so far: <b style=\"color:" + (Math.abs(tot - target) < 0.5 || tot === 0 ? "inherit" : "var(--bad)") + "\">" + (Math.round(tot * 100) / 100) + "</b> of " + target;
+    }
+    m.addEventListener("input", function (e) { if (e.target.classList.contains("wz-share") || e.target.id === "wz-shares") shareHint(); });
+    m.addEventListener("click", function (e) {
+      if (e.target.id === "wz-addu") { document.getElementById("wz-units").insertAdjacentHTML("beforeend", unitRow()); }
+      else if (e.target.id === "wz-addc") { document.getElementById("wz-costs").insertAdjacentHTML("beforeend", costRow("", "other")); }
+      else if (e.target.classList.contains("wz-udel")) { e.target.closest("tr").remove(); shareHint(); }
+      else if (e.target.classList.contains("wz-cdel")) { e.target.closest("tr").remove(); }
+    });
+    shareHint();
   }
 
   // ---- One-off assessment: a special levy outside the recurring charges
