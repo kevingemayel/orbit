@@ -140,6 +140,10 @@ inv "no RLS policy is unconditionally true" \
     "select count(*) as n from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace ns on ns.oid=c.relnamespace where ns.nspname='public' and c.relname not in ('site_content') and pg_get_expr(p.polqual,p.polrelid)='true'" 0
 inv "platform_admins is not writable through the API" \
     "select count(*) as n from pg_policy p join pg_class c on c.oid=p.polrelid where c.relname='platform_admins' and p.polcmd <> 'r'" 0
+inv "every journal entry belongs to a book" \
+    "select count(*) as n from public.journal_entries where book_id is null" 0
+inv "every company has a primary book" \
+    "select count(*) as n from public.companies c where not exists (select 1 from public.books b where b.company_id=c.id and b.is_primary)" 0
 inv "every posted journal entry balances" \
     "select count(*) as n from (select l.entry_id from public.journal_lines l join public.journal_entries e on e.id=l.entry_id where e.state='posted' group by l.entry_id having round(sum(l.debit)::numeric,2) <> round(sum(l.credit)::numeric,2)) s" 0
 

@@ -1760,3 +1760,13 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
     transition-duration: .001ms !important; scroll-behavior: auto !important;
   }
 }
+
+/* Accounting books: the picker in a report bar, and the top-bar warning chip
+   shown whenever you are looking at anything other than the primary book. */
+.o-bookbar{display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:0 8px;height:30px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink2)}
+.o-bookbar svg{width:15px;height:15px}
+.o-bookbar select{border:0;background:none;color:inherit;font:inherit;font-size:12.5px;outline:none;cursor:pointer;max-width:150px}
+.o-bookbar.alt{border-color:var(--warn);background:var(--warn-s);color:var(--warn)}
+.o-bookchip{display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:0 11px;height:30px;border:1px solid var(--warn);border-radius:999px;background:var(--warn-s);color:var(--warn);font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.o-bookchip svg{width:14px;height:14px}
+.o-bookchip:hover{filter:brightness(.97)}

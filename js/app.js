@@ -382,6 +382,142 @@
       var d = (await sb.from("custom_field_defs").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
       d.forEach(function (f) { (S.customDefs[f.entity] = S.customDefs[f.entity] || []).push(f); });
     } catch (e) { }
+    await loadBooks();
+  }
+
+  // ===========================================================================
+  // BOOKS (multi-book accounting)
+  //
+  // Two views of one business rather than two businesses. A book is a LAYER:
+  // `statutory` includes only itself, `management` includes statutory as well,
+  // so a transaction is entered once, lands in one book, and shows up in every
+  // view that includes it. Reports read the selected book's scope.
+  //
+  // The selection is per company and remembered in this browser. It is never
+  // silent: when you are looking at anything other than the primary book, the
+  // top bar says so, because reading the wrong set of numbers by accident is
+  // the one thing that would make this feature dangerous.
+  // ===========================================================================
+  async function loadBooks() {
+    S.books = []; S.book = null;
+    if (!S.company) return;
+    try {
+      S.books = (await sb.from("books").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
+    } catch (e) { S.books = []; }
+    if (!S.books.length) return;
+    var want = null;
+    try { want = localStorage.getItem("orbit_book_" + S.company.id); } catch (e) { }
+    S.book = S.books.filter(function (b) { return b.id === want; })[0]
+          || S.books.filter(function (b) { return b.is_primary; })[0]
+          || S.books[0];
+  }
+  function setBook(id) {
+    var b = S.books.filter(function (x) { return x.id === id; })[0]; if (!b) return;
+    S.book = b;
+    try { localStorage.setItem("orbit_book_" + S.company.id, id); } catch (e) { }
+    renderShell(); renderView();
+  }
+  // The ids whose entries belong in the current view. Empty array = no filter,
+  // which keeps every report working if the books table is somehow unavailable.
+  function bookScope(b) {
+    b = b || S.book;
+    if (!b || !S.books || !S.books.length) return [];
+    var codes = (b.includes && b.includes.length) ? b.includes.slice() : [b.code];
+    if (codes.indexOf(b.code) < 0) codes.push(b.code);
+    return S.books.filter(function (x) { return codes.indexOf(x.code) >= 0; }).map(function (x) { return x.id; });
+  }
+  // Apply the scope to a supabase query on journal_entries (or a join to it).
+  function bookFilter(q, col) {
+    var ids = bookScope();
+    return ids.length ? q.in(col || "book_id", ids) : q;
+  }
+  function bookIsPrimary() { return !S.book || !!S.book.is_primary; }
+  // Book CODES rather than ids, for anything that spans companies. Books are
+  // per company but share codes, so consolidation compares like with like.
+  // null means "no filter", which is what a single-book company wants.
+  function bookCodes() {
+    if (!S.book || !S.books || S.books.length < 2) return null;
+    var codes = (S.book.includes && S.book.includes.length) ? S.book.includes.slice() : [S.book.code];
+    if (codes.indexOf(S.book.code) < 0) codes.push(S.book.code);
+    return codes;
+  }
+  function bookSelectHTML(id, sel, includeBlank) {
+    if (!S.books || S.books.length < 2) return "";
+    return '<select id="' + id + '">' + (includeBlank ? '<option value="">(default)</option>' : "") +
+      S.books.map(function (b) { return '<option value="' + b.id + '"' + ((sel || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>';
+  }
+  // The report filter-bar control. Hidden entirely for a company that has never
+  // set up a second book, so nothing new appears for people who do not need it.
+  function bookBarHTML() {
+    if (!S.books || S.books.length < 2) return "";
+    return '<label class="o-bookbar' + (bookIsPrimary() ? "" : " alt") + '">' + hIcon("book") +
+      '<span class="sr-only">Accounting book</span>' + bookSelectHTML("o-bookpick") + '</label>';
+  }
+  function wireBookBar() {
+    var el = document.getElementById("o-bookpick");
+    if (el) el.onchange = function () { setBook(this.value); };
+  }
+  // Shown in the top bar whenever you are NOT looking at the primary book. It is
+  // deliberately loud: reading the wrong set of numbers without noticing is the
+  // one failure mode that would make this feature dangerous. Clicking it goes
+  // straight back to the primary book.
+  // Settings > Accounting books. Deliberately small: a book is a name plus the
+  // set of layers that roll into it. The statutory book cannot be deleted.
+  function cfgBooks() {
+    return {
+      title: "Accounting books", pageSize: 40, table: "books",
+      fetch: function () { return sb.from("books").select("*").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
+      searchText: function (b) { return (b.name || "") + " " + (b.code || ""); },
+      columns: [
+        { label: "Book", get: function (b) { return '<b>' + esc(b.name) + '</b>' + (b.is_primary ? ' <span class="badge paid">Primary</span>' : "") + (b.is_default && !b.is_primary ? ' <span class="badge partial">New entries land here</span>' : ""); } },
+        { label: "Code", get: function (b) { return '<span class="muted">' + esc(b.code) + '</span>'; } },
+        { label: "Shows", get: function (b) { return esc(((b.includes && b.includes.length) ? b.includes : [b.code]).join(" + ")); } },
+        { label: "Active", get: function (b) { return b.is_active ? '<span class="badge paid">Yes</span>' : '<span class="badge">No</span>'; } }
+      ],
+      emptyHint: "A book is one view of the same business. Statutory is what gets filed; Management shows everything including the entries you keep out of the filed set. A transaction is entered once and appears in every view that includes its book.",
+      onOpen: function (b) { openBookModal(b); }, onNew: function () { openBookModal(null); }
+    };
+  }
+  async function openBookModal(b) {
+    b = b || { includes: [], sort: 30, is_active: true };
+    var others = (S.books || []).filter(function (x) { return x.id !== b.id; });
+    var inner =
+      '<div class="row2"><div><label>Name</label><input id="bk-name" value="' + esc(b.name || "") + '" placeholder="e.g. Management"></div>' +
+      '<div><label>Code</label><input id="bk-code" value="' + esc(b.code || "") + '" placeholder="lowercase, no spaces"' + (b.code === "statutory" ? " disabled" : "") + '></div></div>' +
+      '<div><label>This view shows</label><div class="sub" style="margin:2px 0 6px">Tick the other books whose entries roll up into this one. A management view normally includes the statutory book, so you see everything in one place.</div>' +
+      others.map(function (o) { return '<label style="display:block;margin:3px 0"><input type="checkbox" class="bk-inc" value="' + esc(o.code) + '"' + ((b.includes || []).indexOf(o.code) >= 0 ? " checked" : "") + '> ' + esc(o.name) + '</label>'; }).join("") + '</div>' +
+      '<div class="row2"><div><label>Order</label><input id="bk-sort" type="number" value="' + (b.sort != null ? b.sort : 30) + '"></div>' +
+      '<div><label>Active</label><select id="bk-active"><option value="1"' + (b.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (b.is_active === false ? " selected" : "") + '>No</option></select></div></div>' +
+      '<label style="display:block;margin-top:8px"><input type="checkbox" id="bk-default"' + (b.is_default ? " checked" : "") + '> New entries land in this book by default</label>' +
+      '<div class="o-note">Every entry keeps its full audit trail whichever book it is in. Books change which entries a report adds up, not what is recorded.</div>';
+    plotModal(b.id ? "Edit book" : "New book", inner, async function () {
+      var name = gv("bk-name"); if (!name) { toast("Give the book a name"); return false; }
+      var code = (gv("bk-code") || name).toLowerCase().replace(/[^a-z0-9_]+/g, "_");
+      var inc = [].map.call(document.querySelectorAll(".bk-inc:checked"), function (c) { return c.value; });
+      if (inc.indexOf(code) < 0) inc.push(code);
+      var row = { name: name, code: code, includes: inc, sort: parseInt(gv("bk-sort"), 10) || 30,
+                  is_active: document.getElementById("bk-active").value === "1",
+                  is_default: document.getElementById("bk-default").checked };
+      if (row.is_default) await sb.from("books").update({ is_default: false }).eq("company_id", S.company.id);
+      var r;
+      if (b.id) r = await sb.from("books").update(row).eq("id", b.id);
+      else { row.company_id = S.company.id; r = await sb.from("books").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return false; }
+      await loadBooks(); renderShell(); toast("Saved"); return true;
+    });
+  }
+  function bookChipHTML() {
+    if (!S.books || S.books.length < 2 || bookIsPrimary()) return "";
+    return '<button class="o-bookchip" id="o-bookchip" title="You are viewing the ' + esc(S.book.name) +
+      ' book. Click to return to ' + esc((S.books.filter(function (b) { return b.is_primary; })[0] || {}).name || "the primary book") + '.">' +
+      hIcon("book") + '<span>' + esc(S.book.name) + '</span></button>';
+  }
+  function wireBookChip() {
+    var el = document.getElementById("o-bookchip");
+    if (el) el.onclick = function () {
+      var p = S.books.filter(function (b) { return b.is_primary; })[0];
+      if (p) setBook(p.id);
+    };
   }
   // ORB-06b: custom fields. Render the admin-defined extra fields for an entity as a form
   // block, pre-filled from the record's `custom` jsonb bag.
@@ -491,6 +627,7 @@
       { t: "Shipments and landed cost", h: "<p>When goods travel to you - especially from abroad - a <b>shipment</b> tracks the journey, and its <b>landed cost</b> makes your stock value honest.</p><p><b>Landed cost</b> means the true cost of getting something onto your shelf: not just the price on the supplier's bill, but the freight, insurance and duty on top. If a steel section costs 100 but 20 to ship and clear, its real cost is 120 - and that is what it should be valued at.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Open <b>Purchase &rsaquo; Logistics &rsaquo; Shipments</b> and create one, listing what is on the way.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Add the extra costs - freight, insurance, customs - and Orbit spreads them across the items by value or weight.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">Receive the shipment into stock, and each item lands at its full, true cost.</div></div></div><p>Prefer a board to a list? <b>Shipments board</b> shows the same shipments as cards you drag across their status.</p>" }
     ] },
     { key: "accounting", title: "The money side", articles: [
+      { t: "Books: two views of the same business", h: "<p>Sometimes you need more than one picture of the same trading. What the accountant files is one view. What you need to run the place is another. Rather than keeping a second company and typing everything twice, Orbit gives one company more than one <b>book</b>.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:book}} Statutory</div><p>The set that gets filed. This is the primary book and the one every report shows until you say otherwise.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:book}} Management</div><p>The full picture. It <b>includes</b> the statutory book and adds anything posted only here, so you see everything in one place.</p></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:layers}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Books are layers, not copies</div><p>You enter a transaction <b>once</b> and it goes into one book. A normal transaction lands in Statutory and therefore shows in both views. Something you only want in your own picture lands in Management and shows only there. Nothing is ever entered twice, and there is only one customer list, one product list and one stock pool.</p></div></div><p>Where you choose the book:</p><ul><li>On an <b>invoice or bill</b>, the <b>Book</b> field decides where it posts when you confirm it.</li><li>On a <b>manual journal entry</b>, same thing.</li><li>Everything posted automatically (payments, stock, payroll) follows the company default, which is Statutory.</li></ul><p>Every report - Profit and Loss, Balance Sheet, Trial Balance, General Ledger, Partner Ledger, budget versus actual and consolidation - has a book picker beside the period, and the book name is printed on the report so a printout is never ambiguous.</p><div class=\"man-cal warn\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">You will always know which book you are in</div><p>Whenever you are looking at anything other than the primary book, a coloured chip appears in the top bar naming it. Click it to go straight back. Reading the wrong set of numbers without noticing is the only way this feature could hurt you, so it is made loud on purpose.</p></div></div><p>Add or rename books under <b>Settings &rsaquo; Accounting books</b>. A book is a name plus the list of other books that roll up into it, so you can add a tax or IFRS book the same way.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing is hidden from the record</div><p>A book changes which entries a <b>report</b> adds up. It does not change what is stored. Every entry keeps its full audit trail whichever book it is in, and the audit log records every change as before.</p></div></div>" },
       { t: "The big idea: how money is recorded", h: "<p>This is the one concept that makes everything else click, so here it is in the simplest way.</p><p>Every time money moves, it comes <b>from</b> somewhere and goes <b>to</b> somewhere. If a customer pays you 100, then 100 <b>leaves</b> the &ldquo;owed to us&rdquo; pile and <b>arrives</b> in the &ldquo;bank&rdquo; pile. Bookkeeping is just writing down both halves of every move so the books always balance. This is called <b>double-entry</b>, and Orbit does it for you behind the scenes - you never have to think about the two halves.</p><p>A few words you will see:</p><ul><li>An <b>account</b> is a labelled pile of money, like &ldquo;Bank&rdquo;, &ldquo;Sales&rdquo; or &ldquo;Rent&rdquo;. It is a folder, not a bank account (though one of them represents your bank).</li><li>The <b>chart of accounts</b> is simply the full list of those folders.</li><li>To <b>post</b> something means to record it for real (the pen version, remember).</li><li>A <b>journal</b> and the <b>ledger</b> are just the diary where every posted move is written down.</li></ul><p>You mostly work with everyday screens (invoices, bills, payments). Orbit turns those into the correct accounting behind the scenes.</p>" },
       { t: "The chart of accounts (your money folders)", h: "<p>The <b>chart of accounts</b> is the list of labelled folders every bit of money is sorted into. A new company already comes with a sensible chart, so you rarely start from scratch.</p><ol><li>Open <b>Accounting &rsaquo; Configuration &rsaquo; Chart of Accounts</b>.</li><li>You can <b>rename</b> a folder, <b>archive</b> one you do not use (hides it without losing history), or <b>add</b> a new one.</li></ol><p>Each account has a <b>type</b> (income, expense, asset, and so on). The type decides which report it appears on - money you earn or spend shows on the Profit &amp; Loss; things you own or owe show on the Balance Sheet. You usually leave the types alone.</p>" },
       { t: "Tax and VAT, explained simply", h: "<p><b>VAT</b> (or sales tax) is a slice the government adds on top of a price, which you collect on their behalf. If VAT is 11% and you sell something for 100, the customer pays 111, and you owe that extra 11 to the tax office. When you buy things, you often pay VAT too, and you can subtract that from what you owe.</p><ol><li>Your tax rates live in <b>Settings &rsaquo; Taxes</b> (for example &ldquo;VAT 11%&rdquo;).</li><li>Put the right tax on each product so invoices and bills work it out automatically - you do not do the maths.</li><li>To see the total, open <b>Reporting &rsaquo; VAT / Tax Report</b>. It adds up the VAT you charged on sales and subtracts the VAT you paid on purchases, and shows the difference - either what you owe the tax office or what they owe you.</li></ol>" },
@@ -1025,6 +1162,7 @@
       { i: "send", n: "Scheduled reports", l: "Scheduled reports", d: "Email a report tile to a list of people daily, weekly or monthly, automatically." }
     ] },
     settings: { intro: "Every screen in the <b>Settings</b> app (some are owner-only):", list: [
+      { i: "book", n: "Accounting books", l: "Settings", d: "Statutory and management views of the same trading, entered once." },
       { i: "flag", n: "Getting started", l: "Settings", d: "The setup checklist for a new company." },
       { i: "building", n: "Company Profile", l: "Settings", d: "Legal name, country, currency and logo that stamp every document." },
       { i: "person", n: "Pending signups", l: "Settings", d: "Approve people who requested access." },
@@ -1247,6 +1385,7 @@
         { label: "Tenants", action: "platform.tenants" },
         { label: "Audit Log", action: "settings.audit" },
         { label: "Companies", action: "companies" },
+        { label: "Accounting books", action: "settings.books" },
         { label: "Users & Roles", action: "settings.users" },
         { label: "Roles & Permissions", action: "settings.roles" },
         { label: "Approvals", action: "approvals.inbox" },
@@ -2066,7 +2205,7 @@
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       (APP_FLOW[S.app] ? '<button class="o-howto" id="ohowto" title="How ' + esc(term(a.name)) + ' works" aria-label="How ' + esc(term(a.name)) + ' works"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h7.6"/><path d="M13 9l3 3-3 3"/></svg><span>How this works</span></button>' : '') +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
-      '<div class="o-systray">' + companySelectHTML("bar") + '<button class="o-help" id="olang" aria-label="Change language" title="Translate this app to any language"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg></button><button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '<div class="o-systray">' + bookChipHTML() + companySelectHTML("bar") + '<button class="o-help" id="olang" aria-label="Change language" title="Translate this app to any language"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg></button><button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
       '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
@@ -2083,6 +2222,7 @@
     var _ob = document.getElementById("obrand"); if (_ob) _ob.onclick = goHome;
     var _op = document.getElementById("oprint"); if (_op) _op.onclick = printCurrentPage;
     var _lg = document.getElementById("olang"); if (_lg) _lg.onclick = ensureTranslate;
+    wireBookChip();
     installFormPrintButtons();
     var _gs = document.getElementById("o-gs-in");
     if (_gs) { var _gt; _gs.oninput = function () { var v = this.value; clearTimeout(_gt); _gt = setTimeout(function () { runGlobalSearch(v); }, 250); }; _gs.onblur = function () { setTimeout(function () { var d = document.getElementById("o-gs-dd"); if (d) d.style.display = "none"; }, 180); }; _gs.onfocus = function () { if (this.value.trim().length > 1) { var d = document.getElementById("o-gs-dd"); if (d && d.innerHTML) d.style.display = "block"; } }; }
@@ -2928,6 +3068,7 @@
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
       case "settings.audit": return renderList(cfgAuditLog());
+      case "settings.books": return renderList(cfgBooks());
       case "site.incidents": return renderList(cfgIncidents());
       case "settings.numbering": return renderNumbering();
       case "settings.api": return renderDevelopers();
@@ -3875,15 +4016,22 @@
   function cfgMoves() {
     return {
       title: "Journal Entries", pageSize: 80,
-      fetch: function () { return sb.from("journal_entries").select("*, journals(code,name)").eq("company_id", S.company.id).order("date", { ascending: false }).then(function (r) { return r.data || []; }); },
+      // The list obeys the selected book, so it never shows entries that the
+      // reports on the same book are excluding.
+      fetch: function () { return bookFilter(sb.from("journal_entries").select("*, journals(code,name), books(name,code,is_primary)").eq("company_id", S.company.id), "book_id").order("date", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (m) { return (m.number || "") + " " + (m.ref || "") + " " + (m.narration || ""); },
       columns: [
         { label: "Date", get: function (m) { return '<span class="muted">' + esc(m.date || "") + '</span>'; } },
         { label: "Number", get: function (m) { return '<b>' + esc(m.number || m.ref || "/") + '</b>'; } },
-        { label: "Journal", get: function (m) { return esc(m.journals ? m.journals.name : ""); } },
+        { label: "Journal", get: function (m) { return esc(m.journals ? m.journals.name : ""); } }
+      ].concat(S.books && S.books.length > 1 ? [
+        // A non-primary book is badged, so an entry that will not appear on the
+        // filed accounts is obvious at a glance in the list.
+        { label: "Book", get: function (m) { return !m.books ? "" : (m.books.is_primary ? '<span class="muted">' + esc(m.books.name) + '</span>' : '<span class="badge partial">' + esc(m.books.name) + '</span>'); } }
+      ] : []).concat([
         { label: "Reference", get: function (m) { return '<span class="muted">' + esc(m.narration || m.ref || "") + '</span>'; } },
         { label: "Status", get: function (m) { return m.state === "posted" ? '<span class="badge paid">Posted</span>' : '<span class="badge draft">Draft</span>'; } }
-      ],
+      ]),
       filters: [{ label: "Posted", test: function (m) { return m.state === "posted"; } }, { label: "Draft", test: function (m) { return m.state !== "posted"; } }],
       groupBy: [{ label: "Journal", get: function (m) { return m.journals ? m.journals.name : "None"; } }, { label: "Month", get: function (m) { return (m.date || "").slice(0, 7); } }],
       emptyHint: "Manual double-entry journals. Most postings come from invoices, bills and payments automatically; add a journal here for adjustments and opening balances.",
@@ -3929,7 +4077,7 @@
       fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + (posted ? " disabled" : "") + '>') +
       fld("Journal", '<select id="je-journal"' + (posted ? " disabled" : "") + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
       '</div><div>' +
-      fld("Reference / narration", '<input id="je-narr" value="' + esc(ent.narration || ent.ref || "") + '"' + (posted ? " disabled" : "") + '>') +
+      (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + (posted ? " disabled" : "") + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this entry belongs to. It shows in every view that includes that book.") : "") + fld("Reference / narration", '<input id="je-narr" value="' + esc(ent.narration || ent.ref || "") + '"' + (posted ? " disabled" : "") + '>') +
       '</div></div>' +
       '<div style="overflow-x:auto;margin-top:8px"><table class="o-list" style="min-width:640px"><thead><tr><th style="width:34%">Account</th><th>Description</th><th class="num" style="width:130px">Debit</th><th class="num" style="width:130px">Credit</th><th style="width:34px"></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
       (posted ? '' : '<button id="je-add" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>') +
@@ -3945,7 +4093,7 @@
       var rows = await collect();
       if (rows.length < 2) { toast("Add at least two lines"); return null; }
       var t = totals(); if (!t.bal) { toast("Debits and credits must balance"); return null; }
-      var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: gv("je-narr"), ref: gv("je-narr"), currency_code: S.company.currency_code, source_type: "manual" };
+      var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: gv("je-narr"), ref: gv("je-narr"), currency_code: S.company.currency_code, book_id: (document.getElementById("je-book") ? document.getElementById("je-book").value : null) || null, source_type: "manual" };
       var eid = id;
       if (id === "new") { head.company_id = S.company.id; head.state = "draft"; var ins = await sb.from("journal_entries").insert(head).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } eid = ins.data.id; }
       else { var up = await sb.from("journal_entries").update(head).eq("id", id); if (up.error) { toast(errMsg(up.error)); return null; } await sb.from("journal_lines").delete().eq("entry_id", id); }
@@ -4238,6 +4386,14 @@
       fld(isSale ? "Customer" : "Vendor", partnerField) +
       fld("Reference", editable ? '<input id="f-ref" value="' + esc(inv ? inv.ref || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(inv ? inv.ref || "" : "") + '</span>') +
       fld("Currency", editable ? '<select id="f-cur">' + curList.map(function (c) { return '<option value="' + esc(c) + '"' + (docCcy === c ? " selected" : "") + '>' + esc(c) + (CUR_NAME[c] ? " - " + esc(CUR_NAME[c]) : "") + (c === coCcy ? " (company)" : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(docCcy) + '</span>', "The currency this " + (isSale ? "invoice" : "bill") + " is issued in. Foreign amounts convert to the company books (" + esc(coCcy) + ") at the spot rate on the date.") +
+      // Which set of books this document posts into. Only shown once a second
+      // book exists, so nothing new appears for a company that uses one.
+      (S.books && S.books.length > 1
+        ? fld("Book", editable
+            ? '<select id="f-book">' + S.books.map(function (b) { return '<option value="' + b.id + '"' + (((inv && inv.book_id) || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>'
+            : '<span class="v">' + esc(((S.books.filter(function (b) { return b.id === (inv && inv.book_id); })[0]) || {}).name || "") + '</span>',
+            "Which set of books this posts into when you confirm it. It appears in every view that includes that book.")
+        : "") +
       '</div><div>' +
       fld(isSale ? "Invoice Date" : "Bill Date", editable ? '<input id="f-date" type="date" value="' + (inv ? inv.invoice_date || today() : today()) + '">' : '<span class="v">' + esc(inv.invoice_date || "") + '</span>', "Date the " + (isSale ? "invoice" : "bill") + " is issued.") +
       (editable ? fld("Payment terms", '<select id="f-terms"><option value="0">Due on receipt</option><option value="15">Within 15 days</option><option value="30" selected>Within 30 days</option><option value="45">Within 45 days</option><option value="60">Within 60 days</option><option value="90">Within 90 days</option><option value="eom">End of next month</option></select>', "Pick when payment is due; the due date fills in automatically.") : "") +
@@ -4384,6 +4540,7 @@
         partner_id: partnerId, invoice_date: document.getElementById("f-date").value,
         due_date: document.getElementById("f-due").value || null, ref: document.getElementById("f-ref").value.trim(),
         project_id: document.getElementById("f-proj") ? (document.getElementById("f-proj").value || null) : null,
+        book_id: document.getElementById("f-book") ? (document.getElementById("f-book").value || null) : null,
         cost_code_id: document.getElementById("f-costcode") ? (document.getElementById("f-costcode").value || null) : null,
         property_id: document.getElementById("f-prop") ? (document.getElementById("f-prop").value || null) : null,
         property_category: document.getElementById("f-propcat") ? (document.getElementById("f-propcat").value || null) : null,
@@ -7922,7 +8079,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '</div><div class="o-form-bg" style="padding:18px"><div id="db" class="o-empty">Loading...</div></div></div>';
     wireBc();
-    var rows = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var rows = (await sb.rpc("trial_balance", { p_company: S.company.id, p_book_codes: bookCodes() })).data || [];
     var income = 0, expense = 0, cash = 0, recv = 0, pay = 0;
     rows.forEach(function (r) {
       var g = (r.type_code || "").split("_")[0];
@@ -8007,6 +8164,7 @@
     var el = document.getElementById("rp-period"); if (el) el.onchange = function () { REP_PERIOD = this.value; rerender(); };
     var f = document.getElementById("rp-from"); if (f) f.onchange = function () { REP_FROM = this.value; rerender(); };
     var t = document.getElementById("rp-to"); if (t) t.onchange = function () { REP_TO = this.value; rerender(); };
+    wireBookBar();
   }
   function periodRange(p) {
     var now = new Date(), y = now.getFullYear(), m = now.getMonth();
@@ -8023,8 +8181,10 @@
   // Recreates the trial_balance rpc row shape ({code,name,type_code,debit,credit,balance})
   // from posted journal_lines, but honouring a date window so reports can be period-scoped.
   async function computeRows(fromD, toD) {
-    var lines = (await sb.from("journal_lines").select("debit,credit, accounts!inner(code,name,type_code), journal_entries!inner(date,state)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted")).data || [];
+    var q = sb.from("journal_lines").select("debit,credit, accounts!inner(code,name,type_code), journal_entries!inner(date,state,book_id)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted");
+    q = bookFilter(q, "journal_entries.book_id");
+    var lines = (await q).data || [];
     var acc = {};
     lines.forEach(function (l) {
       var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return;
@@ -8038,7 +8198,7 @@
   async function renderReport(kind) {
     var titles = { pl: "Profit and Loss", bs: "Balance Sheet", tb: "Trial Balance" };
     var pr = periodRange(REP_PERIOD);
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + bookBarHTML() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
       '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
@@ -8074,8 +8234,8 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
-  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
-  function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; as of ' + today() + '</div>'; }
+  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + bookBarHTML() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
+  function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + (S.book && S.books && S.books.length > 1 ? ' &middot; ' + esc(S.book.name) + ' book' : "") + ' &middot; as of ' + today() + '</div>'; }
   // Generic report export: scrape the rendered .o-rt table in #rep into CSV.
   function exportRepCsv() {
     var rep = document.getElementById("rep"); if (!rep) return;
@@ -8100,9 +8260,9 @@
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(renderGeneralLedger);
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
-    var lines = (await sb.from("journal_lines")
-      .select("debit,credit,label, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state), partners(name)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted")).data || [];
+    var lines = (await bookFilter(sb.from("journal_lines")
+      .select("debit,credit,label, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted"), "journal_entries.book_id")).data || [];
     lines = lines.filter(function (l) { var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return false; if (pr.from && d < pr.from) return false; if (pr.to && d > pr.to) return false; return true; });
     if (!lines.length) { rep.innerHTML = repHead("General Ledger - " + pr.label, cc) + '<div class="o-empty">No posted journal entries in this period.</div>'; return; }
     var byAcc = {};
@@ -8130,9 +8290,9 @@
     document.getElementById("o-main").innerHTML = repChrome("Partner Ledger", true);
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var cc = S.company.currency_code, rep = document.getElementById("rep");
-    var lines = (await sb.from("journal_lines")
-      .select("debit,credit,label,partner_id, accounts!inner(code,name,type_code), journal_entries!inner(date,entry_number,ref,state), partners(name)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted").not("partner_id", "is", null)).data || [];
+    var lines = (await bookFilter(sb.from("journal_lines")
+      .select("debit,credit,label,partner_id, accounts!inner(code,name,type_code), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted").not("partner_id", "is", null), "journal_entries.book_id")).data || [];
     lines = lines.filter(function (l) { var t = (l.accounts && l.accounts.type_code) || ""; return t === "asset_receivable" || t === "liability_payable"; });
     if (!lines.length) { rep.innerHTML = repHead("Partner Ledger", cc) + '<div class="o-empty">No receivable or payable entries with a partner yet.</div>'; return; }
     var byP = {};
@@ -8283,7 +8443,7 @@
     var fRefFunc = closeOf(coCcy); // presentation-per-functional
     var accs = (await sb.from("accounts").select("id,type_code,reconcilable").eq("company_id", co.id)).data || [];
     var mon = {}; accs.forEach(function (a) { if (a.reconcilable || a.type_code === "asset_cash" || /^liability/.test(a.type_code || "")) mon[a.id] = 1; });
-    var lines = (await sb.from("journal_lines").select("account_id,debit,credit,amount_currency,currency_code, journal_entries!inner(state,date,company_id)").eq("journal_entries.company_id", co.id).eq("journal_entries.state", "posted").lte("journal_entries.date", defDate).not("currency_code", "is", null)).data || [];
+    var lines = (await bookFilter(sb.from("journal_lines").select("account_id,debit,credit,amount_currency,currency_code, journal_entries!inner(state,date,company_id,book_id)").eq("journal_entries.company_id", co.id).eq("journal_entries.state", "posted").lte("journal_entries.date", defDate).not("currency_code", "is", null), "journal_entries.book_id")).data || [];
     var byCcy = {};
     lines.forEach(function (l) {
       if (!mon[l.account_id]) return;
@@ -8353,7 +8513,7 @@
       var known = fClose !== undefined && fClose !== null;
       if (!known) { missing[co.currency_code] = 1; fClose = 1; }
       if (fAvg === undefined || fAvg === null) fAvg = fClose;
-      var tb = (await sb.rpc("trial_balance", { p_company: co.id })).data || [];
+      var tb = (await sb.rpc("trial_balance", { p_company: co.id, p_book_codes: bookCodes() })).data || [];
       var eInc = 0, eExp = 0, eAssets = 0;
       /* eslint-disable no-loop-func */
       (function (fClose, fAvg) {
@@ -8443,7 +8603,7 @@
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     // opening cash = bank + cash GL balances (codes 51xx bank, 53xx cash)
-    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id, p_book_codes: bookCodes() })).data || [];
     var opening = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) opening += Number(r.balance || 0); });
     // build the period buckets (weekly for short horizons, monthly for long ones)
     var buckets = [];
@@ -8552,7 +8712,7 @@
     rep.innerHTML = repHead("Data Health Check", cc) + '<div class="sub" style="margin:6px 0 12px">Automated integrity checks on this company\'s books. Green means the data is internally consistent - run it any time, especially after a big import or month-end.</div><div id="dh-body"><div class="o-empty">Running checks...</div></div>';
     var checks = [], r2 = function (x) { return Math.round(x * 100) / 100; };
     function add(name, ok, detail, warn) { checks.push({ name: name, ok: ok, detail: detail, warn: !!warn }); }
-    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id })).data || [];
+    var tb = (await sb.rpc("trial_balance", { p_company: S.company.id, p_book_codes: bookCodes() })).data || [];
     var dr = 0, cr = 0; tb.forEach(function (r) { dr += Number(r.debit) || 0; cr += Number(r.credit) || 0; });
     add("Trial balance balances", Math.abs(dr - cr) < 0.01, "Debits " + cc + " " + money(dr) + " vs credits " + cc + " " + money(cr));
     function acc(code) { var x = tb.filter(function (t) { return t.code === code; })[0]; return x ? Number(x.balance) : 0; }
@@ -10976,7 +11136,7 @@
     var b = (await sb.from("budgets").select("*").eq("id", budgetId).maybeSingle()).data || {};
     var lines = (await sb.from("budget_lines").select("*").eq("budget_id", budgetId).order("sequence")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = b.name || "Budget";
-    var jl = (await sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end)).data || [];
+    var jl = (await bookFilter(sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id,book_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end), "journal_entries.book_id")).data || [];
     var actByCode = {}, typeByCode = {};
     jl.forEach(function (l) { var c = l.accounts && l.accounts.code; if (!c) return; typeByCode[c] = l.accounts.type_code; actByCode[c] = (actByCode[c] || 0) + (Number(l.debit || 0) - Number(l.credit || 0)); });
     var rows = "", tp = 0, ta = 0;
@@ -12801,7 +12961,7 @@
     var tOpen = 0, tWon = 0, tLost = 0; tenders.forEach(function (t) { if (t.status === "draft" || t.status === "submitted") tOpen++; else if (t.status === "won") tWon++; else if (t.status === "lost") tLost++; });
     var winRate = (tWon + tLost) > 0 ? Math.round(tWon / (tWon + tLost) * 100) : 0;
     var cashTot = 0;
-    for (var i = 0; i < S.companies.length; i++) { var c = S.companies[i]; var tb = (await sb.rpc("trial_balance", { p_company: c.id })).data || []; var csh = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) csh += Number(r.balance || 0); }); byCo[c.id].cash = fx(c.id, csh); cashTot += byCo[c.id].cash; }
+    for (var i = 0; i < S.companies.length; i++) { var c = S.companies[i]; var tb = (await sb.rpc("trial_balance", { p_company: c.id, p_book_codes: bookCodes() })).data || []; var csh = 0; tb.forEach(function (r) { var code = String(r.code || ""); if (code.charAt(0) === "5" && (code.charAt(1) === "1" || code.charAt(1) === "3")) csh += Number(r.balance || 0); }); byCo[c.id].cash = fx(c.id, csh); cashTot += byCo[c.id].cash; }
     var card = function (l, v, sub, go2, col) { return '<div class="cp-card"' + (go2 ? ' data-go="' + go2 + '" style="cursor:pointer"' : '') + '><div class="l">' + l + '</div><div class="n"' + (col ? ' style="color:' + col + '"' : '') + '>' + v + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
     var mny = function (v) { return ref + ' ' + money(v); };
     var missKeys = Object.keys(missing);

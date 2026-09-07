@@ -159,6 +159,33 @@
         return gone.length ? bad("missing: " + gone.join(", ")) : ok(need.length + " pieces present");
       } },
 
+    { name: "every ledger report honours the selected book",
+      why: "Multi-book only works if EVERY report filters by the chosen book. One report that forgets shows statutory and management mixed together, which is worse than having no books at all: the number looks right and is not.",
+      run: function (src) {
+        var problems = [];
+        // Any query joining journal_entries for reporting must pass through
+        // bookFilter. Note bookFilter WRAPS the query, so it sits to the LEFT of
+        // sb.from - the window has to look backwards, not forwards.
+        // The filter can appear on either side: bookFilter(sb.from(...)) wraps it,
+        // or the query is built into a variable and filtered on a following line.
+        var joins = [], re = /sb\.from\("journal_lines"\)[\s\S]{0,400}?journal_entries!inner/g, m;
+        while ((m = re.exec(src)) !== null) {
+          var window = src.slice(Math.max(0, m.index - 80), m.index + m[0].length + 320);
+          joins.push(window);
+          if (window.indexOf("bookFilter") < 0) {
+            problems.push("a journal_lines report query near line " + src.slice(0, m.index).split("\n").length + " does not use bookFilter");
+          }
+        }
+        // Every trial_balance caller must pass the book codes.
+        var tb = all(src, /(sb\.rpc\("trial_balance",[^)]*\))/g);
+        tb.forEach(function (c) { if (c.indexOf("p_book_codes") < 0) problems.push("a trial_balance call does not pass p_book_codes"); });
+        if (!/function bookFilter/.test(src)) problems.push("bookFilter is missing");
+        if (!/function bookCodes/.test(src)) problems.push("bookCodes is missing");
+        if (!/function bookChipHTML/.test(src)) problems.push("the non-primary book warning chip is missing");
+        return problems.length ? bad(uniq(problems).join("; "))
+                               : ok(tb.length + " trial_balance call(s) and " + joins.length + " ledger query(ies) all book-aware");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {
