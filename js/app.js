@@ -2385,20 +2385,28 @@
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
     return '<select class="o-cosel" id="cosel-' + scope + '" title="Active company">' + opts + '</select>';
   }
+  // Switching company is more than setting a variable: the role, the tenant
+  // config and the number sequences all belong to the company you are in.
+  // Anything that moves you between companies must go through here.
+  async function setCompany(id, opts) {
+    var next = S.companies.filter(function (c) { return c.id === id; })[0];
+    if (!next) { toast("You do not have access to that company"); return false; }
+    S.company = next;
+    resetSeqCache();
+    if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
+    S.role = await loadRole();
+    await loadTenantConfig();
+    maybeLogSupport();
+    await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
+    if (opts && opts.quiet) return true;
+    if (S.app && !canViewApp(S.app)) { renderHome(); return true; }
+    if (S.app) go(S.action || APPS[S.app].home); else renderHome();
+    return true;
+  }
   function wireCompanySelect(scope) {
     var el = document.getElementById("cosel-" + scope);
     if (!el) return;
-    el.onchange = async function () {
-      S.company = S.companies.filter(function (c) { return c.id === this.value; }.bind(this))[0];
-      resetSeqCache();
-      if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
-      S.role = await loadRole();
-      await loadTenantConfig();
-      maybeLogSupport();
-      await sb.from("profiles").update({ active_company_id: S.company.id }).eq("id", S.user.id);
-      if (S.app && !canViewApp(S.app)) { renderHome(); return; }
-      if (S.app) go(S.action || APPS[S.app].home); else renderHome();
-    };
+    el.onchange = async function () { await setCompany(this.value); };
   }
   function onMenuClick(mi, menu) {
     closeDropdowns();
@@ -4463,7 +4471,7 @@
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
-    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit,intercompany_company_id").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var creditCache = {};
     async function creditWarnHtml() {
       if (!isSale) return "";
@@ -4511,6 +4519,15 @@
     if (inv && inv.state === "posted" && !isRefund) btns += '<button id="f-refund">' + (isSale ? "Add Credit Note" : "Add Refund") + '</button>';
     if (inv) btns += '<button id="f-print">Print</button>';
     if (inv && isSale) btns += '<button id="f-email">Email</button>';
+    // The other half of an internal transaction. Only offered on a posted
+    // document to a party tagged as one of your own companies, and only once.
+    var icCo = null;
+    if (inv && inv.state === "posted") {
+      var icP = (partners.filter(function (p) { return p.id === inv.partner_id; })[0] || {});
+      icCo = icP.intercompany_company_id || null;
+      if (icCo && !inv.mirror_invoice_id) btns += '<button id="f-mirror" title="Create the matching document in the other company and stamp both as intercompany">Mirror in the other company</button>';
+      if (inv.mirror_invoice_id) btns += '<button id="f-openmirror" title="Open the matching document in the other company">Open the mirror</button>';
+    }
     var curState = inv ? inv.state : "draft";
     var stages = '<div class="o-stages"><span class="st ' + (curState === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (curState === "posted" ? "on" : "") + '">Posted</span></div>';
 
@@ -4721,6 +4738,19 @@
         var _adt = moveType === "out_invoice" ? "customer_invoice" : (moveType === "in_invoice" ? "vendor_bill" : null);
         if (_adt) { var _ag = await approvalGate(_adt, invId, (hdr.number || (inv && inv.number) || ""), untax + taxTot, null); if (_ag === "blocked") return invId; }
         var pr = await sb.rpc("post_invoice", { p_invoice: invId }); if (pr.error) { toast("Saved draft, posting failed: " + errMsg(pr.error)); return invId; }
+        // An internal transaction is marked as one on the entry itself, so the
+        // group report can eliminate the pair even if the contact is retagged.
+        var mco = (inv && inv.mirror_company_id) || null;
+        if (!mco) {
+          var pRow = partners.filter(function (p) { return p.id === hdr.partner_id; })[0];
+          mco = pRow ? pRow.intercompany_company_id : null;
+        }
+        if (mco) {
+          var je = (await sb.from("invoices").select("journal_entry_id").eq("id", invId).maybeSingle()).data;
+          if (je && je.journal_entry_id) {
+            await sb.from("journal_entries").update({ is_intercompany: true, counterparty_company_id: mco }).eq("id", je.journal_entry_id);
+          }
+        }
       }
       return invId;
     }
@@ -4755,6 +4785,15 @@
     }
     if (inv && inv.state === "posted" && !isRefund) document.getElementById("f-refund").onclick = function () { createCreditNote(inv, linesState, isSale); };
     if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
+    var _mir = document.getElementById("f-mirror");
+    if (_mir) _mir.onclick = function () { mirrorIntercompany(inv, lines, icCo, isSale); };
+    var _omir = document.getElementById("f-openmirror");
+    if (_omir) _omir.onclick = async function () {
+      var other = (await sb.from("invoices").select("id,company_id,number,move_type").eq("id", inv.mirror_invoice_id).maybeSingle()).data;
+      if (!other) { toast("The mirrored document has been deleted"); return; }
+      if (other.company_id !== S.company.id && !(await setCompany(other.company_id, { quiet: true }))) return;
+      renderInvoiceForm(other.id, other.move_type);
+    };
     if (inv && isSale) document.getElementById("f-email").onclick = function () { openSendModal(inv, linesState); };
   }
   function openSendModal(inv, lines) {
@@ -4995,6 +5034,87 @@
     if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return; }
     toast("Credit note created (draft)");
     renderInvoiceForm(invId, moveType);
+  }
+
+  // ======================== INTERCOMPANY MIRRORING ========================
+  // One internal transaction, two sets of books. Selling from Space Work to
+  // ALGECO is revenue here and a cost there, and until both sides exist the
+  // group accounts cannot eliminate it: consolidation would strip the sale and
+  // leave the cost, understating group profit by the whole margin.
+  //
+  // Deliberately a button, never automatic. It writes a document into another
+  // company's books, which is not something to do behind someone's back.
+  async function mirrorIntercompany(inv, lines, otherCoId, isSale) {
+    var other = S.companies.filter(function (c) { return c.id === otherCoId; })[0];
+    if (!other) { toast("You do not have access to the other company, so the mirror cannot be created"); return; }
+    if (inv.mirror_invoice_id) { toast("This document already has a mirror"); return; }
+    var mirrorType = isSale ? "in_invoice" : "out_invoice";
+    var kind = isSale ? "vendor bill" : "customer invoice";
+    // the counterparty needs a partner record pointing back at THIS company
+    var back = (await sb.from("partners").select("id,name")
+      .eq("company_id", other.id).eq("intercompany_company_id", S.company.id).limit(1)).data || [];
+    var inner =
+      '<div class="o-note">This creates a <b>' + esc(kind) + '</b> in <b>' + esc(other.name) + '</b> for the same lines and the same total, and stamps both journal entries as intercompany so the group report can eliminate the pair.</div>' +
+      '<div class="row2"><div><label>In company</label><span class="v">' + esc(other.name) + " (" + esc(other.currency_code || "") + ')</span></div>' +
+      '<div><label>Document</label><span class="v">' + esc(fnbTitle(kind)) + '</span></div></div>' +
+      (back.length
+        ? '<div><label>Counterparty record there</label><span class="v">' + esc(back[0].name) + '</span></div>'
+        : '<div class="o-note warn">' + esc(other.name) + ' has no contact tagged as <b>' + esc(S.company.name) + '</b>. One will be created for you, tagged intercompany, so the pair can be eliminated.</div>') +
+      (other.currency_code && other.currency_code !== (inv.currency_code || S.company.currency_code)
+        ? '<div class="o-note warn">The two companies keep different currencies. The mirror is written in <b>' + esc(inv.currency_code || S.company.currency_code) + '</b>, the currency of this document, and translates on that company&rsquo;s own reports.</div>' : "") +
+      '<div><label>Reference</label><input id="mi-ref" value="' + esc("Intercompany: " + (S.company.name || "") + " " + (inv.number || "")) + '"></div>';
+    var m = plotModal("Mirror in " + other.name, inner, async function () {
+      var ref = gv("mi-ref") || null;
+      var here = S.company, hereOrg = S.company.org_id;
+      // switch quietly so numbering, role and config all belong to the target
+      if (!(await setCompany(other.id, { quiet: true }))) { m.remove(); return; }
+      try {
+        var pid = back.length ? back[0].id : null;
+        if (!pid) {
+          var np = await sb.from("partners").insert({
+            org_id: other.org_id || hereOrg, company_id: other.id, name: here.name,
+            is_company: true, is_customer: true, is_vendor: true,
+            intercompany_company_id: here.id
+          }).select("id").single();
+          if (np.error) throw np.error;
+          pid = np.data.id;
+        }
+        var num = await nextNumber(mirrorType);
+        var ins = await sb.from("invoices").insert({
+          company_id: other.id, move_type: mirrorType, partner_id: pid, number: num,
+          invoice_date: inv.invoice_date, due_date: inv.due_date,
+          currency_code: inv.currency_code || here.currency_code, state: "draft", ref: ref,
+          amount_untaxed: inv.amount_untaxed, amount_tax: inv.amount_tax,
+          amount_total: inv.amount_total, amount_residual: inv.amount_total,
+          mirror_invoice_id: inv.id, mirror_company_id: here.id
+        }).select("id,move_type").single();
+        if (ins.error) throw ins.error;
+        var rows = (lines || []).map(function (l, i) {
+          return {
+            company_id: other.id, invoice_id: ins.data.id, name: l.name, sequence: (i + 1) * 10,
+            quantity: l.quantity, unit_price: l.unit_price, discount: l.discount || 0,
+            price_subtotal: l.price_subtotal, price_total: l.price_total
+          };
+        });
+        if (rows.length) {
+          var ir = await sb.from("invoice_lines").insert(rows);
+          if (ir.error) throw ir.error;
+        }
+        // point this side at the new one, and stamp the entry that already exists
+        await sb.from("invoices").update({ mirror_invoice_id: ins.data.id, mirror_company_id: other.id }).eq("id", inv.id);
+        if (inv.journal_entry_id) {
+          await sb.from("journal_entries").update({ is_intercompany: true, counterparty_company_id: other.id })
+            .eq("id", inv.journal_entry_id);
+        }
+        m.remove();
+        toast("Draft " + kind + " " + num + " created in " + other.name + ". Review it, then post it.");
+        renderInvoiceForm(ins.data.id, ins.data.move_type);
+      } catch (e) {
+        await setCompany(here.id, { quiet: true });
+        m.remove();
+        toast("Could not create the mirror: " + errMsg(e));
+      }
+    });
   }
 
   // ============================ PRINT / PDF ============================
@@ -5923,6 +6043,7 @@
       '</div><div>' +
       fld("Pricelist", '<select id="p-pl"><option value="">(default prices)</option>' + pricelists.map(function (x) { return '<option value="' + x.id + '"' + (p.pricelist_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select>', "Pricelist applied to this customer's sales-order lines.") +
       fld("Intercompany entity", '<select id="p-ic"><option value="">External party</option>' + S.companies.map(function (c) { return '<option value="' + c.id + '"' + (p.intercompany_company_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "If this party is one of your own group companies, tag it here so its balances net out in consolidation.") +
+      (S.companies.length > 1 ? fld("Shared with the group", '<label class="p-share"><input type="checkbox" id="p-share"' + (p.group_key ? " checked" : "") + '> Keep this contact the same in every company of the group</label>', "The same real customer, kept once. Each company still holds its own copy so its ledger and access rules are untouched, and saving here updates the others. Their invoices and balances stay separate.") : "") +
       '</div></div>' +
       (showCaps ? capsBlock() : "") +
       (showCaps ? ('<div class="o-groups" style="margin-top:12px"><div>' + fld("Price rating", ratSel("p-ratp", RAT_PRICE, p.rating_price || ""), "How this supplier compares on price.") + fld("Quality rating", ratSel("p-ratq", RAT_QUAL, p.rating_quality || ""), "Your view of the quality of what they supply.") + '</div><div>' + fld("Delivery / availability", ratSel("p-ratd", RAT_DEL, p.rating_delivery || ""), "How fast they deliver, or whether they hold stock.") + '</div></div>') : "") +
@@ -5999,8 +6120,64 @@
       await sb.from("partner_bank_accounts").delete().eq("partner_id", sid);
       var bks = [].map.call(document.querySelectorAll("#pb-lines tr"), function (tr) { return { company_id: S.company.id, partner_id: sid, bank_name: tr.querySelector(".pb-bank").value.trim(), account_number: tr.querySelector(".pb-acc").value.trim(), iban: tr.querySelector(".pb-iban").value.trim(), currency_code: tr.querySelector(".pb-cur").value.trim() }; }).filter(function (b) { return b.bank_name || b.account_number || b.iban; });
       if (bks.length) await sb.from("partner_bank_accounts").insert(bks);
+      var shareEl = document.getElementById("p-share");
+      if (shareEl) {
+        var pushed = await syncGroupPartner(sid, row, p.group_key || null, shareEl.checked);
+        if (pushed > 0) { toast("Saved, and updated in " + pushed + " other " + (pushed === 1 ? "company" : "companies")); go(backAction); return; }
+      }
       toast("Saved"); go(backAction);
     };
+  }
+  // Two linked companies should not keep two customer lists. A shared contact
+  // is one real party with a linked copy per company, tied together by
+  // group_key. A copy rather than one shared row on purpose: company_id is what
+  // keeps tenants apart, and that filter is the one thing never worth
+  // loosening. Each company keeps its own ledger, balances and access.
+  //
+  // The fields that describe the PARTY travel; the fields that describe the
+  // RELATIONSHIP (credit limit, payment days, price list, intercompany tag) stay
+  // local, because they are that company's own arrangement.
+  var GROUP_PARTNER_FIELDS = ["name", "contact_person", "email", "phone", "phone_cc", "phone_area", "phone_num",
+    "mobile", "mobile_cc", "mobile_area", "mobile_num", "vat", "street", "building", "floor", "city", "country",
+    "industry", "specialty", "website", "is_company", "is_customer", "is_vendor"];
+  async function groupCompanyIds() {
+    if (!S.org) return [];
+    var gs = (await sb.from("consolidation_groups").select("id,is_default").eq("org_id", S.org.id).order("is_default", { ascending: false })).data || [];
+    if (!gs.length) return S.companies.map(function (c) { return c.id; });
+    var mem = (await sb.from("consolidation_group_companies").select("company_id").eq("group_id", gs[0].id)).data || [];
+    var ids = mem.map(function (m) { return m.company_id; });
+    var mine = {}; S.companies.forEach(function (c) { mine[c.id] = 1; });
+    return ids.filter(function (id) { return mine[id]; });
+  }
+  // Returns how many other companies were written to, or -1 if nothing was done.
+  async function syncGroupPartner(id, row, existingKey, wantShared) {
+    if (!wantShared) {
+      if (existingKey) await sb.from("partners").update({ group_key: null }).eq("id", id);
+      return -1;
+    }
+    var key = existingKey || uuid();
+    if (!existingKey) await sb.from("partners").update({ group_key: key }).eq("id", id);
+    var ids = (await groupCompanyIds()).filter(function (c) { return c !== S.company.id; });
+    if (!ids.length) return 0;
+    var shared = {};
+    GROUP_PARTNER_FIELDS.forEach(function (f) { if (row[f] !== undefined) shared[f] = row[f]; });
+    var existing = (await sb.from("partners").select("id,company_id").eq("group_key", key).in("company_id", ids)).data || [];
+    var have = {}; existing.forEach(function (e) { have[e.company_id] = e.id; });
+    var n = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var cid = ids[i];
+      if (have[cid]) {
+        var up = await sb.from("partners").update(shared).eq("id", have[cid]);
+        if (!up.error) n++;
+      } else {
+        var co = S.companies.filter(function (c) { return c.id === cid; })[0] || {};
+        var mk = {}; for (var k in shared) mk[k] = shared[k];
+        mk.org_id = co.org_id || S.company.org_id; mk.company_id = cid; mk.group_key = key;
+        var ins = await sb.from("partners").insert(mk);
+        if (!ins.error) n++;
+      }
+    }
+    return n;
   }
   function gv(id) { var e = document.getElementById(id); return e ? e.value.trim() : ""; }
 
@@ -8641,12 +8818,55 @@
     };
   }
 
+  // A consolidated report is only meaningful over a DEFINED set of companies.
+  // Consolidating everything the signed-in user can see is how a client's
+  // building syndic ends up inside your group profit and loss.
+  async function loadConsGroups() {
+    if (!S.org) return [];
+    var gs = (await sb.from("consolidation_groups").select("*").eq("org_id", S.org.id).order("name")).data || [];
+    if (!gs.length) return [];
+    var ids = gs.map(function (g) { return g.id; });
+    var mem = (await sb.from("consolidation_group_companies").select("*").in("group_id", ids)).data || [];
+    gs.forEach(function (g) {
+      g.members = mem.filter(function (m) { return m.group_id === g.id; })
+        .map(function (m) { return { company_id: m.company_id, method: m.method || "full", pct: Number(m.ownership_pct == null ? 100 : m.ownership_pct), sort: m.sort || 0 }; })
+        .sort(function (a, b) { return a.sort - b.sort; });
+    });
+    return gs;
+  }
   async function renderConsolidation() {
     var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Consolidation") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Consolidating ' + S.companies.length + ' entities...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Consolidation") + '<div class="gap"></div><span id="cons-gp"></span><button class="o-filtbtn" id="cons-edit">Groups</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Consolidating...</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
+
+    var groups = await loadConsGroups();
+    var grp = groups.filter(function (g) { return g.id === S._consGroup; })[0]
+      || groups.filter(function (g) { return g.is_default; })[0] || groups[0] || null;
+    if (grp) S._consGroup = grp.id;
+    document.getElementById("cons-gp").innerHTML = groups.length
+      ? '<select id="cons-pick" class="o-filtbtn">' + groups.map(function (g) {
+        return '<option value="' + g.id + '"' + (grp && g.id === grp.id ? " selected" : "") + '>' + esc(g.name) + " (" + g.members.length + ")" + '</option>';
+      }).join("") + '</select>' : '<span class="muted" style="font-size:12px">every company you can see</span>';
+    var cp = document.getElementById("cons-pick");
+    if (cp) cp.onchange = function () { S._consGroup = this.value; renderConsolidation(); };
+    document.getElementById("cons-edit").onclick = function () { openConsGroupModal(groups, grp); };
+    if (grp) ref = grp.currency_code || ref;
+
+    // The set being consolidated, and how each member folds in.
+    var memberOf = {};
+    var conCos = grp
+      ? grp.members.map(function (m) {
+        memberOf[m.company_id] = m;
+        return S.companies.filter(function (c) { return c.id === m.company_id; })[0];
+      }).filter(Boolean)
+      : S.companies.slice();
+    if (grp && !conCos.length) {
+      document.getElementById("rep").innerHTML = '<h1>Consolidated Financials</h1><div class="o-empty">This group has no companies in it yet, or none you can open. Click <b>Groups</b> to add them.</div>';
+      return;
+    }
+    var missingMembers = grp ? grp.members.length - conCos.length : 0;
     var rates = (await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || [];
     // IAS 21 translation: balance-sheet items at the CLOSING rate, P&L items at the
     // AVERAGE rate. rate = units of the presentation currency per 1 unit of the entity
@@ -8658,43 +8878,69 @@
     function closeOf(code) { if (code === ref) return 1; return closeMap[code] !== undefined ? closeMap[code] : anyMap[code]; }
     function avgOf(code) { if (code === ref) return 1; return avgMap[code] !== undefined ? avgMap[code] : (closeMap[code] !== undefined ? closeMap[code] : anyMap[code]); }
     var cons = {}, entities = [], missing = {}, factorByCo = {};
-    for (var i = 0; i < S.companies.length; i++) {
-      var co = S.companies[i];
+    var minorityResult = 0, minorityEquity = 0, equityInvest = 0, equityResult = 0;
+    for (var i = 0; i < conCos.length; i++) {
+      var co = conCos[i];
+      var mm = memberOf[co.id] || { method: "full", pct: 100 };
+      var share = Math.max(0, Math.min(100, Number(mm.pct == null ? 100 : mm.pct))) / 100;
       var fClose = co.currency_code === ref ? 1 : closeOf(co.currency_code);
       var fAvg = co.currency_code === ref ? 1 : avgOf(co.currency_code);
       var known = fClose !== undefined && fClose !== null;
       if (!known) { missing[co.currency_code] = 1; fClose = 1; }
       if (fAvg === undefined || fAvg === null) fAvg = fClose;
       var tb = (await sb.rpc("trial_balance", { p_company: co.id, p_book_codes: bookCodes() })).data || [];
-      var eInc = 0, eExp = 0, eAssets = 0;
+      var eInc = 0, eExp = 0, eAssets = 0, eNet = 0;
+      // How much of each line the group takes:
+      //   full         all of it, and the outside shareholders' slice is carried
+      //                separately as a non-controlling interest
+      //   proportional the ownership share of every line
+      //   equity       none of the lines; one line for the group's share of net
+      //                assets, and one for its share of the result
+      var lineShare = mm.method === "proportional" ? share : (mm.method === "equity" ? 0 : 1);
       /* eslint-disable no-loop-func */
-      (function (fClose, fAvg) {
+      (function (fClose, fAvg, lineShare) {
         tb.forEach(function (r) {
           var g = (r.type_code || "").split("_")[0];
           var isPL = (g === "income" || g === "expense");
-          var f = isPL ? fAvg : fClose;   // P&L at average, balance sheet at closing
-          var c = cons[r.code] || (cons[r.code] = { code: r.code, name: r.name, type_code: r.type_code, debit: 0, credit: 0, balance: 0 });
-          c.debit += Number(r.debit) * f; c.credit += Number(r.credit) * f; c.balance += Number(r.balance) * f;
+          var f = (isPL ? fAvg : fClose) * lineShare;
+          if (f) {
+            var c = cons[r.code] || (cons[r.code] = { code: r.code, name: r.name, type_code: r.type_code, debit: 0, credit: 0, balance: 0 });
+            c.debit += Number(r.debit) * f; c.credit += Number(r.credit) * f; c.balance += Number(r.balance) * f;
+          }
           if (g === "income") eInc += (Number(r.credit) - Number(r.debit)) * fAvg;
           if (g === "expense") eExp += (Number(r.debit) - Number(r.credit)) * fAvg;
           if (g === "asset") eAssets += Number(r.balance) * fClose;
+          if (g === "asset") eNet += Number(r.balance) * fClose;
+          if (g === "liability") eNet -= (Number(r.credit) - Number(r.debit)) * fClose;
         });
-      })(fClose, fAvg);
-      entities.push({ name: co.name, cur: co.currency_code, fClose: fClose, fAvg: fAvg, known: known, assets: eAssets, result: eInc - eExp });
-      factorByCo[co.id] = { close: fClose, avg: fAvg };
+      })(fClose, fAvg, lineShare);
+      var eResult = eInc - eExp;
+      if (mm.method === "full" && share < 1) { minorityResult += eResult * (1 - share); minorityEquity += eNet * (1 - share); }
+      if (mm.method === "equity") { equityInvest += eNet * share; equityResult += eResult * share; }
+      entities.push({
+        name: co.name, cur: co.currency_code, fClose: fClose, fAvg: fAvg, known: known,
+        assets: eAssets, result: eResult, method: mm.method, pct: Number(mm.pct == null ? 100 : mm.pct)
+      });
+      factorByCo[co.id] = { close: fClose, avg: fAvg, share: lineShare };
     }
     var rows = Object.keys(cons).map(function (k) { return cons[k]; }).sort(function (a, b) { return (a.code || "") < (b.code || "") ? -1 : 1; });
-    // Intercompany eliminations: partners tagged as a group company -> their sales/costs + AR/AP net out
+    // Intercompany eliminations. Only trade BETWEEN MEMBERS OF THIS GROUP nets
+    // out: a sale to a related company that is not in the group is real revenue
+    // to the group and must stay.
+    var coIds = conCos.map(function (c) { return c.id; });
+    var inGroup = {}; coIds.forEach(function (id) { inGroup[id] = 1; });
     var icPartners = (await sb.from("partners").select("id,name,intercompany_company_id").not("intercompany_company_id", "is", null)).data || [];
+    icPartners = icPartners.filter(function (p) { return inGroup[p.intercompany_company_id]; });
     var icRev = 0, icCost = 0, icAR = 0, icAP = 0, icCount = 0;
-    if (icPartners.length) {
+    if (icPartners.length && coIds.length) {
       var icIds = icPartners.map(function (p) { return p.id; });
-      var coIds = S.companies.map(function (c) { return c.id; });
       var icInv = (await sb.from("invoices").select("company_id,move_type,amount_untaxed,amount_residual,partner_id").in("company_id", coIds).eq("state", "posted").in("partner_id", icIds)).data || [];
       icInv.forEach(function (v) {
-        var ff = factorByCo[v.company_id] || { close: 1, avg: 1 };
-        var u = Number(v.amount_untaxed || 0) * ff.avg;      // revenue/cost at average
-        var r = Number(v.amount_residual || 0) * ff.close;   // AR/AP at closing
+        var ff = factorByCo[v.company_id] || { close: 1, avg: 1, share: 1 };
+        // eliminate exactly as much as was brought in
+        var u = Number(v.amount_untaxed || 0) * ff.avg * ff.share;
+        var r = Number(v.amount_residual || 0) * ff.close * ff.share;
+        if (!ff.share) return;
         icCount++;
         if (v.move_type === "out_invoice") { icRev += u; icAR += r; }
         else if (v.move_type === "in_invoice") { icCost += u; icAP += r; }
@@ -8702,12 +8948,21 @@
         else if (v.move_type === "in_refund") { icCost -= u; icAP -= r; }
       });
     }
+    // Mirrored postings stamp the entry itself, which is the durable record of
+    // an internal transaction even after the partner tag is edited.
+    var icEntries = coIds.length
+      ? ((await sb.from("journal_entries").select("id,company_id,counterparty_company_id").in("company_id", coIds).eq("is_intercompany", true).eq("state", "posted")).data || [])
+      : [];
+    var icPairs = icEntries.filter(function (e) { return inGroup[e.counterparty_company_id]; }).length;
     var missKeys = Object.keys(missing);
     var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
+    var METHOD_LABEL = { full: "Full", proportional: "Proportional", equity: "Equity" };
     var entRows = entities.map(function (e) {
       var rc = e.cur === ref ? "1.000000" : (e.known ? Number(e.fClose).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn)">n/a</span>');
       var ra = e.cur === ref ? "1.000000" : (e.fAvg != null ? Number(e.fAvg).toLocaleString("en-US", { maximumFractionDigits: 6 }) : rc);
-      return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td><td class="num">' + rc + '</td><td class="num">' + ra + '</td><td class="num">' + money(e.assets) + '</td><td class="num">' + money(e.result) + '</td></tr>';
+      return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td>' +
+        '<td class="muted">' + esc(METHOD_LABEL[e.method] || "Full") + (e.pct < 100 ? " " + e.pct + "%" : "") + '</td>' +
+        '<td class="num">' + rc + '</td><td class="num">' + ra + '</td><td class="num">' + money(e.assets) + '</td><td class="num">' + money(e.result) + '</td></tr>';
     }).join("");
     function grp(prefix, flip) { var t = 0, html = ""; rows.forEach(function (r) { if ((r.type_code || "").indexOf(prefix) !== 0) return; var v = flip ? Number(r.credit) - Number(r.debit) : Number(r.balance); t += v; html += repLine(r.code, r.name, v); }); return { t: t, html: html }; }
     var inc = grp("income", true);
@@ -8715,33 +8970,114 @@
     var a = grp("asset", false), l = grp("liability", true), eq = grp("equity", true);
     var result = inc.t - expT;
     // group figures after intercompany eliminations
-    var gInc = inc.t - icRev, gExp = expT - icCost, gResult = gInc - gExp;
-    var gAssets = a.t - icAR, gLiab = l.t - icAP;
-    var cta = gAssets - (gLiab + eq.t + gResult); // translation plug so the group balance sheet balances
+    var gInc = inc.t - icRev, gExp = expT - icCost, gResult = gInc - gExp + equityResult;
+    var gAssets = a.t - icAR + equityInvest, gLiab = l.t - icAP;
+    var gParent = gResult - minorityResult;
+    var cta = gAssets - (gLiab + eq.t + gResult + minorityEquity); // translation plug so the group balance sheet balances
+    var memberNote = grp
+      ? esc(grp.name) + ' &middot; ' + conCos.length + ' ' + (conCos.length === 1 ? "entity" : "entities") +
+        (missingMembers > 0 ? ' <span style="color:var(--warn)">(' + missingMembers + ' member(s) you cannot open are left out)</span>' : "")
+      : 'every company you can see &middot; ' + conCos.length + ' entities';
     document.getElementById("rep").innerHTML =
-      '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + S.companies.length + ' entities &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
-      '<table class="o-rt"><tbody><tr class="sec"><td colspan="6">Entities</td></tr>' +
-      '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td class="num">Closing &rarr; ' + esc(ref) + '</td><td class="num">Average &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
+      '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + memberNote + ' &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
+      (grp ? "" : '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No consolidation group is defined, so this adds up <b>every company you can open</b>. That is rarely what a group report should show. Click <b>Groups</b> to define one.</div>') +
+      '<table class="o-rt"><tbody><tr class="sec"><td colspan="7">Entities</td></tr>' +
+      '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td>Method</td><td class="num">Closing &rarr; ' + esc(ref) + '</td><td class="num">Average &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
       entRows + '</tbody></table>' +
-      (icCount ? '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="2">Intercompany eliminations &middot; ' + icPartners.length + ' related ' + (icPartners.length > 1 ? "parties" : "party") + '</td></tr>' +
+      (icCount ? '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="2">Intercompany eliminations &middot; ' + icPartners.length + ' related ' + (icPartners.length > 1 ? "parties" : "party") + ' inside this group</td></tr>' +
         '<tr><td>Intercompany revenue / cost eliminated</td><td class="num">' + money(icRev) + ' / ' + money(icCost) + '</td></tr>' +
-        '<tr><td>Intercompany receivables / payables eliminated</td><td class="num">' + money(icAR) + ' / ' + money(icAP) + '</td></tr></tbody></table>' : '') +
+        '<tr><td>Intercompany receivables / payables eliminated</td><td class="num">' + money(icAR) + ' / ' + money(icAP) + '</td></tr>' +
+        (icPairs ? '<tr><td>Mirrored postings stamped as intercompany</td><td class="num">' + icPairs + '</td></tr>' : '') +
+        '</tbody></table>' : '') +
       '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Group Profit &amp; Loss' + (icCount ? ' (after eliminations)' : '') + '</td></tr>' +
       (inc.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Income</td><td class="num">' + money(inc.t) + '</td></tr>' +
       (icRev ? repLine("", "less: intercompany revenue", -icRev) + '<tr class="tot"><td></td><td>Group Income</td><td class="num">' + money(gInc) + '</td></tr>' : '') +
       (expHtml || repEmpty()) + '<tr class="tot"><td></td><td>Total Expenses</td><td class="num">' + money(expT) + '</td></tr>' +
       (icCost ? repLine("", "less: intercompany costs", -icCost) + '<tr class="tot"><td></td><td>Group Expenses</td><td class="num">' + money(gExp) + '</td></tr>' : '') +
-      '<tr class="tot"><td></td><td>Group Net Profit' + (icCount ? ' (after eliminations)' : '') + '</td><td class="num">' + money(gResult) + '</td></tr></tbody></table>' +
+      (equityResult ? repLine("", "Share of result of equity-accounted entities", equityResult) : '') +
+      '<tr class="tot"><td></td><td>Group Net Profit' + (icCount ? ' (after eliminations)' : '') + '</td><td class="num">' + money(gResult) + '</td></tr>' +
+      (minorityResult ? repLine("", "Attributable to non-controlling interests", minorityResult) +
+        '<tr class="tot"><td></td><td>Attributable to the owners of the parent</td><td class="num">' + money(gParent) + '</td></tr>' : '') +
+      '</tbody></table>' +
       '<table class="o-rt" style="margin-top:20px"><tbody><tr class="sec"><td colspan="3">Group Balance Sheet</td></tr>' +
       (a.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Assets</td><td class="num">' + money(a.t) + '</td></tr>' +
       (icAR ? repLine("", "less: intercompany receivables", -icAR) + '<tr class="tot"><td></td><td>Group Assets</td><td class="num">' + money(gAssets) + '</td></tr>' : '') +
       (l.html || repEmpty()) + '<tr class="tot"><td></td><td>Total Liabilities</td><td class="num">' + money(l.t) + '</td></tr>' +
       (icAP ? repLine("", "less: intercompany payables", -icAP) + '<tr class="tot"><td></td><td>Group Liabilities</td><td class="num">' + money(gLiab) + '</td></tr>' : '') +
+      (equityInvest ? repLine("", "Investments in equity-accounted entities", equityInvest) : '') +
       (eq.html || repEmpty()) + repLine("", "Current Year Earnings", gResult) + repLine("", "Currency translation adjustment", cta) +
-      '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + gResult + cta) + '</td></tr>' +
-      '<tr class="tot"><td></td><td>Total Liabilities + Equity</td><td class="num">' + money(gLiab + eq.t + gResult + cta) + '</td></tr></tbody></table>' +
+      (minorityEquity ? repLine("", "Non-controlling interests", minorityEquity) : '') +
+      '<tr class="tot"><td></td><td>Total Equity</td><td class="num">' + money(eq.t + gResult + cta + minorityEquity) + '</td></tr>' +
+      '<tr class="tot"><td></td><td>Total Liabilities + Equity</td><td class="num">' + money(gLiab + eq.t + gResult + cta + minorityEquity) + '</td></tr></tbody></table>' +
       '<div class="sub" style="margin-top:12px">Each entity is translated to ' + esc(ref) + ' using the IAS 21 method: <b>income and expenses at the average rate</b>, <b>assets, liabilities and equity at the closing rate</b>. Because the two rates differ, the translated balance sheet does not balance on its own; the gap is the <b>currency translation adjustment (CTA)</b>, carried in equity. Balances with parties tagged as a group company (intercompany) are eliminated so internal trade is not double-counted. Realised FX gain/loss on a foreign-currency invoice is recognised in the entity on settlement; the remaining group FX effect of holding entities in different currencies shows here as the CTA.</div>';
     var cr = document.getElementById("cons-rates"); if (cr) cr.onclick = function () { go("rates"); };
+  }
+  // Who is in the group, and how each one folds in. Three methods, and the
+  // ownership percentage that decides how much of an entity the group owns.
+  var CONS_METHODS = [
+    ["full", "Full - every line in full, outside shareholders shown separately"],
+    ["proportional", "Proportional - every line at the ownership percentage"],
+    ["equity", "Equity - one line for the group's share of net assets and result"]
+  ];
+  function openConsGroupModal(groups, current) {
+    var g = current || null;
+    var mem = {}; if (g) g.members.forEach(function (m) { mem[m.company_id] = m; });
+    var inner =
+      '<div class="o-note">A group is the set of companies a consolidated report adds up. Without one, the report totals every company you can open, which will quietly include anything you manage for someone else.</div>' +
+      '<div class="row2"><div><label>Group</label><select id="cg-pick">' +
+      groups.map(function (x) { return '<option value="' + x.id + '"' + (g && x.id === g.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") +
+      '<option value="new">+ New group</option></select></div>' +
+      '<div><label>Presented in</label><select id="cg-cur">' +
+      (S.currencies || [S.company.currency_code, "USD", "EUR"]).filter(function (v, i, a) { return v && a.indexOf(v) === i; })
+        .map(function (c) { return '<option value="' + esc(c) + '"' + (g && g.currency_code === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") +
+      '</select></div></div>' +
+      '<div><label>Name</label><input id="cg-name" value="' + esc(g ? g.name : "") + '" placeholder="Trading group"></div>' +
+      '<label style="margin-top:4px">Companies</label>' +
+      '<div class="cg-list">' + S.companies.map(function (c) {
+        var m = mem[c.id];
+        return '<div class="cg-row"><label class="cg-nm"><input type="checkbox" class="cg-in" data-c="' + c.id + '"' + (m ? " checked" : "") + '> ' + esc(c.name) + ' <span class="muted">' + esc(c.currency_code || "") + '</span></label>' +
+          '<select class="cg-m" data-c="' + c.id + '">' + CONS_METHODS.map(function (x) {
+            return '<option value="' + x[0] + '"' + (m && m.method === x[0] ? " selected" : "") + '>' + esc(x[1].split(" - ")[0]) + '</option>';
+          }).join("") + '</select>' +
+          '<input class="cg-p" type="number" min="0" max="100" step="0.01" data-c="' + c.id + '" value="' + (m ? m.pct : 100) + '" aria-label="Ownership percent"><span class="cg-pc">%</span></div>';
+      }).join("") + '</div>' +
+      '<label class="cg-def"><input type="checkbox" id="cg-default"' + (g && g.is_default ? " checked" : "") + '> Use this group by default</label>';
+    var m2 = plotModal("Consolidation groups", inner, async function () {
+      var name = gv("cg-name");
+      if (!name) { toast("Give the group a name"); return; }
+      var pick = gv("cg-pick"), gid = (pick === "new" || !pick) ? null : pick;
+      var row = { org_id: S.org.id, name: name, currency_code: gv("cg-cur") || null, is_default: !!document.getElementById("cg-default").checked };
+      if (row.is_default) await sb.from("consolidation_groups").update({ is_default: false }).eq("org_id", S.org.id);
+      if (gid) {
+        var up = await sb.from("consolidation_groups").update(row).eq("id", gid);
+        if (up.error) { toast(errMsg(up.error)); return; }
+      } else {
+        var ins = await sb.from("consolidation_groups").insert(row).select("id").single();
+        if (ins.error) { toast(errMsg(ins.error)); return; }
+        gid = ins.data.id;
+      }
+      await sb.from("consolidation_group_companies").delete().eq("group_id", gid);
+      var rows = [];
+      m2.querySelectorAll(".cg-in").forEach(function (chk, i) {
+        if (!chk.checked) return;
+        var cid = chk.dataset.c;
+        rows.push({
+          group_id: gid, company_id: cid,
+          method: m2.querySelector('.cg-m[data-c="' + cid + '"]').value,
+          ownership_pct: parseFloat(m2.querySelector('.cg-p[data-c="' + cid + '"]').value) || 100,
+          sort: i
+        });
+      });
+      if (!rows.length) { toast("Put at least one company in the group"); return; }
+      var ir = await sb.from("consolidation_group_companies").insert(rows);
+      if (ir.error) { toast(errMsg(ir.error)); return; }
+      m2.remove(); S._consGroup = gid; toast("Group saved"); renderConsolidation();
+    }, true);
+    m2.querySelector("#cg-pick").onchange = function () {
+      var v = this.value;
+      if (v === "new") { m2.remove(); openConsGroupModal(groups, null); return; }
+      m2.remove(); openConsGroupModal(groups, groups.filter(function (x) { return x.id === v; })[0] || null);
+    };
   }
 
   // ============================ CASH FLOW FORECAST ============================
@@ -9064,7 +9400,7 @@
         { label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } },
         { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return esc(p.city || ""); } }
       ],
-      filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }, { label: "Archived", test: function (p) { return p.is_active === false; } }],
+      filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }, { label: "Shared with the group", test: function (p) { return !!p.group_key; } }, { label: "Archived", test: function (p) { return p.is_active === false; } }],
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
       emptyHint: "Add the people and companies you work with - customers, suppliers, subcontractors and their staff. You can also add one instantly from any contact dropdown.",
       onOpen: function (p) { renderPartnerForm(p.id, "contact"); }, onNew: function () { renderPartnerForm("new", "contact"); }
@@ -17884,7 +18220,11 @@
   // stops updating is worse than one that is a few seconds behind, and polling
   // recovers by itself from a dropped connection.
   // ===========================================================================
-  var SERVICE = { store: null, tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false, vat: null };
+  var SERVICE = { store: null, stores: [], tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false, vat: null, seat: 0, course: 1 };
+  // Courses are the order food reaches the table in, not a category. A waiter
+  // holds the mains until the starters clear, which is the whole point.
+  var COURSE_NAME = { 1: "Starters", 2: "Mains", 3: "Dessert" };
+  function courseName(c) { return COURSE_NAME[Number(c) || 1] || ("Course " + c); }
   var STATION_DEFAULT_MIN = { barista: 3, bar: 3, kitchen: 8, pastry: 5 };
 
   function svcMins(fromIso) {
@@ -17933,14 +18273,128 @@
   }
 
   // --------------------------------------------------------------------------
+  // WHAT THE GUEST IS HANDED
+  //
+  // A restaurant runs on paper whatever else it runs on: the bill before they
+  // pay, the receipt after, and a docket at the pass for any station without a
+  // screen. All three print 80mm thermal and carry the restaurant's own logo
+  // and branch details, because a bill with the wrong address on it is not a
+  // bill anyone can hand to a guest.
+  // --------------------------------------------------------------------------
+  function svcStoreRow() {
+    return (SERVICE.stores || []).filter(function (s) { return s.id === SERVICE.store; })[0] || null;
+  }
+  // Per terminal, not per company: the till by the pass prints dockets, the one
+  // on the terrace does not.
+  function svcDocketOn() { try { return localStorage.getItem("orbit_docket") === "1"; } catch (e) { return false; } }
+  function svcDocketSet(on) { try { localStorage.setItem("orbit_docket", on ? "1" : "0"); } catch (e) { } }
+  function svcPrintThermal(html) {
+    var wrap = document.createElement("div");
+    wrap.className = "o-print"; wrap.innerHTML = '<div class="tdoc">' + html + '</div>';
+    document.body.appendChild(wrap); document.body.classList.add("printing", "printing-therm");
+    window.print();
+    setTimeout(function () { document.body.classList.remove("printing", "printing-therm"); wrap.remove(); }, 400);
+  }
+  function thermHead(title, sub) {
+    var t = printTplData(), st = svcStoreRow() || {};
+    var logo = (t.show_logo && t.logo) ? '<img alt="" class="tlogo" src="' + t.logo + '">' : "";
+    var addr = [st.address, st.city].filter(Boolean).map(esc).join(", ");
+    if (!addr) addr = pfAddr(t).replace(/<br>/g, ", ");
+    var tel = st.phone || t.phone;
+    return '<div class="thead">' + logo +
+      '<div class="tname">' + esc(pfDisplayName(t)) + '</div>' +
+      (st.name ? '<div class="tbranch">' + esc(st.name) + '</div>' : "") +
+      (addr ? '<div class="tsm">' + addr + '</div>' : "") +
+      (tel ? '<div class="tsm">Tel ' + esc(tel) + '</div>' : "") +
+      (t.vat ? '<div class="tsm">' + esc(t.taxLabel || "VAT") + " " + esc(t.vat) + '</div>' : "") +
+      '<div class="trule"></div><div class="ttitle">' + esc(title) + '</div>' +
+      (sub ? '<div class="tsm tcent">' + sub + '</div>' : "") + '</div>';
+  }
+  function thermLines(lines, withPrice) {
+    return lines.map(function (l) {
+      return '<div class="trow"><span class="tq">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
+        '<span class="tn">' + esc(l.name || "") +
+        (l.modifier_note ? '<span class="tmod">' + esc(l.modifier_note) + '</span>' : "") +
+        (l.seat ? '<span class="tmod">seat ' + Number(l.seat) + '</span>' : "") + '</span>' +
+        (withPrice ? '<span class="ta">' + money(l.line_total || 0) + '</span>' : "") + '</div>';
+    }).join("");
+  }
+  function hhmm(d) { return ("0" + d.getHours()).slice(-2) + ":" + ("0" + d.getMinutes()).slice(-2); }
+  // opts.receipt = paid document with the tenders on it; otherwise the guest bill.
+  function svcPrintBill(t, opts) {
+    opts = opts || {};
+    var o = SERVICE.order;
+    if (!o || !SERVICE.lines.length) { toast("Nothing on this table to print"); return; }
+    var T = svcTotals(), cc = (S.company && S.company.currency_code) || "";
+    var paid = opts.payments || [];
+    var taken = paid.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+    var tips = paid.reduce(function (s, p) { return s + Number(p.tip_amount || 0); }, 0);
+    var now = new Date();
+    var meta = [
+      (t && t.name) ? "Table " + esc(t.name) : esc(fnbTitle(o.order_type || "Order")),
+      o.guest_count ? Number(o.guest_count) + " covers" : "",
+      o.server_name ? "Served by " + esc(String(o.server_name).split("@")[0]) : ""
+    ].filter(Boolean).join(" &middot; ");
+    var html = thermHead(opts.receipt ? "Receipt" : "Bill",
+      esc(o.number || "") + " &middot; " + esc(now.toLocaleDateString()) + " " + hhmm(now)) +
+      (meta ? '<div class="tsm tcent">' + meta + '</div>' : "") +
+      '<div class="trule"></div>' + thermLines(SERVICE.lines, true) + '<div class="trule"></div>' +
+      '<div class="trow tt"><span class="tn">Subtotal</span><span class="ta">' + money(T.sub) + '</span></div>' +
+      (T.svc ? '<div class="trow tt"><span class="tn">Service</span><span class="ta">' + money(T.svc) + '</span></div>' : "") +
+      (T.rate ? '<div class="trow tt"><span class="tn">VAT ' + T.rate + '%</span><span class="ta">' + money(T.tax) + '</span></div>' : "") +
+      '<div class="trow tgrand"><span class="tn">Total ' + esc(cc) + '</span><span class="ta">' + money(T.tot) + '</span></div>';
+    if (opts.receipt) {
+      html += '<div class="trule"></div>' +
+        paid.map(function (p) {
+          return '<div class="trow tt"><span class="tn">' + esc(fnbTitle(p.method || "")) +
+            (p.reference ? '<span class="tmod">' + esc(p.reference) + '</span>' : "") +
+            (p.split_label ? '<span class="tmod">' + esc(p.split_label) + '</span>' : "") +
+            '</span><span class="ta">' + money(p.amount) + '</span></div>';
+        }).join("") +
+        (tips ? '<div class="trow tt"><span class="tn">Tip</span><span class="ta">' + money(tips) + '</span></div>' : "") +
+        '<div class="trow tt"><span class="tn">Taken</span><span class="ta">' + money(taken + tips) + '</span></div>' +
+        '<div class="tpaid">PAID</div>';
+    } else {
+      html += '<div class="tnote">This is your bill. A receipt is printed once payment is taken.</div>';
+    }
+    html += '<div class="tfoot">' + esc(printTplData().footer || "Thank you") + '</div>';
+    svcPrintThermal(html);
+  }
+  // The pass docket: no prices, big table number, allergy impossible to miss.
+  function svcPrintDocket(o, lines, whereName) {
+    if (!lines || !lines.length) { toast("Nothing to send to the pass"); return; }
+    var now = new Date(), byCourse = {};
+    lines.forEach(function (l) { (byCourse[Number(l.course) || 1] = byCourse[Number(l.course) || 1] || []).push(l); });
+    var body = Object.keys(byCourse).sort(function (a, b) { return a - b; }).map(function (c) {
+      return '<div class="tcourse">' + esc(courseName(c)) + '</div>' + thermLines(byCourse[c], false);
+    }).join("");
+    var html = '<div class="tbig">' + esc(whereName || fnbTitle(o.order_type || "Order")) + '</div>' +
+      '<div class="tsm tcent">' + esc(o.number || "") + ' &middot; ' + hhmm(now) +
+      (o.guest_count ? ' &middot; ' + Number(o.guest_count) + ' covers' : "") + '</div>' +
+      (o.allergy_note ? '<div class="tallergy">ALLERGY<br>' + esc(String(o.allergy_note).toUpperCase()) + '</div>' : "") +
+      '<div class="trule"></div>' + body;
+    svcPrintThermal(html);
+  }
+
+  // --------------------------------------------------------------------------
   // FLOOR
   // --------------------------------------------------------------------------
   async function renderFloor() {
     svcStopTimer();
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Floor") + '<div class="gap"></div><span id="fl-store"></span></div><div class="o-body" id="o-body"><div class="o-empty">Loading the floor...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Floor") + '<div class="gap"></div>' +
+      '<button class="o-filtbtn" id="fl-docket" title="Print a paper docket at the pass every time a course is sent">Dockets: ' + (svcDocketOn() ? "on" : "off") + '</button>' +
+      '<span id="fl-store"></span></div><div class="o-body" id="o-body"><div class="o-empty">Loading the floor...</div></div></div>';
     wireBc();
-    var stores = (await fnbCo("stores", "id,name").eq("is_active", true).order("name")).data || [];
+    document.getElementById("fl-docket").onclick = function () {
+      svcDocketSet(!svcDocketOn());
+      this.textContent = "Dockets: " + (svcDocketOn() ? "on" : "off");
+      toast(svcDocketOn() ? "A docket prints at the pass on every send" : "Docket printing off");
+    };
+    // address and phone come along because the printed bill carries the branch,
+    // not the head office
+    var stores = (await fnbCo("stores", "id,name,address,city,country,phone,email").eq("is_active", true).order("name")).data || [];
+    SERVICE.stores = stores;
     if (!SERVICE.store && stores.length) SERVICE.store = stores[0].id;
     document.getElementById("fl-store").innerHTML = stores.length > 1
       ? '<select id="fl-storepick" class="o-filtbtn">' + stores.map(function (s) { return '<option value="' + s.id + '"' + (SERVICE.store === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select>' : "";
@@ -18029,7 +18483,6 @@
   function paintOrderPad(t) {
     var body = document.getElementById("o-body"); if (!body) return;
     var o = SERVICE.order;
-    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
     var opT = svcTotals();
     body.innerHTML = '<div class="op-wrap">' +
       '<div class="op-left">' +
@@ -18038,15 +18491,17 @@
       '</div>' +
       '<div class="op-right">' +
       '<div class="op-head"><b>' + esc(t.name || "Table") + '</b>' +
-      '<span class="muted">' + (o ? (o.fired_at ? "sent " + svcMins(o.fired_at) + "m ago" : "not sent yet") : "new order") + '</span></div>' +
+      '<span class="muted">' + (o ? (o.fired_at ? "sent " + svcMins(o.fired_at) + "m ago" : "not sent yet") : "new order") + '</span>' +
+      '<button class="op-more" id="op-table" title="Move, merge or print">Table</button></div>' +
+      '<div class="op-strip" id="op-strip"></div>' +
       '<div class="op-lines" id="op-lines"></div>' +
       '<div class="op-foot">' +
       '<div class="op-tot sub" id="op-subrow"' + (opT.rate ? "" : " hidden") + '><span>Subtotal</span><b id="op-sub">' + money(opT.sub) + '</b></div>' +
       '<div class="op-tot sub" id="op-taxrow"' + (opT.rate ? "" : " hidden") + '><span>VAT ' + opT.rate + '%</span><b id="op-tax">' + money(opT.tax) + '</b></div>' +
       '<div class="op-tot"><span>Total</span><b id="op-total">' + money(opT.tot) + '</b></div>' +
-      '<button class="btn" id="op-note">Note / allergy</button>' +
-      '<button class="btn" id="op-bill">Bill</button>' +
-      '<button class="btn pri" id="op-send"' + (unsent.length ? "" : " disabled") + '>Send to kitchen' + (unsent.length ? " (" + unsent.length + ")" : "") + '</button>' +
+      '<div class="op-row2"><button class="btn" id="op-note">Note / allergy</button>' +
+      '<button class="btn" id="op-bill">Bill</button></div>' +
+      '<button class="btn pri" id="op-send" disabled>Send to kitchen</button>' +
       '</div></div></div>';
     function grid(q) {
       q = (q || "").toLowerCase();
@@ -18058,23 +18513,118 @@
     }
     grid("");
     document.getElementById("op-search").oninput = function () { grid(this.value); };
+    paintStrip(t);
     paintOrderLines();
+    refreshTotals();
     document.getElementById("op-send").onclick = function () { fireOrder(t); };
     document.getElementById("op-note").onclick = function () { orderNote(); };
     document.getElementById("op-bill").onclick = function () { openBill(t); };
+    document.getElementById("op-table").onclick = function () { tableActions(t); };
+  }
+  // Who the next item is for, and when it should reach the table. Both are set
+  // before the item is tapped, the way a waiter actually works: "seat two,
+  // mains" then three taps.
+  function paintStrip(t) {
+    var el = document.getElementById("op-strip"); if (!el) return;
+    var covers = Math.min(12, Math.max(2, Number((SERVICE.order || {}).guest_count) || Number(t.seats) || 4));
+    var seats = '<button class="op-chip' + (SERVICE.seat ? "" : " on") + '" data-seat="0">Table</button>';
+    for (var i = 1; i <= covers; i++) {
+      seats += '<button class="op-chip' + (SERVICE.seat === i ? " on" : "") + '" data-seat="' + i + '">' + i + '</button>';
+    }
+    var courses = [1, 2, 3].map(function (c) {
+      return '<button class="op-chip' + (SERVICE.course === c ? " on" : "") + '" data-course="' + c + '">' + esc(courseName(c)) + '</button>';
+    }).join("");
+    el.innerHTML = '<div class="op-sr"><span class="op-sl">Seat</span>' + seats + '</div>' +
+      '<div class="op-sr"><span class="op-sl">Course</span>' + courses + '</div>';
+    el.querySelectorAll("[data-seat]").forEach(function (b) {
+      b.onclick = function () { SERVICE.seat = Number(b.dataset.seat); paintStrip(t); };
+    });
+    el.querySelectorAll("[data-course]").forEach(function (b) {
+      b.onclick = function () { SERVICE.course = Number(b.dataset.course); paintStrip(t); };
+    });
+  }
+  // Moving a party, merging two bills, and the paper.
+  async function tableActions(t) {
+    var oq = (await fnbCo("pos_orders", "id,table_id,total,number").in("status", ["open", "draft"])).data || [];
+    var busy = {}; oq.forEach(function (o) { if (o.table_id) busy[o.table_id] = o; });
+    var others = (SERVICE.tables || []).filter(function (x) { return x.id !== t.id; });
+    var free = others.filter(function (x) { return !busy[x.id]; });
+    var taken = others.filter(function (x) { return !!busy[x.id]; });
+    var inner =
+      '<div class="o-note">Moving a party keeps the same bill and frees this table. Merging brings another table&rsquo;s items onto this bill and closes theirs.</div>' +
+      '<div><label>Move this party to</label><select id="tt-move"><option value="">(stay here)</option>' +
+      free.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + (x.seats ? " - " + x.seats + " seats" : "") + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Merge another table into this one</label><select id="tt-merge"><option value="">(none)</option>' +
+      taken.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + " - " + money(busy[x.id].total || 0) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="bill-split" style="margin-top:2px"><span class="sub">Print</span>' +
+      '<button type="button" class="btn" id="tt-bill">Guest bill</button>' +
+      '<button type="button" class="btn" id="tt-docket">Kitchen docket</button></div>';
+    var m = plotModal("Table " + (t.name || ""), inner, async function () {
+      var mv = gv("tt-move"), mg = gv("tt-merge");
+      if (mv && mg) { toast("Do one at a time"); return; }
+      if (!mv && !mg) { m.remove(); return; }
+      m.remove();
+      if (mv) await transferTable(t, mv); else await mergeTable(t, mg, busy[mg]);
+    });
+    m.querySelector("#tt-bill").onclick = function () { m.remove(); svcPrintBill(t); };
+    m.querySelector("#tt-docket").onclick = function () {
+      m.remove();
+      svcPrintDocket(SERVICE.order || {}, SERVICE.lines.filter(function (l) { return l.kds_status !== "new"; }), t.name);
+    };
+  }
+  async function transferTable(t, toId) {
+    if (!SERVICE.order) { toast("Nothing on this table to move"); return; }
+    var to = (SERVICE.tables || []).filter(function (x) { return x.id === toId; })[0] || {};
+    await svcWrite("pos_orders", "update", { table_id: toId }, { match: { id: SERVICE.order.id } });
+    await svcWrite("store_tables", "update", { status: "dirty", seated_at: null, current_order_id: null }, { match: { id: t.id } });
+    await svcWrite("store_tables", "update", {
+      status: SERVICE.order.fired_at ? "ordered" : "seated",
+      seated_at: new Date().toISOString(), current_order_id: SERVICE.order.id
+    }, { match: { id: toId } });
+    toast("Party moved to " + (to.name || "the new table"));
+    go("kitchen.floor");
+  }
+  async function mergeTable(t, fromId, fromOrder) {
+    if (!SERVICE.order) { toast("Put something on this table first, then merge into it"); return; }
+    if (!fromOrder) { toast("That table has no open bill"); return; }
+    var lines = (await sb.from("pos_order_lines").select("*").eq("order_id", fromOrder.id).order("seq")).data || [];
+    var seq = SERVICE.lines.length;
+    for (var i = 0; i < lines.length; i++) {
+      await svcWrite("pos_order_lines", "update", { order_id: SERVICE.order.id, seq: ++seq }, { match: { id: lines[i].id } });
+    }
+    // the emptied order is closed, not deleted: its number was on a docket
+    await svcWrite("pos_orders", "update", { status: "merged", closed_at: new Date().toISOString() }, { match: { id: fromOrder.id } });
+    await svcWrite("store_tables", "update", { status: "dirty", seated_at: null, current_order_id: null }, { match: { id: fromId } });
+    toast(lines.length + " item(s) merged onto this bill");
+    openTableOrder(t.id);
   }
   function paintOrderLines() {
     var el = document.getElementById("op-lines"); if (!el) return;
     if (!SERVICE.lines.length) { el.innerHTML = '<div class="o-empty">Nothing on this table yet.</div>'; return; }
-    el.innerHTML = SERVICE.lines.map(function (l, i) {
-      var sent = l.kds_status !== "new";
-      return '<div class="op-line' + (sent ? " sent" : "") + '">' +
+    // grouped by course so the pad reads the way the food arrives
+    var seen = {}, html = "";
+    var order = SERVICE.lines.map(function (l, i) { return { l: l, i: i }; })
+      .sort(function (a, b) { return (Number(a.l.course) || 1) - (Number(b.l.course) || 1) || a.i - b.i; });
+    order.forEach(function (x) {
+      var c = Number(x.l.course) || 1;
+      if (!seen[c]) {
+        seen[c] = 1;
+        var held = SERVICE.lines.some(function (l) { return (Number(l.course) || 1) === c && l.kds_status === "new"; });
+        html += '<div class="op-course">' + esc(courseName(c)) +
+          (held ? '<span class="op-held">held</span>' : '<span class="op-away">away</span>') + '</div>';
+      }
+      var l = x.l, sent = l.kds_status !== "new";
+      html += '<div class="op-line' + (sent ? " sent" : "") + '">' +
         '<span class="op-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
-        '<span class="op-nm">' + esc(l.name || "") + (l.modifier_note ? '<span class="op-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span>' +
+        '<span class="op-nm">' + esc(l.name || "") +
+        (l.seat ? '<span class="op-seat">seat ' + Number(l.seat) + '</span>' : "") +
+        (l.modifier_note ? '<span class="op-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span>' +
         '<span class="op-amt">' + money(l.line_total || 0) + '</span>' +
-        (sent ? '<span class="op-sent" title="already with the kitchen">sent</span>' : '<button class="op-x" data-i="' + i + '">&times;</button>') +
+        (sent ? '<span class="op-sent" title="already with the kitchen">sent</span>'
+              : '<button class="op-x" data-i="' + x.i + '" aria-label="Remove ' + esc(l.name || "item") + '">&times;</button>') +
         '</div>';
-    }).join("");
+    });
+    el.innerHTML = html;
     el.querySelectorAll(".op-x").forEach(function (b) {
       b.onclick = async function () {
         var l = SERVICE.lines[+b.dataset.i];
@@ -18084,14 +18634,24 @@
       };
     });
   }
+  // The course the kitchen gets next: the lowest one with anything still held.
+  function svcNextCourse() {
+    var cs = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; })
+      .map(function (l) { return Number(l.course) || 1; });
+    return cs.length ? Math.min.apply(null, cs) : null;
+  }
   function refreshTotals() {
     var t = svcTotals();
     var el = document.getElementById("op-total"); if (el) el.textContent = money(t.tot);
     var es = document.getElementById("op-sub"); if (es) es.textContent = money(t.sub);
     var ex = document.getElementById("op-tax"); if (ex) ex.textContent = money(t.tax);
-    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; }).length;
+    var c = svcNextCourse();
+    var n = c == null ? 0 : SERVICE.lines.filter(function (l) { return l.kds_status === "new" && (Number(l.course) || 1) === c; }).length;
     var sb2 = document.getElementById("op-send");
-    if (sb2) { sb2.disabled = !unsent; sb2.textContent = "Send to kitchen" + (unsent ? " (" + unsent + ")" : ""); }
+    if (sb2) {
+      sb2.disabled = !n;
+      sb2.textContent = n ? "Send " + courseName(c).toLowerCase() + " (" + n + ")" : "Nothing held";
+    }
   }
   async function addToOrder(pid, t) {
     var p = SERVICE.products.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
@@ -18145,6 +18705,7 @@
       company_id: S.company.id, order_id: SERVICE.order.id, product_id: p.id, name: p.name,
       qty: 1, unit_price: price, line_total: price, seq: SERVICE.lines.length + 1,
       modifier_ids: modIds || [], modifier_note: modNote || null,
+      seat: SERVICE.seat || null, course: SERVICE.course || 1,
       station: p.station || null, kds_status: "new"
     };
     var saved = await svcWrite("pos_order_lines", "insert", line);
@@ -18158,19 +18719,28 @@
     await svcWrite("pos_orders", "update", { subtotal: t.sub, tax: t.tax, total: t.tot }, { match: { id: SERVICE.order.id } });
     SERVICE.order.subtotal = t.sub; SERVICE.order.tax = t.tax; SERVICE.order.total = t.tot;
   }
+  // One course at a time. The mains stay on the pad until the waiter says go,
+  // which is what stops a kitchen plating everything at once.
   async function fireOrder(t) {
     if (!SERVICE.order) return;
-    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
-    if (!unsent.length) { toast("Nothing new to send"); return; }
+    var c = svcNextCourse();
+    if (c == null) { toast("Nothing held"); return; }
+    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new" && (Number(l.course) || 1) === c; });
     var now = new Date().toISOString();
     for (var ui = 0; ui < unsent.length; ui++) {
       await svcWrite("pos_order_lines", "update", { kds_status: "fired", fired_at: now }, { match: { id: unsent[ui].id } });
     }
-    await svcWrite("pos_orders", "update", { fired_at: SERVICE.order.fired_at || now, status: "open" }, { match: { id: SERVICE.order.id } });
+    await svcWrite("pos_orders", "update", {
+      fired_at: SERVICE.order.fired_at || now, status: "open", course_fired: c
+    }, { match: { id: SERVICE.order.id } });
     await svcWrite("store_tables", "update", { status: "ordered" }, { match: { id: t.id } });
     SERVICE.order.fired_at = SERVICE.order.fired_at || now;
-    SERVICE.lines.forEach(function (l) { if (l.kds_status === "new") { l.kds_status = "fired"; l.fired_at = now; } });
-    toast(unsent.length + " item(s) sent to the kitchen");
+    SERVICE.order.course_fired = c;
+    unsent.forEach(function (l) { l.kds_status = "fired"; l.fired_at = now; });
+    toast(unsent.length + " " + courseName(c).toLowerCase() + " sent to the kitchen");
+    // a paper docket for stations with no screen, off unless the store asks for
+    // it: a print dialog on every fire would be worse than no paper at all
+    if (svcDocketOn()) svcPrintDocket(SERVICE.order, unsent, t.name);
     paintOrderPad(t);
   }
   // --------------------------------------------------------------------------
@@ -18202,6 +18772,7 @@
       (paid.length ? '<div class="sub" style="margin:-2px 0 8px">' + paid.map(function (p) { return esc(fnbTitle(p.method)) + " " + money(p.amount); }).join(" &middot; ") + '</div>' : "") +
       '<div class="bill-split"><span class="sub">Split</span>' +
       '<button type="button" class="btn bill-sp on" data-sp="whole">Whole bill</button>' +
+      '<button type="button" class="btn bill-sp" data-sp="seat">By seat</button>' +
       '<button type="button" class="btn bill-sp" data-sp="even">Evenly</button>' +
       '<button type="button" class="btn bill-sp" data-sp="items">By item</button>' +
       '<button type="button" class="btn bill-sp" data-sp="amount">By amount</button></div>' +
@@ -18209,7 +18780,8 @@
       '<div class="row2"><div><label>Method</label><select id="bill-meth">' + PAY_METHODS.map(function (m) { return '<option value="' + m[0] + '">' + m[1] + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Tip</label><input id="bill-tip" type="number" step="0.01" placeholder="0.00"></div></div>' +
       '<div><label>Reference</label><input id="bill-ref" placeholder="card auth, card last 4, voucher code"></div>' +
-      '<div class="o-note" id="bill-note">This tender will settle <b id="bill-amt">' + money(due) + '</b>. Add more than one tender if the table is paying separately.</div>';
+      '<div class="o-note" id="bill-note">This tender will settle <b id="bill-amt">' + money(due) + '</b>. Add more than one tender if the table is paying separately.</div>' +
+      '<button type="button" class="btn" id="bill-print">Print the bill for the guest</button>';
 
     var m = plotModal("Bill for " + (t.name || "table"), inner, async function () {
       var amt = Number(m.__amount != null ? m.__amount : due);
@@ -18224,7 +18796,7 @@
       };
       if (!(await svcWrite("pos_payments", "insert", row))) return;
       // mark the chosen lines settled, so the next person is not offered them again
-      if (m.__mode === "items" && m.__lineIds && m.__lineIds.length) {
+      if ((m.__mode === "items" || m.__mode === "seat") && m.__lineIds && m.__lineIds.length) {
         for (var pi = 0; pi < m.__lineIds.length; pi++) {
           await svcWrite("pos_order_lines", "update", { paid: true, paid_at: new Date().toISOString() }, { match: { id: m.__lineIds[pi] } });
         }
@@ -18241,7 +18813,8 @@
       }, { match: { id: oid } });
       m.remove();
       if (left <= 0.005) {
-        // the table is done: clear it and hand the floor back
+        // the table is done: receipt, clear it, hand the floor back
+        svcPrintBill(t, { receipt: true, payments: paid.concat([row]) });
         await svcWrite("store_tables", "update", { status: "dirty", seated_at: null, current_order_id: null }, { match: { id: t.id } });
         toast("Bill settled" + (tips ? " (tips " + money(tips) + ")" : "") + " - table free to clear");
         go("kitchen.floor");
@@ -18253,6 +18826,7 @@
 
     // --- split modes ---
     m.__mode = "whole"; m.__amount = due; m.__label = null; m.__lineIds = null;
+    m.querySelector("#bill-print").onclick = function () { svcPrintBill(t); };
     // Every split is expressed tax-inclusive, so the shares add up to the bill.
     var grossUp = function (a) { return a * (1 + T.rate / 100); };
     function setAmount(a, label, ids) {
@@ -18270,6 +18844,32 @@
         document.getElementById("bill-ways").oninput = recalc;
         document.getElementById("bill-shares").oninput = recalc;
         recalc();
+      } else if (m.__mode === "seat") {
+        // "separate bills, please" - the one a waiter is actually asked for
+        var bySeat = {};
+        lines.filter(function (l) { return !l.paid; }).forEach(function (l) {
+          var k = Number(l.seat) || 0;
+          (bySeat[k] = bySeat[k] || []).push(l);
+        });
+        var keys = Object.keys(bySeat).sort(function (a, b) { return a - b; });
+        if (!keys.length) { box.innerHTML = '<div class="o-note">Every item on this table has already been paid for.</div>'; return; }
+        var anySeated = keys.some(function (k) { return Number(k) > 0; });
+        box.innerHTML = (anySeated ? "" : '<div class="o-note">No seat numbers were set on this order, so everything sits under the table. Set the seat on the pad as items go on and this splits itself.</div>') +
+          '<div class="bill-items">' + keys.map(function (k) {
+            var amt = bySeat[k].reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+            return '<label class="bill-it"><input type="radio" name="billseat" class="bill-se" value="' + k + '"> ' +
+              '<span>' + (Number(k) ? "Seat " + k : "Shared") + ' <span class="muted">' + bySeat[k].length + ' item(s)</span></span>' +
+              '<b>' + money(grossUp(amt)) + '</b></label>';
+          }).join("") + '</div>';
+        box.querySelectorAll(".bill-se").forEach(function (c) {
+          c.onchange = function () {
+            var pick = bySeat[c.value] || [];
+            setAmount(grossUp(pick.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0)),
+              Number(c.value) ? "seat " + c.value : "shared items",
+              pick.map(function (l) { return l.id; }));
+          };
+        });
+        setAmount(0, "no seat chosen", []);
       } else if (m.__mode === "items") {
         var open = lines.filter(function (l) { return !l.paid; });
         box.innerHTML = open.length
@@ -18385,12 +18985,26 @@
           '<span class="kds-time" data-fired="' + esc(tk.o.fired_at || "") + '" data-target="' + target + '">' + svcClock(tk.o.fired_at) + '</span></div>' +
           (tk.o.guest_name ? '<div class="kds-guest">' + esc(tk.o.guest_name) + '</div>' : "") +
           (tk.o.allergy_note ? '<div class="kds-allergy">ALLERGY: ' + esc(tk.o.allergy_note) + '</div>' : "") +
-          '<div class="kds-items">' + tk.lines.map(function (l) {
-            return '<button class="kds-item' + (l.kds_status === "ready" ? " done" : "") + '" data-l="' + l.id + '">' +
-              '<span class="kds-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
-              '<span class="kds-nm">' + esc(l.name || "") + (l.modifier_note ? '<span class="kds-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span></button>';
-          }).join("") + '</div>' +
-          '<button class="kds-bump" data-o="' + tk.o.id + '">Bump ticket</button>' +
+          '<div class="kds-items">' + (function () {
+            // grouped by course, because a ticket showing mains next to starters
+            // is how a pass sends the whole table out at once
+            var seen = {}, out = "";
+            tk.lines.slice().sort(function (a, b) { return (Number(a.course) || 1) - (Number(b.course) || 1) || (a.seq || 0) - (b.seq || 0); })
+              .forEach(function (l) {
+                var c = Number(l.course) || 1;
+                if (!seen[c] && tk.lines.some(function (x) { return (Number(x.course) || 1) !== c; })) {
+                  seen[c] = 1; out += '<div class="kds-course">' + esc(courseName(c)) + '</div>';
+                }
+                out += '<button class="kds-item' + (l.kds_status === "ready" ? " done" : "") + '" data-l="' + l.id + '">' +
+                  '<span class="kds-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
+                  '<span class="kds-nm">' + esc(l.name || "") +
+                  (l.seat ? '<span class="kds-mod">seat ' + Number(l.seat) + '</span>' : "") +
+                  (l.modifier_note ? '<span class="kds-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span></button>';
+              });
+            return out;
+          })() + '</div>' +
+          '<div class="kds-acts"><button class="kds-doc" data-d="' + tk.o.id + '" title="Print this ticket">Docket</button>' +
+          '<button class="kds-bump" data-o="' + tk.o.id + '">Bump ticket</button></div>' +
           '</div>';
       }).join("") + '</div></div>';
     body.querySelectorAll(".kds-item").forEach(function (b) {
@@ -18398,6 +19012,12 @@
         var done = b.classList.contains("done");
         await svcWrite("pos_order_lines", "update", { kds_status: done ? "fired" : "ready", ready_at: done ? null : new Date().toISOString() }, { match: { id: b.dataset.l } });
         b.classList.toggle("done");
+      };
+    });
+    body.querySelectorAll(".kds-doc").forEach(function (b) {
+      b.onclick = function () {
+        var tk2 = byOrder[b.dataset.d]; if (!tk2) return;
+        svcPrintDocket(tk2.o, tk2.lines, tk2.o.table_id ? (tabs[tk2.o.table_id] || "Table") : fnbTitle(tk2.o.order_type || "Order"));
       };
     });
     body.querySelectorAll(".kds-bump").forEach(function (b) {
