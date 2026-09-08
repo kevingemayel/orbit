@@ -2628,7 +2628,12 @@
   }
 
   // ============================ APPROVALS ============================
-  var APPR_DOC_LABEL = { purchase_order: "Purchase order", sales_order: "Sales order", vendor_bill: "Vendor bill", customer_invoice: "Customer invoice", subcontract: "Subcontract", variation: "Variation", expense: "Expense", journal_entry: "Journal entry", payroll: "Payroll run" };
+  var APPR_DOC_LABEL = { purchase_order: "Purchase order", sales_order: "Sales order", vendor_bill: "Vendor bill", customer_invoice: "Customer invoice", subcontract: "Subcontract", variation: "Variation", expense: "Expense", journal_entry: "Journal entry", payroll: "Payroll run", leave: "Leave request", submittal: "Submittal", timesheet: "Timesheet", requisition: "Purchase requisition" };
+  // What the threshold on a rule is counted in. Money for most, but a leave
+  // rule that said "needs sign-off above 5" would be meaningless if the screen
+  // implied dollars, and a submittal has no amount at all.
+  var APPR_DOC_UNIT = { leave: "days", timesheet: "hours", submittal: "", requisition: "money" };
+  function apprUnit(t) { var u = APPR_DOC_UNIT[t]; return u === undefined ? "money" : u; }
   // Returns "ok" (allowed to post) or "blocked" (approval requested / awaiting).
   async function approvalGate(docType, docId, docNumber, amount, backAction) {
     var rules = (await sb.from("approval_rules").select("*").eq("company_id", S.company.id).eq("doc_type", docType).eq("is_active", true)).data || [];
@@ -2665,15 +2670,36 @@
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Approvals") + '<div class="gap"></div><button class="o-filtbtn" id="ap-rules">Approval rules</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
     document.getElementById("ap-rules").onclick = function () { go("approvals.rules"); };
-    var rows = (await sb.from("approvals").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(120)).data || [];
-    var pending = rows.filter(function (r) { return r.status === "pending"; }), decided = rows.filter(function (r) { return r.status !== "pending"; });
+    var rows = (await sb.from("approvals").select("*, approval_rules(approver_employee_id, hr_employees(name, user_id))").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(120)).data || [];
+    // "Awaiting you" has to mean you. A rule that names nobody is open to any
+    // member; a rule that names someone is that person's to decide, and the
+    // database refuses anyone else whatever this screen shows.
+    var uid = S.user && S.user.id;
+    function approverOf(r) { var rr = r.approval_rules; return rr && rr.approver_employee_id ? (rr.hr_employees || {}) : null; }
+    function isMine(r) { var a = approverOf(r); return !a || a.user_id === uid; }
+    var pending = rows.filter(function (r) { return r.status === "pending"; });
+    var mine = pending.filter(isMine), theirs = pending.filter(function (r) { return !isMine(r); });
+    var decided = rows.filter(function (r) { return r.status !== "pending"; });
     var body = document.getElementById("o-body");
     if (!rows.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No approvals yet</div><div class="o-empty2-h">When a purchase order, invoice or other document crosses a threshold you set, it lands here for sign-off before it can be posted.</div><button class="o-new" id="ap-rules2" style="margin-top:14px">Set up approval rules</button></div>'; document.getElementById("ap-rules2").onclick = function () { go("approvals.rules"); }; return; }
     function card(r, pend) {
-      return '<div class="ap-card"><div class="ap-card-main"><div class="ap-doc">' + esc(r.doc_number || (APPR_DOC_LABEL[r.doc_type] || r.doc_type)) + ' <span class="ap-type">' + esc(APPR_DOC_LABEL[r.doc_type] || r.doc_type) + '</span></div><div class="ap-amt">' + esc(S.company.currency_code) + " " + money(r.doc_amount) + '</div><div class="ap-meta">Requested by ' + esc(r.requested_by || "someone") + ' &middot; ' + agWhen(r.created_at) + (r.status !== "pending" ? ' &middot; ' + esc(r.status) + ' by ' + esc(r.decided_by || "") + (r.approver_note ? ' (' + esc(r.approver_note) + ')' : "") : "") + '</div></div>' +
-        (pend ? '<div class="ap-actions">' + (r.link_action ? '<button class="o-filtbtn ap-open" data-act="' + esc(r.link_action) + '">View doc</button>' : "") + '<button class="o-filtbtn ap-mail" data-id="' + r.id + '" title="' + (r.notified_at ? "Last emailed " + esc(agWhen(r.notified_at)) + ". Sending again replaces the earlier link." : "Email the approver a one-click Approve / Reject link") + '">' + (r.notified_at ? "Email again" : "Email approver") + '</button><button class="o-filtbtn ap-reject" data-id="' + r.id + '">Reject</button><button class="o-filtbtn pri ap-approve" data-id="' + r.id + '">Approve</button></div>' : '<div class="ap-badge ' + esc(r.status) + '">' + (r.status === "approved" ? "Approved" : "Rejected") + '</div>') + '</div>';
+      var a = approverOf(r);
+      var who = pend && a ? '<div class="ap-meta">Waiting on <b>' + esc(a.name || "another approver") + '</b></div>' : "";
+      return '<div class="ap-card' + (pend && !isMine(r) ? " ap-theirs" : "") + '"><div class="ap-card-main"><div class="ap-doc">' + esc(r.doc_number || (APPR_DOC_LABEL[r.doc_type] || r.doc_type)) + ' <span class="ap-type">' + esc(APPR_DOC_LABEL[r.doc_type] || r.doc_type) + '</span></div><div class="ap-amt">' + esc(S.company.currency_code) + " " + money(r.doc_amount) + '</div><div class="ap-meta">Requested by ' + esc(r.requested_by || "someone") + ' &middot; ' + agWhen(r.created_at) + (r.status !== "pending" ? ' &middot; ' + esc(r.status) + ' by ' + esc(r.decided_by || "") + (r.approver_note ? ' (' + esc(r.approver_note) + ')' : "") : "") + '</div>' + who + '</div>' +
+        (pend
+          ? '<div class="ap-actions">' + (r.link_action ? '<button class="o-filtbtn ap-open" data-act="' + esc(r.link_action) + '">View doc</button>' : "") +
+            '<button class="o-filtbtn ap-mail" data-id="' + r.id + '" title="' + (r.notified_at ? "Last emailed " + esc(agWhen(r.notified_at)) + ". Sending again replaces the earlier link." : "Email the approver a one-click Approve / Reject link") + '">' + (r.notified_at ? "Email again" : "Email approver") + '</button>' +
+            (isMine(r) ? '<button class="o-filtbtn ap-reject" data-id="' + r.id + '">Reject</button><button class="o-filtbtn pri ap-approve" data-id="' + r.id + '">Approve</button>' : '<span class="ap-locked" title="Only the named approver can decide this">Not yours to decide</span>') +
+            '</div>'
+          : '<div class="ap-badge ' + esc(r.status) + '">' + (r.status === "approved" ? "Approved" : "Rejected") + '</div>') + '</div>';
     }
-    body.innerHTML = '<div style="padding:14px 16px">' + (pending.length ? '<div class="ap-sec-h">Awaiting you (' + pending.length + ')</div>' + pending.map(function (r) { return card(r, true); }).join("") : '<div class="ap-sec-h">Nothing awaiting approval</div>') + (decided.length ? '<div class="ap-sec-h" style="margin-top:24px">History</div>' + decided.map(function (r) { return card(r, false); }).join("") : "") + '</div>';
+    body.innerHTML = '<div style="padding:14px 16px">' +
+      (mine.length ? '<div class="ap-sec-h">Awaiting you (' + mine.length + ')</div>' + mine.map(function (r) { return card(r, true); }).join("")
+                   : '<div class="ap-sec-h">Nothing is waiting on you</div>') +
+      (theirs.length ? '<div class="ap-sec-h" style="margin-top:24px">Waiting on someone else (' + theirs.length + ')</div>' +
+        '<div class="sub" style="margin:-6px 0 8px">Here so you can see where a document is stuck. Only the person the rule names can sign these off.</div>' +
+        theirs.map(function (r) { return card(r, true); }).join("") : "") +
+      (decided.length ? '<div class="ap-sec-h" style="margin-top:24px">History</div>' + decided.map(function (r) { return card(r, false); }).join("") : "") + '</div>';
     document.querySelectorAll(".ap-approve").forEach(function (b) { b.onclick = function () { decideApproval(b.dataset.id, "approved"); }; });
     document.querySelectorAll(".ap-reject").forEach(function (b) { b.onclick = function () { decideApproval(b.dataset.id, "rejected"); }; });
     document.querySelectorAll(".ap-open").forEach(function (b) { b.onclick = function () { if (b.dataset.act) go(b.dataset.act); }; });
@@ -2689,8 +2715,11 @@
     var appr = (await sb.from("approvals").select("*").eq("id", id).maybeSingle()).data; if (!appr) return;
     var note = "";
     if (decision === "rejected") { note = window.prompt("Reason for rejection (optional):", "") || ""; }
-    var r = await sb.from("approvals").update({ status: decision, approver_note: note, decided_by: (S.user && S.user.email) || "", decided_at: new Date().toISOString() }).eq("id", id);
+    // Through the guarded function, which checks the rule's named approver and
+    // stamps who decided from the token rather than from the browser.
+    var r = await sb.rpc("approval_decide", { p_approval: id, p_decision: decision, p_note: note });
     if (r.error) { toast(errMsg(r.error)); return; }
+    if (r.data && r.data !== "ok") { toast(r.data === "not yours to decide" ? "Only the approver named on the rule can sign this off" : "This was " + r.data); renderApprovalsInbox(); return; }
     notify({ kind: "approval_result", title: (decision === "approved" ? "Approved" : "Rejected") + ": " + (appr.doc_number || APPR_DOC_LABEL[appr.doc_type] || appr.doc_type), body: (APPR_DOC_LABEL[appr.doc_type] || appr.doc_type) + " " + S.company.currency_code + " " + money(appr.doc_amount) + (note ? " - " + note : ""), link_action: appr.link_action || "approvals.inbox" });
     toast(decision === "approved" ? "Approved - the requester can now post it" : "Rejected");
     renderApprovalsInbox();
@@ -2703,7 +2732,11 @@
       columns: [
         { label: "Rule", get: function (r) { return '<b>' + esc(r.name) + '</b>'; } },
         { label: "Document", get: function (r) { return esc(APPR_DOC_LABEL[r.doc_type] || r.doc_type); } },
-        { label: "Needs sign-off at or above", num: true, get: function (r) { return S.company.currency_code + " " + money(r.min_amount); } },
+        { label: "Needs sign-off at or above", num: true, get: function (r) {
+          var u = apprUnit(r.doc_type);
+          if (!u) return '<span class="muted">every one</span>';
+          return u === "money" ? S.company.currency_code + " " + money(r.min_amount) : (Number(r.min_amount) || 0) + " " + u;
+        } },
         { label: "Approver", get: function (r) { return esc(r.hr_employees ? r.hr_employees.name : "Anyone"); } },
         { label: "Active", get: function (r) { return r.is_active ? '<span class="badge paid">Active</span>' : '<span class="badge draft">Off</span>'; } }
       ],
@@ -2719,13 +2752,25 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (r.id ? "Edit rule" : "New approval rule") + '</h3><div class="form">' +
       '<div><label>Rule name</label><input id="ar-name" value="' + esc(r.name || "") + '" placeholder="e.g. Large purchase orders"></div>' +
-      '<div class="row2"><div><label>Applies to</label><select id="ar-type">' + typeOpts + '</select></div><div><label>Needs approval at or above (' + esc(S.company.currency_code) + ')</label><input id="ar-min" type="number" step="0.01" value="' + (r.id ? (r.min_amount || 0) : 1000) + '"></div></div>' +
+      '<div class="row2"><div><label>Applies to</label><select id="ar-type">' + typeOpts + '</select></div><div><label id="ar-minlbl">Needs approval at or above (' + esc(S.company.currency_code) + ')</label><input id="ar-min" type="number" step="0.01" value="' + (r.id ? (r.min_amount || 0) : 1000) + '"></div></div>' +
       '<div class="row2"><div><label>Approver</label><select id="ar-appr">' + apprOpts + '</select></div><div><label>Status</label><select id="ar-active"><option value="1">Active</option><option value="0">Off</option></select></div></div>' +
-      '<div class="sub">While a matching document is above the threshold it cannot be confirmed or posted until it is approved here.</div>' +
+      '<div class="sub">While a matching document is above the threshold it cannot be confirmed or posted until it is approved here. Only the approver you name can sign it off; leave it as <b>Anyone can approve</b> and any member of the company may.</div>' +
       '</div><div class="foot"><button class="btn" id="ar-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="ar-del" style="color:var(--bad)">Delete</button>' : "") + '<button class="btn pri" id="ar-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ar-type").value = r.doc_type || "purchase_order";
     document.getElementById("ar-active").value = r.is_active === false ? "0" : "1";
+    // The threshold is not always money: say what it is counted in, and hide it
+    // entirely where the document has no amount.
+    function syncUnit() {
+      var u = apprUnit(document.getElementById("ar-type").value);
+      var lbl = document.getElementById("ar-minlbl"), inp = document.getElementById("ar-min");
+      if (!u) { lbl.textContent = "Applies to every one"; inp.disabled = true; inp.value = 0; return; }
+      inp.disabled = false;
+      lbl.textContent = u === "money"
+        ? "Needs approval at or above (" + (S.company.currency_code || "") + ")"
+        : "Needs approval at or above (" + u + ")";
+    }
+    document.getElementById("ar-type").onchange = syncUnit; syncUnit();
     document.getElementById("ar-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("ar-del"); if (del) del.onclick = async function () { await sb.from("approval_rules").delete().eq("id", r.id); m.remove(); toast("Deleted"); go("approvals.rules"); };
     document.getElementById("ar-save").onclick = async function () {
@@ -13257,7 +13302,16 @@
     function wire(bid, extra, msg) { var b = document.getElementById(bid); if (b) b.onclick = async function () { var sid = await persist(extra); if (sid) { toast(msg); renderSubmittalForm(sid); } }; }
     var sv = document.getElementById("sm-save"); if (sv) sv.onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSubmittalForm(sid); } };
     wire("sm-submit", { status: "submitted", submitted_date: today() }, "Submitted");
-    wire("sm-approve", { status: "approved", response_date: today() }, "Approved");
+    // A submittal approval is a technical sign-off, so the rule is keyed on the
+    // document rather than an amount: any active rule catches every one.
+    var smA = document.getElementById("sm-approve");
+    if (smA) smA.onclick = async function () {
+      var sid = await persist(); if (!sid) return;
+      var _mg = await approvalGate("submittal", sid, gv("sm-title") || "Submittal", 0, "doc.subs");
+      if (_mg === "blocked") { renderSubmittalForm(sid); return; }
+      if ((await sb.from("submittals").update({ status: "approved", response_date: today() }).eq("id", sid)).error) { toast("Save failed"); return; }
+      toast("Approved"); renderSubmittalForm(sid);
+    };
     wire("sm-approvec", { status: "approved_comments", response_date: today() }, "Approved with comments");
     wire("sm-reject", { status: "rejected", response_date: today() }, "Rejected");
     var rv = document.getElementById("sm-rev"); if (rv) rv.onclick = async function () {
@@ -14391,8 +14445,16 @@
     var srcTender = (id !== "new" && p.source_tender_id) ? (await sb.from("tenders").select("id,number,name").eq("id", p.source_tender_id).maybeSingle()).data : null;
     var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var tasks = id === "new" ? [] : (await sb.from("project_tasks").select("*").eq("project_id", id).order("created_at")).data || [];
-    var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced").eq("project_id", id)).data || [];
-    var hoursByTask = {}, totalHours = 0, unbilledHours = 0, unbilledIds = []; ts.forEach(function (t) { hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0); totalHours += Number(t.hours || 0); if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); } });
+    var ts = id === "new" ? [] : (await sb.from("timesheets").select("id,hours,task_id,is_invoiced,approved").eq("project_id", id)).data || [];
+    // Only APPROVED hours can be billed. Unapproved time still shows in the
+    // project's total so nothing disappears, but it cannot reach an invoice.
+    var hoursByTask = {}, totalHours = 0, unbilledHours = 0, unbilledIds = [], unapprovedHours = 0;
+    ts.forEach(function (t) {
+      hoursByTask[t.task_id] = (hoursByTask[t.task_id] || 0) + Number(t.hours || 0);
+      totalHours += Number(t.hours || 0);
+      if (!t.approved) { unapprovedHours += Number(t.hours || 0); return; }
+      if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); }
+    });
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var cc = S.company.currency_code;
     var boqTot = id === "new" ? 0 : ((await sb.from("project_boq").select("amount").eq("project_id", id)).data || []).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
@@ -14401,7 +14463,7 @@
       '<button class="sb" id="pf-sm-boq"><span class="v">' + cc + " " + money(boqTot > 0 ? boqTot : (p.contract_value || 0)) + '</span><span class="k">Contract' + (boqTot > 0 ? ' (BOQ)' : '') + '</span></button>' +
       '<button class="sb" id="pf-sm-cert"><span class="v">' + cc + " " + money(certTot) + '</span><span class="k">Certified</span></button>' +
       '<button class="sb" id="pf-sm-budget"><span class="v">&#9776;</span><span class="k">Cost budget</span></button>' +
-      '<button class="sb"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours</span></button></div>' : "";
+      '<button class="sb" id="pf-sm-hours"><span class="v">' + totalHours.toFixed(1) + '</span><span class="k">Hours' + (unapprovedHours > 0.001 ? ", " + unapprovedHours.toFixed(1) + " unapproved" : "") + '</span></button></div>' : "";
     var custOpts = '<option value="">(none)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (p.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var billOpts = Object.keys(BILLING).map(function (k) { return '<option value="' + k + '"' + (p.billing_type === k ? " selected" : "") + '>' + BILLING[k] + '</option>'; }).join("");
     var tasksTab = tasks.length ? '<table class="o-lines"><thead><tr><th>Task</th><th style="text-align:right">Planned h</th><th style="text-align:right">Logged h</th><th>Deadline</th></tr></thead><tbody>' + tasks.map(function (t) { return '<tr><td>' + esc(t.name) + '</td><td class="num">' + Number(t.planned_hours || 0) + '</td><td class="num">' + (hoursByTask[t.id] || 0).toFixed(1) + '</td><td class="muted">' + esc(t.date_deadline || "") + '</td></tr>'; }).join("") + '</tbody></table>' : '<div class="muted" style="padding:8px 0">No tasks yet. Add them in the Tasks screen.</div>';
@@ -14449,6 +14511,7 @@
     if (id !== "new") document.getElementById("pf-exec").onclick = function () { AGS.proj = p.id; AGS.view = "board"; go("proj.board"); };
     if (id !== "new") document.getElementById("pf-time").onclick = function () { openTimesheetModal(p.id, function () { renderProjectForm(p.id); }); };
     if (unbilledHours > 0.001) document.getElementById("pf-bill").onclick = function () { openBillModal(p, unbilledHours, unbilledIds); };
+    var _pfh = document.getElementById("pf-sm-hours"); if (_pfh) _pfh.onclick = function () { go("ts.list"); };
   }
   async function openBillModal(project, hours, tsIds) {
     if (!project.partner_id) { toast("Set a Customer on the project first, then Save."); return; }
@@ -14541,12 +14604,49 @@
         { label: "Project", get: function (t) { return '<b>' + esc(t.projects ? t.projects.name : "") + '</b>'; } },
         { label: "Task", get: function (t) { return esc(t.project_tasks ? t.project_tasks.name : ""); } },
         { label: "Description", get: function (t) { return '<span class="muted">' + esc(t.name || "") + '</span>'; } },
-        { label: "Hours", num: true, get: function (t) { return Number(t.hours || 0).toFixed(2); } }
+        { label: "Hours", num: true, get: function (t) { return Number(t.hours || 0).toFixed(2); } },
+        { label: "Status", get: function (t) { return t.approved ? '<span class="badge paid">Approved</span>' : '<span class="badge unpaid">Awaiting approval</span>'; } }
       ],
-      filters: [{ label: "To invoice", test: function (t) { return !t.is_invoiced; } }, { label: "Invoiced", test: function (t) { return !!t.is_invoiced; } }],
-      groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }, { label: "Month", get: function (t) { return (t.work_date || "").slice(0, 7); } }],
+      filters: [
+        { label: "Awaiting approval", test: function (t) { return !t.approved; } },
+        { label: "To invoice", test: function (t) { return t.approved && !t.is_invoiced; } },
+        { label: "Invoiced", test: function (t) { return !!t.is_invoiced; } }
+      ],
+      groupBy: [{ label: "Project", get: function (t) { return t.projects ? t.projects.name : "None"; } }, { label: "Month", get: function (t) { return (t.work_date || "").slice(0, 7); } }, { label: "Status", get: function (t) { return t.approved ? "Approved" : "Awaiting approval"; } }],
+      onOpen: function (t) { openTimesheetApprove(t); },
       onNew: function () { openTimesheetModal(); }
     };
+  }
+  // Hours are money: they land in job cost and then on a client invoice. Every
+  // other document that moves money has a gate; this one had none.
+  function openTimesheetApprove(t) {
+    var who = t.projects ? t.projects.name : "";
+    var inner =
+      '<div class="bill-sum"><div><span>Date</span><b>' + esc(t.work_date || "") + '</b></div>' +
+      '<div><span>Project</span><b>' + esc(who) + '</b></div>' +
+      (t.project_tasks ? '<div><span>Task</span><b>' + esc(t.project_tasks.name) + '</b></div>' : "") +
+      '<div class="bill-due"><span>Hours</span><b>' + Number(t.hours || 0).toFixed(2) + '</b></div></div>' +
+      (t.name ? '<div class="sub">' + esc(t.name) + '</div>' : "") +
+      (t.approved
+        ? '<div class="o-note">Approved' + (t.approved_by ? " by " + esc(t.approved_by) : "") + '. Approved time can be billed to the client.</div>'
+        : '<div class="o-note warn">Not approved yet. Unapproved hours stay out of anything you bill the client.</div>') +
+      (t.is_invoiced ? '<div class="o-note">Already invoiced, so it can no longer be changed.</div>' : "");
+    var m = plotModal("Timesheet", inner, async function () {
+      if (t.is_invoiced) { m.remove(); return; }
+      if (t.approved) {
+        await sb.from("timesheets").update({ approved: false, approved_by: null, approved_at: null }).eq("id", t.id);
+        m.remove(); toast("Approval withdrawn"); renderView(); return;
+      }
+      var g = await approvalGate("timesheet", t.id, (t.work_date || "") + " " + who, Number(t.hours) || 0, "ts.list");
+      if (g === "blocked") { m.remove(); renderView(); return; }
+      var r = await sb.from("timesheets").update({
+        approved: true, approved_by: (S.user && S.user.email) || "", approved_at: new Date().toISOString()
+      }).eq("id", t.id);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Hours approved"); renderView();
+    });
+    var sv = m.querySelector(".btn.pri");
+    if (sv) sv.textContent = t.is_invoiced ? "Close" : (t.approved ? "Withdraw approval" : "Approve these hours");
   }
   async function openTimesheetModal(projectId, onDone) {
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -15056,6 +15156,10 @@
     var ap = document.getElementById("lv-approve"); if (ap) ap.onclick = async function () {
       var row = collect();
       if (row.leave_type !== "unpaid" && row.days > LV_REM + 0.001) { toast("Exceeds balance: only " + (isFinite(LV_REM) ? LV_REM : 0) + " day(s) remaining. Add an allocation first."); return; }
+      // Long absences can need sign-off above the line manager. The rule is
+      // measured in days here, not money, which is what the unit column says.
+      var _lg = await approvalGate("leave", leave.id, "Leave " + (row.date_from || ""), row.days, "hr.leaves");
+      if (_lg === "blocked") { m.remove(); renderView(); return; }
       row.state = "approved";
       var r = await sb.from("hr_leaves").update(row).eq("id", leave.id);
       if (r.error) { toast("Could not approve: " + errMsg(r.error)); return; }
@@ -15156,6 +15260,10 @@
       m.remove(); toast("Saved"); renderView();
     };
     var ap = document.getElementById("ex-approve"); if (ap) ap.onclick = async function () {
+      // "expense" is offered in the rule editor and, until now, never checked:
+      // a rule set there did nothing at all.
+      var _eg = await approvalGate("expense", exp.id, gv("ex-name") || "Expense", Number(exp.amount) || 0, "hr.exp");
+      if (_eg === "blocked") { m.remove(); renderView(); return; }
       var r = await sb.from("hr_expenses").update({ state: "approved" }).eq("id", exp.id);
       if (r.error) { toast("Could not approve: " + errMsg(r.error)); return; }
       m.remove(); toast("Approved"); renderView();
@@ -16033,14 +16141,25 @@
     document.getElementById("v-cancel").onclick = function () { m.remove(); };
     function collect() { return { project_id: document.getElementById("v-proj").value, number: gv("v-num"), vdate: gv("v-date"), description: gv("v-desc") || "Variation", amount: parseFloat(gv("v-amt")) || 0 }; }
     document.getElementById("v-save").onclick = async function () { if (!gv("v-desc")) { toast("Description required"); return; } var row = collect(); var r; if (v.id) r = await sb.from("project_variations").update(row).eq("id", v.id); else { row.company_id = S.company.id; row.state = "draft"; r = await sb.from("project_variations").insert(row); } if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView(); };
-    var ap = document.getElementById("v-approve"); if (ap) ap.onclick = async function () { var row = collect(); row.state = "approved"; var r = await sb.from("project_variations").update(row).eq("id", v.id); if (r.error) { toast(errMsg(r.error)); return; } var pr = (await sb.from("projects").select("contract_value").eq("id", row.project_id).maybeSingle()).data; await sb.from("projects").update({ contract_value: (Number(pr.contract_value) || 0) + row.amount }).eq("id", row.project_id); m.remove(); toast("Approved - contract value updated"); renderView(); };
+    var ap = document.getElementById("v-approve"); if (ap) ap.onclick = async function () {
+      var row = collect();
+      // Approving a variation raises the contract value, so it is a decision
+      // about money even though no invoice is created here.
+      var _vg = await approvalGate("variation", v.id, (v.number || "Variation"), Number(row.amount) || 0, "var.list");
+      if (_vg === "blocked") { m.remove(); renderView(); return; }
+      row.state = "approved";
+      var r = await sb.from("project_variations").update(row).eq("id", v.id); if (r.error) { toast(errMsg(r.error)); return; }
+      var pr = (await sb.from("projects").select("contract_value").eq("id", row.project_id).maybeSingle()).data;
+      await sb.from("projects").update({ contract_value: (Number(pr.contract_value) || 0) + row.amount }).eq("id", row.project_id);
+      m.remove(); toast("Approved - contract value updated"); renderView();
+    };
   }
 
   // ---- Subcontracts ----
   function cfgSubcontracts() {
     return {
       title: "Subcontracts", pageSize: 80, table: "subcontracts",
-      fetch: function () { return sb.from("subcontracts").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("sc.list").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (s) { return (s.number || "") + " " + (s.name || "") + " " + (s.partners ? s.partners.name : ""); },
       columns: [
         { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
@@ -16070,7 +16189,22 @@
       '</div><div class="foot"><button class="btn" id="sc-cancel">Cancel</button><button class="btn pri" id="sc-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sc-cancel").onclick = function () { m.remove(); };
-    document.getElementById("sc-save").onclick = async function () { if (!gv("sc-name")) { toast("Name required"); return; } var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value }; var r; if (sc.id) r = await sb.from("subcontracts").update(row).eq("id", sc.id); else { row.company_id = S.company.id; r = await sb.from("subcontracts").insert(row); } if (r.error) { toast(errMsg(r.error)); return; } m.remove(); toast("Saved"); renderView(); };
+    document.getElementById("sc-save").onclick = async function () {
+      if (!gv("sc-name")) { toast("Name required"); return; }
+      var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value };
+      var r, sid = sc.id;
+      if (sc.id) r = await sb.from("sc.list").update(row).eq("id", sc.id);
+      else { row.company_id = S.company.id; var ins = await sb.from("sc.list").insert(row).select("id").single(); r = ins; sid = ins.data && ins.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      // Committing to a subcontractor is a spending decision the size of a
+      // purchase order, and "subcontract" was offered in the rule editor
+      // without anything ever checking it.
+      if (row.state === "active" && sid) {
+        var _sg = await approvalGate("subcontract", sid, row.number || row.name, row.amount, "sc.list");
+        if (_sg === "blocked") { await sb.from("sc.list").update({ state: "draft" }).eq("id", sid); m.remove(); renderView(); return; }
+      }
+      m.remove(); toast("Saved"); renderView();
+    };
   }
 
   // ---- Progress certificates (IPC) ----
@@ -20660,6 +20794,15 @@
     var pob = document.getElementById("mr-po"); if (pob) pob.onclick = async function () {
       var sid = await persist(); if (!sid) return;
       var lns = currentLines(); if (!lns.length) { toast("Add at least one item first"); return; }
+      // A take-off becoming a purchase order is the moment it commits money, so
+      // that is where the requisition rule bites rather than on saving a draft.
+      var _rqTot = lns.reduce(function (s, l) {
+        var pr = l.product_id ? pById(l.product_id) : null, lp = l.product_id ? lastPx[l.product_id] : null;
+        var px = lp ? Number(lp.unit_price) : (pr ? Number(pr.cost_price || 0) : 0);
+        return s + (Number(l.quantity) || 0) * (px || 0);
+      }, 0);
+      var _rg = await approvalGate("requisition", sid, gv("mr-num") || "Take-off", _rqTot, "pur.req");
+      if (_rg === "blocked") return;
       var poNum = await nextOrderNumber("purchase");
       var ins = await sb.from("purchase_orders").insert({ company_id: S.company.id, number: poNum, date_order: today(), state: "draft", currency_code: S.company.currency_code, project_id: document.getElementById("mr-proj").value || null, note: "From take-off " + (gv("mr-num") || "") }).select("id").single();
       if (ins.error) { toast("Could not create PO: " + errMsg(ins.error)); return; }
@@ -21015,7 +21158,7 @@
     var parent = { action: "pur.sccert", title: "Subcontract Certificates" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
-    var scs = (await sb.from("subcontracts").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var scs = (await sb.from("sc.list").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
     if (!scs.length) { document.querySelector(".o-form").innerHTML = '<div class="o-sheet"><div class="o-empty">No subcontracts yet. Create one first (Projects &rsaquo; Subcontracts), then certify progress here.</div></div>'; return; }
     var cert = id === "new" ? { state: "draft", date_to: today(), subcontract_id: presetSc || scs[0].id } : (await sb.from("subcontract_certificates").select("*").eq("id", id).maybeSingle()).data || {};
     var sc = scs.filter(function (x) { return x.id === cert.subcontract_id; })[0] || scs[0];
@@ -21068,7 +21211,7 @@
     document.getElementById("sx-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSubcontractCertForm(sid); } };
     var cb = document.getElementById("sx-certify"); if (cb) cb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("subcontract_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderSubcontractCertForm(sid); };
     var bb = document.getElementById("sx-bill"); if (bb) bb.onclick = async function () {
-      var full = (await sb.from("subcontracts").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
+      var full = (await sb.from("sc.list").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
       if (!full.vendor_id) { toast("Set a Vendor on the subcontract first."); return; }
       var num = await nextNumber("in_invoice");
       var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["6100", "6000"])).data || [];

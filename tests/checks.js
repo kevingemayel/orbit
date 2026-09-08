@@ -208,6 +208,36 @@
           : ok(need.length + " pieces present, no service write bypasses the queue");
       } },
 
+    { name: "every approval document type is actually enforced",
+      why: "subcontract, variation and expense were offered in the rule editor and nothing ever called approvalGate for them. A rule set there did nothing at all, and the user had no way to find that out: the screen showed an active rule and the document posted anyway.",
+      run: function (src) {
+        var m = /var APPR_DOC_LABEL = \{([^}]*)\}/.exec(src);
+        if (!m) return bad("could not read APPR_DOC_LABEL");
+        var types = uniq(all(m[1], /([a-z_]+):/g));
+        if (!types.length) return bad("no document types found");
+        // The type is not always a literal in the call: some sites pass a
+        // ternary, some a variable set on the line above. Look at the call and
+        // the statement leading up to it, which is where those are decided.
+        var zones = "", re = /approvalGate\(/g, mm;
+        while ((mm = re.exec(src)) !== null) zones += src.slice(Math.max(0, mm.index - 260), mm.index + 120) + "\n";
+        var miss = types.filter(function (t) { return zones.indexOf('"' + t + '"') < 0; });
+        return miss.length
+          ? bad(miss.length + " type(s) offered in the rule editor but never checked: " + miss.join(", "))
+          : ok(types.length + " document types, every one gated");
+      } },
+
+    { name: "an approval decision is authorised by the database",
+      why: "the approvals table had one write policy for every command, so anyone who could raise a purchase order could also approve it, whoever the rule named, and the audit trail then said a named person signed it off. A browser-side check is not authorisation.",
+      run: function (src) {
+        var need = [
+          ["decisions go through the guarded function", /sb\.rpc\("approval_decide"/],
+          ["the inbox separates what is yours", /function isMine/],
+          ["someone else's items are not actionable", /Not yours to decide/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        return gone.length ? bad("missing: " + gone.join(", ")) : ok(need.length + " pieces present");
+      } },
+
     { name: "a table bill charges the same tax as the register",
       why: "The floor pad wrote subtotal = total and left tax at 0, so the same order rung at the table came out 11% cheaper than at the counter and the sales tax report quietly under-declared. Nothing errors when this breaks; the money is just wrong.",
       run: function (src) {
