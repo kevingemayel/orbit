@@ -792,6 +792,9 @@
     ] },
     { key: "kitchen", title: "Kitchen (food and drink)", articles: [
       { t: "What this app is for", h: "<p><b>Kitchen</b> is the whole food and drink operation in one place: the menu and what it really costs, the stock behind it, the stores it is served in, the guests who buy it, the platforms that deliver it, and the franchisees who run it under your name.</p><p>It is one app with ten sections rather than ten apps, because nobody running a coffee shop thinks of the roastery and the loyalty scheme as separate products. They are rooms in the same building.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menu</span><span class=\"man-chip\">{{ico:scale}} Stock control</span><span class=\"man-chip\">{{ico:building}} Estate</span><span class=\"man-chip\">{{ico:clipboardCheck}} Operations</span><span class=\"man-chip\">{{ico:shield}} Loss prevention</span><span class=\"man-chip\">{{ico:box}} Roastery</span><span class=\"man-chip\">{{ico:heart}} Guests</span><span class=\"man-chip\">{{ico:truck}} Delivery</span><span class=\"man-chip\">{{ico:people}} Franchise</span><span class=\"man-chip\">{{ico:clock}} Planning</span></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:layers}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing here is a separate system</div><p>Items, recipes, suppliers, stock, staff, customers and the ledger are the same records the rest of Orbit uses. A coffee bean is one product whether you buy it green, roast it, sell it by the bag or brew it, which is why the cost follows it all the way through.</p></div></div><p>A single site will use the first two sections and ignore the rest. Turn to Estate when you open a second shop, to Franchise when someone else opens one for you.</p>" },
+      { t: "No tables: the counter", h: "<p>A coffee shop, a bakery counter, a takeaway hatch. There is no table to tap, no bill left open and no waiter carrying it: the customer orders, pays, is handed a <b>number</b>, and waits for it to be called.</p><p><b>Service &rsaquo; Counter</b> is that shop on one screen.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Tap along the <b>category</b> strip, or type in the search box. Every item is a tile with its picture and its price.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Choose <b>Takeaway</b> or <b>Eat in</b>. That is the only thing resembling a table.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\"><span class=\"man-key\">Name / note</span> if they gave a name or an allergy.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Take payment</span>. Type what they hand over and the change works itself out. One press then takes the money, sends the whole order to the kitchen, prints the receipt and shows the number in letters big enough to read across the counter.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:hash}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Numbers start again every morning</div><p>Each shop counts its own, from 1, and rolls back round after 999 so the board never shows a four-digit number. Two tills ringing at the same second cannot be handed the same number.</p></div></div><p>The screen clears itself for the next customer as soon as the number has been shown. There are no courses at a counter, so everything fires at once.</p>" },
+      { t: "Order numbers and the collection screen", h: "<p><b>Service &rsaquo; Collection screen</b> is the customer-facing half of the number system. Put it on a monitor people can see while they wait.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:clock}} Being made</div><p>Every number that has been paid for and is still with the kitchen.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:check}} Ready to collect</div><p>A number moves here on its own the moment the kitchen has marked every item ready. Nobody has to retype it.</p></div></div><p>Tap a ready number when it is handed over and it leaves the board. If a name was taken it shows under the number, for shops that call the name instead.</p><p>The <b>kitchen display</b> knows about counter orders too: a ticket from the till shows its number, so the pass calls &ldquo;forty-two&rdquo; rather than hunting for a table that does not exist.</p>" },
+      { t: "Finding an item fast", h: "<p>During a rush nobody reads a list. Both the counter and the waiter's pad show the menu as <b>tiles with pictures</b>, grouped by <b>category</b>.</p><ul><li>Categories come from <b>Menu &rsaquo; Items</b>, where each item has one. Set the <b>order</b> on a category so the strip reads the way your menu reads rather than alphabetically.</li><li>An ingredient category is hidden from both screens, because a cashier never taps flour.</li><li>Pictures come from the item itself: open an item under <b>Menu &rsaquo; Items</b> and attach a photo. An item with no photo shows its initial instead, so the layout never breaks while you are still taking pictures.</li></ul><div class=\"man-cal tip\"><span class=\"man-ci\">{{ico:star}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Photograph the top twenty first</div><p>A handful of items are most of your covers. Photograph those and the screen is already faster to use; the long tail can wait, and search still finds everything by name.</p></div></div>" },
       { t: "Before service: the book", h: "<p><b>Service &rsaquo; The book</b> is the host's screen. It is tonight's service read in time order, not a list of records: who is due, how many covers are committed, and one move to sit a party down.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">The strip along the top is the service in one glance: <b>covers booked</b>, how many bookings, how many already seated, and how many are waiting.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Each line shows the time, the guest, the party size, the table if one is assigned, and any note. An <b>occasion</b> (a birthday, an anniversary) is shown as a chip, because it is the thing the floor most wants to know and most often misses.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">A booking due within ten minutes is outlined. One more than ten minutes late goes <b>red</b>. That is the whole reason to have the book open on a screen rather than on paper.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Seat</span> offers the free tables that are big enough for the party first, marks the table seated and opens the order pad.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:person}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Seating carries the guest across</div><p>The party's name, the number of covers and the allergy note are already on the order when the pad opens. Nobody retypes them, so nobody mistypes them, and the allergy reaches the kitchen ticket on the first fire.</p></div></div><div class=\"man-cal tip\"><span class=\"man-ci\">{{ico:plus}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Put walk-ins in the book too</div><p>Use <span class=\"man-key\">New booking</span> with the source set to <b>Walk-in</b>. It takes five seconds and it means the covers count is the truth, which is what tomorrow's rota and prep list are built on.</p></div></div><p>Move between days with the arrows, and use <b>All bookings</b> under Delivery for the searchable history.</p>" },
       { t: "During service: the floor", h: "<p><b>Service &rsaquo; Floor</b> is the screen a waiter holds. It opens on the floor plan rather than a product list, because during service the question is never &ldquo;what do we sell&rdquo;, it is &ldquo;what does table six need&rdquo;.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Tables are grouped by <b>zone</b> and coloured by state: free, seated, ordered, bill, needs clearing. Each one shows what it is carrying so far and how long the party has been sitting.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Tap a table to open its pad. If the table already has an order you carry on adding to it; there is no separate step to start one.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">Tap items to add them. An item with a <b>required</b> modifier group asks the question before the line is accepted, so nothing reaches the kitchen half-specified.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Send to kitchen</span> fires only the new lines. Anything already sent is greyed and can no longer be deleted from the pad.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:clock}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The pad only shows what is actually on right now</div><p>It is filtered by the <b>live menu</b>, so a breakfast item disappears at 11:30 on its own, and by the <b>86 list</b>, so anything marked off at that store is not there to be ordered. A waiter cannot sell what the kitchen cannot make.</p></div></div><div class=\"man-cal warn\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Allergies</div><p><b>Note / allergy</b> puts a red banner on the kitchen ticket. Write the <b>allergy</b>, not the dish: &ldquo;nut allergy&rdquo;, not &ldquo;no pesto&rdquo;. The kitchen needs to know what would harm the guest, not what you left off.</p></div></div>" },
       { t: "Seats and courses", h: "<p>Two chips sit above the pad, and you set them <b>before</b> tapping the item, the way a waiter actually works: &ldquo;seat two, mains&rdquo;, then three taps.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:person}} Seat</div><p>Who the item is for. Leave it on <b>Table</b> for anything shared. Setting it is what makes <b>split by seat</b> work later, which is the split people actually ask for.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:clock}} Course</div><p>When it should reach the table: starters, mains, dessert. The kitchen only gets the course you send.</p></div></div><p>The pad groups the lines by course and marks each one <b>held</b> or <b>away</b>. <span class=\"man-key\">Send</span> fires one course at a time, the lowest still held, and the button names it: <i>Send starters (3)</i>, then <i>Send mains (4)</i> when the starters clear.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:check}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">This is what stops the kitchen plating everything at once</div><p>Without courses, a table of six gets its soup and its steak on the pass together. Holding the mains is not a nicety; it is the difference between a kitchen that runs and one that fights.</p></div></div>" },
@@ -1307,6 +1310,8 @@
       { i: "box", n: "Materials & Remnants", l: "Costs", d: "Made-to-size material for a job, including usable offcuts." }
     ] },
     kitchen: { intro: "Every screen in the <b>Kitchen</b> app, grouped the way the menu groups them:", list: [
+      { i: "cart", n: "Counter", l: "Service", d: "For a shop with no tables: tap, take the money, hand over a number. Categories and pictures so nobody hunts for an item." },
+      { i: "hash", n: "Collection screen", l: "Service", d: "The customer-facing board: what is being made, and which numbers are ready to collect." },
       { i: "calendar", n: "The book", l: "Service", d: "Tonight's bookings in time order, with covers, who is late, and one tap to seat a party." },
       { i: "grid", n: "Floor", l: "Service", d: "The floor plan: tap a table, take the order, send it to the kitchen." },
       { i: "clock", n: "Kitchen display", l: "Service", d: "Tickets on a wall screen with a live clock, colouring as they approach their target." },
@@ -1659,7 +1664,7 @@
     kitchen: {
       name: "Kitchen", icon: "🍽", color: "#b45309", color2: "#92400e", home: "kitchen.floor",
       menus: [
-        { label: "Service", items: [["The book", "kitchen.book"], ["Floor", "kitchen.floor"], ["Kitchen display", "kitchen.kds"], ["Service times", "kitchen.times"]] },
+        { label: "Service", items: [["Counter", "kitchen.counter"], ["The book", "kitchen.book"], ["Floor", "kitchen.floor"], ["Kitchen display", "kitchen.kds"], ["Collection screen", "kitchen.collect"], ["Service times", "kitchen.times"]] },
         { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
         { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
@@ -1805,7 +1810,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -3676,6 +3681,8 @@
       case "hr.labour": return renderList(cfgLabourStandards());
       case "hr.forecast": return renderList(cfgForecasts());
       case "kitchen.book": return renderResBook();
+      case "kitchen.counter": return renderCounter();
+      case "kitchen.collect": return renderCollect();
       case "kitchen.floor": return renderFloor();
       case "kitchen.kds": return renderKDS();
       case "kitchen.times": return renderServiceTimes();
@@ -19044,13 +19051,15 @@
       var mi = (await sb.from("menu_items").select("product_id").in("menu_id", live.map(function (m) { return m.id; })).eq("is_available", true)).data || [];
       if (mi.length) { allowed = {}; mi.forEach(function (x) { allowed[x.product_id] = 1; }); }
     }
-    var prods = (await fnbCo("products", "id,name,list_price,station,prep_minutes,category_id").eq("is_active", true).eq("is_sellable", true).order("name").limit(500)).data || [];
+    // 86'd items disappear from the pad rather than being ordered and refused,
+    // and every tile carries the item's picture where it has one
+    var menu = await svcLoadMenu(SERVICE.store || t.store_id);
+    var prods = menu.products;
     if (allowed) prods = prods.filter(function (p) { return allowed[p.id]; });
-    // 86'd items disappear from the pad rather than being ordered and refused
-    var off = (await fnbCo("store_item_availability", "product_id,is_available").eq("store_id", SERVICE.store || t.store_id)).data || [];
-    var offMap = {}; off.forEach(function (x) { if (!x.is_available) offMap[x.product_id] = 1; });
-    prods = prods.filter(function (p) { return !offMap[p.id]; });
     SERVICE.products = prods;
+    SERVICE.cats = menu.cats.filter(function (c) {
+      return prods.some(function (p) { return p.category_id === c.id; });
+    });
     SERVICE.modGroups = (await fnbCo("modifier_groups", "*, modifiers(*)").eq("is_active", true).order("sort")).data || [];
     var pmg = (await fnbCo("product_modifier_groups", "*")).data || [];
     SERVICE.pmg = {}; pmg.forEach(function (x) { (SERVICE.pmg[x.product_id] = SERVICE.pmg[x.product_id] || []).push(x); });
@@ -19063,7 +19072,8 @@
     body.innerHTML = '<div class="op-wrap">' +
       '<div class="op-left">' +
       '<input id="op-search" placeholder="Search the menu..." autocomplete="off">' +
-      '<div class="op-grid" id="op-grid"></div>' +
+      svcCatBarHTML(SERVICE.cats || [], SERVICE.cat) +
+      '<div class="mt-grid" id="op-grid"></div>' +
       '</div>' +
       '<div class="op-right">' +
       '<div class="op-head"><b>' + esc(t.name || "Table") + '</b>' +
@@ -19081,14 +19091,24 @@
       '</div></div></div>';
     function grid(q) {
       q = (q || "").toLowerCase();
-      var list = SERVICE.products.filter(function (p) { return !q || (p.name || "").toLowerCase().indexOf(q) >= 0; }).slice(0, 150);
+      var list = SERVICE.products.filter(function (p) {
+        if (SERVICE.cat && p.category_id !== SERVICE.cat) return false;
+        return !q || (p.name || "").toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 250);
       document.getElementById("op-grid").innerHTML = list.length
-        ? list.map(function (p) { return '<button class="op-tile" data-p="' + p.id + '"><span class="op-tile-n">' + esc(p.name) + '</span><span class="op-tile-p">' + money(p.list_price || 0) + '</span></button>'; }).join("")
+        ? list.map(svcTileHTML).join("")
         : '<div class="o-empty">Nothing matches. If an item is missing it may be off the current menu or marked 86.</div>';
-      document.querySelectorAll("#op-grid .op-tile").forEach(function (b) { b.onclick = function () { addToOrder(b.dataset.p, t); }; });
+      document.querySelectorAll("#op-grid .mt").forEach(function (b) { b.onclick = function () { addToOrder(b.dataset.p, t); }; });
     }
     grid("");
     document.getElementById("op-search").oninput = function () { grid(this.value); };
+    body.querySelectorAll(".mt-cat").forEach(function (b) {
+      b.onclick = function () {
+        SERVICE.cat = b.dataset.c || null;
+        body.querySelectorAll(".mt-cat").forEach(function (x) { x.classList.toggle("on", x === b); });
+        grid(document.getElementById("op-search").value);
+      };
+    });
     paintStrip(t);
     paintOrderLines();
     refreshTotals();
@@ -19260,6 +19280,8 @@
       });
       if (missing) { toast("Choose " + missing); return; }
       m.remove();
+      // the counter has no table, so it commits its own lines
+      if (t && t.__counter) { await counterCommit(p, picked, names.join(", "), t.__counter, extra); return; }
       await commitLine(p, picked, names.join(", "), t, extra);
     });
   }
@@ -19697,6 +19719,322 @@
   }
 
   // --------------------------------------------------------------------------
+  // THE COUNTER
+  //
+  // A coffee shop has no tables to tap. The customer orders at the counter,
+  // pays there, is handed a NUMBER, and waits for it to be called. The floor
+  // plan model is wrong for them end to end: nothing to seat, no bill left
+  // open, no waiter carrying it.
+  //
+  // So the counter is one screen: categories, pictures, a running order, and
+  // one button that takes the money, sends the order and prints the number.
+  // --------------------------------------------------------------------------
+  var COUNTER = { cat: null, type: "takeaway", q: "" };
+
+  // Shared by the counter and the order pad: the menu as tappable tiles,
+  // grouped into categories, with the product's picture when it has one.
+  async function svcLoadMenu(storeId) {
+    var cats = (await fnbCo("product_categories", "id,name,sort,color,is_menu").order("sort").order("name")).data || [];
+    cats = cats.filter(function (c) { return c.is_menu !== false; });
+    var prods = (await fnbCo("products", "id,name,list_price,station,prep_minutes,category_id")
+      .eq("is_active", true).eq("is_sellable", true).order("name").limit(600)).data || [];
+    // 86'd items are not offered at all, at this store
+    var off = storeId ? ((await fnbCo("store_item_availability", "product_id,is_available").eq("store_id", storeId)).data || []) : [];
+    var offMap = {}; off.forEach(function (x) { if (!x.is_available) offMap[x.product_id] = 1; });
+    prods = prods.filter(function (p) { return !offMap[p.id]; });
+    await attachThumbs(prods, "product");
+    var used = {}; prods.forEach(function (p) { if (p.category_id) used[p.category_id] = 1; });
+    return { cats: cats.filter(function (c) { return used[c.id]; }), products: prods };
+  }
+  function svcTileHTML(p) {
+    return '<button class="mt" data-p="' + p.id + '">' +
+      (p._thumb
+        ? '<span class="mt-img"><img alt="" src="' + esc(p._thumb) + '"></span>'
+        : '<span class="mt-img none" aria-hidden="true">' + esc((p.name || "?").slice(0, 1).toUpperCase()) + '</span>') +
+      '<span class="mt-n">' + esc(p.name) + '</span>' +
+      '<span class="mt-p">' + money(p.list_price || 0) + '</span></button>';
+  }
+  function svcCatBarHTML(cats, active) {
+    return '<div class="mt-cats" role="tablist">' +
+      '<button class="mt-cat' + (active ? "" : " on") + '" data-c="">All</button>' +
+      cats.map(function (c) {
+        return '<button class="mt-cat' + (active === c.id ? " on" : "") + '" data-c="' + c.id + '">' + esc(c.name) + '</button>';
+      }).join("") + '</div>';
+  }
+
+  async function renderCounter() {
+    svcStopTimer();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Counter") + '<div class="gap"></div>' +
+      '<span id="ct-store"></span><button class="o-filtbtn" id="ct-collect">Collection screen</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Opening the till...</div></div></div>';
+    wireBc();
+    await svcVat();
+    var stores = (await fnbCo("stores", "id,name,address,city,country,phone,email").eq("is_active", true).order("name")).data || [];
+    SERVICE.stores = stores;
+    if (!SERVICE.store && stores.length) SERVICE.store = stores[0].id;
+    document.getElementById("ct-store").innerHTML = stores.length > 1
+      ? '<select id="ct-storepick" class="o-filtbtn" aria-label="Store">' + stores.map(function (s) { return '<option value="' + s.id + '"' + (SERVICE.store === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select>' : "";
+    var sp = document.getElementById("ct-storepick");
+    if (sp) sp.onchange = function () { SERVICE.store = this.value; renderCounter(); };
+    document.getElementById("ct-collect").onclick = function () { go("kitchen.collect"); };
+
+    var menu = await svcLoadMenu(SERVICE.store);
+    SERVICE.products = menu.products;
+    SERVICE.modGroups = (await fnbCo("modifier_groups", "*, modifiers(*)").eq("is_active", true).order("sort")).data || [];
+    var pmg = (await fnbCo("product_modifier_groups", "*")).data || [];
+    SERVICE.pmg = {}; pmg.forEach(function (x) { (SERVICE.pmg[x.product_id] = SERVICE.pmg[x.product_id] || []).push(x); });
+    // a fresh customer every time this screen opens
+    SERVICE.order = null; SERVICE.lines = []; SERVICE.seat = 0; SERVICE.course = 1;
+    paintCounter(menu);
+  }
+  function paintCounter(menu) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var T = svcTotals();
+    body.innerHTML = '<div class="ct">' +
+      '<div class="ct-left">' +
+      '<div class="ct-search"><input id="ct-q" placeholder="Search the menu..." autocomplete="off" value="' + esc(COUNTER.q) + '"></div>' +
+      svcCatBarHTML(menu.cats, COUNTER.cat) +
+      '<div class="mt-grid" id="ct-grid"></div></div>' +
+      '<div class="ct-right">' +
+      '<div class="ct-head"><b>This order</b>' +
+      '<div class="ct-type">' +
+      [["takeaway", "Takeaway"], ["dine_in", "Eat in"]].map(function (x) {
+        return '<button class="op-chip' + (COUNTER.type === x[0] ? " on" : "") + '" data-t="' + x[0] + '">' + x[1] + '</button>';
+      }).join("") + '</div></div>' +
+      '<div class="op-lines" id="ct-lines"></div>' +
+      '<div class="op-foot">' +
+      '<div class="op-tot sub"' + (T.rate ? "" : " hidden") + '><span>Subtotal</span><b id="op-sub">' + money(T.sub) + '</b></div>' +
+      '<div class="op-tot sub"' + (T.rate ? "" : " hidden") + '><span>VAT ' + T.rate + '%</span><b id="op-tax">' + money(T.tax) + '</b></div>' +
+      '<div class="op-tot"><span>Total</span><b id="op-total">' + money(T.tot) + '</b></div>' +
+      '<div class="op-row2"><button class="btn" id="ct-note">Name / note</button>' +
+      '<button class="btn" id="ct-clear">Clear</button></div>' +
+      '<button class="btn pri" id="ct-pay"' + (SERVICE.lines.length ? "" : " disabled") + '>Take payment</button>' +
+      '</div></div></div>';
+    function grid() {
+      var q = (COUNTER.q || "").toLowerCase();
+      var list = SERVICE.products.filter(function (p) {
+        if (COUNTER.cat && p.category_id !== COUNTER.cat) return false;
+        return !q || (p.name || "").toLowerCase().indexOf(q) >= 0;
+      }).slice(0, 250);
+      document.getElementById("ct-grid").innerHTML = list.length
+        ? list.map(svcTileHTML).join("")
+        : '<div class="o-empty">Nothing matches. An item may be off the menu right now, or marked 86 at this store.</div>';
+      document.querySelectorAll("#ct-grid .mt").forEach(function (b) {
+        b.onclick = function () { counterAdd(b.dataset.p, menu); };
+      });
+    }
+    grid();
+    document.getElementById("ct-q").oninput = function () { COUNTER.q = this.value; grid(); };
+    body.querySelectorAll(".mt-cat").forEach(function (b) {
+      b.onclick = function () { COUNTER.cat = b.dataset.c || null; paintCounter(menu); };
+    });
+    body.querySelectorAll(".ct-type .op-chip").forEach(function (b) {
+      b.onclick = async function () {
+        COUNTER.type = b.dataset.t;
+        if (SERVICE.order) await svcWrite("pos_orders", "update", { order_type: COUNTER.type }, { match: { id: SERVICE.order.id } });
+        paintCounter(menu);
+      };
+    });
+    paintCounterLines(menu);
+    document.getElementById("ct-clear").onclick = function () { counterClear(menu); };
+    document.getElementById("ct-note").onclick = function () { counterNote(menu); };
+    document.getElementById("ct-pay").onclick = function () { counterPay(menu); };
+  }
+  function paintCounterLines(menu) {
+    var el = document.getElementById("ct-lines"); if (!el) return;
+    if (!SERVICE.lines.length) {
+      el.innerHTML = '<div class="o-empty">Tap what they are having. They pay here, get a number, and wait for it to be called.</div>';
+      return;
+    }
+    el.innerHTML = SERVICE.lines.map(function (l, i) {
+      return '<div class="op-line"><span class="op-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
+        '<span class="op-nm">' + esc(l.name || "") + (l.modifier_note ? '<span class="op-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span>' +
+        '<span class="op-amt">' + money(l.line_total || 0) + '</span>' +
+        '<button class="op-x" data-i="' + i + '" aria-label="Remove ' + esc(l.name || "item") + '">&times;</button></div>';
+    }).join("");
+    el.querySelectorAll(".op-x").forEach(function (b) {
+      b.onclick = async function () {
+        var l = SERVICE.lines[+b.dataset.i];
+        if (l.id) await svcWrite("pos_order_lines", "delete", {}, { match: { id: l.id } });
+        SERVICE.lines.splice(+b.dataset.i, 1);
+        await recalcOrder(); paintCounter(menu);
+      };
+    });
+  }
+  async function counterAdd(pid, menu) {
+    var p = SERVICE.products.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
+    var groups = (SERVICE.pmg[pid] || []).map(function (g) { return SERVICE.modGroups.filter(function (m) { return m.id === g.group_id; })[0]; }).filter(Boolean);
+    if (groups.length) { openModifierPrompt(p, groups, { id: null, __counter: menu }); return; }
+    await counterCommit(p, [], "", menu);
+  }
+  async function counterCommit(p, modIds, modNote, menu, extra) {
+    var price = Number(p.list_price || 0) + Number(extra || 0);
+    if (!SERVICE.order) {
+      var made = await svcWrite("pos_orders", "insert", {
+        company_id: S.company.id, store_id: SERVICE.store || null, table_id: null,
+        order_type: COUNTER.type, status: "draft", number: "C" + Date.now().toString().slice(-6),
+        subtotal: 0, tax: 0, total: 0, created_at: new Date().toISOString(),
+        server_name: (S.user && S.user.email) || null
+      });
+      if (!made) return;
+      SERVICE.order = made;
+    }
+    var saved = await svcWrite("pos_order_lines", "insert", {
+      company_id: S.company.id, order_id: SERVICE.order.id, product_id: p.id, name: p.name,
+      qty: 1, unit_price: price, line_total: price, seq: SERVICE.lines.length + 1,
+      modifier_ids: modIds || [], modifier_note: modNote || null,
+      course: 1, station: p.station || null, kds_status: "new"
+    });
+    if (!saved) return;
+    SERVICE.lines.push(saved);
+    await recalcOrder();
+    paintCounter(menu);
+  }
+  async function counterClear(menu) {
+    if (!SERVICE.order) return;
+    if (!confirm("Clear this order without taking payment?")) return;
+    for (var i = 0; i < SERVICE.lines.length; i++) {
+      if (SERVICE.lines[i].id) await svcWrite("pos_order_lines", "delete", {}, { match: { id: SERVICE.lines[i].id } });
+    }
+    await svcWrite("pos_orders", "update", { status: "cancelled", closed_at: new Date().toISOString() }, { match: { id: SERVICE.order.id } });
+    SERVICE.order = null; SERVICE.lines = [];
+    toast("Cleared"); paintCounter(menu);
+  }
+  function counterNote(menu) {
+    if (!SERVICE.order) { toast("Add something first"); return; }
+    var inner = '<div><label>Name to call</label><input id="cn-name" value="' + esc(SERVICE.order.guest_name || "") + '" placeholder="Some shops call the name instead of the number"></div>' +
+      '<div><label>Allergy or note</label><textarea id="cn-note" rows="2" placeholder="Write the allergy, not the dish">' + esc(SERVICE.order.allergy_note || "") + '</textarea></div>';
+    var m = plotModal("Order note", inner, async function () {
+      var row = { guest_name: gv("cn-name") || null, allergy_note: (document.getElementById("cn-note").value || "").trim() || null };
+      if (!(await svcWrite("pos_orders", "update", row, { match: { id: SERVICE.order.id } }))) return;
+      Object.assign(SERVICE.order, row); m.remove(); toast("Saved"); paintCounter(menu);
+    });
+  }
+  // One action: take the money, send it to the kitchen, hand over a number.
+  function counterPay(menu) {
+    if (!SERVICE.lines.length) { toast("Nothing to pay for"); return; }
+    var T = svcTotals();
+    var inner =
+      '<div class="bill-sum"><div><span>Items</span><b>' + money(T.sub) + '</b></div>' +
+      (T.rate ? '<div><span>VAT ' + T.rate + '%</span><b>' + money(T.tax) + '</b></div>' : "") +
+      '<div class="bill-due"><span>To pay</span><b>' + money(T.tot) + '</b></div></div>' +
+      '<div class="row2"><div><label>Method</label><select id="ct-meth">' +
+      PAY_METHODS.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Cash given</label><input id="ct-cash" type="number" step="0.01" placeholder="' + money(T.tot) + '"></div></div>' +
+      '<div class="o-note" id="ct-change">Enter what they hand over and the change is worked out for you.</div>' +
+      '<div><label>Reference</label><input id="ct-ref" placeholder="card auth, last 4"></div>';
+    var m = plotModal("Take " + money(T.tot), inner, async function () {
+      var meth = gv("ct-meth") || "cash";
+      var row = {
+        company_id: S.company.id, order_id: SERVICE.order.id, method: meth,
+        amount: T.tot, tip_amount: 0, reference: gv("ct-ref") || null,
+        store_id: SERVICE.store || null, taken_by: (S.user && S.user.email) || null,
+        split_kind: "whole"
+      };
+      if (!(await svcWrite("pos_payments", "insert", row))) return;
+      var num = (await sb.rpc("pos_next_call_number", { p_company: S.company.id, p_store: SERVICE.store || null })).data;
+      var now = new Date().toISOString();
+      // everything goes to the kitchen at once: there are no courses at a counter
+      for (var i = 0; i < SERVICE.lines.length; i++) {
+        await svcWrite("pos_order_lines", "update", { kds_status: "fired", fired_at: now }, { match: { id: SERVICE.lines[i].id } });
+      }
+      await svcWrite("pos_orders", "update", {
+        status: "paid", amount_paid: T.tot, call_number: num || null,
+        fired_at: now, served_at: null, closed_at: now
+      }, { match: { id: SERVICE.order.id } });
+      SERVICE.order.call_number = num;
+      m.remove();
+      svcPrintBill(null, { receipt: true, payments: [row] });
+      counterCalled(num, menu);
+    });
+    var cash = m.querySelector("#ct-cash"), note = m.querySelector("#ct-change");
+    cash.oninput = function () {
+      var given = parseFloat(this.value);
+      note.innerHTML = given > 0
+        ? (given + 0.0001 >= T.tot
+          ? 'Change <b>' + money(given - T.tot) + '</b>'
+          : '<b>' + money(T.tot - given) + '</b> short')
+        : "Enter what they hand over and the change is worked out for you.";
+    };
+    m.querySelector("#ct-meth").onchange = function () {
+      cash.parentElement.style.display = this.value === "cash" ? "" : "none";
+      if (this.value !== "cash") note.textContent = "";
+    };
+  }
+  // The number, big, for the length of time it takes to hand over a receipt.
+  function counterCalled(num, menu) {
+    var o = document.createElement("div");
+    o.className = "ct-called";
+    o.innerHTML = '<div class="ct-called-b"><span>Order number</span><b>' + (num || "-") + '</b>' +
+      '<p>Tell them to listen for it. Tap anywhere for the next customer.</p></div>';
+    document.body.appendChild(o);
+    function next() {
+      o.remove();
+      SERVICE.order = null; SERVICE.lines = []; COUNTER.q = "";
+      paintCounter(menu);
+    }
+    o.onclick = next;
+    setTimeout(function () { if (document.body.contains(o)) next(); }, 6000);
+  }
+
+  // --------------------------------------------------------------------------
+  // THE COLLECTION SCREEN
+  //
+  // The customer-facing half of a number system: what is being made, and what
+  // is ready to collect. Deliberately readable from the other side of a shop.
+  // --------------------------------------------------------------------------
+  async function renderCollect() {
+    svcStopTimer();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Collection") + '<div class="gap"></div>' +
+      '<button class="o-filtbtn" id="cl-full">Full screen</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    document.getElementById("cl-full").onclick = function () {
+      var el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
+      else if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+    };
+    await paintCollect();
+    SERVICE.timer = setInterval(function () {
+      if (!document.getElementById("cb")) { svcStopTimer(); return; }
+      paintCollect();
+    }, 8000);
+  }
+  async function paintCollect() {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
+    var q = fnbCo("pos_orders", "id,call_number,guest_name,status,collected_at,created_at, pos_order_lines(kds_status)")
+      .not("call_number", "is", null).is("collected_at", null).gte("created_at", since);
+    if (SERVICE.store) q = q.eq("store_id", SERVICE.store);
+    var rows = (await q.order("call_number")).data || [];
+    var making = [], ready = [];
+    rows.forEach(function (o) {
+      var ls = o.pos_order_lines || [];
+      var allDone = ls.length && ls.every(function (l) { return l.kds_status === "ready" || l.kds_status === "bumped"; });
+      (allDone ? ready : making).push(o);
+    });
+    function cell(o, isReady) {
+      return '<button class="cb-n' + (isReady ? " rdy" : "") + '" data-id="' + o.id + '">' +
+        (o.call_number || "-") + (o.guest_name ? '<span>' + esc(o.guest_name) + '</span>' : "") + '</button>';
+    }
+    body.innerHTML = '<div class="cb" id="cb">' +
+      '<section><h2>Being made</h2><div class="cb-grid">' +
+      (making.length ? making.map(function (o) { return cell(o, false); }).join("") : '<span class="cb-none">Nothing waiting</span>') +
+      '</div></section>' +
+      '<section class="cb-ready"><h2>Ready to collect</h2><div class="cb-grid">' +
+      (ready.length ? ready.map(function (o) { return cell(o, true); }).join("") : '<span class="cb-none">Nothing ready yet</span>') +
+      '</div></section></div>';
+    body.querySelectorAll(".cb-n.rdy").forEach(function (b) {
+      b.onclick = async function () {
+        await svcWrite("pos_orders", "update", { collected_at: new Date().toISOString() }, { match: { id: b.dataset.id } });
+        paintCollect();
+      };
+    });
+  }
+
+  // --------------------------------------------------------------------------
   // KITCHEN DISPLAY
   // --------------------------------------------------------------------------
   async function renderKDS() {
@@ -19733,7 +20071,7 @@
   }
   async function paintKDS(quiet) {
     var body = document.getElementById("o-body"); if (!body) return;
-    var lq = sb.from("pos_order_lines").select("*, products(prep_minutes), pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status)")
+    var lq = sb.from("pos_order_lines").select("*, products(prep_minutes), pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status,call_number)")
       .eq("company_id", S.company.id).in("kds_status", ["fired", "ready"]);
     if (SERVICE.station) lq = lq.eq("station", SERVICE.station);
     var lines = (await lq.order("fired_at")).data || [];
@@ -19762,7 +20100,9 @@
       '<div class="kds-board">' + tickets.map(function (tk) {
         var target = Math.max.apply(null, tk.lines.map(svcTarget));
         var mins = svcMins(tk.o.fired_at);
-        var where = tk.o.table_id ? (tabs[tk.o.table_id] || "Table") : fnbTitle(tk.o.order_type || "Order");
+        // a counter order is called by its number, so that is what the pass sees
+        var where = tk.o.call_number ? "#" + tk.o.call_number
+          : tk.o.table_id ? (tabs[tk.o.table_id] || "Table") : fnbTitle(tk.o.order_type || "Order");
         return '<div class="kds-card ' + svcHeat(mins, target) + '">' +
           '<div class="kds-h"><span class="kds-where">' + esc(where) + '</span>' +
           '<span class="kds-time" data-fired="' + esc(tk.o.fired_at || "") + '" data-target="' + target + '">' + svcClock(tk.o.fired_at) + '</span></div>' +
