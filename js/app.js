@@ -4827,7 +4827,7 @@
       },
       searchText: function (c) { return (c.name || "") + " " + (c.legal_name || "") + " " + ((c.profile && c.profile.tagline) || ""); },
       columns: [
-        { label: "", cls: "thumbcol", get: function (c) { return thumbCell(c); } },
+        { label: "", cls: "thumbcol", get: function (c) { return thumbCell(c, "logo"); } },
         { label: "Name", get: function (c) {
           var tag = (c.profile && c.profile.tagline) || "";
           return '<b>' + esc(c.name) + '</b>' + (tag ? '<div class="muted" style="font-size:11px">' + esc(tag) + '</div>' : "");
@@ -6565,7 +6565,7 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? '<button id="p-arch">' + (p.is_active === false ? "Restore" : "Archive") + '</button>' + formDelBtn("partners", id, backAction, isContact ? "contact" : (isCust ? "customer" : "vendor")) : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + smart +
-      titleRowHTML('<input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name">', "partner", id) +
+      titleRowHTML('<input id="p-name" value="' + esc(p.name || "") + '" placeholder="' + (isContact ? "Contact" : isCust ? "Customer" : "Vendor") + ' name">', "partner", id, { fit: !isContact }) +
       '<div class="o-groups"><div>' +
       fld("Contact type", '<select id="p-kind"><option value="company"' + (ck === "company" ? " selected" : "") + '>Company (third party)</option><option value="freelancer"' + (ck === "freelancer" ? " selected" : "") + '>Freelancer (individual)</option><option value="employee"' + (ck === "employee" ? " selected" : "") + '>Employee of a company</option></select>', "A company you deal with, an individual freelancer, or a person who works at one of your contact companies.") +
       '<div id="p-ctype-wrap"' + (ck === "company" ? "" : ' style="display:none"') + '>' + fld("Company type", '<select id="p-ctype">' + CTYPES.map(function (t) { return '<option value="' + t + '"' + (ctypeDef === t ? " selected" : "") + '>' + t.charAt(0).toUpperCase() + t.slice(1) + '</option>'; }).join("") + '</select>', "Bank, insurance, client, supplier, subcontractor...") + '</div>' +
@@ -7248,14 +7248,17 @@
     try { var sg = await sb.storage.from(MEDIA_BUCKET).createSignedUrls(paths, 3600); (sg.data || []).forEach(function (s) { if (s.signedUrl) urlByPath[s.path] = s.signedUrl; }); } catch (e) { }
     rows.forEach(function (r) { var p = byId[r.id]; if (p && urlByPath[p]) r._thumb = urlByPath[p]; });
   }
-  function thumbCell(r) { return r._thumb ? '<span class="o-rowthumb"><img alt="" src="' + r._thumb + '"></span>' : '<span class="o-rowthumb none"></span>'; }
+  // cls "logo" puts the picture on a white ground: a company mark is usually dark
+  // ink on transparency and would vanish in the dark themes.
+  function thumbCell(r, cls) { var k = "o-rowthumb" + (cls ? " " + cls : ""); return r._thumb ? '<span class="' + k + '"><img alt="" src="' + r._thumb + '"></span>' : '<span class="' + k + ' none"></span>'; }
   // reusable attachments panel. entity is a short key ("product","tool","partner"...);
   // on a new record leave entityId empty and call mediaFlush(entity,newId) after insert.
   var UPLOAD_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5"/><path d="m7 10 5-5 5 5"/><path d="M4 19h16"/></svg>';
   function attachBlockHTML(entity, entityId, opts) {
     opts = opts || {};
     var slot = !!opts.slot;
-    return '<div class="o-att' + (slot ? " slot" : "") + '" data-entity="' + entity + '" data-id="' + (entityId || "") + '" data-slot="' + (slot ? 1 : 0) + '">' +
+    // fit: the picture is a logo, so show all of it rather than filling the tile
+    return '<div class="o-att' + (slot ? " slot" : "") + (opts.fit ? " fit" : "") + '" data-entity="' + entity + '" data-id="' + (entityId || "") + '" data-slot="' + (slot ? 1 : 0) + '">' +
       (slot ? "" : '<div class="o-cf-head">' + esc(opts.label || "Photos & documents") + '</div>') +
       '<div class="o-att-row"><div class="o-att-grid" id="att-grid-' + entity + '"></div>' +
       '<label class="o-att-add" title="' + (slot ? "Add a photo" : "Add photo or file") + '"><input type="file" accept="' + (opts.accept || "image/*,application/pdf") + '" multiple id="att-input-' + entity + '">' + UPLOAD_SVG + '<span>' + (slot ? "Add photo" : "Add") + '</span></label></div>' +
@@ -7263,8 +7266,9 @@
       '</div>';
   }
   // put the name input on the left and a dotted photo-upload slot on the right of a form's title row
-  function titleRowHTML(titleInputHtml, entity, id) {
-    return '<div class="o-titlerow"><div class="o-title">' + titleInputHtml + '</div>' + attachBlockHTML(entity, id === "new" ? "" : id, { slot: true }) + '</div>';
+  function titleRowHTML(titleInputHtml, entity, id, opts) {
+    opts = opts || {};
+    return '<div class="o-titlerow"><div class="o-title">' + titleInputHtml + '</div>' + attachBlockHTML(entity, id === "new" ? "" : id, { slot: true, fit: !!opts.fit }) + '</div>';
   }
   function mediaThumbHTML(m, url) {
     if (m.kind === "image" && url) return '<div class="o-att-thumb"><img alt="Attachment" src="' + url + '" data-open="' + m.id + '"><button class="o-att-x" data-mid="' + m.id + '" title="Remove">&times;</button></div>';
@@ -7899,7 +7903,7 @@
       '<div><label>Company name</label>' + fhint("Company name", "The trading name of this company.") + '<input id="co-name" value="' + esc(c.name || "") + '" placeholder="e.g. Skyline Glass SARL"></div>' +
       '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label>' + currencySelectHTML("co-cur", c.currency_code || "USD") + '</div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
-      (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
+      (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, fit: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
       '</div><div class="foot">' + (id ? '<button class="btn" id="co-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>' : '') + '<button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
     document.body.appendChild(m);
     if (id) wireAttach("company");
@@ -19118,6 +19122,7 @@
     var tel = st.phone || t.phone;
     return '<div class="thead">' + logo +
       '<div class="tname">' + esc(pfDisplayName(t)) + '</div>' +
+      (t.tagline ? '<div class="ttag">' + esc(t.tagline) + '</div>' : "") +
       (st.name ? '<div class="tbranch">' + esc(st.name) + '</div>' : "") +
       (addr ? '<div class="tsm">' + addr + '</div>' : "") +
       (tel ? '<div class="tsm">Tel ' + esc(tel) + '</div>' : "") +
@@ -24390,13 +24395,14 @@
   }
   function printCashReceipt(m) {
     var t = printTplData();
-    var logo = (t.show_logo && t.logo) ? '<img alt="" src="' + t.logo + '" style="max-height:54px;display:block">' : "";
+    var logo = (t.show_logo && t.logo) ? '<img alt="" src="' + t.logo + '" style="max-height:54px;max-width:210px;object-fit:contain;display:block">' : "";
     var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.reference], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
     var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
     var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<table style="font-size:13px;margin:-8px 0 4px"><tr><td style="color:#666;padding:2px 16px 2px 0">Cash tendered</td><td style="font-weight:600">' + esc(moneyC(m.tendered, m.currency_code)) + '</td></tr><tr><td style="color:#666;padding:2px 16px 2px 0">Change given</td><td style="font-weight:600">' + esc(moneyC(m.change_given, m.currency_code)) + '</td></tr></table>' : '';
     var html = '<div style="max-width:520px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:18px">'
-      + '<div>' + logo + '<div style="font-size:17px;font-weight:800;margin-top:6px">' + esc(pfDisplayName(t)) + '</div></div>'
+      + '<div>' + logo + '<div style="font-size:17px;font-weight:800;margin-top:6px">' + esc(pfDisplayName(t)) + '</div>'
+      + (t.tagline ? '<div style="font-size:11px;color:#666;font-style:italic;margin-top:2px">' + esc(t.tagline) + '</div>' : "") + '</div>'
       + '<div style="text-align:right"><div style="font-size:20px;font-weight:800;letter-spacing:.03em">' + (m.direction === "in" ? "RECEIPT" : "PAYMENT VOUCHER") + '</div><div style="font-size:12px;color:#666;font-family:monospace">' + esc(m.number || "") + '</div></div></div>'
       + '<table style="font-size:13.5px;border-collapse:collapse">' + rows + '</table>' + amt + tender
       + '<div style="margin-top:44px;display:flex;justify-content:space-between;font-size:12px;color:#666"><div>_____________________<br>' + (m.direction === "in" ? "Received by" : "Received by") + '</div><div style="text-align:right">_____________________<br>Cashier</div></div>'

@@ -939,6 +939,7 @@ body{top:0!important}
 .tdoc .thead{text-align:center}
 .tdoc .tname{font-size:14px;font-weight:800;letter-spacing:.01em}
 .tdoc .tbranch{font-size:11.5px;font-weight:700}
+.tdoc .ttag{font-size:9.5px;font-style:italic;color:#333}
 .tdoc .tsm{font-size:9.5px;color:#333}
 .tdoc .tcent{text-align:center}
 .tdoc .trule{border-top:1px dashed #000;margin:5px 0}
@@ -1504,6 +1505,8 @@ body{top:0!important}
 .o-att-grid{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0}
 .o-att-thumb{position:relative;width:92px;height:92px;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:var(--panel2);cursor:pointer;flex:0 0 auto}
 .o-att-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+/* a logo slot shows the whole mark on white; photo slots still fill their tile */
+.o-att.fit .o-att-thumb img{object-fit:contain;background:#fff;padding:5px;box-sizing:border-box}
 .o-att-thumb.doc{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px;text-align:center}
 .o-att-doc{font-weight:800;font-size:13px;color:var(--accent);letter-spacing:.5px}
 .o-att-cap{font-size:10.5px;color:var(--ink2);margin-top:4px;line-height:1.2;word-break:break-word}
@@ -1525,7 +1528,12 @@ body{top:0!important}
 /* ---- Row thumbnails on list views ---- */
 .o-list td.thumbcol{width:46px;padding:4px 6px}
 .o-rowthumb{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:7px;overflow:hidden;background:var(--panel2);border:1px solid var(--line)}
-.o-rowthumb img{width:100%;height:100%;object-fit:cover;display:block}
+/* shrink to fit, never crop: at 34px a cropped picture shows nothing useful,
+   and a cropped logo is just wrong */
+.o-rowthumb img{width:100%;height:100%;object-fit:contain;display:block;padding:2px;box-sizing:border-box}
+/* a logo is usually dark ink on transparency, so it needs a light ground to
+   read in the dark themes - the same white it sits on when printed */
+.o-rowthumb.logo{background:#fff;border-color:rgba(0,0,0,.14)}
 .o-rowthumb.none{border-style:dashed;opacity:.5}
 
 /* ---- Photo slot next to the form name + dotted upload tile ---- */
