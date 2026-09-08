@@ -228,13 +228,8 @@ create index if not exists idx_grinder on public.grinder_logs (company_id, store
 create or replace function public.theoretical_usage(
   p_company uuid, p_from date, p_to date, p_store uuid default null)
 returns table(product_id uuid, product_name text, qty numeric, unit_cost numeric, value numeric)
-language plpgsql stable security definer set search_path = public as $$
-declare r record;
-begin
-  create temp table if not exists _tu (pid uuid, qty numeric) on commit drop;
-  delete from _tu;
-
-  for r in
+language sql stable security definer set search_path = public as $fn$
+  with sold as (
     select l.product_id as sold_product, sum(l.qty) as sold_qty
       from public.pos_order_lines l
       join public.pos_orders o on o.id = l.order_id
@@ -245,19 +240,21 @@ begin
        and (p_store is null or o.store_id = p_store)
        and l.product_id is not null
      group by l.product_id
-  loop
-    insert into _tu (pid, qty)
-    select e.pid, e.qty * r.sold_qty from public.explode_recipe(r.sold_product, 1) e;
-  end loop;
-
-  return query
-    select t.pid, p.name, round(sum(t.qty), 4),
-           round(coalesce(p.cost_price,0), 4),
-           round(sum(t.qty) * coalesce(p.cost_price,0), 2)
-      from _tu t join public.products p on p.id = t.pid
-     group by t.pid, p.name, p.cost_price
-     order by 5 desc;
-end $$;
+  ),
+  exploded as (
+    select e.pid, e.qty * s.sold_qty as qty
+      from sold s
+      cross join lateral public.explode_recipe(s.sold_product, 1) e
+  )
+  select x.pid, p.name,
+         round(sum(x.qty), 4),
+         round(coalesce(p.cost_price, 0), 4),
+         round(sum(x.qty) * coalesce(p.cost_price, 0), 2)
+    from exploded x
+    join public.products p on p.id = x.pid
+   group by x.pid, p.name, p.cost_price
+   order by 5 desc;
+$fn$;
 
 -- One unit of a sellable item, exploded into the raw ingredients it consumes,
 -- honouring per-line waste and batch yield exactly as plate_cost does.
