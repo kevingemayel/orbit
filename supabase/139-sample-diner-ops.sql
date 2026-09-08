@@ -56,7 +56,7 @@ cross join lateral (
    order by public.seed_rand(d.d::text || st.code || slot::text || 'r' || wr2.code) desc limit 1
 ) wr
 cross join lateral (
-  select (0.5 + public.seed_rand(d.d::text || st.code || slot::text || 'q') * 2.2) as qty
+  select (2.2 + public.seed_rand(d.d::text || st.code || slot::text || 'q') * 9.6) as qty
 ) q
 where public.seed_rand(d.d::text || st.code || slot::text || 'has') < 0.72;
 

@@ -61,7 +61,7 @@ from (
     ((6 + floor(public.seed_rand(st.code || d.d::text || dp.name || n::text || 'prep')*14))::text || ' minutes')::interval as prep
   from (select generate_series(date '2026-08-01', date '2026-08-31', interval '1 day')::date d) d
   cross join (select id, code from public.stores where company_id='aa510000-0000-4000-8000-0000000000c0') st
-  cross join (values ('breakfast',8,3,0.10),('lunch',12,3,0.35),('afternoon',15,3,0.12),('dinner',18,5,0.43))
+  cross join (values ('lunch',12,4,0.42),('afternoon',16,2,0.13),('dinner',18,5,0.45))
              as dp(name, from_h, span, share)
   cross join lateral generate_series(1, greatest(1, round(
       -- base volume per branch, lifted at the weekend, split across dayparts
@@ -116,36 +116,28 @@ cross join lateral (values
 cross join lateral (
   select pr.id, pr.name, pr.station
     from public.products pr
-   where pr.company_id='aa510000-0000-4000-8000-0000000000c0' and pr.is_sellable
-     and case
-       when o.daypart = 'breakfast' then
-         case c.course
-           when 'main'  then pr.name in ('Pancakes','Omelette','Halloumi Sandwich')
-           when 'side'  then pr.name in ('Fries')
-           when 'drink' then pr.name in ('Coffee','Fresh Orange Juice','Water')
-           else pr.name in ('Brownie') end
-       else
-         case c.course
-           when 'main'  then pr.name in ('Classic Burger','Cheeseburger','Mushroom Swiss Burger','Chicken Burger','Veggie Burger','Chicken Sub','Caesar Salad','Garden Salad','Grilled Chicken Salad')
-           when 'side'  then pr.name in ('Fries','Curly Fries','Onion Rings')
-           when 'drink' then pr.name in ('Soft Drink','Water','Fresh Orange Juice','Milkshake','Coffee')
-           else pr.name in ('Brownie','Cheesecake') end
-     end
+    join public.product_categories pc on pc.id = pr.category_id
+   where pr.company_id='aa510000-0000-4000-8000-0000000000c0' and pr.is_sellable and pr.is_active
+     and case c.course
+       when 'main'    then pc.name in ('Burgers','Angus','Sandwiches','Salads','Platters','Pasta','Go Light','Kids')
+       when 'side'    then pc.name = 'Lets get started'
+       when 'drink'   then pc.name = 'Drinks'
+       else pc.name = 'Desserts' end
    order by (
-     public.seed_rand(o.id::text || c.course || pr.name) * case pr.name
-       when 'Classic Burger' then 3.2 when 'Cheeseburger' then 3.0
-       when 'Chicken Burger' then 2.4 when 'Mushroom Swiss Burger' then 1.6
-       when 'Veggie Burger' then 0.7  when 'Chicken Sub' then 1.3
-       when 'Caesar Salad' then 0.9   when 'Garden Salad' then 0.5
-       when 'Grilled Chicken Salad' then 1.0
-       when 'Fries' then 3.6          when 'Curly Fries' then 1.7
-       when 'Onion Rings' then 1.0
-       when 'Soft Drink' then 3.2     when 'Water' then 1.8
-       when 'Fresh Orange Juice' then 1.2 when 'Milkshake' then 1.4
-       when 'Coffee' then 1.6
-       when 'Brownie' then 1.0        when 'Cheesecake' then 0.8
-       when 'Pancakes' then 2.2       when 'Omelette' then 2.0
-       when 'Halloumi Sandwich' then 1.4
+     public.seed_rand(o.id::text || c.course || pr.name) *
+     -- popularity: the classics carry the mix, the specials ride along
+     case
+       when pr.name in ('Classic Burger','Chicken Burger') then 3.4
+       when pr.name in ('Route 66 Burger','B.B.B. Beef Burger','Cuban Burger','Mighty Chicken Burger') then 2.2
+       when pr.name like 'Angus%' then 1.1
+       when pc.name = 'Kids' then 0.9
+       when pc.name = 'Go Light' then 0.8
+       when pr.name in ('Skin-on Fries','Curly Fries') then 3.6
+       when pr.name in ('Mozzarella Sticks','Chicken Strips','Buffalo Wings') then 2.0
+       when pr.name in ('Soft Drink','Mineral Water') then 3.2
+       when pr.name in ('Old Time Milkshake','Fresh Lemonade','Iced Tea') then 1.6
+       when pr.name in ('Local Beer','Imported Beer','Red Bull') then 0.7
+       when pr.name in ('Oreo Cheesecake','Marbled Mud Pie','Brownie Temptation') then 1.8
        else 1.0 end
    ) desc
    limit 1
