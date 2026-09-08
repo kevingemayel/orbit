@@ -165,7 +165,9 @@
       why: "A green Paid pill was drawing 2.79:1 green on pale green, and amber on cream was 2.82:1. Both are far under the 4.5:1 EN 301 549 and WCAG AA floor for body text, which is what closes UK and EU public sector. The fills are fine; it is the WORDS that were unreadable, so there is a separate token for the text and every text use must take it.",
       run: function (src, css) {
         var sheet = css || src;
-        var raw = (sheet.match(/color:var\(--(?:good|warn|bad)[,)]/g) || []);
+        // the `color` property only: border-color and background-color are
+        // fills, and a fill at that contrast is fine
+        var raw = (sheet.match(/(?:^|[;{\s"'>])color:\s*var\(--(?:good|warn|bad)[,)]/g) || []);
         if (raw.length) return bad(raw.length + " place(s) still use a status fill colour as text");
         var t = (sheet.match(/--good-t:/g) || []).length;
         if (t < 5) return bad("only " + t + " theme(s) define the readable text tokens");

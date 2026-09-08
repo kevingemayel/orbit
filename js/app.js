@@ -1188,6 +1188,7 @@
       { i: "box", n: "Materials & Remnants", l: "Costs", d: "Made-to-size material for a job, including usable offcuts." }
     ] },
     kitchen: { intro: "Every screen in the <b>Kitchen</b> app, grouped the way the menu groups them:", list: [
+      { i: "calendar", n: "The book", l: "Service", d: "Tonight's bookings in time order, with covers, who is late, and one tap to seat a party." },
       { i: "grid", n: "Floor", l: "Service", d: "The floor plan: tap a table, take the order, send it to the kitchen." },
       { i: "clock", n: "Kitchen display", l: "Service", d: "Tickets on a wall screen with a live clock, colouring as they approach their target." },
       { i: "gauge", n: "Service times", l: "Service", d: "How long from sending a ticket to bumping it, including the 90th percentile." },
@@ -1510,7 +1511,7 @@
     kitchen: {
       name: "Kitchen", icon: "🍽", color: "#b45309", color2: "#92400e", home: "kitchen.floor",
       menus: [
-        { label: "Service", items: [["Floor", "kitchen.floor"], ["Kitchen display", "kitchen.kds"], ["Service times", "kitchen.times"]] },
+        { label: "Service", items: [["The book", "kitchen.book"], ["Floor", "kitchen.floor"], ["Kitchen display", "kitchen.kds"], ["Service times", "kitchen.times"]] },
         { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
         { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
@@ -1518,7 +1519,7 @@
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
         { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"]] },
         { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
-        { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["Reservations", "dlv.reservations"]] },
+        { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["All bookings", "dlv.reservations"]] },
         { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] }
       ]
@@ -1656,7 +1657,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -2154,33 +2155,229 @@
     setupBannerInject();
     invitesBannerInject();
   }
-  // Personal work-desk: my open tasks, upcoming calendar, my alerts, quick actions.
+  // ===========================================================================
+  // MY DESK
+  //
+  // The first screen of the day. Not a dashboard of numbers about the company:
+  // a list of what is waiting on THIS person, in the order it should be dealt
+  // with, and the two or three things they are most likely to open next.
+  //
+  // Everything here is scoped to the signed-in user. If nothing is waiting, it
+  // says so plainly rather than filling the space with charts.
+  // ===========================================================================
+  var _myEmpCache = {};
+  async function myEmployee() {
+    var k = S.company.id + "|" + (S.user && S.user.id);
+    if (_myEmpCache[k] !== undefined) return _myEmpCache[k];
+    var r = (await sb.from("hr_employees").select("id,name,work_email").eq("company_id", S.company.id).eq("user_id", S.user.id).maybeSingle()).data || null;
+    _myEmpCache[k] = r;
+    return r;
+  }
+  function wdMonday() {
+    var d = new Date(); d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+    return d;
+  }
   async function renderWorkdesk() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Desk") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
-    var hr = new Date().getHours(); var greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
-    var myEmp = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("user_id", S.user.id).maybeSingle()).data;
-    var tasks = [];
-    if (myEmp) tasks = (await sb.from("project_tasks").select("id,name,project_id,date_deadline,board_stage,priority, projects:project_id(name)").eq("company_id", S.company.id).eq("assignee_id", myEmp.id).neq("board_stage", "done").is("completed_at", null).order("date_deadline", { ascending: true, nullsFirst: false }).limit(12)).data || [];
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Desk") + '<div class="gap"></div><button class="o-filtbtn" id="wd-refresh">Refresh</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading your desk...</div></div></div>';
+    wireBc();
+    document.getElementById("wd-refresh").onclick = function () { renderWorkdesk(); };
+
+    var uid = S.user && S.user.id, email = (S.user && S.user.email) || "";
+    var myEmp = await myEmployee();
+    var mon = wdMonday(), monIso = mon.toISOString().slice(0, 10);
     var soon = isoShift(14);
-    var events = (await sb.from("calendar_events").select("id,title,event_date,start_time,location,done,assigned_to").eq("company_id", S.company.id).gte("event_date", today()).lte("event_date", soon).neq("done", true).order("event_date").order("start_time").limit(12)).data || [];
-    var notifs = (await sb.from("notifications").select("*").eq("company_id", S.company.id).or("user_id.eq." + S.user.id + ",user_id.is.null").order("created_at", { ascending: false }).limit(8)).data || [];
+
+    // Everything the desk needs, in one round of requests rather than a waterfall.
+    var res = await Promise.all([
+      myEmp ? sb.from("project_tasks").select("id,name,project_id,date_deadline,board_stage,priority, projects:project_id(name)")
+        .eq("company_id", S.company.id).eq("assignee_id", myEmp.id).neq("board_stage", "done").is("completed_at", null)
+        .order("date_deadline", { ascending: true, nullsFirst: false }).limit(30) : Promise.resolve({ data: [] }),
+      sb.from("calendar_events").select("id,title,event_date,start_time,location,done,assigned_to")
+        .eq("company_id", S.company.id).gte("event_date", today()).lte("event_date", soon).neq("done", true)
+        .order("event_date").order("start_time").limit(12),
+      sb.from("notifications").select("*").eq("company_id", S.company.id)
+        .or("user_id.eq." + uid + ",user_id.is.null").eq("is_read", false)
+        .order("created_at", { ascending: false }).limit(10),
+      sb.from("approvals").select("*, approval_rules(approver_employee_id, hr_employees(name,user_id))")
+        .eq("company_id", S.company.id).eq("status", "pending").order("created_at").limit(40),
+      sb.from("timesheets").select("work_date,hours,approved").eq("company_id", S.company.id)
+        .eq("user_id", uid).gte("work_date", monIso).limit(200),
+      sb.from("approvals").select("id,doc_type,doc_number,doc_amount,approver_note,decided_at,link_action")
+        .eq("company_id", S.company.id).eq("status", "rejected").eq("requested_by", email)
+        .order("decided_at", { ascending: false }).limit(5)
+    ]);
+    var tasks = res[0].data || [], events = res[1].data || [], notifs = res[2].data || [];
+    var pending = res[3].data || [], myHours = res[4].data || [], rejected = res[5].data || [];
+
+    var mineAppr = pending.filter(function (r) {
+      var rr = r.approval_rules;
+      if (!rr || !rr.approver_employee_id) return true;
+      return rr.hr_employees && rr.hr_employees.user_id === uid;
+    });
+    var td = today();
+    var overdue = tasks.filter(function (t) { return t.date_deadline && t.date_deadline < td; });
+    var dueToday = tasks.filter(function (t) { return t.date_deadline === td; });
+    var todayEvents = events.filter(function (e) { return e.event_date === td; });
+
+    // hours logged per weekday, so a gap is visible rather than remembered
+    var byDay = {}; myHours.forEach(function (h) { byDay[h.work_date] = (byDay[h.work_date] || 0) + Number(h.hours || 0); });
+    var week = [], weekTotal = 0;
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(mon); d.setDate(mon.getDate() + i);
+      var iso = d.toISOString().slice(0, 10), h = byDay[iso] || 0;
+      weekTotal += h;
+      week.push({ iso: iso, h: h, label: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][i], future: iso > td, isToday: iso === td });
+    }
+    var maxH = Math.max(8, Math.ceil(Math.max.apply(null, week.map(function (w) { return w.h; }))));
+
+    // ---- what is waiting on this person, most urgent first -----------------
+    var items = [];
+    if (mineAppr.length) items.push({
+      k: "appr", tone: "act", n: mineAppr.length,
+      t: mineAppr.length === 1 ? "1 approval is waiting on you" : mineAppr.length + " approvals are waiting on you",
+      d: mineAppr.slice(0, 3).map(function (a) { return (a.doc_number || APPR_DOC_LABEL[a.doc_type] || a.doc_type); }).join(", ") +
+        (mineAppr.length > 3 ? " and " + (mineAppr.length - 3) + " more" : ""),
+      go: "approvals.inbox", cta: "Review"
+    });
+    if (overdue.length) items.push({
+      k: "over", tone: "bad", n: overdue.length,
+      t: overdue.length === 1 ? "1 task is past its date" : overdue.length + " tasks are past their date",
+      d: overdue.slice(0, 3).map(function (t) { return t.name; }).join(", ") + (overdue.length > 3 ? "..." : ""),
+      task: overdue[0], cta: "Open the oldest"
+    });
+    if (rejected.length) items.push({
+      k: "rej", tone: "bad", n: rejected.length,
+      t: rejected.length === 1 ? "1 of your documents was rejected" : rejected.length + " of your documents were rejected",
+      d: rejected.slice(0, 2).map(function (r) { return (r.doc_number || r.doc_type) + (r.approver_note ? " - " + r.approver_note : ""); }).join("; "),
+      go: rejected[0].link_action || "approvals.inbox", cta: "See why"
+    });
+    if (dueToday.length) items.push({
+      k: "due", tone: "act", n: dueToday.length,
+      t: dueToday.length === 1 ? "1 task is due today" : dueToday.length + " tasks are due today",
+      d: dueToday.slice(0, 3).map(function (t) { return t.name; }).join(", "),
+      task: dueToday[0], cta: "Open"
+    });
+    // a missing weekday is the timesheet gap people actually forget
+    var gaps = week.filter(function (w) { return !w.future && !w.h && w.label !== "Sat" && w.label !== "Sun"; });
+    if (gaps.length && canView("projects")) items.push({
+      k: "ts", tone: "warn", n: gaps.length,
+      t: gaps.length === 1 ? "No hours logged for " + gaps[0].label : "No hours logged on " + gaps.length + " days this week",
+      d: gaps.map(function (w) { return w.label; }).join(", ") + ". Unlogged time cannot be charged to a job.",
+      time: true, cta: "Log time"
+    });
+    if (todayEvents.length) items.push({
+      k: "ev", tone: "act", n: todayEvents.length,
+      t: todayEvents.length === 1 ? "1 thing in the diary today" : todayEvents.length + " things in the diary today",
+      d: todayEvents.map(function (e) { return (e.start_time ? String(e.start_time).slice(0, 5) + " " : "") + e.title; }).join(", "),
+      go: "cal.month", app: "calendar", cta: "Open the calendar"
+    });
+
+    // ---- quick actions the person can actually reach ------------------------
+    var qaAll = [
+      ["New quotation", "so.list", "sales"], ["New invoice", "inv.out", "sales"],
+      ["Enter a bill", "inv.in", "purchase"], ["Log time", "ts.list", "project"],
+      ["The book", "kitchen.book", "kitchen"], ["Floor", "kitchen.floor", "kitchen"],
+      ["Open register", "pos.terminal", "pos"], ["Service ticket", "svc.tickets", "service"],
+      ["Calendar", "cal.month", "calendar"], ["Contacts", "contacts", "contacts"]
+    ].filter(function (q) { return APPS[q[2]] && canViewApp(q[2]); }).slice(0, 6);
+
+    var hr = new Date().getHours();
+    var greet = hr < 12 ? "Good morning" : hr < 18 ? "Good afternoon" : "Good evening";
+    var name = (myEmp && myEmp.name) ? myEmp.name.split(" ")[0] : (email ? email.split("@")[0] : "");
     var body = document.getElementById("o-body");
-    function card(title, inner, extra) { return '<div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3 style="margin:0;font-size:15px">' + title + '</h3>' + (extra || "") + '</div>' + inner + '</div>'; }
-    var taskInner = tasks.length ? '<div class="o-rt-wrap"><table class="o-lines"><tbody>' + tasks.map(function (t) { var over = t.date_deadline && t.date_deadline < today(); return '<tr class="wd-task" data-id="' + t.id + '" data-proj="' + t.project_id + '" style="cursor:pointer"><td><b>' + esc(t.name) + '</b><div class="muted" style="font-size:11px">' + esc(t.projects ? t.projects.name : "") + '</div></td><td class="num"><span class="' + (over ? "badge draft" : "muted") + '">' + esc(t.date_deadline || "-") + '</span></td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="muted" style="padding:6px">' + (myEmp ? "No open tasks assigned to you." : "Link your user to an employee record to see your tasks here.") + '</div>';
-    var evInner = events.length ? '<div class="o-rt-wrap"><table class="o-lines"><tbody>' + events.map(function (e) { return '<tr class="wd-ev" data-id="' + e.id + '" style="cursor:pointer"><td style="width:92px" class="muted">' + esc(e.event_date) + (e.start_time ? " " + esc(String(e.start_time).slice(0, 5)) : "") + '</td><td><b>' + esc(e.title) + '</b>' + (e.location ? ' <span class="muted">' + esc(e.location) + '</span>' : '') + '</td></tr>'; }).join("") + '</tbody></table></div>' : '<div class="muted" style="padding:6px">Nothing scheduled in the next two weeks.</div>';
-    var alertInner = notifs.length ? notifs.map(function (n) { return '<div class="wd-alert" data-action="' + esc(n.link_action || "") + '" data-id="' + esc(n.link_id || "") + '" style="padding:7px 0;border-bottom:1px solid var(--line);cursor:' + (n.link_action ? "pointer" : "default") + '"><b style="font-size:13px">' + esc(n.title || "") + '</b>' + (n.body ? '<div class="muted" style="font-size:12px">' + esc(n.body) + '</div>' : '') + '</div>'; }).join("") : '<div class="muted" style="padding:6px">No alerts. All clear.</div>';
-    var qa = [["New quotation", "so.list", "sales"], ["New invoice", "inv.out", "sales"], ["Service ticket", "svc.tickets", "service"], ["Open register", "pos.terminal", "pos"], ["Calendar", "cal.month", "calendar"], ["Contacts", "contacts", "crm"]];
-    var qaInner = '<div style="display:flex;flex-wrap:wrap;gap:8px">' + qa.map(function (q) { return '<button class="o-filtbtn wd-qa" data-go="' + q[1] + '" data-app="' + q[2] + '">' + esc(q[0]) + '</button>'; }).join("") + '</div>';
-    body.innerHTML = '<div style="margin-bottom:14px"><div style="font-family:Archivo,sans-serif;font-size:22px;font-weight:800">' + greet + (myEmp && myEmp.name ? ", " + esc(myEmp.name.split(" ")[0]) : "") + '</div><div class="muted">' + new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + '</div></div>' +
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">' +
-      '<div style="display:flex;flex-direction:column;gap:14px">' + card("My tasks", taskInner) + card("Upcoming", evInner) + '</div>' +
-      '<div style="display:flex;flex-direction:column;gap:14px">' + card("Alerts", alertInner) + card("Quick actions", qaInner) + '</div>' +
+
+    function taskRow(t) {
+      var over = t.date_deadline && t.date_deadline < td;
+      return '<button class="wd-item wd-task" data-id="' + t.id + '" data-proj="' + t.project_id + '">' +
+        '<span class="wd-item-m"><b>' + esc(t.name) + '</b>' +
+        '<span class="wd-sub">' + esc(t.projects ? t.projects.name : "No project") + '</span></span>' +
+        '<span class="badge ' + (over ? "unpaid" : t.date_deadline === td ? "partial" : "draft") + '">' +
+        esc(t.date_deadline || "no date") + '</span></button>';
+    }
+
+    body.innerHTML = '<div class="wd">' +
+      '<header class="wd-head"><h1>' + greet + (name ? ", " + esc(name) : "") + '</h1>' +
+      '<p>' + esc(new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })) +
+      ' &middot; ' + esc(S.company.name) + '</p></header>' +
+
+      '<section class="wd-sec"><h2>' + (items.length ? "Waiting on you" : "Nothing is waiting on you") + '</h2>' +
+      (items.length
+        ? '<div class="wd-acts">' + items.map(function (x, i) {
+          return '<div class="wd-act ' + x.tone + '" data-i="' + i + '">' +
+            '<span class="wd-act-n">' + x.n + '</span>' +
+            '<span class="wd-act-b"><b>' + esc(x.t) + '</b><span>' + esc(x.d) + '</span></span>' +
+            '<button class="o-filtbtn wd-go" data-i="' + i + '">' + esc(x.cta) + '</button></div>';
+        }).join("") + '</div>'
+        : '<div class="wd-clear">No approvals, no overdue work, nothing due today. ' +
+          (weekTotal ? "You have logged " + weekTotal.toFixed(1) + " hours this week." : "") + '</div>') +
+      '</section>' +
+
+      '<div class="wd-cols">' +
+      '<section class="wd-sec"><h2>My open work' + (tasks.length ? ' <span class="wd-count">' + tasks.length + '</span>' : "") + '</h2>' +
+      (tasks.length
+        ? '<div class="wd-list">' + tasks.slice(0, 8).map(taskRow).join("") + '</div>' +
+          (tasks.length > 8 ? '<button class="o-filtbtn wd-more" data-go="tasks.all">See all ' + tasks.length + '</button>' : "")
+        : '<div class="wd-empty">' + (myEmp
+          ? "Nothing assigned to you. Work assigned on a project board appears here."
+          : "Your login is not linked to an employee record yet, so tasks cannot be matched to you. Someone with access to <b>People</b> can set that on your employee record.") + '</div>') +
+      '</section>' +
+
+      '<section class="wd-sec"><h2>My week</h2>' +
+      '<div class="wd-week">' + week.map(function (w) {
+        return '<div class="wd-day' + (w.isToday ? " on" : "") + (w.future ? " fut" : "") + '">' +
+          '<span class="wd-bar" style="height:' + Math.round((w.h / maxH) * 46) + 'px"></span>' +
+          '<span class="wd-h">' + (w.h ? (Math.round(w.h * 10) / 10) : "") + '</span>' +
+          '<span class="wd-d">' + w.label + '</span></div>';
+      }).join("") + '</div>' +
+      '<div class="wd-weeksum"><b>' + weekTotal.toFixed(1) + ' h</b> logged since Monday' +
+      '<button class="o-filtbtn" id="wd-log">Log time</button></div>' +
+      '</section></div>' +
+
+      '<div class="wd-cols">' +
+      '<section class="wd-sec"><h2>Coming up</h2>' +
+      (events.length
+        ? '<div class="wd-list">' + events.slice(0, 6).map(function (e) {
+          return '<button class="wd-item wd-ev"><span class="wd-when">' + esc(e.event_date === td ? "Today" : e.event_date) +
+            (e.start_time ? '<span>' + esc(String(e.start_time).slice(0, 5)) + '</span>' : "") + '</span>' +
+            '<span class="wd-item-m"><b>' + esc(e.title) + '</b>' +
+            (e.location ? '<span class="wd-sub">' + esc(e.location) + '</span>' : "") + '</span></button>';
+        }).join("") + '</div>'
+        : '<div class="wd-empty">Nothing in the next two weeks.</div>') + '</section>' +
+
+      '<section class="wd-sec"><h2>Alerts</h2>' +
+      (notifs.length
+        ? '<div class="wd-list">' + notifs.map(function (n) {
+          return '<button class="wd-item wd-alert" data-action="' + esc(n.link_action || "") + '">' +
+            '<span class="wd-item-m"><b>' + esc(n.title || "") + '</b>' +
+            (n.body ? '<span class="wd-sub">' + esc(n.body) + '</span>' : "") + '</span>' +
+            '<span class="wd-ago">' + esc(agWhen(n.created_at)) + '</span></button>';
+        }).join("") + '</div>'
+        : '<div class="wd-empty">Nothing unread.</div>') + '</section></div>' +
+
+      (qaAll.length ? '<section class="wd-sec"><h2>Start something</h2><div class="wd-qa">' +
+        qaAll.map(function (q) { return '<button class="wd-qab" data-go="' + q[1] + '" data-app="' + q[2] + '">' + esc(q[0]) + '</button>'; }).join("") +
+        '</div></section>' : "") +
       '</div>';
-    body.querySelectorAll(".wd-task").forEach(function (r) { r.onclick = function () { try { AGS.proj = r.dataset.proj; } catch (e) { } openTaskPanel(r.dataset.id, r.dataset.proj, function () { renderWorkdesk(); }); }; });
+
+    function openTask(id, proj) { try { AGS.proj = proj; } catch (e) { } openTaskPanel(id, proj, function () { renderWorkdesk(); }); }
+    body.querySelectorAll(".wd-go").forEach(function (b) {
+      b.onclick = function () {
+        var x = items[+b.dataset.i]; if (!x) return;
+        if (x.task) return openTask(x.task.id, x.task.project_id);
+        if (x.time) return openTimesheetModal(null, function () { renderWorkdesk(); });
+        if (x.app) { S.app = x.app; applyAppColor(); }
+        if (x.go) go(x.go);
+      };
+    });
+    body.querySelectorAll(".wd-task").forEach(function (r) { r.onclick = function () { openTask(r.dataset.id, r.dataset.proj); }; });
+    body.querySelectorAll(".wd-ev").forEach(function () { });
     body.querySelectorAll(".wd-ev").forEach(function (r) { r.onclick = function () { S.app = "calendar"; applyAppColor(); go("cal.month"); }; });
     body.querySelectorAll(".wd-alert").forEach(function (r) { r.onclick = function () { if (r.dataset.action) go(r.dataset.action); }; });
-    body.querySelectorAll(".wd-qa").forEach(function (b) { b.onclick = function () { S.app = b.dataset.app; applyAppColor(); go(b.dataset.go); }; });
+    body.querySelectorAll(".wd-qab").forEach(function (b) { b.onclick = function () { S.app = b.dataset.app; applyAppColor(); go(b.dataset.go); }; });
+    var _wl = document.getElementById("wd-log"); if (_wl) _wl.onclick = function () { openTimesheetModal(null, function () { renderWorkdesk(); }); };
+    var _wm = body.querySelector(".wd-more"); if (_wm) _wm.onclick = function () { S.app = "project"; applyAppColor(); go("ts.list"); };
   }
   function renderAppStore() {
     S.app = null; S.action = null;
@@ -3330,6 +3527,7 @@
       case "fr.suppliers": return renderList(cfgApprovedSuppliers());
       case "hr.labour": return renderList(cfgLabourStandards());
       case "hr.forecast": return renderList(cfgForecasts());
+      case "kitchen.book": return renderResBook();
       case "kitchen.floor": return renderFloor();
       case "kitchen.kds": return renderKDS();
       case "kitchen.times": return renderServiceTimes();
@@ -14749,7 +14947,11 @@
     document.getElementById("ts-cancel").onclick = function () { m.remove(); };
     document.getElementById("ts-save").onclick = async function () {
       var hours = parseFloat(document.getElementById("ts-hours").value); if (!(hours > 0)) { toast("Enter the hours worked"); return; }
-      var row = { company_id: S.company.id, project_id: document.getElementById("ts-proj").value, task_id: document.getElementById("ts-task").value || null, work_date: document.getElementById("ts-date").value, hours: hours, name: document.getElementById("ts-desc").value.trim() };
+      // Attribute the hours. Both columns existed and neither was ever written,
+      // so job cost carried time that belonged to nobody and no one could see
+      // their own week.
+      var me = await myEmployee();
+      var row = { company_id: S.company.id, project_id: document.getElementById("ts-proj").value, task_id: document.getElementById("ts-task").value || null, work_date: document.getElementById("ts-date").value, hours: hours, name: document.getElementById("ts-desc").value.trim(), user_id: (S.user && S.user.id) || null, employee_id: me ? me.id : null };
       var r = await sb.from("timesheets").insert(row);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       m.remove(); toast("Time logged"); if (onDone) onDone(); else renderView();
@@ -18907,14 +19109,23 @@
     var price = Number(p.list_price || 0) + Number(extra || 0);
     if (!SERVICE.order) {
       var n = "T" + Date.now().toString().slice(-6);
+      // a party seated from the book arrives with its name, covers and note
+      var seat = (S._resSeat && S._resSeat.tableless !== true) ? S._resSeat : null;
       var made = await svcWrite("pos_orders", "insert", {
         company_id: S.company.id, store_id: SERVICE.store || t.store_id || null, table_id: t.id,
         order_type: "dine_in", status: "open", number: n, subtotal: 0, tax: 0, total: 0,
         created_at: new Date().toISOString(),
-        server_name: (S.user && S.user.email) || null, guest_count: t.guest_count || null
+        server_name: (S.user && S.user.email) || null,
+        guest_count: (seat && seat.covers) || t.guest_count || null,
+        guest_name: (seat && seat.guest) || null,
+        allergy_note: (seat && seat.note) || null
       });
       if (!made) return;
       SERVICE.order = made;
+      if (seat) {
+        if (seat.resId) await svcWrite("reservations", "update", { order_id: made.id }, { match: { id: seat.resId } });
+        S._resSeat = null;
+      }
       await svcWrite("store_tables", "update", { status: "seated", seated_at: new Date().toISOString(), current_order_id: made.id }, { match: { id: t.id } });
     }
     var line = {
@@ -19127,6 +19338,204 @@
       if (!(await svcWrite("pos_orders", "update", row, { match: { id: SERVICE.order.id } }))) return;
       Object.assign(SERVICE.order, row); m.remove(); toast("Saved");
     });
+  }
+
+  // --------------------------------------------------------------------------
+  // THE BOOK
+  //
+  // Reservations were a table and a generic list, filed under Delivery. No
+  // restaurant keeps bookings that way. The book is read one service at a time,
+  // in time order: who is due, who is late, how many covers are committed, and
+  // one move to put a party on a table. Seating a booking hands straight over
+  // to the order pad, which is the only reason the screen exists.
+  // --------------------------------------------------------------------------
+  var RES_STATUS = { booked: "Booked", seated: "Seated", no_show: "No show", cancelled: "Cancelled", waitlist: "Waitlist", finished: "Finished" };
+  function resDay(d) { return (d || new Date().toISOString().slice(0, 10)); }
+  function resTime(iso) { if (!iso) return ""; var d = new Date(iso); return hhmm(d); }
+  async function renderResBook() {
+    svcStopTimer();
+    var day = S._resDay || today();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("The book") + '<div class="gap"></div>' +
+      '<button class="o-filtbtn" id="rb-prev" aria-label="Previous day">&lsaquo;</button>' +
+      '<input id="rb-day" type="date" class="o-filtbtn" value="' + esc(day) + '" style="width:150px">' +
+      '<button class="o-filtbtn" id="rb-next" aria-label="Next day">&rsaquo;</button>' +
+      '<span id="rb-store"></span><button class="o-new" id="rb-add">New booking</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Opening the book...</div></div></div>';
+    wireBc();
+    var stores = (await fnbCo("stores", "id,name").eq("is_active", true).order("name")).data || [];
+    if (!SERVICE.store && stores.length) SERVICE.store = stores[0].id;
+    document.getElementById("rb-store").innerHTML = stores.length > 1
+      ? '<select id="rb-storepick" class="o-filtbtn" aria-label="Store">' + stores.map(function (s) { return '<option value="' + s.id + '"' + (SERVICE.store === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select>' : "";
+    var sp = document.getElementById("rb-storepick");
+    if (sp) sp.onchange = function () { SERVICE.store = this.value; renderResBook(); };
+    function shift(n) { var d = new Date(day + "T12:00:00"); d.setDate(d.getDate() + n); S._resDay = d.toISOString().slice(0, 10); renderResBook(); }
+    document.getElementById("rb-prev").onclick = function () { shift(-1); };
+    document.getElementById("rb-next").onclick = function () { shift(1); };
+    document.getElementById("rb-day").onchange = function () { S._resDay = this.value || today(); renderResBook(); };
+    document.getElementById("rb-add").onclick = function () { openResModal(null, day); };
+    await paintResBook(day);
+    // the book re-reads itself, because a host is looking at it all evening
+    SERVICE.timer = setInterval(function () {
+      if (!document.getElementById("rb-list")) { svcStopTimer(); return; }
+      paintResBook(S._resDay || today());
+    }, 30000);
+  }
+  async function paintResBook(day) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var from = day + "T00:00:00", to = day + "T23:59:59";
+    var q = fnbCo("reservations", "*, store_tables(name,seats)").gte("reserved_for", from).lte("reserved_for", to);
+    if (SERVICE.store) q = q.eq("store_id", SERVICE.store);
+    var rows = (await q.order("reserved_for")).data || [];
+    SERVICE.tables = (await fnbCo("store_tables", "id,name,seats,zone,status,store_id").eq("is_active", true).order("sort")).data || [];
+    var live = rows.filter(function (r) { return r.status !== "cancelled" && r.status !== "no_show"; });
+    var covers = live.reduce(function (s, r) { return s + (Number(r.party_size) || 0); }, 0);
+    var seated = rows.filter(function (r) { return r.status === "seated"; }).length;
+    var waits = rows.filter(function (r) { return r.status === "waitlist"; });
+    var booked = rows.filter(function (r) { return r.status !== "waitlist"; });
+    var now = new Date();
+    var isToday = day === today();
+    if (!rows.length) {
+      body.innerHTML = '<div class="rb-wrap"><div class="rb-sum"><div class="rb-stat"><b>0</b><span>covers booked</span></div></div>' +
+        '<div class="o-empty2"><div class="o-empty2-t">Nothing in the book for ' + esc(day) + '</div>' +
+        '<div class="o-empty2-h">Take a booking with <b>New booking</b>, or use the same button for a walk-in so the covers are still counted.</div></div></div>';
+      return;
+    }
+    function card(r) {
+      var t = r.reserved_for ? new Date(r.reserved_for) : null;
+      // late = due more than ten minutes ago and still not sat down
+      var late = isToday && t && r.status === "booked" && (now - t) > 600000;
+      var due = isToday && t && r.status === "booked" && Math.abs(now - t) <= 600000;
+      return '<div class="rb-row' + (late ? " late" : due ? " due" : "") + '" data-r="' + r.id + '">' +
+        '<div class="rb-t">' + esc(resTime(r.reserved_for)) + (late ? '<span class="rb-flag">late</span>' : due ? '<span class="rb-flag due">now</span>' : "") + '</div>' +
+        '<div class="rb-g"><b>' + esc(r.guest_name || "Guest") + '</b>' +
+        (r.phone ? '<span class="rb-sub">' + esc(r.phone) + '</span>' : "") +
+        (r.occasion ? '<span class="rb-occ">' + esc(r.occasion) + '</span>' : "") +
+        (r.note ? '<span class="rb-sub">' + esc(r.note) + '</span>' : "") + '</div>' +
+        '<div class="rb-p">' + (Number(r.party_size) || 0) + '<span>covers</span></div>' +
+        '<div class="rb-tbl">' + (r.store_tables ? esc(r.store_tables.name) : '<span class="muted">unassigned</span>') + '</div>' +
+        '<div class="rb-st"><span class="badge ' + (r.status === "seated" ? "paid" : r.status === "no_show" || r.status === "cancelled" ? "unpaid" : "draft") + '">' + esc(RES_STATUS[r.status] || r.status) + '</span></div>' +
+        '<div class="rb-a">' +
+        (r.status === "booked" || r.status === "waitlist"
+          ? '<button class="o-filtbtn rb-seat" data-r="' + r.id + '">Seat</button>' +
+            '<button class="o-filtbtn rb-ns" data-r="' + r.id + '" title="Mark as a no show">No show</button>'
+          : "") +
+        '<button class="o-filtbtn rb-edit" data-r="' + r.id + '">Edit</button></div></div>';
+    }
+    body.innerHTML = '<div class="rb-wrap" id="rb-list">' +
+      '<div class="rb-sum">' +
+      '<div class="rb-stat"><b>' + covers + '</b><span>covers booked</span></div>' +
+      '<div class="rb-stat"><b>' + live.length + '</b><span>bookings</span></div>' +
+      '<div class="rb-stat"><b>' + seated + '</b><span>seated</span></div>' +
+      (waits.length ? '<div class="rb-stat"><b>' + waits.length + '</b><span>waiting</span></div>' : "") +
+      '</div>' +
+      '<div class="rb-tbl-h"><span>Time</span><span>Guest</span><span>Party</span><span>Table</span><span>Status</span><span></span></div>' +
+      booked.map(card).join("") +
+      (waits.length ? '<div class="rb-sec">Waitlist</div>' + waits.map(card).join("") : "") +
+      '</div>';
+    body.querySelectorAll(".rb-edit").forEach(function (b) {
+      b.onclick = function () { openResModal(rows.filter(function (r) { return r.id === b.dataset.r; })[0], day); };
+    });
+    body.querySelectorAll(".rb-ns").forEach(function (b) {
+      b.onclick = async function () {
+        await svcWrite("reservations", "update", { status: "no_show" }, { match: { id: b.dataset.r } });
+        toast("Marked as a no show"); paintResBook(day);
+      };
+    });
+    body.querySelectorAll(".rb-seat").forEach(function (b) {
+      b.onclick = function () { seatReservation(rows.filter(function (r) { return r.id === b.dataset.r; })[0]); };
+    });
+  }
+  // Seating is the whole point of the book: pick a table big enough that is not
+  // already carrying a party, put the booking on it, and open the pad.
+  async function seatReservation(r) {
+    if (!r) return;
+    var party = Number(r.party_size) || 2;
+    var mine = (SERVICE.tables || []).filter(function (t) { return !r.store_id || t.store_id === r.store_id; });
+    var freeT = mine.filter(function (t) { return (t.status || "free") === "free" || t.status === "dirty"; });
+    var fits = freeT.filter(function (t) { return !t.seats || Number(t.seats) >= party; });
+    var opts = (fits.length ? fits : freeT).concat(mine.filter(function (t) { return freeT.indexOf(t) < 0; }));
+    if (!mine.length) { toast("No tables set up for this store yet - add them under Kitchen > Estate > Tables"); return; }
+    var inner =
+      '<div class="o-note">' + esc(r.guest_name || "Guest") + ', ' + party + ' covers' +
+      (r.note ? '. ' + esc(r.note) : "") + (r.occasion ? '. <b>' + esc(r.occasion) + '</b>' : "") + '</div>' +
+      '<div><label>Table</label><select id="rs-tbl">' + opts.map(function (t) {
+        var busy = (t.status || "free") !== "free" && t.status !== "dirty";
+        return '<option value="' + t.id + '"' + (r.table_id === t.id ? " selected" : "") + '>' + esc(t.name) +
+          (t.seats ? " - " + t.seats + " seats" : "") + (t.zone ? " - " + esc(t.zone) : "") +
+          (busy ? " (occupied)" : "") + '</option>';
+      }).join("") + '</select></div>' +
+      (fits.length === 0 && freeT.length ? '<div class="o-note warn">No free table seats ' + party + '. Pick one anyway, or join two together on the floor.</div>' : "");
+    var m = plotModal("Seat " + (r.guest_name || "the party"), inner, async function () {
+      var tid = gv("rs-tbl"); if (!tid) { toast("Pick a table"); return; }
+      var t = mine.filter(function (x) { return x.id === tid; })[0] || {};
+      await svcWrite("reservations", "update", {
+        status: "seated", table_id: tid, seated_at: new Date().toISOString()
+      }, { match: { id: r.id } });
+      await svcWrite("store_tables", "update", {
+        status: "seated", seated_at: new Date().toISOString()
+      }, { match: { id: tid } });
+      m.remove();
+      toast(esc(r.guest_name || "Party") + " seated at " + (t.name || "the table"));
+      // straight to the pad, with the covers and the guest already filled in
+      SERVICE.store = r.store_id || SERVICE.store;
+      S._resSeat = { guest: r.guest_name, covers: party, note: r.note || null, resId: r.id };
+      openTableOrder(tid);
+    });
+  }
+  function openResModal(r, day) {
+    r = r || {};
+    var isNew = !r.id;
+    var when = r.reserved_for ? new Date(r.reserved_for) : null;
+    var dayVal = when ? r.reserved_for.slice(0, 10) : (day || today());
+    var timeVal = when ? hhmm(when) : "19:30";
+    var inner =
+      '<div class="row2"><div><label>Date</label><input id="rz-date" type="date" value="' + esc(dayVal) + '"></div>' +
+      '<div><label>Time</label><input id="rz-time" type="time" value="' + esc(timeVal) + '"></div></div>' +
+      '<div class="row2"><div><label>Guest</label><input id="rz-name" value="' + esc(r.guest_name || "") + '" placeholder="Name on the booking"></div>' +
+      '<div><label>Phone</label><input id="rz-phone" value="' + esc(r.phone || "") + '"></div></div>' +
+      '<div class="row2"><div><label>Party size</label><input id="rz-party" type="number" min="1" value="' + (r.party_size || 2) + '"></div>' +
+      '<div><label>Holds the table for</label><select id="rz-dur">' +
+      [60, 90, 120, 150, 180].map(function (n) { return '<option value="' + n + '"' + ((r.duration_minutes || 90) === n ? " selected" : "") + '>' + n + ' minutes</option>'; }).join("") + '</select></div></div>' +
+      '<div class="row2"><div><label>Came from</label><select id="rz-src">' +
+      [["phone", "Phone"], ["walk_in", "Walk-in"], ["online", "Online"], ["aggregator", "Aggregator"]].map(function (x) {
+        return '<option value="' + x[0] + '"' + ((r.source || "phone") === x[0] ? " selected" : "") + '>' + x[1] + '</option>';
+      }).join("") + '</select></div>' +
+      '<div><label>Status</label><select id="rz-status">' + Object.keys(RES_STATUS).map(function (k) {
+        return '<option value="' + k + '"' + ((r.status || "booked") === k ? " selected" : "") + '>' + RES_STATUS[k] + '</option>';
+      }).join("") + '</select></div></div>' +
+      '<div><label>Occasion</label><input id="rz-occ" value="' + esc(r.occasion || "") + '" placeholder="Birthday, anniversary, first visit"></div>' +
+      '<div><label>Note</label><textarea id="rz-note" rows="2" placeholder="Allergies, a quiet table, a high chair">' + esc(r.note || "") + '</textarea></div>' +
+      (isNew ? '<div class="o-note">A walk-in belongs here too: put it in as a walk-in so the covers are counted and the table is held.</div>' : "");
+    var m = plotModal(isNew ? "New booking" : "Booking", inner, async function () {
+      var nm = gv("rz-name"); if (!nm) { toast("Who is the booking for?"); return; }
+      var d = gv("rz-date") || today(), tm = gv("rz-time") || "19:30";
+      var row = {
+        guest_name: nm, phone: gv("rz-phone") || null,
+        party_size: parseInt(gv("rz-party"), 10) || 2,
+        reserved_for: new Date(d + "T" + tm + ":00").toISOString(),
+        duration_minutes: parseInt(gv("rz-dur"), 10) || 90,
+        source: gv("rz-src") || "phone", status: gv("rz-status") || "booked",
+        occasion: gv("rz-occ") || null,
+        note: (document.getElementById("rz-note").value || "").trim() || null
+      };
+      if (isNew) { row.company_id = S.company.id; row.store_id = SERVICE.store || null; }
+      var ok2 = isNew
+        ? await svcWrite("reservations", "insert", row)
+        : await svcWrite("reservations", "update", row, { match: { id: r.id } });
+      if (!ok2) return;
+      m.remove(); toast(isNew ? "Booked" : "Saved");
+      S._resDay = d; paintResBook(d);
+    });
+    if (!isNew) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.type = "button"; del.style.color = "var(--bad-t)"; del.textContent = "Cancel booking";
+      del.onclick = async function () {
+        await svcWrite("reservations", "update", { status: "cancelled" }, { match: { id: r.id } });
+        m.remove(); toast("Booking cancelled"); paintResBook(day || today());
+      };
+      var foot = m.querySelector(".foot"); if (foot) foot.insertBefore(del, foot.firstChild);
+    }
   }
 
   // --------------------------------------------------------------------------

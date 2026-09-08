@@ -152,6 +152,12 @@ begin
     join public.pos_orders o on o.id = l.order_id
    where o.company_id = p_company and o.status = 'open';
 
+  -- tonight's book, so the first screen an owner opens is not empty either
+  begin
+    perform public.sample_refresh_book(p_company);
+  exception when undefined_function then null;
+  end;
+
   return made || ' live tickets, ' || lines_made || ' lines, clocks anchored to ' || to_char(now(), 'HH24:MI');
 end $fn$;
 
