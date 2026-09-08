@@ -603,8 +603,10 @@
   }
   // ORB-06b: custom fields. Render the admin-defined extra fields for an entity as a form
   // block, pre-filled from the record's `custom` jsonb bag.
-  function customFieldsHTML(entity, rec) {
-    var defs = (S.customDefs && S.customDefs[entity]) || [];
+  // `only` renders just those definitions and returns the bare rows, which is
+  // how the sectioned variant builds one block per section.
+  function customFieldsHTML(entity, rec, only) {
+    var defs = only || (S.customDefs && S.customDefs[entity]) || [];
     if (!defs.length) return "";
     var vals = (rec && rec.custom) || {};
     var rows = defs.map(function (f) {
@@ -621,11 +623,15 @@
         inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="number" type="number" step="any" value="' + esc(String(v)) + '">';
       } else if (f.field_type === "date") {
         inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="date" type="date" value="' + esc(String(v)) + '">';
+      } else if (f.field_type === "textarea") {
+        inp = '<textarea id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="text" rows="3">' + esc(String(v)) + '</textarea>';
       } else {
         inp = '<input id="' + eid + '" class="o-cf" data-key="' + esc(f.field_key) + '" data-type="text" type="text" value="' + esc(String(v)) + '">';
       }
-      return '<div class="o-cf-row"><label for="' + eid + '">' + esc(f.label) + star + '</label>' + inp + '</div>';
+      return '<div class="o-cf-row' + (f.field_type === "textarea" ? " wide" : "") + '"><label for="' + eid + '">' + esc(f.label) + star + '</label>' + inp +
+        (f.hint ? '<span class="o-cf-hint">' + esc(f.hint) + '</span>' : "") + '</div>';
     }).join("");
+    if (only) return rows;
     return '<div class="o-cf-block"><div class="o-cf-head">' + esc(term("More details")) + '</div><div class="o-cf-grid">' + rows + '</div></div>';
   }
   // Read the custom-field inputs back into a plain object for the `custom` jsonb column.
@@ -651,8 +657,26 @@
     }
     return "";
   }
-  var CF_ENTITIES = [["partner", "Contacts"], ["project", "Projects"], ["product", "Products"]];
-  var CF_TYPES = [["text", "Text"], ["number", "Number"], ["date", "Date"], ["select", "Dropdown"], ["checkbox", "Yes / No"]];
+  var CF_ENTITIES = [["partner", "Contacts"], ["project", "Projects"], ["product", "Products"], ["appt_client", "Appoint: the client file"]];
+  var CF_TYPES = [["text", "Text"], ["number", "Number"], ["date", "Date"], ["select", "Dropdown"], ["checkbox", "Yes / No"], ["textarea", "Long text"]];
+  // Same fields, grouped by their section, for a record that is read as a file
+  // rather than filled in as a form. Falls back to one block when nothing is
+  // sectioned, so it behaves like customFieldsHTML for entities that are flat.
+  function customFieldsSectioned(entity, rec) {
+    var defs = (S.customDefs && S.customDefs[entity]) || [];
+    if (!defs.length) return "";
+    var vals = (rec && rec.custom) || {};
+    var order = [], groups = {};
+    defs.forEach(function (f) {
+      var s = f.section || "More details";
+      if (!groups[s]) { groups[s] = []; order.push(s); }
+      groups[s].push(f);
+    });
+    return order.map(function (s) {
+      var inner = customFieldsHTML(entity, { custom: vals }, groups[s]);
+      return inner ? '<div class="o-cf-block"><div class="o-cf-head">' + esc(s) + '</div><div class="o-cf-grid">' + inner + '</div></div>' : "";
+    }).join("");
+  }
   function entLabel(e) { var m = { partner: "Contact", project: "Project", product: "Product" }; return m[e] || e; }
   // The full set of nav-visible labels term() can rewrite, harvested from APPS so every
   // rename maps to something real. The Terminology screen offers a curated slice of these.
@@ -13348,6 +13372,11 @@
     };
   }
   // ORB-06b: admin screen to define custom fields per master entity.
+  function sectionsOf(defs) {
+    var out = [];
+    (defs || []).forEach(function (f) { if (f.section && out.indexOf(f.section) < 0) out.push(f.section); });
+    return out;
+  }
   async function renderCustomFieldsAdmin(entity) {
     entity = entity || "partner";
     var main = document.getElementById("o-main");
@@ -13358,25 +13387,30 @@
     var tabs = CF_ENTITIES.map(function (e) { return '<button class="o-seg' + (e[0] === entity ? " on" : "") + '" data-ent="' + e[0] + '">' + esc(e[1]) + '</button>'; }).join("");
     var listRows = defs.length ? defs.map(function (f) {
       var tl = (CF_TYPES.filter(function (t) { return t[0] === f.field_type; })[0] || ["", f.field_type])[1];
-      return '<tr><td><b>' + esc(f.label) + '</b><div class="muted" style="font-size:11px">' + esc(f.field_key) + '</div></td>' +
+      return '<tr><td><b>' + esc(f.label) + '</b><div class="muted" style="font-size:11px">' + esc(f.field_key) +
+        (f.from_profile ? " &middot; from the " + esc(f.from_profile) + " profile" : "") + '</div></td>' +
+        '<td class="muted">' + esc(f.section || "") + '</td>' +
         '<td>' + esc(tl) + '</td>' +
         '<td class="muted">' + esc(f.options || "") + '</td>' +
         '<td style="text-align:center">' + (f.required ? "Yes" : "") + '</td>' +
         '<td style="text-align:right">' + (canEdit ? '<button class="lnk cf-del" data-id="' + f.id + '" style="color:var(--bad-t)">Remove</button>' : '') + '</td></tr>';
-    }).join("") : '<tr><td colspan="5" class="muted" style="padding:14px">No custom fields yet for ' + esc(entLabel(entity)) + '. Add one below.</td></tr>';
+    }).join("") : '<tr><td colspan="6" class="muted" style="padding:14px">No custom fields yet for ' + esc(entLabel(entity)) + '. Add one below.</td></tr>';
     var addForm = canEdit ? '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">Add a field</h3>' +
       '<div class="o-groups"><div>' +
       fld("Label", '<input id="cf-label" placeholder="e.g. Site contact, License no.">', "What the field is called on the form.") +
       fld("Type", '<select id="cf-type">' + CF_TYPES.map(function (t) { return '<option value="' + t[0] + '">' + t[1] + '</option>'; }).join("") + '</select>') +
       '</div><div>' +
       fld("Choices", '<input id="cf-options" placeholder="comma-separated, e.g. Low, Medium, High">', "Only for a Dropdown. Separate the choices with commas.") +
+      fld("Section", '<input id="cf-section" list="cf-sections" placeholder="' + esc(sectionsOf(defs)[0] || "More details") + '">' +
+        '<datalist id="cf-sections">' + sectionsOf(defs).map(function (s) { return '<option value="' + esc(s) + '">'; }).join("") + '</datalist>',
+        "Fields are grouped under this heading on the record. Reuse a section you already have, or type a new one.") +
       '<label style="display:flex;align-items:center;gap:8px;margin-top:8px"><input type="checkbox" id="cf-required"> Make this field required</label>' +
       '</div></div>' +
       '<button class="pri" id="cf-add" style="margin-top:10px">Add field</button></div>' : '';
     document.getElementById("o-body").innerHTML = '<div style="padding:16px">' +
       '<div class="sub" style="margin-bottom:10px">Add your own fields to a record. They show on the ' + esc(entLabel(entity)) + ' form and save with each record.</div>' +
       '<div class="o-seg-row">' + tabs + '</div>' +
-      '<div class="card"><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Field</th><th>Type</th><th>Choices</th><th style="text-align:center">Required</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div></div>' +
+      '<div class="card"><div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Field</th><th>Section</th><th>Type</th><th>Choices</th><th style="text-align:center">Required</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div></div>' +
       addForm + '</div>';
     document.querySelectorAll(".o-seg[data-ent]").forEach(function (b) { b.onclick = function () { renderCustomFieldsAdmin(b.dataset.ent); }; });
     document.querySelectorAll(".cf-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this field? Values already saved on records stay in the database but are no longer shown.")) return; var r = await sb.from("custom_field_defs").delete().eq("id", b.dataset.id); if (r.error) { toast(errMsg(r.error)); return; } await loadTenantConfig(); toast("Field removed"); renderCustomFieldsAdmin(entity); }; });
@@ -13389,7 +13423,7 @@
       var opts = (gv("cf-options") || "").trim();
       if (type === "select" && !opts) { toast("A dropdown needs at least one choice"); return; }
       var maxSort = defs.reduce(function (m, f) { return Math.max(m, f.sort || 0); }, 0);
-      var row = { company_id: S.company.id, entity: entity, field_key: key, label: label, field_type: type, options: type === "select" ? opts : "", required: document.getElementById("cf-required").checked, sort: maxSort + 10 };
+      var row = { company_id: S.company.id, entity: entity, field_key: key, label: label, field_type: type, options: type === "select" ? opts : "", section: (gv("cf-section") || "").trim() || null, required: document.getElementById("cf-required").checked, sort: maxSort + 10 };
       var r = await sb.from("custom_field_defs").insert(row);
       if (r.error) { toast(/duplicate|unique/i.test(r.error.message || "") ? "A field with that name already exists here." : errMsg(r.error)); return; }
       await loadTenantConfig(); toast("Field added"); renderCustomFieldsAdmin(entity);
@@ -23952,13 +23986,187 @@
   // Appointment-based service platform, as an Orbit module. Clients are ordinary
   // partners (billing + statements reuse the ledger); Appoint adds scheduling,
   // the client/patient record, and per-trade configuration.
+  // ===========================================================================
+  // APPOINT PROFILES
+  //
+  // Appoint is for anyone you make an appointment with: a dentist, a solicitor,
+  // a hairdresser, a physio, a coach, a vet. They all book time with a person.
+  // What they need to KNOW about that person is completely different, and it is
+  // the record, not the calendar, that decides whether the app is usable.
+  //
+  // A profile therefore carries four things beyond the vocabulary:
+  //   file    the sections and fields kept on the person
+  //   alerts  what is shown in red at the top of the file before anything else
+  //   note    the shape of a visit note
+  //   sensitive  health, legal and therapy records are special-category or
+  //              privileged, which turns on the confidentiality banner and the
+  //              consent prompt
+  //
+  // These are STARTING POINTS. Every field below can be edited or removed, and
+  // the practice adds its own, because no preset survives a real practice.
+  // ===========================================================================
   var APPT_VERTICALS = {
-    coach: { label: "Coach / trainer", term_client: "Client", term_appointment: "Session", services: [["Private session", 60, 0], ["Group class", 60, 0], ["Assessment", 45, 0]] },
-    clinic: { label: "Clinic (medical)", term_client: "Patient", term_appointment: "Appointment", services: [["Consultation", 30, 0], ["Follow-up", 15, 0], ["Procedure", 45, 0]] },
-    legal: { label: "Legal", term_client: "Client", term_appointment: "Meeting", services: [["Consultation", 60, 0], ["Case review", 60, 0], ["Document review", 30, 0]] },
-    wellness: { label: "Wellness / dietician", term_client: "Client", term_appointment: "Consultation", services: [["Initial consultation", 60, 0], ["Follow-up", 30, 0], ["Plan review", 30, 0]] },
-    general: { label: "General", term_client: "Client", term_appointment: "Appointment", services: [["Appointment", 60, 0]] }
+    clinic: {
+      label: "Medical clinic", term_client: "Patient", term_appointment: "Appointment",
+      term_file: "Patient file", prefix: "PT", sensitive: true,
+      alertLabel: "Allergies and alerts", alertHint: "Drug allergies, conditions the clinician must see first.",
+      services: [["Consultation", 30, 0], ["Follow-up", 15, 0], ["Procedure", 45, 0]],
+      file: [
+        ["Identity", [["dob", "Date of birth", "date"], ["sex", "Sex", "select", "Female,Male,Other,Prefer not to say"], ["national_id", "National ID / passport", "text"], ["blood_group", "Blood group", "select", "A+,A-,B+,B-,AB+,AB-,O+,O-,Unknown"]]],
+        ["Clinical", [["conditions", "Ongoing conditions", "textarea"], ["medications", "Current medications", "textarea"], ["past_surgery", "Past surgery", "textarea"], ["family_history", "Family history", "textarea"], ["smoker", "Smoker", "select", "No,Yes,Former"]]],
+        ["Cover", [["insurer", "Insurer", "text"], ["policy_no", "Policy number", "text"], ["policy_expiry", "Policy expires", "date"], ["referred_by", "Referred by", "text"]]],
+        ["Emergency", [["next_of_kin", "Next of kin", "text"], ["next_of_kin_phone", "Next of kin phone", "text"]]]
+      ],
+      note: { key: "soap", label: "Consultation note", parts: [["s", "Subjective (what they report)"], ["o", "Objective (what you observe and measure)"], ["a", "Assessment"], ["p", "Plan"]] }
+    },
+    dental: {
+      label: "Dental practice", term_client: "Patient", term_appointment: "Appointment",
+      term_file: "Patient file", prefix: "PT", sensitive: true,
+      alertLabel: "Allergies and alerts", alertHint: "Latex, anaesthetic reactions, bleeding risk, endocarditis prophylaxis.",
+      services: [["Check-up", 20, 0], ["Scale and polish", 30, 0], ["Filling", 45, 0], ["Extraction", 45, 0], ["Root canal", 90, 0], ["Emergency", 20, 0]],
+      file: [
+        ["Identity", [["dob", "Date of birth", "date"], ["sex", "Sex", "select", "Female,Male,Other,Prefer not to say"], ["national_id", "National ID / passport", "text"]]],
+        ["Medical", [["conditions", "Medical conditions", "textarea"], ["medications", "Current medications", "textarea"], ["anticoagulant", "On anticoagulants", "checkbox"], ["pregnant", "Pregnant or breastfeeding", "checkbox"]]],
+        ["Dental", [["last_xray", "Last radiograph", "date"], ["ortho", "Orthodontic history", "textarea"], ["perio_status", "Periodontal status", "select", "Healthy,Gingivitis,Mild,Moderate,Severe"], ["brushing", "Brushing and habits", "textarea"]]],
+        ["Cover", [["insurer", "Insurer", "text"], ["policy_no", "Policy number", "text"], ["policy_expiry", "Policy expires", "date"]]]
+      ],
+      note: { key: "dental", label: "Treatment note", parts: [["complaint", "Presenting complaint"], ["exam", "Examination and charting"], ["treatment", "Treatment carried out"], ["materials", "Materials and anaesthetic"], ["next", "Next visit and advice"]] }
+    },
+    legal: {
+      label: "Law firm", term_client: "Client", term_appointment: "Meeting",
+      term_file: "Matter", prefix: "MAT", sensitive: true,
+      alertLabel: "Conflicts and alerts", alertHint: "Conflict of interest, limitation date, vulnerable client.",
+      services: [["Initial consultation", 60, 0], ["Case review", 60, 0], ["Document review", 30, 0], ["Court attendance", 180, 0], ["Signing", 30, 0]],
+      file: [
+        ["Matter", [["matter_type", "Matter type", "select", "Corporate,Litigation,Property,Family,Employment,Criminal,Estate,Other"], ["opposing_party", "Opposing party", "text"], ["court_ref", "Court or registry reference", "text"], ["limitation_date", "Limitation or filing date", "date"], ["matter_summary", "Matter summary", "textarea"]]],
+        ["Engagement", [["engagement_signed", "Engagement letter signed", "date"], ["fee_basis", "Fee basis", "select", "Hourly,Fixed fee,Retainer,Contingency"], ["hourly_rate", "Hourly rate", "number"], ["estimate", "Estimate given", "number"]]],
+        ["Compliance", [["id_verified", "Identity verified", "date"], ["source_of_funds", "Source of funds checked", "checkbox"], ["conflict_checked", "Conflict check completed", "date"], ["pep", "Politically exposed person", "checkbox"]]]
+      ],
+      note: { key: "attendance", label: "Attendance note", parts: [["present", "Who was present"], ["discussed", "What was discussed"], ["advice", "Advice given"], ["next", "Next steps and who is doing them"], ["time", "Time engaged"]] }
+    },
+    salon: {
+      label: "Salon / barber", term_client: "Client", term_appointment: "Appointment",
+      term_file: "Client card", prefix: "CL", sensitive: false,
+      alertLabel: "Sensitivities", alertHint: "Failed patch test, scalp condition, product reaction.",
+      services: [["Cut and finish", 45, 0], ["Colour", 120, 0], ["Highlights", 150, 0], ["Blow dry", 30, 0], ["Treatment", 30, 0], ["Beard trim", 20, 0]],
+      file: [
+        ["Preferences", [["preferred_stylist", "Preferred stylist", "text"], ["hair_type", "Hair type", "select", "Fine,Medium,Thick,Curly,Coily,Chemically treated"], ["scalp", "Scalp condition", "text"], ["how_they_like_it", "How they like it", "textarea"]]],
+        ["Colour", [["current_colour", "Current colour", "text"], ["last_formula", "Last formula used", "textarea"], ["patch_test_date", "Last patch test", "date"], ["patch_test_result", "Patch test result", "select", "Clear,Reaction,Not tested"]]],
+        ["Commercial", [["source", "How they found you", "select", "Walk-in,Referral,Instagram,Google,Other"], ["products_bought", "Products they buy", "textarea"]]]
+      ],
+      note: { key: "salon", label: "Service record", parts: [["service", "Service done"], ["formula", "Formula and developer"], ["timing", "Processing time"], ["result", "Result and what to change next time"]] }
+    },
+    therapy: {
+      label: "Therapy / counselling", term_client: "Client", term_appointment: "Session",
+      term_file: "Case notes", prefix: "CN", sensitive: true,
+      alertLabel: "Risk flags", alertHint: "Risk to self or others, safeguarding concern, crisis contact.",
+      services: [["Initial assessment", 60, 0], ["Therapy session", 50, 0], ["Couples session", 80, 0], ["Review", 30, 0]],
+      file: [
+        ["Referral", [["referral_source", "Referral source", "text"], ["presenting_issue", "Presenting issue", "textarea"], ["start_date", "Therapy started", "date"], ["modality", "Modality", "select", "CBT,Psychodynamic,Person-centred,EMDR,Systemic,Integrative,Other"]]],
+        ["Clinical", [["diagnosis", "Working formulation", "textarea"], ["medications", "Medication", "textarea"], ["gp_name", "GP or physician", "text"], ["previous_therapy", "Previous therapy", "textarea"]]],
+        ["Safety", [["risk_level", "Risk level", "select", "None identified,Low,Medium,High"], ["safety_plan", "Safety plan", "textarea"], ["emergency_contact", "Emergency contact", "text"], ["emergency_phone", "Emergency phone", "text"]]],
+        ["Contract", [["sessions_agreed", "Sessions agreed", "number"], ["review_date", "Review date", "date"]]]
+      ],
+      note: { key: "session", label: "Session note", parts: [["presentation", "Presentation today"], ["content", "Content of the session"], ["intervention", "Intervention used"], ["risk", "Risk reviewed"], ["plan", "Plan for next session"]] }
+    },
+    physio: {
+      label: "Physiotherapy / rehab", term_client: "Patient", term_appointment: "Appointment",
+      term_file: "Patient file", prefix: "PT", sensitive: true,
+      alertLabel: "Precautions", alertHint: "Red flags, contraindications, weight-bearing status.",
+      services: [["Initial assessment", 45, 0], ["Treatment", 30, 0], ["Review", 20, 0], ["Home visit", 60, 0]],
+      file: [
+        ["Identity", [["dob", "Date of birth", "date"], ["occupation", "Occupation", "text"], ["sport", "Sport or activity", "text"]]],
+        ["Injury", [["site", "Site of problem", "text"], ["onset", "Date of onset", "date"], ["mechanism", "Mechanism of injury", "textarea"], ["imaging", "Imaging done", "textarea"], ["surgery", "Related surgery", "textarea"]]],
+        ["Baseline", [["pain_score", "Pain score out of 10", "number"], ["rom", "Range of movement", "textarea"], ["goals", "Patient goals", "textarea"]]],
+        ["Cover", [["insurer", "Insurer", "text"], ["policy_no", "Policy number", "text"], ["sessions_approved", "Sessions approved", "number"]]]
+      ],
+      note: { key: "soap", label: "Treatment note", parts: [["s", "Subjective (what they report)"], ["o", "Objective (measures today)"], ["a", "Assessment"], ["p", "Plan and home exercise"]] }
+    },
+    vet: {
+      label: "Veterinary", term_client: "Patient", term_appointment: "Appointment",
+      term_file: "Animal record", prefix: "AN", sensitive: false,
+      alertLabel: "Alerts", alertHint: "Aggressive, drug reaction, chronic condition.",
+      services: [["Consultation", 20, 0], ["Vaccination", 15, 0], ["Neutering", 90, 0], ["Dental", 60, 0], ["Emergency", 30, 0]],
+      file: [
+        ["Animal", [["animal_name", "Animal name", "text"], ["species", "Species", "select", "Dog,Cat,Bird,Rabbit,Horse,Reptile,Other"], ["breed", "Breed", "text"], ["dob", "Date of birth", "date"], ["sex", "Sex", "select", "Female,Female neutered,Male,Male neutered"], ["microchip", "Microchip number", "text"], ["weight_kg", "Weight (kg)", "number"]]],
+        ["Health", [["conditions", "Ongoing conditions", "textarea"], ["medications", "Current medications", "textarea"], ["vaccinations_due", "Vaccinations due", "date"], ["insurer", "Insurer", "text"]]]
+      ],
+      note: { key: "vet", label: "Clinical note", parts: [["history", "History"], ["exam", "Clinical exam"], ["diagnosis", "Diagnosis"], ["treatment", "Treatment and dose"], ["next", "Follow-up"]] }
+    },
+    coach: {
+      label: "Coach / personal trainer", term_client: "Client", term_appointment: "Session",
+      term_file: "Client record", prefix: "CL", sensitive: false,
+      alertLabel: "Health flags", alertHint: "Injuries or conditions that change what you can programme.",
+      services: [["Private session", 60, 0], ["Group class", 60, 0], ["Assessment", 45, 0], ["Programme review", 30, 0]],
+      file: [
+        ["Goals", [["main_goal", "Main goal", "textarea"], ["target_date", "Target date", "date"], ["experience", "Training experience", "select", "Beginner,Some experience,Experienced,Athlete"]]],
+        ["Health", [["injuries", "Injuries and limitations", "textarea"], ["conditions", "Medical conditions", "textarea"], ["par_q", "PAR-Q completed", "date"]]],
+        ["Baseline", [["weight_kg", "Weight (kg)", "number"], ["height_cm", "Height (cm)", "number"], ["resting_hr", "Resting heart rate", "number"], ["notes_baseline", "Starting measurements", "textarea"]]],
+        ["Package", [["sessions_bought", "Sessions bought", "number"], ["sessions_used", "Sessions used", "number"], ["expires", "Package expires", "date"]]]
+      ],
+      note: { key: "session", label: "Session record", parts: [["worked", "What we worked on"], ["loads", "Loads and reps"], ["form", "Form and coaching cues"], ["next", "Next session"]] }
+    },
+    wellness: {
+      label: "Nutrition / wellness", term_client: "Client", term_appointment: "Consultation",
+      term_file: "Client record", prefix: "CL", sensitive: true,
+      alertLabel: "Allergies and intolerances", alertHint: "Anything that must never appear in a plan.",
+      services: [["Initial consultation", 60, 0], ["Follow-up", 30, 0], ["Plan review", 30, 0]],
+      file: [
+        ["Identity", [["dob", "Date of birth", "date"], ["occupation", "Occupation", "text"]]],
+        ["Health", [["conditions", "Medical conditions", "textarea"], ["medications", "Medication and supplements", "textarea"], ["intolerances", "Intolerances", "textarea"], ["diet_type", "Diet", "select", "No restriction,Vegetarian,Vegan,Halal,Kosher,Gluten free,Other"]]],
+        ["Baseline", [["weight_kg", "Weight (kg)", "number"], ["height_cm", "Height (cm)", "number"], ["goal", "Goal", "textarea"], ["activity", "Activity level", "select", "Sedentary,Light,Moderate,Active,Very active"]]]
+      ],
+      note: { key: "consult", label: "Consultation note", parts: [["review", "Review since last time"], ["measures", "Measurements today"], ["plan", "Plan agreed"], ["next", "Next review"]] }
+    },
+    general: {
+      label: "General (anything else)", term_client: "Client", term_appointment: "Appointment",
+      term_file: "Client record", prefix: "CL", sensitive: false,
+      alertLabel: "Alerts", alertHint: "Anything whoever opens this file must see first.",
+      services: [["Appointment", 60, 0]],
+      file: [
+        ["Details", [["dob", "Date of birth", "date"], ["source", "How they found you", "text"], ["notes_general", "Background", "textarea"]]]
+      ],
+      note: { key: "visit", label: "Visit note", parts: [["what", "What was done"], ["outcome", "Outcome"], ["next", "Next steps"]] }
+    }
   };
+  function apptProfile() { return APPT_VERTICALS[(_apptSet && _apptSet.vertical) || "general"] || APPT_VERTICALS.general; }
+  function apptTermFile() { return (_apptSet && _apptSet.term_file) || apptProfile().term_file || "Client record"; }
+  // Applying a profile seeds its services and its file fields. It never removes
+  // anything: a field the practice added, or one it edited, is left alone, so
+  // switching profile or re-applying after an update is safe.
+  async function apptApplyProfile(key, opts) {
+    var p = APPT_VERTICALS[key]; if (!p) return { services: 0, fields: 0 };
+    opts = opts || {};
+    var madeSvc = 0, madeFld = 0;
+    if (opts.services !== false) {
+      var have = (await sb.from("appt_services").select("name").eq("company_id", S.company.id)).data || [];
+      var names = {}; have.forEach(function (s) { names[(s.name || "").toLowerCase()] = 1; });
+      var rows = p.services.filter(function (s) { return !names[s[0].toLowerCase()]; })
+        .map(function (s, i) {
+          return { company_id: S.company.id, name: s[0], duration_min: s[1], price: s[2], currency_code: S.company.currency_code, is_active: true, sort: (i + 1) * 10 };
+        });
+      if (rows.length) { var r1 = await sb.from("appt_services").insert(rows); if (!r1.error) madeSvc = rows.length; }
+    }
+    if (opts.fields !== false) {
+      var defs = (await sb.from("custom_field_defs").select("field_key").eq("company_id", S.company.id).eq("entity", "appt_client")).data || [];
+      var keys = {}; defs.forEach(function (d) { keys[d.field_key] = 1; });
+      var add = [], sort = 0;
+      p.file.forEach(function (sec) {
+        sec[1].forEach(function (f) {
+          sort += 10;
+          if (keys[f[0]]) return;
+          add.push({
+            company_id: S.company.id, entity: "appt_client", field_key: f[0], label: f[1],
+            field_type: f[2], options: f[3] || null, section: sec[0], required: false,
+            is_active: true, sort: sort, from_profile: key
+          });
+        });
+      });
+      if (add.length) { var r2 = await sb.from("custom_field_defs").insert(add); if (!r2.error) madeFld = add.length; }
+    }
+    await loadTenantConfig();
+    return { services: madeSvc, fields: madeFld };
+  }
   var APPT_STATUS = { booked: ["Booked", "var(--warn)"], confirmed: ["Confirmed", "var(--accent)"], completed: ["Completed", "var(--good)"], cancelled: ["Cancelled", "var(--ink3)"], no_show: ["No-show", "var(--bad)"] };
   var _apptSet = null;
   async function apptLoadSettings(force) {
@@ -24146,38 +24354,176 @@
       onNew: function () { openAppointmentModal(null); }
     };
   }
+  // The file. This is the screen a practice lives in: what is known about the
+  // person, what has happened, and what was recorded each time.
+  function apptAge(dob) {
+    if (!dob) return "";
+    var d = new Date(dob); if (isNaN(d)) return "";
+    var t = new Date(), a = t.getFullYear() - d.getFullYear();
+    var m = t.getMonth() - d.getMonth();
+    if (m < 0 || (m === 0 && t.getDate() < d.getDate())) a--;
+    return (a >= 0 && a < 130) ? a + "y" : "";
+  }
   async function renderApptClient(id) {
     await apptLoadSettings();
+    var P = apptProfile();
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(apptTermClient(), { title: apptTermClient() + "s", action: "appt.clients" }) + '</div><div class="o-body" id="o-body">Loading...</div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(apptTermFile(), { title: apptTermClient() + "s", action: "appt.clients" }) +
+      '<div class="gap"></div><button class="o-filtbtn" id="cl-print">Print</button><button class="o-filtbtn" id="cl-stmt">Statement</button>' +
+      '<button class="o-new" id="cl-book">Book ' + esc(apptTermAppt().toLowerCase()) + '</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Opening the file...</div></div></div>';
     wireBc();
-    var c = (await sb.from("partners").select("*").eq("id", id).single()).data || {};
-    var appts = (await sb.from("appt_appointments").select("*, appt_services(name)").eq("company_id", S.company.id).eq("client_id", id).order("starts_at", { ascending: false })).data || [];
-    var notes = (await sb.from("appt_notes").select("*").eq("company_id", S.company.id).eq("client_id", id).order("created_at", { ascending: false })).data || [];
+    var res = await Promise.all([
+      sb.from("partners").select("*").eq("id", id).single(),
+      sb.from("appt_appointments").select("*, appt_services(name)").eq("company_id", S.company.id).eq("client_id", id).order("starts_at", { ascending: false }),
+      sb.from("appt_notes").select("*").eq("company_id", S.company.id).eq("client_id", id).order("created_at", { ascending: false }),
+      sb.from("appt_files").select("*").eq("company_id", S.company.id).eq("client_id", id).maybeSingle(),
+      sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")
+    ]);
+    var c = res[0].data || {}, appts = res[1].data || [], notes = res[2].data || [];
+    var f = res[3].data, staff = res[4].data || [];
+    // The file is opened the first time it is looked at, so there is no
+    // separate "create the record" step to forget.
+    if (!f) {
+      var no = (await sb.rpc("appt_next_file_no", { p_company: S.company.id, p_prefix: (_apptSet && _apptSet.file_prefix) || P.prefix || "F" })).data;
+      var ins = await sb.from("appt_files").insert({ company_id: S.company.id, client_id: id, file_no: no }).select("*").single();
+      f = ins.data || { data: {}, alerts: [] };
+    }
+    f.data = f.data || {}; f.alerts = f.alerts || [];
+
     var now = new Date();
     var upcoming = appts.filter(function (a) { return new Date(a.starts_at) >= now && a.status !== "cancelled"; });
-    var past = appts.filter(function (a) { return new Date(a.starts_at) < now || a.status === "completed" || a.status === "cancelled"; });
-    var billed = appts.filter(function (a) { return a.status === "completed"; }).reduce(function (s, a) { return s + Number(a.price || 0); }, 0);
-    function apptLine(a) { return '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px;cursor:pointer;background:var(--panel)"><div style="min-width:120px"><b>' + esc(apptFmtDate(a.starts_at)) + '</b> <span class="muted">' + esc(apptFmtTime(a.starts_at)) + '</span></div><div style="flex:1">' + esc(a.appt_services ? a.appt_services.name : "") + '</div>' + apptStatusPill(a.status) + '</div>'; }
-    var noteHtml = notes.map(function (n) { return '<div style="padding:9px 11px;border:1px solid var(--line);border-radius:9px;margin-bottom:7px;background:var(--panel)"><div style="font-size:11px;color:var(--ink3)">' + esc(apptFmtDate(n.created_at)) + '</div>' + (n.title ? '<div style="font-weight:700">' + esc(n.title) + '</div>' : '') + '<div style="font-size:13px;white-space:pre-wrap">' + esc(n.body || "") + '</div></div>'; }).join("") || '<p class="muted">No notes yet.</p>';
+    var done = appts.filter(function (a) { return a.status === "completed"; });
+    var billed = done.reduce(function (s, a) { return s + Number(a.price || 0); }, 0);
+    var noShows = appts.filter(function (a) { return a.status === "no_show"; }).length;
+    var last = done[0];
+
+    // One timeline, appointments and notes interleaved newest first, because
+    // that is how anyone actually reads a history.
+    var events = appts.map(function (a) { return { at: a.starts_at, kind: "appt", a: a }; })
+      .concat(notes.map(function (n) { return { at: n.created_at, kind: "note", n: n }; }))
+      .sort(function (x, y) { return (String(y.at || "") < String(x.at || "")) ? -1 : 1; });
+    function noteBody(n) {
+      var parts = (P.note && P.note.key === n.template_key) ? P.note.parts : null;
+      if (parts && n.data) {
+        var any = parts.filter(function (p) { return String(n.data[p[0]] || "").trim(); });
+        if (any.length) {
+          return '<dl class="ap-note-parts">' + any.map(function (p) {
+            return '<dt>' + esc(p[1]) + '</dt><dd>' + esc(n.data[p[0]]) + '</dd>';
+          }).join("") + '</dl>';
+        }
+      }
+      return '<div class="ap-note-body">' + esc(n.body || "") + '</div>';
+    }
+    var timeline = events.length ? events.map(function (e) {
+      if (e.kind === "appt") {
+        var a = e.a;
+        return '<div class="ap-tl appt" data-id="' + a.id + '"><div class="ap-tl-d"><b>' + esc(apptFmtDate(a.starts_at)) + '</b><span>' + esc(apptFmtTime(a.starts_at)) + '</span></div>' +
+          '<div class="ap-tl-b"><b>' + esc(a.appt_services ? a.appt_services.name : (a.title || apptTermAppt())) + '</b>' +
+          (a.notes ? '<span class="ap-tl-s">' + esc(a.notes) + '</span>' : "") + '</div>' +
+          '<div>' + apptStatusPill(a.status) + '</div></div>';
+      }
+      var n = e.n;
+      return '<div class="ap-tl note"><div class="ap-tl-d"><b>' + esc(apptFmtDate(n.created_at)) + '</b><span>' + esc(apptFmtTime(n.created_at)) + '</span></div>' +
+        '<div class="ap-tl-b"><b>' + esc(n.title || "Note") + '</b>' + noteBody(n) + '</div><div></div></div>';
+    }).join("") : '<div class="wd-empty">Nothing recorded yet. Book a ' + esc(apptTermAppt().toLowerCase()) + ', or write the first note on the right.</div>';
+
+    var age = apptAge(f.data.dob);
     var body = document.getElementById("o-body");
-    body.innerHTML = '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px">'
-      + '<div style="flex:1;min-width:220px"><h1 class="man-h" style="font-size:24px;margin:0 0 4px">' + esc(c.name || "") + '</h1><div class="muted" style="font-size:13px">' + esc([c.email, c.mobile || c.phone].filter(Boolean).join(" &middot; ")) + '</div><div class="muted" style="font-size:11px;margin-top:2px">' + esc(apptTermClient()) + ' ID: ' + esc((c.id || "").slice(0, 8).toUpperCase()) + '</div></div>'
-      + '<div style="display:flex;gap:8px"><button class="btn" id="cl-stmt">Statement</button><button class="btn pri" id="cl-book" style="background:var(--app);border-color:var(--app)">+ Book</button></div></div>'
-      + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px">' + kpi("Upcoming", String(upcoming.length)) + kpi("Total visits", String(appts.length)) + kpi("Billed value", moneyC(billed, S.company.currency_code)) + '</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px" class="cl-grid">'
-      + '<div><h3 style="margin:0 0 8px">Upcoming</h3>' + (upcoming.map(apptLine).join("") || '<p class="muted">Nothing upcoming.</p>') + '<h3 style="margin:16px 0 8px">History</h3>' + (past.map(apptLine).join("") || '<p class="muted">No past ' + esc(apptTermAppt().toLowerCase()) + 's.</p>') + '</div>'
-      + '<div><h3 style="margin:0 0 8px">Record &amp; notes</h3><div style="margin-bottom:10px"><input id="cl-note-t" placeholder="Note title (optional)" style="width:100%;margin-bottom:6px"><textarea id="cl-note-b" placeholder="Add a note to this ' + esc(apptTermClient().toLowerCase()) + "'s record..." + '" style="width:100%;min-height:60px"></textarea><button class="btn pri" id="cl-note-add" style="background:var(--app);border-color:var(--app);margin-top:6px">Add note</button></div>' + noteHtml + '</div>'
-      + '</div>';
+    body.innerHTML = '<div class="apf">' +
+      (P.sensitive ? '<div class="apf-conf"><b>Confidential.</b> ' +
+        (f.consent_given_at
+          ? "Consent recorded " + esc(String(f.consent_given_at).slice(0, 10)) + "."
+          : "No consent recorded yet. Record it below before storing anything sensitive.") + '</div>' : "") +
+      (f.alerts.length ? '<div class="apf-alert"><span class="apf-alert-t">' + esc(P.alertLabel || "Alerts") + '</span>' +
+        f.alerts.map(function (a) { return '<span class="apf-chip">' + esc(a) + '</span>'; }).join("") + '</div>' : "") +
+
+      '<header class="apf-head"><div class="apf-who"><h1>' + esc(c.name || "") + '</h1>' +
+      '<p>' + [esc(f.file_no || ""), age, esc(c.mobile || c.phone || ""), esc(c.email || "")].filter(Boolean).join(" &middot; ") + '</p></div>' +
+      '<div class="apf-kpi">' +
+      '<div><b>' + upcoming.length + '</b><span>upcoming</span></div>' +
+      '<div><b>' + done.length + '</b><span>visits</span></div>' +
+      (noShows ? '<div><b>' + noShows + '</b><span>no-shows</span></div>' : "") +
+      '<div><b>' + esc(moneyC(billed, S.company.currency_code)) + '</b><span>billed</span></div>' +
+      (last ? '<div><b>' + esc(apptFmtDate(last.starts_at)) + '</b><span>last seen</span></div>' : "") +
+      '</div></header>' +
+
+      '<div class="apf-cols">' +
+      '<section class="apf-main"><h2>' + esc(apptTermFile()) + '</h2>' +
+      (customFieldsSectioned("appt_client", { custom: f.data }) ||
+        '<div class="wd-empty">This file has no fields yet. Pick a profile under <b>Configuration &rsaquo; Settings</b> to seed the usual ones for your kind of practice, then add your own under <b>Settings &rsaquo; Custom fields</b>.</div>') +
+      '<div class="o-cf-block"><div class="o-cf-head">Record</div><div class="o-cf-grid">' +
+      '<div class="o-cf-row"><label for="apf-alerts">' + esc(P.alertLabel || "Alerts") + '</label>' +
+      '<input id="apf-alerts" value="' + esc(f.alerts.join(", ")) + '" placeholder="Separate with commas">' +
+      (P.alertHint ? '<span class="o-cf-hint">' + esc(P.alertHint) + '</span>' : "") + '</div>' +
+      '<div class="o-cf-row"><label for="apf-assigned">Seen by</label><select id="apf-assigned"><option value="">(anyone)</option>' +
+      staff.map(function (s) { return '<option value="' + s.id + '"' + (f.assigned_to === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
+      '<div class="o-cf-row"><label for="apf-status">File status</label><select id="apf-status">' +
+      [["active", "Active"], ["discharged", "Discharged"], ["closed", "Closed"]].map(function (x) {
+        return '<option value="' + x[0] + '"' + ((f.status || "active") === x[0] ? " selected" : "") + '>' + x[1] + '</option>';
+      }).join("") + '</select></div>' +
+      (P.sensitive ? '<div class="o-cf-row"><label for="apf-consent">Consent given on</label>' +
+        '<input id="apf-consent" type="date" value="' + esc(f.consent_given_at ? String(f.consent_given_at).slice(0, 10) : "") + '">' +
+        '<span class="o-cf-hint">Consent to hold and process this record.</span></div>' : "") +
+      '<div class="o-cf-row wide"><label for="apf-summary">Summary</label>' +
+      '<textarea id="apf-summary" rows="2" placeholder="The paragraph anyone opening this file should read first">' + esc(f.summary || "") + '</textarea></div>' +
+      '</div></div>' +
+      '<button class="btn pri" id="apf-save">Save the file</button>' +
+      '</section>' +
+
+      '<section class="apf-side"><h2>' + esc(P.note.label) + '</h2>' +
+      '<div class="apf-note-form">' +
+      '<label class="apf-np"><span>About which ' + esc(apptTermAppt().toLowerCase()) + '</span>' +
+      '<select id="apf-note-appt"><option value="">Not tied to one</option>' +
+      appts.slice(0, 20).map(function (a) {
+        return '<option value="' + a.id + '">' + esc(apptFmtDate(a.starts_at)) + " " + esc(apptFmtTime(a.starts_at)) +
+          " - " + esc(a.appt_services ? a.appt_services.name : apptTermAppt()) + '</option>';
+      }).join("") + '</select></label>' +
+      P.note.parts.map(function (p) {
+        return '<label class="apf-np"><span>' + esc(p[1]) + '</span><textarea class="apf-part" data-k="' + esc(p[0]) + '" rows="2"></textarea></label>';
+      }).join("") +
+      '<button class="btn pri" id="apf-note-add">Save the ' + esc(P.note.label.toLowerCase()) + '</button></div>' +
+      '</section></div>' +
+
+      '<section class="apf-tl"><h2>History</h2>' + timeline + '</section></div>';
+
     document.getElementById("cl-book").onclick = function () { openAppointmentModal(null, id); };
     document.getElementById("cl-stmt").onclick = function () { STMT_PRESET_PARTNER = id; go("rep.stmt"); };
-    document.getElementById("cl-note-add").onclick = async function () {
-      var b = gv("cl-note-b"); if (!b) { toast("Write a note first"); return; }
-      var r = await sb.from("appt_notes").insert({ company_id: S.company.id, client_id: id, title: gv("cl-note-t"), body: b });
+    document.getElementById("cl-print").onclick = function () { window.print(); };
+    document.getElementById("apf-save").onclick = async function () {
+      var err = customError("appt_client"); if (err) { toast(err); return; }
+      var row = {
+        data: collectCustom("appt_client"),
+        alerts: (gv("apf-alerts") || "").split(",").map(function (s) { return s.trim(); }).filter(Boolean),
+        assigned_to: gv("apf-assigned") || null,
+        status: gv("apf-status") || "active",
+        summary: (document.getElementById("apf-summary").value || "").trim() || null
+      };
+      var cons = document.getElementById("apf-consent");
+      if (cons) row.consent_given_at = cons.value ? new Date(cons.value).toISOString() : null;
+      var r = await sb.from("appt_files").update(row).eq("id", f.id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      toast("Note added"); renderApptClient(id);
+      toast(apptTermFile() + " saved"); renderApptClient(id);
     };
-    body.querySelectorAll(".ap-row").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
+    document.getElementById("apf-note-add").onclick = async function () {
+      var data = {}, any = false;
+      body.querySelectorAll(".apf-part").forEach(function (t) {
+        var v = (t.value || "").trim(); if (v) { data[t.dataset.k] = v; any = true; }
+      });
+      if (!any) { toast("Write something first"); return; }
+      // body keeps a readable rendering, so search and print need no template
+      var text = P.note.parts.filter(function (p) { return data[p[0]]; })
+        .map(function (p) { return p[1] + ": " + data[p[0]]; }).join("\n\n");
+      var r = await sb.from("appt_notes").insert({
+        company_id: S.company.id, client_id: id,
+        appointment_id: gv("apf-note-appt") || null,
+        template_key: P.note.key, note_type: P.note.key,
+        title: P.note.label, data: data, body: text
+      });
+      if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
+      toast(P.note.label + " saved"); renderApptClient(id);
+    };
+    body.querySelectorAll(".ap-tl.appt").forEach(function (r) { r.onclick = function () { openAppointmentModal(r.dataset.id); }; });
   }
 
   // ---- services ----
@@ -24258,31 +24604,60 @@
     wireBc();
     var vertOpts = Object.keys(APPT_VERTICALS).map(function (k) { return '<option value="' + k + '"' + (st.vertical === k ? " selected" : "") + '>' + esc(APPT_VERTICALS[k].label) + '</option>'; }).join("");
     var body = document.getElementById("o-body");
-    body.innerHTML = '<div style="max-width:520px;display:grid;gap:14px">'
-      + '<p class="lead" style="color:var(--ink2)">Pick your profession and Appoint uses the right words. You can fine-tune the wording, and load a starter set of services for your trade.</p>'
-      + '<div><label>Profession</label><select id="st-vert">' + vertOpts + '</select></div>'
+    body.innerHTML = '<div style="max-width:560px;display:grid;gap:14px">'
+      + '<p class="lead" style="color:var(--ink2)">Appoint works for anyone people book time with: a dentist, a solicitor, a hairdresser, a physio, a coach, a vet. Pick the closest profile and it sets the words, the usual services, and the file you keep on each person. Everything it sets can then be changed.</p>'
+      + '<div><label>Profession</label><select id="st-vert">' + vertOpts + '</select><div class="muted" style="font-size:12px;margin-top:5px" id="st-vsum"></div></div>'
       + '<div class="row2"><div><label>Call clients</label><input id="st-tc" value="' + esc(st.term_client || "Client") + '"></div><div><label>Call bookings</label><input id="st-ta" value="' + esc(st.term_appointment || "Appointment") + '"></div></div>'
-      + '<div><label><input type="checkbox" id="st-seed"> Also load starter services for this profession</label></div>'
+      + '<div class="row2"><div><label>Call the record</label><input id="st-tf" value="' + esc(st.term_file || "") + '" placeholder="Patient file, Matter, Client card"></div>'
+      + '<div><label>File number prefix</label><input id="st-fp" value="' + esc(st.file_prefix || "") + '" placeholder="PT"></div></div>'
+      + '<div><label><input type="checkbox" id="st-seed" checked> Set up this profile: add its services and the fields on the file</label>'
+      + '<div class="muted" style="font-size:12px;margin-top:4px">Nothing is removed. A service or a field you already have is left exactly as it is, so this is safe to run again after changing profile.</div></div>'
       + '<hr style="border:none;border-top:1px solid var(--line);margin:2px 0">'
       + '<div><label>Public booking link</label><div style="display:flex;gap:7px;align-items:center"><span style="color:var(--ink3);font-size:13px;white-space:nowrap">.../book?s=</span><input id="st-slug" value="' + esc(st.public_slug || "") + '" placeholder="your-name" style="max-width:220px"></div><div class="muted" style="font-size:12px;margin-top:5px">Share this link and clients book themselves, no login needed. Leave blank to switch the link off.</div><div id="st-linkbox" style="margin-top:8px"></div></div>'
       + '<div><label>Reminders</label><div style="font-size:13.5px;color:var(--ink2)"><input type="checkbox" id="st-rem"' + (st.reminders_enabled ? " checked" : "") + '> Email a reminder <input id="st-remh" type="number" value="' + (Number(st.reminder_hours) || 24) + '" style="width:64px;height:32px;display:inline-block"> hours before the ' + esc((st.term_appointment || "appointment").toLowerCase()) + '</div></div>'
       + '<div><button class="btn pri" id="st-save" style="background:var(--app);border-color:var(--app)">Save</button></div>'
       + '</div>';
-    document.getElementById("st-vert").onchange = function () { var v = APPT_VERTICALS[this.value]; if (v) { document.getElementById("st-tc").value = v.term_client; document.getElementById("st-ta").value = v.term_appointment; } };
+    function apptVertSummary() {
+      var v = APPT_VERTICALS[document.getElementById("st-vert").value];
+      var el = document.getElementById("st-vsum"); if (!v || !el) return;
+      var n = v.file.reduce(function (s, sec) { return s + sec[1].length; }, 0);
+      el.innerHTML = v.services.length + " services, a " + esc(v.term_file.toLowerCase()) + " with " + n +
+        " fields in " + v.file.length + " sections, and a " + esc(v.note.label.toLowerCase()) + " with " +
+        v.note.parts.length + " parts." + (v.sensitive ? " <b>Treated as confidential</b>, so the file asks for consent." : "");
+    }
+    document.getElementById("st-vert").onchange = function () {
+      var v = APPT_VERTICALS[this.value]; if (!v) return;
+      document.getElementById("st-tc").value = v.term_client;
+      document.getElementById("st-ta").value = v.term_appointment;
+      document.getElementById("st-tf").value = v.term_file;
+      document.getElementById("st-fp").value = v.prefix;
+      apptVertSummary();
+    };
+    apptVertSummary();
     function apptRenderLink() { var s = (document.getElementById("st-slug").value || "").trim(); var box = document.getElementById("st-linkbox"); if (!s) { box.innerHTML = ""; return; } var link = location.origin + "/book?s=" + encodeURIComponent(s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "")); box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px"><a href="' + esc(link) + '" target="_blank" style="flex:1;font-size:12.5px;color:var(--accent);word-break:break-all">' + esc(link) + '</a><button class="btn" id="st-copy" style="padding:4px 10px;font-size:12px">Copy</button></div>'; document.getElementById("st-copy").onclick = function () { try { navigator.clipboard.writeText(link); toast("Link copied"); } catch (e) { toast("Select and copy the link"); } }; }
     document.getElementById("st-slug").oninput = apptRenderLink; apptRenderLink();
     document.getElementById("st-save").onclick = async function () {
       var vert = document.getElementById("st-vert").value;
       var slug = (gv("st-slug") || "").toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "");
-      var r = await sb.from("appt_settings").update({ vertical: vert, term_client: gv("st-tc") || "Client", term_appointment: gv("st-ta") || "Appointment", public_slug: slug || null, reminders_enabled: document.getElementById("st-rem").checked, reminder_hours: parseInt(gv("st-remh"), 10) || 24 }).eq("company_id", S.company.id);
+      var P = APPT_VERTICALS[vert] || APPT_VERTICALS.general;
+      var r = await sb.from("appt_settings").update({
+        vertical: vert,
+        term_client: gv("st-tc") || P.term_client, term_appointment: gv("st-ta") || P.term_appointment,
+        term_file: gv("st-tf") || P.term_file, file_prefix: (gv("st-fp") || P.prefix).toUpperCase(),
+        is_sensitive: !!P.sensitive,
+        public_slug: slug || null,
+        reminders_enabled: document.getElementById("st-rem").checked,
+        reminder_hours: parseInt(gv("st-remh"), 10) || 24,
+        profile_applied_at: new Date().toISOString()
+      }).eq("company_id", S.company.id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
-      if (document.getElementById("st-seed").checked) {
-        var have = (await sb.from("appt_services").select("id").eq("company_id", S.company.id).limit(1)).data || [];
-        var defs = APPT_VERTICALS[vert].services || [];
-        var ins = defs.map(function (d, i) { return { company_id: S.company.id, name: d[0], duration_min: d[1], price: d[2], currency_code: S.company.currency_code, sort: i }; });
-        if (ins.length) await sb.from("appt_services").insert(ins);
-      }
-      _apptSet = null; await apptLoadSettings(true); toast("Saved"); goApp("appt.cal");
+      var made = { services: 0, fields: 0 };
+      if (document.getElementById("st-seed").checked) made = await apptApplyProfile(vert);
+      _apptSet = null; await apptLoadSettings(true);
+      toast(made.services || made.fields
+        ? "Saved. Added " + made.services + " service(s) and " + made.fields + " field(s) to the " + (gv("st-tf") || P.term_file).toLowerCase() + "."
+        : "Saved");
+      goApp("appt.cal");
     };
   }
 
