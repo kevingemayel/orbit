@@ -490,7 +490,7 @@
       '<div><label>Active</label><select id="bk-active"><option value="1"' + (b.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (b.is_active === false ? " selected" : "") + '>No</option></select></div></div>' +
       '<label style="display:block;margin-top:8px"><input type="checkbox" id="bk-default"' + (b.is_default ? " checked" : "") + '> New entries land in this book by default</label>' +
       '<div class="o-note">Every entry keeps its full audit trail whichever book it is in. Books change which entries a report adds up, not what is recorded.</div>';
-    plotModal(b.id ? "Edit book" : "New book", inner, async function () {
+    var _m = plotModal(b.id ? "Edit book" : "New book", inner, async function () {
       var name = gv("bk-name"); if (!name) { toast("Give the book a name"); return false; }
       var code = (gv("bk-code") || name).toLowerCase().replace(/[^a-z0-9_]+/g, "_");
       var inc = [].map.call(document.querySelectorAll(".bk-inc:checked"), function (c) { return c.value; });
@@ -503,7 +503,7 @@
       if (b.id) r = await sb.from("books").update(row).eq("id", b.id);
       else { row.company_id = S.company.id; r = await sb.from("books").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return false; }
-      await loadBooks(); renderShell(); toast("Saved"); return true;
+      await loadBooks(); renderShell(); _m.remove(); toast("Saved"); renderView(); return true;
     });
   }
   function bookChipHTML() {
@@ -1361,6 +1361,88 @@
         { label: "Warranties", action: "svc.warranties" }
       ]
     },
+    // The estate: stores, brands, regions. Every F&B transaction is stamped
+    // with a store, so this is the first thing a multi-site operator sets up.
+    estate: {
+      name: "Estate", icon: "⌂", color: "#0f766e", color2: "#115e59", home: "estate.stores",
+      menus: [
+        { label: "Stores", action: "estate.stores" },
+        { label: "Brands", action: "estate.brands" },
+        { label: "Regions", action: "estate.regions" },
+        { label: "Tables", action: "estate.tables" },
+        { label: "Licences & documents", action: "estate.docs" }
+      ]
+    },
+    // Front of house: what a shift lead and an area manager live in.
+    floor: {
+      name: "Operations", icon: "◔", color: "#c2410c", color2: "#9a3412", home: "ops.checkruns",
+      menus: [
+        { label: "Checklist runs", action: "ops.checkruns" },
+        { label: "Checklist templates", action: "ops.checktpl" },
+        { label: "Equipment", action: "ops.equipment" },
+        { label: "Maintenance", action: "ops.maintenance" },
+        { label: "Audits", items: [["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"]] },
+        { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] }
+      ]
+    },
+    // Stock, the F&B way: waste, counts, transfers, 86, and the variance that
+    // only becomes possible once recipes and modifiers are real.
+    stockops: {
+      name: "Stock control", icon: "▤", color: "#15803d", color2: "#166534", home: "sc.variance",
+      menus: [
+        { label: "Cost variance", action: "sc.variance" },
+        { label: "Waste log", action: "sc.waste" },
+        { label: "Stock counts", action: "sc.counts" },
+        { label: "Transfers", action: "sc.transfers" },
+        { label: "Availability (86)", action: "sc.availability" },
+        { label: "Setup", items: [["Waste reasons", "sc.wastereasons"]] }
+      ]
+    },
+    // The roastery.
+    roastery: {
+      name: "Roastery", icon: "◉", color: "#7c2d12", color2: "#601c08", home: "rst.lots",
+      menus: [
+        { label: "Green lots", action: "rst.lots" },
+        { label: "Roast batches", action: "rst.batches" },
+        { label: "Grinder dial-in", action: "rst.grinder" },
+        { label: "Wholesale accounts", action: "rst.wholesale" },
+        { label: "Training academy", action: "rst.courses" }
+      ]
+    },
+    // Guests: loyalty, stored value, subscriptions, feedback.
+    guests: {
+      name: "Guests", icon: "♥", color: "#be185d", color2: "#9d174d", home: "gst.loyalty",
+      menus: [
+        { label: "Loyalty programmes", action: "gst.loyalty" },
+        { label: "Gift cards & wallets", action: "gst.storedvalue" },
+        { label: "Subscription plans", action: "gst.subs" },
+        { label: "Feedback & complaints", action: "gst.feedback" },
+        { label: "Customers", action: "contacts" }
+      ]
+    },
+    // Delivery and the platforms, including the reconciliation that matters most.
+    delivery: {
+      name: "Delivery", icon: "⇢", color: "#0369a1", color2: "#075985", home: "dlv.payouts",
+      menus: [
+        { label: "Aggregator payouts", action: "dlv.payouts" },
+        { label: "Aggregator accounts", action: "dlv.accounts" },
+        { label: "Own deliveries", action: "dlv.deliveries" },
+        { label: "Reservations", action: "dlv.reservations" }
+      ]
+    },
+    // The franchise module: what turns this from a till into something a
+    // franchisor buys.
+    franchise: {
+      name: "Franchise", icon: "◈", color: "#6d28d9", color2: "#5b21b6", home: "fr.franchisees",
+      menus: [
+        { label: "Franchisees", action: "fr.franchisees" },
+        { label: "Royalty schemes", action: "fr.schemes" },
+        { label: "Reported sales", action: "fr.sales" },
+        { label: "Royalty run", action: "fr.royaltyrun" },
+        { label: "Development pipeline", action: "fr.pipeline" },
+        { label: "Approved suppliers", action: "fr.suppliers" }
+      ]
+    },
     // Menu engineering. Sits beside POS rather than inside it, because the menu,
     // its recipes and its channel prices are master data that outlive any till.
     menu: {
@@ -1402,6 +1484,7 @@
         { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"], ["Contracts", "hr.contracts"]] },
         { label: "Talent", items: [["Skills", "hr.skills"], ["Employee Skills", "hr.empskills"], ["Certifications", "hr.certs"], ["Onboarding", "hr.onboard"], ["Appraisals", "hr.appraisals"]] },
         { label: "Planning", items: [["Planning", "hr.planning"], ["Shift Templates", "hr.shifttmpl"]] },
+        { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] },
         { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
         { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
         { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
@@ -1507,7 +1590,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "menu.list": "menu", "menu.modgroups": "menu", "menu.channels": "menu", "menu.prices": "menu", "menu.engineering": "menu", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "settings", "estate.brands": "settings", "estate.regions": "settings", "estate.tables": "settings", "estate.docs": "settings", "ops.checkruns": "site", "ops.checktpl": "site", "ops.equipment": "site", "ops.maintenance": "site", "ops.audits": "site", "ops.auditactions": "site", "ops.exceptions": "pos", "ops.reasons": "pos", "sc.variance": "inventory", "sc.waste": "inventory", "sc.counts": "inventory", "sc.transfers": "inventory", "sc.availability": "inventory", "sc.wastereasons": "inventory", "rst.lots": "inventory", "rst.batches": "manufacturing", "rst.grinder": "manufacturing", "rst.wholesale": "sales", "rst.courses": "sales", "gst.loyalty": "crm", "gst.storedvalue": "crm", "gst.subs": "crm", "gst.feedback": "crm", "dlv.payouts": "accounting", "dlv.accounts": "sales", "dlv.deliveries": "sales", "dlv.reservations": "sales", "fr.franchisees": "sales", "fr.schemes": "accounting", "fr.sales": "accounting", "fr.royaltyrun": "accounting", "fr.pipeline": "crm", "fr.suppliers": "purchase", "hr.labour": "hr", "hr.forecast": "insights", "menu.list": "menu", "menu.modgroups": "menu", "menu.channels": "menu", "menu.prices": "menu", "menu.engineering": "menu", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -3083,6 +3166,46 @@
       case "svc.ppm": return renderMaintenancePlans();
       case "pos.terminal": return renderPOS();
       case "pos.returns": return renderPosReturns();
+      case "estate.stores": return renderList(cfgStores());
+      case "estate.brands": return renderList(cfgBrands());
+      case "estate.regions": return renderList(cfgRegions());
+      case "estate.tables": return renderList(cfgStoreTables());
+      case "estate.docs": return renderList(cfgComplianceDocs());
+      case "ops.checkruns": return renderList(cfgChecklistRuns());
+      case "ops.checktpl": return renderList(cfgChecklistTemplates());
+      case "ops.equipment": return renderList(cfgEquipment());
+      case "ops.maintenance": return renderList(cfgMaintenance());
+      case "ops.audits": return renderList(cfgAudits());
+      case "ops.auditactions": return renderList(cfgAuditActions());
+      case "ops.exceptions": return renderExceptionReport();
+      case "ops.reasons": return renderList(cfgReasonCodes());
+      case "sc.variance": return renderCostVariance();
+      case "sc.waste": return renderList(cfgWaste());
+      case "sc.counts": return renderList(cfgStockCounts());
+      case "sc.transfers": return renderList(cfgTransfers());
+      case "sc.availability": return renderList(cfgAvailability());
+      case "sc.wastereasons": return renderList(cfgWasteReasons());
+      case "rst.lots": return renderList(cfgGreenLots());
+      case "rst.batches": return renderList(cfgRoastBatches());
+      case "rst.grinder": return renderList(cfgGrinderLogs());
+      case "rst.wholesale": return renderList(cfgWholesale());
+      case "rst.courses": return renderList(cfgTrainingCourses());
+      case "gst.loyalty": return renderList(cfgLoyaltyPrograms());
+      case "gst.storedvalue": return renderList(cfgStoredValue());
+      case "gst.subs": return renderList(cfgSubscriptionPlans());
+      case "gst.feedback": return renderList(cfgFeedback());
+      case "dlv.payouts": return renderList(cfgAggregatorPayouts());
+      case "dlv.accounts": return renderList(cfgAggregatorAccounts());
+      case "dlv.deliveries": return renderList(cfgDeliveries());
+      case "dlv.reservations": return renderList(cfgReservations());
+      case "fr.franchisees": return renderList(cfgFranchisees());
+      case "fr.schemes": return renderList(cfgRoyaltySchemes());
+      case "fr.sales": return renderList(cfgFranchiseSales());
+      case "fr.royaltyrun": return renderRoyaltyRun();
+      case "fr.pipeline": return renderList(cfgPipeline());
+      case "fr.suppliers": return renderList(cfgApprovedSuppliers());
+      case "hr.labour": return renderList(cfgLabourStandards());
+      case "hr.forecast": return renderList(cfgForecasts());
       case "menu.list": return renderList(cfgMenus());
       case "menu.modgroups": return renderList(cfgModifierGroups());
       case "menu.channels": return renderList(cfgChannels());
@@ -16534,6 +16657,140 @@
   }
   // Promotions config.
   // ===========================================================================
+  // F&B SCREEN FACTORY
+  //
+  // Sections 0, 2, 3, 4, 5, 8, 9, 10 and 12 of the spec add around fifty
+  // register-style screens: a list, a modal to add or edit, a few typed fields.
+  // Hand-writing fifty renderList configs would be fifty places to get the
+  // company scoping or the delete button wrong. Instead one factory turns a
+  // small declaration into a full screen, so every one of them behaves the same
+  // and a fix lands everywhere at once.
+  //
+  //   f(spec) where spec = {
+  //     title, table, order, hint,
+  //     cols:   [{l: label, k: key, fmt: "money"|"date"|"badge"|"pct"|fn, num: bool}],
+  //     fields: [{k, l, t: "text"|"num"|"date"|"time"|"select"|"textarea"|"check",
+  //               opts: [[v,label]] | fn, hint, req}],
+  //     lookups:{name: () => rows},        // loaded once, usable by opts
+  //     filters, groupBy
+  //   }
+  // ===========================================================================
+  var FNB_LOOKUP_CACHE = {};
+  function fnbLookup(name, loader) {
+    var key = name + ":" + (S.company ? S.company.id : "");
+    if (!FNB_LOOKUP_CACHE[key]) FNB_LOOKUP_CACHE[key] = loader();
+    return FNB_LOOKUP_CACHE[key];
+  }
+  function fnbClearLookups() { FNB_LOOKUP_CACHE = {}; }
+  function fnbCo(table, sel) {
+    return sb.from(table).select(sel || "*").eq("company_id", S.company.id);
+  }
+  // The common lookups, loaded once per company and shared by every screen.
+  function lkStores() { return fnbLookup("stores", function () { return fnbCo("stores", "id,name,code").eq("is_active", true).order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkProducts() { return fnbLookup("products", function () { return fnbCo("products", "id,name").eq("is_active", true).order("name").limit(1000).then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkPartners() { return fnbLookup("partners", function () { return fnbCo("partners", "id,name").order("name").limit(1000).then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkEmployees() { return fnbLookup("employees", function () { return fnbCo("hr_employees", "id,name").order("name").limit(1000).then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkChannels() { return fnbLookup("channels", function () { return fnbCo("sales_channels", "id,name").eq("is_active", true).order("sort").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkFranchisees() { return fnbLookup("franchisees", function () { return fnbCo("franchisees", "id,name").order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  function lkEquipment() { return fnbLookup("equipment", function () { return fnbCo("equipment", "id,name").order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+
+  function fnbFmt(v, fmt, row) {
+    if (typeof fmt === "function") return fmt(row, v);
+    if (v == null || v === "") return "";
+    if (fmt === "money") return money(v);
+    if (fmt === "pct") return (Math.round(Number(v) * 100) / 100) + "%";
+    if (fmt === "date") return '<span class="muted">' + esc(String(v).slice(0, 10)) + '</span>';
+    if (fmt === "datetime") return '<span class="muted">' + esc(String(v).replace("T", " ").slice(0, 16)) + '</span>';
+    if (fmt === "bool") return v ? '<span class="badge paid">Yes</span>' : '<span class="badge">No</span>';
+    if (fmt === "badge") return '<span class="badge ' + fnbBadge(v) + '">' + esc(fnbTitle(v)) + '</span>';
+    if (fmt === "muted") return '<span class="muted">' + esc(v) + '</span>';
+    if (fmt === "b") return '<b>' + esc(v) + '</b>';
+    return esc(v);
+  }
+  function fnbTitle(v) { return String(v).replace(/_/g, " ").replace(/^./, function (c) { return c.toUpperCase(); }); }
+  function fnbBadge(v) {
+    v = String(v);
+    if (/^(active|approved|verified|received|delivered|paid|settled|done|complete|open_store|matched|accepted|posted)$/.test(v)) return "paid";
+    if (/^(draft|requested|new|booked|pending|prospect|lead|submitted)$/.test(v)) return "draft";
+    if (/^(cancelled|rejected|failed|disputed|terminated|breach|no_show|critical)$/.test(v)) return "unpaid";
+    return "partial";
+  }
+  function fnbField(f, rec, opts) {
+    var v = rec ? rec[f.k] : (f.def != null ? f.def : "");
+    var id = "fx-" + f.k;
+    if (f.t === "select") {
+      var list = opts[f.k] || (typeof f.opts === "function" ? f.opts() : f.opts) || [];
+      return fld(f.l, '<select id="' + id + '">' + (f.req ? "" : '<option value="">(none)</option>') +
+        list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(v) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("") + '</select>', f.hint);
+    }
+    if (f.t === "check") return fld(f.l, '<select id="' + id + '"><option value="1"' + (v ? " selected" : "") + '>Yes</option><option value="0"' + (!v ? " selected" : "") + '>No</option></select>', f.hint);
+    if (f.t === "textarea") return fld(f.l, '<textarea id="' + id + '" rows="2">' + esc(v || "") + '</textarea>', f.hint);
+    var type = f.t === "num" ? 'type="number" step="' + (f.step || "0.01") + '"' : f.t === "date" ? 'type="date"' : f.t === "time" ? 'type="time"' : 'type="text"';
+    return fld(f.l, '<input id="' + id + '" ' + type + ' value="' + esc(v == null ? "" : String(v).slice(0, f.t === "time" ? 5 : 99)) + '"' + (f.ph ? ' placeholder="' + esc(f.ph) + '"' : "") + '>', f.hint);
+  }
+  function fnbRead(fields) {
+    var row = {};
+    fields.forEach(function (f) {
+      var el = document.getElementById("fx-" + f.k); if (!el) return;
+      var v = el.value;
+      if (f.t === "num") row[f.k] = v === "" ? null : parseFloat(v);
+      else if (f.t === "check") row[f.k] = v === "1";
+      else row[f.k] = v === "" ? null : v;
+    });
+    return row;
+  }
+  function fnbCfg(spec) {
+    return {
+      title: spec.title, pageSize: spec.pageSize || 60, table: spec.table,
+      fetch: async function () {
+        var q = fnbCo(spec.table, spec.select);
+        (spec.order || [["created_at", false]]).forEach(function (o) { q = q.order(o[0], { ascending: o[1] !== false }); });
+        var r = await q;
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        return r.data || [];
+      },
+      searchText: function (r) { return (spec.searchKeys || spec.cols.map(function (c) { return c.k; })).map(function (k) { return r[k] || ""; }).join(" "); },
+      columns: spec.cols.map(function (c) {
+        return { label: c.l, num: !!c.num, get: function (r) { return fnbFmt(r[c.k], c.fmt, r); } };
+      }),
+      filters: spec.filters, groupBy: spec.groupBy,
+      emptyHint: spec.hint,
+      onOpen: function (r) { fnbModal(spec, r); }, onNew: function () { fnbModal(spec, null); }
+    };
+  }
+  async function fnbModal(spec, rec) {
+    var opts = {};
+    for (var i = 0; i < spec.fields.length; i++) {
+      var f = spec.fields[i];
+      if (f.lookup) opts[f.k] = await f.lookup();
+    }
+    var inner = spec.fields.map(function (f) { return fnbField(f, rec, opts); }).join("");
+    if (spec.note) inner += '<div class="o-note">' + spec.note + '</div>';
+    var m = plotModal((rec ? "Edit " : "New ") + (spec.one || spec.title.replace(/s$/, "").toLowerCase()), inner, async function () {
+      var row = fnbRead(spec.fields);
+      var missing = spec.fields.filter(function (f) { return f.req && (row[f.k] == null || row[f.k] === ""); });
+      if (missing.length) { toast(missing[0].l + " is required"); return; }
+      if (spec.before) { var ok = spec.before(row, rec); if (ok === false) return; }
+      var r;
+      if (rec && rec.id) r = await sb.from(spec.table).update(row).eq("id", rec.id);
+      else { row.company_id = S.company.id; r = await sb.from(spec.table).insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); fnbClearLookups(); toast("Saved"); renderView();
+    }, spec.wide);
+    if (rec && rec.id && canManageApp(S.app)) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this record?")) return;
+        var d = await sb.from(spec.table).delete().eq("id", rec.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+
+  // ===========================================================================
   // MENU ENGINEERING  (F&B spec section 1)
   //
   // Four things live here that a product catalogue alone cannot express:
@@ -16574,7 +16831,7 @@
       '<div class="o-note">Markup is what you add to the base price on this channel to absorb its commission. Commission is what the channel actually takes, so the two can be compared later against the payout statement.</div>' +
       '<div class="row2"><div><label>Order</label><input id="ch-sort" type="number" value="' + (c.sort != null ? c.sort : 50) + '"></div>' +
       '<div><label>Active</label><select id="ch-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>No</option></select></div></div>';
-    plotModal(c.id ? "Edit channel" : "New channel", inner, async function () {
+    var _m = plotModal(c.id ? "Edit channel" : "New channel", inner, async function () {
       var name = gv("ch-name"); if (!name) { toast("Name the channel"); return false; }
       var row = { name: name, code: (gv("ch-code") || name).toLowerCase().replace(/[^a-z0-9_]+/g, "_"),
         kind: document.getElementById("ch-kind").value, markup_percent: parseFloat(gv("ch-markup")) || 0,
@@ -16583,7 +16840,7 @@
       var r; if (c.id) r = await sb.from("sales_channels").update(row).eq("id", c.id);
       else { row.company_id = S.company.id; r = await sb.from("sales_channels").insert(row); }
       if (r.error) { toast(errMsg(r.error)); return false; }
-      toast("Saved"); return true;
+      _m.remove(); toast("Saved"); renderView(); return true;
     });
   }
 
@@ -16818,7 +17075,7 @@
         .eq("product_id", productId).eq("channel_id", channelId).is("valid_to", null).lt("valid_from", from);
       var r = await sb.from("product_prices").insert({ company_id: S.company.id, product_id: productId, channel_id: channelId, price: price, currency_code: S.company.currency_code, valid_from: from, note: gv("pp-note") || null });
       if (r.error) { toast(errMsg(r.error)); return false; }
-      toast("Price set from " + from); renderPriceList(); return true;
+      _m.remove(); toast("Price set from " + from); renderPriceList(); return true;
     });
     // live margin simulator
     var el = document.getElementById("pp-price");
@@ -16883,6 +17140,708 @@
       rows.map(function (r) {
         return '<tr><td>' + esc(r.name) + '</td><td class="num">' + Math.round(r.qty * 100) / 100 + '</td><td class="num">' + money(r.rev) + '</td><td class="num">' + money(r.cost) + '</td><td class="num">' + money(r.cm) + '</td><td class="num">' + money(r.qty ? r.cm / r.qty : 0) + '</td><td><span class="badge ' + cls[r.box] + '">' + r.box + '</span> <span class="muted">' + esc(r.advice) + '</span></td></tr>';
       }).join("") + '</tbody></table></div>';
+  }
+
+  // ===========================================================================
+  // F&B SCREENS  (spec sections 0, 2, 3, 4, 5, 8, 9, 10, 12)
+  // Each is a declaration handed to the factory above.
+  // ===========================================================================
+  var OWNERSHIP = [["coco", "COCO - company owned, company operated"], ["fofo", "FOFO - franchise owned, franchise operated"], ["foco", "FOCO - franchise owned, company operated"], ["managed", "Managed under contract"]];
+  var STORE_TYPES = [["outlet", "Outlet"], ["kiosk", "Kiosk"], ["central_kitchen", "Central kitchen"], ["roastery", "Roastery"], ["warehouse", "Warehouse"], ["popup", "Pop-up"], ["truck", "Truck / cart"]];
+
+  // --- Section 0: the estate ---
+  function cfgStores() {
+    return fnbCfg({
+      title: "Stores", table: "stores", one: "store", wide: true, order: [["name", true]],
+      hint: "A store is a trading location: an outlet, a kiosk, a central kitchen, a roastery. Every sale, shift and stock movement can be stamped with one, which is what makes store-by-store reporting possible.",
+      cols: [{ l: "Store", k: "name", fmt: "b" }, { l: "Code", k: "code", fmt: "muted" }, { l: "Type", k: "store_type", fmt: "badge" }, { l: "Ownership", k: "ownership", fmt: function (r) { return '<span class="badge ' + (r.ownership === "coco" ? "paid" : "partial") + '">' + String(r.ownership || "").toUpperCase() + '</span>'; } }, { l: "City", k: "city" }, { l: "Active", k: "is_active", fmt: "bool" }],
+      filters: [{ label: "Company owned", test: function (r) { return r.ownership === "coco"; } }, { label: "Franchised", test: function (r) { return r.ownership !== "coco"; } }],
+      groupBy: [{ label: "Type", get: function (r) { return fnbTitle(r.store_type || "None"); } }, { label: "City", get: function (r) { return r.city || "None"; } }],
+      fields: [
+        { k: "name", l: "Store name", t: "text", req: true }, { k: "code", l: "Code", t: "text", req: true, hint: "Short, unique, used on reports." },
+        { k: "store_type", l: "Type", t: "select", opts: STORE_TYPES, req: true },
+        { k: "ownership", l: "Ownership", t: "select", opts: OWNERSHIP, req: true, hint: "Decides royalty treatment and how it consolidates." },
+        { k: "franchisee_id", l: "Franchisee", t: "select", lookup: lkFranchisees, hint: "Only for a franchised store." },
+        { k: "city", l: "City", t: "text" }, { k: "country", l: "Country", t: "text" }, { k: "address", l: "Address", t: "text" },
+        { k: "phone", l: "Phone", t: "text" }, { k: "opened_on", l: "Opened", t: "date" },
+        { k: "seats", l: "Seats", t: "num", step: "1" }, { k: "area_sqm", l: "Area m2", t: "num" },
+        { k: "has_drive_thru", l: "Drive-thru", t: "check" }, { k: "has_delivery", l: "Delivery", t: "check" },
+        { k: "delivery_radius_km", l: "Delivery radius km", t: "num" },
+        { k: "target_food_cost_pct", l: "Target food cost %", t: "num", hint: "Used by the prime cost report." },
+        { k: "target_labour_pct", l: "Target labour %", t: "num" },
+        { k: "is_active", l: "Active", t: "check", def: true }
+      ]
+    });
+  }
+  function cfgBrands() {
+    return fnbCfg({ title: "Brands", table: "brands", one: "brand", order: [["name", true]],
+      hint: "A group can run more than one brand out of the same company.",
+      cols: [{ l: "Brand", k: "name", fmt: "b" }, { l: "Code", k: "code", fmt: "muted" }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "code", l: "Code", t: "text" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgRegions() {
+    return fnbCfg({ title: "Regions", table: "regions", one: "region", order: [["name", true]],
+      hint: "Group stores by country or area so an area manager sees only their own.",
+      cols: [{ l: "Region", k: "name", fmt: "b" }, { l: "Country", k: "country" }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "country", l: "Country", t: "text" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+
+  // --- Section 5: inventory ---
+  function cfgWaste() {
+    return fnbCfg({
+      title: "Waste log", table: "waste_entries", one: "waste entry", order: [["waste_date", false]],
+      hint: "Every bin trip, with a reason. Waste that is never recorded turns up later as an unexplained stock variance nobody can act on.",
+      select: "*, products(name), waste_reasons(name,is_controllable), stores(name)",
+      cols: [{ l: "Date", k: "waste_date", fmt: "date" }, { l: "Item", k: "product_id", fmt: function (r) { return esc(r.products ? r.products.name : ""); } },
+        { l: "Reason", k: "reason_id", fmt: function (r) { return r.waste_reasons ? '<span class="badge ' + (r.waste_reasons.is_controllable ? "unpaid" : "draft") + '">' + esc(r.waste_reasons.name) + '</span>' : ""; } },
+        { l: "Qty", k: "qty", num: true }, { l: "Cost", k: "total_cost", fmt: "money", num: true }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } }],
+      groupBy: [{ label: "Reason", get: function (r) { return r.waste_reasons ? r.waste_reasons.name : "None"; } }, { label: "Item", get: function (r) { return r.products ? r.products.name : "None"; } }, { label: "Month", get: function (r) { return (r.waste_date || "").slice(0, 7); } }],
+      fields: [
+        { k: "waste_date", l: "Date", t: "date", req: true, def: today() },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "product_id", l: "Item", t: "select", lookup: lkProducts, req: true },
+        { k: "reason_id", l: "Reason", t: "select", lookup: function () { return fnbLookup("wastereasons", function () { return fnbCo("waste_reasons", "id,name").eq("is_active", true).order("sort").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }, req: true },
+        { k: "qty", l: "Quantity", t: "num", req: true }, { k: "uom", l: "Unit", t: "text" },
+        { k: "unit_cost", l: "Unit cost", t: "num" }, { k: "total_cost", l: "Total cost", t: "num", hint: "Leave blank to use quantity times unit cost." },
+        { k: "shift", l: "Shift", t: "text" }, { k: "note", l: "Note", t: "textarea" }
+      ],
+      before: function (row) { if (row.total_cost == null && row.qty != null && row.unit_cost != null) row.total_cost = row.qty * row.unit_cost; }
+    });
+  }
+  function cfgWasteReasons() {
+    return fnbCfg({ title: "Waste reasons", table: "waste_reasons", one: "reason", order: [["sort", true]],
+      hint: "Keep controllable losses (spoilage, breakage) apart from the cost of doing business (staff meals, training). Only the first kind is worth chasing.",
+      cols: [{ l: "Reason", k: "name", fmt: "b" }, { l: "Code", k: "code", fmt: "muted" }, { l: "Controllable", k: "is_controllable", fmt: "bool" }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "code", l: "Code", t: "text", req: true },
+        { k: "is_controllable", l: "Controllable loss", t: "check", def: true, hint: "No for staff meals and training." },
+        { k: "sort", l: "Order", t: "num", step: "1" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgStockCounts() {
+    return fnbCfg({
+      title: "Stock counts", table: "stock_counts", one: "count", order: [["count_date", false]],
+      hint: "A blind count is the only kind worth doing: the counter cannot see what the system expects, so the number is what is actually on the shelf.",
+      select: "*, stores(name)",
+      cols: [{ l: "Date", k: "count_date", fmt: "date" }, { l: "Reference", k: "reference", fmt: "b" }, { l: "Type", k: "count_type", fmt: "badge" },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } }, { l: "Blind", k: "is_blind", fmt: "bool" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Open", test: function (r) { return r.status !== "posted" && r.status !== "cancelled"; } }, { label: "Posted", test: function (r) { return r.status === "posted"; } }],
+      fields: [
+        { k: "reference", l: "Reference", t: "text" }, { k: "count_date", l: "Date", t: "date", req: true, def: today() },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "count_type", l: "Type", t: "select", opts: [["full", "Full"], ["cycle", "Cycle"], ["spot", "Spot"]], req: true },
+        { k: "is_blind", l: "Blind count", t: "check", def: true },
+        { k: "status", l: "Status", t: "select", opts: [["draft", "Draft"], ["counting", "Counting"], ["review", "Review"], ["approved", "Approved"], ["posted", "Posted"], ["cancelled", "Cancelled"]] },
+        { k: "counted_by", l: "Counted by", t: "text" }, { k: "note", l: "Note", t: "textarea" }
+      ]
+    });
+  }
+  function cfgTransfers() {
+    return fnbCfg({
+      title: "Stock transfers", table: "stock_transfers", one: "transfer", order: [["requested_at", false]],
+      hint: "Between two of your own stores. Recording dispatch and receipt separately is what makes the difference visible instead of quietly absorbed.",
+      select: "*, from_store:from_store_id(name), to_store:to_store_id(name)",
+      cols: [{ l: "Number", k: "number", fmt: "b" }, { l: "From", k: "from_store_id", fmt: function (r) { return esc(r.from_store ? r.from_store.name : ""); } },
+        { l: "To", k: "to_store_id", fmt: function (r) { return esc(r.to_store ? r.to_store.name : ""); } },
+        { l: "Requested", k: "requested_at", fmt: "datetime" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "In flight", test: function (r) { return r.status === "requested" || r.status === "approved" || r.status === "dispatched"; } }, { label: "Received", test: function (r) { return r.status === "received"; } }],
+      fields: [
+        { k: "number", l: "Number", t: "text" },
+        { k: "from_store_id", l: "From store", t: "select", lookup: lkStores, req: true },
+        { k: "to_store_id", l: "To store", t: "select", lookup: lkStores, req: true },
+        { k: "status", l: "Status", t: "select", opts: [["requested", "Requested"], ["approved", "Approved"], ["dispatched", "Dispatched"], ["received", "Received"], ["cancelled", "Cancelled"]] },
+        { k: "note", l: "Note", t: "textarea" }
+      ],
+      before: function (row) { if (row.from_store_id && row.from_store_id === row.to_store_id) { toast("A store cannot transfer to itself"); return false; } }
+    });
+  }
+  function cfgAvailability() {
+    return fnbCfg({
+      title: "Availability (86)", table: "store_item_availability", one: "availability flag", order: [["updated_at", false]],
+      hint: "Mark an item off at one store and it stops being offered there, on every channel, until you put it back.",
+      select: "*, products(name), stores(name)",
+      cols: [{ l: "Item", k: "product_id", fmt: function (r) { return '<b>' + esc(r.products ? r.products.name : "") + '</b>'; } },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Available", k: "is_available", fmt: function (r) { return r.is_available ? '<span class="badge paid">On</span>' : '<span class="badge unpaid">86</span>'; } },
+        { l: "Reason", k: "reason", fmt: "muted" }, { l: "Until", k: "until_date", fmt: "date" }],
+      filters: [{ label: "Currently 86", test: function (r) { return !r.is_available; } }],
+      fields: [
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores, req: true },
+        { k: "product_id", l: "Item", t: "select", lookup: lkProducts, req: true },
+        { k: "is_available", l: "Available", t: "check", def: true },
+        { k: "reason", l: "Reason", t: "text", ph: "out of stock, machine down..." },
+        { k: "until_date", l: "Back on", t: "date" }
+      ]
+    });
+  }
+  function cfgGreenLots() {
+    return fnbCfg({
+      title: "Green coffee lots", table: "green_lots", one: "lot", wide: true, order: [["arrival_date", false]],
+      hint: "Where the coffee came from and what is left of it. Origin, process and cupping score follow the beans through roasting and into the cup.",
+      select: "*, partners(name)",
+      cols: [{ l: "Lot", k: "lot_code", fmt: "b" }, { l: "Origin", k: "origin" }, { l: "Farm", k: "farm", fmt: "muted" }, { l: "Process", k: "process", fmt: "badge" },
+        { l: "Score", k: "cupping_score", num: true }, { l: "kg left", k: "qty_remaining_kg", num: true }, { l: "Cost/kg", k: "cost_per_kg", fmt: "money", num: true }],
+      groupBy: [{ label: "Origin", get: function (r) { return r.origin || "None"; } }, { label: "Process", get: function (r) { return fnbTitle(r.process || "None"); } }],
+      fields: [
+        { k: "lot_code", l: "Lot code", t: "text", req: true }, { k: "product_id", l: "Green product", t: "select", lookup: lkProducts },
+        { k: "supplier_id", l: "Supplier", t: "select", lookup: lkPartners },
+        { k: "origin", l: "Origin", t: "text" }, { k: "farm", l: "Farm / station", t: "text" }, { k: "region", l: "Region", t: "text" }, { k: "varietal", l: "Varietal", t: "text" },
+        { k: "process", l: "Process", t: "select", opts: [["washed", "Washed"], ["natural", "Natural"], ["honey", "Honey"], ["anaerobic", "Anaerobic"]] },
+        { k: "harvest_year", l: "Harvest year", t: "num", step: "1" }, { k: "altitude_m", l: "Altitude m", t: "num" },
+        { k: "moisture_pct", l: "Moisture %", t: "num" }, { k: "screen_size", l: "Screen", t: "text" },
+        { k: "cupping_score", l: "Cupping score", t: "num" },
+        { k: "qty_kg", l: "Received kg", t: "num" }, { k: "qty_remaining_kg", l: "Remaining kg", t: "num" },
+        { k: "cost_per_kg", l: "Cost per kg", t: "num" }, { k: "arrival_date", l: "Arrived", t: "date" },
+        { k: "notes", l: "Notes", t: "textarea" }
+      ]
+    });
+  }
+  function cfgRoastBatches() {
+    return fnbCfg({
+      title: "Roast batches", table: "roast_batches", one: "roast", wide: true, order: [["roast_date", false]],
+      hint: "Green in, roasted out. Roast loss is calculated for you and is the number that tells you whether a profile drifted.",
+      select: "*, green_lots(lot_code,origin), stores(name)",
+      cols: [{ l: "Date", k: "roast_date", fmt: "date" }, { l: "Batch", k: "batch_code", fmt: "b" },
+        { l: "Lot", k: "green_lot_id", fmt: function (r) { return esc(r.green_lots ? r.green_lots.lot_code : ""); } },
+        { l: "Green kg", k: "green_kg", num: true }, { l: "Roasted kg", k: "roasted_kg", num: true },
+        { l: "Loss", k: "loss_pct", num: true, fmt: function (r) { var v = Number(r.loss_pct); return isNaN(v) ? "" : '<span class="badge ' + (v > 20 || v < 10 ? "unpaid" : "paid") + '">' + v + '%</span>'; } },
+        { l: "Roaster", k: "roaster", fmt: "muted" }],
+      groupBy: [{ label: "Profile", get: function (r) { return r.profile_name || "None"; } }, { label: "Month", get: function (r) { return (r.roast_date || "").slice(0, 7); } }],
+      fields: [
+        { k: "batch_code", l: "Batch code", t: "text" }, { k: "roast_date", l: "Roast date", t: "date", req: true, def: today() },
+        { k: "green_lot_id", l: "Green lot", t: "select", lookup: function () { return fnbLookup("greenlots", function () { return fnbCo("green_lots", "id,lot_code").order("arrival_date", { ascending: false }).then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.lot_code]; }); }); }); } },
+        { k: "output_product_id", l: "Roasted product", t: "select", lookup: lkProducts },
+        { k: "store_id", l: "Roastery", t: "select", lookup: lkStores },
+        { k: "green_kg", l: "Green kg in", t: "num", req: true }, { k: "roasted_kg", l: "Roasted kg out", t: "num", req: true },
+        { k: "profile_name", l: "Profile", t: "text" }, { k: "roaster", l: "Roasted by", t: "text" },
+        { k: "charge_temp", l: "Charge temp", t: "num" }, { k: "drop_temp", l: "Drop temp", t: "num" }, { k: "development_min", l: "Development min", t: "num" },
+        { k: "cupping_score", l: "Cupping score", t: "num" }, { k: "qc_notes", l: "QC notes", t: "textarea" }
+      ],
+      before: function (row) { if (row.roasted_kg != null && row.green_kg != null && row.roasted_kg > row.green_kg) { toast("Roasted weight cannot exceed green weight"); return false; } }
+    });
+  }
+  function cfgGrinderLogs() {
+    return fnbCfg({
+      title: "Grinder dial-in", table: "grinder_logs", one: "dial-in", order: [["log_date", false]],
+      hint: "Dose, yield and time, every session. The ratio is worked out for you, and a drifting ratio is the first sign of a grinder or a bean problem.",
+      select: "*, products(name), stores(name)",
+      cols: [{ l: "Date", k: "log_date", fmt: "date" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Coffee", k: "product_id", fmt: function (r) { return esc(r.products ? r.products.name : ""); } },
+        { l: "Setting", k: "grind_setting" }, { l: "Dose g", k: "dose_g", num: true }, { l: "Yield g", k: "yield_g", num: true },
+        { l: "Time s", k: "time_sec", num: true }, { l: "Ratio", k: "ratio", num: true }, { l: "Verdict", k: "verdict", fmt: "muted" }],
+      fields: [
+        { k: "log_date", l: "Date", t: "date", req: true, def: today() }, { k: "shift", l: "Shift", t: "text" },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "product_id", l: "Coffee", t: "select", lookup: lkProducts },
+        { k: "grind_setting", l: "Grind setting", t: "text" },
+        { k: "dose_g", l: "Dose g", t: "num" }, { k: "yield_g", l: "Yield g", t: "num" }, { k: "time_sec", l: "Time sec", t: "num" }, { k: "temp_c", l: "Temp C", t: "num" },
+        { k: "tasted_by", l: "Tasted by", t: "text" }, { k: "verdict", l: "Verdict", t: "text", ph: "balanced / sour / bitter" }, { k: "note", l: "Note", t: "textarea" }
+      ]
+    });
+  }
+
+  // --- Section 2: floor and loss prevention ---
+  function cfgReasonCodes() {
+    return fnbCfg({ title: "Reason codes", table: "pos_reason_codes", one: "reason code", order: [["kind", true], ["sort", true]],
+      hint: "Nothing may be voided, discounted or refunded without one. This is what turns the exception report from a list into evidence.",
+      cols: [{ l: "Applies to", k: "kind", fmt: "badge" }, { l: "Reason", k: "name", fmt: "b" }, { l: "Code", k: "code", fmt: "muted" }, { l: "Manager", k: "requires_manager", fmt: "bool" }],
+      groupBy: [{ label: "Applies to", get: function (r) { return fnbTitle(r.kind); } }],
+      fields: [{ k: "kind", l: "Applies to", t: "select", opts: [["void", "Void"], ["discount", "Discount"], ["refund", "Refund"], ["comp", "Comp"], ["no_sale", "No sale"], ["price_override", "Price override"]], req: true },
+        { k: "code", l: "Code", t: "text", req: true }, { k: "name", l: "Reason", t: "text", req: true },
+        { k: "requires_manager", l: "Needs a manager", t: "check", def: true }, { k: "sort", l: "Order", t: "num", step: "1" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgStoreTables() {
+    return fnbCfg({ title: "Tables", table: "store_tables", one: "table", order: [["sort", true]],
+      hint: "The floor plan for table service.",
+      select: "*, stores(name)",
+      cols: [{ l: "Table", k: "name", fmt: "b" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } }, { l: "Zone", k: "zone" }, { l: "Seats", k: "seats", num: true }, { l: "Status", k: "status", fmt: "badge" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "zone", l: "Zone", t: "text" }, { k: "seats", l: "Seats", t: "num", step: "1" },
+        { k: "status", l: "Status", t: "select", opts: [["free", "Free"], ["seated", "Seated"], ["ordered", "Ordered"], ["bill", "Bill"], ["dirty", "Needs clearing"]] },
+        { k: "sort", l: "Order", t: "num", step: "1" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+
+  // --- Section 9: operations and compliance ---
+  function cfgChecklistTemplates() {
+    return fnbCfg({ title: "Checklist templates", table: "checklist_templates", one: "template", order: [["name", true]],
+      hint: "Opening, closing, hourly cleaning, fridge temperatures, brand audits. Build the list once and every store runs the same one.",
+      cols: [{ l: "Template", k: "name", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" }, { l: "Frequency", k: "frequency", fmt: "muted" }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["opening", "Opening"], ["closing", "Closing"], ["hourly", "Hourly"], ["handover", "Shift handover"], ["cleaning", "Cleaning"], ["haccp", "HACCP / food safety"], ["audit", "Audit"]], req: true },
+        { k: "frequency", l: "Frequency", t: "select", opts: [["daily", "Daily"], ["per_shift", "Per shift"], ["weekly", "Weekly"], ["monthly", "Monthly"]] },
+        { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgChecklistRuns() {
+    return fnbCfg({ title: "Checklist runs", table: "checklist_runs", one: "run", order: [["run_date", false]],
+      hint: "Every completed round, who did it and when. A HACCP reading outside its safe range is flagged as a breach and needs a corrective action.",
+      select: "*, checklist_templates(name,kind), stores(name)",
+      cols: [{ l: "Date", k: "run_date", fmt: "date" }, { l: "Checklist", k: "template_id", fmt: function (r) { return '<b>' + esc(r.checklist_templates ? r.checklist_templates.name : "") + '</b>'; } },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } }, { l: "Shift", k: "shift" },
+        { l: "Score", k: "score", num: true }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Failed", test: function (r) { return r.status === "failed"; } }, { label: "Open", test: function (r) { return r.status === "open"; } }],
+      fields: [{ k: "run_date", l: "Date", t: "date", req: true, def: today() },
+        { k: "template_id", l: "Checklist", t: "select", lookup: function () { return fnbLookup("cltemplates", function () { return fnbCo("checklist_templates", "id,name").eq("is_active", true).order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }, req: true },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "shift", l: "Shift", t: "text" }, { k: "status", l: "Status", t: "select", opts: [["open", "Open"], ["complete", "Complete"], ["failed", "Failed"]] },
+        { k: "score", l: "Score", t: "num" }, { k: "completed_by", l: "Completed by", t: "text" }, { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgEquipment() {
+    return fnbCfg({ title: "Equipment", table: "equipment", one: "machine", order: [["name", true]],
+      hint: "Espresso machines, grinders, ovens, fridges. What you own, where it is, and whether it is running.",
+      select: "*, stores(name), partners(name)",
+      cols: [{ l: "Equipment", k: "name", fmt: "b" }, { l: "Category", k: "category", fmt: "badge" },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Serial", k: "serial_no", fmt: "muted" }, { l: "Warranty", k: "warranty_until", fmt: "date" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "In repair", test: function (r) { return r.status === "repair"; } }],
+      groupBy: [{ label: "Category", get: function (r) { return fnbTitle(r.category || "None"); } }, { label: "Store", get: function (r) { return r.stores ? r.stores.name : "None"; } }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "code", l: "Asset code", t: "text" },
+        { k: "category", l: "Category", t: "select", opts: [["espresso_machine", "Espresso machine"], ["grinder", "Grinder"], ["oven", "Oven"], ["fridge", "Fridge"], ["freezer", "Freezer"], ["ice", "Ice machine"], ["pos", "POS hardware"], ["other", "Other"]] },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "make", l: "Make", t: "text" }, { k: "model", l: "Model", t: "text" }, { k: "serial_no", l: "Serial no", t: "text" },
+        { k: "supplier_id", l: "Supplier", t: "select", lookup: lkPartners },
+        { k: "purchase_date", l: "Purchased", t: "date" }, { k: "warranty_until", l: "Warranty until", t: "date" },
+        { k: "status", l: "Status", t: "select", opts: [["active", "Active"], ["repair", "In repair"], ["retired", "Retired"]] }] });
+  }
+  function cfgMaintenance() {
+    return fnbCfg({ title: "Maintenance", table: "maintenance_schedules", one: "schedule", order: [["next_due", true]],
+      hint: "Backflush, descale, filter change, annual service. Overdue is what you want to see at a glance.",
+      select: "*, equipment(name)",
+      cols: [{ l: "Equipment", k: "equipment_id", fmt: function (r) { return '<b>' + esc(r.equipment ? r.equipment.name : "") + '</b>'; } },
+        { l: "Task", k: "task" }, { l: "Every", k: "frequency_days", num: true, fmt: function (r) { return r.frequency_days ? r.frequency_days + " days" : ""; } },
+        { l: "Last done", k: "last_done", fmt: "date" },
+        { l: "Next due", k: "next_due", fmt: function (r) { if (!r.next_due) return ""; var late = r.next_due < today(); return '<span class="badge ' + (late ? "unpaid" : "paid") + '">' + esc(r.next_due) + '</span>'; } }],
+      filters: [{ label: "Overdue", test: function (r) { return r.next_due && r.next_due < today(); } }],
+      fields: [{ k: "equipment_id", l: "Equipment", t: "select", lookup: lkEquipment, req: true },
+        { k: "task", l: "Task", t: "text", req: true, ph: "backflush / descale / filter change" },
+        { k: "frequency_days", l: "Every N days", t: "num", step: "1" },
+        { k: "last_done", l: "Last done", t: "date" }, { k: "next_due", l: "Next due", t: "date" },
+        { k: "is_active", l: "Active", t: "check", def: true }],
+      before: function (row) { if (!row.next_due && row.last_done && row.frequency_days) { var d = new Date(row.last_done + "T00:00:00"); d.setDate(d.getDate() + Number(row.frequency_days)); row.next_due = d.toISOString().slice(0, 10); } } });
+  }
+  function cfgAudits() {
+    return fnbCfg({ title: "Store audits", table: "store_audits", one: "audit", order: [["audit_date", false]],
+      hint: "Brand standards, food safety, mystery shopper. A score plus an action list with an owner and a due date.",
+      select: "*, stores(name)",
+      cols: [{ l: "Date", k: "audit_date", fmt: "date" }, { l: "Store", k: "store_id", fmt: function (r) { return '<b>' + esc(r.stores ? r.stores.name : "") + '</b>'; } },
+        { l: "Kind", k: "kind", fmt: "badge" }, { l: "Score", k: "score", num: true, fmt: function (r) { if (r.score == null) return ""; var pct = r.max_score ? Math.round((r.score / r.max_score) * 100) : r.score; return '<span class="badge ' + (pct >= 90 ? "paid" : pct >= 75 ? "partial" : "unpaid") + '">' + pct + '%</span>'; } },
+        { l: "Auditor", k: "auditor", fmt: "muted" }, { l: "Status", k: "status", fmt: "badge" }],
+      fields: [{ k: "audit_date", l: "Date", t: "date", req: true, def: today() },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores, req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["brand_standards", "Brand standards"], ["food_safety", "Food safety"], ["mystery_shopper", "Mystery shopper"]], req: true },
+        { k: "auditor", l: "Auditor", t: "text" }, { k: "score", l: "Score", t: "num" }, { k: "max_score", l: "Out of", t: "num" },
+        { k: "status", l: "Status", t: "select", opts: [["draft", "Draft"], ["issued", "Issued"], ["actioned", "Actioned"], ["closed", "Closed"]] },
+        { k: "summary", l: "Summary", t: "textarea" }] });
+  }
+  function cfgAuditActions() {
+    return fnbCfg({ title: "Audit actions", table: "audit_actions", one: "action", order: [["due_date", true]],
+      hint: "Every finding with an owner and a date. This is the part that actually changes a store.",
+      cols: [{ l: "Finding", k: "finding", fmt: "b" }, { l: "Severity", k: "severity", fmt: "badge" }, { l: "Owner", k: "owner" },
+        { l: "Due", k: "due_date", fmt: function (r) { if (!r.due_date) return ""; var late = r.due_date < today() && r.status !== "done" && r.status !== "verified"; return '<span class="badge ' + (late ? "unpaid" : "draft") + '">' + esc(r.due_date) + '</span>'; } },
+        { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Open", test: function (r) { return r.status === "open" || r.status === "in_progress"; } }, { label: "Overdue", test: function (r) { return r.due_date && r.due_date < today() && r.status !== "done" && r.status !== "verified"; } }],
+      fields: [{ k: "audit_id", l: "Audit", t: "select", lookup: function () { return fnbLookup("audits", function () { return fnbCo("store_audits", "id,audit_date,kind").order("audit_date", { ascending: false }).limit(200).then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.audit_date + " " + fnbTitle(x.kind)]; }); }); }); }, req: true },
+        { k: "finding", l: "Finding", t: "textarea", req: true },
+        { k: "severity", l: "Severity", t: "select", opts: [["critical", "Critical"], ["major", "Major"], ["minor", "Minor"]], req: true },
+        { k: "owner", l: "Owner", t: "text" }, { k: "due_date", l: "Due", t: "date" },
+        { k: "status", l: "Status", t: "select", opts: [["open", "Open"], ["in_progress", "In progress"], ["done", "Done"], ["verified", "Verified"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgComplianceDocs() {
+    return fnbCfg({ title: "Licences & documents", table: "compliance_documents", one: "document", order: [["expires_on", true]],
+      hint: "Licences, permits, insurance, leases. Anything with an expiry date that would close a store if it lapsed.",
+      select: "*, stores(name)",
+      cols: [{ l: "Document", k: "name", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Expires", k: "expires_on", fmt: function (r) { if (!r.expires_on) return ""; var soon = r.expires_on <= new Date(Date.now() + (r.reminder_days || 30) * 864e5).toISOString().slice(0, 10); return '<span class="badge ' + (r.expires_on < today() ? "unpaid" : soon ? "partial" : "paid") + '">' + esc(r.expires_on) + '</span>'; } }],
+      filters: [{ label: "Expiring or expired", test: function (r) { return r.expires_on && r.expires_on <= new Date(Date.now() + (r.reminder_days || 30) * 864e5).toISOString().slice(0, 10); } }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["licence", "Licence"], ["permit", "Permit"], ["insurance", "Insurance"], ["lease", "Lease"], ["certificate", "Certificate"]] },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "reference", l: "Reference", t: "text" }, { k: "issuer", l: "Issued by", t: "text" },
+        { k: "issued_on", l: "Issued", t: "date" }, { k: "expires_on", l: "Expires", t: "date" },
+        { k: "reminder_days", l: "Warn me N days before", t: "num", step: "1", def: 30 }, { k: "note", l: "Note", t: "textarea" }] });
+  }
+
+  // --- Section 3: customer ---
+  function cfgLoyaltyPrograms() {
+    return fnbCfg({ title: "Loyalty programmes", table: "loyalty_programs", one: "programme", order: [["name", true]],
+      hint: "Points, a stamp card, or spend tiers. Start with a stamp card: it is the easiest to explain at the counter.",
+      cols: [{ l: "Programme", k: "name", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" }, { l: "Earn", k: "earn_per_currency", num: true }, { l: "Stamps", k: "stamps_required", num: true }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["points", "Points"], ["stamp", "Stamp card"], ["spend_tier", "Spend tiers"], ["visit_tier", "Visit tiers"]], req: true },
+        { k: "earn_per_currency", l: "Points per 1 spent", t: "num" }, { k: "redeem_value", l: "Value per point", t: "num" },
+        { k: "stamps_required", l: "Stamps for a reward", t: "num", step: "1", hint: "Buy 9 get 1 free means 9." },
+        { k: "reward_product_id", l: "Reward item", t: "select", lookup: lkProducts },
+        { k: "birthday_reward", l: "Birthday reward", t: "text" },
+        { k: "starts_on", l: "Starts", t: "date" }, { k: "ends_on", l: "Ends", t: "date" }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgStoredValue() {
+    return fnbCfg({ title: "Gift cards & wallets", table: "stored_value_accounts", one: "card", order: [["created_at", false]],
+      hint: "A loaded card is money you owe, not money you have earned. The balance sits as a liability until it is spent, which is why each card names the account it posts to.",
+      select: "*, partners(name)",
+      cols: [{ l: "Card", k: "card_number", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" },
+        { l: "Holder", k: "partner_id", fmt: function (r) { return esc(r.partners ? r.partners.name : ""); } },
+        { l: "Balance", k: "balance", fmt: "money", num: true }, { l: "Expires", k: "expires_on", fmt: "date" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "With a balance", test: function (r) { return Number(r.balance || 0) > 0; } }],
+      fields: [{ k: "card_number", l: "Card number", t: "text", req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["wallet", "Wallet"], ["gift_card", "Gift card"], ["corporate", "Corporate account"]], req: true },
+        { k: "partner_id", l: "Holder", t: "select", lookup: lkPartners },
+        { k: "balance", l: "Balance", t: "num" }, { k: "expires_on", l: "Expires", t: "date" },
+        { k: "status", l: "Status", t: "select", opts: [["active", "Active"], ["frozen", "Frozen"], ["expired", "Expired"], ["closed", "Closed"]] }],
+      note: "Loading a card is not a sale. Revenue is recognised when the balance is spent, and unspent balance that expires is recognised separately as breakage." });
+  }
+  function cfgSubscriptionPlans() {
+    return fnbCfg({ title: "Subscription plans", table: "subscription_plans", one: "plan", order: [["name", true]],
+      hint: "An unlimited-coffee pass, a bean box, a corporate plan. Set a daily limit on a pass or one customer will drink the margin.",
+      cols: [{ l: "Plan", k: "name", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" }, { l: "Price", k: "price", fmt: "money", num: true }, { l: "Period", k: "period" }, { l: "Daily limit", k: "daily_limit", num: true }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true },
+        { k: "kind", l: "Kind", t: "select", opts: [["pass", "Unlimited pass"], ["box", "Subscription box"], ["corporate", "Corporate"]], req: true },
+        { k: "price", l: "Price", t: "num", req: true },
+        { k: "period", l: "Billed", t: "select", opts: [["weekly", "Weekly"], ["monthly", "Monthly"], ["quarterly", "Quarterly"]] },
+        { k: "included_product_id", l: "Included item", t: "select", lookup: lkProducts },
+        { k: "daily_limit", l: "Daily limit", t: "num", step: "1" }, { k: "period_limit", l: "Limit per period", t: "num", step: "1" },
+        { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgFeedback() {
+    return fnbCfg({ title: "Feedback & complaints", table: "feedback", one: "entry", order: [["created_at", false]],
+      hint: "Every score and every complaint, with who owns it and by when. A complaint with no owner is a customer you have already lost.",
+      select: "*, stores(name), partners(name)",
+      cols: [{ l: "When", k: "created_at", fmt: "datetime" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Source", k: "source", fmt: "badge" },
+        { l: "Score", k: "nps", num: true, fmt: function (r) { if (r.nps == null) return r.rating == null ? "" : r.rating; return '<span class="badge ' + (r.nps >= 9 ? "paid" : r.nps >= 7 ? "partial" : "unpaid") + '">' + r.nps + '</span>'; } },
+        { l: "Comment", k: "comment", fmt: function (r) { return '<span class="muted">' + esc((r.comment || "").slice(0, 70)) + '</span>'; } },
+        { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Open", test: function (r) { return r.status === "new" || r.status === "acknowledged"; } }, { label: "Detractors", test: function (r) { return r.nps != null && r.nps <= 6; } }],
+      fields: [{ k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "partner_id", l: "Customer", t: "select", lookup: lkPartners },
+        { k: "source", l: "Source", t: "select", opts: [["receipt", "Receipt"], ["app", "App"], ["google", "Google"], ["aggregator", "Aggregator"], ["walk_in", "In person"]] },
+        { k: "nps", l: "NPS 0-10", t: "num", step: "1" }, { k: "rating", l: "Rating", t: "num" },
+        { k: "comment", l: "Comment", t: "textarea" }, { k: "category", l: "Category", t: "text" },
+        { k: "status", l: "Status", t: "select", opts: [["new", "New"], ["acknowledged", "Acknowledged"], ["resolved", "Resolved"], ["closed", "Closed"]] },
+        { k: "assigned_to", l: "Owner", t: "text" }, { k: "compensation_amount", l: "Compensation", t: "num" }] });
+  }
+
+  // --- Section 4: delivery and aggregators ---
+  function cfgAggregatorAccounts() {
+    return fnbCfg({ title: "Aggregator accounts", table: "aggregator_accounts", one: "account", order: [["platform", true]],
+      hint: "One row per platform per store, carrying the commission they charge you. That rate is what the payout is checked against.",
+      select: "*, stores(name), sales_channels(name)",
+      cols: [{ l: "Platform", k: "platform", fmt: "b" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Their store id", k: "external_store_id", fmt: "muted" }, { l: "Commission", k: "commission_percent", fmt: "pct", num: true }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "platform", l: "Platform", t: "select", opts: [["talabat", "Talabat"], ["toters", "Toters"], ["deliveroo", "Deliveroo"], ["careem", "Careem"], ["ubereats", "Uber Eats"], ["other", "Other"]], req: true },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores, req: true },
+        { k: "channel_id", l: "Channel", t: "select", lookup: lkChannels },
+        { k: "external_store_id", l: "Their store id", t: "text" },
+        { k: "commission_percent", l: "Commission %", t: "num", req: true },
+        { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgAggregatorPayouts() {
+    return fnbCfg({ title: "Aggregator payouts", table: "aggregator_payouts", one: "payout", wide: true, order: [["period_end", false]],
+      hint: "What the platform said it would pay against what it actually paid. The variance is calculated for you, and anything unexplained becomes a dispute.",
+      select: "*, aggregator_accounts(platform)",
+      cols: [{ l: "Platform", k: "account_id", fmt: function (r) { return '<b>' + esc(r.aggregator_accounts ? fnbTitle(r.aggregator_accounts.platform) : "") + '</b>'; } },
+        { l: "Period", k: "period_end", fmt: function (r) { return '<span class="muted">' + esc((r.period_start || "") + " to " + (r.period_end || "")) + '</span>'; } },
+        { l: "Expected", k: "expected_net", fmt: "money", num: true }, { l: "They paid", k: "statement_net", fmt: "money", num: true },
+        { l: "Difference", k: "variance", num: true, fmt: function (r) { var v = Number(r.variance || 0); if (!v) return '<span class="badge paid">Matches</span>'; return '<span class="badge ' + (v < 0 ? "unpaid" : "partial") + '">' + money(v) + '</span>'; } },
+        { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Short paid", test: function (r) { return Number(r.variance || 0) < 0; } }, { label: "Unmatched", test: function (r) { return r.status === "draft"; } }],
+      fields: [{ k: "account_id", l: "Account", t: "select", lookup: function () { return fnbLookup("aggaccounts", function () { return fnbCo("aggregator_accounts", "id,platform").order("platform").then(function (r) { return (r.data || []).map(function (x) { return [x.id, fnbTitle(x.platform)]; }); }); }); }, req: true },
+        { k: "reference", l: "Statement ref", t: "text" },
+        { k: "period_start", l: "From", t: "date", req: true }, { k: "period_end", l: "To", t: "date", req: true },
+        { k: "expected_net", l: "Expected net", t: "num", hint: "What your own orders say they owe you." },
+        { k: "statement_gross", l: "Statement gross", t: "num" }, { k: "statement_commission", l: "Their commission", t: "num" },
+        { k: "statement_other", l: "Other deductions", t: "num" }, { k: "statement_net", l: "Net actually paid", t: "num" },
+        { k: "received_on", l: "Received", t: "date" },
+        { k: "status", l: "Status", t: "select", opts: [["draft", "Draft"], ["matched", "Matched"], ["disputed", "Disputed"], ["settled", "Settled"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgDeliveries() {
+    return fnbCfg({ title: "Deliveries", table: "deliveries", one: "delivery", order: [["assigned_at", false]],
+      hint: "Your own riders. Cash collected is tracked separately until it is settled, because that is where it goes missing.",
+      select: "*, stores(name), hr_employees(name)",
+      cols: [{ l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Rider", k: "rider_employee_id", fmt: function (r) { return esc(r.hr_employees ? r.hr_employees.name : ""); } },
+        { l: "Address", k: "address", fmt: "muted" }, { l: "Fee", k: "fee", fmt: "money", num: true },
+        { l: "Cash", k: "cash_collected", fmt: "money", num: true }, { l: "Settled", k: "settled", fmt: "bool" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Cash not settled", test: function (r) { return Number(r.cash_collected || 0) > 0 && !r.settled; } }],
+      fields: [{ k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "rider_employee_id", l: "Rider", t: "select", lookup: lkEmployees },
+        { k: "address", l: "Address", t: "text" }, { k: "phone", l: "Phone", t: "text" },
+        { k: "fee", l: "Delivery fee", t: "num" }, { k: "cash_collected", l: "Cash collected", t: "num" },
+        { k: "settled", l: "Cash settled", t: "check" },
+        { k: "status", l: "Status", t: "select", opts: [["pending", "Pending"], ["assigned", "Assigned"], ["picked_up", "Picked up"], ["delivered", "Delivered"], ["failed", "Failed"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgReservations() {
+    return fnbCfg({ title: "Reservations", table: "reservations", one: "reservation", order: [["reserved_for", false]],
+      hint: "Bookings and the waitlist.",
+      select: "*, stores(name), store_tables(name)",
+      cols: [{ l: "When", k: "reserved_for", fmt: "datetime" }, { l: "Guest", k: "guest_name", fmt: "b" },
+        { l: "Party", k: "party_size", num: true }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Table", k: "table_id", fmt: function (r) { return esc(r.store_tables ? r.store_tables.name : ""); } }, { l: "Status", k: "status", fmt: "badge" }],
+      fields: [{ k: "guest_name", l: "Guest", t: "text", req: true }, { k: "phone", l: "Phone", t: "text" },
+        { k: "party_size", l: "Party size", t: "num", step: "1", def: 2 },
+        { k: "reserved_for", l: "Date and time", t: "text", ph: "2026-09-08T19:30", req: true },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "status", l: "Status", t: "select", opts: [["booked", "Booked"], ["seated", "Seated"], ["no_show", "No show"], ["cancelled", "Cancelled"], ["waitlist", "Waitlist"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+
+  // --- Section 8: workforce ---
+  function cfgLabourStandards() {
+    return fnbCfg({ title: "Labour standards", table: "labour_standards", one: "standard", order: [["daypart", true]],
+      hint: "How much revenue one labour hour should produce in each daypart, and the minimum crew you cannot go below whatever the forecast says.",
+      select: "*, stores(name)",
+      cols: [{ l: "Daypart", k: "daypart", fmt: "b" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "From", k: "from_time" }, { l: "To", k: "to_time" }, { l: "Sales per hour", k: "sales_per_labour_hour", fmt: "money", num: true }, { l: "Min staff", k: "min_staff", num: true }],
+      fields: [{ k: "daypart", l: "Daypart", t: "select", opts: [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["afternoon", "Afternoon"], ["evening", "Evening"], ["late", "Late"]], req: true },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "from_time", l: "From", t: "time" }, { k: "to_time", l: "To", t: "time" },
+        { k: "sales_per_labour_hour", l: "Target sales per labour hour", t: "num" },
+        { k: "min_staff", l: "Minimum staff", t: "num", step: "1", def: 1 }, { k: "role", l: "Role", t: "text" },
+        { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgForecasts() {
+    return fnbCfg({ title: "Sales forecast", table: "sales_forecasts", one: "forecast", order: [["forecast_date", false]],
+      hint: "What you expect to take, by store and daypart. The roster and the prep list both hang off this.",
+      select: "*, stores(name)",
+      cols: [{ l: "Date", k: "forecast_date", fmt: "date" }, { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Daypart", k: "daypart" }, { l: "Forecast", k: "forecast_sales", fmt: "money", num: true }, { l: "Actual", k: "actual_sales", fmt: "money", num: true },
+        { l: "Variance", k: "actual_sales", num: true, fmt: function (r) { if (r.actual_sales == null || !r.forecast_sales) return ""; var v = Math.round(((r.actual_sales - r.forecast_sales) / r.forecast_sales) * 1000) / 10; return '<span class="badge ' + (Math.abs(v) <= 10 ? "paid" : "partial") + '">' + v + '%</span>'; } }],
+      fields: [{ k: "forecast_date", l: "Date", t: "date", req: true, def: today() },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores, req: true },
+        { k: "daypart", l: "Daypart", t: "select", opts: [["breakfast", "Breakfast"], ["lunch", "Lunch"], ["afternoon", "Afternoon"], ["evening", "Evening"], ["all_day", "All day"]] },
+        { k: "forecast_sales", l: "Forecast sales", t: "num" }, { k: "forecast_transactions", l: "Forecast transactions", t: "num", step: "1" },
+        { k: "actual_sales", l: "Actual sales", t: "num" }, { k: "note", l: "Note", t: "textarea" }] });
+  }
+
+  // --- Section 10: franchise ---
+  function cfgFranchisees() {
+    return fnbCfg({ title: "Franchisees", table: "franchisees", one: "franchisee", wide: true, order: [["name", true]],
+      hint: "Who holds which agreement, over what territory, and when it comes up for renewal.",
+      cols: [{ l: "Franchisee", k: "name", fmt: "b" }, { l: "Territory", k: "territory" },
+        { l: "Agreement ends", k: "agreement_end", fmt: function (r) { if (!r.agreement_end) return ""; var soon = r.agreement_end <= new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10); return '<span class="badge ' + (r.agreement_end < today() ? "unpaid" : soon ? "partial" : "paid") + '">' + esc(r.agreement_end) + '</span>'; } },
+        { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Renewal within 6 months", test: function (r) { return r.agreement_end && r.agreement_end <= new Date(Date.now() + 180 * 864e5).toISOString().slice(0, 10); } }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "code", l: "Code", t: "text" },
+        { k: "partner_id", l: "Contact record", t: "select", lookup: lkPartners },
+        { k: "principals", l: "Principals", t: "text" }, { k: "portal_email", l: "Portal email", t: "text" },
+        { k: "agreement_ref", l: "Agreement ref", t: "text" },
+        { k: "agreement_start", l: "Starts", t: "date" }, { k: "agreement_end", l: "Ends", t: "date" }, { k: "renewal_due", l: "Renewal due", t: "date" },
+        { k: "territory", l: "Territory", t: "text" }, { k: "exclusivity_radius_km", l: "Exclusivity radius km", t: "num" },
+        { k: "status", l: "Status", t: "select", opts: [["prospect", "Prospect"], ["active", "Active"], ["terminated", "Terminated"], ["transferred", "Transferred"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgRoyaltySchemes() {
+    return fnbCfg({ title: "Royalty schemes", table: "royalty_schemes", one: "scheme", wide: true, order: [["name", true]],
+      hint: "A percentage, a flat fee, a sliding scale, or a percentage with a floor. The calculation lives in one place so the invoice and the statement always agree.",
+      select: "*, franchisees(name)",
+      cols: [{ l: "Scheme", k: "name", fmt: "b" }, { l: "Franchisee", k: "franchisee_id", fmt: function (r) { return esc(r.franchisees ? r.franchisees.name : "All"); } },
+        { l: "Kind", k: "kind", fmt: "badge" }, { l: "Rate", k: "percent", fmt: "pct", num: true },
+        { l: "Minimum", k: "minimum_amount", fmt: "money", num: true }, { l: "Ad fund", k: "marketing_percent", fmt: "pct", num: true }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true },
+        { k: "franchisee_id", l: "Franchisee", t: "select", lookup: lkFranchisees },
+        { k: "kind", l: "Kind", t: "select", opts: [["percent", "Percent of net sales"], ["fixed", "Fixed fee"], ["tiered", "Tiered"], ["percent_with_minimum", "Percent with a minimum"]], req: true },
+        { k: "percent", l: "Percent", t: "num" }, { k: "fixed_amount", l: "Fixed amount", t: "num" }, { k: "minimum_amount", l: "Minimum", t: "num" },
+        { k: "marketing_percent", l: "Marketing fund %", t: "num" },
+        { k: "period", l: "Period", t: "select", opts: [["monthly", "Monthly"], ["quarterly", "Quarterly"], ["weekly", "Weekly"]] },
+        { k: "is_active", l: "Active", t: "check", def: true }],
+      note: "For a tiered scheme, each band charges its own rate on the slice of sales inside it, and the headline percent applies to anything above the last band." });
+  }
+  function cfgFranchiseSales() {
+    return fnbCfg({ title: "Reported sales", table: "franchise_sales_reports", one: "sales report", order: [["period_end", false]],
+      hint: "What each franchisee declares, which is what royalty is charged on. A missing period is the under-reporting signal worth chasing.",
+      select: "*, franchisees(name), stores(name)",
+      cols: [{ l: "Period", k: "period_end", fmt: function (r) { return '<span class="muted">' + esc((r.period_start || "") + " to " + (r.period_end || "")) + '</span>'; } },
+        { l: "Franchisee", k: "franchisee_id", fmt: function (r) { return '<b>' + esc(r.franchisees ? r.franchisees.name : "") + '</b>'; } },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
+        { l: "Net sales", k: "net_sales", fmt: "money", num: true }, { l: "Source", k: "source", fmt: "badge" }, { l: "Status", k: "status", fmt: "badge" }],
+      filters: [{ label: "Unverified", test: function (r) { return r.status === "submitted"; } }],
+      fields: [{ k: "franchisee_id", l: "Franchisee", t: "select", lookup: lkFranchisees, req: true },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "period_start", l: "From", t: "date", req: true }, { k: "period_end", l: "To", t: "date", req: true },
+        { k: "net_sales", l: "Net sales", t: "num", req: true }, { k: "gross_sales", l: "Gross sales", t: "num" },
+        { k: "transactions", l: "Transactions", t: "num", step: "1" },
+        { k: "source", l: "Source", t: "select", opts: [["declared", "Declared by franchisee"], ["pos_captured", "Captured from their POS"]] },
+        { k: "status", l: "Status", t: "select", opts: [["submitted", "Submitted"], ["verified", "Verified"], ["disputed", "Disputed"]] },
+        { k: "note", l: "Note", t: "textarea" }] });
+  }
+  function cfgPipeline() {
+    return fnbCfg({ title: "Development pipeline", table: "franchise_pipeline", one: "applicant", wide: true, order: [["created_at", false]],
+      hint: "Lead to open door, with a stage gate at each step. Most franchise systems lose applicants because nobody owns the middle of this list.",
+      cols: [{ l: "Applicant", k: "applicant_name", fmt: "b" }, { l: "Territory", k: "territory" }, { l: "City", k: "city" },
+        { l: "Stage", k: "stage", fmt: "badge" }, { l: "Target open", k: "target_open_date", fmt: "date" }, { l: "Owner", k: "owner", fmt: "muted" }],
+      groupBy: [{ label: "Stage", get: function (r) { return fnbTitle(r.stage); } }, { label: "Country", get: function (r) { return r.country || "None"; } }],
+      fields: [{ k: "applicant_name", l: "Applicant", t: "text", req: true },
+        { k: "contact_email", l: "Email", t: "text" }, { k: "contact_phone", l: "Phone", t: "text" },
+        { k: "territory", l: "Territory", t: "text" }, { k: "city", l: "City", t: "text" }, { k: "country", l: "Country", t: "text" },
+        { k: "stage", l: "Stage", t: "select", req: true, opts: [["lead", "Lead"], ["application", "Application"], ["vetting", "Financial vetting"], ["approved", "Approved"], ["site_selection", "Site selection"], ["lease", "Lease"], ["design", "Design"], ["construction", "Construction"], ["equipment", "Equipment"], ["training", "Training"], ["opening", "Opening"], ["open", "Open"], ["rejected", "Rejected"]] },
+        { k: "net_worth", l: "Net worth", t: "num" }, { k: "liquid_capital", l: "Liquid capital", t: "num" },
+        { k: "target_open_date", l: "Target open", t: "date" }, { k: "actual_open_date", l: "Actually opened", t: "date" },
+        { k: "owner", l: "Owner", t: "text" }, { k: "vetting_note", l: "Notes", t: "textarea" }] });
+  }
+  function cfgApprovedSuppliers() {
+    return fnbCfg({ title: "Approved suppliers", table: "approved_suppliers", one: "approval", order: [["created_at", false]],
+      hint: "Who a franchisee is allowed to buy from, and what must be bought from the brand. Rebates are tracked here too.",
+      select: "*, partners(name), products(name), brands(name)",
+      cols: [{ l: "Supplier", k: "partner_id", fmt: function (r) { return '<b>' + esc(r.partners ? r.partners.name : "") + '</b>'; } },
+        { l: "Item", k: "product_id", fmt: function (r) { return esc(r.products ? r.products.name : "All items"); } },
+        { l: "Brand", k: "brand_id", fmt: function (r) { return esc(r.brands ? r.brands.name : "All"); } },
+        { l: "Mandatory", k: "is_mandatory", fmt: "bool" }, { l: "Rebate", k: "rebate_percent", fmt: "pct", num: true }],
+      fields: [{ k: "partner_id", l: "Supplier", t: "select", lookup: lkPartners, req: true },
+        { k: "product_id", l: "Item", t: "select", lookup: lkProducts, hint: "Leave blank to approve them for everything." },
+        { k: "brand_id", l: "Brand", t: "select", lookup: function () { return fnbLookup("brands", function () { return fnbCo("brands", "id,name").eq("is_active", true).order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); } },
+        { k: "is_mandatory", l: "Must buy from here", t: "check" }, { k: "rebate_percent", l: "Rebate %", t: "num" },
+        { k: "valid_from", l: "From", t: "date" }, { k: "valid_to", l: "To", t: "date" }, { k: "note", l: "Note", t: "textarea" }] });
+  }
+
+  // --- Section 12: ancillary ---
+  function cfgWholesale() {
+    return fnbCfg({ title: "Wholesale accounts", table: "wholesale_accounts", one: "account", order: [["created_at", false]],
+      hint: "Office coffee and HORECA. Delivery day and route are what make a round plannable.",
+      select: "*, partners(name)",
+      cols: [{ l: "Account", k: "partner_id", fmt: function (r) { return '<b>' + esc(r.partners ? r.partners.name : "") + '</b>'; } },
+        { l: "Tier", k: "price_tier" }, { l: "Day", k: "delivery_day" }, { l: "Route", k: "route" },
+        { l: "Commitment kg", k: "volume_commitment_kg", num: true }, { l: "Active", k: "is_active", fmt: "bool" }],
+      fields: [{ k: "partner_id", l: "Customer", t: "select", lookup: lkPartners, req: true },
+        { k: "price_tier", l: "Price tier", t: "text" },
+        { k: "delivery_day", l: "Delivery day", t: "select", opts: [["mon", "Monday"], ["tue", "Tuesday"], ["wed", "Wednesday"], ["thu", "Thursday"], ["fri", "Friday"], ["sat", "Saturday"]] },
+        { k: "route", l: "Route", t: "text" }, { k: "credit_limit", l: "Credit limit", t: "num" },
+        { k: "billing", l: "Billing", t: "select", opts: [["monthly", "Monthly"], ["per_delivery", "Per delivery"]] },
+        { k: "equipment_on_loan", l: "Equipment on loan", t: "text" }, { k: "volume_commitment_kg", l: "Volume commitment kg", t: "num" },
+        { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+  function cfgTrainingCourses() {
+    return fnbCfg({ title: "Training courses", table: "training_courses", one: "course", order: [["name", true]],
+      hint: "The barista academy, sold to the public and used to certify your own staff.",
+      cols: [{ l: "Course", k: "name", fmt: "b" }, { l: "Level", k: "level" }, { l: "Hours", k: "duration_hours", num: true }, { l: "Price", k: "price", fmt: "money", num: true }, { l: "Public", k: "is_public", fmt: "bool" }],
+      fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "level", l: "Level", t: "text" },
+        { k: "duration_hours", l: "Hours", t: "num" }, { k: "price", l: "Price", t: "num" },
+        { k: "is_public", l: "Sold to the public", t: "check", def: true }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+
+  // ===========================================================================
+  // THE THREE REPORTS THE F&B SECTIONS EXIST TO PRODUCE
+  // ===========================================================================
+
+  // Section 5. What the recipes say the period's sales should have consumed,
+  // against what stock actually went. The gap, priced and ranked, is the single
+  // most useful number in a food business.
+  async function renderCostVariance() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cost variance") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Working out what should have been used...</div></div></div></div>';
+    wireBc(); wirePeriod(renderCostVariance);
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var from = pr.from || new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), to = pr.to || today();
+    var th = await sb.rpc("theoretical_usage", { p_company: S.company.id, p_from: from, p_to: to });
+    if (th.error) { rep.innerHTML = repHead("Cost variance", cc) + '<div class="o-note warn">Could not work out theoretical usage: ' + esc(errMsg(th.error)) + '</div>'; return; }
+    var theo = th.data || [];
+    if (!theo.length) {
+      rep.innerHTML = repHead("Cost variance - " + pr.label, cc) +
+        '<div class="o-empty">Nothing to compare yet. This report needs till sales in the period and a recipe on the items sold. Once both exist it shows, for every ingredient, what the recipes say you should have used against what actually left the shelf.</div>';
+      return;
+    }
+    // actual = what the waste log and the counts say went, for the same items
+    var waste = (await fnbCo("waste_entries", "product_id,qty,total_cost").gte("waste_date", from).lte("waste_date", to)).data || [];
+    var wasteBy = {};
+    waste.forEach(function (w) { if (!w.product_id) return; var a = wasteBy[w.product_id] || (wasteBy[w.product_id] = { qty: 0, cost: 0 }); a.qty += Number(w.qty || 0); a.cost += Number(w.total_cost || 0); });
+    var totTheo = theo.reduce(function (s, r) { return s + Number(r.value || 0); }, 0);
+    var totWaste = waste.reduce(function (s, w) { return s + Number(w.total_cost || 0); }, 0);
+    rep.innerHTML = repHead("Cost variance - " + pr.label, cc) +
+      '<div class="o-note">What the recipes say the period&rsquo;s sales <b>should</b> have consumed, ingredient by ingredient, priced at cost. Recorded waste is shown beside it. Anything left over once waste is accounted for is over-portioning, giveaway or theft.</div>' +
+      '<div class="mr-summary"><span class="man-chip plain">Theoretical cost of sales ' + esc(cc) + ' ' + money(totTheo) + '</span><span class="man-chip plain">Recorded waste ' + esc(cc) + ' ' + money(totWaste) + '</span><span class="man-chip plain">' + theo.length + ' ingredients</span></div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Ingredient</td><td class="num">Should have used</td><td class="num">Unit cost</td><td class="num">Theoretical cost</td><td class="num">Recorded waste</td><td class="num">Waste as %</td></tr></thead><tbody>' +
+      theo.map(function (r) {
+        var w = wasteBy[r.product_id] || { qty: 0, cost: 0 };
+        var pct = Number(r.value) > 0 ? Math.round((w.cost / Number(r.value)) * 1000) / 10 : 0;
+        return '<tr><td>' + esc(r.product_name || "") + '</td><td class="num">' + (Math.round(Number(r.qty) * 1000) / 1000) + '</td><td class="num">' + money(r.unit_cost) + '</td><td class="num">' + money(r.value) + '</td><td class="num">' + (w.cost ? money(w.cost) : "") + '</td><td class="num">' + (pct ? '<span class="badge ' + (pct > 5 ? "unpaid" : "partial") + '">' + pct + '%</span>' : "") + '</td></tr>';
+      }).join("") +
+      '<tr class="tot"><td>Total</td><td class="num"></td><td class="num"></td><td class="num">' + money(totTheo) + '</td><td class="num">' + money(totWaste) + '</td><td class="num"></td></tr>' +
+      '</tbody></table></div>';
+  }
+
+  // Section 2. Voids, discounts and refunds ranked by who did them. Nothing here
+  // accuses anyone; it puts the outliers in front of a manager.
+  async function renderExceptionReport() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Exception report") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc(); wirePeriod(renderExceptionReport);
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var q = fnbCo("pos_exceptions", "*, pos_reason_codes(name), stores(name)");
+    if (pr.from) q = q.gte("occurred_at", pr.from);
+    if (pr.to) q = q.lte("occurred_at", pr.to + "T23:59:59");
+    var rows = (await q.order("occurred_at", { ascending: false }).limit(2000)).data || [];
+    if (!rows.length) {
+      rep.innerHTML = repHead("Exception report - " + pr.label, cc) +
+        '<div class="o-empty">No exceptions recorded in this period. Once the till records voids, discounts and refunds with a reason code, this ranks them by cashier so an outlier stands out.</div>';
+      return;
+    }
+    var byCashier = {};
+    rows.forEach(function (r) {
+      var k = r.cashier || "(unknown)";
+      var a = byCashier[k] || (byCashier[k] = { n: 0, amt: 0, kinds: {} });
+      a.n++; a.amt += Number(r.amount || 0);
+      a.kinds[r.kind] = (a.kinds[r.kind] || 0) + 1;
+    });
+    var list = Object.keys(byCashier).map(function (k) { return { cashier: k, d: byCashier[k] }; });
+    list.sort(function (a, b) { return b.d.amt - a.d.amt; });
+    var totAmt = rows.reduce(function (s, r) { return s + Number(r.amount || 0); }, 0);
+    var avg = totAmt / list.length;
+    rep.innerHTML = repHead("Exception report - " + pr.label, cc) +
+      '<div class="o-note">Every void, discount, refund and no-sale, grouped by who rang it. Being at the top of this list is not proof of anything; being at the top of it every week is worth a conversation.</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Cashier</td><td class="num">Count</td><td class="num">Value</td><td class="num">vs average</td><td>Breakdown</td></tr></thead><tbody>' +
+      list.map(function (x) {
+        var ratio = avg > 0 ? Math.round((x.d.amt / avg) * 100) : 100;
+        return '<tr><td>' + esc(x.cashier) + '</td><td class="num">' + x.d.n + '</td><td class="num">' + money(x.d.amt) + '</td>' +
+          '<td class="num">' + (ratio > 200 ? '<span class="badge unpaid">' + ratio + '%</span>' : ratio > 130 ? '<span class="badge partial">' + ratio + '%</span>' : '<span class="muted">' + ratio + '%</span>') + '</td>' +
+          '<td><span class="muted">' + esc(Object.keys(x.d.kinds).map(function (k) { return fnbTitle(k) + " " + x.d.kinds[k]; }).join(", ")) + '</span></td></tr>';
+      }).join("") +
+      '<tr class="tot"><td>Total</td><td class="num">' + rows.length + '</td><td class="num">' + money(totAmt) + '</td><td class="num"></td><td></td></tr>' +
+      '</tbody></table></div>';
+  }
+
+  // Section 10. Turn reported sales into royalty and marketing-fund charges,
+  // using the one shared calculation, and show the working.
+  async function renderRoyaltyRun() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Royalty run") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc(); wirePeriod(renderRoyaltyRun);
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var from = pr.from || new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10), to = pr.to || today();
+    var reports = (await fnbCo("franchise_sales_reports", "*, franchisees(name), stores(name)").gte("period_start", from).lte("period_end", to)).data || [];
+    if (!reports.length) {
+      rep.innerHTML = repHead("Royalty run - " + pr.label, cc) +
+        '<div class="o-empty">No sales reported for this period yet. Franchisees submit their net sales under <b>Reported sales</b>, and this turns them into royalty and marketing charges.</div>';
+      return;
+    }
+    var schemes = (await fnbCo("royalty_schemes", "*").eq("is_active", true)).data || [];
+    var rows = [];
+    for (var i = 0; i < reports.length; i++) {
+      var r = reports[i];
+      var sc = schemes.filter(function (s) { return s.franchisee_id === r.franchisee_id; })[0] || schemes.filter(function (s) { return !s.franchisee_id; })[0];
+      var royalty = 0;
+      if (sc) { var d = await sb.rpc("royalty_due", { p_scheme: sc.id, p_net_sales: Number(r.net_sales || 0) }); royalty = (d && !d.error) ? Number(d.data) : 0; }
+      var mk = sc && sc.marketing_percent ? Number(r.net_sales || 0) * Number(sc.marketing_percent) / 100 : 0;
+      rows.push({ who: r.franchisees ? r.franchisees.name : "", store: r.stores ? r.stores.name : "",
+        period: (r.period_start || "") + " to " + (r.period_end || ""), sales: Number(r.net_sales || 0),
+        scheme: sc ? sc.name : "(no scheme)", royalty: royalty, marketing: mk, total: royalty + mk,
+        verified: r.status === "verified" });
+    }
+    rows.sort(function (a, b) { return b.total - a.total; });
+    var t = function (k) { return rows.reduce(function (s, r) { return s + r[k]; }, 0); };
+    rep.innerHTML = repHead("Royalty run - " + pr.label, cc) +
+      '<div class="o-note">Royalty is calculated from the sales each franchisee reported, using their scheme. A row marked unverified has not been checked against their till yet, so treat the figure as provisional.</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Franchisee</td><td>Store</td><td>Period</td><td>Scheme</td><td class="num">Net sales</td><td class="num">Royalty</td><td class="num">Marketing</td><td class="num">Total due</td></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r.who) + (r.verified ? "" : ' <span class="badge draft">unverified</span>') + '</td><td>' + esc(r.store) + '</td><td><span class="muted">' + esc(r.period) + '</span></td><td><span class="muted">' + esc(r.scheme) + '</span></td>' +
+          '<td class="num">' + money(r.sales) + '</td><td class="num">' + money(r.royalty) + '</td><td class="num">' + money(r.marketing) + '</td><td class="num"><b>' + money(r.total) + '</b></td></tr>';
+      }).join("") +
+      '<tr class="tot"><td>Total</td><td></td><td></td><td></td><td class="num">' + money(t("sales")) + '</td><td class="num">' + money(t("royalty")) + '</td><td class="num">' + money(t("marketing")) + '</td><td class="num">' + money(t("total")) + '</td></tr>' +
+      '</tbody></table></div>';
   }
 
   async function renderPromotions() {
