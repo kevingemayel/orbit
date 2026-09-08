@@ -1770,3 +1770,13 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .o-bookchip{display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:0 11px;height:30px;border:1px solid var(--warn);border-radius:999px;background:var(--warn-s);color:var(--warn);font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
 .o-bookchip svg{width:14px;height:14px}
 .o-bookchip:hover{filter:brightness(.97)}
+
+/* Menu engineering: day picker and the item chooser on a menu */
+.mn-days{display:flex;flex-wrap:wrap;gap:8px}
+.mn-day{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;color:var(--ink2);background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:4px 9px;cursor:pointer}
+.mn-items{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px;max-height:340px;overflow:auto;padding:2px}
+.mn-item{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 9px;cursor:pointer}
+.mn-item:hover{border-color:var(--accent)}
+.pl-cell{cursor:pointer;border-bottom:1px dashed var(--line)}
+.pl-cell:hover{color:var(--accent);border-bottom-color:var(--accent)}
+.o-rt td.bad{color:var(--bad);font-weight:600}

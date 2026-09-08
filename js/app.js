@@ -680,6 +680,15 @@
       { t: "Site diary and equipment", h: "<p>The <b>Site Diary</b> is a daily record of what happened on site - the weather, who was there, and progress. It is invaluable later if there is a dispute or a claim, because it is a contemporaneous record (written at the time).</p><p>You can also register the <b>Plant &amp; Equipment</b> on site (machines and tools). Together these build the evidence trail you need for reviews and claims.</p>" },
       { t: "Install jobs and tools", h: "<p>Two more screens run the physical side of a job:</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:hardhat}} Install Jobs</div><p>An <b>install job</b> is a package of installation work scheduled on site - a floor, a zone, a batch of panels. Track its progress and tie it to the project, so what is fitted is recorded, not just what is made.</p></div><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:wrench}} Tools &amp; Equipment</div><p>A register of hand tools and kit - who has what, and where it is. It saves the daily hunt for the missing drill and the argument over who lost it.</p></div></div><p>Install jobs sit next to <b>Panel Tracking</b> in Manufacturing: the panel says &ldquo;made and delivered&rdquo;, the install job says &ldquo;fitted&rdquo;. Between them you can see a facade go up, unit by unit.</p>" }
     ] },
+    { key: "menu", title: "Menu engineering", articles: [
+      { t: "What this app is for", h: "<p>A product catalogue says what you sell. A <b>menu</b> says what you offer, to whom, at what price, at which hours, and what it really costs you to make. That gap is where the margin in food and drink is won or lost.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menus</span><span class=\"man-chip\">{{ico:layers}} Modifiers</span><span class=\"man-chip\">{{ico:cart}} Channels</span><span class=\"man-chip\">{{ico:tag}} Price list</span><span class=\"man-chip\">{{ico:chartBar}} Menu engineering</span></div><p>Recipes and items are shared with the rest of Orbit, so a coffee bean is one product whether you buy it, roast it, sell it by the bag or brew it.</p>" },
+      { t: "Channels: the same item, different prices", h: "<p>A latte sold at the counter, through a delivery app and to an office account is the same drink at three different prices. A <b>channel</b> is each of those routes.</p><p>Each channel carries two numbers. <b>Markup</b> is what you add to the base price on that channel to absorb its cut. <b>Commission</b> is what the channel actually takes. Keeping them apart means you can later compare what you expected to keep against what the aggregator actually paid you.</p>" },
+      { t: "Prices are dated, never overwritten", h: "<p>Changing a price does not edit the old one. It writes a new price that <b>starts on a date</b>, and closes the previous one the day before. Nothing overlaps, and a report for last March still shows last March&rsquo;s prices.</p><p>Open <b>Price list</b> and click any figure. Before you commit, type the new price and the panel tells you the margin it gives you, and what is left after that channel&rsquo;s commission.</p>" },
+      { t: "Modifiers: choices that change the cost, not just the price", h: "<p>A <b>modifier group</b> is a question: milk, size, shots. Each choice can do three things, and the third is the one most systems miss.</p><ol><li>Change the <b>price</b> the customer pays.</li><li>Change the <b>cost</b> to you.</li><li><b>Consume a different ingredient</b>. Set &ldquo;Consumes&rdquo; to oat milk and &ldquo;Instead of&rdquo; to dairy, and both the plate cost and the stock movement follow what the customer actually chose.</li></ol><p>Set whether the group is required, and how many choices are allowed. Orbit refuses a group where the maximum is below the minimum.</p>" },
+      { t: "Plate cost: what it really costs to make", h: "<p>Plate cost walks the whole recipe, including recipes inside recipes, and applies two things people forget.</p><ul><li><b>Waste</b> per ingredient line. If you lose 10% trimming, you pay for 110%.</li><li><b>Yield</b> for the batch. A 2 litre batch that yields 90% gives you 1.8 litres to sell, so the cost per litre is higher than the ingredients divided by two.</li></ul><p>Worked example: 0.5 kg of beans at 20 makes 10.00 of ingredients. At 90% yield that is 11.11, over a 2 litre batch that is <b>5.5556 a litre</b>. A latte using 0.2 litres of it with 10% waste takes 0.22 litres, so 1.2222, plus 0.15 litres of milk at 2 is 0.30, giving a plate cost of <b>1.5222</b>.</p><p>One shared calculation does this for the price list, the menu matrix and anything built later, so nothing can disagree about what a drink costs.</p>" },
+      { t: "Day-parting: menus that switch themselves on", h: "<p>A menu carries the days it runs, the hours it runs, and optionally a start and end date. Breakfast can come on at 07:00 and go off at 11:30 without anyone touching it, and a seasonal menu can retire itself.</p><p>The list shows which menus are <b>serving now</b>, using exactly the rule the till uses, so what you see is what a customer would be offered.</p>" },
+      { t: "The menu matrix", h: "<p><b>Menu engineering</b> puts every item into one of four boxes, using real till sales and real recipe cost, each measured against the average for the period.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:star}} Star and Plowhorse</div><p>Both sell well. A <b>Star</b> also makes good money, so protect it and do not discount it. A <b>Plowhorse</b> is popular but thin, so cut the recipe cost or nudge the price.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:question}} Puzzle and Dog</div><p>Both sell poorly. A <b>Puzzle</b> is profitable, so give it a better spot on the menu or train the upsell. A <b>Dog</b> earns little and sells little; rework it or drop it.</p></div></div>" }
+    ] },
     { key: "manufacturing", title: "Fabrication (Manufacturing)", articles: [
       { t: "Start here: what this app is for", h: "<p>Use <b>Fabrication</b> when you <b>make</b> something instead of buying it finished. It answers the three questions a workshop is always asked: what does this item consume, where has it got to, and what did it actually cost to make.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:box}} Products</span><span class=\"man-chip\">{{ico:list}} Bills of Materials</span><span class=\"man-chip\">{{ico:clipboard}} Work Orders</span><span class=\"man-chip\">{{ico:play}} Production Runs</span><span class=\"man-chip\">{{ico:grid}} Panel Tracking</span><span class=\"man-chip\">{{ico:wrench}} Dies</span><span class=\"man-chip\">{{ico:truck}} Delivery Notes</span></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:play}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Learn it by doing, not by reading</div><p>This chapter is a walkthrough you can follow with your own data. There is also a <b>guided tutorial</b> that checks your company as you go and ticks each step off once you have really done it.</p><p><button class=\"man-tutbtn\" data-tut=\"manufacturing\">Start the guided tutorial</button></p></div></div><p>You will not use all seven screens. Nearly everyone needs <b>Products</b>, <b>Bills of Materials</b> and <b>Work Orders</b>. The rest wait until the work demands them: <b>Panel Tracking</b> when you must know where each individual unit is, <b>Dies</b> if you extrude your own profiles, <b>Delivery Notes</b> for the paperwork that leaves with the lorry, and <b>Production Runs</b> for one-off batches that have no fixed recipe.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:question}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Do you need this app at all?</div><p>If you buy goods and sell them on unchanged, no. Stock in, stock out, and the <b>Inventory</b> app is enough. You need Fabrication the moment one product is <b>consumed to create a different one</b>, because that is when quantity and value have to move from one item to another.</p></div></div>" },
       { t: "Follow it through once: 20 window frames", h: "<p>Here is the whole app in one example. A customer orders <b>20 aluminium window frames</b>. Each frame takes 6 m of profile, 1 glass unit and 4 m of gasket. Make these seven moves once and everything else in this chapter is detail.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">In <b>Products</b>, make sure four items exist: the profile, the glass, the gasket and the finished <b>Window frame W1</b>. Put a <b>cost price</b> on the three components.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">In <b>Bills of Materials &rsaquo; New</b>, name it <i>W1 frame</i>, set <b>Finished product</b> to Window frame W1, leave <b>Output qty</b> at 1, and add the three component lines with quantities 6, 1 and 4.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">In <b>Work Orders &rsaquo; New</b>, pick the product, the BOM, the <b>project</b> it is for and quantity <b>20</b>. Save. Orbit numbers it <span class=\"man-key\">WO/2026/0001</span> and multiplies the recipe out for you.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\">Under <b>Routing / operations</b>, list the steps: Cut, Weld, Glaze, QC, each with a work centre and planned minutes. Save, then click <span class=\"man-key\">Start</span>.</div></div><div class=\"man-step\"><div class=\"man-step-n\">5</div><div class=\"man-step-b\">As the shop works through them, set each operation to <b>In progress</b>, then <b>Done</b>, and Save. That is your traveller: it says where the order really is.</div></div><div class=\"man-step\"><div class=\"man-step-n\">6</div><div class=\"man-step-b\">Once the last operation is Done, click <span class=\"man-key\">Complete &amp; consume</span>. The components leave stock and the 20 frames arrive in stock carrying their cost.</div></div><div class=\"man-step\"><div class=\"man-step-n\">7</div><div class=\"man-step-b\">Ship them on a <b>Delivery Note</b>. If each frame has to be tracked to a position on the elevation, give them <b>panels</b> with QR labels first.</div></div></div><div class=\"man-mock\"><div class=\"man-mock-bar\"><span class=\"man-mock-dot\"></span><span class=\"man-mock-ttl\">WO/2026/0001</span><span class=\"man-mock-sp\"></span><span class=\"man-mock-btn ghost\">Start</span><span class=\"man-mock-btn\">Complete &amp; consume</span></div><div class=\"man-mock-body\"><div class=\"man-mock-r\"><span class=\"l1\">Aluminium profile 60x40</span><span class=\"l2\">120.00 m</span><span class=\"man-mock-pill d\">1,440.00</span></div><div class=\"man-mock-r\"><span class=\"l1\">Glass unit 6/12/6</span><span class=\"l2\">20.00</span><span class=\"man-mock-pill d\">1,700.00</span></div><div class=\"man-mock-r\"><span class=\"l1\">Gasket EPDM</span><span class=\"l2\">80.00 m</span><span class=\"man-mock-pill d\">96.00</span></div></div></div><div class=\"man-mock-cap\">The work order multiplies the recipe by the quantity for you: 6 m of profile per frame x 20 frames = 120 m. Total material cost 3,236.00.</div>" },
@@ -1085,6 +1094,15 @@
       { i: "tag", n: "Cost Codes", l: "Costs", d: "The buckets you tag spend to, so cost reports add up." },
       { i: "box", n: "Materials & Remnants", l: "Costs", d: "Made-to-size material for a job, including usable offcuts." }
     ] },
+    menu: { intro: "Every screen in the <b>Menu</b> app:", list: [
+      { i: "list", n: "Menus", l: "Menus", d: "What is offered, on which channel, at which hours." },
+      { i: "layers", n: "Modifiers", l: "Modifiers", d: "Choices that change price, cost and what is consumed." },
+      { i: "cart", n: "Channels", l: "Channels", d: "Dine-in, delivery, aggregator, wholesale, each with its own prices." },
+      { i: "tag", n: "Price list", l: "Price list", d: "Every item against every channel, with margin and a price simulator." },
+      { i: "chartBar", n: "Menu engineering", l: "Menu engineering", d: "Stars, Plowhorses, Puzzles and Dogs from real sales and real cost." },
+      { i: "clipboard", n: "Recipes", l: "Recipes", d: "The shared bill of materials, with yield and waste." },
+      { i: "box", n: "Items", l: "Items", d: "The shared product catalogue." }
+    ] },
     manufacturing: { intro: "Every screen in the <b>Manufacturing</b> app:", list: [
       { i: "clipboard", n: "Work Orders", l: "Work Orders", d: "Make a quantity from a recipe, with routing steps and a completion that moves stock." },
       { i: "grid", n: "Panel Tracking", l: "Panel Tracking", d: "Follow each unit individually by QR code, zone and state." },
@@ -1343,6 +1361,20 @@
         { label: "Warranties", action: "svc.warranties" }
       ]
     },
+    // Menu engineering. Sits beside POS rather than inside it, because the menu,
+    // its recipes and its channel prices are master data that outlive any till.
+    menu: {
+      name: "Menu", icon: "☕", color: "#b45309", color2: "#92400e", home: "menu.list",
+      menus: [
+        { label: "Menus", action: "menu.list" },
+        { label: "Modifiers", action: "menu.modgroups" },
+        { label: "Channels", action: "menu.channels" },
+        { label: "Price list", action: "menu.prices" },
+        { label: "Menu engineering", action: "menu.engineering" },
+        { label: "Recipes", action: "mfg.boms" },
+        { label: "Items", action: "products" }
+      ]
+    },
     pos: {
       name: "Point of Sale", icon: "▤", color: "#7c3aed", color2: "#6d28d9", home: "pos.terminal",
       menus: [
@@ -1475,7 +1507,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "menu.list": "menu", "menu.modgroups": "menu", "menu.channels": "menu", "menu.prices": "menu", "menu.engineering": "menu", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -3051,6 +3083,11 @@
       case "svc.ppm": return renderMaintenancePlans();
       case "pos.terminal": return renderPOS();
       case "pos.returns": return renderPosReturns();
+      case "menu.list": return renderList(cfgMenus());
+      case "menu.modgroups": return renderList(cfgModifierGroups());
+      case "menu.channels": return renderList(cfgChannels());
+      case "menu.prices": return renderPriceList();
+      case "menu.engineering": return renderMenuEngineering();
       case "pos.promos": return renderPromotions();
       case "pos.vouchers": return renderVouchers();
       case "pos.orders": return renderList(cfgPosOrders());
@@ -16496,6 +16533,358 @@
     });
   }
   // Promotions config.
+  // ===========================================================================
+  // MENU ENGINEERING  (F&B spec section 1)
+  //
+  // Four things live here that a product catalogue alone cannot express:
+  //   channels   - the same item sells at different prices dine-in vs delivery
+  //   prices     - effective dated, so a historical report reproduces exactly
+  //   modifiers  - a choice that changes price, cost AND what is consumed
+  //   menus      - which items are offered, on which channel, at which hours
+  // Plate cost comes from the shared plate_cost() function so POS, reports and
+  // the price simulator can never disagree about what something costs to make.
+  // ===========================================================================
+  var CHANNEL_KINDS = [["dine_in", "Dine-in"], ["takeaway", "Takeaway"], ["drive_thru", "Drive-thru"], ["delivery", "Delivery"], ["aggregator", "Aggregator"], ["catering", "Catering"], ["wholesale", "Wholesale"], ["retail", "Retail"]];
+  var DOW = [["0", "Sun"], ["1", "Mon"], ["2", "Tue"], ["3", "Wed"], ["4", "Thu"], ["5", "Fri"], ["6", "Sat"]];
+
+  function cfgChannels() {
+    return {
+      title: "Sales channels", pageSize: 50, table: "sales_channels",
+      fetch: function () { return sb.from("sales_channels").select("*").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
+      searchText: function (c) { return (c.name || "") + " " + (c.code || ""); },
+      columns: [
+        { label: "Channel", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
+        { label: "Type", get: function (c) { return esc((CHANNEL_KINDS.filter(function (k) { return k[0] === c.kind; })[0] || [, c.kind])[1] || ""); } },
+        { label: "Markup", num: true, get: function (c) { return Number(c.markup_percent || 0) + "%"; } },
+        { label: "Commission", num: true, get: function (c) { return Number(c.commission_percent || 0) + "%"; } },
+        { label: "Active", get: function (c) { return c.is_active ? '<span class="badge paid">Yes</span>' : '<span class="badge">No</span>'; } }
+      ],
+      emptyHint: "A channel is a way you sell: dine-in, delivery, an aggregator, wholesale. Each can carry its own prices and its own menu.",
+      onOpen: function (c) { openChannelModal(c); }, onNew: function () { openChannelModal(null); }
+    };
+  }
+  async function openChannelModal(c) {
+    c = c || { kind: "dine_in", markup_percent: 0, commission_percent: 0, sort: 50, is_active: true };
+    var inner =
+      '<div class="row2"><div><label>Name</label><input id="ch-name" value="' + esc(c.name || "") + '" placeholder="e.g. Talabat"></div>' +
+      '<div><label>Code</label><input id="ch-code" value="' + esc(c.code || "") + '" placeholder="lowercase"></div></div>' +
+      '<div><label>Type</label><select id="ch-kind">' + CHANNEL_KINDS.map(function (k) { return '<option value="' + k[0] + '"' + (c.kind === k[0] ? " selected" : "") + '>' + k[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div class="row2"><div><label>Menu markup %</label><input id="ch-markup" type="number" step="0.01" value="' + Number(c.markup_percent || 0) + '"></div>' +
+      '<div><label>Commission %</label><input id="ch-comm" type="number" step="0.01" value="' + Number(c.commission_percent || 0) + '"></div></div>' +
+      '<div class="o-note">Markup is what you add to the base price on this channel to absorb its commission. Commission is what the channel actually takes, so the two can be compared later against the payout statement.</div>' +
+      '<div class="row2"><div><label>Order</label><input id="ch-sort" type="number" value="' + (c.sort != null ? c.sort : 50) + '"></div>' +
+      '<div><label>Active</label><select id="ch-active"><option value="1"' + (c.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (c.is_active === false ? " selected" : "") + '>No</option></select></div></div>';
+    plotModal(c.id ? "Edit channel" : "New channel", inner, async function () {
+      var name = gv("ch-name"); if (!name) { toast("Name the channel"); return false; }
+      var row = { name: name, code: (gv("ch-code") || name).toLowerCase().replace(/[^a-z0-9_]+/g, "_"),
+        kind: document.getElementById("ch-kind").value, markup_percent: parseFloat(gv("ch-markup")) || 0,
+        commission_percent: parseFloat(gv("ch-comm")) || 0, sort: parseInt(gv("ch-sort"), 10) || 50,
+        is_active: document.getElementById("ch-active").value === "1" };
+      var r; if (c.id) r = await sb.from("sales_channels").update(row).eq("id", c.id);
+      else { row.company_id = S.company.id; r = await sb.from("sales_channels").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return false; }
+      toast("Saved"); return true;
+    });
+  }
+
+  function cfgModifierGroups() {
+    return {
+      title: "Modifier groups", pageSize: 50, table: "modifier_groups",
+      fetch: async function () {
+        var gs = (await sb.from("modifier_groups").select("*").eq("company_id", S.company.id).order("sort")).data || [];
+        if (!gs.length) return gs;
+        var ms = (await sb.from("modifiers").select("group_id,name,price_delta").in("group_id", gs.map(function (g) { return g.id; }))).data || [];
+        gs.forEach(function (g) { g._opts = ms.filter(function (m) { return m.group_id === g.id; }); });
+        return gs;
+      },
+      searchText: function (g) { return (g.name || "") + " " + (g.code || ""); },
+      columns: [
+        { label: "Group", get: function (g) { return '<b>' + esc(g.name) + '</b>'; } },
+        { label: "Choices", get: function (g) { return '<span class="muted">' + esc((g._opts || []).map(function (m) { return m.name; }).slice(0, 5).join(", ")) + ((g._opts || []).length > 5 ? " ..." : "") + '</span>'; } },
+        { label: "Rule", get: function (g) { return esc((g.is_required ? "Required" : "Optional") + ", pick " + (g.min_select === g.max_select ? g.min_select : g.min_select + " to " + g.max_select)); } },
+        { label: "Options", num: true, get: function (g) { return (g._opts || []).length; } }
+      ],
+      emptyHint: "A modifier group is a question the customer answers: milk, size, shots. Each choice can change the price, the cost, and which ingredient is consumed.",
+      onOpen: function (g) { renderModifierGroupForm(g.id); }, onNew: function () { renderModifierGroupForm("new"); }
+    };
+  }
+  async function renderModifierGroupForm(id) {
+    var parent = { action: "menu.modgroups", title: "Modifier groups" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var g = id === "new" ? { min_select: 0, max_select: 1, sort: 10, is_active: true } : (await sb.from("modifier_groups").select("*").eq("id", id).maybeSingle()).data || {};
+    var opts = id === "new" ? [] : (await sb.from("modifiers").select("*").eq("group_id", id).order("sort")).data || [];
+    var prods = (await sb.from("products").select("id,name,cost_price,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (g.name || "Group");
+    function prodOpts(sel) { return '<option value="">(none)</option>' + prods.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join(""); }
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="mg-save">Save</button><button id="mg-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("modifier_groups", id, "menu.modgroups", "modifier group") : "") + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="mg-name" value="' + esc(g.name || "") + '" placeholder="e.g. Milk"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Code", '<input id="mg-code" value="' + esc(g.code || "") + '" placeholder="milk">') +
+      fld("Required", '<select id="mg-req"><option value="0"' + (!g.is_required ? " selected" : "") + '>Optional</option><option value="1"' + (g.is_required ? " selected" : "") + '>Must choose</option></select>', "A required group blocks the order until the customer picks.") +
+      '</div><div>' +
+      '<div class="row2"><div>' + fld("Pick at least", '<input id="mg-min" type="number" value="' + (g.min_select != null ? g.min_select : 0) + '">') + '</div><div>' + fld("Pick at most", '<input id="mg-max" type="number" value="' + (g.max_select != null ? g.max_select : 1) + '">') + '</div></div>' +
+      fld("Order", '<input id="mg-sort" type="number" value="' + (g.sort != null ? g.sort : 10) + '">') +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Choices</div></div><div class="o-nb-pg">' +
+      '<table class="o-lines"><thead><tr><th style="width:150px">Name</th><th style="width:95px;text-align:right">Price +/-</th><th style="width:170px">Consumes</th><th style="width:75px;text-align:right">Qty</th><th style="width:170px">Instead of</th><th style="width:60px">Default</th><th style="width:22px"></th></tr></thead><tbody id="mg-body"></tbody></table>' +
+      '<button class="o-addln" id="mg-add">+ Add a choice</button>' +
+      '<div class="sub" style="margin-top:6px"><b>Consumes</b> is what this choice actually takes out of stock, and <b>Instead of</b> is what it replaces. Set both on &ldquo;oat milk&rdquo; and the plate cost and the stock movement both follow the customer&rsquo;s choice.</div>' +
+      '</div></div></div>';
+    document.getElementById("mg-discard").onclick = function () { go("menu.modgroups"); };
+    var body = document.getElementById("mg-body");
+    function addRow(m) {
+      m = m || {};
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><input class="mo-name" value="' + esc(m.name || "") + '"></td>' +
+        '<td><input class="mo-price num" type="number" step="0.01" value="' + Number(m.price_delta || 0) + '"></td>' +
+        '<td><select class="mo-comp">' + prodOpts(m.component_product_id) + '</select></td>' +
+        '<td><input class="mo-qty num" type="number" step="0.001" value="' + (m.component_qty != null ? m.component_qty : "") + '"></td>' +
+        '<td><select class="mo-repl">' + prodOpts(m.replaces_product_id) + '</select></td>' +
+        '<td style="text-align:center"><input class="mo-def" type="checkbox"' + (m.is_default ? " checked" : "") + '></td>' +
+        '<td><button class="del">&times;</button></td>';
+      body.appendChild(tr);
+      tr.querySelector(".del").onclick = function () { tr.remove(); };
+    }
+    if (opts.length) opts.forEach(addRow); else addRow(null);
+    document.getElementById("mg-add").onclick = function () { addRow(null); };
+    document.getElementById("mg-save").onclick = async function () {
+      var name = gv("mg-name"); if (!name) { toast("Name the group"); return; }
+      var row = { name: name, code: (gv("mg-code") || name).toLowerCase().replace(/[^a-z0-9_]+/g, "_"),
+        is_required: document.getElementById("mg-req").value === "1",
+        min_select: parseInt(gv("mg-min"), 10) || 0, max_select: parseInt(gv("mg-max"), 10) || 1,
+        sort: parseInt(gv("mg-sort"), 10) || 10 };
+      if (row.max_select < row.min_select) { toast("Pick at most cannot be less than pick at least"); return; }
+      var gid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("modifier_groups").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } gid = ins.data.id; }
+      else { if ((await sb.from("modifier_groups").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("modifiers").delete().eq("group_id", id); }
+      var rows = [].map.call(body.querySelectorAll("tr"), function (tr, i) {
+        return { company_id: S.company.id, group_id: gid, name: tr.querySelector(".mo-name").value.trim(),
+          price_delta: parseFloat(tr.querySelector(".mo-price").value) || 0,
+          component_product_id: tr.querySelector(".mo-comp").value || null,
+          component_qty: parseFloat(tr.querySelector(".mo-qty").value) || null,
+          replaces_product_id: tr.querySelector(".mo-repl").value || null,
+          is_default: tr.querySelector(".mo-def").checked, sort: (i + 1) * 10 };
+      }).filter(function (r) { return r.name; });
+      if (rows.length) { var mi = await sb.from("modifiers").insert(rows); if (mi.error) { toast("Choices failed: " + errMsg(mi.error)); return; } }
+      toast("Saved"); go("menu.modgroups");
+    };
+  }
+
+  function cfgMenus() {
+    return {
+      title: "Menus", pageSize: 50, table: "menus",
+      fetch: function () { return sb.from("menus").select("*, sales_channels(name)").eq("company_id", S.company.id).order("sort").then(function (r) { return r.data || []; }); },
+      searchText: function (m) { return (m.name || "") + " " + (m.code || ""); },
+      columns: [
+        { label: "Menu", get: function (m) { return '<b>' + esc(m.name) + '</b>'; } },
+        { label: "Channel", get: function (m) { return esc(m.sales_channels ? m.sales_channels.name : "All channels"); } },
+        { label: "When", get: function (m) { return '<span class="muted">' + esc(menuWhen(m)) + '</span>'; } },
+        { label: "Live now", get: function (m) { return menuLiveNow(m) ? '<span class="badge paid">On</span>' : '<span class="badge draft">Off</span>'; } }
+      ],
+      emptyHint: "A menu is what you offer, on which channel, at which hours. Day-parting means a breakfast menu can switch itself on at 07:00 and off at 11:30 without anyone touching it.",
+      onOpen: function (m) { renderMenuForm(m.id); }, onNew: function () { renderMenuForm("new"); }
+    };
+  }
+  function menuWhen(m) {
+    var days = (m.days_of_week || []).map(String);
+    var d = days.length === 7 ? "Every day" : DOW.filter(function (x) { return days.indexOf(x[0]) >= 0; }).map(function (x) { return x[1]; }).join(" ");
+    var t = (m.start_time || m.end_time) ? " " + (m.start_time || "00:00").slice(0, 5) + " to " + (m.end_time || "23:59").slice(0, 5) : " all day";
+    return d + t;
+  }
+  // Is this menu on right now? Same rule the till would use.
+  function menuLiveNow(m) {
+    if (!m.is_active) return false;
+    var now = new Date(), iso = today();
+    if (m.valid_from && iso < m.valid_from) return false;
+    if (m.valid_to && iso > m.valid_to) return false;
+    if ((m.days_of_week || []).length && (m.days_of_week || []).indexOf(now.getDay()) < 0) return false;
+    var hm = ("0" + now.getHours()).slice(-2) + ":" + ("0" + now.getMinutes()).slice(-2);
+    if (m.start_time && hm < m.start_time.slice(0, 5)) return false;
+    if (m.end_time && hm > m.end_time.slice(0, 5)) return false;
+    return true;
+  }
+  async function renderMenuForm(id) {
+    var parent = { action: "menu.list", title: "Menus" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    wireBc();
+    var m = id === "new" ? { days_of_week: [0, 1, 2, 3, 4, 5, 6], is_active: true, sort: 10 } : (await sb.from("menus").select("*").eq("id", id).maybeSingle()).data || {};
+    var chans = (await sb.from("sales_channels").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
+    var prods = (await sb.from("products").select("id,name,list_price").eq("company_id", S.company.id).eq("is_active", true).eq("is_sellable", true).order("name")).data || [];
+    var items = id === "new" ? [] : (await sb.from("menu_items").select("*").eq("menu_id", id).order("sort")).data || [];
+    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (m.name || "Menu");
+    var chosen = {}; items.forEach(function (i) { chosen[i.product_id] = i; });
+    document.querySelector(".o-form").innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="mn-save">Save</button><button id="mn-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("menus", id, "menu.list", "menu") : "") + '</div>' +
+      (id !== "new" ? '<div class="o-stages"><span class="st ' + (menuLiveNow(m) ? "on" : "") + '">' + (menuLiveNow(m) ? "Serving now" : "Not serving now") + '</span></div>' : "") + '</div>' +
+      '<div class="o-sheet"><div class="o-title"><input id="mn-name" value="' + esc(m.name || "") + '" placeholder="e.g. Breakfast"></div>' +
+      '<div class="o-groups"><div>' +
+      fld("Channel", '<select id="mn-chan"><option value="">All channels</option>' + chans.map(function (c) { return '<option value="' + c.id + '"' + (m.channel_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("") + '</select>', "Leave on all channels unless this menu is only for delivery, say.") +
+      fld("Days", '<div class="mn-days">' + DOW.map(function (d) { return '<label class="mn-day"><input type="checkbox" class="mn-dow" value="' + d[0] + '"' + ((m.days_of_week || []).indexOf(Number(d[0])) >= 0 ? " checked" : "") + '> ' + d[1] + '</label>'; }).join("") + '</div>') +
+      '</div><div>' +
+      '<div class="row2"><div>' + fld("From", '<input id="mn-start" type="time" value="' + esc((m.start_time || "").slice(0, 5)) + '">') + '</div><div>' + fld("To", '<input id="mn-end" type="time" value="' + esc((m.end_time || "").slice(0, 5)) + '">') + '</div></div>' +
+      '<div class="row2"><div>' + fld("Live from", '<input id="mn-vfrom" type="date" value="' + esc(m.valid_from || "") + '">') + '</div><div>' + fld("Live to", '<input id="mn-vto" type="date" value="' + esc(m.valid_to || "") + '">') + '</div></div>' +
+      '</div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Items on this menu</div></div><div class="o-nb-pg">' +
+      '<input id="mn-filter" placeholder="Filter items..." style="width:100%;margin-bottom:8px">' +
+      '<div class="mn-items" id="mn-items">' + prods.map(function (p) {
+        return '<label class="mn-item" data-n="' + esc((p.name || "").toLowerCase()) + '"><input type="checkbox" class="mn-pick" value="' + p.id + '"' + (chosen[p.id] ? " checked" : "") + '> <span>' + esc(p.name) + '</span></label>';
+      }).join("") + '</div>' +
+      (prods.length ? "" : '<div class="o-empty">No sellable items yet. Add products first.</div>') +
+      '</div></div></div>';
+    document.getElementById("mn-discard").onclick = function () { go("menu.list"); };
+    var filt = document.getElementById("mn-filter");
+    filt.oninput = function () {
+      var v = this.value.trim().toLowerCase();
+      document.querySelectorAll("#mn-items .mn-item").forEach(function (el) { el.style.display = (!v || el.dataset.n.indexOf(v) >= 0) ? "" : "none"; });
+    };
+    document.getElementById("mn-save").onclick = async function () {
+      var name = gv("mn-name"); if (!name) { toast("Name the menu"); return; }
+      var dows = [].map.call(document.querySelectorAll(".mn-dow:checked"), function (c) { return Number(c.value); });
+      var row = { name: name, channel_id: document.getElementById("mn-chan").value || null,
+        days_of_week: dows.length ? dows : [0, 1, 2, 3, 4, 5, 6],
+        start_time: gv("mn-start") || null, end_time: gv("mn-end") || null,
+        valid_from: gv("mn-vfrom") || null, valid_to: gv("mn-vto") || null, is_active: true };
+      var mid = id;
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("menus").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } mid = ins.data.id; }
+      else { if ((await sb.from("menus").update(row).eq("id", id)).error) { toast("Save failed"); return; } await sb.from("menu_items").delete().eq("menu_id", id); }
+      var picks = [].map.call(document.querySelectorAll(".mn-pick:checked"), function (c, i) { return { company_id: S.company.id, menu_id: mid, product_id: c.value, sort: (i + 1) * 10, is_available: true }; });
+      if (picks.length) { var pi = await sb.from("menu_items").insert(picks); if (pi.error) { toast("Items failed: " + errMsg(pi.error)); return; } }
+      toast("Saved"); go("menu.list");
+    };
+  }
+
+  // Price list: every sellable item against every channel, with the margin that
+  // results, and a simulator that shows the effect of a change before it is made.
+  async function renderPriceList() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Price list") + '<div class="gap"></div><button class="o-filtbtn" id="pl-export">Export</button></div><div class="o-form-bg"><div class="o-report" id="pl" style="max-width:1100px"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc();
+    var cc = S.company.currency_code;
+    var chans = (await sb.from("sales_channels").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
+    var prods = (await sb.from("products").select("id,name,list_price,cost_price").eq("company_id", S.company.id).eq("is_active", true).eq("is_sellable", true).order("name").limit(400)).data || [];
+    var prices = (await sb.from("product_prices").select("*").eq("company_id", S.company.id).lte("valid_from", today())).data || [];
+    var costs = {};
+    // plate cost where a recipe exists, else the item's own cost
+    for (var i = 0; i < prods.length; i++) {
+      var pc = await sb.rpc("plate_cost", { p_product: prods[i].id });
+      costs[prods[i].id] = (pc && !pc.error && Number(pc.data)) || Number(prods[i].cost_price || 0);
+    }
+    function priceFor(pid, chId) {
+      var rows = prices.filter(function (r) { return r.product_id === pid && (r.channel_id === chId || r.channel_id === null) && (!r.valid_to || r.valid_to >= today()); });
+      rows.sort(function (a, b) { return ((b.channel_id ? 1 : 0) - (a.channel_id ? 1 : 0)) || (a.valid_from < b.valid_from ? 1 : -1); });
+      if (rows.length) return Number(rows[0].price);
+      var p = prods.filter(function (x) { return x.id === pid; })[0];
+      return Number((p && p.list_price) || 0);
+    }
+    var head = '<tr><td>Item</td><td class="num">Plate cost</td>' + chans.map(function (c) { return '<td class="num">' + esc(c.name) + '</td>'; }).join("") + '<td class="num">Margin</td></tr>';
+    var body = prods.map(function (p) {
+      var cost = costs[p.id] || 0, base = priceFor(p.id, null);
+      var marg = base > 0 ? Math.round(((base - cost) / base) * 1000) / 10 : 0;
+      return '<tr data-p="' + p.id + '"><td>' + esc(p.name) + '</td><td class="num">' + money(cost) + '</td>' +
+        chans.map(function (c) { return '<td class="num"><span class="pl-cell" data-p="' + p.id + '" data-c="' + c.id + '">' + money(priceFor(p.id, c.id)) + '</span></td>'; }).join("") +
+        '<td class="num' + (marg < 0 ? " bad" : "") + '">' + marg + '%</td></tr>';
+    }).join("");
+    document.getElementById("pl").innerHTML = repHead("Price list", cc) +
+      '<div class="o-note">Prices are <b>effective dated</b>. Changing one writes a new price that starts on a date you choose; the old one stays, so last year&rsquo;s reports still reproduce exactly. Click any price to change it.</div>' +
+      (prods.length ? '<div class="o-rt-wrap"><table class="o-rt"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>'
+                    : '<div class="o-empty">No sellable items yet.</div>');
+    var ex = document.getElementById("pl-export"); if (ex) ex.onclick = exportRepCsv;
+    document.querySelectorAll(".pl-cell").forEach(function (el) {
+      el.onclick = function () { openPriceModal(el.dataset.p, el.dataset.c, prods, chans, costs[el.dataset.p] || 0); };
+    });
+  }
+  async function openPriceModal(productId, channelId, prods, chans, cost) {
+    var p = prods.filter(function (x) { return x.id === productId; })[0] || {};
+    var ch = chans.filter(function (x) { return x.id === channelId; })[0] || {};
+    var hist = (await sb.from("product_prices").select("*").eq("product_id", productId).eq("channel_id", channelId).order("valid_from", { ascending: false }).limit(6)).data || [];
+    var inner =
+      '<div class="sub" style="margin-bottom:8px"><b>' + esc(p.name || "") + '</b> on <b>' + esc(ch.name || "") + '</b> &middot; plate cost ' + money(cost) + '</div>' +
+      '<div class="row2"><div><label>New price</label><input id="pp-price" type="number" step="0.01" placeholder="0.00"></div>' +
+      '<div><label>Starts on</label><input id="pp-from" type="date" value="' + today() + '"></div></div>' +
+      '<div id="pp-sim" class="o-note">Type a price to see the margin it gives you.</div>' +
+      '<div><label>Note</label><input id="pp-note" placeholder="why, e.g. supplier increase"></div>' +
+      (hist.length ? '<div class="o-cf-head" style="margin-top:10px">Price history</div><table class="o-list"><tbody>' + hist.map(function (h) { return '<tr><td>' + esc(h.valid_from) + '</td><td class="num">' + money(h.price) + '</td><td class="muted">' + esc(h.note || "") + '</td></tr>'; }).join("") + '</tbody></table>' : "");
+    plotModal("Change price", inner, async function () {
+      var price = parseFloat(gv("pp-price"));
+      if (!(price >= 0)) { toast("Enter a price"); return false; }
+      var from = gv("pp-from") || today();
+      // close the current price the day before the new one starts, so the two
+      // never overlap and a historical lookup stays unambiguous
+      var prev = new Date(from + "T00:00:00"); prev.setDate(prev.getDate() - 1);
+      var prevIso = prev.toISOString().slice(0, 10);
+      await sb.from("product_prices").update({ valid_to: prevIso })
+        .eq("product_id", productId).eq("channel_id", channelId).is("valid_to", null).lt("valid_from", from);
+      var r = await sb.from("product_prices").insert({ company_id: S.company.id, product_id: productId, channel_id: channelId, price: price, currency_code: S.company.currency_code, valid_from: from, note: gv("pp-note") || null });
+      if (r.error) { toast(errMsg(r.error)); return false; }
+      toast("Price set from " + from); renderPriceList(); return true;
+    });
+    // live margin simulator
+    var el = document.getElementById("pp-price");
+    if (el) el.oninput = function () {
+      var v = parseFloat(this.value), sim = document.getElementById("pp-sim");
+      if (!sim) return;
+      if (!(v > 0)) { sim.className = "o-note"; sim.textContent = "Type a price to see the margin it gives you."; return; }
+      var gp = v - cost, pct = Math.round((gp / v) * 1000) / 10;
+      sim.className = "o-note" + (pct < 0 ? " warn" : "");
+      sim.innerHTML = "At " + esc(S.company.currency_code) + " " + money(v) + " you make <b>" + money(gp) + "</b> a unit, a margin of <b>" + pct + "%</b>" +
+        (ch.commission_percent ? ". After " + Number(ch.commission_percent) + "% channel commission you keep " + money(v * (1 - Number(ch.commission_percent) / 100) - cost) + "." : ".");
+    };
+  }
+
+  // The classic four-box menu matrix, computed from real POS sales and real
+  // plate cost rather than guesswork.
+  async function renderMenuEngineering() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Menu engineering") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc(); wirePeriod(renderMenuEngineering);
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var q = sb.from("pos_order_lines").select("product_id,qty,unit_price,line_total, pos_orders!inner(company_id,created_at,status)").eq("pos_orders.company_id", S.company.id).neq("pos_orders.status", "cancelled");
+    if (pr.from) q = q.gte("pos_orders.created_at", pr.from);
+    if (pr.to) q = q.lte("pos_orders.created_at", pr.to + "T23:59:59");
+    var lines = (await q).data || [];
+    if (!lines.length) { rep.innerHTML = repHead("Menu engineering - " + pr.label, cc) + '<div class="o-empty">No till sales in this period yet. Once items sell, this ranks every one of them by popularity and profit.</div>'; return; }
+    var agg = {};
+    lines.forEach(function (l) {
+      if (!l.product_id) return;
+      var a = agg[l.product_id] || (agg[l.product_id] = { qty: 0, rev: 0 });
+      a.qty += Number(l.qty || 0);
+      a.rev += (l.line_total != null ? Number(l.line_total) : Number(l.qty || 0) * Number(l.unit_price || 0));
+    });
+    var ids = Object.keys(agg);
+    var prods = (await sb.from("products").select("id,name").in("id", ids)).data || [];
+    var nameBy = {}; prods.forEach(function (p) { nameBy[p.id] = p.name; });
+    var rows = [];
+    for (var i = 0; i < ids.length; i++) {
+      var pc = await sb.rpc("plate_cost", { p_product: ids[i] });
+      var cost = (pc && !pc.error && Number(pc.data)) || 0;
+      var a = agg[ids[i]];
+      rows.push({ id: ids[i], name: nameBy[ids[i]] || "?", qty: a.qty, rev: a.rev, cost: cost * a.qty, cm: a.rev - cost * a.qty });
+    }
+    var totQty = rows.reduce(function (s, r) { return s + r.qty; }, 0);
+    var avgQty = totQty / rows.length;
+    var avgCm = rows.reduce(function (s, r) { return s + (r.qty ? r.cm / r.qty : 0); }, 0) / rows.length;
+    rows.forEach(function (r) {
+      var pop = r.qty >= avgQty, prof = (r.qty ? r.cm / r.qty : 0) >= avgCm;
+      r.box = pop && prof ? "Star" : (pop && !prof ? "Plowhorse" : (!pop && prof ? "Puzzle" : "Dog"));
+      r.advice = r.box === "Star" ? "Protect it. Keep it visible and do not discount it."
+        : r.box === "Plowhorse" ? "Popular but thin. Cut the recipe cost or raise the price a little."
+        : r.box === "Puzzle" ? "Profitable but nobody orders it. Move it up the menu or train the upsell."
+        : "Little sold, little made. Consider dropping it or reworking it.";
+    });
+    rows.sort(function (a, b) { return b.cm - a.cm; });
+    var cls = { Star: "paid", Plowhorse: "partial", Puzzle: "draft", Dog: "unpaid" };
+    rep.innerHTML = repHead("Menu engineering - " + pr.label, cc) +
+      '<div class="o-note">Every item is placed by how <b>often</b> it sells against how much <b>profit</b> each one makes, both measured against the average for this period. Profit uses the real recipe cost, including yield and waste.</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Item</td><td class="num">Sold</td><td class="num">Revenue</td><td class="num">Cost</td><td class="num">Profit</td><td class="num">Per unit</td><td>Verdict</td></tr></thead><tbody>' +
+      rows.map(function (r) {
+        return '<tr><td>' + esc(r.name) + '</td><td class="num">' + Math.round(r.qty * 100) / 100 + '</td><td class="num">' + money(r.rev) + '</td><td class="num">' + money(r.cost) + '</td><td class="num">' + money(r.cm) + '</td><td class="num">' + money(r.qty ? r.cm / r.qty : 0) + '</td><td><span class="badge ' + cls[r.box] + '">' + r.box + '</span> <span class="muted">' + esc(r.advice) + '</span></td></tr>';
+      }).join("") + '</tbody></table></div>';
+  }
+
   async function renderPromotions() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Promotions") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
