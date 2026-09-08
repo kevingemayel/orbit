@@ -182,6 +182,74 @@
     });
     mo.observe(document.body, { childList: true, subtree: true });
   }
+  // ---------------------------------------------------------------------------
+  // The second half: naming things.
+  //
+  // Orbit writes forms as `<label>Date</label><input id="f-date">`. To a sighted
+  // user that reads as a labelled field. To a screen reader it is a stray piece
+  // of text followed by an unnamed edit box, and clicking the word does not
+  // focus the field either. There are several hundred of these across 270
+  // screens, so, as with the click handlers, they are fixed where they are
+  // created rather than one at a time.
+  //
+  // Three passes, all idempotent and all cheap:
+  //   1. a label with no `for` is tied to the control it visually belongs to
+  //   2. a control that still has no name borrows its placeholder or title
+  //   3. a `th` with no `scope` gets one, so a screen reader can say which
+  //      column a cell belongs to when reading across a row
+  // ---------------------------------------------------------------------------
+  var A11Y_CTRL = "input:not([type=hidden]),select,textarea";
+  function a11yId(el) {
+    if (!el.id) el.id = "a11y-" + Math.random().toString(36).slice(2, 9);
+    return el.id;
+  }
+  function a11yNamed(el) {
+    return !!(el.getAttribute("aria-label") || el.getAttribute("aria-labelledby") ||
+      (el.id && document.querySelector('label[for="' + (window.CSS && CSS.escape ? CSS.escape(el.id) : el.id) + '"]')));
+  }
+  function a11yFields(root) {
+    try {
+      if (!root || !root.querySelectorAll) return;
+      // 1. labels -> their control
+      var labels = root.querySelectorAll("label:not([for])");
+      for (var i = 0; i < labels.length; i++) {
+        var lb = labels[i];
+        if (lb.__a11y) continue;
+        lb.__a11y = 1;
+        if (lb.querySelector(A11Y_CTRL)) continue;      // wrapping label: already fine
+        // the control this label sits above, inside the same field wrapper
+        var scope = lb.parentElement || root;
+        var ctl = null, sib = lb.nextElementSibling;
+        while (sib && !ctl) {
+          if (sib.matches && sib.matches(A11Y_CTRL)) ctl = sib;
+          else if (sib.querySelector) ctl = sib.querySelector(A11Y_CTRL);
+          if (sib.tagName === "LABEL") break;           // the next field has started
+          sib = sib.nextElementSibling;
+        }
+        if (!ctl && scope !== root) ctl = scope.querySelector(A11Y_CTRL);
+        if (!ctl || ctl.__a11yLabelled) continue;
+        ctl.__a11yLabelled = 1;
+        lb.setAttribute("for", a11yId(ctl));
+      }
+      // 2. anything still unnamed borrows its placeholder or tooltip
+      var ctrls = root.querySelectorAll(A11Y_CTRL);
+      for (var k = 0; k < ctrls.length; k++) {
+        var c = ctrls[k];
+        if (c.__a11yName) continue;
+        c.__a11yName = 1;
+        if (a11yNamed(c)) continue;
+        var nm = c.getAttribute("placeholder") || c.getAttribute("title") ||
+          (c.type === "checkbox" || c.type === "radio" ? (c.parentElement && (c.parentElement.textContent || "").trim()) : "");
+        if (nm) c.setAttribute("aria-label", nm.slice(0, 120));
+      }
+      // 3. table headers
+      var ths = root.querySelectorAll("th:not([scope])");
+      for (var t = 0; t < ths.length; t++) {
+        var th = ths[t];
+        th.setAttribute("scope", th.closest("thead") ? "col" : (th.parentElement && th.parentElement.firstElementChild === th ? "row" : "col"));
+      }
+    } catch (e) { }
+  }
   (function a11yInit() {
     function go() {
       try {
@@ -192,6 +260,14 @@
           s.onclick = function () { var m = document.getElementById("o-main"); if (m) { m.focus(); m.scrollIntoView(); } };
           document.body.insertBefore(s, document.body.firstChild);
         }
+        // Screens are painted with one big innerHTML, so batch the naming pass
+        // to the end of the frame rather than running it per added node.
+        var pending = [], queued = false;
+        function flush() {
+          queued = false;
+          var q = pending; pending = [];
+          for (var i = 0; i < q.length; i++) a11yFields(q[i]);
+        }
         new MutationObserver(function (muts) {
           for (var i = 0; i < muts.length; i++) {
             var an = muts[i].addedNodes;
@@ -199,9 +275,15 @@
               var n = an[j]; if (!n || n.nodeType !== 1) continue;
               if (n.classList && n.classList.contains("modal")) a11yDialog(n);
               else if (n.querySelector) { var inner = n.querySelector(".modal"); if (inner) a11yDialog(inner); }
+              pending.push(n);
             }
           }
+          // A timeout rather than requestAnimationFrame: rAF does not fire while
+          // the tab is in the background, so a screen painted there would stay
+          // unnamed until the user came back to it.
+          if (pending.length && !queued) { queued = true; setTimeout(flush, 0); }
         }).observe(document.body, { childList: true, subtree: true });
+        a11yFields(document.body);
       } catch (e) { }
     }
     if (document.body) go(); else document.addEventListener("DOMContentLoaded", go);
@@ -528,7 +610,7 @@
     var rows = defs.map(function (f) {
       var v = vals[f.field_key]; if (v == null) v = "";
       var eid = "cf-" + entity + "-" + f.field_key;
-      var star = f.required ? ' <span aria-hidden="true" style="color:var(--bad)">*</span>' : '';
+      var star = f.required ? ' <span aria-hidden="true" style="color:var(--bad-t)">*</span>' : '';
       var inp;
       if (f.field_type === "select") {
         var opts = (f.options || "").split(",").map(function (o) { return o.trim(); }).filter(Boolean);
@@ -2755,7 +2837,7 @@
       '<div class="row2"><div><label>Applies to</label><select id="ar-type">' + typeOpts + '</select></div><div><label id="ar-minlbl">Needs approval at or above (' + esc(S.company.currency_code) + ')</label><input id="ar-min" type="number" step="0.01" value="' + (r.id ? (r.min_amount || 0) : 1000) + '"></div></div>' +
       '<div class="row2"><div><label>Approver</label><select id="ar-appr">' + apprOpts + '</select></div><div><label>Status</label><select id="ar-active"><option value="1">Active</option><option value="0">Off</option></select></div></div>' +
       '<div class="sub">While a matching document is above the threshold it cannot be confirmed or posted until it is approved here. Only the approver you name can sign it off; leave it as <b>Anyone can approve</b> and any member of the company may.</div>' +
-      '</div><div class="foot"><button class="btn" id="ar-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="ar-del" style="color:var(--bad)">Delete</button>' : "") + '<button class="btn pri" id="ar-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ar-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="ar-del" style="color:var(--bad-t)">Delete</button>' : "") + '<button class="btn pri" id="ar-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ar-type").value = r.doc_type || "purchase_order";
     document.getElementById("ar-active").value = r.is_active === false ? "0" : "1";
@@ -2879,11 +2961,11 @@
     function cadLabel(r) { return r.cadence === "daily" ? "Every day" : r.cadence === "monthly" ? ("Day " + (r.day_of_month || 1) + " each month") : ("Every " + ((RS_DOW.filter(function (d) { return d[0] === String(r.day_of_week); })[0] || RS_DOW[1])[1])); }
     document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Scheduled reports</h3>' +
       '<div class="sub" style="margin:0 0 12px">Pick a dashboard report and Orbit emails it on your schedule - nobody has to remember to run it. Times are UTC.</div>' +
-      (reports.length ? '' : '<div class="sub" style="color:var(--bad);margin-bottom:10px">Create a report tile on the Dashboard first, then you can schedule it.</div>') +
+      (reports.length ? '' : '<div class="sub" style="color:var(--bad-t);margin-bottom:10px">Create a report tile on the Dashboard first, then you can schedule it.</div>') +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Name</th><th>Report</th><th>When</th><th>Recipients</th><th>Last sent</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (r) {
         return '<tr><td><b>' + esc(r.name) + '</b>' + (r.active ? '' : ' <span class="badge draft">Off</span>') + '</td><td>' + esc(r.reports ? r.reports.name : "(report deleted)") + '</td><td>' + esc(cadLabel(r)) + ' at ' + String(r.hour).padStart(2, "0") + ':00</td><td class="muted">' + esc(r.recipients || "") + '</td><td class="muted">' + esc((r.last_sent_at || "").slice(0, 16).replace("T", " ")) + '</td>' +
-          '<td style="text-align:right;white-space:nowrap"><button class="btn sm rs-tog" data-id="' + r.id + '" data-on="' + (r.active ? "1" : "0") + '">' + (r.active ? "Pause" : "Resume") + '</button> <button class="btn sm rs-del" data-id="' + r.id + '" style="color:var(--bad)">&times;</button></td></tr>';
+          '<td style="text-align:right;white-space:nowrap"><button class="btn sm rs-tog" data-id="' + r.id + '" data-on="' + (r.active ? "1" : "0") + '">' + (r.active ? "Pause" : "Resume") + '</button> <button class="btn sm rs-del" data-id="' + r.id + '" style="color:var(--bad-t)">&times;</button></td></tr>';
       }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No scheduled reports yet.</td></tr>') +
       '</tbody></table></div>' +
       '<div class="o-cf-head" style="margin-top:14px">Add a schedule</div>' +
@@ -3005,7 +3087,7 @@
       '<div class="row2"><div><label>Data source</label><select id="rp-src">' + srcOpts + '</select></div><div><label>Measure</label><select id="rp-meas">' + measOpts(rep.source, rep.measure) + '</select></div></div>' +
       '<div class="row2"><div><label>Group by</label><select id="rp-dim">' + dimOpts(rep.source, rep.group_by) + '</select></div><div><label>Chart</label><select id="rp-chart">' + chartOpts + '</select></div></div>' +
       '<div class="sub">The numbers are calculated live from your data each time the dashboard loads.</div>' +
-      '</div><div class="foot"><button class="btn" id="rp-cancel">Cancel</button>' + (rep.id ? '<button class="btn" id="rp-del" style="color:var(--bad)">Delete</button>' : "") + '<button class="btn pri" id="rp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="rp-cancel">Cancel</button>' + (rep.id ? '<button class="btn" id="rp-del" style="color:var(--bad-t)">Delete</button>' : "") + '<button class="btn pri" id="rp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     var srcSel = document.getElementById("rp-src");
     srcSel.onchange = function () { document.getElementById("rp-meas").innerHTML = measOpts(srcSel.value, "count"); document.getElementById("rp-dim").innerHTML = dimOpts(srcSel.value, ""); };
@@ -3047,7 +3129,7 @@
       '<div><label>Sign-in email</label><input id="pi-email" value="' + esc(r.email || "") + '" placeholder="who@company.com"></div>' +
       '<div class="row2"><div><label>They can see</label><select id="pi-role">' + roleOpts + '</select></div><div><label>Status</label><select id="pi-active"><option value="1">Active</option><option value="0">Off</option></select></div></div>' +
       '<div class="sub">They sign in at <b>' + esc(portalUrl) + '</b> with this email (a one-time link is emailed, no password). They only ever see their own projects, certificates and invoices, read-only.</div>' +
-      '</div><div class="foot"><button class="btn" id="pi-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="pi-del" style="color:var(--bad)">Remove</button>' : "") + '<button class="btn pri" id="pi-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="pi-cancel">Cancel</button>' + (r.id ? '<button class="btn" id="pi-del" style="color:var(--bad-t)">Remove</button>' : "") + '<button class="btn pri" id="pi-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pi-role").value = r.role || "client";
     document.getElementById("pi-active").value = r.is_active === false ? "0" : "1";
@@ -3096,7 +3178,7 @@
     }, false);
   }
   // Delete button for a form status bar; the global handler above does the work.
-  function formDelBtn(table, id, back, label) { return '<button class="o-del" data-del-table="' + esc(table) + '" data-del-id="' + esc(id) + '" data-del-back="' + esc(back || "") + '" data-del-label="' + esc(label || "record") + '" style="color:var(--bad)">Delete</button>'; }
+  function formDelBtn(table, id, back, label) { return '<button class="o-del" data-del-table="' + esc(table) + '" data-del-id="' + esc(id) + '" data-del-back="' + esc(back || "") + '" data-del-label="' + esc(label || "record") + '" style="color:var(--bad-t)">Delete</button>'; }
   function go(action) {
     if (action === "settings.roles" && !canManageRoles()) { toast("Only owners and super admins can manage roles"); if (!S.app) renderHome(); return; }
     if (!canGo(action)) { toast("You do not have access to that"); if (!S.app) renderHome(); return; }
@@ -3768,7 +3850,7 @@
         selbar.style.display = "";
         selbar.innerHTML = '<span class="o-seln">' + ids.length + ' selected</span><button class="btn sm pri" id="o-selexp" style="background:var(--app);border-color:var(--app)">Export selected</button>' +
           (_selEt && _selCanWrite && cfg.archiveField ? '<button class="btn sm" id="o-selarch">Archive</button>' : '') +
-          (_selEt && _selCanWrite && cfg.deletable !== false ? '<button class="btn sm" id="o-seldel" style="color:var(--bad)">Delete</button>' : '') +
+          (_selEt && _selCanWrite && cfg.deletable !== false ? '<button class="btn sm" id="o-seldel" style="color:var(--bad-t)">Delete</button>' : '') +
           '<button class="btn sm" id="o-selclr">Clear</button>';
         document.getElementById("o-selexp").onclick = function () { exportListCsv(true); };
         document.getElementById("o-selclr").onclick = function () { L.sel = {}; paintBody(); };
@@ -3991,7 +4073,7 @@
         { label: "Name", get: function (r) { return '<b>' + esc(r.name || "Recurring") + '</b>'; } },
         { label: "Customer", get: function (r) { return esc(r.partners ? r.partners.name : ""); } },
         { label: "Every", get: function (r) { return esc(recurLabel(r.interval_unit, r.interval_count)); } },
-        { label: "Next", get: function (r) { return '<span' + (r.active && r.next_date && r.next_date <= today() ? ' style="color:var(--bad);font-weight:700"' : ' class="muted"') + '>' + esc(r.next_date || "") + '</span>'; } },
+        { label: "Next", get: function (r) { return '<span' + (r.active && r.next_date && r.next_date <= today() ? ' style="color:var(--bad-t);font-weight:700"' : ' class="muted"') + '>' + esc(r.next_date || "") + '</span>'; } },
         { label: "Mode", get: function (r) { return r.auto_post ? '<span class="badge paid">auto-post</span>' : '<span class="badge">draft</span>'; } },
         { label: "Active", get: function (r) { return r.active ? "yes" : '<span class="muted">paused</span>'; } }
       ],
@@ -4016,7 +4098,7 @@
     function prodOptsFor(sel) { return '<option value="">(custom line)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
     function taxOptsFor(sel) { return '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '"' + (sel === t.id ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
     var unitOpts = RECUR_UNITS.map(function (u) { return '<option value="' + u[0] + '"' + (r.interval_unit === u[0] ? " selected" : "") + '>' + u[1] + '</option>'; }).join("");
-    function lineRow(l) { l = l || {}; return '<tr><td><select class="rl-prod">' + prodOptsFor(l.product_id) + '</select></td><td><input class="rl-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="rl-qty" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:70px"></td><td><input class="rl-price" type="number" step="0.01" value="' + (l.unit_price != null ? l.unit_price : 0) + '" style="width:90px"></td><td><select class="rl-tax">' + taxOptsFor(l.tax_id) + '</select></td><td><button class="rl-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function lineRow(l) { l = l || {}; return '<tr><td><select class="rl-prod">' + prodOptsFor(l.product_id) + '</select></td><td><input class="rl-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="rl-qty" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:70px"></td><td><input class="rl-price" type="number" step="0.01" value="' + (l.unit_price != null ? l.unit_price : 0) + '" style="width:90px"></td><td><select class="rl-tax">' + taxOptsFor(l.tax_id) + '</select></td><td><button class="rl-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var btns = '<button class="pri" id="rc-save">Save</button><button id="rc-discard">Discard</button>' + (id !== "new" ? '<button id="rc-gen">Generate invoice now</button>' : '');
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div>' + (r.next_date ? '<span class="muted">Next</span> <b>' + esc(r.next_date) + '</b>' : '') + '</div></div>' +
@@ -4171,7 +4253,7 @@
     m.innerHTML = '<div class="sheet"><h3>Payment ' + esc(p.reference || "") + '</h3>' +
       '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
       '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' +
-      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-rev" style="color:var(--bad)">Reverse payment</button>' : '') + '</div></div>';
+      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-rev" style="color:var(--bad-t)">Reverse payment</button>' : '') + '</div></div>';
     document.body.appendChild(m);
     document.getElementById("pv-close").onclick = function () { m.remove(); };
     var rb = document.getElementById("pv-rev"); if (rb) rb.onclick = async function () {
@@ -4258,7 +4340,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (ent.number || ent.ref || "Entry");
     function acctOpts(cur) { return '<option value="">Account...</option>' + accts.map(function (a) { return '<option value="' + a.id + '"' + (cur === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>'; }).join(""); }
     function totals() { var d = 0, c = 0; lines.forEach(function (l) { d += Number(l.debit) || 0; c += Number(l.credit) || 0; }); return { d: d, c: c, bal: Math.abs(d - c) < 0.005 && (d > 0 || c > 0) }; }
-    function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> &nbsp; ' + (t.bal ? '<span style="color:var(--good);font-weight:700">Balanced</span>' : '<span style="color:var(--bad);font-weight:700">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
+    function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> &nbsp; ' + (t.bal ? '<span style="color:var(--good-t);font-weight:700">Balanced</span>' : '<span style="color:var(--bad-t);font-weight:700">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
     function paint() {
       document.getElementById("je-grid").innerHTML = lines.map(function (l, i) {
         return '<tr>' +
@@ -4266,7 +4348,7 @@
           '<td><input data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Description"' + (posted ? " disabled" : "") + '></td>' +
           '<td><input data-i="' + i + '" data-f="debit" type="number" step="0.01" style="text-align:right" value="' + (l.debit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
           '<td><input data-i="' + i + '" data-f="credit" type="number" step="0.01" style="text-align:right" value="' + (l.credit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
-          '<td style="text-align:center">' + (posted ? "" : '<button data-del="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>';
+          '<td style="text-align:center">' + (posted ? "" : '<button data-del="' + i + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>';
       }).join("");
       document.getElementById("je-tot").innerHTML = totHTML();
       document.querySelectorAll("#je-grid [data-i]").forEach(function (el) {
@@ -4275,7 +4357,7 @@
       document.querySelectorAll("#je-grid [data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({}); paint(); }; });
     }
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted ? '<button id="je-rev" style="color:var(--bad)">Reverse</button>' : '') + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted ? '<button id="je-rev" style="color:var(--bad-t)">Reverse</button>' : '') + '</div>' +
       '<div class="o-stages"><span class="st ' + (posted ? "done" : "on") + '">Draft</span><span class="st ' + (posted ? "on" : "") + '">Posted</span></div></div>' +
       '<div class="o-sheet"><div class="o-title">Journal entry ' + esc(ent.number || ent.ref || "") + '</div>' +
       '<div class="o-groups"><div>' +
@@ -4358,7 +4440,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Edit tax" : "New tax") + '</h3><div class="form">' +
       '<div><label>Name</label><input id="tx-name" value="' + esc(t.name || "") + '" placeholder="e.g. VAT 5%"></div>' +
       '<div class="row2"><div><label>Rate %</label><input id="tx-amt" type="number" step="0.0001" value="' + (t.amount != null ? t.amount : "") + '"></div><div><label>Scope</label><select id="tx-scope"><option value="sale">Sale</option><option value="purchase">Purchase</option><option value="both">Both</option></select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="tx-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="tx-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="tx-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="tx-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="tx-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="tx-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("tx-scope").value = t.scope || "sale";
     document.getElementById("tx-cancel").onclick = function () { m.remove(); };
@@ -4403,7 +4485,7 @@
       '<div><label>Currency</label>' + fhint("Currency", "The currency you are quoting a rate for. Pick from the list.") + currencySelectHTML("r-code", rate.code || "EUR") + '</div>' +
       '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + (rate.rate_date || today()) + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
       '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09" value="' + (rate.rate != null ? rate.rate : "") + '"></div>' +
-      '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button>' + (rate.id ? '<button class="btn" id="r-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button>' + (rate.id ? '<button class="btn" id="r-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="r-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     if (rate.rate_type) document.getElementById("r-type").value = rate.rate_type;
     document.getElementById("r-cancel").onclick = function () { m.remove(); };
@@ -4721,7 +4803,7 @@
         var d = (document.getElementById("f-date") ? document.getElementById("f-date").value : null) || (inv && inv.invoice_date) || today();
         var rt = fxRate(docCcy, coCcy, d);
         if (rt != null) fxHtml = '<div class="r" style="opacity:.85"><span class="k">In company books (' + esc(coCcy) + ')</span><span>' + coCcy + " " + money(total * rt) + ' <span class="muted">&middot; 1 ' + esc(docCcy) + ' = ' + (Math.round(rt * 1e6) / 1e6) + ' ' + esc(coCcy) + '</span></span></div>';
-        else fxHtml = '<div class="r" style="color:var(--bad)"><span class="k">No ' + esc(docCcy) + ' &rarr; ' + esc(coCcy) + ' rate on ' + esc(d) + '</span><span>add one in Accounting &rsaquo; Exchange Rates before posting</span></div>';
+        else fxHtml = '<div class="r" style="color:var(--bad-t)"><span class="k">No ' + esc(docCcy) + ' &rarr; ' + esc(coCcy) + ' rate on ' + esc(d) + '</span><span>add one in Accounting &rsaquo; Exchange Rates before posting</span></div>';
       }
       el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + docCcy + " " + money(sub) + '</span></div>' +
         '<div class="r"><span class="k">Taxes</span><span>' + docCcy + " " + money(tax) + '</span></div>' +
@@ -5814,7 +5896,7 @@
     }
     if (detector) {
       try { stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } }); video.srcObject = stream; }
-      catch (e) { msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc(e.message || "permission denied") + '. Allow camera access and try again.</span>'; return; }
+      catch (e) { msg.innerHTML = '<span style="color:var(--bad-t)">Could not open the camera: ' + esc(e.message || "permission denied") + '. Allow camera access and try again.</span>'; return; }
       var tick = async function () {
         if (!running) return;
         try { var codes = await detector.detect(video); if (codes && codes.length) { handle(codes[0].rawValue || ""); return; } } catch (e) { }
@@ -5827,12 +5909,12 @@
     msg.textContent = "Starting the scanner...";
     loadZXing(function (ok) {
       if (!running) return;
-      if (!ok || !window.ZXing) { msg.innerHTML = '<span style="color:var(--bad)">Could not load the scanner. You can still pick the product from the list.</span>'; return; }
+      if (!ok || !window.ZXing) { msg.innerHTML = '<span style="color:var(--bad-t)">Could not load the scanner. You can still pick the product from the list.</span>'; return; }
       try {
         zreader = new window.ZXing.BrowserMultiFormatReader();
         zreader.decodeFromConstraints({ video: { facingMode: { ideal: "environment" } } }, video, function (result, err) {
           if (!running || !result) return; handle(result.getText());
-        }).catch(function (e) { if (running) msg.innerHTML = '<span style="color:var(--bad)">Could not open the camera: ' + esc((e && e.message) || "permission denied") + '. Allow camera access and try again.</span>'; });
+        }).catch(function (e) { if (running) msg.innerHTML = '<span style="color:var(--bad-t)">Could not open the camera: ' + esc((e && e.message) || "permission denied") + '. Allow camera access and try again.</span>'; });
         msg.textContent = "Point the camera at the label.";
       } catch (e) { msg.textContent = "Scanner unavailable on this device."; }
     });
@@ -6051,7 +6133,7 @@
       var boxes = capNames.map(function (c) { return capBox(c, pcaps.indexOf(c) >= 0); }).join("");
       return '<div class="o-matspec" style="margin-top:14px"><div class="o-cf-head">What they can supply</div><div class="sub" style="margin:-2px 0 9px">Tick the products or services this supplier offers. Not listed? Add it and it is saved for next time.</div><div class="cap-list" id="cap-list">' + boxes + '</div><div class="cap-add"><input id="cap-new" placeholder="Add a type, e.g. Insulation"><button type="button" class="o-filtbtn" id="cap-addbtn">Add</button></div></div>';
     }
-    function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
@@ -6610,7 +6692,7 @@
     function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
     var typeSel = '<select id="pr-type">' + Object.keys(PTYPE).map(function (k) { return '<option value="' + k + '"' + (p.type === k ? " selected" : "") + '>' + PTYPE[k] + '</option>'; }).join("") + '</select>';
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-qr">QR label</button>' : "") + (id !== "new" && canManageApp(S.app) ? '<button id="pr-del" style="color:var(--bad)">Delete</button>' : "") + '</div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-qr">QR label</button>' : "") + (id !== "new" && canManageApp(S.app) ? '<button id="pr-del" style="color:var(--bad-t)">Delete</button>' : "") + '</div><div></div></div>' +
       '<div class="o-sheet">' + prSmart + titleRowHTML('<input id="pr-name" value="' + esc(p.name || "") + '" placeholder="Product name">', "product", id) +
       '<div class="o-groups"><div>' +
       fld("Item code", '<input id="pr-code" value="' + esc(p.default_code || "") + '" placeholder="auto from classification">', "Your code for this item. Built automatically from the classification tree (e.g. AL-EXT-MUL-001); edit it if you want your own.") +
@@ -7393,7 +7475,7 @@
       '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label>' + currencySelectHTML("co-cur", c.currency_code || "USD") + '</div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
       (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
-      '</div><div class="foot">' + (id ? '<button class="btn" id="co-del" style="margin-right:auto;color:var(--bad)">Delete</button>' : '') + '<button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
+      '</div><div class="foot">' + (id ? '<button class="btn" id="co-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>' : '') + '<button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
     document.body.appendChild(m);
     if (id) wireAttach("company");
     document.getElementById("co-cancel").onclick = function () { m.remove(); };
@@ -7816,7 +7898,7 @@
       '<div class="row2"><div><label>Email</label><input id="gm-email" value="' + esc(g.email || "") + '"></div><div><label>Phone</label><input id="gm-phone" value="' + esc(g.phone || "") + '"></div></div>' +
       '<div class="row2"><div><label>Dietary / notes</label><input id="gm-diet" value="' + esc(g.dietary || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="gm-vip"' + (g.is_vip ? " checked" : "") + '> VIP</label></div></div>' +
       (!isNew && g.rsvp_token ? '<div class="o-chkline" style="justify-content:space-between"><span>Personal RSVP link' + (g.responded_at ? ' &middot; <span class="muted">responded</span>' : "") + '</span><button type="button" class="btn sm" id="gm-rsvplink">Copy link</button></div>' : "") +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="gm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="gm-cancel">Cancel</button><button class="btn pri" id="gm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="gm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="gm-cancel">Cancel</button><button class="btn pri" id="gm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("gm-cancel").onclick = function () { m.remove(); };
     var glink = document.getElementById("gm-rsvplink"); if (glink) glink.onclick = function () { evCopy(location.origin + "/rsvp.html?g=" + g.rsvp_token, "RSVP link copied"); };
@@ -7952,7 +8034,7 @@
       '<div class="row2"><div><label>Cost basis</label><select id="bm-basis"><option value="fixed"' + (b.cost_basis !== "per_guest" ? " selected" : "") + '>Fixed</option><option value="per_guest"' + (b.cost_basis === "per_guest" ? " selected" : "") + '>Per guest</option></select></div><div><label>Rate / guest</label><input id="bm-rate" type="number" step="0.01" value="' + (b.rate_per_guest != null ? b.rate_per_guest : "") + '"></div></div>' +
       '<div class="row2"><div><label>Estimated (' + esc(evCur()) + ')</label><input id="bm-est" type="number" step="0.01" value="' + (b.estimated != null ? b.estimated : "") + '"></div><div><label>Actual (' + esc(evCur()) + ')</label><input id="bm-act" type="number" step="0.01" value="' + (b.actual != null ? b.actual : "") + '"></div></div>' +
       '<div><label>Notes</label><input id="bm-notes" value="' + esc(b.notes || "") + '"></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="bm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="bm-cancel">Cancel</button><button class="btn pri" id="bm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="bm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="bm-cancel">Cancel</button><button class="btn pri" id="bm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("bm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("bm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this line?")) return; await sb.from("event_budget_lines").delete().eq("id", b.id); m.remove(); evRouteSection("budget"); evOverviewStats(); };
@@ -8001,7 +8083,7 @@
       '<div class="row2"><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="pm-paid"' + (p.paid ? " checked" : "") + '> Paid</label></div><div><label>Paid date</label><input id="pm-paiddate" type="date" value="' + esc(p.paid_date || "") + '"></div></div>' +
       '<div><label>Supplier <span style="font-weight:400;color:var(--ink2)">(so you can raise a vendor bill)</span></label><select id="pm-supplier"><option value="">(none)</option>' + paySups.map(function (s) { return '<option value="' + s.id + '"' + (p.supplier_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Reference / notes</label><input id="pm-notes" value="' + esc(p.notes || "") + '"></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="pm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="pm-cancel">Cancel</button><button class="btn pri" id="pm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="pm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="pm-cancel">Cancel</button><button class="btn pri" id="pm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("pm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this payment?")) return; await sb.from("event_payments").delete().eq("id", p.id); m.remove(); evRouteSection("payments"); evOverviewStats(); };
@@ -8054,7 +8136,7 @@
       '<div class="row2"><div><label>Where to find / source</label><input id="sm-source" value="' + esc(s.source || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="sm-pick"' + (s.is_pick ? " checked" : "") + '> Best-value pick</label></div></div>' +
       '<div><label>Notes</label><input id="sm-notes" value="' + esc(s.notes || "") + '"></div>' +
       '<div><label>Linked contact <span style="font-weight:400;color:var(--ink2)">(reuse a vendor from your Contacts)</span></label><div style="display:flex;gap:8px"><select id="sm-partner" style="flex:1"><option value="">(not linked)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (s.partner_id === v.id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("") + '</select><button type="button" class="btn" id="sm-newcontact">＋ New contact</button></div></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="sm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="sm-cancel">Cancel</button><button class="btn pri" id="sm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="sm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="sm-cancel">Cancel</button><button class="btn pri" id="sm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sm-newcontact").onclick = async function () {
       var nm = gv("sm-name"); if (!nm) { toast("Enter a supplier name first"); return; }
@@ -8103,7 +8185,7 @@
       '<div class="row2"><div><label>Needed by</label><input id="qm-need" type="date" value="' + esc(p.needed_by || "") + '"></div><div><label>Status</label><select id="qm-status">' + PROC_STATUS.map(function (o) { return '<option value="' + o[0] + '"' + ((p.status || "planned") === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Amount (' + esc(evCur()) + ') <span style="font-weight:400;color:var(--ink2)">auto = qty x price; override if needed</span></label><input id="qm-amount" type="number" step="0.01" value="' + (p.amount != null ? p.amount : "") + '"></div><div></div></div>' +
       '<div><label>Notes</label><input id="qm-notes" value="' + esc(p.notes || "") + '"></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="qm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="qm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="qm-cancel">Cancel</button><button class="btn pri" id="qm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("qm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("qm-del"); if (del) del.onclick = async function () { if (!confirm("Delete?")) return; await sb.from("event_procurement").delete().eq("id", p.id); m.remove(); evRouteSection("procurement"); };
@@ -8141,7 +8223,7 @@
       '<div class="row2"><div><label>Type</label><input id="rm-src" list="rm-src-dl" value="' + esc(r.source || "") + '" placeholder="Pick or type"><datalist id="rm-src-dl">' + REV_TYPES.map(function (t) { return '<option>' + esc(t) + '</option>'; }).join("") + '</datalist></div><div><label>Amount (' + esc(evCur()) + ')</label><input id="rm-amt" type="number" step="0.01" value="' + (r.amount != null ? r.amount : "") + '"></div></div>' +
       '<div><label>Details / from whom</label><input id="rm-desc" value="' + esc(r.description || "") + '" placeholder="e.g. sponsor name, gift giver, notes"></div>' +
       '<div class="row2"><div><label>Expected date</label><input id="rm-date" type="date" value="' + esc(r.expected_date || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="rm-recv"' + (r.received ? " checked" : "") + '> Received</label></div></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="rm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="rm-cancel">Cancel</button><button class="btn pri" id="rm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="rm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="rm-cancel">Cancel</button><button class="btn pri" id="rm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("rm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("rm-del"); if (del) del.onclick = async function () { if (!confirm("Delete?")) return; await sb.from("event_revenues").delete().eq("id", r.id); m.remove(); evRouteSection("revenues"); };
@@ -8225,7 +8307,7 @@
       '<div class="row2"><div><label>Start date</label><input id="tm-start" type="date" value="' + esc(t.start_date || "") + '"></div><div><label>Due date</label><input id="tm-due" type="date" value="' + esc(t.due_date || "") + '"></div></div>' +
       '<div class="row2"><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="tm-pay"' + (t.is_payment ? " checked" : "") + '> Payment task</label></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:6px"><input type="checkbox" id="tm-book"' + (t.is_booking ? " checked" : "") + '> Booking confirmation</label></div></div>' +
       '<div><label>Notes</label><input id="tm-notes" value="' + esc(t.notes || "") + '"></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="tm-cancel">Cancel</button><button class="btn pri" id="tm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="tm-cancel">Cancel</button><button class="btn pri" id="tm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     // seed assignee suggestions with people already on the event + suppliers
     try {
@@ -8295,7 +8377,7 @@
       '<div class="sub" style="margin:-2px 0 10px">They accept a link and can then see and edit <b>this event only</b>. Their other data stays private, and yours stays private to them.</div>' +
       '<div class="row2" style="display:flex;gap:8px"><input id="tm-email" placeholder="their email" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><select id="tm-role" style="padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink)"><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn pri" id="tm-invite" style="background:var(--app);border-color:var(--app)">Invite</button></div></div>' +
       '<div class="card"><h3>Collaborators</h3>' + (collabs.length ? '<div class="ev-kv">' + collabs.map(function (cc) {
-        return '<div class="r" style="align-items:center"><span class="k">' + esc(cc.invited_email || "invited") + '<div class="muted" style="font-size:11px">' + esc(cc.role) + ' &middot; ' + esc(cc.status) + '</div></span><span style="display:flex;gap:6px">' + (cc.status === "pending" ? '<button class="btn sm tm-copy" data-token="' + cc.token + '">Copy link</button>' : "") + '<button class="btn sm tm-rem" data-id="' + cc.id + '" style="color:var(--bad)">Remove</button></span></div>';
+        return '<div class="r" style="align-items:center"><span class="k">' + esc(cc.invited_email || "invited") + '<div class="muted" style="font-size:11px">' + esc(cc.role) + ' &middot; ' + esc(cc.status) + '</div></span><span style="display:flex;gap:6px">' + (cc.status === "pending" ? '<button class="btn sm tm-copy" data-token="' + cc.token + '">Copy link</button>' : "") + '<button class="btn sm tm-rem" data-id="' + cc.id + '" style="color:var(--bad-t)">Remove</button></span></div>';
       }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No collaborators yet.</div>') + '</div></div>' + peopleCard;
     document.getElementById("tm-invite").onclick = async function () {
       var email = gv("tm-email"); if (!email) { toast("Enter an email"); return; }
@@ -8396,7 +8478,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add table" : "Edit table") + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div class="row2"><div><label>Name</label><input id="tbm-name" value="' + esc(t.name || (isNew ? "Table " + ((count || 0) + 1) : "")) + '"></div><div><label>Capacity</label><input id="tbm-cap" type="number" value="' + (t.capacity != null ? t.capacity : 10) + '"></div></div>' +
       '<div class="row2"><div><label>Shape</label><select id="tbm-shape"><option value="round"' + (t.shape !== "rect" ? " selected" : "") + '>Round</option><option value="rect"' + (t.shape === "rect" ? " selected" : "") + '>Rectangle</option></select></div><div><label>Zone</label><select id="tbm-zone"><option value="">(none)</option>' + (zones || []).map(function (z) { return '<option value="' + z.id + '"' + (t.zone_id === z.id ? " selected" : "") + '>' + esc(z.name) + '</option>'; }).join("") + '</select></div></div>' +
-      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tbm-del" style="margin-right:auto;color:var(--bad)">Delete</button>') + '<button class="btn" id="tbm-cancel">Cancel</button><button class="btn pri" id="tbm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (isNew ? "" : '<button class="btn" id="tbm-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>') + '<button class="btn" id="tbm-cancel">Cancel</button><button class="btn pri" id="tbm-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("tbm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("tbm-del"); if (del) del.onclick = async function () { if (!confirm("Delete this table? Guests seated here become unassigned.")) return; await sb.from("event_tables").delete().eq("id", t.id); m.remove(); evRouteSection("seating"); };
@@ -8412,7 +8494,7 @@
     var zones = (await sb.from("event_zones").select("*").eq("event_id", EV.eventId).order("sort")).data || [];
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>Zones</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
-      '<div id="zm-list">' + zones.map(function (z) { return '<div class="zm-row" data-id="' + z.id + '"><input type="color" class="zm-color" value="' + esc(z.color || "#0ea5e9") + '"><input class="zm-name" value="' + esc(z.name) + '"><button class="btn zm-del" style="color:var(--bad)">&times;</button></div>'; }).join("") + '</div>' +
+      '<div id="zm-list">' + zones.map(function (z) { return '<div class="zm-row" data-id="' + z.id + '"><input type="color" class="zm-color" value="' + esc(z.color || "#0ea5e9") + '"><input class="zm-name" value="' + esc(z.name) + '"><button class="btn zm-del" style="color:var(--bad-t)">&times;</button></div>'; }).join("") + '</div>' +
       '<div class="zm-row"><input type="color" id="zm-newcolor" value="#0ea5e9"><input id="zm-newname" placeholder="New zone name"><button class="btn pri" id="zm-add" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
       '</div><div class="foot"><button class="btn pri" id="zm-close" style="background:var(--app);border-color:var(--app)">Done</button></div></div>';
     document.body.appendChild(m);
@@ -8484,7 +8566,7 @@
     var overdueTotal = overdue.reduce(function (s, v) { return s + Number(v.amount_residual || 0); }, 0);
     var overdueRows = overdue.slice(0, 8).map(function (v) {
       var dd = v.due_date || v.invoice_date, days = Math.floor((new Date(todayS) - new Date(dd)) / 864e5);
-      return '<tr data-inv="' + v.id + '" style="cursor:pointer"><td>' + esc(v.partners ? v.partners.name : "(none)") + '</td><td>' + esc(v.number || "") + '</td><td>' + esc(dd) + '</td><td class="num" style="color:var(--warn,#c0392b);font-weight:600">' + days + 'd</td><td class="num">' + cc + ' ' + money(v.amount_residual) + '</td></tr>';
+      return '<tr data-inv="' + v.id + '" style="cursor:pointer"><td>' + esc(v.partners ? v.partners.name : "(none)") + '</td><td>' + esc(v.number || "") + '</td><td>' + esc(dd) + '</td><td class="num" style="color:var(--warn-t,#8a5a0d);font-weight:600">' + days + 'd</td><td class="num">' + cc + ' ' + money(v.amount_residual) + '</td></tr>';
     }).join("");
     var overdueHtml = overdue.length
       ? '<div class="o-chart" style="margin-top:14px"><h3>Overdue invoices &middot; ' + cc + ' ' + money(overdueTotal) + ' across ' + overdue.length + ' invoice' + (overdue.length === 1 ? "" : "s") + '</h3><div class="o-chart-bd" style="padding:0"><table class="o-list"><thead><tr><th>Customer</th><th>Number</th><th>Due</th><th class="num">Overdue</th><th class="num">Amount</th></tr></thead><tbody>' + overdueRows + '</tbody></table></div></div>'
@@ -8832,7 +8914,7 @@
       if (fClose !== undefined && fClose !== null && fRefFunc) { target = b.fc * fClose / fRefFunc; adj = target - b.func; totalAdj += adj; }
       else anyMissing = true;
       return '<tr><td><b>' + esc(ccy) + '</b></td><td class="num">' + b.fc.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '</td><td class="num">' + money(b.func) +
-        '</td><td class="num">' + (target == null ? '<span style="color:var(--warn)">no closing rate</span>' : money(target)) +
+        '</td><td class="num">' + (target == null ? '<span style="color:var(--warn-t)">no closing rate</span>' : money(target)) +
         '</td><td class="num"' + (adj && Math.abs(adj) > 0.005 ? ' style="color:' + (adj > 0 ? "var(--good)" : "var(--bad)") + '"' : '') + '>' + (adj == null ? "-" : money(adj)) + '</td></tr>';
     }).join("");
     var body =
@@ -8846,7 +8928,7 @@
         '<tr style="font-size:11px;color:var(--ink3)"><td>Currency</td><td class="num">Open balance</td><td class="num">On books (' + esc(coCcy) + ')</td><td class="num">At closing rate</td><td class="num">Unrealized adj.</td></tr>' +
         rowsHtml +
         '<tr class="tot"><td></td><td></td><td></td><td>Net unrealized ' + (totalAdj >= 0 ? "gain" : "loss") + '</td><td class="num"' + (Math.abs(totalAdj) > 0.005 ? ' style="color:' + (totalAdj > 0 ? "var(--good)" : "var(--bad)") + '"' : '') + '>' + money(totalAdj) + '</td></tr></tbody></table>';
-      if (anyMissing) body += '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-top:12px;font-size:13px">Some currencies have no <b>closing</b> rate for this date - add one under <a id="rev-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Exchange Rates</a> so they can be revalued.</div>';
+      if (anyMissing) body += '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-top:12px;font-size:13px">Some currencies have no <b>closing</b> rate for this date - add one under <a id="rev-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Exchange Rates</a> so they can be revalued.</div>';
       body += '<div class="sub" style="margin-top:12px">Running this posts one balanced journal entry: each monetary account is moved to its closing-rate value and the net difference goes to the FX gain / loss account set in company settings. It is safe to run repeatedly - it only ever posts the incremental change, and reverses automatically once the underlying items settle.</div>';
     }
     document.getElementById("rev").innerHTML = body;
@@ -9000,10 +9082,10 @@
       : [];
     var icPairs = icEntries.filter(function (e) { return inGroup[e.counterparty_company_id]; }).length;
     var missKeys = Object.keys(missing);
-    var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
+    var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
     var METHOD_LABEL = { full: "Full", proportional: "Proportional", equity: "Equity" };
     var entRows = entities.map(function (e) {
-      var rc = e.cur === ref ? "1.000000" : (e.known ? Number(e.fClose).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn)">n/a</span>');
+      var rc = e.cur === ref ? "1.000000" : (e.known ? Number(e.fClose).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn-t)">n/a</span>');
       var ra = e.cur === ref ? "1.000000" : (e.fAvg != null ? Number(e.fAvg).toLocaleString("en-US", { maximumFractionDigits: 6 }) : rc);
       return '<tr><td>' + esc(e.name) + '</td><td class="muted">' + esc(e.cur) + '</td>' +
         '<td class="muted">' + esc(METHOD_LABEL[e.method] || "Full") + (e.pct < 100 ? " " + e.pct + "%" : "") + '</td>' +
@@ -9021,11 +9103,11 @@
     var cta = gAssets - (gLiab + eq.t + gResult + minorityEquity); // translation plug so the group balance sheet balances
     var memberNote = grp
       ? esc(grp.name) + ' &middot; ' + conCos.length + ' ' + (conCos.length === 1 ? "entity" : "entities") +
-        (missingMembers > 0 ? ' <span style="color:var(--warn)">(' + missingMembers + ' member(s) you cannot open are left out)</span>' : "")
+        (missingMembers > 0 ? ' <span style="color:var(--warn-t)">(' + missingMembers + ' member(s) you cannot open are left out)</span>' : "")
       : 'every company you can see &middot; ' + conCos.length + ' entities';
     document.getElementById("rep").innerHTML =
       '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + memberNote + ' &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
-      (grp ? "" : '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No consolidation group is defined, so this adds up <b>every company you can open</b>. That is rarely what a group report should show. Click <b>Groups</b> to define one.</div>') +
+      (grp ? "" : '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No consolidation group is defined, so this adds up <b>every company you can open</b>. That is rarely what a group report should show. Click <b>Groups</b> to define one.</div>') +
       '<table class="o-rt"><tbody><tr class="sec"><td colspan="7">Entities</td></tr>' +
       '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td>Method</td><td class="num">Closing &rarr; ' + esc(ref) + '</td><td class="num">Average &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
       entRows + '</tbody></table>' +
@@ -9189,8 +9271,8 @@
     var run = opening, low = opening, net = [], running = [], rows = "";
     buckets.forEach(function (b, i) {
       var n = b.inflow - b.outflow; run += n; if (run < low) low = run; net.push(n); running.push(run);
-      var cls = run < 0 ? ' style="color:var(--bad);font-weight:700"' : '';
-      rows += '<tr><td class="muted">' + esc(b.label) + '</td><td class="num" style="color:var(--good)">' + money(b.inflow) + '</td><td class="num" style="color:var(--bad)">' + money(b.outflow) + '</td><td class="num"' + (n < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(n) + '</td><td class="num"' + cls + '>' + money(run) + '</td></tr>';
+      var cls = run < 0 ? ' style="color:var(--bad-t);font-weight:700"' : '';
+      rows += '<tr><td class="muted">' + esc(b.label) + '</td><td class="num" style="color:var(--good-t)">' + money(b.inflow) + '</td><td class="num" style="color:var(--bad-t)">' + money(b.outflow) + '</td><td class="num"' + (n < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + money(n) + '</td><td class="num"' + cls + '>' + money(run) + '</td></tr>';
     });
     // ---- chart (running-cash line + net inflow/outflow bars, shared money axis) ----
     function cfChart() {
@@ -9327,7 +9409,7 @@
         var dl = daysLate(d.due_date), lf = lastByInv[d.id], lv = levelFor(dl);
         var stat = lf ? '<span class="muted">' + esc(lf.status) + (lf.promised_date ? ' &middot; promised ' + esc(lf.promised_date) : '') + '</span>' : '<span class="muted">-</span>';
         var sugg = lv ? '<span class="ob-flag" style="background:' + (lv.action === "legal" ? "var(--bad)" : lv.action === "letter" ? "var(--warn)" : "var(--accent)") + '" title="' + esc(lv.message || "") + '">' + esc(lv.name) + '</span>' : '<span class="muted">-</span>';
-        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
+        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad-t)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
       }).join("");
       return '<tr class="sec"><td colspan="7"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
     }).join("");
@@ -9375,7 +9457,7 @@
       '<div class="row2"><div><label>Name</label><input id="st2-name" value="' + esc(s.name || "") + '"></div><div><label>Role</label><input id="st2-role" value="' + esc(s.role || "") + '" placeholder="e.g. Installer, Foreman"></div></div>' +
       '<div class="row2"><div><label>Start</label><input id="st2-start" value="' + esc(s.start_time || "08:00") + '"></div><div><label>End</label><input id="st2-end" value="' + esc(s.end_time || "17:00") + '"></div></div>' +
       '<div><label>Hours</label><input id="st2-hours" type="number" step="0.25" value="' + (s.hours || 8) + '"></div>' +
-      '</div><div class="foot"><button class="btn" id="st2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="st2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="st2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="st2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="st2-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="st2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("st2-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("st2-del"); if (del) del.onclick = async function () { await sb.from("shift_templates").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
@@ -9416,7 +9498,7 @@
       '<div class="row2"><div><label>Project</label><select id="ps-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Date</label><input id="ps-date" type="date" value="' + (s.shift_date || today()) + '"></div></div>' +
       '<div class="row2"><div><label>Start</label><input id="ps-start" value="' + esc(s.start_time || "08:00") + '"></div><div><label>End</label><input id="ps-end" value="' + esc(s.end_time || "17:00") + '"></div></div>' +
       '<div class="row2"><div><label>Hours</label><input id="ps-hours" type="number" step="0.25" value="' + (s.hours || 8) + '"></div><div><label>Status</label><select id="ps-pub"><option value="0">Draft</option><option value="1">Published</option></select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="ps-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="ps-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ps-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ps-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="ps-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="ps-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ps-pub").value = s.published ? "1" : "0";
     var tsel = document.getElementById("ps-tmpl"); if (tsel) tsel.onchange = function () { var t = tmpls.filter(function (x) { return x.id === tsel.value; })[0]; if (t) { document.getElementById("ps-role").value = t.role || ""; document.getElementById("ps-start").value = t.start_time || ""; document.getElementById("ps-end").value = t.end_time || ""; document.getElementById("ps-hours").value = t.hours || 8; } };
@@ -9471,7 +9553,7 @@
     var parts = (await sb.from("partners").select("capabilities").eq("company_id", S.company.id).not("capabilities", "is", null)).data || [];
     var count = {}; parts.forEach(function (p) { (p.capabilities || []).forEach(function (c) { count[c] = (count[c] || 0) + 1; }); });
     var body = document.getElementById("o-body");
-    function rowH(c) { return '<tr data-id="' + c.id + '" data-name="' + esc(c.name) + '"><td><input class="cap-name" value="' + esc(c.name) + '" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit"></td><td class="num muted">' + (count[c.name] || 0) + '</td><td style="white-space:nowrap"><button class="btn sm cap-ren">Rename</button> <button class="btn sm cap-del" style="color:var(--bad)">&times;</button></td></tr>'; }
+    function rowH(c) { return '<tr data-id="' + c.id + '" data-name="' + esc(c.name) + '"><td><input class="cap-name" value="' + esc(c.name) + '" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit"></td><td class="num muted">' + (count[c.name] || 0) + '</td><td style="white-space:nowrap"><button class="btn sm cap-ren">Rename</button> <button class="btn sm cap-del" style="color:var(--bad-t)">&times;</button></td></tr>'; }
     body.innerHTML = '<div style="padding:16px;max-width:640px"><div class="card"><h3 style="margin:0 0 4px">Services &amp; Products a supplier can offer</h3><div class="sub" style="margin-bottom:10px">This is the master list ticked under &ldquo;What they can supply&rdquo; on each supplier. Rename or delete cascades to every supplier using it.</div>' +
       '<div style="display:flex;gap:6px;margin-bottom:10px"><input id="cap-add" placeholder="Add a service or product..." style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit"><button class="btn pri" id="cap-addb" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
       '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Name</th><th class="num">Used by</th><th></th></tr></thead><tbody id="cap-body">' + (caps.length ? caps.map(rowH).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No services yet - add some, or they appear here as you tick them on suppliers.</td></tr>') + '</tbody></table></div></div></div>';
@@ -9484,7 +9566,7 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Edit" : "New") + ' tag</h3><div class="form">' +
       '<div class="row2"><div><label>Name</label><input id="ct-name" value="' + esc(t.name || "") + '"></div><div><label>Colour</label><input id="ct-color" type="color" value="' + (t.color || "#2f6bff") + '"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="ct-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="ct-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ct-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ct-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="ct-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="ct-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ct-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("ct-del"); if (del) del.onclick = async function () { await sb.from("contact_tags").delete().eq("id", t.id); m.remove(); toast("Deleted"); renderView(); };
@@ -9512,7 +9594,7 @@
   }
   function confirmModal(title, msgHtml, okLabel, onOk) {
     var m = document.createElement("div"); m.className = "modal on";
-    m.innerHTML = '<div class="sheet"><h3>' + esc(title) + '</h3><div class="form"><div class="sub">' + msgHtml + '</div></div><div class="foot"><button class="btn" id="cm-c">Cancel</button><button class="btn pri" id="cm-y" style="background:var(--bad);border-color:var(--bad)">' + esc(okLabel || "Confirm") + '</button></div></div>';
+    m.innerHTML = '<div class="sheet"><h3>' + esc(title) + '</h3><div class="form"><div class="sub">' + msgHtml + '</div></div><div class="foot"><button class="btn" id="cm-c">Cancel</button><button class="btn pri" id="cm-y" style="background:var(--bad);border-color:var(--bad-t)">' + esc(okLabel || "Confirm") + '</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("cm-c").onclick = function () { m.remove(); };
     document.getElementById("cm-y").onclick = function () { m.remove(); onOk(); };
@@ -9616,7 +9698,7 @@
       a += (mem.status === "suspended"
         ? '<button class="o-filtbtn um-act" data-id="' + mem.member_id + '" data-act="reactivate">Reactivate</button>'
         : '<button class="o-filtbtn um-act" data-id="' + mem.member_id + '" data-act="suspend">Suspend</button>');
-      a += '<button class="o-filtbtn um-remove" data-id="' + mem.member_id + '" style="color:var(--bad)">Remove</button>';
+      a += '<button class="o-filtbtn um-remove" data-id="' + mem.member_id + '" style="color:var(--bad-t)">Remove</button>';
       return a;
     }
     var rows = team.map(function (mem) {
@@ -9631,7 +9713,7 @@
     var inviteRows = invites.map(function (iv) {
       return '<tr><td><b>' + esc(iv.email) + '</b></td><td>' + esc(roleLabel[iv.role] || iv.role) + '</td>' +
         (multiCompany ? '<td class="muted" style="font-size:12.5px">' + esc(companyAccessLabel(iv.company_ids)) + '</td>' : '') +
-        '<td style="text-align:right"><div class="um-acts">' + (canMng ? '<button class="o-filtbtn inv-resend" data-id="' + iv.id + '">Resend email</button><button class="o-filtbtn inv-revoke" data-id="' + iv.id + '" style="color:var(--bad)">Revoke</button>' : '') + '</div></td></tr>';
+        '<td style="text-align:right"><div class="um-acts">' + (canMng ? '<button class="o-filtbtn inv-resend" data-id="' + iv.id + '">Resend email</button><button class="o-filtbtn inv-revoke" data-id="' + iv.id + '" style="color:var(--bad-t)">Revoke</button>' : '') + '</div></td></tr>';
     }).join("");
     var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage">Manage roles &amp; permissions</button>' : '';
     var inviteBtn = canMng ? '<button class="o-new" id="ur-invite">+ Invite teammate</button>' : '';
@@ -9668,7 +9750,7 @@
         (r.full_access ? ' <span class="badge paid">Full access</span>' : '') +
         (r.can_see_money === false ? ' <span class="badge unpaid">No money</span>' : '') +
         (r.can_manage_roles ? ' <span class="badge">Roles</span>' : '');
-      var actions = (isOrg && editable ? '<button class="o-filtbtn rl-del" data-id="' + r.id + '" style="color:var(--bad)">Delete</button>' : '') +
+      var actions = (isOrg && editable ? '<button class="o-filtbtn rl-del" data-id="' + r.id + '" style="color:var(--bad-t)">Delete</button>' : '') +
         (editable ? '<button class="o-filtbtn rl-edit" data-slug="' + r.slug + '">' + (isOrg ? "Edit" : "Customize") + '</button>' : '<span class="muted" style="font-size:11.5px">Locked</span>');
       return '<div class="rl-card"><div class="rl-h"><b>' + esc(r.label || r.slug) + '</b> ' + tags + '</div>' +
         '<div class="muted" style="font-size:12.5px;margin:4px 0 8px">' + esc(r.description || "") + '</div>' +
@@ -9678,7 +9760,7 @@
       '<div class="rl-grid">' + cards + '</div></div>';
     document.getElementById("rl-new").onclick = function () { openRoleEditor(null); };
     body.querySelectorAll(".rl-edit").forEach(function (b) { b.onclick = function () { openRoleEditor(bySlug[b.dataset.slug]); }; });
-    body.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = async function () { var m = document.createElement("div"); m.className = "modal on"; m.innerHTML = '<div class="sheet"><h3>Delete role?</h3><div class="form"><div class="sub">People currently on this role fall back to the shared template with the same name, if any.</div></div><div class="foot"><button class="btn" id="rd-c">Cancel</button><button class="btn pri" id="rd-y" style="background:var(--bad);border-color:var(--bad)">Delete</button></div></div>'; document.body.appendChild(m); document.getElementById("rd-c").onclick = function () { m.remove(); }; document.getElementById("rd-y").onclick = async function () { var r = await sb.from("roles").delete().eq("id", b.dataset.id); m.remove(); if (r.error) { toast(errMsg(r.error)); } else { toast("Deleted"); renderRoles(); } }; }; });
+    body.querySelectorAll(".rl-del").forEach(function (b) { b.onclick = async function () { var m = document.createElement("div"); m.className = "modal on"; m.innerHTML = '<div class="sheet"><h3>Delete role?</h3><div class="form"><div class="sub">People currently on this role fall back to the shared template with the same name, if any.</div></div><div class="foot"><button class="btn" id="rd-c">Cancel</button><button class="btn pri" id="rd-y" style="background:var(--bad);border-color:var(--bad-t)">Delete</button></div></div>'; document.body.appendChild(m); document.getElementById("rd-c").onclick = function () { m.remove(); }; document.getElementById("rd-y").onclick = async function () { var r = await sb.from("roles").delete().eq("id", b.dataset.id); m.remove(); if (r.error) { toast(errMsg(r.error)); } else { toast("Deleted"); renderRoles(); } }; }; });
   }
   function openRoleEditor(role) {
     var isNew = !role;
@@ -9759,7 +9841,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (s.id ? "Edit" : "New") + ' skill</h3><div class="form">' +
       '<div><label>Skill name</label><input id="sk-name" value="' + esc(s.name || "") + '"></div>' +
       '<div><label>Category</label><input id="sk-cat" value="' + esc(s.category || "") + '" placeholder="e.g. Technical, Trade, Safety"></div>' +
-      '</div><div class="foot"><button class="btn" id="sk-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sk-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="sk-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sk-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="sk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sk-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("sk-del"); if (del) del.onclick = async function () { await sb.from("skills").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
@@ -9792,7 +9874,7 @@
       '<div><label>Employee</label><select id="es-emp">' + empOptions(emps, es.employee_id) + '</select></div>' +
       '<div><label>Skill</label><select id="es-skill">' + skills.map(function (x) { return '<option value="' + x.id + '"' + (es.skill_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Level</label><select id="es-level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option><option value="expert">Expert</option></select></div>' +
-      '</div><div class="foot"><button class="btn" id="es-cancel">Cancel</button>' + (es.id ? '<button class="btn" id="es-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="es-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="es-cancel">Cancel</button>' + (es.id ? '<button class="btn" id="es-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="es-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("es-level").value = es.level || "intermediate";
     document.getElementById("es-cancel").onclick = function () { m.remove(); };
@@ -9828,7 +9910,7 @@
       '<div><label>Employee</label><select id="ce-emp">' + empOptions(emps, c.employee_id) + '</select></div>' +
       '<div class="row2"><div><label>Certificate</label><input id="ce-name" value="' + esc(c.name || "") + '"></div><div><label>Authority</label><input id="ce-auth" value="' + esc(c.authority || "") + '"></div></div>' +
       '<div class="row2"><div><label>Issued</label><input id="ce-iss" type="date" value="' + (c.issued_date || "") + '"></div><div><label>Expiry</label><input id="ce-exp" type="date" value="' + (c.expiry_date || "") + '"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="ce-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="ce-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ce-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ce-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="ce-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="ce-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ce-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("ce-del"); if (del) del.onclick = async function () { await sb.from("certifications").delete().eq("id", c.id); m.remove(); toast("Deleted"); renderView(); };
@@ -9864,7 +9946,7 @@
       '<div class="row2"><div><label>Kind</label><select id="ob-kind"><option value="onboarding">Onboarding</option><option value="offboarding">Offboarding</option></select></div><div><label>Due date</label><input id="ob-due" type="date" value="' + (o.due_date || "") + '"></div></div>' +
       '<div><label>Task</label><input id="ob-task" value="' + esc(o.task || "") + '" placeholder="e.g. Issue PPE, Sign contract, Return laptop"></div>' +
       '<div><label>Status</label><select id="ob-done"><option value="0">Open</option><option value="1">Done</option></select></div>' +
-      '</div><div class="foot"><button class="btn" id="ob-cancel">Cancel</button>' + (o.id ? '<button class="btn" id="ob-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ob-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ob-cancel">Cancel</button>' + (o.id ? '<button class="btn" id="ob-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="ob-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ob-kind").value = o.kind || "onboarding";
     document.getElementById("ob-done").value = o.done ? "1" : "0";
@@ -9950,7 +10032,7 @@
       '<div class="row2"><div><label>Carrier</label><input id="dm-carrier" value="' + esc(d.carrier || "") + '"></div><div><label>Price</label><input id="dm-price" type="number" step="0.01" value="' + (d.price || 0) + '"></div></div>' +
       '<div><label>Notes</label><input id="dm-notes" value="' + esc(d.notes || "") + '"></div>' +
       '<div><label>Status</label><select id="dm-active"><option value="1"' + (d.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (d.is_active === false ? " selected" : "") + '>Off</option></select></div>' +
-      '</div><div class="foot"><button class="btn" id="dm-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="dm-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="dm-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="dm-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="dm-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="dm-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("dm-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("dm-del"); if (del) del.onclick = async function () { await sb.from("delivery_methods").delete().eq("id", d.id); m.remove(); toast("Deleted"); renderView(); };
@@ -9976,7 +10058,7 @@
       '<div><label>Name</label><input id="pk-name" value="' + esc(p.name || "") + '"></div>' +
       '<div class="row2"><div><label>Length</label><input id="pk-l" type="number" step="0.01" value="' + (p.length || 0) + '"></div><div><label>Width</label><input id="pk-w" type="number" step="0.01" value="' + (p.width || 0) + '"></div></div>' +
       '<div class="row2"><div><label>Height</label><input id="pk-h" type="number" step="0.01" value="' + (p.height || 0) + '"></div><div><label>Max weight</label><input id="pk-mw" type="number" step="0.01" value="' + (p.max_weight || 0) + '"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="pk-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pk-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="pk-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pk-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="pk-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pk-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("pk-del"); if (del) del.onclick = async function () { await sb.from("package_types").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
@@ -10002,7 +10084,7 @@
       '<div><label>Name</label><input id="sc2-name" value="' + esc(s.name || "") + '"></div>' +
       '<div class="row2"><div><label>Max weight</label><input id="sc2-mw" type="number" step="0.01" value="' + (s.max_weight || 0) + '"></div><div><label>Capacity</label><input id="sc2-cap" type="number" step="0.01" value="' + (s.capacity || 0) + '"></div></div>' +
       '<div><label>Notes</label><input id="sc2-notes" value="' + esc(s.notes || "") + '"></div>' +
-      '</div><div class="foot"><button class="btn" id="sc2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sc2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sc2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="sc2-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sc2-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="sc2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sc2-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("sc2-del"); if (del) del.onclick = async function () { await sb.from("storage_categories").delete().eq("id", s.id); m.remove(); toast("Deleted"); renderView(); };
@@ -10034,7 +10116,7 @@
       '<div><label>Product</label>' + fhint("__pw1", "Apply to this product (or leave blank and pick a category).") + '<select id="pw-prod"><option value="">(any)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (p.product_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Or product category</label><select id="pw-cat"><option value="">(any)</option>' + cats.map(function (x) { return '<option value="' + x.id + '"' + (p.category_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Store at location</label><select id="pw-loc"><option value="">(pick)</option>' + locs.map(function (x) { return '<option value="' + x.id + '"' + (p.location_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>' +
-      '</div><div class="foot"><button class="btn" id="pw-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pw-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pw-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="pw-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pw-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="pw-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pw-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("pw-del"); if (del) del.onclick = async function () { await sb.from("putaway_rules").delete().eq("id", p.id); m.remove(); toast("Deleted"); renderView(); };
@@ -10136,7 +10218,7 @@
       '<div class="row2"><div><label>Start time</label><input id="ev-start" value="' + esc(e.start_time || "") + '" placeholder="e.g. 09:00"></div><div><label>End time</label><input id="ev-end" value="' + esc(e.end_time || "") + '" placeholder="e.g. 10:00"></div></div>' +
       '<div class="row2"><div><label>Project</label><select id="ev-proj"><option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (e.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div><label>Location</label><input id="ev-loc" value="' + esc(e.location || "") + '"></div></div>' +
       '<div><label>Notes</label><input id="ev-notes" value="' + esc(e.notes || "") + '"></div>' +
-      '</div><div class="foot"><button class="btn" id="ev-cancel">Cancel</button>' + (eventId ? '<button class="btn" id="ev-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="ev-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="ev-cancel">Cancel</button>' + (eventId ? '<button class="btn" id="ev-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="ev-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ev-cat").value = e.category || "meeting";
     document.getElementById("ev-cancel").onclick = function () { m.remove(); };
@@ -10186,7 +10268,7 @@
     if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
     if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
-    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
+    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="sg-title" value="' + esc(s.title || "") + '" placeholder="What is being signed"' + (done ? " disabled" : "") + '></div>' +
@@ -10386,7 +10468,7 @@
       '<div class="row2"><div><label>Severity</label><select id="sn-sev"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></div><div><label>Trade</label>' + sug("sn-trade", s.trade, "trade", "e.g. Glazing, Sealant") + '</div></div>' +
       '<div class="row2"><div><label>Assigned to</label><select id="sn-emp"><option value="">(none)</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (s.assigned_to === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("") + '</select></div><div><label>Due date</label><input id="sn-due" type="date" value="' + (s.due_date || "") + '"></div></div>' +
       '<div class="row2"><div><label>Status</label><select id="sn-status"><option value="open">Open</option><option value="in_progress">In progress</option><option value="fixed">Fixed</option><option value="verified">Verified</option><option value="closed">Closed</option></select></div><div><label>Photo URL</label><input id="sn-photo" value="' + esc(s.photo_url || "") + '" placeholder="optional link"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="sn-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sn-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sn-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="sn-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sn-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="sn-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sn-sev").value = s.severity || "medium";
     document.getElementById("sn-status").value = s.status || "open";
@@ -10431,7 +10513,7 @@
     var templates = (await sb.from("inspection_templates").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var items = i.id ? (await sb.from("inspection_items").select("*").eq("inspection_id", i.id).order("sequence")).data || [] : [];
     var m = document.createElement("div"); m.className = "modal on";
-    function itemRow(it) { it = it || {}; return '<tr><td><input class="ii-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><select class="ii-res"><option value="na"' + (it.result === "na" || !it.result ? " selected" : "") + '>N/A</option><option value="pass"' + (it.result === "pass" ? " selected" : "") + '>Pass</option><option value="fail"' + (it.result === "fail" ? " selected" : "") + '>Fail</option></select></td><td><input class="ii-note" value="' + esc(it.note || "") + '" placeholder="note" style="width:130px"></td><td><button class="ii-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function itemRow(it) { it = it || {}; return '<tr><td><input class="ii-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><select class="ii-res"><option value="na"' + (it.result === "na" || !it.result ? " selected" : "") + '>N/A</option><option value="pass"' + (it.result === "pass" ? " selected" : "") + '>Pass</option><option value="fail"' + (it.result === "fail" ? " selected" : "") + '>Fail</option></select></td><td><input class="ii-note" value="' + esc(it.note || "") + '" placeholder="note" style="width:130px"></td><td><button class="ii-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var tmplOpts = '<option value="">Load a checklist template...</option>' + templates.map(function (t) { return '<option value="' + t.id + '">' + esc(t.name) + '</option>'; }).join("");
     m.innerHTML = '<div class="sheet" style="max-width:640px"><h3>' + (i.id ? "Inspection " + esc(i.number || "") : "New inspection") + '</h3><div class="form" style="max-height:72vh;overflow:auto">' +
       '<div class="row2"><div><label>Type</label><select id="in-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option><option value="snag">Snag</option></select></div><div><label>Date</label><input id="in-date" type="date" value="' + (i.insp_date || today()) + '"></div></div>' +
@@ -10441,7 +10523,7 @@
       '<table class="o-lines" style="margin-top:8px"><thead><tr><th>Item</th><th style="width:90px">Result</th><th>Note</th><th></th></tr></thead><tbody id="in-items">' + (items.length ? items.map(itemRow).join("") : "") + '</tbody></table><button id="in-additem" class="o-addln">+ Add item</button></div>' +
       '<div><label>Notes</label><textarea id="in-notes" rows="2">' + esc(i.notes || "") + '</textarea></div>' +
       '<div class="row2"><div><label>Status</label><select id="in-status"><option value="open">Open</option><option value="closed">Closed</option></select></div><div><label>Signed off by</label><input id="in-signed" value="' + esc(i.signed_by || "") + '" placeholder="' + (i.signed_at ? esc(String(i.signed_at).slice(0, 10)) : "not signed") + '"></div></div>' +
-      '</div><div class="foot"><button class="btn" id="in-cancel">Cancel</button>' + (i.id ? '<button class="btn" id="in-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="in-cancel">Cancel</button>' + (i.id ? '<button class="btn" id="in-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="in-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("in-type").value = i.insp_type || "quality";
     document.getElementById("in-status").value = i.status || "open";
@@ -10486,11 +10568,11 @@
     t = t || {};
     var items = t.id ? (await sb.from("inspection_template_items").select("*").eq("template_id", t.id).order("sequence")).data || [] : [];
     var m = document.createElement("div"); m.className = "modal on";
-    function row(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function row(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Check item"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     m.innerHTML = '<div class="sheet"><h3>' + (t.id ? "Checklist" : "New checklist") + '</h3><div class="form" style="max-height:70vh;overflow:auto">' +
       '<div class="row2"><div><label>Name</label><input id="it-name" value="' + esc(t.name || "") + '" placeholder="e.g. Facade panel install"></div><div><label>For type</label><select id="it-type"><option value="quality">Quality</option><option value="safety">Safety (QHSE)</option><option value="pre_pour">Pre-pour</option><option value="handover">Handover</option></select></div></div>' +
       '<table class="o-lines" style="margin-top:8px"><thead><tr><th>Check item</th><th></th></tr></thead><tbody id="it-items">' + (items.length ? items.map(row).join("") : row()) + '</tbody></table><button id="it-add" class="o-addln">+ Add item</button>' +
-      '</div><div class="foot"><button class="btn" id="it-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="it-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="it-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="it-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="it-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="it-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("it-type").value = t.insp_type || "quality";
     function wd() { document.querySelectorAll("#it-items .ti-del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
@@ -10553,7 +10635,7 @@
       '<div class="row2"><div><label>Insurance no.</label><input id="pl2-insno" value="' + esc(p.insurance_no || "") + '"></div><div><label>Insurance expiry</label><input id="pl2-insexp" type="date" value="' + (p.insurance_expiry || "") + '"></div></div>' +
       '<div class="row2"><div><label>Current meter</label><input id="pl2-meter" type="number" step="0.1" value="' + (p.current_hours != null ? p.current_hours : "") + '"></div><div><label>Meter unit</label><select id="pl2-munit"><option value="hours">Hours</option><option value="km">Km</option></select></div></div>' +
       (p.id ? '<div id="pl2-events" style="margin-top:8px"></div>' : '') +
-      '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-tkt">Raise service ticket</button>' : '') + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="pl2-cancel">Cancel</button>' + (p.id ? '<button class="btn" id="pl2-tkt">Raise service ticket</button>' : '') + (p.id ? '<button class="btn" id="pl2-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="pl2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     if (p.id) loadEquipmentEvents(p);
     document.getElementById("pl2-own").value = p.ownership || "owned";
@@ -10657,7 +10739,7 @@
       '<div class="row2"><div><label>Location</label><input id="di-loc" value="' + esc(d.location || "") + '"></div><div><label>Supplier</label><input id="di-sup" value="' + esc(d.supplier || "") + '"></div></div>' +
       (d.id ? '<div class="o-cf-head" style="margin:8px 0 2px">Log a production run</div><div class="row2"><div><label>Shots to add</label><input id="di-addshots" type="number" step="1" placeholder="e.g. 120"></div><div style="display:flex;align-items:flex-end"><button class="btn" id="di-logrun" style="width:100%">Add shots &amp; mark used today</button></div></div>' : '') +
       '<div><label>Notes</label><textarea id="di-notes" rows="2">' + esc(d.notes || "") + '</textarea></div>' +
-      '</div><div class="foot"><button class="btn" id="di-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="di-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="di-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="di-cancel">Cancel</button>' + (d.id ? '<button class="btn" id="di-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="di-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("di-status").value = d.status || "active";
     document.getElementById("di-cancel").onclick = function () { m.remove(); };
@@ -10804,7 +10886,7 @@
       '<div class="row2"><div><label>WBS / code</label><input id="st-wbs" value="' + esc(t.wbs || "") + '" placeholder="e.g. 2.1"></div><div><label>Progress (%)</label><input id="st-prog" type="number" min="0" max="100" value="' + (t.progress || 0) + '"></div></div>' +
       '<div class="row2"><div><label>Start</label><input id="st-start" type="date" value="' + (t.start_date || "") + '"></div><div><label>End</label><input id="st-end" type="date" value="' + (t.end_date || "") + '"></div></div>' +
       '<div class="row2"><div><label>Depends on</label><select id="st-dep"><option value="">(none)</option>' + others.filter(function (o) { return o.id !== t.id; }).map(function (o) { return '<option value="' + o.id + '"' + (t.depends_on === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join("") + '</select></div><div><label>Milestone?</label><select id="st-ms"><option value="0">No</option><option value="1">Yes</option></select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="st-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="st-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="st-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="st-cancel">Cancel</button>' + (t.id ? '<button class="btn" id="st-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="st-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("st-ms").value = t.is_milestone ? "1" : "0";
     document.getElementById("st-cancel").onclick = function () { m.remove(); };
@@ -11141,7 +11223,7 @@
       '<div><label>Goal</label><input id="sp-goal" value="' + esc(s.goal || "") + '" placeholder="What this sprint aims to deliver"></div>' +
       '<div class="row2"><div><label>Start</label><input id="sp-start" type="date" value="' + (s.start_date || "") + '"></div><div><label>End</label><input id="sp-end" type="date" value="' + (s.end_date || "") + '"></div></div>' +
       '<div><label>Status</label><select id="sp-status"><option value="planned">Planned</option><option value="active">Active</option><option value="done">Done</option></select></div>' +
-      '</div><div class="foot"><button class="btn" id="sp-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sp-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="sp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="sp-cancel">Cancel</button>' + (s.id ? '<button class="btn" id="sp-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="sp-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("sp-status").value = s.status || "planned";
     document.getElementById("sp-cancel").onclick = function () { m.remove(); };
@@ -11387,7 +11469,7 @@
     var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "Pricelist");
     function prodOpts(sel) { return '<option value="">(any product)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
-    function rowHtml(l) { l = l || {}; return '<tr><td><select class="pi-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="pi-min" type="number" step="0.01" value="' + (l.min_qty || 1) + '" style="width:70px;text-align:right"></td><td><input class="pi-fixed" type="number" step="0.01" value="' + (l.fixed_price != null ? l.fixed_price : "") + '" placeholder="fixed" style="width:90px;text-align:right"></td><td><input class="pi-off" type="number" step="0.01" value="' + (l.percent_off || 0) + '" style="width:70px;text-align:right"></td><td><button class="pi-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="pi-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="pi-min" type="number" step="0.01" value="' + (l.min_qty || 1) + '" style="width:70px;text-align:right"></td><td><input class="pi-fixed" type="number" step="0.01" value="' + (l.fixed_price != null ? l.fixed_price : "") + '" placeholder="fixed" style="width:90px;text-align:right"></td><td><input class="pi-off" type="number" step="0.01" value="' + (l.percent_off || 0) + '" style="width:70px;text-align:right"></td><td><button class="pi-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pl-save">Save</button><button id="pl-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("pricelists", id, "sale.pricelists", "pricelist") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="pl-name" value="' + esc(p.name || "") + '" placeholder="Pricelist name"></div>' +
@@ -11430,7 +11512,7 @@
     var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "Template");
     function prodOpts(sel) { return '<option value="">(free text)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
-    function rowHtml(l) { l = l || {}; return '<tr><td><select class="qt-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="qt-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="qt-qty" type="number" step="0.01" value="' + (l.quantity || 1) + '" style="width:64px;text-align:right"></td><td><input class="qt-price" type="number" step="0.01" value="' + (l.unit_price || 0) + '" style="width:90px;text-align:right"></td><td><button class="qt-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="qt-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="qt-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="qt-qty" type="number" step="0.01" value="' + (l.quantity || 1) + '" style="width:64px;text-align:right"></td><td><input class="qt-price" type="number" step="0.01" value="' + (l.unit_price || 0) + '" style="width:90px;text-align:right"></td><td><button class="qt-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var btns = '<button class="pri" id="qt-save">Save</button><button id="qt-discard">Discard</button>' + (id !== "new" ? '<button id="qt-quote">Create quotation</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("quote_templates", id, "sale.qtempl", "template") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
@@ -11573,7 +11655,7 @@
         '<div class="sub">This closes the asset. Record the disposal journal (remove cost + accumulated depreciation, book the ' + '<span id="dp-glword">gain/loss</span>' + ' and any proceeds) from Journal Entries.</div>' +
         '</div><div class="foot"><button class="btn" id="dp-x">Cancel</button><button class="btn pri" id="dp-do" style="background:var(--app);border-color:var(--app)">Dispose &amp; close</button></div></div>';
       document.body.appendChild(m);
-      function gl() { var v = parseFloat(gv("dp-val")) || 0; var g = v - bookNow; document.getElementById("dp-gl").innerHTML = (g >= 0 ? 'Gain on disposal: <b style="color:var(--good)">' + cc + ' ' + money(g) + '</b>' : 'Loss on disposal: <b style="color:var(--bad)">' + cc + ' ' + money(-g) + '</b>'); document.getElementById("dp-glword").textContent = g >= 0 ? "gain" : "loss"; return g; }
+      function gl() { var v = parseFloat(gv("dp-val")) || 0; var g = v - bookNow; document.getElementById("dp-gl").innerHTML = (g >= 0 ? 'Gain on disposal: <b style="color:var(--good-t)">' + cc + ' ' + money(g) + '</b>' : 'Loss on disposal: <b style="color:var(--bad-t)">' + cc + ' ' + money(-g) + '</b>'); document.getElementById("dp-glword").textContent = g >= 0 ? "gain" : "loss"; return g; }
       document.getElementById("dp-val").oninput = gl; gl();
       document.getElementById("dp-x").onclick = function () { m.remove(); };
       document.getElementById("dp-do").onclick = async function () {
@@ -11635,7 +11717,7 @@
     var accts = (await sb.from("accounts").select("code,name").eq("company_id", S.company.id).order("code")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (b.name || "Budget");
     function acctOpts(sel) { return accts.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join(""); }
-    function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt" type="number" step="0.01" value="' + (l.planned || 0) + '" style="text-align:right"></td><td><button class="bl-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt" type="number" step="0.01" value="' + (l.planned || 0) + '" style="text-align:right"></td><td><button class="bl-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var btns = '<button class="pri" id="bg-save">Save</button><button id="bg-discard">Discard</button>' + (id !== "new" ? '<button id="bg-report">Budget vs actual</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("budgets", id, "budget.list", "budget") : "");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
@@ -11679,7 +11761,7 @@
       var planned = Number(l.planned || 0), variance = planned - actual;
       tp += planned; ta += actual;
       var over = actual > planned + 0.005;
-      rows += '<tr' + (over ? ' style="background:var(--bad-s)"' : '') + '><td>' + esc(code) + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + money(planned) + '</td><td class="num">' + money(actual) + '</td><td class="num"' + (variance < 0 ? ' style="color:var(--bad)"' : '') + '>' + money(variance) + '</td><td class="num">' + (planned ? Math.round(actual / planned * 100) + "%" : "-") + '</td><td>' + (over ? '<span class="ob-flag">over</span>' : (planned && actual >= planned * 0.9 ? '<span class="ob-flag" style="background:var(--warn)">near</span>' : '<span style="color:var(--good);font-weight:600">ok</span>')) + '</td></tr>';
+      rows += '<tr' + (over ? ' style="background:var(--bad-s)"' : '') + '><td>' + esc(code) + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + money(planned) + '</td><td class="num">' + money(actual) + '</td><td class="num"' + (variance < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + money(variance) + '</td><td class="num">' + (planned ? Math.round(actual / planned * 100) + "%" : "-") + '</td><td>' + (over ? '<span class="ob-flag">over</span>' : (planned && actual >= planned * 0.9 ? '<span class="ob-flag" style="background:var(--warn)">near</span>' : '<span style="color:var(--good-t);font-weight:600">ok</span>')) + '</td></tr>';
     });
     document.getElementById("rep").innerHTML = '<h1>' + esc(b.name || "Budget") + ' &middot; budget vs actual</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; ' + esc(b.date_start || "") + ' to ' + esc(b.date_end || "") + '</div>' +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Account</td><td>Note</td><td class="num">Planned</td><td class="num">Actual</td><td class="num">Variance</td><td class="num">Used</td><td>Status</td></tr></thead><tbody>' + (rows || '<tr><td colspan="7" class="muted">No budget lines.</td></tr>') + '<tr class="tot"><td>Total</td><td></td><td class="num">' + money(tp) + '</td><td class="num">' + money(ta) + '</td><td class="num">' + money(tp - ta) + '</td><td class="num">' + (tp ? Math.round(ta / tp * 100) + "%" : "-") + '</td><td></td></tr></tbody></table></div>' +
@@ -11709,7 +11791,7 @@
       '<div><label>Days overdue</label>' + fhint("__fld2", "Applies once an invoice is this many days past due.") + '<input id="fl-days" type="number" value="' + (lvl.days || 15) + '"></div></div>' +
       '<div><label>Action</label>' + fhint("__fla", "What to do at this level.") + '<select id="fl-action"><option value="email">Email reminder</option><option value="call">Phone call</option><option value="letter">Formal letter</option><option value="legal">Escalate / legal</option></select></div>' +
       '<div><label>Message</label>' + fhint("__flm", "Suggested wording for the reminder.") + '<textarea id="fl-msg" rows="2">' + esc(lvl.message || "") + '</textarea></div>' +
-      '</div><div class="foot"><button class="btn" id="fl-cancel">Cancel</button>' + (lvl.id ? '<button class="btn" id="fl-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="fl-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="fl-cancel">Cancel</button>' + (lvl.id ? '<button class="btn" id="fl-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="fl-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("fl-action").value = lvl.action || "email";
     document.getElementById("fl-cancel").onclick = function () { m.remove(); };
@@ -11831,7 +11913,7 @@
         '<div style="margin-top:8px;font-size:13px;color:var(--ink2);display:flex;flex-direction:column;gap:3px">' +
         kv("Scope of work", o.scope_of_work) + kv("Employees", o.employee_count) + kv("Phone", o.contact_phone) + kv("Reg / Tax no.", o.reg_no) + kv("Applied", (o.applied_at || "").slice(0, 16).replace("T", " ")) + kv("Terms accepted", o.tc_version) +
         '</div></div>' +
-        '<div style="display:flex;flex-direction:column;gap:8px;flex:none"><button class="btn pri pa-appr" data-id="' + o.id + '" data-name="' + esc(o.name) + '" style="background:var(--good);border-color:var(--good)">Approve</button><button class="btn pa-rej" data-id="' + o.id + '" style="color:var(--bad)">Reject</button></div>' +
+        '<div style="display:flex;flex-direction:column;gap:8px;flex:none"><button class="btn pri pa-appr" data-id="' + o.id + '" data-name="' + esc(o.name) + '" style="background:var(--good);border-color:var(--good-t)">Approve</button><button class="btn pa-rej" data-id="' + o.id + '" style="color:var(--bad-t)">Reject</button></div>' +
         '</div></div>';
     }).join("");
     body.innerHTML = '<div style="padding:16px;max-width:880px"><div class="sub" style="margin:0 0 12px"><b>' + pend.length + '</b> application' + (pend.length === 1 ? "" : "s") + ' awaiting review. Approving unlocks the account immediately; the applicant can then sign in.</div>' + cards + '</div>';
@@ -11947,7 +12029,7 @@
       '<div><label for="in2-desc">What happened</label><textarea id="in2-desc" rows="3">' + esc(inc.description || "") + '</textarea></div>' +
       '<div><label for="in2-act">Action taken</label><textarea id="in2-act" rows="2">' + esc(inc.action_taken || "") + '</textarea></div>' +
       '<div class="row2"><div><label for="in2-rep">Reported by</label>' + userSelectHTML("in2-rep", inc.reported_by, users, "(select person)") + '</div><div><label for="in2-status">Status</label><select id="in2-status">' + statusOpts + '</select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="in2-cancel">Cancel</button>' + (inc.id ? '<button class="btn" id="in2-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="in2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="in2-cancel">Cancel</button>' + (inc.id ? '<button class="btn" id="in2-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="in2-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("in2-cancel").onclick = function () { m.remove(); };
     var del = document.getElementById("in2-del"); if (del) del.onclick = async function () { await sb.from("site_incidents").delete().eq("id", inc.id); m.remove(); toast("Deleted"); renderView(); };
@@ -12029,7 +12111,7 @@
       '</div></div>';
     function showFields() {
       var spec = IMPORT_SPECS[document.getElementById("im-entity").value];
-      document.getElementById("im-fields").innerHTML = 'Columns: ' + spec.fields.map(function (f) { return '<b>' + esc(f[1]) + '</b>' + (f[2] ? ' <span style="color:var(--bad)">*</span>' : ''); }).join(", ");
+      document.getElementById("im-fields").innerHTML = 'Columns: ' + spec.fields.map(function (f) { return '<b>' + esc(f[1]) + '</b>' + (f[2] ? ' <span style="color:var(--bad-t)">*</span>' : ''); }).join(", ");
       document.getElementById("im-preview").innerHTML = "";
     }
     document.getElementById("im-entity").onchange = showFields; showFields();
@@ -12054,10 +12136,10 @@
       var okN = data.filter(function (d) { return !d.__err.length; }).length, badN = data.length - okN;
       var head = spec.fields.map(function (f) { return '<th>' + esc(f[1]) + (f[2] ? ' *' : '') + '</th>'; }).join("");
       var body = data.slice(0, 25).map(function (d) {
-        var tds = spec.fields.map(function (f) { var bad = f[2] && !d[f[0]]; return '<td' + (bad ? ' style="background:var(--bad-s);color:var(--bad)"' : '') + '>' + esc(d[f[0]] || (bad ? "missing" : "")) + '</td>'; }).join("");
+        var tds = spec.fields.map(function (f) { var bad = f[2] && !d[f[0]]; return '<td' + (bad ? ' style="background:var(--bad-s);color:var(--bad-t)"' : '') + '>' + esc(d[f[0]] || (bad ? "missing" : "")) + '</td>'; }).join("");
         return '<tr>' + tds + '</tr>';
       }).join("");
-      prev.innerHTML = '<div class="sub" style="margin:0 0 8px"><b>' + data.length + '</b> rows found &middot; <span style="color:var(--good)">' + okN + ' ready</span>' + (badN ? ' &middot; <span style="color:var(--bad)">' + badN + ' missing a required field (skipped)</span>' : '') + (data.length > 25 ? ' &middot; showing first 25' : '') + '</div>' +
+      prev.innerHTML = '<div class="sub" style="margin:0 0 8px"><b>' + data.length + '</b> rows found &middot; <span style="color:var(--good-t)">' + okN + ' ready</span>' + (badN ? ' &middot; <span style="color:var(--bad-t)">' + badN + ' missing a required field (skipped)</span>' : '') + (data.length > 25 ? ' &middot; showing first 25' : '') + '</div>' +
         '<div class="o-rt-wrap"><table class="o-list"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
         '<button class="btn pri" id="im-go" style="margin-top:12px;background:var(--accent);border-color:var(--accent)"' + (okN ? '' : ' disabled') + '>Import ' + okN + ' row' + (okN === 1 ? '' : 's') + '</button>';
       var go = document.getElementById("im-go");
@@ -12072,7 +12154,7 @@
         });
         var res = await sb.from(spec.table).insert(payload);
         if (res.error) { toast("Import failed: " + errMsg(res.error)); go.disabled = false; go.textContent = "Import " + okN + " rows"; return; }
-        toast("Imported " + payload.length + " " + spec.label.toLowerCase()); prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good);border:0">Imported ' + payload.length + ' rows successfully.</div>';
+        toast("Imported " + payload.length + " " + spec.label.toLowerCase()); prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good-t);border:0">Imported ' + payload.length + ' rows successfully.</div>';
       };
     }
   }
@@ -12556,7 +12638,7 @@
     function showSecret(title, value, note) {
       var m = document.createElement("div"); m.className = "modal on";
       m.innerHTML = '<div class="sheet" style="max-width:520px"><h3>' + esc(title) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
-        '<div class="sub" style="color:var(--bad)">Copy this now - it is shown only once.</div>' +
+        '<div class="sub" style="color:var(--bad-t)">Copy this now - it is shown only once.</div>' +
         '<textarea readonly id="sec-val" style="width:100%;min-height:64px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-family:var(--mono);font-size:12.5px">' + esc(value || "") + '</textarea>' +
         (note ? '<div class="sub">' + esc(note) + '</div>' : '') + '</div>' +
         '<div class="foot"><button class="btn" id="sec-copy">Copy</button><button class="btn pri" id="sec-close" style="background:var(--accent);border-color:var(--accent)">Done</button></div></div>';
@@ -12892,7 +12974,7 @@
       var taxTxt = (pack.taxes && pack.taxes.length) ? pack.taxes.map(function (t) { return esc(t.name); }).join(", ") : "no indirect tax";
       var applied = locState && locState.country && String(locState.country).toLowerCase() === String(country).toLowerCase();
       el.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">' +
-        '<div style="flex:1;min-width:240px"><div style="font-weight:700;margin-bottom:4px">' + esc(country) + (applied ? ' <span style="color:var(--good);font-weight:600;font-size:12px">&#10003; applied</span>' : '') + '</div>' +
+        '<div style="flex:1;min-width:240px"><div style="font-weight:700;margin-bottom:4px">' + esc(country) + (applied ? ' <span style="color:var(--good-t);font-weight:600;font-size:12px">&#10003; applied</span>' : '') + '</div>' +
         '<div class="sub" style="margin:0">Currency <b>' + esc(pack.currency) + '</b> &middot; fiscal ID <b>' + esc(pack.taxIdLabel) + '</b> &middot; dates <b>' + esc(pack.dateFmt) + '</b><br>Taxes: ' + taxTxt + '</div></div>' +
         '<button type="button" class="o-filtbtn" id="cp-loc-apply" style="font-weight:700">Apply ' + esc(country) + ' pack</button></div>';
       var ap = document.getElementById("cp-loc-apply");
@@ -12958,7 +13040,7 @@
         '<td>' + esc(tl) + '</td>' +
         '<td class="muted">' + esc(f.options || "") + '</td>' +
         '<td style="text-align:center">' + (f.required ? "Yes" : "") + '</td>' +
-        '<td style="text-align:right">' + (canEdit ? '<button class="lnk cf-del" data-id="' + f.id + '" style="color:var(--bad)">Remove</button>' : '') + '</td></tr>';
+        '<td style="text-align:right">' + (canEdit ? '<button class="lnk cf-del" data-id="' + f.id + '" style="color:var(--bad-t)">Remove</button>' : '') + '</td></tr>';
     }).join("") : '<tr><td colspan="5" class="muted" style="padding:14px">No custom fields yet for ' + esc(entLabel(entity)) + '. Add one below.</td></tr>';
     var addForm = canEdit ? '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 10px">Add a field</h3>' +
       '<div class="o-groups"><div>' +
@@ -13033,7 +13115,7 @@
       var ch = kids(n.tree, n.id), canChild = depth < 2;
       return '<div class="cls-node" style="padding-left:' + (depth * 22) + 'px">' +
         '<span class="cls-name">' + esc(n.name) + '</span>' + (n.code ? '<span class="cls-code">' + esc(n.code) + '</span>' : '<span class="cls-code muted">-</span>') +
-        (canEdit ? '<span class="cls-acts">' + (canChild ? '<button class="lnk cls-add" data-parent="' + n.id + '" data-tree="' + n.tree + '" data-depth="' + (depth + 1) + '">+ sub</button>' : '') + '<button class="lnk cls-edit" data-id="' + n.id + '">Edit</button><button class="lnk cls-del" data-id="' + n.id + '" style="color:var(--bad)">Delete</button></span>' : '') +
+        (canEdit ? '<span class="cls-acts">' + (canChild ? '<button class="lnk cls-add" data-parent="' + n.id + '" data-tree="' + n.tree + '" data-depth="' + (depth + 1) + '">+ sub</button>' : '') + '<button class="lnk cls-edit" data-id="' + n.id + '">Edit</button><button class="lnk cls-del" data-id="' + n.id + '" style="color:var(--bad-t)">Delete</button></span>' : '') +
         '</div>' + ch.map(function (k) { return row(k, depth + 1); }).join("");
     }
     function treeBox(tree, title) {
@@ -13169,7 +13251,7 @@
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || d.title || "Drawing");
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     function revRow(r) {
-      return '<tr><td><b>' + esc(r.revision || "") + '</b></td><td>' + esc((REV_STATUS.filter(function (x) { return x[0] === r.status; })[0] || [null, r.status || "draft"])[1]) + '</td><td>' + esc(r.issue_purpose || "") + '</td><td class="muted">' + esc(r.issued_date || "") + '</td><td><a class="dw-open" data-rev="' + r.id + '" style="cursor:pointer;color:var(--accent);font-weight:600">Open / files</a></td><td><button class="dw-del" data-rev="' + r.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>';
+      return '<tr><td><b>' + esc(r.revision || "") + '</b></td><td>' + esc((REV_STATUS.filter(function (x) { return x[0] === r.status; })[0] || [null, r.status || "draft"])[1]) + '</td><td>' + esc(r.issue_purpose || "") + '</td><td class="muted">' + esc(r.issued_date || "") + '</td><td><a class="dw-open" data-rev="' + r.id + '" style="cursor:pointer;color:var(--accent);font-weight:600">Open / files</a></td><td><button class="dw-del" data-rev="' + r.id + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>';
     }
     var revSection = id === "new"
       ? '<div class="sub" style="margin-top:16px">Save the drawing first, then add revisions (Rev A, B, C ...) with their files here.</div>'
@@ -13413,7 +13495,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var items = id === "new" ? [] : (await sb.from("transmittal_items").select("*").eq("transmittal_id", id).order("sequence")).data || [];
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || "Transmittal");
-    function rowHtml(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Document"></td><td><input class="ti-ref" value="' + esc(it.doc_ref || "") + '" placeholder="Ref"></td><td><input class="ti-rev" value="' + esc(it.revision || "") + '" placeholder="Rev" style="width:60px"></td><td><input class="ti-cop" type="number" value="' + (it.copies || 1) + '" style="width:70px"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
+    function rowHtml(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Document"></td><td><input class="ti-ref" value="' + esc(it.doc_ref || "") + '" placeholder="Ref"></td><td><input class="ti-rev" value="' + esc(it.revision || "") + '" placeholder="Rev" style="width:60px"></td><td><input class="ti-cop" type="number" value="' + (it.copies || 1) + '" style="width:70px"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var btns = '<button class="pri" id="tr-save">Save</button><button id="tr-discard">Discard</button>' + (id !== "new" ? '<button id="tr-print">Print</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("transmittals", id, "doc.trans", "transmittal") : "");
     document.querySelector(".o-form").innerHTML =
@@ -13507,7 +13589,7 @@
     var card = function (l, v, sub, go2, col) { return '<div class="cp-card"' + (go2 ? ' data-go="' + go2 + '" style="cursor:pointer"' : '') + '><div class="l">' + l + '</div><div class="n"' + (col ? ' style="color:' + col + '"' : '') + '>' + v + '</div>' + (sub ? '<div class="s">' + sub + '</div>' : '') + '</div>'; };
     var mny = function (v) { return ref + ' ' + money(v); };
     var missKeys = Object.keys(missing);
-    var coRows = S.companies.map(function (c) { var b = byCo[c.id]; return '<tr><td>' + esc(b.name) + '</td><td class="muted">' + esc(b.cur) + '</td><td class="num">' + money(b.backlog) + '</td><td class="num">' + money(b.cash) + '</td><td class="num">' + b.active + '</td><td class="num"' + (b.over ? ' style="color:var(--bad)"' : '') + '>' + b.over + '</td><td class="num"' + (b.risk ? ' style="color:var(--warn)"' : '') + '>' + b.risk + '</td></tr>'; }).join("");
+    var coRows = S.companies.map(function (c) { var b = byCo[c.id]; return '<tr><td>' + esc(b.name) + '</td><td class="muted">' + esc(b.cur) + '</td><td class="num">' + money(b.backlog) + '</td><td class="num">' + money(b.cash) + '</td><td class="num">' + b.active + '</td><td class="num"' + (b.over ? ' style="color:var(--bad-t)"' : '') + '>' + b.over + '</td><td class="num"' + (b.risk ? ' style="color:var(--warn-t)"' : '') + '>' + b.risk + '</td></tr>'; }).join("");
     document.getElementById("rep").innerHTML =
       '<h1>Executive Cockpit</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; group-wide &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' +
       (missKeys.length ? '<div class="ob-banner warn">No exchange rate for <b>' + esc(missKeys.join(", ")) + '</b> - those entities counted 1:1. Add a rate in Exchange Rates for accurate group figures.</div>' : '') +
@@ -13519,7 +13601,7 @@
         card("Open tenders", tOpen, "in the pipeline", "est.list") +
         card("Tender win rate", winRate + '%', tWon + " won / " + tLost + " lost", "est.list") +
       '</div>' +
-      (overBudget.length || marginRisk.length ? '<div class="ob-banner" style="margin-top:14px">' + (overBudget.length ? '! Over budget: <b>' + overBudget.map(esc).join(", ") + '</b>' : '') + (overBudget.length && marginRisk.length ? ' &nbsp;|&nbsp; ' : '') + (marginRisk.length ? 'Margin at risk: <b>' + marginRisk.map(esc).join(", ") + '</b>' : '') + '</div>' : '<div class="ob-banner" style="background:var(--good-s);border-color:var(--good);color:var(--good);margin-top:14px">All active projects within budget.</div>') +
+      (overBudget.length || marginRisk.length ? '<div class="ob-banner" style="margin-top:14px">' + (overBudget.length ? '! Over budget: <b>' + overBudget.map(esc).join(", ") + '</b>' : '') + (overBudget.length && marginRisk.length ? ' &nbsp;|&nbsp; ' : '') + (marginRisk.length ? 'Margin at risk: <b>' + marginRisk.map(esc).join(", ") + '</b>' : '') + '</div>' : '<div class="ob-banner" style="background:var(--good-s);border-color:var(--good-t);color:var(--good-t);margin-top:14px">All active projects within budget.</div>') +
       '<h3 style="font-size:14px;margin:20px 0 6px">By entity</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Backlog</td><td class="num">Cash</td><td class="num">Active</td><td class="num">Over budget</td><td class="num">Margin risk</td></tr></thead><tbody>' + coRows + '</tbody></table></div>' +
       '<div class="sub" style="margin-top:8px">Backlog = signed contract value minus certified to date. Over budget = actual cost above the cost budget. Margin at risk = certified revenue below actual cost. Figures translated to ' + esc(ref) + ' at your exchange rates.</div>';
     document.querySelectorAll(".cp-card[data-go]").forEach(function (el) { el.onclick = function () { go(el.dataset.go); }; });
@@ -13605,7 +13687,7 @@
         var recCell = l.is_reconciled
           ? '<span class="badge paid">Reconciled</span> <span class="muted">' + esc(l.accounts ? l.accounts.code : "") + '</span>'
           : '<select class="rec-acct" data-id="' + l.id + '"><option value="">Counterpart account...</option>' + accOpts + '</select> <button class="btn sm rec-btn" data-id="' + l.id + '">Reconcile</button>';
-        return '<tr><td class="muted">' + esc(l.line_date || "") + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + (Number(l.amount) < 0 ? '<span style="color:var(--bad)">' : '<span style="color:var(--good)">') + money(l.amount) + '</span></td><td>' + recCell + '</td></tr>';
+        return '<tr><td class="muted">' + esc(l.line_date || "") + '</td><td>' + esc(l.label || "") + '</td><td class="num">' + (Number(l.amount) < 0 ? '<span style="color:var(--bad-t)">' : '<span style="color:var(--good-t)">') + money(l.amount) + '</span></td><td>' + recCell + '</td></tr>';
       }).join("");
       pg.innerHTML = '<div class="muted" style="margin-bottom:8px;font-size:12.5px">' + recN + ' of ' + lines.length + ' lines reconciled</div>' +
         '<table class="o-lines"><thead><tr><th style="width:110px">Date</th><th>Label</th><th style="width:110px;text-align:right">Amount</th><th style="width:320px">Reconcile with</th></tr></thead><tbody>' + (body || '<tr><td colspan="4" class="muted" style="padding:14px">No lines.</td></tr>') + '</tbody></table>' +
@@ -13802,7 +13884,7 @@
     function updConv() {
       var el = document.getElementById("k-uomconv"); if (!el) return;
       var stock = prodUom(), entered = kUomSel.value, q = parseFloat(kQtyIn.value) || 0;
-      if (entered && entered !== "__addu" && entered !== stock) { var conv = uomConvert(q, entered, stock, uoms); el.innerHTML = (conv !== q) ? '= <b>' + (Math.round(conv * 1e4) / 1e4) + '</b> ' + esc(stock) + ' (stock unit)' : '<span style="color:var(--bad)">no conversion to ' + esc(stock) + ' - stored as entered</span>'; }
+      if (entered && entered !== "__addu" && entered !== stock) { var conv = uomConvert(q, entered, stock, uoms); el.innerHTML = (conv !== q) ? '= <b>' + (Math.round(conv * 1e4) / 1e4) + '</b> ' + esc(stock) + ' (stock unit)' : '<span style="color:var(--bad-t)">no conversion to ' + esc(stock) + ' - stored as entered</span>'; }
       else el.textContent = "";
     }
     wireUnitAdd(kUomSel, uoms);
@@ -14049,7 +14131,7 @@
       '<div><label>Type</label>' + fhint("__uc", "What it measures. Groups similar units together.") + '<select id="u-cat">' + UOM_CATS.map(function (c) { return '<option value="' + c + '"' + ((u.category || "unit") === c ? " selected" : "") + '>' + c.charAt(0).toUpperCase() + c.slice(1) + '</option>'; }).join("") + '</select></div></div>' +
       '<div class="row2"><div><label>Converts to (base unit)</label>' + fhint("__ub", "Link this unit to a base unit so quantities can convert. E.g. base m, this km.") + '<input id="u-base" value="' + esc(u.base_uom || "") + '" placeholder="e.g. m"></div><div><label>1 ' + esc(u.name || "unit") + ' = ? base</label>' + fhint("__uf", "How many base units are in one of this unit. E.g. 1 km = 1000 m.") + '<input id="u-factor" type="number" step="any" value="' + (u.factor != null ? u.factor : "") + '" placeholder="factor"></div></div>' +
       '<div><label>Status</label>' + fhint("__us", "Archived units stay on history but are hidden from new pickers.") + '<select id="u-active"><option value="1"' + (u.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (u.is_active === false ? " selected" : "") + '>Archived</option></select></div>' +
-      '</div><div class="foot">' + (u.id ? '<button class="btn" id="u-del" style="margin-right:auto;color:var(--bad);border-color:var(--bad)">Delete</button>' : "") + '<button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot">' + (u.id ? '<button class="btn" id="u-del" style="margin-right:auto;color:var(--bad-t);border-color:var(--bad-t)">Delete</button>' : "") + '<button class="btn" id="u-cancel">Cancel</button><button class="btn pri" id="u-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("u-cancel").onclick = function () { m.remove(); };
     var udel = document.getElementById("u-del");
@@ -14353,7 +14435,7 @@
       return '<tr><td class="num" style="text-align:left">' + esc(r.p.default_code || "") + '</td><td><b>' + esc(r.p.name) + '</b></td>' +
         '<td class="num">' + (Math.round(r.onh * 1000) / 1000) + '</td><td class="num">' + (r.inc ? Math.round(r.inc * 1000) / 1000 : "") + '</td>' +
         '<td class="num">' + (Math.round(r.dem * 1000) / 1000) + (r.tags.length ? ' <span class="muted" style="font-size:10px">' + esc(r.tags.join(", ")) + '</span>' : "") + '</td>' +
-        '<td class="num"' + (r.net < 0 ? ' style="color:var(--bad)"' : '') + '>' + (Math.round(r.net * 1000) / 1000) + '</td>' +
+        '<td class="num"' + (r.net < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + (Math.round(r.net * 1000) / 1000) + '</td>' +
         '<td class="num">' + (short ? '<b>' + (Math.round(r.suggest * 1000) / 1000) + '</b>' : '<span class="muted">-</span>') + '</td>' +
         '<td>' + (short ? '<span class="badge unpaid">Buy</span>' : '<span class="badge paid">Covered</span>') + '</td></tr>';
     }).join("");
@@ -14751,7 +14833,7 @@
     var stages = await ensureCrmStages();
     var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var acts = id === "new" ? [] : (await sb.from("crm_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false })).data || [];
-    function actItemHtml(a) { return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:64px;font-weight:600;font-size:12px;color:var(--accent)">' + esc(actTypeLabel(a.act_type)) + '</div><div style="flex:1"><div><b>' + esc(a.subject || "(no subject)") + '</b>' + (a.due_date && !a.done ? ' <span class="ob-flag"' + (a.due_date < today() ? ' style="background:var(--bad)"' : '') + '>follow up ' + esc(a.due_date) + '</span>' : '') + (a.done ? ' <span class="badge paid">done</span>' : '') + '</div>' + (a.note ? '<div class="muted" style="font-size:12.5px">' + esc(a.note) + '</div>' : '') + '<div class="muted" style="font-size:11px">' + esc(String(a.created_at || "").slice(0, 10)) + '</div></div>' + (!a.done ? '<button class="ld-actdone" data-id="' + a.id + '" style="border:none;background:none;color:var(--good);cursor:pointer;font-size:12px;font-weight:600">Mark done</button>' : '') + '</div>'; }
+    function actItemHtml(a) { return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:64px;font-weight:600;font-size:12px;color:var(--accent)">' + esc(actTypeLabel(a.act_type)) + '</div><div style="flex:1"><div><b>' + esc(a.subject || "(no subject)") + '</b>' + (a.due_date && !a.done ? ' <span class="ob-flag"' + (a.due_date < today() ? ' style="background:var(--bad)"' : '') + '>follow up ' + esc(a.due_date) + '</span>' : '') + (a.done ? ' <span class="badge paid">done</span>' : '') + '</div>' + (a.note ? '<div class="muted" style="font-size:12.5px">' + esc(a.note) + '</div>' : '') + '<div class="muted" style="font-size:11px">' + esc(String(a.created_at || "").slice(0, 10)) + '</div></div>' + (!a.done ? '<button class="ld-actdone" data-id="' + a.id + '" style="border:none;background:none;color:var(--good-t);cursor:pointer;font-size:12px;font-weight:600">Mark done</button>' : '') + '</div>'; }
     var actSection = id === "new" ? "" : '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Activity &amp; follow-ups</div></div><div class="o-nb-pg"><button id="ld-logact" class="o-addln">+ Log activity</button>' + (acts.length ? '<div style="margin-top:6px">' + acts.map(actItemHtml).join("") + '</div>' : '<div class="muted" style="margin-top:8px">No activity logged yet.</div>') + '</div></div>';
     if (id === "new" && !l.stage_id && stages[0]) l.stage_id = stages[0].id;
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
@@ -15030,7 +15112,7 @@
       '<div><label>Name</label>' + fhint("__dname", "The department name, e.g. Engineering or Site Operations.") + '<input id="d-name" value="' + esc(dept.name || "") + '"></div>' +
       '<div class="row2"><div><label>Parent department</label>' + fhint("__dparent", "The department this one sits under, if any.") + '<select id="d-parent">' + opts(depts.filter(function (x) { return x.id !== dept.id; }), dept.parent_id) + '</select></div>' +
       '<div><label>Manager</label>' + fhint("__dmgr", "The employee who manages this department.") + '<select id="d-mgr">' + opts(emps, dept.manager_id) + '</select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="d-cancel">Cancel</button>' + (dept.id ? '<button class="btn" id="d-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="d-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="d-cancel">Cancel</button>' + (dept.id ? '<button class="btn" id="d-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="d-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("d-cancel").onclick = function () { m.remove(); };
     var ddel = document.getElementById("d-del"); if (ddel) ddel.onclick = async function () {
@@ -15073,7 +15155,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (job.id ? "Edit job position" : "New job position") + '</h3><div class="form">' +
       '<div><label>Job title</label>' + fhint("__jname", "The position title, e.g. Facade Engineer or Project Manager.") + '<input id="j-name" value="' + esc(job.name || "") + '"></div>' +
       '<div><label>Department</label>' + fhint("__jdept", "The department this role belongs to.") + '<select id="j-dept"><option value="">None</option>' + depts.map(function (d) { return '<option value="' + d.id + '"' + (job.department_id === d.id ? " selected" : "") + '>' + esc(d.name) + '</option>'; }).join("") + '</select></div>' +
-      '</div><div class="foot"><button class="btn" id="j-cancel">Cancel</button>' + (job.id ? '<button class="btn" id="j-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="j-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="j-cancel">Cancel</button>' + (job.id ? '<button class="btn" id="j-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="j-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("j-cancel").onclick = function () { m.remove(); };
     var jdel = document.getElementById("j-del"); if (jdel) jdel.onclick = async function () {
@@ -15937,11 +16019,11 @@
       if (!known) { missing[co.currency_code] = 1; factor = 1; }
       var gRef = gross * factor, eRef = employer * factor, nRef = net * factor;
       totGross += gRef; totEmployer += eRef; totNet += nRef;
-      var rateCell = co.currency_code === ref ? '<span class="muted">1.0000</span>' : (known ? Number(factor).toFixed(4) : '<span style="color:var(--warn)">1:1 no rate</span>');
+      var rateCell = co.currency_code === ref ? '<span class="muted">1.0000</span>' : (known ? Number(factor).toFixed(4) : '<span style="color:var(--warn-t)">1:1 no rate</span>');
       var native = co.currency_code === ref ? '' : '<div class="muted" style="font-size:11px">' + esc(co.currency_code) + " " + money(gross) + ' &rarr;</div>';
       rows.push('<tr><td>' + esc(co.name) + '</td><td class="muted">' + esc(co.currency_code) + '</td><td class="num">' + rateCell + '</td><td class="num">' + native + money(gRef) + '</td><td class="num">' + money(eRef) + '</td><td class="num">' + money(gRef + eRef) + '</td><td class="num">' + money(nRef) + '</td></tr>');
     }
-    var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
+    var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
     document.getElementById("rep").innerHTML = '<h1>Payroll Consolidation</h1><div class="sub">All ' + S.companies.length + ' entities, converted to <b>' + esc(ref) + '</b> at the latest exchange rate (rate + native amount shown per entity) &middot; posted payslips</div>' + banner +
       '<table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Gross</td><td class="num">Employer cost</td><td class="num">Total cost</td><td class="num">Net</td></tr></thead><tbody>' +
       (rows.join("") || '<tr><td colspan="7" class="muted">No posted payslips yet.</td></tr>') +
@@ -16019,7 +16101,7 @@
       '<div class="row2"><div><label for="cc-code">Code</label><input id="cc-code" value="' + esc(c.code || "") + '" placeholder="e.g. 100"></div><div><label for="cc-cat">Category</label><select id="cc-cat">' + catOpts + '</select></div></div>' +
       '<div><label for="cc-name">Name</label><input id="cc-name" value="' + esc(c.name || "") + '" placeholder="e.g. Site labour"></div>' +
       '<div class="row2"><div><label for="cc-sort">Sort</label><input id="cc-sort" type="number" value="' + (c.sort != null ? c.sort : 10) + '"></div><div><label for="cc-active">Active</label><select id="cc-active"><option value="1">Active</option><option value="0">Inactive</option></select></div></div>' +
-      '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="cc-del" style="color:var(--bad)">Delete</button>' : '') + '<button class="btn pri" id="cc-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
+      '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button>' + (c.id ? '<button class="btn" id="cc-del" style="color:var(--bad-t)">Delete</button>' : '') + '<button class="btn pri" id="cc-save" style="background:var(--accent);border-color:var(--accent)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("cc-active").value = c.is_active === false ? "0" : "1";
     document.getElementById("cc-cancel").onclick = function () { m.remove(); };
@@ -16433,7 +16515,7 @@
       if (over.length) alerts.push({ name: p.name, over: over });
       if (fore.length) foreAlerts.push({ name: p.name, fore: fore });
       tc += cv; tcert += cert; tbud += bud; tact += act; tcom += com;
-      var vc = variance < 0 ? ' style="color:var(--bad)"' : '';
+      var vc = variance < 0 ? ' style="color:var(--bad-t)"' : '';
       var flag = over.length ? ' <span class="ob-flag" title="Over budget: ' + over.map(function (o) { return esc(o.cat); }).join(", ") + '">! over</span>'
         : (fore.length ? ' <span class="ob-flag" style="background:var(--warn)" title="Committed cost will exceed budget: ' + fore.map(function (o) { return esc(o.cat); }).join(", ") + '">forecast</span>' : '');
       return '<tr class="pnl-row" data-proj="' + p.id + '" style="cursor:pointer"><td>' + esc(p.name) + flag + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(cert) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num"' + vc + '>' + money(variance) + '</td><td class="num">' + money(margin) + '</td></tr>';
@@ -16446,7 +16528,7 @@
       (rows || '<tr><td colspan="8" class="muted">No active projects.</td></tr>') +
       '<tr class="tot"><td>Total</td><td class="num">' + money(tc) + '</td><td class="num">' + money(tcert) + '</td><td class="num">' + money(tbud) + '</td><td class="num">' + money(tact) + '</td><td class="num">' + money(tcom) + '</td><td class="num">' + money(tvar) + '</td><td class="num">' + money(tmargin) + '</td></tr>' +
       '</tbody></table></div>' +
-      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued + site labour. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual. <b>! over</b> = actual cost has already passed a category budget; <b style="color:var(--warn)">forecast</b> = committed cost will take a category over. Click a project for the by-category breakdown.</div>';
+      '<div class="sub" style="margin-top:12px">Actual = posted project bills + materials issued + site labour. Committed = open POs tagged to the project. Cost variance = Budget - Actual (red if over). Margin = Certified - Actual. <b>! over</b> = actual cost has already passed a category budget; <b style="color:var(--warn-t)">forecast</b> = committed cost will take a category over. Click a project for the by-category breakdown.</div>';
     document.querySelectorAll(".pnl-row").forEach(function (tr) { tr.onclick = function () { renderProjectCosts(tr.dataset.proj); }; });
   }
 
@@ -16495,7 +16577,7 @@
       else if (act > bud + 0.005) { st = '<span class="ob-flag">! over by ' + cc + ' ' + money(act - bud) + '</span>'; cls = ' style="background:var(--bad-s)"'; }
       else if (bud > 0 && fore > bud + 0.005) { st = '<span class="ob-flag" style="background:var(--warn)">forecast over by ' + cc + ' ' + money(fore - bud) + '</span>'; cls = ' style="background:var(--warn-s)"'; }
       else if (bud > 0 && act >= bud * 0.9) { st = '<span class="ob-flag" style="background:var(--warn)">near limit</span>'; }
-      else { st = '<span style="color:var(--good);font-weight:600">ok</span>'; }
+      else { st = '<span style="color:var(--good-t);font-weight:600">ok</span>'; }
       return '<tr' + cls + '><td>' + c + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + money(com) + '</td><td class="num">' + money(fore) + '</td><td class="num">' + (bud > 0 ? Math.round(fore / bud * 100) + '%' : '-') + '</td><td>' + st + '</td></tr>';
     }).filter(Boolean).join("");
     function kpi2(l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; }
@@ -16649,7 +16731,7 @@
       var pct = bud > 0 ? Math.min(act / bud, 1) : 0;
       var earned = cv * pct, ob = billed - earned;
       tcv += cv; tbud += bud; tact += act; tearn += earned; tbill += billed; tob += ob;
-      var obc = ob > 0.005 ? ' style="color:var(--warn)"' : (ob < -0.005 ? ' style="color:var(--good)"' : '');
+      var obc = ob > 0.005 ? ' style="color:var(--warn-t)"' : (ob < -0.005 ? ' style="color:var(--good-t)"' : '');
       return '<tr><td>' + esc(p.name) + '</td><td class="num">' + money(cv) + '</td><td class="num">' + money(bud) + '</td><td class="num">' + money(act) + '</td><td class="num">' + (pct * 100).toFixed(1) + '%</td><td class="num">' + money(earned) + '</td><td class="num">' + money(billed) + '</td><td class="num"' + obc + '>' + money(ob) + '</td></tr>';
     }).join("");
     document.getElementById("rep").innerHTML = '<h1>WIP schedule</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; % complete = actual cost / budget (cost-to-cost)</div>' +
@@ -16700,14 +16782,14 @@
             : priceOff ? '<span class="badge unpaid" title="Bill price differs from the PO price">Price ' + (pvar > 0 ? "+" : "") + (Math.round(pvarPct * 10) / 10) + '%</span>'
               : (rec >= ord - 0.001 && bilQty >= ord - 0.001) ? '<span class="badge paid">Matched</span>'
                 : (rec > 0.001 || bilQty > 0.001) ? '<span class="badge partial">In progress</span>' : '<span class="badge">Not received</span>';
-        var priceCell = poPrice ? money(poPrice) + (bilQty && Math.abs(pvar) > 0.005 ? ' <span style="color:var(--bad);font-size:11px">&rarr; ' + money(bilPrice) + '</span>' : "") : "";
+        var priceCell = poPrice ? money(poPrice) + (bilQty && Math.abs(pvar) > 0.005 ? ' <span style="color:var(--bad-t);font-size:11px">&rarr; ' + money(bilPrice) + '</span>' : "") : "";
         return '<tr><td>' + esc(l.name) + baseNote(l) + '</td><td class="num">' + ord + '</td><td class="num">' + rec + '</td><td class="num">' + (Math.round(bilQty * 1000) / 1000) + '</td><td class="num">' + priceCell + '</td><td class="num">' + money(ordVal) + '</td><td class="num">' + money(bilVal) + '</td><td>' + status + '</td></tr>';
       }).join("");
       return head + (lrows || '<tr><td colspan="8" class="muted">No lines.</td></tr>');
     }).join("");
     var totOrd = 0, totBill = 0;
     lines.forEach(function (l) { totOrd += Number(l.quantity || 0) * Number(l.unit_price || 0); var a = billAgg[keyOf(l.order_id, l.product_id, l.name)]; totBill += a ? a.val : 0; });
-    document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; PO vs receipt vs bill on quantity, price &amp; value &middot; ' + ((exQty + exPrice) ? '<span style="color:var(--bad)">' + exQty + ' over-billed, ' + exPrice + ' price-variance</span>' : 'no exceptions') + '</div>' +
+    document.getElementById("rep").innerHTML = '<h1>3-Way Match</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + ' &middot; PO vs receipt vs bill on quantity, price &amp; value &middot; ' + ((exQty + exPrice) ? '<span style="color:var(--bad-t)">' + exQty + ' over-billed, ' + exPrice + ' price-variance</span>' : 'no exceptions') + '</div>' +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Item</td><td class="num">Ordered</td><td class="num">Received</td><td class="num">Billed</td><td class="num">Price (PO&rarr;bill)</td><td class="num">Ordered value</td><td class="num">Billed value</td><td>Status</td></tr></thead><tbody>' + rows +
       '<tr class="tot" style="font-weight:700"><td>Total</td><td></td><td></td><td></td><td></td><td class="num">' + money(totOrd) + '</td><td class="num">' + money(totBill) + '</td><td></td></tr></tbody></table></div>' +
       '<div class="sub" style="margin-top:12px"><b>Matched</b> = received and billed both cover the order and the bill price equals the PO price. <b>Billed &gt; received</b> = a bill for goods not yet received. <b>Price ±%</b> = the bill unit price differs from the PO (invoice price variance) - the classic 3-way exception to catch before paying. Base row shows the converted stock measure for counted materials (sheets&rarr;m&sup2;, bars&rarr;m).</div>';
@@ -16977,7 +17059,7 @@
       '<select id="pos-pl" style="min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><option value="">Standard price</option>' + POS.pricelists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
       '<input id="pos-search" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
       '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between"><span>Cart</span><span id="pos-loyalty" class="muted" style="font-size:11px;font-weight:400"></span></div><div class="pos-lines" id="pos-cartlines"></div>' +
-      '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot" id="pos-discrow" hidden><span>Discount</span><b id="pos-disc" style="color:var(--bad)">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
+      '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot" id="pos-discrow" hidden><span>Discount</span><b id="pos-disc" style="color:var(--bad-t)">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
       '<button class="pos-charge" id="pos-charge" disabled>Charge</button></div></div></div>';
     function paintGrid(q) {
       q = (q || "").toLowerCase();
@@ -17037,7 +17119,7 @@
   function posPaintCart() {
     var el = document.getElementById("pos-cartlines"); if (!el) return;
     var t = posTotals();
-    el.innerHTML = POS.cart.length ? POS.cart.map(function (l, i) { return '<div class="pos-line"><span class="nm">' + esc(l.name) + '<div class="muted" style="font-size:11px">' + money(l.price) + (l.discount > 0 ? ' &middot; <span style="color:var(--bad)">-' + money(l.discount) + (l.promo ? " " + esc(l.promo) : "") + '</span>' : '') + '</div></span><span class="qty"><button data-dec="' + i + '">&minus;</button><span>' + l.qty + '</span><button data-inc="' + i + '">+</button></span><span class="amt">' + money(l.price * l.qty - (l.discount || 0)) + '</span><button data-rm="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:15px">&times;</button></div>'; }).join("") : '<div class="muted" style="padding:24px 0;text-align:center">Tap a product to add it.</div>';
+    el.innerHTML = POS.cart.length ? POS.cart.map(function (l, i) { return '<div class="pos-line"><span class="nm">' + esc(l.name) + '<div class="muted" style="font-size:11px">' + money(l.price) + (l.discount > 0 ? ' &middot; <span style="color:var(--bad-t)">-' + money(l.discount) + (l.promo ? " " + esc(l.promo) : "") + '</span>' : '') + '</div></span><span class="qty"><button data-dec="' + i + '">&minus;</button><span>' + l.qty + '</span><button data-inc="' + i + '">+</button></span><span class="amt">' + money(l.price * l.qty - (l.discount || 0)) + '</span><button data-rm="' + i + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:15px">&times;</button></div>'; }).join("") : '<div class="muted" style="padding:24px 0;text-align:center">Tap a product to add it.</div>';
     document.getElementById("pos-sub").textContent = money(t.gross);
     var dr = document.getElementById("pos-discrow"); if (dr) { dr.hidden = t.discount <= 0; document.getElementById("pos-disc").textContent = "-" + money(t.discount); }
     document.getElementById("pos-tax").textContent = money(t.tax); document.getElementById("pos-total").textContent = money(t.tot);
@@ -17062,7 +17144,7 @@
     function refresh() {
       POS.redeem = parseFloat(gv("pos-redeem")) || 0;
       var t = posTotals();
-      document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span style="color:var(--bad)">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && earnPct > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnPct / 100) + ' pts' : '');
+      document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span style="color:var(--bad-t)">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && earnPct > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnPct / 100) + ' pts' : '');
       var meth = document.getElementById("pos-method").value; document.getElementById("pos-cashwrap").style.display = meth === "cash" ? "" : "none";
       var tend = document.getElementById("pos-tendered"); if (meth === "cash") { if (!tend.value) tend.value = t.tot.toFixed(2); var ch = (parseFloat(tend.value) || 0) - t.tot; document.getElementById("pos-change").textContent = ch >= 0 ? "Change: " + money(ch) : "Short " + money(-ch); }
     }
@@ -17243,7 +17325,7 @@
     }, spec.wide);
     if (rec && rec.id && canManageApp(S.app)) {
       var del = document.createElement("button");
-      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad)"; del.textContent = "Delete";
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
       del.onclick = async function () {
         if (!confirm("Delete this record?")) return;
         var d = await sb.from(spec.table).delete().eq("id", rec.id);
@@ -19766,7 +19848,7 @@
           '<td><input data-i="' + i + '" data-f="' + (l.kind === "labor" ? "hours" : "qty") + '" type="number" step="0.25" value="' + esc(l.kind === "labor" ? (l.hours || "") : (l.qty || "")) + '" style="width:70px;text-align:right"></td>' +
           '<td><input data-i="' + i + '" data-f="unit_price" type="number" step="0.01" value="' + esc(l.unit_price || "") + '" style="width:90px;text-align:right"></td>' +
           '<td style="text-align:center"><input type="checkbox" data-i="' + i + '" data-f="covered"' + (l.covered ? " checked" : "") + ' title="Covered by warranty (not billed)"></td>' +
-          '<td style="text-align:center"><button data-del="' + i + '" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:15px">&times;</button></td></tr>';
+          '<td style="text-align:center"><button data-del="' + i + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:15px">&times;</button></td></tr>';
       }).join("");
     }
     function paintLines() {
@@ -19973,11 +20055,11 @@
       fld("Font", '<select id="ws-font">' + ["Inter", "Onest", "Poppins", "Roboto", "Montserrat", "Playfair Display", "Lora", "Space Grotesk"].map(function (f) { return '<option' + ((th.font || "Inter") === f ? " selected" : "") + '>' + f + '</option>'; }).join("") + '</select>') +
       '</div></div>' +
       ((id !== "new") ? ('<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Pages</div></div><div class="o-nb-pg"><table class="o-list"><thead><tr><th>Title</th><th>Path</th><th>Status</th><th style="width:22px"></th></tr></thead><tbody id="ws-pages">' +
-        (pages.length ? pages.map(function (p) { return '<tr data-pid="' + p.id + '" style="cursor:pointer"><td><b>' + esc(p.title || "(untitled)") + '</b></td><td class="muted">' + esc(p.path) + '</td><td>' + (p.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>') + '</td><td><button class="wp-del" data-pid="' + p.id + '" title="Delete page" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="4" class="muted">No pages yet. Add your first page.</td></tr>') +
+        (pages.length ? pages.map(function (p) { return '<tr data-pid="' + p.id + '" style="cursor:pointer"><td><b>' + esc(p.title || "(untitled)") + '</b></td><td class="muted">' + esc(p.path) + '</td><td>' + (p.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>') + '</td><td><button class="wp-del" data-pid="' + p.id + '" title="Delete page" style="border:none;background:none;color:var(--bad-t);cursor:pointer">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="4" class="muted">No pages yet. Add your first page.</td></tr>') +
         '</tbody></table><button class="o-addln" id="ws-addpage">+ Add a page</button></div></div>' +
         '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Custom domain</div></div><div class="o-nb-pg">' +
         '<div class="sub" style="margin-bottom:8px">Use your own domain (e.g. <b>www.yourbusiness.com</b>) with nothing of ' + WEB_SUB_BASE + ' visible to visitors. Add it here, then point one DNS record at us; SSL is issued automatically.</div>' +
-        '<table class="o-list"><tbody id="ws-hosts">' + (hosts.length ? hosts.map(function (h) { return '<tr><td><b>' + esc(h.hostname) + '</b></td><td>' + (h.status === "active" ? '<span class="badge paid">Live</span>' : '<span class="badge partial">Pending DNS</span>') + '</td><td class="muted">CNAME &rarr; ' + WEB_SUB_BASE + '</td><td><button class="btn sm wh-verify" data-id="' + h.id + '">Verify</button> <button class="wh-del" data-id="' + h.id + '" style="border:none;background:none;color:var(--bad);cursor:pointer">&times;</button></td></tr>'; }).join("") : "") + '</tbody></table>' +
+        '<table class="o-list"><tbody id="ws-hosts">' + (hosts.length ? hosts.map(function (h) { return '<tr><td><b>' + esc(h.hostname) + '</b></td><td>' + (h.status === "active" ? '<span class="badge paid">Live</span>' : '<span class="badge partial">Pending DNS</span>') + '</td><td class="muted">CNAME &rarr; ' + WEB_SUB_BASE + '</td><td><button class="btn sm wh-verify" data-id="' + h.id + '">Verify</button> <button class="wh-del" data-id="' + h.id + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer">&times;</button></td></tr>'; }).join("") : "") + '</tbody></table>' +
         '<div style="display:flex;gap:6px;margin-top:8px;max-width:420px"><input id="ws-newhost" placeholder="www.yourbusiness.com" style="flex:1"><button class="btn" id="ws-addhost">Add domain</button></div>' +
         '</div></div>') : '<div class="sub" style="margin-top:12px">Save the site first, then add pages and a custom domain.</div>') +
       '</div>';
@@ -20039,7 +20121,7 @@
     function blockCard(b) {
       return '<div class="o-matspec wb-card" data-type="' + esc(b.type) + '" style="margin:0 0 10px;padding:12px 14px">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="text-transform:capitalize">' + esc((WEB_BLOCKS.filter(function (x) { return x[0] === b.type; })[0] || [b.type, b.type])[1]) + '</b><div class="gap" style="flex:1"></div>' +
-        '<button class="wb-up" title="Move up" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&uarr;</button><button class="wb-dn" title="Move down" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&darr;</button><button class="wb-del" title="Delete" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;color:var(--bad);cursor:pointer">&times;</button></div>' +
+        '<button class="wb-up" title="Move up" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&uarr;</button><button class="wb-dn" title="Move down" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&darr;</button><button class="wb-del" title="Delete" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;color:var(--bad-t);cursor:pointer">&times;</button></div>' +
         '<div class="wb-fields" style="display:grid;gap:8px">' + webBlockFields(b.type, b.props || {}) + '</div></div>';
     }
     document.querySelector(".o-form").innerHTML =
@@ -20116,7 +20198,7 @@
       ".wb-li{border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel2);display:flex;flex-direction:column;gap:6px}" +
       ".wb-li-top{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.wb-li-top .sp{flex:1}.wb-li-top button{border:1px solid var(--line);background:var(--panel);border-radius:5px;cursor:pointer;width:22px;height:22px;color:var(--ink)}" +
       ".wb-li-add,.wb-p-foot button{border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
-      ".wb-p-foot{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}.wb-p-foot .del{color:var(--bad);border-color:var(--bad)}" +
+      ".wb-p-foot{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}.wb-p-foot .del{color:var(--bad-t);border-color:var(--bad-t)}" +
       ".wb-sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}" +
       ".wb-gal{display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
       ".wb-gal button{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:12px 6px;cursor:pointer;color:var(--ink);font:inherit;font-size:12px}" +
@@ -20602,13 +20684,13 @@
       var body = previewRows.map(function (r, i) {
         var prodSel = '<select class="ci-prod" data-i="' + i + '" style="max-width:230px"><option value="">(no match &ndash; buy as text)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (r.product_id === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("") + '</select>';
         var reserve = r.product_id ? Math.min(r.qty, r.avail) : 0, shortfall = Math.max(0, r.qty - reserve);
-        return '<tr><td>' + esc(r.material) + '</td><td>' + prodSel + '</td><td class="num">' + fmtQ(r.qty) + '</td><td>' + esc(r.unit || "") + '</td><td class="num">' + (r.product_id ? fmtQ(r.avail) : "-") + '</td><td class="num" style="color:var(--good)">' + (reserve > 0 ? fmtQ(reserve) : "-") + '</td><td class="num"' + (shortfall > 0 ? ' style="color:var(--bad);font-weight:700"' : '') + '>' + (shortfall > 0 ? fmtQ(shortfall) : "-") + '</td></tr>';
+        return '<tr><td>' + esc(r.material) + '</td><td>' + prodSel + '</td><td class="num">' + fmtQ(r.qty) + '</td><td>' + esc(r.unit || "") + '</td><td class="num">' + (r.product_id ? fmtQ(r.avail) : "-") + '</td><td class="num" style="color:var(--good-t)">' + (reserve > 0 ? fmtQ(reserve) : "-") + '</td><td class="num"' + (shortfall > 0 ? ' style="color:var(--bad-t);font-weight:700"' : '') + '>' + (shortfall > 0 ? fmtQ(shortfall) : "-") + '</td></tr>';
       }).join("");
       var totRes = previewRows.reduce(function (s, r) { return s + (r.product_id ? Math.min(r.qty, r.avail) : 0); }, 0);
       var totShort = previewRows.reduce(function (s, r) { return s + Math.max(0, r.qty - (r.product_id ? Math.min(r.qty, r.avail) : 0)); }, 0);
       document.getElementById("ci-result").innerHTML =
         '<div class="card" style="margin-top:16px"><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>From your list</td><td>Product</td><td class="num">Needed</td><td>Unit</td><td class="num">Available</td><td class="num">Reserve</td><td class="num">Short (buy)</td></tr></thead><tbody>' + body + '</tbody></table></div>' +
-        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:12px"><div class="sub" style="margin:0">Will reserve <b style="color:var(--good)">' + fmtQ(totRes) + '</b> from stock and put <b style="color:var(--bad)">' + fmtQ(totShort) + '</b> on a draft RFQ.</div><div style="flex:1"></div><button class="pri" id="ci-go">Reserve stock &amp; create RFQ</button></div></div>';
+        '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin-top:12px"><div class="sub" style="margin:0">Will reserve <b style="color:var(--good-t)">' + fmtQ(totRes) + '</b> from stock and put <b style="color:var(--bad-t)">' + fmtQ(totShort) + '</b> on a draft RFQ.</div><div style="flex:1"></div><button class="pri" id="ci-go">Reserve stock &amp; create RFQ</button></div></div>';
       document.querySelectorAll(".ci-prod").forEach(function (sel) { sel.onchange = async function () { var i = +sel.dataset.i; previewRows[i].product_id = sel.value; previewRows[i].avail = 0; if (sel.value) { var av = await availableMap(); previewRows[i].avail = Math.max(0, Number(av.available[sel.value] || 0)); } drawPreview(); }; });
       document.getElementById("ci-go").onclick = doReserveAndRfq;
     }
@@ -20974,7 +21056,7 @@
         '<td class="muted">' + esc(b.date_planned || "-") + '</td>' +
         '<td class="num">' + cc + " " + money(agreed) + '</td>' +
         '<td class="num">' + cc + " " + money(relTot) + ' <span class="muted" style="font-size:11px">(' + released.length + ')</span></td>' +
-        '<td class="num"' + (remain < 0 ? ' style="color:var(--bad)"' : '') + '>' + cc + " " + money(remain) + '</td>' +
+        '<td class="num"' + (remain < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + cc + " " + money(remain) + '</td>' +
         '<td style="min-width:90px"><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + pctUsed + '%;background:var(--accent)"></div></div></td>' +
         '<td>' + statusBadge + '</td>' +
         '<td><button class="btn sm bo-rel" data-id="' + b.id + '">Release</button> <button class="btn sm bo-open" data-id="' + b.id + '">Open</button></td></tr>';
@@ -21820,7 +21902,7 @@
     if (id !== "new" && (wo.state === "draft" || wo.state === "in_progress")) btns += '<button class="pri" id="wo-complete">Complete &amp; consume</button>';
     var stages = '<div class="o-stages"><span class="st ' + (wo.state === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (wo.state === "in_progress" ? "on" : wo.state === "done" ? "done" : "") + '">In progress</span><span class="st ' + (wo.state === "done" ? "on" : "") + '">Done</span></div>';
     function opts(list, sel, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (sel === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
-    function opRow(o) { o = o || {}; var dis = done ? " disabled" : ""; return '<tr><td><input class="op-name" value="' + esc(o.name || "") + '" placeholder="e.g. Cut / Weld / Glaze / QC"' + dis + '></td><td><input class="op-wc" value="' + esc(o.work_center || "") + '" placeholder="Work centre" style="width:130px"' + dis + '></td><td><input class="op-min" type="number" value="' + (o.planned_minutes || 0) + '" style="width:80px"' + dis + '></td><td><select class="op-state"' + dis + '><option value="pending"' + (o.state === "pending" ? " selected" : "") + '>Pending</option><option value="in_progress"' + (o.state === "in_progress" ? " selected" : "") + '>In progress</option><option value="done"' + (o.state === "done" ? " selected" : "") + '>Done</option></select></td><td>' + (done ? "" : '<button class="op-del" style="border:none;background:none;color:var(--bad);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>'; }
+    function opRow(o) { o = o || {}; var dis = done ? " disabled" : ""; return '<tr><td><input class="op-name" value="' + esc(o.name || "") + '" placeholder="e.g. Cut / Weld / Glaze / QC"' + dis + '></td><td><input class="op-wc" value="' + esc(o.work_center || "") + '" placeholder="Work centre" style="width:130px"' + dis + '></td><td><input class="op-min" type="number" value="' + (o.planned_minutes || 0) + '" style="width:80px"' + dis + '></td><td><select class="op-state"' + dis + '><option value="pending"' + (o.state === "pending" ? " selected" : "") + '>Pending</option><option value="in_progress"' + (o.state === "in_progress" ? " selected" : "") + '>In progress</option><option value="done"' + (o.state === "done" ? " selected" : "") + '>Done</option></select></td><td>' + (done ? "" : '<button class="op-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button>') + '</td></tr>'; }
     var compRows = blines.map(function (l) { var q = Number(l.quantity || 0) * factor; return '<tr><td>' + esc(l.products ? l.products.name : (l.name || "")) + '</td><td class="num">' + (Math.round(q * 100) / 100) + '</td><td class="num">' + money(q * Number(l.products ? l.products.cost_price : 0)) + '</td></tr>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
@@ -22713,7 +22795,7 @@
         { label: "Kind", get: function (a) { return esc(a.kind === "bank" ? "Bank" : "Cash"); } },
         { label: "Currency", get: function (a) { return esc(a.currency_code || S.company.currency_code); } },
         { label: "Opening", num: true, get: function (a) { return money(a.opening_balance); } },
-        { label: "Active", get: function (a) { return a.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+        { label: "Active", get: function (a) { return a.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good-t)">Active</span>'; } }
       ],
       onNew: function () { openCashAccountModal(null); },
       onOpen: function (a) { openCashAccountModal(a); }
@@ -22732,7 +22814,7 @@
       + '<div><label>Posts to (GL account)</label><select id="ca-gl">' + glOpts + '</select></div>'
       + '<div class="row2"><div><label>Opening balance</label><input id="ca-open" type="number" step="0.01" value="' + (Number(a.opening_balance || 0)) + '"></div>'
       + '<div><label>Active</label><select id="ca-act"><option value="1"' + (a.is_active !== false ? " selected" : "") + '>Active</option><option value="0"' + (a.is_active === false ? " selected" : "") + '>Off</option></select></div></div>'
-      + '</div><div class="foot">' + (a.id ? '<button class="btn" id="ca-del" style="margin-right:auto;color:var(--bad)">Delete</button>' : '') + '<button class="btn" id="ca-cancel">Cancel</button><button class="btn pri" id="ca-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      + '</div><div class="foot">' + (a.id ? '<button class="btn" id="ca-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>' : '') + '<button class="btn" id="ca-cancel">Cancel</button><button class="btn pri" id="ca-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ca-cancel").onclick = function () { m.remove(); };
     var caDel = document.getElementById("ca-del");
@@ -22775,18 +22857,18 @@
         + '<div style="font-weight:700">' + esc(a.name) + '</div>'
         + '<div class="muted" style="font-size:12px">' + esc(a.kind === "bank" ? "Bank" : "Cash") + ' &middot; ' + esc(a.currency_code || S.company.currency_code) + '</div>'
         + '<div style="font-size:18px;font-weight:800;margin-top:6px">' + moneyC(d.bal[a.id] || 0, a.currency_code || S.company.currency_code) + '</div>'
-        + ((d.func[a.id] === null) ? '<div style="font-size:11px;color:var(--warn);margin-top:3px;font-weight:600">No ' + esc((a.currency_code || "") + " → " + d.fn) + ' rate · not in total</div>' : '')
+        + ((d.func[a.id] === null) ? '<div style="font-size:11px;color:var(--warn-t);margin-top:3px;font-weight:600">No ' + esc((a.currency_code || "") + " → " + d.fn) + ' rate · not in total</div>' : '')
         + '</div>';
     }).join("");
-    var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
+    var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn-t);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
     var rows = recent.map(function (m) {
       var sign = m.direction === "in" ? "+" : "-";
       return '<tr style="border-top:1px solid var(--line)"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
     }).join("");
     var canW = canManageApp(S.app);
     body.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
-      + (canW ? '<button class="btn pri" id="cd-in" style="background:var(--good);border-color:var(--good)">+ Money in</button><button class="btn pri" id="cd-out" style="background:var(--bad);border-color:var(--bad)">- Money out</button><button class="btn" id="cd-ho">Handover</button>' : '')
-      + '<div style="flex:1"></div><div style="font-weight:700">Total held: ' + moneyC(total, S.company.currency_code) + (d.totalOk ? '' : ' <span style="color:var(--warn);font-weight:600" title="Wallets without an exchange rate are excluded">(partial)</span>') + '</div></div>'
+      + (canW ? '<button class="btn pri" id="cd-in" style="background:var(--good);border-color:var(--good-t)">+ Money in</button><button class="btn pri" id="cd-out" style="background:var(--bad);border-color:var(--bad-t)">- Money out</button><button class="btn" id="cd-ho">Handover</button>' : '')
+      + '<div style="flex:1"></div><div style="font-weight:700">Total held: ' + moneyC(total, S.company.currency_code) + (d.totalOk ? '' : ' <span style="color:var(--warn-t);font-weight:600" title="Wallets without an exchange rate are excluded">(partial)</span>') + '</div></div>'
       + warnBanner
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:20px">' + cards + '</div>'
       + '<h3 style="margin:0 0 6px">Recent movements</h3><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left"><th style="padding:6px 8px">Date</th><th style="padding:6px 8px">No.</th><th style="padding:6px 8px">Type</th><th style="padding:6px 8px">Party</th><th style="padding:6px 8px;text-align:right">Amount</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="muted" style="padding:10px 8px">Nothing yet.</td></tr>') + '</tbody></table></div>';
@@ -23061,7 +23143,7 @@
       columns: [
         { label: "Method", get: function (m) { return '<b>' + esc(m.name || "") + '</b>'; } },
         { label: "Kind", get: function (m) { return esc(m.kind || ""); } },
-        { label: "Active", get: function (m) { return m.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+        { label: "Active", get: function (m) { return m.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good-t)">Active</span>'; } }
       ],
       onNew: function () { openPaymentMethodModal(null); },
       onOpen: function (m) { openPaymentMethodModal(m); }
@@ -23098,8 +23180,8 @@
         { label: "No.", get: function (m) { return esc(m.number || ""); } },
         { label: "Type", get: function (m) { return esc(cashKindLabel(m.kind)); } },
         { label: "Party", get: function (m) { return '<b>' + esc(m.payee_name || "") + '</b>'; } },
-        { label: "In", num: true, get: function (m) { return m.direction === "in" ? '<span style="color:var(--good)">' + money(m.amount) + '</span>' : ''; } },
-        { label: "Out", num: true, get: function (m) { return m.direction === "out" ? '<span style="color:var(--bad)">' + money(m.amount) + '</span>' : ''; } }
+        { label: "In", num: true, get: function (m) { return m.direction === "in" ? '<span style="color:var(--good-t)">' + money(m.amount) + '</span>' : ''; } },
+        { label: "Out", num: true, get: function (m) { return m.direction === "out" ? '<span style="color:var(--bad-t)">' + money(m.amount) + '</span>' : ''; } }
       ],
       filters: [
         { label: "Money in", test: function (m) { return m.direction === "in"; } },
@@ -23117,8 +23199,8 @@
     mm.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (m.direction === "in" ? "Receipt " : "Payment ") + esc(m.number || "") + '</h3><div class="form" style="padding:16px 18px">'
       + '<div style="font-size:26px;font-weight:800;color:' + col + ';font-variant-numeric:tabular-nums">' + (m.direction === "in" ? "+" : "-") + moneyC(m.amount, m.currency_code) + '</div>'
       + '<div style="margin-top:10px">' + rows + tender + '</div>'
-      + (m.status === "void" ? '<div style="margin-top:10px;font-size:12.5px;color:var(--bad);font-weight:600">This movement was voided.</div>' : "")
-      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button>' + (m.status !== "void" && !m.void_of ? '<button class="btn" id="mr-void" style="color:var(--bad);border-color:var(--bad)">Void</button>' : "") + '<button class="btn pri" id="mr-print" style="background:var(--app);border-color:var(--app)">Print receipt</button></div></div>';
+      + (m.status === "void" ? '<div style="margin-top:10px;font-size:12.5px;color:var(--bad-t);font-weight:600">This movement was voided.</div>' : "")
+      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button>' + (m.status !== "void" && !m.void_of ? '<button class="btn" id="mr-void" style="color:var(--bad-t);border-color:var(--bad-t)">Void</button>' : "") + '<button class="btn pri" id="mr-print" style="background:var(--app);border-color:var(--app)">Print receipt</button></div></div>';
     document.body.appendChild(mm);
     document.getElementById("mr-close").onclick = function () { mm.remove(); };
     document.getElementById("mr-print").onclick = function () { mm.remove(); printCashReceipt(m); };
@@ -23195,7 +23277,7 @@
         { label: "From", get: function (h) { return esc(h._from || ""); } },
         { label: "To", get: function (h) { return esc(h._to || ""); } },
         { label: "Amount", num: true, get: function (h) { return money(h.amount); } },
-        { label: "Status", get: function (h) { return h.status === "confirmed" ? '<span style="color:var(--good)">Confirmed</span>' : (h.status === "cancelled" ? '<span class="muted">Cancelled</span>' : '<span style="color:var(--warn)">Pending</span>'); } }
+        { label: "Status", get: function (h) { return h.status === "confirmed" ? '<span style="color:var(--good-t)">Confirmed</span>' : (h.status === "cancelled" ? '<span class="muted">Cancelled</span>' : '<span style="color:var(--warn-t)">Pending</span>'); } }
       ],
       onNew: function () { openHandoverModal(null); },
       onOpen: function (h) { openHandoverModal(h); }
@@ -23215,7 +23297,7 @@
       + '<div><label>Purpose</label><input id="ho-purpose" value="' + esc(h.purpose || "") + '" placeholder="e.g. supplier run, return, deposit"' + (view ? " disabled" : "") + '></div>'
       + (view ? '<div class="muted" style="font-size:12.5px">Status: ' + esc(h.status) + '</div>' : '')
       + '</div><div class="foot"><button class="btn" id="ho-cancel">Close</button>'
-      + (view && h.status === "pending" ? '<button class="btn" id="ho-void">Cancel it</button><button class="btn pri" id="ho-confirm" style="background:var(--good);border-color:var(--good)">Confirm received</button>' : (view ? '' : '<button class="btn pri" id="ho-save" style="background:var(--app);border-color:var(--app)">Create</button>'))
+      + (view && h.status === "pending" ? '<button class="btn" id="ho-void">Cancel it</button><button class="btn pri" id="ho-confirm" style="background:var(--good);border-color:var(--good-t)">Confirm received</button>' : (view ? '' : '<button class="btn pri" id="ho-save" style="background:var(--app);border-color:var(--app)">Create</button>'))
       + '</div></div>';
     document.body.appendChild(m);
     document.getElementById("ho-cancel").onclick = function () { m.remove(); };
@@ -23576,7 +23658,7 @@
         { label: "Duration", get: function (s) { return (s.duration_min || 0) + " min"; } },
         { label: "Where", get: function (s) { return esc(s.location_type === "online" ? "Online" : (s.location_type === "phone" ? "Phone" : "In person")); } },
         { label: "Price", num: true, get: function (s) { return money(s.price); } },
-        { label: "Active", get: function (s) { return s.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good)">Active</span>'; } }
+        { label: "Active", get: function (s) { return s.is_active === false ? '<span class="muted">Off</span>' : '<span style="color:var(--good-t)">Active</span>'; } }
       ],
       onNew: function () { openServiceModal(null); },
       onOpen: function (s) { openServiceModal(s); }
@@ -23954,7 +24036,7 @@
         { label: "Unit", get: function (o) { return esc((o.property_units && o.property_units.code) || ""); } },
         { label: "Building", get: function (o) { return esc((o.property_units && o.property_units.properties && o.property_units.properties.name) || ""); } },
         { label: "Share of unit", num: true, get: function (o) { return (Number(o.share_pct || 100)) + "%"; } },
-        { label: "Primary", get: function (o) { return o.is_primary ? '<span style="color:var(--good)">Billed</span>' : '<span class="muted">Co-owner</span>'; } }
+        { label: "Primary", get: function (o) { return o.is_primary ? '<span style="color:var(--good-t)">Billed</span>' : '<span class="muted">Co-owner</span>'; } }
       ],
       emptyHint: "Link each unit to its owner (a contact). The primary owner receives that unit's charges.",
       onNew: function () { openOwnershipModal(null); },
@@ -24285,7 +24367,7 @@
           '<span class="badge">' + esc(it.kind) + '</span>' +
           (isMotion ? '<span class="badge">' + esc(PLOT_AUTH[it.authority] || it.authority || "") + '</span>' : '') +
           '<span class="badge ' + (it.status === "carried" ? "paid" : it.status === "rejected" ? "unpaid" : "draft") + '">' + esc(it.status) + '</span>' +
-          '<span style="flex:1"></span><button class="o-filtbtn mi-del" data-id="' + it.id + '" style="color:var(--bad)">&times;</button></div>' +
+          '<span style="flex:1"></span><button class="o-filtbtn mi-del" data-id="' + it.id + '" style="color:var(--bad-t)">&times;</button></div>' +
           (it.description ? '<div class="muted" style="font-size:12.5px;margin-top:3px">' + esc(it.description) + '</div>' : '') +
           (isMotion ? '<div style="font-size:12.5px;margin-top:6px">' +
             'For <b>' + esc(v.t.for.toFixed(2)) + '</b> &middot; Against <b>' + esc(v.t.against.toFixed(2)) + '</b> &middot; Abstain <b>' + esc(v.t.abstain.toFixed(2)) + '</b> ' +
@@ -24380,7 +24462,7 @@
         { label: "Stage", get: function (n) { return '<span class="badge ' + (n.stage >= 3 ? "unpaid" : "partial") + '">' + (["", "Reminder", "Warning", "Formal"][n.stage] || ("Stage " + n.stage)) + '</span>'; } },
         { label: "Date", get: function (n) { return esc(n.notice_date || ""); } },
         { label: "Amount", num: true, get: function (n) { return moneyC(n.amount); } },
-        { label: "Delivered", get: function (n) { return n.delivered ? '<span style="color:var(--good)">Yes</span>' : '<span class="muted">No</span>'; } }
+        { label: "Delivered", get: function (n) { return n.delivered ? '<span style="color:var(--good-t)">Yes</span>' : '<span class="muted">No</span>'; } }
       ],
       emptyHint: "Log the reminder and warning letters you send owners in arrears, so there's a record if it goes legal.",
       onNew: function () { openNoticeModal(null); },
@@ -24460,7 +24542,7 @@
         '<div><label>Decision note (the resident sees the outcome)</label><input id="sg-dec" value="' + esc(s.decision_note || "") + '"></div>' +
         '<div><label>Decided at meeting</label><select id="sg-meet"><option value="">(not at a meeting)</option></select></div>' +
         '<div><label><input type="checkbox" id="sg-task" checked> Create a task when accepting</label></div>' +
-        '<div style="display:flex;gap:8px"><button class="o-filtbtn" id="sg-accept" style="color:var(--good)">Accept</button><button class="o-filtbtn" id="sg-reject" style="color:var(--bad)">Reject</button></div>'
+        '<div style="display:flex;gap:8px"><button class="o-filtbtn" id="sg-accept" style="color:var(--good-t)">Accept</button><button class="o-filtbtn" id="sg-reject" style="color:var(--bad-t)">Reject</button></div>'
         : '');
     var m = plotModal(s.id ? "Suggestion" : "New suggestion", inner, async function () {
       var title = gv("sg-title"); if (!title) { toast("Enter a title"); return; }
@@ -24574,7 +24656,7 @@
       (bids.length ? '<table class="o-list" style="margin-bottom:8px"><thead><tr><th>Bidder</th><th class="num">Amount</th><th class="num">Days</th><th>Status</th><th></th></tr></thead><tbody>' +
         bids.map(function (b) {
           return '<tr><td>' + esc((b.partners && b.partners.name) || b.bidder_name || "-") + '</td><td class="num">' + moneyC(b.amount) + '</td><td class="num">' + (b.duration_days || "") + '</td><td><span class="badge ' + (b.status === "awarded" ? "paid" : "draft") + '">' + esc(b.status) + '</span></td>' +
-            '<td class="right">' + (b.status !== "awarded" ? '<button class="o-filtbtn pj-award-btn" data-id="' + b.id + '" data-amt="' + b.amount + '" data-partner="' + esc(b.partner_id || "") + '">Award</button>' : '') + '<button class="o-filtbtn pj-bid-del" data-id="' + b.id + '" style="color:var(--bad)">&times;</button></td></tr>';
+            '<td class="right">' + (b.status !== "awarded" ? '<button class="o-filtbtn pj-award-btn" data-id="' + b.id + '" data-amt="' + b.amount + '" data-partner="' + esc(b.partner_id || "") + '">Award</button>' : '') + '<button class="o-filtbtn pj-bid-del" data-id="' + b.id + '" style="color:var(--bad-t)">&times;</button></td></tr>';
         }).join("") + '</tbody></table>' : '<div class="muted" style="font-size:12.5px;margin-bottom:8px">No bids yet.</div>') +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">' + plotSel("pj-bidder", vendors, null, "(supplier)") +
       '<input id="pj-bidamt" type="number" step="0.01" placeholder="Amount" style="max-width:120px">' +
@@ -24670,7 +24752,7 @@
         { label: "Item", get: function (c) { return '<b>' + esc(c.title) + '</b>'; } },
         { label: "Building", get: function (c) { return esc((c.properties && c.properties.name) || ""); } },
         { label: "Photo needed", get: function (c) { return c.requires_photo ? '<span class="badge">Photo</span>' : '<span class="muted">-</span>'; } },
-        { label: "Active", get: function (c) { return c.is_active ? '<span style="color:var(--good)">Active</span>' : '<span class="muted">Off</span>'; } },
+        { label: "Active", get: function (c) { return c.is_active ? '<span style="color:var(--good-t)">Active</span>' : '<span class="muted">Off</span>'; } },
         { label: "Today", get: function (c) { return c._doneToday ? '<span class="badge paid">Done</span>' : '<button class="o-filtbtn ck-do" data-id="' + c.id + '" data-prop="' + esc(c.property_id) + '" data-photo="' + (c.requires_photo ? 1 : 0) + '" data-title="' + esc(c.title) + '">Mark done</button>'; } }
       ],
       rowWire: function (root) {
@@ -25040,10 +25122,10 @@
           return '<tr><td><b>' + esc(l.label || "") + '</b></td><td>' + esc(plotCatLabel(l.category)) + '</td><td class="num">' + moneyC(bud2) + '</td><td class="num">' + moneyC(act) + '</td>' +
             '<td class="num" style="color:' + (left < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(left) + '</td>' +
             '<td><span class="badge ' + (lp > 100 ? "unpaid" : lp > 85 ? "partial" : "paid") + '">' + lp + '%</span></td>' +
-            '<td class="right">' + (locked ? '' : '<button class="o-filtbtn bd-edit" data-id="' + l.id + '" data-label="' + esc(l.label || "") + '" data-cat="' + esc(l.category) + '" data-amt="' + Number(l.amount || 0) + '">Edit</button><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad)">&times;</button>') + '</td></tr>';
+            '<td class="right">' + (locked ? '' : '<button class="o-filtbtn bd-edit" data-id="' + l.id + '" data-label="' + esc(l.label || "") + '" data-cat="' + esc(l.category) + '" data-amt="' + Number(l.amount || 0) + '">Edit</button><button class="o-filtbtn bd-del" data-id="' + l.id + '" style="color:var(--bad-t)">&times;</button>') + '</td></tr>';
         }).join("") +
         unbudgeted.map(function (k) {
-          return '<tr style="opacity:.8"><td><i>Unbudgeted spend</i></td><td>' + esc(plotCatLabel(k)) + '</td><td class="num">-</td><td class="num">' + moneyC(actualByCat[k]) + '</td><td class="num" style="color:var(--bad)">' + moneyC(-actualByCat[k]) + '</td><td><span class="badge unpaid">n/a</span></td><td></td></tr>';
+          return '<tr style="opacity:.8"><td><i>Unbudgeted spend</i></td><td>' + esc(plotCatLabel(k)) + '</td><td class="num">-</td><td class="num">' + moneyC(actualByCat[k]) + '</td><td class="num" style="color:var(--bad-t)">' + moneyC(-actualByCat[k]) + '</td><td><span class="badge unpaid">n/a</span></td><td></td></tr>';
         }).join("") +
         '<tr style="font-weight:700"><td colspan="2">Total</td><td class="num">' + moneyC(totalBudget) + '</td><td class="num">' + moneyC(totalActual) + '</td><td class="num" style="color:' + ((totalBudget - totalActual) < 0 ? "var(--bad)" : "inherit") + '">' + moneyC(totalBudget - totalActual) + '</td><td><span class="badge ' + (pct > 100 ? "unpaid" : "paid") + '">' + pct + '%</span></td><td></td></tr></tbody></table>'
         : '<div class="o-empty2"><div class="o-empty2-t">No budget lines yet</div><div class="o-empty2-h">Add lines, or press <b>Fill from charges</b> to turn the building\'s recurring charges into a yearly budget.</div></div>') + '</div>';
@@ -25517,7 +25599,7 @@
         { label: "Role", get: function (m) { return '<span class="badge">' + esc(PLOT_ROLE[m.role] || m.role) + '</span>'; } },
         { label: "Building", get: function (m) { return esc((m.properties && m.properties.name) || ""); } },
         { label: "Term", get: function (m) { return esc((m.start_date || "") + (m.end_date ? " to " + m.end_date : "")); } },
-        { label: "Active", get: function (m) { return m.is_active ? '<span style="color:var(--good)">Active</span>' : '<span class="muted">Past</span>'; } }
+        { label: "Active", get: function (m) { return m.is_active ? '<span style="color:var(--good-t)">Active</span>' : '<span class="muted">Past</span>'; } }
       ],
       groupBy: [{ label: "Building", get: function (m) { return (m.properties && m.properties.name) || "-"; } }, { label: "Role", get: function (m) { return PLOT_ROLE[m.role] || m.role; } }],
       emptyHint: "Who holds which office in this building - head, treasurer, secretary, concierge. Terms are kept so you can show who was responsible when.",
@@ -25677,7 +25759,7 @@
       '<table class="o-list"><thead><tr><th>What</th><th>Record</th><th>Deleted</th><th>By</th><th></th></tr></thead><tbody>' +
       out.map(function (x) {
         return '<tr><td>' + esc(PLOT_TBL_LABEL[x.t] || x.t) + '</td><td><b>' + esc(plotRowLabel(x.t, x.r)) + '</b></td><td>' + esc((x.r.deleted_at || "").slice(0, 16).replace("T", " ")) + '</td><td class="muted">' + esc(x.r.deleted_by || "") + '</td>' +
-          '<td class="right"><button class="o-filtbtn ar-restore" data-t="' + x.t + '" data-id="' + x.r.id + '">Restore</button><button class="o-filtbtn ar-purge" data-t="' + x.t + '" data-id="' + x.r.id + '" data-l="' + esc(plotRowLabel(x.t, x.r)) + '" style="color:var(--bad)">Remove for good</button></td></tr>';
+          '<td class="right"><button class="o-filtbtn ar-restore" data-t="' + x.t + '" data-id="' + x.r.id + '">Restore</button><button class="o-filtbtn ar-purge" data-t="' + x.t + '" data-id="' + x.r.id + '" data-l="' + esc(plotRowLabel(x.t, x.r)) + '" style="color:var(--bad-t)">Remove for good</button></td></tr>';
       }).join("") + '</tbody></table></div>';
     body.querySelectorAll(".ar-restore").forEach(function (b) {
       b.onclick = async function () {

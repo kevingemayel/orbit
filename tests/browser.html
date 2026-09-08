@@ -21,7 +21,8 @@
 <script>
 (async function () {
   var src = await fetch("../js/app.js?cb=" + Math.random()).then(function (r) { return r.text(); });
-  var res = ORBIT_CHECKS.run(src);
+  var css = await fetch("../css/app.css?cb=" + Math.random()).then(function (r) { return r.text(); });
+  var res = ORBIT_CHECKS.run(src, css);
   var pass = res.filter(function (r) { return r.ok; }).length;
   document.getElementById("sum").textContent = pass + " of " + res.length + " passed";
   document.getElementById("sum").style.color = pass === res.length ? "#16a34a" : "#dc2626";

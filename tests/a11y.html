@@ -96,6 +96,21 @@
     }).join("");
   }
 
+  // ---- naming: labels, fields and table headers -------------------------
+  // These run through the same observer the app uses, so they prove the real
+  // path rather than calling the helper directly.
+  var form = document.createElement("div");
+  form.innerHTML =
+    '<div class="form">' +
+      '<div><label>Invoice date</label><input id="nm-date" type="date"></div>' +
+      '<div><label>Customer</label><span class="fd">hint text</span><select id="nm-cust"><option>A</option></select></div>' +
+      '<div><label>Notes</label><textarea></textarea></div>' +
+      '<input placeholder="Search a name or number" id="nm-search">' +
+      '<label><input type="checkbox" id="nm-wrapped"> Already wrapped</label>' +
+    '</div>' +
+    '<table><thead><tr><th>Item</th><th>Amount</th></tr></thead><tbody><tr><td>x</td><td>1</td></tr></tbody></table>';
+  stage.appendChild(form);
+
   // the modal check needs the MutationObserver to fire, so it finishes async
   var m = document.createElement("div"); m.className = "modal on";
   var closed = 0;
@@ -112,6 +127,30 @@
     results[i] = { name: "a modal gets a dialog role, and Escape closes it", ok: roled && labelled && closed === 1,
                    detail: "role/aria-modal=" + roled + " labelled=" + labelled + " escapeClosed=" + closed };
     if (m.parentNode) m.remove();
+
+    // labels find their control even with a hint element in between
+    var lbls = form.querySelectorAll("label");
+    var dateFor = lbls[0].getAttribute("for") === "nm-date";
+    var custFor = lbls[1].getAttribute("for") === "nm-cust";
+    var ta = form.querySelector("textarea");
+    var taFor = !!ta.id && lbls[2].getAttribute("for") === ta.id;
+    t("a label with no for is tied to its field", function () {
+      return { ok: dateFor && custFor && taFor, detail: "date=" + dateFor + " select=" + custFor + " textarea(generated id)=" + taFor };
+    });
+    t("an unlabelled field borrows its placeholder", function () {
+      var s = document.getElementById("nm-search");
+      return { ok: s.getAttribute("aria-label") === "Search a name or number", detail: "aria-label=" + s.getAttribute("aria-label") };
+    });
+    t("a field already inside its label is left alone", function () {
+      var c = document.getElementById("nm-wrapped");
+      var wrap = c.parentElement;
+      return { ok: !wrap.getAttribute("for"), detail: "wrapping label untouched=" + !wrap.getAttribute("for") };
+    });
+    t("table headers say which column they are", function () {
+      var ths = form.querySelectorAll("th");
+      var all = [].every.call(ths, function (x) { return x.getAttribute("scope") === "col"; });
+      return { ok: ths.length === 2 && all, detail: ths.length + " th, all scope=col: " + all };
+    });
     render();
   }, 120);
   render();
