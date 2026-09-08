@@ -713,6 +713,9 @@
       { t: "Price lists and quotation templates", h: "<p>Two tools under <b>Sales &rsaquo; Configuration</b> save you retyping and keep your pricing consistent:</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:tag}} Pricelists</div><p>A <b>pricelist</b> sets different prices for different situations - a trade discount for one customer, a lower rate above a certain quantity. Orbit picks the right price on a quote automatically, so nobody has to remember the special rate.</p></div><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:doc}} Quotation Templates</div><p>A <b>template</b> is a ready-made quote - the usual lines, terms and wording - so you start from something 90% done instead of a blank page. Great for jobs you quote again and again.</p></div></div>" }
     ] },
     { key: "crm", title: "Winning work (CRM)", articles: [
+      { t: "When the lead is a place, not a switchboard", h: "<p>Plenty of businesses do not sell to a company with a reception desk. They sell to a <b>site</b>: a building going up, a shop being fitted out, a house being renovated. The questions are different, and a lead carries the fields to answer them.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:pin}} Where it is</div><p><b>Area</b> is the round or district, so a rep can work one at a time and the list can be grouped by it. <b>Map pin</b> is a link to the exact spot, because a pin beats a postal address when the thing you are selling to has no address yet.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:clock}} When to call</div><p><b>How they stand</b> is where the prospect is with you: interested, not interested, already has a supplier. <b>Their project stage</b> is how far along their OWN job is, which is what actually decides when to ring. A builder says &ldquo;floors pouring&rdquo;; a software buyer says &ldquo;budget approved&rdquo;.</p></div></div><p>Both boxes suggest what your company already uses, so the list stays tidy without anyone maintaining a dropdown.</p>" },
+      { t: "The several people on one lead", h: "<p>A site has an owner, an architect, a contractor and whoever answered the phone. Losing which is which loses most of the value of the record, so a lead keeps <b>a list of people, each with a role</b>, rather than one contact field.</p><p>Under <b>People on this lead</b>, add a row per person with their role and number. The first one is the primary and is what shows in the list. Add them as a proper <b>customer</b> only when there is something to invoice: until then they are prospects and do not belong in your contact book.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:upload}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Photograph the site</div><p><b>Photos &amp; files</b> takes pictures straight from a phone. On a site visit that is worth more than a paragraph of notes, and it is how anyone else picks the lead up later.</p></div></div>" },
+      { t: "Next actions, and what you quoted", h: "<p>Two blocks stop a pipeline going quiet.</p><p><b>Next action</b> is the single next thing anyone should do, who owns it and by when. Name an owner and it is theirs; give it a date and it chases itself. The leads list can be filtered to everything that has one, which is the Monday morning list.</p><p><b>What we have from them</b> records what they have given you so you can quote at all: drawings, a brief, a specification. Then <b>Quoted</b> holds the amount and the day it went, and <b>Against what specification</b> holds what the price was built on. Six months later that last field is the one that settles the argument.</p>" },
       { t: "The pipeline, in plain words", h: "<p>The <b>CRM</b> (Customer Relationship Management) app is where you track deals you are chasing <b>before</b> they become real work. Each deal is an <b>opportunity</b> (or lead) - a chance to win a job.</p><p>Open <b>CRM &rsaquo; Pipeline</b> and you see columns: the <b>stages</b> a deal moves through, like New, Qualified, Quoted, Won. Each opportunity is a card you drag from one stage to the next as it progresses. At the top are two figures: the <b>open pipeline</b> (the total value of everything in play) and the <b>weighted forecast</b> (that value adjusted by how likely each deal is - a 50%-likely 100k deal counts as 50k). The forecast is your honest expectation, not wishful thinking.</p>" },
       { t: "Working a lead and logging activity", h: "<p>Click an opportunity to open it. Fill in who it is, the <b>expected value</b>, and your <b>probability</b> of winning, and move it along the stages as things develop.</p><p>Under <b>Activity &amp; follow-ups</b>, click <b>Log activity</b> every time you speak to them - a call, an email, a meeting, a note - and give it a follow-up date so it reminds you when to chase. This is the discipline that wins deals: a written trail of every touch, and a clear next action, so nothing goes cold.</p>" },
       { t: "Turning a lead into work", h: "<p>When a lead warms up, convert it in one click, with no retyping:</p><ul><li><b>Create Customer</b> - saves them as a proper customer you can invoice.</li><li><b>Create Quotation</b> - a simple priced offer of products or services.</li><li><b>Create Tender</b> - a full priced construction bid with a cost build-up and margin (see the Bidding chapter). Win it and it becomes a project.</li></ul><p>Everything carries over - the name, the value, the link back to the opportunity - so you keep the whole story from first contact to signed job.</p>" }
@@ -15176,16 +15179,30 @@
     return {
       title: "Leads", pageSize: 80, table: "crm_leads",
       fetch: function () { return Promise.all([sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }), sb.from("crm_stages").select("id,name").eq("company_id", S.company.id)]).then(function (res) { var sm = {}; (res[1].data || []).forEach(function (s) { sm[s.id] = s.name; }); return (res[0].data || []).map(function (l) { l._stage = sm[l.stage_id]; return l; }); }); },
-      searchText: function (l) { return (l.name || "") + " " + (l.contact_name || "") + " " + (l.partners ? l.partners.name : ""); },
+      searchText: function (l) { return (l.name || "") + " " + (l.contact_name || "") + " " + (l.partners ? l.partners.name : "") + " " + (l.area || "") + " " + (l.notes || "") + " " + (l.next_action || ""); },
       columns: [
-        { label: "Opportunity", get: function (l) { return '<b>' + esc(l.name) + '</b>'; } },
-        { label: "Customer", get: function (l) { return esc(l.partners ? l.partners.name : (l.contact_name || "")); } },
+        { label: "Opportunity", get: function (l) { return '<b>' + esc(l.name) + '</b>' + (l.next_action ? '<div class="muted" style="font-size:11px">Next: ' + esc(l.next_action) + (l.next_action_owner ? " (" + esc(l.next_action_owner) + ")" : "") + '</div>' : ""); } },
+        { label: "Area", get: function (l) { return esc(l.area || ""); } },
+        { label: "Contact", get: function (l) { return esc(l.partners ? l.partners.name : (l.contact_name || "")); } },
+        { label: "How they stand", get: function (l) { return l.qualification ? '<span class="badge ' + (/^interested/i.test(l.qualification) ? "paid" : /not interested/i.test(l.qualification) ? "unpaid" : "draft") + '">' + esc(l.qualification) + '</span>' : ""; } },
+        { label: "Their stage", get: function (l) { return esc(l.site_stage || ""); } },
         { label: "Stage", get: function (l) { return '<span class="badge">' + esc(l._stage || "") + '</span>'; } },
-        { label: "Expected", num: true, get: function (l) { return money(l.expected_revenue); } },
-        { label: "Prob.", num: true, get: function (l) { return Number(l.probability || 0) + "%"; } }
+        { label: "Quoted", num: true, get: function (l) { return l.quoted_amount == null ? "" : money(l.quoted_amount); } }
       ],
-      filters: [{ label: "Open", test: function (l) { return l.is_active !== false; } }, { label: "Lost", test: function (l) { return l.is_active === false; } }],
-      groupBy: [{ label: "Stage", get: function (l) { return l._stage || "None"; } }],
+      filters: [
+        { label: "Open", test: function (l) { return l.is_active !== false; } },
+        { label: "Interested", test: function (l) { return /^interested/i.test(l.qualification || ""); } },
+        { label: "Quoted", test: function (l) { return l.quoted_amount != null; } },
+        { label: "Has a next action", test: function (l) { return !!l.next_action; } },
+        { label: "Never contacted", test: function (l) { return /not contacted/i.test(l.qualification || ""); } },
+        { label: "Lost", test: function (l) { return l.is_active === false || !!l.lost_reason; } }
+      ],
+      groupBy: [
+        { label: "Stage", get: function (l) { return l._stage || "None"; } },
+        { label: "Area", get: function (l) { return l.area || "No area"; } },
+        { label: "How they stand", get: function (l) { return l.qualification || "Not set"; } },
+        { label: "Their project stage", get: function (l) { return l.site_stage || "Not set"; } }
+      ],
       emptyHint: "Track sales opportunities from first contact to won. Move a lead through the stages; winning one can spin up a project or an event automatically.",
       onOpen: function (l) { renderLeadForm(l.id); },
       onNew: function () { renderLeadForm("new"); }
@@ -15200,8 +15217,40 @@
     var stages = await ensureCrmStages();
     var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var acts = id === "new" ? [] : (await sb.from("crm_activities").select("*").eq("lead_id", id).order("created_at", { ascending: false })).data || [];
+    var lcs = id === "new" ? [] : (await sb.from("crm_lead_contacts").select("*").eq("lead_id", id).order("sort")).data || [];
     function actItemHtml(a) { return '<div style="display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)"><div style="min-width:64px;font-weight:600;font-size:12px;color:var(--accent)">' + esc(actTypeLabel(a.act_type)) + '</div><div style="flex:1"><div><b>' + esc(a.subject || "(no subject)") + '</b>' + (a.due_date && !a.done ? ' <span class="ob-flag"' + (a.due_date < today() ? ' style="background:var(--bad)"' : '') + '>follow up ' + esc(a.due_date) + '</span>' : '') + (a.done ? ' <span class="badge paid">done</span>' : '') + '</div>' + (a.note ? '<div class="muted" style="font-size:12.5px">' + esc(a.note) + '</div>' : '') + '<div class="muted" style="font-size:11px">' + esc(String(a.created_at || "").slice(0, 10)) + '</div></div>' + (!a.done ? '<button class="ld-actdone" data-id="' + a.id + '" style="border:none;background:none;color:var(--good-t);cursor:pointer;font-size:12px;font-weight:600">Mark done</button>' : '') + '</div>'; }
     var actSection = id === "new" ? "" : '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Activity &amp; follow-ups</div></div><div class="o-nb-pg"><button id="ld-logact" class="o-addln">+ Log activity</button>' + (acts.length ? '<div style="margin-top:6px">' + acts.map(actItemHtml).join("") + '</div>' : '<div class="muted" style="margin-top:8px">No activity logged yet.</div>') + '</div></div>';
+    // Suggest what this company already uses rather than inventing a taxonomy.
+    var seen = (await sb.from("crm_leads").select("area,qualification,site_stage").eq("company_id", S.company.id).limit(2000)).data || [];
+    function dlist(id2, key) {
+      var vals = [];
+      seen.forEach(function (x) { var v = (x[key] || "").trim(); if (v && vals.indexOf(v) < 0) vals.push(v); });
+      vals.sort();
+      return '<datalist id="' + id2 + '">' + vals.map(function (v) { return '<option value="' + esc(v) + '">'; }).join("") + '</datalist>';
+    }
+    var areaDatalist = dlist("ld-areas", "area"), qualDatalist = dlist("ld-quals", "qualification"), siteDatalist = dlist("ld-sites", "site_stage");
+
+    // Several people, each with a role. On a site there is an owner, an
+    // architect, a contractor and whoever answered the phone.
+    var contactsSection = id === "new" ? "" :
+      '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">People on this lead' + (lcs.length ? ' (' + lcs.length + ')' : '') + '</div></div><div class="o-nb-pg">' +
+      '<table class="o-lines" id="ld-ctab"><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th></th></tr></thead><tbody>' +
+      lcs.map(function (c) {
+        return '<tr data-cid="' + c.id + '"><td><input class="lc-name" value="' + esc(c.name || "") + '"></td>' +
+          '<td><input class="lc-role" value="' + esc(c.role || "") + '" list="ld-roles"></td>' +
+          '<td><input class="lc-phone" value="' + esc(c.phone || "") + '"></td>' +
+          '<td><input class="lc-email" value="' + esc(c.email || "") + '"></td>' +
+          '<td style="text-align:right"><button class="lnk lc-del" data-id="' + c.id + '" style="color:var(--bad-t)">Remove</button></td></tr>' +
+          (c.note ? '<tr><td colspan="5" class="muted" style="font-size:11.5px;padding-top:0">' + esc(c.note) + '</td></tr>' : "");
+      }).join("") + '</tbody></table>' +
+      '<datalist id="ld-roles"><option value="Owner"><option value="Architect"><option value="Contractor"><option value="Engineer"><option value="Other contact"></datalist>' +
+      '<button class="o-addln" id="ld-caddrow">+ Add a person</button>' +
+      '<button class="btn" id="ld-csave" style="margin-left:8px">Save the people</button></div></div>';
+
+    var photoSection = id === "new" ? "" :
+      '<div class="o-nb" style="margin-top:14px"><div class="o-nb-tabs"><div class="tb on">Photos &amp; files</div></div>' +
+      '<div class="o-nb-pg">' + attachBlockHTML("lead", id, { label: "Site photos" }) + '</div></div>';
+
     if (id === "new" && !l.stage_id && stages[0]) l.stage_id = stages[0].id;
     document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
     var stageBar = '<div class="o-stages">' + stages.map(function (s) { return '<span class="st ' + (l.stage_id === s.id ? "on" : "") + '" data-stage="' + s.id + '">' + esc(s.name) + '</span>'; }).join("") + '</div>';
@@ -15222,18 +15271,93 @@
       fld("Expected revenue", '<input id="ld-rev" type="number" step="0.01" value="' + (l.expected_revenue || 0) + '">', "Estimated deal value if won.") +
       fld("Probability", '<input id="ld-prob" type="number" step="1" min="0" max="100" value="' + (l.probability || 0) + '">', "Your confidence of winning, in percent (0-100).") +
       fld("Source", '<input id="ld-src" value="' + esc(l.source || "") + '">', "Where the lead came from, e.g. referral or website.") +
-      '</div></div>' + (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') + actSection + '</div>';
+      '</div></div>' +
+
+      // Where it is, how the prospect stands, and when they will be ready. A
+      // great many businesses sell to a place rather than to a switchboard.
+      '<div class="o-groups"><div>' +
+      fld("Area", '<input id="ld-area" value="' + esc(l.area || "") + '" list="ld-areas" placeholder="The round or district it belongs to">' + areaDatalist, "The sales area or round this belongs to, so a rep can work a district at a time.") +
+      fld("Map pin", '<input id="ld-map" value="' + esc(l.map_url || "") + '" placeholder="Paste a maps link">' +
+        (l.map_url ? ' <a class="lnk" href="' + esc(l.map_url) + '" target="_blank" rel="noopener">Open the map</a>' : ""),
+        "A link to the exact spot. A pin beats a postal address when the thing you are selling to is a building site.") +
+      fld("How they stand", '<input id="ld-qual" value="' + esc(l.qualification || "") + '" list="ld-quals" placeholder="Interested, not interested, has a supplier">' + qualDatalist, "Where the prospect stands with you, in their words.") +
+      '</div><div>' +
+      fld("Their project stage", '<input id="ld-site" value="' + esc(l.site_stage || "") + '" list="ld-sites" placeholder="How far along their own job is">' + siteDatalist, "How far along the prospect's OWN project is, which is what decides when to call. A builder says floors pouring; a software buyer says budget approved.") +
+      fld("Next action", '<input id="ld-next" value="' + esc(l.next_action || "") + '" placeholder="The next thing anyone should do">', "The single next step. It also shows on the person's desk if you name an owner.") +
+      '<div class="row2"><div>' + fld("Owner of it", '<input id="ld-nextown" value="' + esc(l.next_action_owner || "") + '">', "Who is supposed to do it.") + '</div><div>' +
+      fld("By when", '<input id="ld-nextdate" type="date" value="' + esc(l.next_action_date || "") + '">', "When it should be done by.") + '</div></div>' +
+      '</div></div>' +
+
+      // What we put in front of them
+      '<div class="o-groups"><div>' +
+      fld("What we have from them", '<input id="ld-docs" value="' + esc(l.docs_status || "") + '" placeholder="Drawings, a brief, a specification">', "What they have given you so you can quote: drawings, a brief, a spec.") +
+      fld("Quoted", '<div class="row2"><input id="ld-qamt" type="number" step="0.01" value="' + (l.quoted_amount == null ? "" : l.quoted_amount) + '" placeholder="Amount"><input id="ld-qdate" type="date" value="' + esc(l.quoted_at || "") + '"></div>', "What you quoted, and the day you sent it.") +
+      '</div><div>' +
+      fld("Against what specification", '<textarea id="ld-spec" rows="2" placeholder="What the quote covers">' + esc(l.quote_spec || "") + '</textarea>', "The system, range or scope the price was built on.") +
+      '</div></div>' +
+      '<div>' + fld("Notes", '<textarea id="ld-notes" rows="4" placeholder="Everything worth remembering about this one">' + esc(l.notes || "") + '</textarea>', "The running record. Anything that does not fit a field above belongs here.") + '</div>' +
+
+      (id !== "new" ? '<div class="sub" style="margin-top:8px"><b>Create Tender</b> for a priced construction bid (cost build-up, margin, BOQ) that becomes a project with its budget when you mark it Won. <b>Create Quotation</b> for a simple priced offer of products or services.</div>' : '') +
+      contactsSection + photoSection + actSection + '</div>';
     var la = document.getElementById("ld-logact"); if (la) la.onclick = function () { openLeadActivity(id, l.partner_id); };
     document.querySelectorAll(".ld-actdone").forEach(function (b) { b.onclick = async function () { await sb.from("crm_activities").update({ done: true, done_at: new Date().toISOString() }).eq("id", b.dataset.id); toast("Marked done"); renderLeadForm(id); }; });
     document.querySelectorAll(".o-stages .st[data-stage]").forEach(function (x) { x.onclick = async function () { l.stage_id = x.dataset.stage; document.querySelectorAll(".o-stages .st").forEach(function (y) { y.classList.toggle("on", y === x); }); if (id !== "new") { await sb.from("crm_leads").update({ stage_id: l.stage_id }).eq("id", id); toast("Stage updated"); } }; });
     document.getElementById("ld-discard").onclick = function () { go("crm.pipe"); };
     custPickerAdd("ld-cust");
+    if (id !== "new") wireAttach("lead");
+    // the people on the lead: add, edit and remove as a small grid
+    var caddr = document.getElementById("ld-caddrow");
+    if (caddr) caddr.onclick = function () {
+      var tb = document.querySelector("#ld-ctab tbody");
+      var tr = document.createElement("tr");
+      tr.innerHTML = '<td><input class="lc-name"></td><td><input class="lc-role" list="ld-roles"></td>' +
+        '<td><input class="lc-phone"></td><td><input class="lc-email"></td>' +
+        '<td style="text-align:right"><button class="lnk lc-drop" style="color:var(--bad-t)">Remove</button></td>';
+      tb.appendChild(tr);
+      tr.querySelector(".lc-drop").onclick = function () { tr.remove(); };
+      tr.querySelector(".lc-name").focus();
+    };
+    document.querySelectorAll(".lc-del").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("Remove this person from the lead?")) return;
+        var r = await sb.from("crm_lead_contacts").delete().eq("id", b.dataset.id);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        toast("Removed"); renderLeadForm(id);
+      };
+    });
+    var csave = document.getElementById("ld-csave");
+    if (csave) csave.onclick = async function () {
+      var rows2 = [].map.call(document.querySelectorAll("#ld-ctab tbody tr"), function (tr, i) {
+        var g = function (c) { var e = tr.querySelector(c); return e ? e.value.trim() : ""; };
+        if (!tr.querySelector(".lc-name")) return null;
+        return { cid: tr.dataset.cid || null, name: g(".lc-name"), role: g(".lc-role"), phone: g(".lc-phone"), email: g(".lc-email"), sort: (i + 1) * 10 };
+      }).filter(function (x) { return x && x.name; });
+      for (var i = 0; i < rows2.length; i++) {
+        var x = rows2[i];
+        var body = { name: x.name, role: x.role || null, phone: x.phone || null, email: x.email || null, sort: x.sort, is_primary: i === 0 };
+        var rr;
+        if (x.cid) rr = await sb.from("crm_lead_contacts").update(body).eq("id", x.cid);
+        else { body.company_id = S.company.id; body.lead_id = id; rr = await sb.from("crm_lead_contacts").insert(body); }
+        if (rr.error) { toast("Could not save: " + errMsg(rr.error)); return; }
+      }
+      toast(rows2.length + " person(s) saved"); renderLeadForm(id);
+    };
     document.getElementById("ld-save").onclick = async function () {
       var name = gv("ld-name"); if (!name) { toast("Name required"); return; }
       var _cust = document.getElementById("ld-cust").value || null;
       if (!_cust && !gv("ld-contact") && !gv("ld-email") && !gv("ld-phone")) { toast("Add a customer or a contact name / email / phone so this opportunity can be followed up."); return; }
       var lph = collectPhone("ld-phone");
-      var row = { name: name, partner_id: _cust, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: lph.combined, phone_cc: lph.cc, phone_area: lph.area, phone_num: lph.num, expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: Math.max(0, Math.min(100, parseFloat(gv("ld-prob")) || 0)), source: gv("ld-src"), stage_id: l.stage_id };
+      var row = { name: name, partner_id: _cust, contact_name: gv("ld-contact"), email: gv("ld-email"), phone: lph.combined, phone_cc: lph.cc, phone_area: lph.area, phone_num: lph.num, expected_revenue: parseFloat(gv("ld-rev")) || 0, probability: Math.max(0, Math.min(100, parseFloat(gv("ld-prob")) || 0)), source: gv("ld-src"), stage_id: l.stage_id,
+        area: gv("ld-area") || null, map_url: gv("ld-map") || null,
+        qualification: gv("ld-qual") || null, site_stage: gv("ld-site") || null,
+        next_action: gv("ld-next") || null, next_action_owner: gv("ld-nextown") || null,
+        next_action_date: gv("ld-nextdate") || null,
+        docs_status: gv("ld-docs") || null,
+        quoted_amount: gv("ld-qamt") === "" ? null : (parseFloat(gv("ld-qamt")) || 0),
+        quoted_at: gv("ld-qdate") || null,
+        quote_spec: (document.getElementById("ld-spec").value || "").trim() || null,
+        notes: (document.getElementById("ld-notes").value || "").trim() || null };
+      if (row.quoted_amount != null && !l.quoted_currency) row.quoted_currency = S.company.currency_code;
       var r; if (id === "new") { row.company_id = S.company.id; row.is_active = true; r = await sb.from("crm_leads").insert(row); } else r = await sb.from("crm_leads").update(row).eq("id", id);
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       toast("Saved"); go("crm.pipe");
