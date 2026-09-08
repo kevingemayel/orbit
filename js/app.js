@@ -15142,10 +15142,11 @@
     document.getElementById("crm-new").onclick = function () { renderLeadForm("new"); };
     var stages = await ensureCrmStages();
     var leads = (await sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).eq("is_active", true).order("created_at", { ascending: false })).data || [];
+    await attachThumbs(leads, "lead");
     var byStage = {}; leads.forEach(function (l) { (byStage[l.stage_id] = byStage[l.stage_id] || []).push(l); });
     var cols = stages.map(function (s) {
       var ls = byStage[s.id] || [], amt = ls.reduce(function (a, l) { return a + Number(l.expected_revenue || 0); }, 0);
-      var cards = ls.map(function (l) { return '<div class="o-lead" data-id="' + l.id + '"><div class="t">' + esc(l.name) + '</div><div class="m">' + esc(l.partners ? l.partners.name : (l.contact_name || "")) + '</div><div class="rev">' + S.company.currency_code + ' ' + money(l.expected_revenue) + ' &middot; ' + Number(l.probability || 0) + '%</div></div>'; }).join("");
+      var cards = ls.map(function (l) { return '<div class="o-lead" data-id="' + l.id + '">' + (l._thumb ? '<div class="o-card-img"><img alt="" src="' + l._thumb + '"></div>' : "") + '<div class="t">' + esc(l.name) + '</div><div class="m">' + esc(l.partners ? l.partners.name : (l.contact_name || "")) + '</div><div class="rev">' + S.company.currency_code + ' ' + money(l.expected_revenue) + ' &middot; ' + Number(l.probability || 0) + '%</div></div>'; }).join("");
       return '<div class="o-pcol"><div class="hd"><span>' + esc(s.name) + '</span><span class="amt">' + ls.length + ' &middot; ' + S.company.currency_code + ' ' + money(amt) + '</span></div><div class="cards">' + (cards || '<div class="muted" style="font-size:12px;padding:6px">Empty</div>') + '</div></div>';
     }).join("");
     var totalPipe = leads.reduce(function (a, l) { return a + Number(l.expected_revenue || 0); }, 0);
@@ -15175,19 +15176,52 @@
       m.remove(); toast("Activity logged"); renderLeadForm(leadId);
     };
   }
+  // The canonical set, offered in the dropdown. Anything already on a record is
+  // kept whatever it says, because an import should never silently rewrite.
+  var CRM_QUALIFICATIONS = ["", "Interested", "Not contacted yet", "Not interested",
+    "Has another supplier, still interested", "Has another supplier, not interested", "On hold"];
   function cfgLeads() {
     return {
       title: "Leads", pageSize: 80, table: "crm_leads",
-      fetch: function () { return Promise.all([sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }), sb.from("crm_stages").select("id,name").eq("company_id", S.company.id)]).then(function (res) { var sm = {}; (res[1].data || []).forEach(function (s) { sm[s.id] = s.name; }); return (res[0].data || []).map(function (l) { l._stage = sm[l.stage_id]; return l; }); }); },
+      fetch: async function () {
+        var res = await Promise.all([
+          sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
+          sb.from("crm_stages").select("id,name").eq("company_id", S.company.id)
+        ]);
+        var sm = {}; (res[1].data || []).forEach(function (s) { sm[s.id] = s.name; });
+        // the stage dropdown for editing in place
+        if (L.cfg) L.cfg._stageOpts = [["", ""]].concat((res[1].data || []).map(function (s) { return [s.id, s.name]; }));
+        var rows = (res[0].data || []).map(function (l) { l._stage = sm[l.stage_id]; return l; });
+        // a site photo is the fastest way to recognise a lead, so it comes
+        // along for the table, the board and the gallery
+        await attachThumbs(rows, "lead");
+        return rows;
+      },
+      thumb: true,
+      kanbanCard: function (l) {
+        return (l._thumb ? '<div class="o-card-img"><img alt="" src="' + l._thumb + '"></div>' : "") +
+          '<div class="t">' + esc(l.name) + '</div>' +
+          '<div class="muted">' + esc([l.area, l.contact_name].filter(Boolean).join(" &middot; ")) + '</div>' +
+          '<div class="r">' + (l.qualification ? '<span>' + esc(l.qualification) + '</span>' : '<span></span>') +
+          (l.quoted_amount != null ? '<b>' + money(l.quoted_amount) + '</b>' : (l.site_stage ? '<span>' + esc(l.site_stage) + '</span>' : "")) + '</div>';
+      },
       searchText: function (l) { return (l.name || "") + " " + (l.contact_name || "") + " " + (l.partners ? l.partners.name : "") + " " + (l.area || "") + " " + (l.notes || "") + " " + (l.next_action || ""); },
+      // Every column below is editable in place: click the cell, type, Enter.
+      // Which columns show, and how wide, is under the Columns button and by
+      // dragging a column edge; both stick per screen.
       columns: [
-        { label: "Opportunity", get: function (l) { return '<b>' + esc(l.name) + '</b>' + (l.next_action ? '<div class="muted" style="font-size:11px">Next: ' + esc(l.next_action) + (l.next_action_owner ? " (" + esc(l.next_action_owner) + ")" : "") + '</div>' : ""); } },
-        { label: "Area", get: function (l) { return esc(l.area || ""); } },
-        { label: "Contact", get: function (l) { return esc(l.partners ? l.partners.name : (l.contact_name || "")); } },
-        { label: "How they stand", get: function (l) { return l.qualification ? '<span class="badge ' + (/^interested/i.test(l.qualification) ? "paid" : /not interested/i.test(l.qualification) ? "unpaid" : "draft") + '">' + esc(l.qualification) + '</span>' : ""; } },
-        { label: "Their stage", get: function (l) { return esc(l.site_stage || ""); } },
-        { label: "Stage", get: function (l) { return '<span class="badge">' + esc(l._stage || "") + '</span>'; } },
-        { label: "Quoted", num: true, get: function (l) { return l.quoted_amount == null ? "" : money(l.quoted_amount); } }
+        { label: "Opportunity", edit: { field: "name", type: "text" }, get: function (l) { return '<b>' + esc(l.name) + '</b>' + (l.next_action ? '<div class="muted" style="font-size:11px">Next: ' + esc(l.next_action) + (l.next_action_owner ? " (" + esc(l.next_action_owner) + ")" : "") + '</div>' : ""); } },
+        { label: "Area", edit: { field: "area", type: "text" }, get: function (l) { return esc(l.area || ""); } },
+        { label: "Contact", edit: { field: "contact_name", type: "text" }, get: function (l) { return esc(l.partners ? l.partners.name : (l.contact_name || "")); } },
+        { label: "Phone", edit: { field: "phone", type: "text" }, get: function (l) { return esc(l.phone || ""); } },
+        { label: "How they stand", edit: { field: "qualification", type: "select", options: CRM_QUALIFICATIONS }, get: function (l) { return l.qualification ? '<span class="badge ' + (/^interested/i.test(l.qualification) ? "paid" : /not interested/i.test(l.qualification) ? "unpaid" : "draft") + '">' + esc(l.qualification) + '</span>' : ""; } },
+        { label: "Their stage", edit: { field: "site_stage", type: "text" }, get: function (l) { return esc(l.site_stage || ""); } },
+        { label: "Stage", edit: { field: "stage_id", type: "select", options: function () { return (L.cfg && L.cfg._stageOpts) || []; } }, get: function (l) { return '<span class="badge">' + esc(l._stage || "") + '</span>'; } },
+        { label: "Next action", edit: { field: "next_action", type: "text" }, get: function (l) { return esc(l.next_action || ""); } },
+        { label: "Owner", edit: { field: "next_action_owner", type: "text" }, get: function (l) { return esc(l.next_action_owner || ""); } },
+        { label: "By when", edit: { field: "next_action_date", type: "date" }, get: function (l) { return esc(l.next_action_date || ""); } },
+        { label: "Quoted", num: true, edit: { field: "quoted_amount", type: "number" }, get: function (l) { return l.quoted_amount == null ? "" : money(l.quoted_amount); } },
+        { label: "Map", cls: "thumbcol", get: function (l) { return l.map_url ? '<a class="lnk" href="' + esc(l.map_url) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()">Map</a>' : ""; } }
       ],
       filters: [
         { label: "Open", test: function (l) { return l.is_active !== false; } },
