@@ -682,6 +682,17 @@
     ] },
     { key: "kitchen", title: "Kitchen (food and drink)", articles: [
       { t: "What this app is for", h: "<p><b>Kitchen</b> is the whole food and drink operation in one place: the menu and what it really costs, the stock behind it, the stores it is served in, the guests who buy it, the platforms that deliver it, and the franchisees who run it under your name.</p><p>It is one app with ten sections rather than ten apps, because nobody running a coffee shop thinks of the roastery and the loyalty scheme as separate products. They are rooms in the same building.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menu</span><span class=\"man-chip\">{{ico:scale}} Stock control</span><span class=\"man-chip\">{{ico:building}} Estate</span><span class=\"man-chip\">{{ico:clipboardCheck}} Operations</span><span class=\"man-chip\">{{ico:shield}} Loss prevention</span><span class=\"man-chip\">{{ico:box}} Roastery</span><span class=\"man-chip\">{{ico:heart}} Guests</span><span class=\"man-chip\">{{ico:truck}} Delivery</span><span class=\"man-chip\">{{ico:people}} Franchise</span><span class=\"man-chip\">{{ico:clock}} Planning</span></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:layers}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing here is a separate system</div><p>Items, recipes, suppliers, stock, staff, customers and the ledger are the same records the rest of Orbit uses. A coffee bean is one product whether you buy it green, roast it, sell it by the bag or brew it, which is why the cost follows it all the way through.</p></div></div><p>A single site will use the first two sections and ignore the rest. Turn to Estate when you open a second shop, to Franchise when someone else opens one for you.</p>" },
+      { t: "During service: the floor", h: "<p><b>Service &rsaquo; Floor</b> is the screen a waiter holds. It opens on the floor plan rather than a product list, because during service the question is never &ldquo;what do we sell&rdquo;, it is &ldquo;what does table six need&rdquo;.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Tables are grouped by <b>zone</b> and coloured by state: free, seated, ordered, bill, needs clearing. Each one shows what it is carrying so far and how long the party has been sitting.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Tap a table to open its pad. If the table already has an order you carry on adding to it; there is no separate step to start one.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">Tap items to add them. An item with a <b>required</b> modifier group asks the question before the line is accepted, so nothing reaches the kitchen half-specified.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Send to kitchen</span> fires only the new lines. Anything already sent is greyed and can no longer be deleted from the pad.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:clock}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The pad only shows what is actually on right now</div><p>It is filtered by the <b>live menu</b>, so a breakfast item disappears at 11:30 on its own, and by the <b>86 list</b>, so anything marked off at that store is not there to be ordered. A waiter cannot sell what the kitchen cannot make.</p></div></div><div class=\"man-cal warn\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Allergies</div><p><b>Note / allergy</b> puts a red banner on the kitchen ticket. Write the <b>allergy</b>, not the dish: &ldquo;nut allergy&rdquo;, not &ldquo;no pesto&rdquo;. The kitchen needs to know what would harm the guest, not what you left off.</p></div></div>" },
+      { t: "During service: the kitchen display", h: "<p><b>Service &rsaquo; Kitchen display</b> is the screen on the wall. Tickets appear the moment the floor sends them, oldest first, and every one carries a clock.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:check}} Green, then amber</div><p>A ticket is green until it reaches 70% of its target, then amber. The target is the item&rsquo;s own prep time if you set one, otherwise a sensible default for its station.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:alert}} Red</div><p>Past target. The clock turns red and the card is outlined, so a late ticket is visible from across the kitchen rather than needing to be read.</p></div></div><p>Tap an item to mark it ready; tap it again if you were wrong. <span class=\"man-key\">Bump ticket</span> clears the whole card and stamps the serving time.</p><p><b>All day</b> along the top totals every outstanding item across every ticket, which is how a section knows to put six flat whites on at once instead of one at a time.</p><p><b>Station</b> filters the board, so the barista screen shows drinks and the pass shows food. <b>Full screen</b> removes everything else.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:refresh}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Why it refreshes rather than pushes</div><p>The board re-reads every fifteen seconds and the clocks tick every second. A screen that silently stops updating is far worse in a kitchen than one a few seconds behind, and polling recovers on its own when the wifi drops.</p></div></div>" },
+      { t: "Service times: the number a kitchen is judged on", h: "<p><b>Service &rsaquo; Service times</b> measures from the moment a ticket is sent to the moment it is bumped, for every completed ticket.</p><p>It shows the median, the average and the <b>90th percentile</b>. Watch the last one. The average hides the disasters; the 90th percentile is the experience of the unluckiest one guest in ten, and that is the guest who does not come back.</p><p>Underneath, the slowest fifteen tickets with their times, so a bad night can be looked at rather than argued about.</p>" },
+      { t: "Stock control: where the money actually leaks", h: "<p>Food cost is not lost in big obvious events. It leaks: a heavy hand on the milk, a bin nobody logged, a transfer that arrived two short.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:scale}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Cost variance is the report this whole app exists to produce</div><p>It takes what you actually sold, works backwards through every recipe (including recipes inside recipes, with their waste and yield) and says what you <b>should</b> have used. Beside it sits what you recorded as waste. Whatever is left over after both is over-portioning, giveaway or theft.</p></div></div><ul><li><b>Waste log</b> records every bin trip with a reason. Reasons are split into controllable (spoilage, breakage) and not (staff meals, training), because only the first kind is worth chasing.</li><li><b>Stock counts</b> are <b>blind</b> by default: the counter cannot see what the system expects, so the number is what is actually on the shelf rather than what someone assumed.</li><li><b>Transfers</b> record dispatch and receipt separately. The difference between the two is the point; a transfer that just moves a number hides the loss.</li><li><b>Availability (86)</b> takes an item off at one store, and it vanishes from the order pad there immediately.</li></ul>" },
+      { t: "Estate: more than one place", h: "<p>A <b>store</b> is a trading location: an outlet, a kiosk, a central kitchen, a roastery. Every sale, shift, stock movement and count can be stamped with one, which is what makes store-by-store reporting possible at all.</p><p>The <b>ownership</b> field is not decoration. COCO means you own and run it; FOFO means a franchisee does both; FOCO means they own it and you run it; managed means you run it under contract. That single choice decides whether royalty applies and how the store consolidates into the group.</p><p>Set the <b>target food cost</b> and <b>target labour</b> percentages here and the prime cost reporting has something to measure against.</p><p><b>Tables</b> are the floor plan the service screen draws. <b>Licences and documents</b> holds anything with an expiry date that would close the store if it lapsed.</p>" },
+      { t: "Operations: proving it was done", h: "<p>Checklists exist so that a thing done at 6am can be shown to have been done, months later, by someone who was not there.</p><ul><li>A <b>template</b> is built once and every store runs the same one. Items can be a tick, a number, a temperature, a note or a photo.</li><li>A <b>temperature</b> item carries a safe range. A reading outside it is recorded as a <b>breach</b> and asks for a corrective action, which is exactly what a food safety inspector wants to see.</li><li><b>Equipment</b> and <b>Maintenance</b> keep the machines honest: backflush, descale, filter change, annual service, with overdue visible at a glance.</li><li><b>Store audits</b> score a visit and turn each finding into an <b>action</b> with an owner and a date. The audit is not the point; the action list is.</li></ul>" },
+      { t: "Loss prevention: reason codes first", h: "<p>The <b>exception report</b> ranks voids, discounts, refunds and no-sales by who rang them, against the average for the period.</p><div class=\"man-cal warn\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">This only works if reason codes are compulsory</div><p>Set them up under <b>Reason codes</b> and require a manager where it matters. Without a reason on every void the report has nothing to rank, and you are left guessing.</p></div></div><p>Being top of the list once is nothing. Being top of it every week, well above the average, is a conversation. The report puts the outlier in front of a manager; it does not accuse anyone of anything.</p>" },
+      { t: "Roastery: green in, roasted out", h: "<p>If you roast, the chain runs green lot to roast batch to bag, and the cost follows it the whole way.</p><ul><li>A <b>green lot</b> carries origin, farm, process, harvest, moisture and cupping score, plus what is left of it.</li><li>A <b>roast batch</b> records green kilos in and roasted kilos out. <b>Roast loss</b> is calculated, never typed, and a batch that drifts outside 10 to 20 per cent is flagged.</li><li><b>Grinder dial-in</b> logs dose, yield and time. The ratio is worked out for you, and a drifting ratio is usually the first sign of a problem with the grinder or the beans, well before anyone complains.</li></ul>" },
+      { t: "Guests: money you hold is not money you earned", h: "<p><b>Loyalty</b> can be points, a stamp card or spend tiers. Start with a stamp card; it is the one a barista can explain in four seconds.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:coin}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">A loaded gift card is a liability</div><p>When someone buys a 50 gift card you have not earned 50, you owe 50 of coffee. It sits on the balance sheet as a liability and becomes revenue only as it is spent. Unspent balance that expires is recognised separately, as breakage. Each card names the accounts it posts to so this happens correctly rather than being remembered at year end.</p></div></div><p><b>Subscriptions</b> cover the unlimited pass and the bean box. Put a <b>daily limit</b> on a pass or one enthusiastic customer will drink the margin of ten.</p>" },
+      { t: "Delivery: check what the platform actually paid", h: "<p>Aggregators are a channel with a large, variable deduction, and the deduction is not always the one in the contract.</p><p>Record the commission on the <b>account</b>. Each order carries what you expected to keep. When the statement arrives, enter it as a <b>payout</b> and Orbit shows the <b>difference</b> between what they said they would pay and what they paid. Anything unexplained becomes a <b>dispute</b> you can actually evidence.</p><p>For your own riders, cash collected is tracked separately until it is settled, because that is where it goes missing.</p>" },
+      { t: "Franchise: the module a franchisor buys", h: "<p>Everything else here helps you run shops. This section is for when other people run them under your name.</p><ul><li>A <b>franchisee</b> holds an agreement over a territory with a renewal date.</li><li>A <b>royalty scheme</b> can be a percentage, a flat fee, a sliding scale, or a percentage with a floor. The calculation lives in one place, so the invoice and the statement can never disagree.</li><li><b>Reported sales</b> is what royalty is charged on. A <b>missing period</b> is the under-reporting signal worth chasing, which is why the list shows what was submitted rather than only what was calculated.</li><li><b>Royalty run</b> turns reported sales into royalty and marketing charges and shows its working. A row still marked unverified is provisional.</li><li><b>Development pipeline</b> runs lead to open door with a stage gate at each step. Most franchise systems lose applicants in the middle of that list because nobody owns it.</li></ul>" },
       { t: "Channels: the same item, different prices", h: "<p>A latte sold at the counter, through a delivery app and to an office account is the same drink at three different prices. A <b>channel</b> is each of those routes.</p><p>Each channel carries two numbers. <b>Markup</b> is what you add to the base price on that channel to absorb its cut. <b>Commission</b> is what the channel actually takes. Keeping them apart means you can later compare what you expected to keep against what the aggregator actually paid you.</p>" },
       { t: "Prices are dated, never overwritten", h: "<p>Changing a price does not edit the old one. It writes a new price that <b>starts on a date</b>, and closes the previous one the day before. Nothing overlaps, and a report for last March still shows last March&rsquo;s prices.</p><p>Open <b>Price list</b> and click any figure. Before you commit, type the new price and the panel tells you the margin it gives you, and what is left after that channel&rsquo;s commission.</p>" },
       { t: "Modifiers: choices that change the cost, not just the price", h: "<p>A <b>modifier group</b> is a question: milk, size, shots. Each choice can do three things, and the third is the one most systems miss.</p><ol><li>Change the <b>price</b> the customer pays.</li><li>Change the <b>cost</b> to you.</li><li><b>Consume a different ingredient</b>. Set &ldquo;Consumes&rdquo; to oat milk and &ldquo;Instead of&rdquo; to dairy, and both the plate cost and the stock movement follow what the customer actually chose.</li></ol><p>Set whether the group is required, and how many choices are allowed. Orbit refuses a group where the maximum is below the minimum.</p>" },
@@ -1095,6 +1106,9 @@
       { i: "box", n: "Materials & Remnants", l: "Costs", d: "Made-to-size material for a job, including usable offcuts." }
     ] },
     kitchen: { intro: "Every screen in the <b>Kitchen</b> app, grouped the way the menu groups them:", list: [
+      { i: "grid", n: "Floor", l: "Service", d: "The floor plan: tap a table, take the order, send it to the kitchen." },
+      { i: "clock", n: "Kitchen display", l: "Service", d: "Tickets on a wall screen with a live clock, colouring as they approach their target." },
+      { i: "gauge", n: "Service times", l: "Service", d: "How long from sending a ticket to bumping it, including the 90th percentile." },
       { i: "list", n: "Menus", l: "Menu", d: "What is offered, on which channel, at which hours." },
       { i: "layers", n: "Modifiers", l: "Menu", d: "Choices that change price, cost and what is consumed." },
       { i: "cart", n: "Channels", l: "Menu", d: "Dine-in, delivery, aggregator, wholesale, each with its own prices." },
@@ -1411,8 +1425,9 @@
     // actually divides on a shift.
     // ---------------------------------------------------------------------
     kitchen: {
-      name: "Kitchen", icon: "🍽", color: "#b45309", color2: "#92400e", home: "menu.list",
+      name: "Kitchen", icon: "🍽", color: "#b45309", color2: "#92400e", home: "kitchen.floor",
       menus: [
+        { label: "Service", items: [["Floor", "kitchen.floor"], ["Kitchen display", "kitchen.kds"], ["Service times", "kitchen.times"]] },
         { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
         { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
@@ -1558,7 +1573,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -3178,6 +3193,9 @@
       case "fr.suppliers": return renderList(cfgApprovedSuppliers());
       case "hr.labour": return renderList(cfgLabourStandards());
       case "hr.forecast": return renderList(cfgForecasts());
+      case "kitchen.floor": return renderFloor();
+      case "kitchen.kds": return renderKDS();
+      case "kitchen.times": return renderServiceTimes();
       case "menu.list": return renderList(cfgMenus());
       case "menu.modgroups": return renderList(cfgModifierGroups());
       case "menu.channels": return renderList(cfgChannels());
@@ -17688,6 +17706,411 @@
       fields: [{ k: "name", l: "Name", t: "text", req: true }, { k: "level", l: "Level", t: "text" },
         { k: "duration_hours", l: "Hours", t: "num" }, { k: "price", l: "Price", t: "num" },
         { k: "is_public", l: "Sold to the public", t: "check", def: true }, { k: "is_active", l: "Active", t: "check", def: true }] });
+  }
+
+  // ===========================================================================
+  // SERVICE: the two screens that are actually open during trading hours.
+  //
+  //   Floor    a waiter or floor manager on a tablet. Tables first, not
+  //            products first: tap a table, see what it has already had, add to
+  //            it, fire it to the kitchen.
+  //   Kitchen  a screen on the wall. Tickets oldest first, a live clock on each,
+  //            colour changing as it approaches and passes its target, and one
+  //            tap to bump a line or a whole ticket.
+  //
+  // Both poll rather than hold a socket, because a kitchen screen that silently
+  // stops updating is worse than one that is a few seconds behind, and polling
+  // recovers by itself from a dropped connection.
+  // ===========================================================================
+  var SERVICE = { store: null, tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false };
+  var STATION_DEFAULT_MIN = { barista: 3, bar: 3, kitchen: 8, pastry: 5 };
+
+  function svcMins(fromIso) {
+    if (!fromIso) return 0;
+    return Math.max(0, Math.floor((Date.now() - new Date(fromIso).getTime()) / 60000));
+  }
+  function svcClock(fromIso) {
+    if (!fromIso) return "";
+    var s = Math.max(0, Math.floor((Date.now() - new Date(fromIso).getTime()) / 1000));
+    return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
+  }
+  // Target for a line: the item's own prep time, else the station's default.
+  function svcTarget(line) {
+    if (line.prep_minutes) return Number(line.prep_minutes);
+    return STATION_DEFAULT_MIN[line.station || ""] || 6;
+  }
+  function svcHeat(mins, target) {
+    if (mins >= target) return "late";
+    if (mins >= target * 0.7) return "soon";
+    return "ok";
+  }
+  function svcStopTimer() { if (SERVICE.timer) { clearInterval(SERVICE.timer); SERVICE.timer = null; } }
+
+  // --------------------------------------------------------------------------
+  // FLOOR
+  // --------------------------------------------------------------------------
+  async function renderFloor() {
+    svcStopTimer();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Floor") + '<div class="gap"></div><span id="fl-store"></span></div><div class="o-body" id="o-body"><div class="o-empty">Loading the floor...</div></div></div>';
+    wireBc();
+    var stores = (await fnbCo("stores", "id,name").eq("is_active", true).order("name")).data || [];
+    if (!SERVICE.store && stores.length) SERVICE.store = stores[0].id;
+    document.getElementById("fl-store").innerHTML = stores.length > 1
+      ? '<select id="fl-storepick" class="o-filtbtn">' + stores.map(function (s) { return '<option value="' + s.id + '"' + (SERVICE.store === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select>' : "";
+    var sp = document.getElementById("fl-storepick");
+    if (sp) sp.onchange = function () { SERVICE.store = this.value; renderFloor(); };
+    await paintFloor();
+    SERVICE.timer = setInterval(function () {
+      if (!document.getElementById("fl-map")) { svcStopTimer(); return; }
+      document.querySelectorAll("[data-since]").forEach(function (el) { el.textContent = svcMins(el.dataset.since) + "m"; });
+    }, 20000);
+  }
+  async function paintFloor() {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var q = fnbCo("store_tables", "*").eq("is_active", true);
+    if (SERVICE.store) q = q.eq("store_id", SERVICE.store);
+    var tables = (await q.order("sort")).data || [];
+    SERVICE.tables = tables;
+    // open orders, so a table shows what it is already carrying
+    var oq = fnbCo("pos_orders", "id,table_id,total,created_at,fired_at,status,guest_count,guest_name").in("status", ["open", "draft", "fired"]);
+    if (SERVICE.store) oq = oq.eq("store_id", SERVICE.store);
+    var orders = (await oq).data || [];
+    var byTable = {}; orders.forEach(function (o) { if (o.table_id) byTable[o.table_id] = o; });
+    if (!tables.length) {
+      body.innerHTML = '<div class="man-wrap"><div class="o-empty">No tables set up for this store yet. Add them under <b>Kitchen &rsaquo; Estate &rsaquo; Tables</b>, giving each a name and a zone. This screen then becomes your floor plan.</div></div>';
+      return;
+    }
+    var zones = {};
+    tables.forEach(function (t) { (zones[t.zone || "Floor"] = zones[t.zone || "Floor"] || []).push(t); });
+    body.innerHTML = '<div class="fl-wrap">' +
+      '<div class="fl-legend"><span class="fl-key free">Free</span><span class="fl-key seated">Seated</span><span class="fl-key ordered">Ordered</span><span class="fl-key bill">Bill</span><span class="fl-key dirty">Needs clearing</span></div>' +
+      Object.keys(zones).map(function (z) {
+        return '<div class="fl-zone"><div class="fl-zone-h">' + esc(z) + '</div><div class="fl-map" id="fl-map">' +
+          zones[z].map(function (t) {
+            var o = byTable[t.id];
+            var st = o ? (o.fired_at ? "ordered" : "seated") : (t.status || "free");
+            var since = o ? o.created_at : t.seated_at;
+            return '<button class="fl-t ' + esc(st) + '" data-t="' + t.id + '">' +
+              '<span class="fl-t-n">' + esc(t.name) + '</span>' +
+              (t.seats ? '<span class="fl-t-s">' + t.seats + ' seats</span>' : "") +
+              (o ? '<span class="fl-t-tot">' + money(o.total || 0) + '</span>' : "") +
+              (since ? '<span class="fl-t-min" data-since="' + esc(since) + '">' + svcMins(since) + 'm</span>' : "") +
+              '</button>';
+          }).join("") + '</div></div>';
+      }).join("") + '</div>';
+    body.querySelectorAll(".fl-t").forEach(function (b) {
+      b.onclick = function () { openTableOrder(b.dataset.t); };
+    });
+  }
+
+  // The order pad. Opened from a table, so it always knows where it belongs.
+  async function openTableOrder(tableId) {
+    svcStopTimer();
+    var t = SERVICE.tables.filter(function (x) { return x.id === tableId; })[0] || {};
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(t.name || "Table", { action: "kitchen.floor", title: "Floor" }) + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    wireBc();
+    // an open order for this table, or a new one
+    var ord = (await fnbCo("pos_orders", "*").eq("table_id", tableId).in("status", ["open", "draft", "fired"]).order("created_at", { ascending: false }).limit(1)).data || [];
+    SERVICE.order = ord[0] || null;
+    SERVICE.lines = SERVICE.order ? ((await sb.from("pos_order_lines").select("*").eq("order_id", SERVICE.order.id).order("seq")).data || []) : [];
+    // only what is actually on a live menu right now, which is what day-parting is for
+    var menus = (await fnbCo("menus", "id,name,days_of_week,start_time,end_time,valid_from,valid_to,is_active,channel_id")).data || [];
+    var live = menus.filter(menuLiveNow);
+    var allowed = null;
+    if (live.length) {
+      var mi = (await sb.from("menu_items").select("product_id").in("menu_id", live.map(function (m) { return m.id; })).eq("is_available", true)).data || [];
+      if (mi.length) { allowed = {}; mi.forEach(function (x) { allowed[x.product_id] = 1; }); }
+    }
+    var prods = (await fnbCo("products", "id,name,list_price,station,prep_minutes,category_id").eq("is_active", true).eq("is_sellable", true).order("name").limit(500)).data || [];
+    if (allowed) prods = prods.filter(function (p) { return allowed[p.id]; });
+    // 86'd items disappear from the pad rather than being ordered and refused
+    var off = (await fnbCo("store_item_availability", "product_id,is_available").eq("store_id", SERVICE.store || t.store_id)).data || [];
+    var offMap = {}; off.forEach(function (x) { if (!x.is_available) offMap[x.product_id] = 1; });
+    prods = prods.filter(function (p) { return !offMap[p.id]; });
+    SERVICE.products = prods;
+    SERVICE.modGroups = (await fnbCo("modifier_groups", "*, modifiers(*)").eq("is_active", true).order("sort")).data || [];
+    var pmg = (await fnbCo("product_modifier_groups", "*")).data || [];
+    SERVICE.pmg = {}; pmg.forEach(function (x) { (SERVICE.pmg[x.product_id] = SERVICE.pmg[x.product_id] || []).push(x); });
+    paintOrderPad(t);
+  }
+  function paintOrderPad(t) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var o = SERVICE.order;
+    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
+    body.innerHTML = '<div class="op-wrap">' +
+      '<div class="op-left">' +
+      '<input id="op-search" placeholder="Search the menu..." autocomplete="off">' +
+      '<div class="op-grid" id="op-grid"></div>' +
+      '</div>' +
+      '<div class="op-right">' +
+      '<div class="op-head"><b>' + esc(t.name || "Table") + '</b>' +
+      '<span class="muted">' + (o ? (o.fired_at ? "sent " + svcMins(o.fired_at) + "m ago" : "not sent yet") : "new order") + '</span></div>' +
+      '<div class="op-lines" id="op-lines"></div>' +
+      '<div class="op-foot">' +
+      '<div class="op-tot"><span>Total</span><b id="op-total">' + money(SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0)) + '</b></div>' +
+      '<button class="btn" id="op-note">Note / allergy</button>' +
+      '<button class="btn pri" id="op-send"' + (unsent.length ? "" : " disabled") + '>Send to kitchen' + (unsent.length ? " (" + unsent.length + ")" : "") + '</button>' +
+      '</div></div></div>';
+    function grid(q) {
+      q = (q || "").toLowerCase();
+      var list = SERVICE.products.filter(function (p) { return !q || (p.name || "").toLowerCase().indexOf(q) >= 0; }).slice(0, 150);
+      document.getElementById("op-grid").innerHTML = list.length
+        ? list.map(function (p) { return '<button class="op-tile" data-p="' + p.id + '"><span class="op-tile-n">' + esc(p.name) + '</span><span class="op-tile-p">' + money(p.list_price || 0) + '</span></button>'; }).join("")
+        : '<div class="o-empty">Nothing matches. If an item is missing it may be off the current menu or marked 86.</div>';
+      document.querySelectorAll("#op-grid .op-tile").forEach(function (b) { b.onclick = function () { addToOrder(b.dataset.p, t); }; });
+    }
+    grid("");
+    document.getElementById("op-search").oninput = function () { grid(this.value); };
+    paintOrderLines();
+    document.getElementById("op-send").onclick = function () { fireOrder(t); };
+    document.getElementById("op-note").onclick = function () { orderNote(); };
+  }
+  function paintOrderLines() {
+    var el = document.getElementById("op-lines"); if (!el) return;
+    if (!SERVICE.lines.length) { el.innerHTML = '<div class="o-empty">Nothing on this table yet.</div>'; return; }
+    el.innerHTML = SERVICE.lines.map(function (l, i) {
+      var sent = l.kds_status !== "new";
+      return '<div class="op-line' + (sent ? " sent" : "") + '">' +
+        '<span class="op-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
+        '<span class="op-nm">' + esc(l.name || "") + (l.modifier_note ? '<span class="op-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span>' +
+        '<span class="op-amt">' + money(l.line_total || 0) + '</span>' +
+        (sent ? '<span class="op-sent" title="already with the kitchen">sent</span>' : '<button class="op-x" data-i="' + i + '">&times;</button>') +
+        '</div>';
+    }).join("");
+    el.querySelectorAll(".op-x").forEach(function (b) {
+      b.onclick = async function () {
+        var l = SERVICE.lines[+b.dataset.i];
+        if (l.id) await sb.from("pos_order_lines").delete().eq("id", l.id);
+        SERVICE.lines.splice(+b.dataset.i, 1);
+        await recalcOrder(); paintOrderLines(); refreshTotals();
+      };
+    });
+  }
+  function refreshTotals() {
+    var tot = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+    var el = document.getElementById("op-total"); if (el) el.textContent = money(tot);
+    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; }).length;
+    var sb2 = document.getElementById("op-send");
+    if (sb2) { sb2.disabled = !unsent; sb2.textContent = "Send to kitchen" + (unsent ? " (" + unsent + ")" : ""); }
+  }
+  async function addToOrder(pid, t) {
+    var p = SERVICE.products.filter(function (x) { return x.id === pid; })[0]; if (!p) return;
+    var groups = (SERVICE.pmg[pid] || []).map(function (g) { return SERVICE.modGroups.filter(function (m) { return m.id === g.group_id; })[0]; }).filter(Boolean);
+    if (groups.length) { openModifierPrompt(p, groups, t); return; }
+    await commitLine(p, [], "", t);
+  }
+  // A required modifier group blocks the line until it is answered, which is the
+  // whole point of marking one required.
+  function openModifierPrompt(p, groups, t) {
+    var inner = groups.map(function (g) {
+      var multi = (g.max_select || 1) > 1;
+      return '<div class="mp-g"><div class="mp-h">' + esc(g.name) + (g.is_required ? ' <span class="badge unpaid">choose</span>' : ' <span class="muted">optional</span>') + '</div>' +
+        '<div class="mp-opts">' + (g.modifiers || []).filter(function (m) { return m.is_active !== false; }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0); }).map(function (m) {
+          return '<label class="mp-o"><input type="' + (multi ? "checkbox" : "radio") + '" name="g' + g.id + '" class="mp-c" data-g="' + g.id + '" value="' + m.id + '"' + (m.is_default ? " checked" : "") + '> ' +
+            esc(m.name) + (Number(m.price_delta) ? ' <span class="muted">' + (Number(m.price_delta) > 0 ? "+" : "") + money(m.price_delta) + '</span>' : "") + '</label>';
+        }).join("") + '</div></div>';
+    }).join("");
+    var m = plotModal(p.name, inner, async function () {
+      var picked = [], names = [], extra = 0, missing = null;
+      groups.forEach(function (g) {
+        var chosen = [].filter.call(document.querySelectorAll('.mp-c[data-g="' + g.id + '"]'), function (c) { return c.checked; });
+        if (g.is_required && chosen.length < Math.max(1, g.min_select || 1)) { missing = missing || g.name; return; }
+        if ((g.max_select || 1) && chosen.length > (g.max_select || 1)) { missing = missing || (g.name + " allows at most " + g.max_select); return; }
+        chosen.forEach(function (c) {
+          var mod = (g.modifiers || []).filter(function (x) { return x.id === c.value; })[0];
+          if (!mod) return;
+          picked.push(mod.id); names.push(mod.name); extra += Number(mod.price_delta || 0);
+        });
+      });
+      if (missing) { toast("Choose " + missing); return; }
+      m.remove();
+      await commitLine(p, picked, names.join(", "), t, extra);
+    });
+  }
+  async function commitLine(p, modIds, modNote, t, extra) {
+    var price = Number(p.list_price || 0) + Number(extra || 0);
+    if (!SERVICE.order) {
+      var n = "T" + Date.now().toString().slice(-6);
+      var ins = await sb.from("pos_orders").insert({
+        company_id: S.company.id, store_id: SERVICE.store || t.store_id || null, table_id: t.id,
+        order_type: "dine_in", status: "open", number: n, subtotal: 0, tax: 0, total: 0,
+        server_name: (S.user && S.user.email) || null, guest_count: t.guest_count || null
+      }).select("*").single();
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      SERVICE.order = ins.data;
+      await sb.from("store_tables").update({ status: "seated", seated_at: new Date().toISOString(), current_order_id: ins.data.id }).eq("id", t.id);
+    }
+    var line = {
+      company_id: S.company.id, order_id: SERVICE.order.id, product_id: p.id, name: p.name,
+      qty: 1, unit_price: price, line_total: price, seq: SERVICE.lines.length + 1,
+      modifier_ids: modIds || [], modifier_note: modNote || null,
+      station: p.station || null, kds_status: "new"
+    };
+    var li = await sb.from("pos_order_lines").insert(line).select("*").single();
+    if (li.error) { toast(errMsg(li.error)); return; }
+    SERVICE.lines.push(li.data);
+    await recalcOrder(); paintOrderLines(); refreshTotals();
+  }
+  async function recalcOrder() {
+    if (!SERVICE.order) return;
+    var tot = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+    await sb.from("pos_orders").update({ subtotal: tot, total: tot }).eq("id", SERVICE.order.id);
+    SERVICE.order.total = tot;
+  }
+  async function fireOrder(t) {
+    if (!SERVICE.order) return;
+    var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
+    if (!unsent.length) { toast("Nothing new to send"); return; }
+    var now = new Date().toISOString();
+    var r = await sb.from("pos_order_lines").update({ kds_status: "fired", fired_at: now }).eq("order_id", SERVICE.order.id).eq("kds_status", "new");
+    if (r.error) { toast(errMsg(r.error)); return; }
+    await sb.from("pos_orders").update({ fired_at: SERVICE.order.fired_at || now, status: "open" }).eq("id", SERVICE.order.id);
+    await sb.from("store_tables").update({ status: "ordered" }).eq("id", t.id);
+    SERVICE.order.fired_at = SERVICE.order.fired_at || now;
+    SERVICE.lines.forEach(function (l) { if (l.kds_status === "new") { l.kds_status = "fired"; l.fired_at = now; } });
+    toast(unsent.length + " item(s) sent to the kitchen");
+    paintOrderPad(t);
+  }
+  function orderNote() {
+    if (!SERVICE.order) { toast("Add something to the table first"); return; }
+    var inner = '<div><label>Guest name</label><input id="on-name" value="' + esc(SERVICE.order.guest_name || "") + '"></div>' +
+      '<div><label>Covers</label><input id="on-cov" type="number" value="' + (SERVICE.order.guest_count || "") + '"></div>' +
+      '<div><label>Allergy or note</label><textarea id="on-note" rows="2">' + esc(SERVICE.order.allergy_note || "") + '</textarea></div>' +
+      '<div class="o-note warn">An allergy note is printed on the kitchen ticket in red. Write the allergy, not the dish.</div>';
+    var m = plotModal("Table note", inner, async function () {
+      var row = { guest_name: gv("on-name") || null, guest_count: parseInt(gv("on-cov"), 10) || null, allergy_note: (document.getElementById("on-note").value || "").trim() || null };
+      var r = await sb.from("pos_orders").update(row).eq("id", SERVICE.order.id);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      Object.assign(SERVICE.order, row); m.remove(); toast("Saved");
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // KITCHEN DISPLAY
+  // --------------------------------------------------------------------------
+  async function renderKDS() {
+    svcStopTimer();
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Kitchen display") + '<div class="gap"></div>' +
+      '<select id="kds-station" class="o-filtbtn"><option value="">All stations</option><option value="kitchen">Kitchen</option><option value="barista">Barista</option><option value="bar">Bar</option><option value="pastry">Pastry</option></select>' +
+      '<button class="o-filtbtn" id="kds-full">Full screen</button></div>' +
+      '<div class="o-body" id="o-body"><div class="o-empty">Loading tickets...</div></div></div>';
+    wireBc();
+    var st = document.getElementById("kds-station");
+    st.value = SERVICE.station || "";
+    st.onchange = function () { SERVICE.station = this.value; paintKDS(); };
+    document.getElementById("kds-full").onclick = function () {
+      var el = document.documentElement;
+      if (!document.fullscreenElement && el.requestFullscreen) el.requestFullscreen();
+      else if (document.exitFullscreen && document.fullscreenElement) document.exitFullscreen();
+    };
+    await paintKDS();
+    // Poll. A wall screen that quietly stops updating is worse than one a few
+    // seconds behind, and polling heals itself after a dropped connection.
+    SERVICE.timer = setInterval(function () {
+      if (!document.getElementById("kds-board")) { svcStopTimer(); return; }
+      document.querySelectorAll("[data-fired]").forEach(function (el) {
+        var mins = svcMins(el.dataset.fired), target = Number(el.dataset.target) || 6;
+        el.textContent = svcClock(el.dataset.fired);
+        var card = el.closest(".kds-card"); if (card) card.className = "kds-card " + svcHeat(mins, target);
+      });
+    }, 1000);
+    SERVICE.poll = setInterval(function () {
+      if (!document.getElementById("kds-board")) { clearInterval(SERVICE.poll); return; }
+      paintKDS(true);
+    }, 15000);
+  }
+  async function paintKDS(quiet) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var lq = sb.from("pos_order_lines").select("*, pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status)")
+      .eq("company_id", S.company.id).in("kds_status", ["fired", "ready"]);
+    if (SERVICE.station) lq = lq.eq("station", SERVICE.station);
+    var lines = (await lq.order("fired_at")).data || [];
+    if (SERVICE.store) lines = lines.filter(function (l) { return !l.pos_orders.store_id || l.pos_orders.store_id === SERVICE.store; });
+    var tabs = {};
+    (SERVICE.tables || []).forEach(function (t) { tabs[t.id] = t.name; });
+    if (!lines.length) {
+      body.innerHTML = '<div class="kds-wrap" id="kds-board"><div class="kds-empty">Nothing waiting.<span>Tickets appear here the moment the floor sends them.</span></div></div>';
+      return;
+    }
+    var byOrder = {};
+    lines.forEach(function (l) { (byOrder[l.order_id] = byOrder[l.order_id] || { o: l.pos_orders, lines: [] }).lines.push(l); });
+    var tickets = Object.keys(byOrder).map(function (k) { return byOrder[k]; });
+    tickets.sort(function (a, b) { return (a.o.fired_at || "") < (b.o.fired_at || "") ? -1 : 1; });
+    // all-day counts: how many of each item are outstanding across every ticket
+    var allDay = {};
+    lines.forEach(function (l) { allDay[l.name] = (allDay[l.name] || 0) + Number(l.qty || 0); });
+    var allDayHtml = Object.keys(allDay).sort(function (a, b) { return allDay[b] - allDay[a]; }).slice(0, 12)
+      .map(function (n) { return '<span class="kds-ad"><b>' + (Math.round(allDay[n] * 100) / 100) + '</b> ' + esc(n) + '</span>'; }).join("");
+    body.innerHTML = '<div class="kds-wrap" id="kds-board">' +
+      '<div class="kds-allday"><span class="kds-ad-h">All day</span>' + allDayHtml + '</div>' +
+      '<div class="kds-board">' + tickets.map(function (tk) {
+        var target = Math.max.apply(null, tk.lines.map(svcTarget));
+        var mins = svcMins(tk.o.fired_at);
+        var where = tk.o.table_id ? (tabs[tk.o.table_id] || "Table") : fnbTitle(tk.o.order_type || "Order");
+        return '<div class="kds-card ' + svcHeat(mins, target) + '">' +
+          '<div class="kds-h"><span class="kds-where">' + esc(where) + '</span>' +
+          '<span class="kds-time" data-fired="' + esc(tk.o.fired_at || "") + '" data-target="' + target + '">' + svcClock(tk.o.fired_at) + '</span></div>' +
+          (tk.o.guest_name ? '<div class="kds-guest">' + esc(tk.o.guest_name) + '</div>' : "") +
+          (tk.o.allergy_note ? '<div class="kds-allergy">ALLERGY: ' + esc(tk.o.allergy_note) + '</div>' : "") +
+          '<div class="kds-items">' + tk.lines.map(function (l) {
+            return '<button class="kds-item' + (l.kds_status === "ready" ? " done" : "") + '" data-l="' + l.id + '">' +
+              '<span class="kds-q">' + (Math.round(Number(l.qty) * 100) / 100) + '</span>' +
+              '<span class="kds-nm">' + esc(l.name || "") + (l.modifier_note ? '<span class="kds-mod">' + esc(l.modifier_note) + '</span>' : "") + '</span></button>';
+          }).join("") + '</div>' +
+          '<button class="kds-bump" data-o="' + tk.o.id + '">Bump ticket</button>' +
+          '</div>';
+      }).join("") + '</div></div>';
+    body.querySelectorAll(".kds-item").forEach(function (b) {
+      b.onclick = async function () {
+        var done = b.classList.contains("done");
+        await sb.from("pos_order_lines").update({ kds_status: done ? "fired" : "ready", ready_at: done ? null : new Date().toISOString() }).eq("id", b.dataset.l);
+        b.classList.toggle("done");
+      };
+    });
+    body.querySelectorAll(".kds-bump").forEach(function (b) {
+      b.onclick = async function () {
+        var now = new Date().toISOString();
+        await sb.from("pos_order_lines").update({ kds_status: "bumped", bumped_at: now }).eq("order_id", b.dataset.o).in("kds_status", ["fired", "ready"]);
+        await sb.from("pos_orders").update({ ready_at: now, served_at: now }).eq("id", b.dataset.o);
+        toast("Ticket bumped"); paintKDS();
+      };
+    });
+  }
+
+  // How long from sending to serving, which is the number a kitchen is judged on.
+  async function renderServiceTimes() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Service times") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:900px"><div class="o-empty">Loading...</div></div></div></div>';
+    wireBc(); wirePeriod(renderServiceTimes);
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
+    var q = fnbCo("pos_orders", "id,number,order_type,fired_at,served_at,total,store_id, stores(name)").not("fired_at", "is", null).not("served_at", "is", null);
+    if (pr.from) q = q.gte("fired_at", pr.from);
+    if (pr.to) q = q.lte("fired_at", pr.to + "T23:59:59");
+    var rows = (await q.order("fired_at", { ascending: false }).limit(2000)).data || [];
+    if (!rows.length) { rep.innerHTML = repHead("Service times - " + pr.label, cc) + '<div class="o-empty">No completed tickets in this period yet. Once the floor sends orders and the kitchen bumps them, this shows how long each one took and where the slow ones cluster.</div>'; return; }
+    rows.forEach(function (r) { r.mins = Math.max(0, (new Date(r.served_at) - new Date(r.fired_at)) / 60000); });
+    var sorted = rows.map(function (r) { return r.mins; }).sort(function (a, b) { return a - b; });
+    var avg = sorted.reduce(function (s, v) { return s + v; }, 0) / sorted.length;
+    var med = sorted[Math.floor(sorted.length / 2)];
+    var p90 = sorted[Math.floor(sorted.length * 0.9)];
+    var byType = {};
+    rows.forEach(function (r) { var k = fnbTitle(r.order_type || "Order"); var a = byType[k] || (byType[k] = { n: 0, t: 0 }); a.n++; a.t += r.mins; });
+    rep.innerHTML = repHead("Service times - " + pr.label, cc) +
+      '<div class="o-note">From the moment the floor sends a ticket to the moment the kitchen bumps it. The <b>90th percentile</b> matters more than the average: it is the experience of the unluckiest one guest in ten.</div>' +
+      '<div class="mr-summary"><span class="man-chip plain">Median ' + (Math.round(med * 10) / 10) + ' min</span><span class="man-chip plain">Average ' + (Math.round(avg * 10) / 10) + ' min</span><span class="man-chip plain">90th percentile ' + (Math.round(p90 * 10) / 10) + ' min</span><span class="man-chip plain">' + rows.length + ' tickets</span></div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Order type</td><td class="num">Tickets</td><td class="num">Average minutes</td></tr></thead><tbody>' +
+      Object.keys(byType).map(function (k) { return '<tr><td>' + esc(k) + '</td><td class="num">' + byType[k].n + '</td><td class="num">' + (Math.round((byType[k].t / byType[k].n) * 10) / 10) + '</td></tr>'; }).join("") +
+      '</tbody></table></div>' +
+      '<div class="o-cf-head" style="margin-top:16px">Slowest tickets</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Ticket</td><td>Type</td><td>Sent</td><td class="num">Minutes</td></tr></thead><tbody>' +
+      rows.slice().sort(function (a, b) { return b.mins - a.mins; }).slice(0, 15).map(function (r) {
+        return '<tr><td>' + esc(r.number || "") + '</td><td>' + esc(fnbTitle(r.order_type || "")) + '</td><td><span class="muted">' + esc(String(r.fired_at).replace("T", " ").slice(0, 16)) + '</span></td><td class="num"><span class="badge ' + (r.mins > 15 ? "unpaid" : r.mins > 10 ? "partial" : "paid") + '">' + (Math.round(r.mins * 10) / 10) + '</span></td></tr>';
+      }).join("") + '</tbody></table></div>';
   }
 
   // ===========================================================================
