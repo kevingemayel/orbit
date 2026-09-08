@@ -293,6 +293,84 @@
   var money = function (n) { if (S.role && S.role.can_see_money === false) return "•••"; return Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); };
   // currency-aware money: prefixes the given document currency (falls back to the company's home currency)
   function moneyC(n, code) { var c = code || (S.company && S.company.currency_code) || ""; return (c ? c + " " : "") + money(n); }
+  // ---------------------------------------------------------------------------
+  // The amount in words.
+  //
+  // On a formal notice, a cheque or a legal demand the figure is written out as
+  // well as printed, because a digit can be altered and a sentence cannot. In
+  // Lebanon that sentence is usually needed in Arabic, and a notice that has to
+  // stand up in front of a notary needs both.
+  //
+  // The Arabic is the plain form used on commercial and syndicate documents:
+  // units joined with "wa", the hundreds as one word, and no case endings.
+  // ---------------------------------------------------------------------------
+  var W_ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+    "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+  var W_TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+  function numWordsEn(n) {
+    n = Math.floor(Math.abs(Number(n) || 0));
+    if (n === 0) return "zero";
+    function u1000(x) {
+      var s = "";
+      if (x >= 100) { s += W_ONES[Math.floor(x / 100)] + " hundred"; x %= 100; if (x) s += " and "; }
+      if (x >= 20) { s += W_TENS[Math.floor(x / 10)]; if (x % 10) s += "-" + W_ONES[x % 10]; }
+      else if (x > 0) s += W_ONES[x];
+      return s;
+    }
+    var parts = [];
+    [[1e9, "billion"], [1e6, "million"], [1e3, "thousand"]].forEach(function (sc) {
+      if (n >= sc[0]) { parts.push(u1000(Math.floor(n / sc[0])) + " " + sc[1]); n %= sc[0]; }
+    });
+    // "three thousand six hundred and forty-seven", but "one thousand and five":
+    // the joining "and" belongs before a tail under a hundred, nowhere else
+    if (n > 0) parts.push((parts.length && n < 100 ? "and " : "") + u1000(n));
+    return parts.join(" ");
+  }
+  var A_ONES = ["", "واحد", "اثنان", "ثلاثة", "أربعة", "خمسة", "ستة", "سبعة", "ثمانية", "تسعة", "عشرة",
+    "أحد عشر", "اثنا عشر", "ثلاثة عشر", "أربعة عشر", "خمسة عشر", "ستة عشر", "سبعة عشر", "ثمانية عشر", "تسعة عشر"];
+  var A_TENS = ["", "", "عشرون", "ثلاثون", "أربعون", "خمسون", "ستون", "سبعون", "ثمانون", "تسعون"];
+  var A_HUND = ["", "مئة", "مئتان", "ثلاثمئة", "أربعمئة", "خمسمئة", "ستمئة", "سبعمئة", "ثمانمئة", "تسعمئة"];
+  function numWordsAr(n) {
+    n = Math.floor(Math.abs(Number(n) || 0));
+    if (n === 0) return "صفر";
+    function u1000(x) {
+      var out = [];
+      if (x >= 100) { out.push(A_HUND[Math.floor(x / 100)]); x %= 100; }
+      if (x >= 20) { var t = A_TENS[Math.floor(x / 10)], u = x % 10; out.push(u ? A_ONES[u] + " و" + t : t); }
+      else if (x > 0) out.push(A_ONES[x]);
+      return out.join(" و");
+    }
+    var out = [], rem = n;
+    var mil = Math.floor(rem / 1e6); rem %= 1e6;
+    var th = Math.floor(rem / 1e3); rem %= 1e3;
+    if (mil) out.push(mil === 1 ? "مليون" : mil === 2 ? "مليونان" : (mil <= 10 ? u1000(mil) + " ملايين" : u1000(mil) + " مليون"));
+    if (th) out.push(th === 1 ? "ألف" : th === 2 ? "ألفان" : (th <= 10 ? u1000(th) + " آلاف" : u1000(th) + " ألف"));
+    if (rem) out.push(u1000(rem));
+    return out.join(" و");
+  }
+  var CUR_WORDS = {
+    USD: { en: ["US Dollar", "US Dollars", "cent", "cents"], ar: ["دولار أمريكي", "سنت"] },
+    LBP: { en: ["Lebanese Pound", "Lebanese Pounds", "piastre", "piastres"], ar: ["ليرة لبنانية", "قرش"] },
+    EUR: { en: ["Euro", "Euros", "cent", "cents"], ar: ["يورو", "سنت"] },
+    GBP: { en: ["Pound Sterling", "Pounds Sterling", "penny", "pence"], ar: ["جنيه إسترليني", "بنس"] },
+    AED: { en: ["UAE Dirham", "UAE Dirhams", "fils", "fils"], ar: ["درهم إماراتي", "فلس"] },
+    SAR: { en: ["Saudi Riyal", "Saudi Riyals", "halala", "halalas"], ar: ["ريال سعودي", "هللة"] },
+    XAF: { en: ["CFA Franc", "CFA Francs", "centime", "centimes"], ar: ["فرنك أفريقي", "سنتيم"] },
+    XOF: { en: ["CFA Franc", "CFA Francs", "centime", "centimes"], ar: ["فرنك أفريقي", "سنتيم"] }
+  };
+  function amountInWords(amount, ccy, lang) {
+    var a = Math.abs(Number(amount) || 0);
+    var whole = Math.floor(a + 1e-9), frac = Math.round((a - whole) * 100);
+    var w = CUR_WORDS[ccy];
+    if (lang === "ar") {
+      var maj = w ? w.ar[0] : (ccy || ""), min = w ? w.ar[1] : "";
+      return numWordsAr(whole) + " " + maj + (frac ? " و" + numWordsAr(frac) + " " + min : "") + " لا غير";
+    }
+    var majE = w ? (whole === 1 ? w.en[0] : w.en[1]) : (ccy || "");
+    var minE = w ? (frac === 1 ? w.en[2] : w.en[3]) : "";
+    var s = numWordsEn(whole) + " " + majE + (frac ? " and " + numWordsEn(frac) + " " + minE : "") + " only";
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
   // FX display cache: currency_rates.rate = units of the org ref currency per 1 unit of code (ref itself = 1)
   async function loadFxRates(force) {
     if (S._fxRates && !force) return;
@@ -818,6 +896,7 @@
       { t: "What stock tracking is", h: "<p><b>Stock</b> (or inventory) is the physical things you keep - materials, products, parts. Tracking stock means Orbit always knows how much of each you have, where it is, and what it is worth, and warns you before you run out. If you do not keep physical things, you can skip this whole chapter.</p>" },
       { t: "Products: the things you buy, sell or store", h: "<p>A <b>product</b> is anything you buy, sell, or keep. When you create one you pick its type, and the type decides how much Orbit tracks:</p><ul><li><b>Storable</b> - a real thing you keep on a shelf. Orbit tracks how many you have, their value, and reordering.</li><li><b>Service</b> - something you do, not a thing (like &ldquo;installation&rdquo;). No stock is counted.</li><li><b>Consumable</b> - a thing you buy and use but do not bother counting.</li></ul><p>Set its <b>price</b> (what you sell it for), <b>cost</b> (what it costs you), and its default taxes, so invoices and bills fill in automatically whenever you use it.</p>" },
       { t: "Counting things that are cut to size", h: "<p>Some materials are <b>counted</b> one way but <b>measured</b> another. You buy and count glass in <b>sheets</b>, aluminium in <b>bars</b>, membrane in <b>rolls</b> - but you value and use them by the <b>square metre, metre or litre</b>. Orbit keeps both straight, so &ldquo;3 sheets&rdquo; is never mistaken for &ldquo;3 m&sup2;&rdquo;.</p><p>On a product, choose its <b>form</b> (sheet, bar, roll, liquid, or glass unit) and enter its size in the product's material panel. Orbit then knows, for instance, that one sheet is 3.75 m&sup2;. On the <b>On Hand</b> screen that product reads &ldquo;<b>3 sheets = 11.25 m&sup2;</b>&rdquo; - the honest count and the measure it holds. Receiving, issuing and valuation all use the real measure, so stock value and job cost come out right.</p><p>A <b>glass unit</b> form goes further: you describe the make-up pane by pane (for example 6 / 16 Argon / 6 Low-E), and Orbit works out the total thickness, area and weight.</p>" },
+      { t: "Costing a bar or a profile: weight, not price", h: "<p>An extrusion has no price of its own. It has a <b>weight per metre</b>, which the extruder publishes and which never changes, and a <b>metal rate</b>, which moves every month. The cost of one bar is simply weight per metre, times the length you buy it in, times the rate.</p><p>Put those two numbers on the product, under the cost: <b>Weight per metre (kg)</b> and <b>Stock length (mm)</b>. Then open <b>Inventory &rsaquo; Recost from weight</b>, type today's rate per kilo, and press <span class=\"man-key\">Show me what changes</span> before applying it. One number, and a whole catalogue of profiles is repriced.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">A real price is never overwritten</div><p>Recosting touches only the items whose cost came from this calculation. Anything with a price from an actual purchase, or a figure somebody typed in, is left exactly as it is. The product list shows which is which in the <b>Cost basis</b> column, and every cost carries one line saying where it came from.</p></div></div>" },
       { t: "Moving stock: receive, deliver, adjust, transfer", h: "<p>Stock changes when it moves. Under <b>Inventory &rsaquo; Operations</b>:</p><ul><li><b>Receive</b> - stock coming in from a supplier. Numbers go up.</li><li><b>Deliver</b> - stock going out to a customer. Numbers go down.</li><li><b>Adjust</b> - you counted the shelf and it differs from the app; this corrects it.</li><li><b>Transfer</b> - moving stock from one location to another (say warehouse to van).</li></ul><p>If stock <b>valuation</b> is switched on, the accounting for each move happens automatically, so your stock value and your books stay in step.</p>" },
       { t: "Seeing what you have", h: "<p>Open <b>Inventory &rsaquo; On Hand</b> to see, for every product, how many you have, in which location, and what it is worth, with totals at the top and flags for low stock and expiring items.</p><p>Two extras: if you track batches, you can record a <b>lot</b> number and expiry when you receive, and see per-lot quantities. And <b>Replenishment</b> lets you set a minimum and maximum for each product, then top up everything below its minimum in one click - so you never run out of the important things.</p>" },
       { t: "The setup behind stock (warehouses, locations, units)", h: "<p>Before the counts can be accurate, Orbit needs to know your physical world. It lives under <b>Inventory &rsaquo; Configuration</b>, set up once:</p><div class=\"man-map\"><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:warehouse}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Warehouses</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">The physical sites you hold stock at - a yard, a store, a factory.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:pin}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Locations</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Shelves, bins and zones inside a warehouse, so you know not just how many but where.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:ruler}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Units of Measure</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Metres, kilos, boxes - and how they convert, so buying in boxes and using in metres just works.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:folder}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Product Categories</span><span class=\"man-scr-loc\">Products</span><span class=\"man-scr-d\">Group products so reports and stock valuation add up by the right buckets.</span></div></div></div><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:check}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">You can start simple</div><p>A single warehouse with one location is enough to begin. Add more locations, units and rules only when your handling actually needs them.</p></div></div>" },
@@ -845,6 +924,7 @@
       { t: "Moving a party, and joining two bills", h: "<p>The <span class=\"man-key\">Table</span> button on the pad does the three things a floor manager needs mid-service.</p><ul><li><b>Move this party to</b> another table. The bill goes with them, the old table is freed for clearing, and the kitchen ticket follows so the pass calls the right number.</li><li><b>Merge another table into this one.</b> Two couples who turn out to be four friends become one bill. The emptied order is closed rather than deleted, because its number is already printed on a docket in the kitchen.</li><li><b>Print</b> the guest bill or a kitchen docket on demand.</li></ul>" },
       { t: "The paper: bill, receipt and docket", h: "<p>A restaurant runs on paper whatever else it runs on, and Orbit prints the three documents a service needs. All three are 80mm thermal and carry your logo and the <b>branch</b> address, not head office.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:doc}} The bill</div><p>What the guest looks at before paying. Items, service, VAT and the total. It says plainly that it is not a receipt.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:receipt}} The receipt</div><p>Printed automatically when the last tender settles. Same items, plus every tender taken, the tip, and a PAID stamp.</p></div></div><p>The <b>kitchen docket</b> is the pass copy for a station with no screen: no prices, a big table number, courses in order, and the allergy in a box impossible to miss. Print it from a ticket on the display, or turn <b>Dockets</b> on from the Floor bar to print one automatically every time a course is sent.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Docket printing is off by default</div><p>It is set per terminal, not per company: the till by the pass prints, the one on the terrace does not. Left on everywhere it would open a print dialog on every send, which is worse than no paper at all.</p></div></div>" },
       { t: "Taking the money at the table", h: "<p><span class=\"man-key\">Bill</span> on the pad opens the tender screen. A table bill is not a counter sale: several people pay, in several ways, sometimes before the rest have finished. So it is a running balance settled by any number of tenders, and the table only frees itself when the balance reaches zero.</p><p>Five ways to split, and the amounts always include tax so the shares add up to the bill:</p><ul><li><b>Whole bill</b> - one tender for the lot.</li><li><b>By seat</b> - &ldquo;separate bills, please&rdquo;. This is the one you will use most, and it only works if the seat was set on the pad as the items went on.</li><li><b>Evenly</b> - split so many ways, this tender covers so many shares.</li><li><b>By item</b> - tick what this person is paying for.</li><li><b>By amount</b> - they hand you a fixed sum.</li></ul><p>Record the tip at the terminal. When the last tender lands, the receipt prints, the table goes to <b>needs clearing</b>, and the order is closed.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:percent}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The tax is the same as the counter</div><p>The floor charges the same sales tax as the register, from the same setting. A bill closed at the table and the same order rung up at the till come to exactly the same money, and both declare the same VAT.</p></div></div>" },
+      { t: "When they pay in two currencies", h: "<p>A Beirut till takes three hundred thousand lira and five dollars for the same bill, and gives the change in whichever it has. Orbit takes that as it happens rather than making the cashier fudge it.</p><p>On the tender screen, every line is <b>one thing that physically crossed the counter</b>: a method, a currency and an amount. The first line is filled in for you with the whole bill in your own currency, so an ordinary sale is still one tap.</p><ol><li>Type what they handed over in the first currency.</li><li>Press <span class=\"man-key\">Add another currency</span>. The rest of the bill appears already converted, so you only correct it if they gave you something different.</li><li>The line at the bottom says <b>Exact</b>, how much is <b>short</b>, or the <b>change</b> due. Choose which currency you are giving the change in and it works out the amount.</li></ol><p>The receipt prints each tender as the guest paid it, with the rate used, and the change beside it.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:coin}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Change is money leaving the drawer</div><p>That is exactly how Orbit records it: change is a negative tender in the currency you handed back. So the takings still add up to the bill, and at close of shift the drawer is counted <b>per currency</b> with what should be in it beside each one.</p></div></div><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">No rate, no sale</div><p>If there is no exchange rate for that currency today, the screen says so and will not let the sale through. It never guesses at one to one: that does not error, does not look wrong, and is wrong by whatever the rate happens to be. Set rates in <b>Settings &rsaquo; Currencies</b>.</p></div></div>" },
       { t: "During service: the kitchen display", h: "<p><b>Service &rsaquo; Kitchen display</b> is the screen on the wall. Tickets appear the moment the floor sends them, oldest first, and every one carries a clock.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:check}} Green, then amber</div><p>A ticket is green until it reaches 70% of its target, then amber. The target is the item&rsquo;s own prep time if you set one, otherwise a sensible default for its station.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:alert}} Red</div><p>Past target. The clock turns red and the card is outlined, so a late ticket is visible from across the kitchen rather than needing to be read.</p></div></div><p>Tap an item to mark it ready; tap it again if you were wrong. <span class=\"man-key\">Bump ticket</span> clears the whole card and stamps the serving time.</p><p><b>All day</b> along the top totals every outstanding item across every ticket, which is how a section knows to put six flat whites on at once instead of one at a time.</p><p><b>Station</b> filters the board, so the barista screen shows drinks and the pass shows food. <b>Full screen</b> removes everything else.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:refresh}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Why it refreshes rather than pushes</div><p>The board re-reads every fifteen seconds and the clocks tick every second. A screen that silently stops updating is far worse in a kitchen than one a few seconds behind, and polling recovers on its own when the wifi drops.</p></div></div>" },
       { t: "Service times: the number a kitchen is judged on", h: "<p><b>Service &rsaquo; Service times</b> measures from the moment a ticket is sent to the moment it is bumped, for every completed ticket.</p><p>It shows the median, the average and the <b>90th percentile</b>. Watch the last one. The average hides the disasters; the 90th percentile is the experience of the unluckiest one guest in ten, and that is the guest who does not come back.</p><p>Underneath, the slowest fifteen tickets with their times, so a bad night can be looked at rather than argued about.</p>" },
       { t: "Stock control: where the money actually leaks", h: "<p>Food cost is not lost in big obvious events. It leaks: a heavy hand on the milk, a bin nobody logged, a transfer that arrived two short.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:scale}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Cost variance is the report this whole app exists to produce</div><p>It takes what you actually sold, works backwards through every recipe (including recipes inside recipes, with their waste and yield) and says what you <b>should</b> have used. Beside it sits what you recorded as waste. Whatever is left over after both is over-portioning, giveaway or theft.</p></div></div><ul><li><b>Waste log</b> records every bin trip with a reason. Reasons are split into controllable (spoilage, breakage) and not (staff meals, training), because only the first kind is worth chasing.</li><li><b>Stock counts</b> are <b>blind</b> by default: the counter cannot see what the system expects, so the number is what is actually on the shelf rather than what someone assumed.</li><li><b>Transfers</b> record dispatch and receipt separately. The difference between the two is the point; a transfer that just moves a number hides the loss.</li><li><b>Availability (86)</b> takes an item off at one store, and it vanishes from the order pad there immediately.</li></ul>" },
@@ -907,6 +987,7 @@
         { t: "Setting a building up", h: "<p>The fastest way is <b>Set up a building</b> on the Property overview when you have none yet. It asks for three things in one screen:</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">The building - its name and how its shares are counted. Use <b>100</b> if owners think in percentages, <b>1000</b> for milliemes.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">The units, each with its owner and its share. A running total tells you whether the shares add up.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">What the building costs to run each month - concierge, electricity, generator, cleaning.</div></div></div><p>That is enough to bill from. Owners are created as normal contacts, so they can be invoiced, chased and given portal access like anyone else.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:percent}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The reserve</div><p>If the building collects a little more than it spends to build a fund, set a <b>reserve uplift</b> on the building. Every owner's charge goes up by that percentage.</p></div></div>" },
         { t: "How a charge is worked out", h: "<p>Each <b>charge</b> is a running cost with an amount and how often it falls due. Orbit converts them all to a monthly figure (a yearly cost divided by twelve, a quarterly one by three), adds them up, adds the reserve, and splits the result across the units by share.</p><p>A charge can be scoped to a <b>block</b> if a building has separate entrances and some costs belong to only one of them. Then only that block's units share it, using the block's own share column if you have set one.</p><div class=\"man-cal warn\"><b>If a charge names a block no unit belongs to</b>, nobody can be billed for it. Orbit leaves it out of the totals and says so on the overview rather than quietly inflating what the building thinks it collects.</div><p>Press <b>Generate this period's charges</b> to turn the split into one draft invoice per owner. They are drafts on purpose - review them, then post them in Accounting, and only then do they count as money owed.</p>" },
         { t: "Chasing what is unpaid", h: "<p><b>Money &rsaquo; Arrears</b> lists only what is genuinely late: posted invoices that are past their due date, per unit, with any credit notes already deducted. It works out how many months late the oldest one is and suggests a stage - a reminder, a warning, or a formal notice.</p><p><b>Notice</b> opens a letter pre-filled with the owner, the unit and the amount. Printing it attaches the <b>schedule of unpaid charges</b> behind the figure, so the letter shows its working, and signs it from the committee head and treasurer.</p><div class=\"man-cal key\"><b>Put the building's details on the building first.</b> The property number, cadastral zone, bylaws reference and how to pay all live on the building record, and the notice quotes them. Without them a formal notice makes a claim it cannot support.</div>" },
+        { t: "Sending the notice in Arabic", h: "<p>A formal notice that may end up in front of a Lebanese notary has to be readable to him, and to a court. So the arrears letter prints in <b>English</b>, in <b>Arabic</b>, or in <b>both</b>, chosen next to the Print button, with the default set per building under <b>Notice language</b> on the building record.</p><p>Both languages means the Arabic first and the English on the following page: one envelope that satisfies the notary and the owner who lives abroad.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:pen}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">The amount is written out as well as printed</div><p>Every notice now carries the figure in words as well as digits, in the language of the letter, because a digit can be altered afterwards and a sentence cannot. This is the same reason a cheque is written out twice.</p></div></div>" },
         { t: "Money in, and money back out", h: "<p><b>Record a payment</b> takes a receipt against a specific charge: the amount defaults to what is still owed, you say whether the <b>owner or the tenant</b> actually paid and how, and a printable receipt comes out. The invoice balance updates as you save.</p><p><b>Special assessment</b> raises a one-off levy - a lift motor, a facade repair - outside the regular charges. Enter the total the building needs, choose to split it by share or equally, and every owner gets a draft invoice. The rounding is pushed onto the largest share so the levy raises exactly the total.</p><p><b>Give back to owners</b> is the reverse. It works out the surplus from the cash on hand, less the reserve you want to keep, less anything already given back, and refuses politely while suppliers are still owed money. Each owner gets a credit note for their share.</p>" },
         { t: "The budget, and where the money went", h: "<p><b>Money &rsaquo; Annual budget</b> sets out what the building expects to spend for the year, line by line, and shows each line against what was actually spent. <b>Fill from charges</b> turns the recurring costs into a year's budget in one press.</p><p>The actual figures come from <b>bills tagged to the building</b>. When you enter a supplier bill, set <b>Building</b> and <b>Building cost type</b> on it - that is what makes it appear in the building's expenses, count against the right budget line, and land in that building's profit &amp; loss.</p><div class=\"man-cal warn\"><b>An untagged bill is invisible to the building.</b> If a building's expenses look empty, it is almost always because the bills were entered without the Building field set.</div><p>Approving a budget locks its lines. Reopen it if the assembly changes something.</p>" },
         { t: "Meetings, votes and resolutions", h: "<p>A meeting holds the agenda, who came, and what was decided. Add <b>agenda items</b>, <b>motions</b> to be voted on, and <b>actions</b>. A motion carries the majority it needs - simple, two thirds, or unanimous.</p><p>Owners vote from their <b>resident portal</b>, and each vote is weighted by that owner's shares. A unit marked <i>excluded from voting</i> carries no weight. The meeting shows the live tally: for, against, abstain, how much of the building has voted, whether <b>quorum</b> is met, and whether the motion would carry under its own rule.</p><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:calendar}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Give proper notice</div><p>Record the date notice was given. A general assembly called on less than ten days' notice is flagged, because its decisions can be challenged.</p></div></div><p><b>Posting</b> the minutes locks them, turns each agreed action into a task, and promotes any carried motion into a standing <b>resolution</b> - the building's binding decisions, kept in one place.</p>" },
@@ -949,6 +1030,8 @@
       { t: "Custom fields (your own boxes)", h: "<p>Orbit's forms already have the usual boxes, but every business is a little different. <b>Custom fields</b> let you add your own boxes to a form.</p><ol><li>Open <b>Settings &rsaquo; Custom Fields</b>.</li><li>Pick where the box should appear: Contacts, Projects or Products.</li><li>Choose the kind of box - text, number, date, a dropdown of choices, or a simple yes/no - give it a name, and (if you want) make it required.</li></ol><p>Your new box then appears on that form under &ldquo;More details&rdquo; and is saved with every record, just like the built-in ones.</p>" },
       { t: "Renaming words (terminology)", h: "<p>Not every business uses the same words. If you say &ldquo;Suppliers&rdquo; where Orbit says &ldquo;Vendors&rdquo;, you can change it.</p><p>Open <b>Settings &rsaquo; Terminology</b>, find the word, and type what you would rather it said. The whole app - menus, headings, app names - updates to your word, and only for your company. It is cosmetic: it changes the label, not how anything works.</p>" },
       { t: "Automatic reminders (automations)", h: "<p><b>Automations</b> are little robots that watch your data and drop a note in the bell when something needs attention, so you do not have to remember to check.</p><ol><li>Open <b>Settings &rsaquo; Automations</b>.</li><li>Switch on the reminders you want: an <b>overdue invoice</b>, a <b>bill due soon</b>, a <b>project deadline</b> approaching, or a <b>quotation</b> going stale with no reply.</li><li>Set how many days each should trigger at, and save. Use <b>Run now</b> to test.</li></ol><p>They run once a day and are smart enough never to nag you twice about the same thing on the same day.</p>" },
+      { t: "Somebody asks what you hold about them", h: "<p>Sooner or later a customer, an ex-employee or someone whose details you were given writes and asks for a copy of everything you hold about them, or asks you to delete it. In the UK and the EU you have <b>one month</b> to answer, and &ldquo;we could not work out where it all is&rdquo; is not an answer.</p><p><b>Settings &rsaquo; Privacy &amp; data requests</b> does both.</p><ol><li>Choose whether they are a contact, an employee or a lead, and search for them.</li><li><span class=\"man-key\">Export their data</span> gathers every record in this company that names them or carries their email address, as one file you can send back.</li><li><span class=\"man-key\">Erase them</span> removes the person - name, email, phone, address - from every record they appear in.</li></ol><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Erasing does not touch the books</div><p>Invoices, ledger entries and payments are kept: tax law requires them, and the right to erasure has an explicit exception for exactly that. What changes is that they point at an anonymous record instead of a person. If you delete an invoice to satisfy a privacy request you break the law you were trying to obey.</p></div></div><p>Every export and every erasure is logged on the same screen, permanently. That log is what you show when someone asks whether you answered.</p><p>Underneath sits the <b>record of processing activities</b>: what personal data the business holds, why it is allowed to, how long it keeps it, and who else touches it. It is the first document asked for in any investigation. Print it and keep it with your policies.</p>" },
+      { t: "Your calendar in Google or Outlook, and theirs in Orbit", h: "<p>Field and sales people live in the calendar on their phone. A booking they cannot see there is a booking they miss. So it goes both ways, and neither direction needs you to sign in to Google or Microsoft.</p><p>Open the <b>Calendar</b> and press <span class=\"man-key\">Sync</span>.</p><ol><li><b>Orbit into your calendar app.</b> Copy the address shown and add it as a subscribed calendar: in Google that is <i>Other calendars &rsaquo; From URL</i>, in Outlook <i>Add calendar &rsaquo; Subscribe from web</i>, on an iPhone <i>Calendars &rsaquo; Add subscribed calendar</i>. Your appointments and diary entries appear there and keep themselves up to date.</li><li><b>Your calendar into Orbit.</b> Paste your own secret iCalendar address - in Google, <i>Settings &rsaquo; your calendar &rsaquo; Secret address in iCal format</i>. Every hour Orbit reads it, and when you are busy shows on the Orbit calendar so nobody books a site visit on top of it.</li></ol><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:lock}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Two things worth knowing</div><p>Coming in, Orbit keeps <b>only when you are busy</b>, never who with or about what. Going out, that address is the only thing protecting your diary: anyone who has it can read it, so treat it like a password. If it gets out, <span class=\"man-key\">Create a new address</span> kills the old one at once.</p></div></div>" },
       { t: "Document numbers", h: "<p>Every invoice, order and certificate gets a number so you can refer to it. <b>Settings &rsaquo; Document Numbering</b> lets you choose the style: the <b>prefix</b> (like INV), whether to include the <b>year</b>, and how many <b>digits</b> the running number has (so you get INV/2026/0001). Changes only affect new documents, and each company can have its own style.</p>" },
       { t: "Bringing data in and taking it out", h: "<p>You are never trapped. To bring existing data in, open <b>Settings &rsaquo; Import Data</b>. Download the <b>template</b> spreadsheet (it stars the columns you must fill), type or paste your customers, vendors, products, cost codes or projects into it, and upload. Orbit checks it and shows you a preview before saving.</p><p>To take data out, every list has an <b>Export</b> button and every report exports to a spreadsheet - so your information is always yours to keep.</p>" },
       { t: "The history log (audit log)", h: "<p>The <b>audit log</b> (<b>Settings &rsaquo; Audit Log</b>) is a record of who did what and when - who created, changed or deleted the important records. It is there for trust and for tracing a mistake back to its source.</p><p>On top of that, posted invoices are protected by a lock deep in the system, so their amounts, party, date and number cannot be altered after the fact. The history is tamper-resistant, not just written down.</p>" },
@@ -1319,6 +1402,7 @@
       { i: "refresh", n: "Replenishment", l: "Operations", d: "Min/max levels; top up everything below its minimum in one click." },
       { i: "box", n: "Products", l: "Products", d: "The item master: price, cost, tax and type." },
       { i: "folder", n: "Product Categories", l: "Products", d: "Group products for reporting and valuation." },
+      { i: "scale", n: "Recost from weight", l: "Products", d: "Bars and profiles are priced by the kilo. Change the metal rate once and every one of them recalculates." },
       { i: "barcode", n: "Lots / Serials", l: "Products", d: "Batch and serial numbers, with expiry dates." },
       { i: "warehouse", n: "Warehouses", l: "Configuration", d: "The physical sites you hold stock at." },
       { i: "pin", n: "Locations", l: "Configuration", d: "Shelves, bins and zones inside a warehouse." },
@@ -1499,6 +1583,7 @@
       { i: "globe", n: "Portal Access", l: "Settings", d: "Let a customer or supplier log in to their own limited view." },
       { i: "hash", n: "Document Numbering", l: "Settings", d: "How invoices, orders and certificates are numbered." },
       { i: "upload", n: "Import Data", l: "Settings", d: "Bring customers, products and more in from a spreadsheet." },
+      { i: "shield", n: "Privacy & data requests", l: "Settings", d: "Answer a subject access request, erase a person, and see what you hold about whom." },
       { i: "plus", n: "Custom Fields", l: "Settings", d: "Add your own boxes to Contacts, Projects or Products." },
       { i: "text", n: "Terminology", l: "Settings", d: "Rename words to match your business." },
       { i: "robot", n: "Automations", l: "Settings", d: "Reminders that watch your data and nudge you." },
@@ -1603,7 +1688,7 @@
       menus: [
         { label: "Overview", action: "inv.onhand" },
         { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"], ["Planning", "inv.planning"], ["Cycle Count", "inv.cyclecount"]] },
-        { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Lots / Serials", "lots"]] },
+        { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Recost from weight", "inv.recost"], ["Lots / Serials", "lots"]] },
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Classification", "settings.classification"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
     },
@@ -1775,6 +1860,7 @@
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
+        { label: "Privacy & data requests", action: "settings.privacy" },
         { label: "Developers (API)", action: "settings.api" },
         { label: "Appearance", action: "appearance" }
       ]
@@ -1838,11 +1924,11 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "site", "doc.subs": "site", "doc.rfis": "site", "doc.trans": "site",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
+    "inv.onhand": "inventory", "inv.recost": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "kitchen", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
@@ -3761,6 +3847,7 @@
       case "settings.classification": return renderClassification();
       case "settings.terminology": return renderTerminologyAdmin();
       case "settings.automations": return renderAutomations();
+      case "settings.privacy": return renderPrivacy();
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
       case "settings.audit": return renderList(cfgAuditLog());
@@ -3820,6 +3907,7 @@
       case "bank": return renderList(cfgBankStatements());
       case "appearance": return renderAppearance();
       case "inv.onhand": return renderOnHand();
+      case "inv.recost": return renderRecost();
       case "inv.moves": return renderList(cfgStockMoves());
       case "inv.issues": return renderList(cfgMaterialIssues());
       case "inv.cats": return renderCategoryTree();
@@ -4953,9 +5041,14 @@
         { label: "Origin", get: function (p) { return '<span class="muted">' + esc(p.origin_country || "") + '</span>'; } },
         { label: "Sales Price", num: true, edit: { field: "list_price", type: "number" }, get: function (p) { return money(p.list_price); } },
         { label: "Cost", num: true, edit: { field: "cost_price", type: "number" }, get: function (p) { return money(p.cost_price); } },
+        // A zero cost and an estimated one both look like a number in a list.
+        // This says which is which, and makes the gaps findable with a filter.
+        { label: "Cost basis", get: function (p) { return Number(p.cost_price) > 0 ? '<span class="badge' + (p.cost_source === "weight_model" ? " unpaid" : "") + '" title="' + esc(p.cost_basis || "") + '">' + esc(COST_SRC[p.cost_source] || "Not recorded") + '</span>' : '<span class="badge unpaid">No cost</span>'; } },
         { label: "Status", get: function (p) { return p.is_active ? '<span class="badge">Active</span>' : '<span class="badge unpaid">Archived</span>'; } }
       ],
-      filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } }],
+      filters: [{ label: "Active", test: function (p) { return p.is_active; } }, { label: "Archived", test: function (p) { return !p.is_active; } },
+        { label: "No cost yet", test: function (p) { return !(Number(p.cost_price) > 0); } },
+        { label: "Cost is an estimate", test: function (p) { return p.cost_source === "weight_model"; } }],
       groupBy: [
         { label: "Family (brand)", get: function (p) { return (p._fam || [])[0] || "Unclassified"; } },
         { label: "Series", get: function (p) { return (p._fam || []).slice(0, 2).join(" › ") || "Unclassified"; } },
@@ -7092,6 +7185,88 @@
       toast(made + " variant(s) generated"); loadVariants(productId, p);
     };
   }
+  // A cost of zero and a cost somebody guessed look the same in a list, and both
+  // feed margin, plate cost and job cost as though they were fact. Every cost
+  // carries its working, and the form shows it under the field.
+  var COST_SRC = { purchase: "From a purchase", purchase_avg: "Average of purchases", weight_model: "Estimated from weight", manual: "Typed in" };
+  function costBasisHint(p) {
+    if (!p || !p.cost_basis) return "What this item costs you. Fill it in and margin, job cost and plate cost start telling the truth.";
+    return (COST_SRC[p.cost_source] || "Cost basis") + ". " + p.cost_basis;
+  }
+  // Recost from weight.
+  //
+  // An extrusion has no price of its own: it has a weight per metre, which the
+  // extruder publishes and which never changes, and a metal rate, which moves
+  // every month. Keep those apart and a catalogue of profiles is maintained by
+  // changing one number instead of retyping hundreds of costs.
+  async function renderRecost() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Recost from weight") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var rows = (await sb.from("products").select("id,name,default_code,uom,family,cost_price,cost_source,cost_rate,kg_per_m,bar_length_mm")
+      .eq("company_id", S.company.id).eq("is_active", true).gt("kg_per_m", 0).order("name")).data || [];
+    var body = document.getElementById("o-body");
+    if (!rows.length) {
+      body.innerHTML = '<div class="card"><div class="o-empty">' +
+        '<b>No item here is priced by weight yet.</b><div class="sub" style="margin-top:8px;max-width:60ch">' +
+        'Put the <b>weight per metre</b> and the <b>stock length</b> on a bar or profile (both are on the product form, under the cost) and it appears here. ' +
+        'From then on its cost is arithmetic: weight per metre &times; length &times; the metal rate. When the rate moves you change it once, here, and every profile follows.' +
+        '</div></div></div>';
+      return;
+    }
+    var eligible = rows.filter(function (r) { return !r.cost_source || r.cost_source === "weight_model"; });
+    var lockedRows = rows.filter(function (r) { return r.cost_source && r.cost_source !== "weight_model"; });
+    var fams = {}; eligible.forEach(function (r) { fams[r.family || "(no family)"] = (fams[r.family || "(no family)"] || 0) + 1; });
+    var rateCounts = {}; eligible.forEach(function (r) { if (Number(r.cost_rate) > 0) rateCounts[r.cost_rate] = (rateCounts[r.cost_rate] || 0) + 1; });
+    var curRate = Object.keys(rateCounts).sort(function (a, b) { return rateCounts[b] - rateCounts[a]; })[0] || "";
+    var cc = S.company.currency_code;
+
+    body.innerHTML = '<div class="card">' +
+      '<div class="sub" style="max-width:78ch;margin-bottom:14px">' +
+      '<b>' + eligible.length + ' item' + (eligible.length === 1 ? " is" : "s are") + ' costed from weight.</b> ' +
+      'Each one holds the extruder&rsquo;s kilograms per metre and the length it is bought in, so its cost is <b>weight &times; length &times; the rate below</b>. ' +
+      'Change the rate and they all recompute.' +
+      (lockedRows.length ? ' <b>' + lockedRows.length + '</b> other item' + (lockedRows.length === 1 ? " has" : "s have") + ' a real purchase price or a typed one; those are never touched.' : '') +
+      '</div>' +
+      '<div class="row2" style="align-items:flex-end">' +
+      '<div><label>Rate per kilogram (' + esc(cc) + ')</label><input id="rc-rate" type="number" step="0.01" value="' + esc(curRate) + '" placeholder="e.g. 12.00"></div>' +
+      '<div><label>Apply to</label><select id="rc-fam"><option value="">Every item costed by weight (' + eligible.length + ')</option>' +
+      Object.keys(fams).sort().map(function (f) { return '<option value="' + esc(f) + '">' + esc(f) + ' (' + fams[f] + ')</option>'; }).join("") + '</select></div>' +
+      '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="rc-prev">Show me what changes</button>' +
+      '<button class="btn pri" id="rc-apply">Apply the new rate</button></div>' +
+      '<div id="rc-out" style="margin-top:14px"></div></div>';
+
+    function picked() {
+      var f = gv("rc-fam");
+      return eligible.filter(function (r) { return !f || (r.family || "(no family)") === f; });
+    }
+    function newCost(r, rate) { return Math.round(Number(r.kg_per_m) * ((Number(r.bar_length_mm) || 1000) / 1000) * rate * 10000) / 10000; }
+    document.getElementById("rc-prev").onclick = function () {
+      var rate = parseFloat(gv("rc-rate")) || 0;
+      if (!(rate > 0)) { toast("Put in a rate per kilogram first"); return; }
+      var list = picked().map(function (r) { var n = newCost(r, rate); return { r: r, n: n, d: n - (Number(r.cost_price) || 0) }; });
+      var up = list.filter(function (x) { return x.d > 0.005; }).length, dn = list.filter(function (x) { return x.d < -0.005; }).length;
+      document.getElementById("rc-out").innerHTML =
+        '<div class="sub" style="margin-bottom:8px">' + list.length + ' item(s): <b>' + up + '</b> would cost more, <b>' + dn + '</b> less, ' + (list.length - up - dn) + ' unchanged.</div>' +
+        '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Item</th><th>Weight</th><th>Length</th><th class="num">Cost now</th><th class="num">Becomes</th><th class="num">Change</th></tr></thead><tbody>' +
+        list.slice(0, 200).map(function (x) {
+          return '<tr><td>' + esc(x.r.name) + '</td><td class="muted">' + Number(x.r.kg_per_m).toFixed(4) + ' kg/m</td>' +
+            '<td class="muted">' + ((Number(x.r.bar_length_mm) || 1000) / 1000).toFixed(2) + ' m</td>' +
+            '<td class="num">' + money(x.r.cost_price) + '</td><td class="num"><b>' + money(x.n) + '</b></td>' +
+            '<td class="num" style="color:var(--' + (x.d > 0.005 ? "bad-t" : x.d < -0.005 ? "good-t" : "ink2") + ')">' + (x.d > 0 ? "+" : "") + money(x.d) + '</td></tr>';
+        }).join("") + '</tbody></table></div>' + (list.length > 200 ? '<div class="sub" style="margin-top:6px">Showing the first 200.</div>' : "");
+    };
+    document.getElementById("rc-apply").onclick = async function () {
+      var rate = parseFloat(gv("rc-rate")) || 0;
+      if (!(rate > 0)) { toast("Put in a rate per kilogram first"); return; }
+      var f = gv("rc-fam"), list = picked();
+      if (!confirm("Recost " + list.length + " item(s) at " + cc + " " + rate + " a kilogram? Purchase and typed-in costs are left alone.")) return;
+      var r = await sb.rpc("recost_by_weight", { p_company: S.company.id, p_rate: rate, p_family: f || null });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast(r.data + " item(s) recosted");
+      renderRecost();
+    };
+  }
   async function renderProductForm(id) {
     _msProductForm = true;   // product form: price comes from Suppliers & prices, not the material spec
     mediaClearStage();
@@ -7126,7 +7301,7 @@
       fld("Type", typeSel) +
       fld("Unit of Measure", '<select id="pr-uom"><option value="">(none)</option>' + uoms.map(function (u) { return '<option value="' + esc(u.name) + '"' + (p.uom === u.name ? " selected" : "") + '>' + esc(u.name) + '</option>'; }).join("") + '</select>', "How it is measured & stocked, e.g. m2, kg, tube, box.") +
       fld("Sales Price", '<input id="pr-price" type="number" step="0.01" value="' + (p.list_price || 0) + '">') +
-      fld("Cost", '<input id="pr-cost" type="number" step="0.01" value="' + (p.cost_price || 0) + '">') +
+      fld("Cost", '<input id="pr-cost" type="number" step="0.01" value="' + (p.cost_price || 0) + '">', costBasisHint(p)) +
       fld("Status", '<select id="pr-active"><option value="1"' + (p.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!p.is_active ? " selected" : "") + '>Archived</option></select>') +
       '</div><div>' +
       fld("Income Account", sel("pr-inc", inc, p.income_account_id, "Default")) +
@@ -7134,6 +7309,11 @@
       fld("Sales Tax", sel("pr-stax", saleTax, p.sale_tax_id, "None")) +
       fld("Purchase Tax", sel("pr-ptax", purTax, p.purchase_tax_id, "None")) +
       fld("Shelf / bin location", '<input id="pr-shelf" value="' + esc(p.shelf_location || "") + '" placeholder="e.g. Rack A-2">', "Where this item sits in the warehouse, so anyone can find it or put it away.") +
+      // An extrusion is not priced, it is weighed: kg per metre is the
+      // extruder's own figure and does not change, so with a metal rate the
+      // cost follows. Filling these two lets Recost from weight maintain it.
+      fld("Weight per metre (kg)", '<input id="pr-kgm" type="number" step="0.000001" value="' + (p.kg_per_m != null ? p.kg_per_m : "") + '" placeholder="e.g. 1.162">', "For bars and profiles. The extruder publishes this; it is what a cost per bar is calculated from.") +
+      fld("Stock length (mm)", '<input id="pr-barlen" type="number" step="1" value="' + (p.bar_length_mm != null ? p.bar_length_mm : "") + '" placeholder="e.g. 6100">', "The length one bar is bought in. Cost per bar = weight per metre x this length x the metal rate.") +
       fld("Consignment stock", '<select id="pr-consign"><option value="0"' + (!p.is_consignment ? " selected" : "") + '>Owned stock</option><option value="1"' + (p.is_consignment ? " selected" : "") + '>Consignment (supplier-owned until sold)</option></select>', "Consignment stock sits in your store but is owned by the supplier until you sell it - you only owe them once it moves.") +
       fld("Kit / bundle", '<select id="pr-kit"><option value="0"' + (!p.is_kit ? " selected" : "") + '>Simple item</option><option value="1"' + (p.is_kit ? " selected" : "") + '>Kit - sold as one, made of components</option></select>', "A kit is a sellable product built from other products (e.g. a door set). Define the components below; selling the kit can draw the parts from stock.") +
       '</div></div>' + materialSpecHTML(p, clsNodes) + (id !== "new" ? '<div id="pr-variants" style="margin-top:16px"></div><div id="pr-kitc" style="margin-top:16px"></div><div id="pr-barcodes" style="margin-top:16px"></div><div id="pr-sup" style="margin-top:16px"></div>' : '') + customFieldsHTML("product", p) + '</div>';
@@ -7164,8 +7344,17 @@
         sale_tax_id: document.getElementById("pr-stax").value || null, purchase_tax_id: document.getElementById("pr-ptax").value || null,
         is_active: document.getElementById("pr-active").value === "1",
         is_consignment: (document.getElementById("pr-consign") || {}).value === "1",
-        is_kit: (document.getElementById("pr-kit") || {}).value === "1"
+        is_kit: (document.getElementById("pr-kit") || {}).value === "1",
+        kg_per_m: parseFloat(gv("pr-kgm")) || null,
+        bar_length_mm: parseFloat(gv("pr-barlen")) || null
       };
+      // A typed cost overwrites a derived one, and says so: an estimate that
+      // silently keeps its old working is worse than no working at all.
+      if ((parseFloat(gv("pr-cost")) || 0) !== (Number(p.cost_price) || 0)) {
+        row.cost_source = "manual";
+        row.cost_basis = "Typed in by " + ((S.user && S.user.email) || "a user") + " on " + today() + ".";
+        row.cost_updated_at = new Date().toISOString();
+      }
       var cerrPr = customError("product"); if (cerrPr) { toast(cerrPr); return; }
       row.custom = collectCustom("product");
       row.cost_price = parseFloat(gv("pr-cost")) || 0;   // the calculator may have updated it live
@@ -7892,10 +8081,34 @@
   }
 
   // ============================ COMPANIES (create / subcompany) ================
+  // Which accounts stock posts to. These used to be hardcoded account codes,
+  // which worked only for companies on Orbit's own seeded chart: bring your own
+  // chart of accounts and every stock receipt silently stopped reaching the
+  // ledger. Now they are named here, and the codes only fill in the blanks.
+  var STOCK_GL = [
+    ["stock_account_id", "Stock on hand", "What the warehouse is worth. A receipt debits this; a delivery credits it."],
+    ["cogs_account_id", "Cost of sales", "What the goods cost you, charged when they leave."],
+    ["grni_account_id", "Received not invoiced", "Holds the value of goods received until the supplier's bill arrives."],
+    ["wip_account_id", "Work in progress", "Materials consumed by a production run, until the finished item exists."],
+    ["stock_adj_account_id", "Stock adjustment", "Where a count difference or a write-off is charged."]
+  ];
+  function stockGlHTML(c, accs) {
+    if (!accs.length) return "";
+    function sel(k) {
+      return '<select id="co-' + k + '"><option value="">(not set)</option>' + accs.map(function (a) {
+        return '<option value="' + a.id + '"' + (c[k] === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>';
+      }).join("") + '</select>';
+    }
+    return '<details class="o-acc"><summary>Stock accounting</summary><div class="sub" style="margin:8px 0 10px">' +
+      'Where perpetual inventory posts. Set once; if any is left blank, stock moves are recorded but never reach the ledger.</div>' +
+      STOCK_GL.map(function (g) { return '<div><label>' + g[1] + '</label>' + fhint(g[1], g[2]) + sel(g[0]) + '</div>'; }).join("") +
+      '</details>';
+  }
   async function openCompanyModal(id) {
     var existing = (await sb.from("companies").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
     var c = id ? (await sb.from("companies").select("*").eq("id", id).maybeSingle()).data || {} : { currency_code: (S.company && S.company.currency_code) || "USD" };
     var others = existing.filter(function (x) { return x.id !== id; });
+    var coAccs = id ? ((await sb.from("accounts").select("id,code,name").eq("company_id", id).eq("is_active", true).order("code")).data || []) : [];
     var countryOpts = '<option value="">(select country)</option>' + COUNTRIES.map(function (co) { return '<option' + (c.country === co ? " selected" : "") + '>' + esc(co) + '</option>'; }).join("");
     var parentOpts = '<option value="">(none - top level)</option>' + others.map(function (o) { return '<option value="' + o.id + '"' + (c.parent_company_id === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "comodal";
@@ -7903,6 +8116,7 @@
       '<div><label>Company name</label>' + fhint("Company name", "The trading name of this company.") + '<input id="co-name" value="' + esc(c.name || "") + '" placeholder="e.g. Skyline Glass SARL"></div>' +
       '<div class="row2"><div><label>Legal name</label><input id="co-legal" value="' + esc(c.legal_name || "") + '"></div><div><label>Currency</label>' + currencySelectHTML("co-cur", c.currency_code || "USD") + '</div></div>' +
       '<div class="row2"><div><label>Country</label><select id="co-country">' + countryOpts + '</select></div><div><label>Parent company</label>' + fhint("Parent company", "Link this company under another one to model a group (holding and subsidiaries). It keeps its own separate books.") + '<select id="co-parent">' + parentOpts + '</select></div></div>' +
+      (id ? stockGlHTML(c, coAccs) : "") +
       (id ? '<div><label>Company logo & documents</label>' + attachBlockHTML("company", id, { slot: true, fit: true, accept: "image/*,application/pdf" }) + '</div>' : '<div class="muted" style="font-size:12px">You can add a logo after the company is created.</div>') +
       '</div><div class="foot">' + (id ? '<button class="btn" id="co-del" style="margin-right:auto;color:var(--bad-t)">Delete</button>' : '') + '<button class="btn" id="co-cancel">Cancel</button><button class="btn pri" id="co-save" style="background:var(--app);border-color:var(--app)">' + (id ? "Save" : "Create company") + '</button></div></div>';
     document.body.appendChild(m);
@@ -7934,7 +8148,12 @@
     document.getElementById("co-save").onclick = async function () {
       var name = gv("co-name"); if (!name) { toast("Enter a company name"); return; }
       var row = { name: name, legal_name: gv("co-legal") || null, currency_code: (gv("co-cur") || "USD").toUpperCase().slice(0, 3), country: document.getElementById("co-country").value || null, parent_company_id: document.getElementById("co-parent").value || null };
-      if (id) { var up = await sb.from("companies").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; } m.remove(); toast("Saved"); renderView(); return; }
+      STOCK_GL.forEach(function (g) { var el = document.getElementById("co-" + g[0]); if (el) row[g[0]] = el.value || null; });
+      if (id) {
+        var up = await sb.from("companies").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; }
+        if (S.company && S.company.id === id) { Object.assign(S.company, row); INVACC = null; }
+        m.remove(); toast("Saved"); renderView(); return;
+      }
       row.org_id = S.company.org_id;
       var btn = document.getElementById("co-save"); btn.disabled = true; btn.textContent = "Creating...";
       var ins = await sb.from("companies").insert(row).select("id").single();
@@ -10558,12 +10777,22 @@
   }
 
   // ============================ CALENDAR & ACTIVITIES ============================
-  var CAT_COLOR = { meeting: "#2f6bff", site_visit: "#0d9488", milestone: "#7c3aed", reminder: "#c58217", deadline: "#c58217", other: "#55565c", submittal: "#0369a1", rfi: "#ea580c", cert: "#f4573d", invoice: "#0ea66f", planning: "#4f46e5", install: "#ea580c", event: "#db2777" };
+  var CAT_COLOR = { meeting: "#2f6bff", site_visit: "#0d9488", milestone: "#7c3aed", reminder: "#c58217", deadline: "#c58217", other: "#55565c", submittal: "#0369a1", rfi: "#ea580c", cert: "#f4573d", invoice: "#0ea66f", planning: "#4f46e5", install: "#ea580c", event: "#db2777", busy: "#8a8c94" };
   async function collectCalendarItems(fromStr, toStr) {
     var cid = S.company.id, out = [];
     function push(date, title, cat, action, evwork) { if (!date) return; var d = String(date).slice(0, 10); if (d < fromStr || d > toStr) return; out.push({ date: d, title: title, cat: cat, action: action, evwork: evwork || null }); }
     var ev = (await sb.from("calendar_events").select("*").eq("company_id", cid).gte("event_date", fromStr).lte("event_date", toStr)).data || [];
     ev.forEach(function (e) { out.push({ date: e.event_date, title: e.title, cat: e.category || "other", event: e }); });
+    // whatever their own Google or Outlook calendar says they are busy with, so
+    // nobody books a site visit over it
+    try {
+      var busy = (await sb.from("calendar_busy").select("title,starts_at,ends_at")
+        .gte("starts_at", fromStr).lte("starts_at", toStr + "T23:59:59")).data || [];
+      busy.forEach(function (b) {
+        var t = new Date(b.starts_at);
+        push(String(b.starts_at).slice(0, 10), (isNaN(t) ? "" : ("0" + t.getHours()).slice(-2) + ":" + ("0" + t.getMinutes()).slice(-2) + " ") + (b.title || "Busy"), "busy", null);
+      });
+    } catch (e) { }
     var subs = (await sb.from("submittals").select("number,title,due_date,status").eq("company_id", cid).not("due_date", "is", null).gte("due_date", fromStr).lte("due_date", toStr)).data || [];
     subs.forEach(function (s) { if (["approved", "approved_comments", "superseded"].indexOf(s.status) < 0) push(s.due_date, "Submittal due: " + (s.title || s.number), "submittal", "doc.subs"); });
     var rfis = (await sb.from("rfis").select("number,subject,needed_by,status").eq("company_id", cid).not("needed_by", "is", null).gte("needed_by", fromStr).lte("needed_by", toStr)).data || [];
@@ -10586,13 +10815,72 @@
     } catch (e) { }
     return out;
   }
+  // Google and Outlook, both ways, without an OAuth consent screen.
+  //
+  // Out: Orbit publishes one unguessable .ics address per person, which any
+  // calendar app subscribes to and refreshes itself.
+  // In: they paste their own secret .ics address back, and an hourly job reads
+  // when they are busy. Only the times are kept, never the details.
+  async function openCalendarSync() {
+    var feeds = (await sb.from("calendar_feeds").select("*").eq("company_id", S.company.id).order("created_at")).data || [];
+    var inFeeds = feeds.filter(function (f) { return f.direction === "in"; });
+    var tok = (feeds.filter(function (f) { return f.direction === "out"; })[0] || {}).token || "";
+    if (!tok) {
+      var t = await sb.rpc("calendar_out_token", { p_company: S.company.id, p_roll: false });
+      tok = (!t.error && t.data) || "";
+    }
+    var url = tok ? (location.origin.indexOf("localhost") >= 0 ? "https://orbit.spacework.ai" : location.origin) + "/api/calendar/" + tok + ".ics" : "";
+    var inner =
+      '<div class="o-note">Your Orbit calendar in the app you already use, and that app&rsquo;s busy times back in Orbit. No sign-in to Google or Microsoft is needed: both sides work over a private address.</div>' +
+      '<h4 style="margin:14px 0 4px;font-size:14px">Put Orbit in your calendar app</h4>' +
+      '<div class="sub" style="margin-bottom:6px">Copy this and add it as a <b>subscribed calendar</b>: in Google Calendar it is <i>Other calendars &rsaquo; From URL</i>, in Outlook <i>Add calendar &rsaquo; Subscribe from web</i>, on iPhone <i>Calendars &rsaquo; Add subscribed calendar</i>. It refreshes itself. Treat it like a password: anyone with the address can read your appointments.</div>' +
+      '<div style="display:flex;gap:6px"><input id="cs-url" readonly value="' + esc(url) + '" style="font-family:var(--mono,monospace);font-size:12px">' +
+      '<button type="button" class="btn" id="cs-copy">Copy</button></div>' +
+      '<div style="margin-top:6px"><button type="button" class="btn sm" id="cs-roll">Create a new address</button> <span class="sub">Use this if the old one was shared by mistake. The old address stops working at once.</span></div>' +
+      '<h4 style="margin:18px 0 4px;font-size:14px">Bring your calendar into Orbit</h4>' +
+      '<div class="sub" style="margin-bottom:6px">Paste your own <b>secret iCalendar address</b>: in Google Calendar it is <i>Settings &rsaquo; your calendar &rsaquo; Secret address in iCal format</i>, in Outlook <i>Settings &rsaquo; Shared calendars &rsaquo; Publish a calendar &rsaquo; ICS</i>. Orbit reads it every hour and keeps only <b>when you are busy</b> - never what the appointment is with or about.</div>' +
+      (inFeeds.length ? '<div class="o-rt-wrap" style="margin-bottom:8px"><table class="o-lines"><tbody>' + inFeeds.map(function (f) {
+        return '<tr><td><b>' + esc(f.label || "Calendar") + '</b><div class="muted" style="font-size:11px;word-break:break-all">' + esc((f.url || "").slice(0, 70)) + '...</div></td>' +
+          '<td class="muted">' + (f.last_error ? '<span style="color:var(--bad-t)">' + esc(f.last_error) + '</span>' : f.last_sync_at ? (f.event_count || 0) + ' event(s), read ' + esc(String(f.last_sync_at).slice(0, 16).replace("T", " ")) : "not read yet") + '</td>' +
+          '<td style="text-align:right"><button type="button" class="btn sm cs-del" data-id="' + f.id + '">Remove</button></td></tr>';
+      }).join("") + '</tbody></table></div>' : "") +
+      '<div style="display:flex;gap:6px"><input id="cs-in" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">' +
+      '<button type="button" class="btn" id="cs-add">Add</button></div>';
+    var m = plotModal("Calendar sync", inner, null, true);
+    m.querySelector("#cs-copy").onclick = function () {
+      var el = m.querySelector("#cs-url"); el.select();
+      try { document.execCommand("copy"); toast("Address copied"); } catch (e) { toast("Copy it from the box"); }
+    };
+    m.querySelector("#cs-roll").onclick = async function () {
+      if (!confirm("Create a new address? Any calendar app subscribed to the old one stops updating until you give it the new address.")) return;
+      var r = await sb.rpc("calendar_out_token", { p_company: S.company.id, p_roll: true });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); openCalendarSync();
+    };
+    m.querySelector("#cs-add").onclick = async function () {
+      var v = (m.querySelector("#cs-in").value || "").trim();
+      if (v.indexOf("webcal://") === 0) v = "https://" + v.slice(9);
+      if (!/^https:\/\/.+/i.test(v)) { toast("Paste the full address, starting with https://"); return; }
+      var r = await sb.from("calendar_feeds").insert({ company_id: S.company.id, direction: "in", url: v, label: v.indexOf("google") >= 0 ? "Google Calendar" : v.indexOf("outlook") >= 0 || v.indexOf("office") >= 0 ? "Outlook" : "Calendar" });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast("Added. It is read within the hour, and every hour after that.");
+      m.remove(); openCalendarSync();
+    };
+    m.querySelectorAll(".cs-del").forEach(function (b) {
+      b.onclick = async function () {
+        await sb.from("calendar_feeds").delete().eq("id", b.dataset.id);
+        toast("Removed"); m.remove(); openCalendarSync();
+      };
+    });
+  }
   var CALV = null;
   async function renderCalendar(y, mo) {
     var now = new Date();
     if (y == null) { y = CALV ? CALV.y : now.getFullYear(); mo = CALV ? CALV.m : now.getMonth(); }
     CALV = { y: y, m: mo };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '<div class="gap"></div><button class="o-filtbtn" id="cal-prev">&#8249;</button><button class="o-filtbtn" id="cal-today">Today</button><button class="o-filtbtn" id="cal-next">&#8250;</button><button class="o-filtbtn" id="cal-agenda">Agenda</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '<div class="gap"></div><button class="o-filtbtn" id="cal-prev">&#8249;</button><button class="o-filtbtn" id="cal-today">Today</button><button class="o-filtbtn" id="cal-next">&#8250;</button><button class="o-filtbtn" id="cal-agenda">Agenda</button><button class="o-filtbtn" id="cal-sync">Sync</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
+    document.getElementById("cal-sync").onclick = openCalendarSync;
     document.getElementById("cal-prev").onclick = function () { var nm = mo - 1, ny = y; if (nm < 0) { nm = 11; ny--; } renderCalendar(ny, nm); };
     document.getElementById("cal-next").onclick = function () { var nm = mo + 1, ny = y; if (nm > 11) { nm = 0; ny++; } renderCalendar(ny, nm); };
     document.getElementById("cal-today").onclick = function () { renderCalendar(now.getFullYear(), now.getMonth()); };
@@ -12517,6 +12805,110 @@
     var example = spec.fields.map(function (f) { return csvCell(f[3] === "num" ? "0" : ("Example " + f[1])); }).join(",");
     return "﻿" + header + "\r\n" + example;
   }
+  // ============================ PRIVACY & DATA REQUESTS ======================
+  // What a regulator actually asks: someone wrote to you and said "send me
+  // everything you hold about me", or "delete me". Can you do it, and can you
+  // show that you did. Everything below answers one of those two questions.
+  //
+  // The record of processing activities is the other half. It is the document
+  // you are asked for first in any investigation, and writing it once here beats
+  // reconstructing it under pressure.
+  var ROPA = [
+    { act: "Running a customer's account", who: "Customers and their contacts", what: "Name, email, phone, address, tax number, everything they bought and paid", why: "Performing the contract", keep: "Ten years from the last transaction: tax law, not choice", where: "Supabase (EU region), Cloudflare (edge)" },
+    { act: "Buying from suppliers", who: "Suppliers and their contacts", what: "Name, email, phone, bank details, purchase and payment history", why: "Performing the contract, and legal obligation", keep: "Ten years from the last transaction", where: "Supabase (EU region)" },
+    { act: "Employing people", who: "Employees and applicants", what: "Name, contact details, pay, leave, appraisals, documents", why: "Contract, and legal obligation for payroll and tax", keep: "Employees: as required by local employment and tax law. Applicants: one year unless they ask sooner", where: "Supabase (EU region)" },
+    { act: "Selling: leads and opportunities", who: "Prospects", what: "Name, company, email, phone, site address, what was discussed", why: "Legitimate interest in doing business, with an easy opt-out", keep: "Three years from the last contact, then reviewed", where: "Supabase (EU region)" },
+    { act: "Sending email from the app", who: "Anyone Orbit emails", what: "Email address and the content of the message", why: "Contract, or consent for anything promotional", keep: "As long as the record it belongs to", where: "Resend (processor)" },
+    { act: "Website analytics", who: "Visitors to the marketing site", what: "IP address, rough location, pages viewed, engagement", why: "Consent (the banner), legitimate interest in knowing what works", keep: "The IP and precise location are removed after 90 days, automatically, every night", where: "Supabase (EU region), Cloudflare (processor)" },
+    { act: "Signing in", who: "Users of the app", what: "Email, hashed password, sign-in times", why: "Contract, and security", keep: "While the account exists, plus one year of access logs", where: "Supabase Auth (EU region)" }
+  ];
+  var PROCESSORS = [
+    ["Supabase", "Database, storage and authentication", "A data processing agreement is on their standard terms. Confirm the project region and keep a signed copy."],
+    ["Cloudflare", "Hosting, CDN, DNS and the edge functions", "Their DPA covers processing; confirm it is accepted on the account."],
+    ["Resend", "Transactional email", "Processes the recipient address and message body. DPA on their terms."]
+  ];
+  async function renderPrivacy() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Privacy & data requests") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var reqs = (await sb.from("privacy_requests").select("*").eq("company_id", S.company.id).order("requested_at", { ascending: false }).limit(50)).data || [];
+    document.getElementById("o-body").innerHTML =
+      '<div class="card"><h3 class="cp-sec">Answer a request about one person</h3>' +
+      '<div class="sub" style="max-width:76ch;margin:-4px 0 12px">Someone has written and asked what you hold about them, or asked you to delete it. Find them here. ' +
+      'The export is <b>everything in this company that names them or carries their email address</b>, as one file you can send back. ' +
+      'Erasing removes the person from every record; it does <b>not</b> delete invoices, ledger entries or payments, because tax law requires those to be kept. Those are left pointing at an anonymous record.</div>' +
+      '<div class="row2" style="align-items:flex-end">' +
+      '<div><label>Who is this</label><select id="pv-kind"><option value="partner">A customer, supplier or contact</option><option value="employee">An employee</option><option value="lead">A sales lead</option></select></div>' +
+      '<div><label>Search by name or email</label><input id="pv-q" placeholder="start typing"></div></div>' +
+      '<div id="pv-hits" style="margin-top:10px"></div>' +
+      '</div>' +
+      '<div class="card"><h3 class="cp-sec">What has been asked, and answered</h3>' +
+      (reqs.length
+        ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>When</th><th>Request</th><th>Person</th><th>Result</th></tr></thead><tbody>' +
+        reqs.map(function (r) {
+          return '<tr><td class="muted">' + esc((r.requested_at || "").slice(0, 16).replace("T", " ")) + '</td>' +
+            '<td><span class="badge' + (r.kind === "erase" ? " unpaid" : "") + '">' + (r.kind === "erase" ? "Erasure" : "Export") + '</span></td>' +
+            '<td><b>' + esc(r.subject_label || "") + '</b>' + (r.subject_email ? '<div class="muted" style="font-size:11px">' + esc(r.subject_email) + '</div>' : "") + '</td>' +
+            '<td class="muted">' + esc(r.note || JSON.stringify(r.rows_touched || {})) + '</td></tr>';
+        }).join("") + '</tbody></table></div>'
+        : '<div class="sub">Nothing yet. Every export and every erasure is logged here, permanently, because the log is the proof that you answered.</div>') +
+      '</div>' +
+      '<div class="card o-print"><h3 class="cp-sec">Record of processing activities</h3>' +
+      '<div class="sub" style="margin:-4px 0 12px">The document a regulator asks for first: what personal data this business holds, why it is allowed to, how long it keeps it and who else touches it. Print it and keep it with your policies. Review it whenever you start doing something new with people\'s data.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Activity</th><th>Whose data</th><th>What is held</th><th>Lawful basis</th><th>Kept for</th><th>Where it sits</th></tr></thead><tbody>' +
+      ROPA.map(function (r) {
+        return '<tr><td><b>' + esc(r.act) + '</b></td><td>' + esc(r.who) + '</td><td class="muted">' + esc(r.what) + '</td><td>' + esc(r.why) + '</td><td class="muted">' + esc(r.keep) + '</td><td class="muted">' + esc(r.where) + '</td></tr>';
+      }).join("") + '</tbody></table></div>' +
+      '<h3 class="cp-sec" style="margin-top:18px">Who else processes it</h3>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Processor</th><th>What they do</th><th>What you still have to do</th></tr></thead><tbody>' +
+      PROCESSORS.map(function (p) { return '<tr><td><b>' + esc(p[0]) + '</b></td><td>' + esc(p[1]) + '</td><td class="muted">' + esc(p[2]) + '</td></tr>'; }).join("") +
+      '</tbody></table></div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="pv-print">Print this record</button></div></div>';
+
+    document.getElementById("pv-print").onclick = function () { window.print(); };
+    var q = document.getElementById("pv-q"), kind = document.getElementById("pv-kind");
+    var timer = null;
+    function search() {
+      clearTimeout(timer);
+      timer = setTimeout(async function () {
+        var term = (q.value || "").trim();
+        var box = document.getElementById("pv-hits");
+        if (term.length < 2) { box.innerHTML = '<div class="sub">Type at least two letters.</div>'; return; }
+        var k = kind.value, rows = [];
+        if (k === "partner") rows = (await sb.from("partners").select("id,name,email,phone").eq("company_id", S.company.id).or("name.ilike.%" + term + "%,email.ilike.%" + term + "%").limit(20)).data || [];
+        else if (k === "employee") rows = (await sb.from("hr_employees").select("id,name,work_email,personal_email").eq("company_id", S.company.id).or("name.ilike.%" + term + "%,work_email.ilike.%" + term + "%").limit(20)).data || [];
+        else rows = (await sb.from("crm_leads").select("id,name,contact_name,email").eq("company_id", S.company.id).or("name.ilike.%" + term + "%,contact_name.ilike.%" + term + "%,email.ilike.%" + term + "%").limit(20)).data || [];
+        if (!rows.length) { box.innerHTML = '<div class="sub">Nobody matches that.</div>'; return; }
+        box.innerHTML = '<div class="o-rt-wrap"><table class="o-lines"><tbody>' + rows.map(function (r) {
+          var em = r.email || r.work_email || r.personal_email || "";
+          var nm = r.contact_name || r.name || "";
+          return '<tr><td><b>' + esc(nm) + '</b>' + (em ? '<div class="muted" style="font-size:11px">' + esc(em) + '</div>' : "") + '</td>' +
+            '<td style="text-align:right;white-space:nowrap"><button class="btn sm pv-exp" data-id="' + r.id + '" data-n="' + esc(nm) + '">Export their data</button> ' +
+            '<button class="btn sm pv-era" data-id="' + r.id + '" data-n="' + esc(nm) + '" style="color:var(--bad-t)">Erase them</button></td></tr>';
+        }).join("") + '</tbody></table></div>';
+        box.querySelectorAll(".pv-exp").forEach(function (b) {
+          b.onclick = async function () {
+            b.disabled = true; b.textContent = "Gathering...";
+            var r = await sb.rpc("gdpr_export", { p_company: S.company.id, p_kind: kind.value, p_id: b.dataset.id });
+            b.disabled = false; b.textContent = "Export their data";
+            if (r.error) { toast(errMsg(r.error)); return; }
+            downloadBlob((b.dataset.n || "subject").replace(/[^\w]+/g, "_").toLowerCase() + "_data_" + today() + ".json", JSON.stringify(r.data, null, 2), "application/json");
+            toast("Exported. Send them the file."); renderPrivacy();
+          };
+        });
+        box.querySelectorAll(".pv-era").forEach(function (b) {
+          b.onclick = async function () {
+            if (!confirm("Erase " + b.dataset.n + " from this company's records?\n\nTheir name, email, phone and address are removed everywhere they appear. Invoices, ledger entries and payments are KEPT, because tax law requires it, and will point at an anonymous record.\n\nThis cannot be undone.")) return;
+            if (!confirm("Last check: erase " + b.dataset.n + "? Export their data first if they also asked for a copy.")) return;
+            var r = await sb.rpc("gdpr_erase", { p_company: S.company.id, p_kind: kind.value, p_id: b.dataset.id });
+            if (r.error) { toast(errMsg(r.error)); return; }
+            toast("Erased. The record of it is kept as your proof."); renderPrivacy();
+          };
+        });
+      }, 250);
+    }
+    q.oninput = search; kind.onchange = search;
+    document.getElementById("pv-hits").innerHTML = '<div class="sub">Type at least two letters.</div>';
+  }
   function downloadBlob(name, text, mime) {
     var blob = new Blob([text], { type: (mime || "text/csv") + ";charset=utf-8" });
     var url = URL.createObjectURL(blob), a = document.createElement("a");
@@ -14372,18 +14764,27 @@
     };
   }
   var INVACC = null;
+  // The stock accounts, in order of authority: what the company was configured
+  // with, then the codes Orbit seeds. Guessing by code alone was silent and
+  // wrong the moment a company brought its own chart of accounts.
   async function invAccounts() {
     if (INVACC && INVACC.company === S.company.id) return INVACC;
-    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["3100", "3500", "4700", "6000", "6500"])).data || [];
-    var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
-    // Self-heal: older companies may predate the WIP/finished-goods account (3500).
-    // Create it so fabrication (work orders / production) can capitalise through WIP.
-    if (!by["3500"] && by["3100"]) {
-      var w = await sb.from("accounts").insert({ company_id: S.company.id, code: "3500", name: "Work in progress / finished goods", type_code: "asset_current" }).select("id").single();
-      if (!w.error && w.data) by["3500"] = w.data.id;
+    var co = S.company || {};
+    var got = { inv: co.stock_account_id || null, wip: co.wip_account_id || null, susp: co.grni_account_id || null, cogs: co.cogs_account_id || null, adj: co.stock_adj_account_id || null };
+    if (!got.inv || !got.cogs || !got.susp || !got.adj || !got.wip) {
+      var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["3100", "3500", "4700", "6000", "6500"])).data || [];
+      var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
+      // Self-heal: older companies may predate the WIP/finished-goods account (3500).
+      // Create it so fabrication (work orders / production) can capitalise through WIP.
+      if (!got.wip && !by["3500"] && by["3100"]) {
+        var w = await sb.from("accounts").insert({ company_id: S.company.id, code: "3500", name: "Work in progress / finished goods", type_code: "asset_current" }).select("id").single();
+        if (!w.error && w.data) by["3500"] = w.data.id;
+      }
+      got.inv = got.inv || by["3100"]; got.wip = got.wip || by["3500"];
+      got.susp = got.susp || by["4700"]; got.cogs = got.cogs || by["6000"]; got.adj = got.adj || by["6500"];
     }
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
-    INVACC = { company: S.company.id, inv: by["3100"], wip: by["3500"], susp: by["4700"], cogs: by["6000"], adj: by["6500"], journal: jr ? jr.id : null };
+    INVACC = { company: S.company.id, inv: got.inv, wip: got.wip, susp: got.susp, cogs: got.cogs, adj: got.adj, journal: jr ? jr.id : null };
     return INVACC;
   }
   // Perpetual-inventory GL posting for a stock move (value = qty x product cost).
@@ -14395,7 +14796,10 @@
     var cost = (unitCost != null && unitCost !== "" && Number(unitCost) > 0) ? Number(unitCost) : Number(product.cost_price || 0), value = qty * cost;
     if (value <= 0) return;
     var a = await invAccounts();
-    if (!a.journal || !a.inv) return;
+    // Silence here is how stock stopped reaching the ledger for a company on
+    // its own chart of accounts. Say so instead.
+    if (!a.inv) { toast("Stock saved, but no stock account is set for this company - Settings, Companies, Stock accounting"); return; }
+    if (!a.journal) { toast("Stock saved, but this company has no MISC journal to post through"); return; }
     // WIP paths need the 3500 account; if it is somehow missing, degrade safely:
     // consume -> expense (old behaviour), output -> quantity-only (skip GL).
     if (kind === "wip_consume" && !a.wip) kind = "deliver";
@@ -17739,18 +18143,18 @@
     m.innerHTML = '<div class="sheet"><h3>Take payment</h3><div class="form">' +
       '<div style="display:flex;gap:8px"><div style="flex:1"><label>Voucher code</label><input id="pos-vcode" placeholder="optional"></div><button class="btn" id="pos-vapply" style="align-self:flex-end">Apply</button></div><div id="pos-vmsg" class="muted" style="font-size:12px;margin-top:-4px"></div>' +
       (cust && ptVal > 0 && Number(cust.loyalty_points) > 0 ? '<div><label>Redeem points (' + (Number(cust.loyalty_points) || 0) + ' available &middot; ' + money(ptVal) + '/pt)</label><input id="pos-redeem" type="number" min="0" step="1" value="0"></div>' : '') +
-      '<div><label>Method</label><select id="pos-method"><option value="cash">Cash</option><option value="card">Card</option><option value="transfer">Transfer</option></select></div>' +
-      '<div id="pos-cashwrap"><label>Cash received</label><input id="pos-tendered" type="number" step="0.01"><div id="pos-change" class="muted" style="margin-top:6px"></div></div>' +
+      '<label>What they hand over</label><div id="pos-pad" class="tp"></div>' +
       '<div class="sub" id="pos-summary" style="margin-top:4px"></div>' +
       '</div><div class="foot"><button class="btn" id="pos-x">Cancel</button><button class="btn pri" id="pos-done" style="background:var(--app);border-color:var(--app)">Complete sale</button></div></div>';
     document.body.appendChild(m);
+    var posPad = null;
     function refresh() {
       POS.redeem = parseFloat(gv("pos-redeem")) || 0;
       var t = posTotals();
       document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span style="color:var(--bad-t)">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && earnPct > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnPct / 100) + ' pts' : '');
-      var meth = document.getElementById("pos-method").value; document.getElementById("pos-cashwrap").style.display = meth === "cash" ? "" : "none";
-      var tend = document.getElementById("pos-tendered"); if (meth === "cash") { if (!tend.value) tend.value = t.tot.toFixed(2); var ch = (parseFloat(tend.value) || 0) - t.tot; document.getElementById("pos-change").textContent = ch >= 0 ? "Change: " + money(ch) : "Short " + money(-ch); }
+      if (posPad) posPad.setDue(t.tot);
     }
+    loadFxRates().then(function () { posPad = tenderPad("pos-pad", posTotals().tot); });
     document.getElementById("pos-vapply").onclick = async function () {
       var code = gv("pos-vcode"); var msg = document.getElementById("pos-vmsg"); if (!code) { POS.voucher = null; msg.textContent = ""; refresh(); return; }
       var v = (await sb.from("pos_vouchers").select("*").eq("company_id", S.company.id).eq("code", code).eq("active", true).maybeSingle()).data;
@@ -17761,10 +18165,11 @@
       refresh();
     };
     var rd = document.getElementById("pos-redeem"); if (rd) rd.oninput = refresh;
-    document.getElementById("pos-method").onchange = refresh; document.getElementById("pos-tendered").oninput = refresh; refresh();
+    refresh();
     document.getElementById("pos-x").onclick = function () { POS.voucher = null; POS.redeem = 0; m.remove(); };
     document.getElementById("pos-done").onclick = async function () {
-      var meth = document.getElementById("pos-method").value; var t = posTotals();
+      var t = posTotals();
+      if (!posPad || !posPad.ready) { var pt = posPad ? posPad.totals() : null; toast(pt && pt.missing ? "No exchange rate for " + pt.missing + " today - add one in Settings, Currencies" : "That does not cover the sale yet"); return; }
       var earned = cust && earnPct > 0 ? Math.floor(t.sub * earnPct / 100) : 0;
       var redeemedPts = ptVal > 0 ? Math.round(t.redeemDisc / ptVal) : 0;
       var ins = await sb.from("pos_orders").insert({ company_id: S.company.id, session_id: POS.session.id, number: "POS-" + String(Date.now()).slice(-7), partner_id: POS.partner || null, subtotal: t.sub, tax: t.tax, total: t.tot, discount: t.discount, voucher_code: POS.voucher ? POS.voucher.code : null, loyalty_earned: earned, loyalty_redeemed: redeemedPts, status: "paid", created_by: S.user.id }).select("id").single();
@@ -17772,7 +18177,7 @@
       var oid = ins.data.id;
       var lines = POS.cart.map(function (l, i) { return { company_id: S.company.id, order_id: oid, product_id: l.product_id, name: l.name, qty: l.qty, unit_price: l.price, tax_rate: POS.vat, discount: l.discount || 0, line_total: l.price * l.qty - (l.discount || 0), seq: (i + 1) * 10 }; });
       await sb.from("pos_order_lines").insert(lines);
-      await sb.from("pos_payments").insert({ company_id: S.company.id, order_id: oid, method: meth, amount: t.tot });
+      await sb.from("pos_payments").insert(posPad.payments({ company_id: S.company.id, order_id: oid }));
       if (POS.voucher) await sb.from("pos_vouchers").update({ used_at: new Date().toISOString(), used_order_id: oid }).eq("id", POS.voucher.id);
       if (cust && (earned || redeemedPts)) { var newPts = (Number(cust.loyalty_points) || 0) + earned - redeemedPts; await sb.from("partners").update({ loyalty_points: newPts }).eq("id", cust.id); cust.loyalty_points = newPts; }
       m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; posPaintCart(); toast("Sale complete · " + money(t.tot) + (earned ? " · +" + earned + " pts" : ""));
@@ -19166,7 +19571,11 @@
     if (opts.receipt) {
       html += '<div class="trule"></div>' +
         paid.map(function (p) {
-          return '<div class="trow tt"><span class="tn">' + esc(fnbTitle(p.method || "")) +
+          // a tender taken in another currency prints as the guest paid it,
+          // with the rate, and the home value beside it
+          var foreign = p.currency_code && p.currency_code !== cc && p.amount_ccy != null;
+          return '<div class="trow tt"><span class="tn">' + esc(fnbTitle(p.method === "change" ? "Change" : (p.method || ""))) +
+            (foreign ? '<span class="tmod">' + esc(p.currency_code) + " " + money(Math.abs(p.amount_ccy)) + " at " + Number(p.fx_rate).toFixed(6).replace(/0+$/, "").replace(/\.$/, "") + '</span>' : "") +
             (p.reference ? '<span class="tmod">' + esc(p.reference) + '</span>' : "") +
             (p.split_label ? '<span class="tmod">' + esc(p.split_label) + '</span>' : "") +
             '</span><span class="ta">' + money(p.amount) + '</span></div>';
@@ -19597,6 +20006,148 @@
   // --------------------------------------------------------------------------
   var PAY_METHODS = [["cash", "Cash"], ["card", "Card"], ["wallet", "Wallet / gift card"], ["voucher", "Voucher"], ["points", "Loyalty points"], ["account", "On account"], ["transfer", "Transfer"]];
 
+  // ---------------------------------------------------------------------------
+  // Taking money in more than one currency.
+  //
+  // A Beirut till takes 300,000 lira and five dollars for the same bill and
+  // gives change in whichever it has. The engine always converted correctly;
+  // the tender screen only ever took one currency, so the cashier fudged it and
+  // the drawer count afterwards meant nothing.
+  //
+  // A payment is a list of tenders. Each carries the amount in the currency it
+  // was physically handed over in and the rate it converted at, while `amount`
+  // stays in the company's own currency so nothing downstream changes. Change
+  // is a NEGATIVE tender, which is how a drawer really works and keeps the
+  // payments on an order adding up to exactly the bill.
+  // ---------------------------------------------------------------------------
+  function tenderCcyOptions() {
+    var home = S.company.currency_code, seen = {}, out = [home];
+    seen[home] = 1;
+    Object.keys(S._fxRates || {}).forEach(function (c) { if (!seen[c]) { seen[c] = 1; out.push(c); } });
+    return out;
+  }
+  // one tender pad, mounted into a container inside a modal
+  function tenderPad(rootId, due, opts) {
+    opts = opts || {};
+    var home = S.company.currency_code, ccys = tenderCcyOptions(), rates = {};
+    rates[home] = 1;
+    var rows = [{ method: opts.method || "cash", ccy: home, amt: svcR2(due) }];
+    var pad = { due: due, rows: rows, ready: true };
+    var root = document.getElementById(rootId);
+    if (!root) return pad;
+
+    function ccySel(v, i) {
+      return '<select class="tp-ccy" data-i="' + i + '">' + ccys.map(function (c) {
+        return '<option value="' + c + '"' + (c === v ? " selected" : "") + '>' + c + '</option>';
+      }).join("") + '</select>';
+    }
+    function methSel(v, i) {
+      return '<select class="tp-meth" data-i="' + i + '">' + PAY_METHODS.map(function (m) {
+        return '<option value="' + m[0] + '"' + (m[0] === v ? " selected" : "") + '>' + m[1] + '</option>';
+      }).join("") + '</select>';
+    }
+    async function rateFor(c) {
+      if (rates[c] != null) return rates[c];
+      var r = await cashFx(1, c, home, today());
+      rates[c] = r.ok ? r.value : null;
+      return rates[c];
+    }
+    function homeValue(r) { var rt = rates[r.ccy]; return rt == null ? null : svcR2((Number(r.amt) || 0) * rt); }
+    function totals() {
+      var sum = 0, missing = null;
+      rows.forEach(function (r) { var h = homeValue(r); if (h == null) missing = r.ccy; else sum += h; });
+      sum = svcR2(sum);
+      return { taken: sum, change: svcR2(Math.max(0, sum - due)), short: svcR2(Math.max(0, due - sum)), missing: missing };
+    }
+    function paint() {
+      root.innerHTML =
+        '<div class="tp-rows">' + rows.map(function (r, i) {
+          var h = homeValue(r);
+          return '<div class="tp-row">' + methSel(r.method, i) + ccySel(r.ccy, i) +
+            '<input class="tp-amt" data-i="' + i + '" type="number" step="0.01" value="' + (r.amt != null ? r.amt : "") + '" aria-label="Amount in ' + r.ccy + '">' +
+            '<span class="tp-eq">' + (r.ccy === home ? "" : (h == null ? '<span style="color:var(--bad-t)">no rate</span>' : "= " + money(h))) + '</span>' +
+            (rows.length > 1 ? '<button type="button" class="tp-x" data-i="' + i + '" title="Remove this tender">&times;</button>' : '<span></span>') +
+            '</div>';
+        }).join("") + '</div>' +
+        '<div class="tp-foot"><button type="button" class="btn sm" id="tp-add">Add another currency</button>' +
+        '<span class="tp-sum" id="tp-sum"></span></div>' +
+        '<div id="tp-change"></div>';
+      var t = totals();
+      var sm = root.querySelector("#tp-sum");
+      sm.innerHTML = t.missing ? '<b style="color:var(--bad-t)">No rate for ' + esc(t.missing) + ' today</b>'
+        : t.short > 0.005 ? '<b style="color:var(--bad-t)">' + money(t.short) + ' short</b>'
+          : t.change > 0.005 ? 'Change <b>' + money(t.change) + '</b>'
+            : '<b style="color:var(--good-t)">Exact</b>';
+      var ch = root.querySelector("#tp-change");
+      if (t.change > 0.005) {
+        var cc = pad.changeCcy || home;
+        var chr = rates[cc];
+        ch.innerHTML = '<div class="tp-row tp-chg"><span class="tp-lbl">Change given in</span>' +
+          '<select id="tp-chgccy">' + ccys.map(function (c) { return '<option value="' + c + '"' + (c === cc ? " selected" : "") + '>' + c + '</option>'; }).join("") + '</select>' +
+          '<b>' + (chr ? (cc + " " + money(svcR2(t.change / chr))) : "no rate") + '</b></div>';
+        ch.querySelector("#tp-chgccy").onchange = async function () {
+          pad.changeCcy = this.value; await rateFor(this.value); paint();
+        };
+      } else ch.innerHTML = "";
+      pad.ready = !t.missing && t.short <= 0.005;
+      root.querySelectorAll(".tp-amt").forEach(function (el) {
+        el.oninput = function () { rows[+el.dataset.i].amt = parseFloat(el.value); var t2 = totals(); repaintSummary(t2); };
+        el.onchange = function () { paint(); };
+      });
+      root.querySelectorAll(".tp-ccy").forEach(function (el) {
+        el.onchange = async function () { rows[+el.dataset.i].ccy = el.value; await rateFor(el.value); paint(); };
+      });
+      root.querySelectorAll(".tp-meth").forEach(function (el) {
+        el.onchange = function () { rows[+el.dataset.i].method = el.value; };
+      });
+      root.querySelectorAll(".tp-x").forEach(function (el) {
+        el.onclick = function () { rows.splice(+el.dataset.i, 1); paint(); };
+      });
+      root.querySelector("#tp-add").onclick = function () {
+        var t3 = totals();
+        // the new row is pre-filled with whatever is still owed, in the second
+        // currency, which is the whole point: "the rest in lira"
+        var nc = ccys[1] || home;
+        rows.push({ method: "cash", ccy: nc, amt: null });
+        rateFor(nc).then(function (rt) {
+          if (rt && t3.short > 0.005) rows[rows.length - 1].amt = svcR2(t3.short / rt);
+          paint();
+        });
+      };
+      if (opts.onChange) opts.onChange(t);
+    }
+    function repaintSummary(t) {
+      var sm = root.querySelector("#tp-sum"); if (!sm) return;
+      sm.innerHTML = t.missing ? '<b style="color:var(--bad-t)">No rate for ' + esc(t.missing) + '</b>'
+        : t.short > 0.005 ? '<b style="color:var(--bad-t)">' + money(t.short) + ' short</b>'
+          : t.change > 0.005 ? 'Change <b>' + money(t.change) + '</b>' : '<b style="color:var(--good-t)">Exact</b>';
+      pad.ready = !t.missing && t.short <= 0.005;
+      if (opts.onChange) opts.onChange(t);
+    }
+    // the rows to write: one per tender, plus change as a negative tender
+    pad.payments = function (base) {
+      var t = totals(), out = [];
+      rows.forEach(function (r) {
+        var amt = Number(r.amt) || 0; if (!amt) return;
+        var rt = rates[r.ccy]; if (rt == null) return;
+        out.push(Object.assign({}, base, {
+          method: r.method, currency_code: r.ccy, amount_ccy: svcR2(amt), fx_rate: rt, amount: svcR2(amt * rt)
+        }));
+      });
+      if (t.change > 0.005) {
+        var cc = pad.changeCcy || home, cr = rates[cc] || 1;
+        out.push(Object.assign({}, base, {
+          method: "change", currency_code: cc, amount_ccy: -svcR2(t.change / cr), fx_rate: cr, amount: -t.change, tip_amount: 0
+        }));
+      }
+      return out;
+    };
+    pad.totals = totals;
+    pad.setDue = function (d) { due = d; pad.due = d; if (rows.length === 1) rows[0].amt = svcR2(d); paint(); };
+    paint();
+    return pad;
+  }
+
   async function openBill(t) {
     if (!SERVICE.order) { toast("Nothing on this table yet"); return; }
     var oid = SERVICE.order.id;
@@ -19621,24 +20172,30 @@
       '<button type="button" class="btn bill-sp" data-sp="items">By item</button>' +
       '<button type="button" class="btn bill-sp" data-sp="amount">By amount</button></div>' +
       '<div id="bill-mode"></div>' +
-      '<div class="row2"><div><label>Method</label><select id="bill-meth">' + PAY_METHODS.map(function (m) { return '<option value="' + m[0] + '">' + m[1] + '</option>'; }).join("") + '</select></div>' +
-      '<div><label>Tip</label><input id="bill-tip" type="number" step="0.01" placeholder="0.00"></div></div>' +
+      '<label>What they hand over</label><div id="bill-pad" class="tp"></div>' +
+      '<div><label>Tip</label><input id="bill-tip" type="number" step="0.01" placeholder="0.00"></div>' +
       '<div><label>Reference</label><input id="bill-ref" placeholder="card auth, card last 4, voucher code"></div>' +
       '<div class="o-note" id="bill-note">This tender will settle <b id="bill-amt">' + money(due) + '</b>. Add more than one tender if the table is paying separately.</div>' +
       '<button type="button" class="btn" id="bill-print">Print the bill for the guest</button>';
 
+    var billPad = null;
     var m = plotModal("Bill for " + (t.name || "table"), inner, async function () {
       var amt = Number(m.__amount != null ? m.__amount : due);
       if (!(amt > 0)) { toast("Nothing to settle"); return; }
       if (amt > due + 0.005) { toast("That is more than is still owed"); return; }
-      var row = {
-        company_id: S.company.id, order_id: oid, method: document.getElementById("bill-meth").value,
-        amount: Math.round(amt * 100) / 100, tip_amount: parseFloat(gv("bill-tip")) || 0,
+      if (!billPad || !billPad.ready) { var bt = billPad ? billPad.totals() : null; toast(bt && bt.missing ? "No exchange rate for " + bt.missing + " today - add one in Settings, Currencies" : "That does not cover this share yet"); return; }
+      var rows = billPad.payments({
+        company_id: S.company.id, order_id: oid, tip_amount: 0,
         reference: gv("bill-ref") || null, store_id: SERVICE.store || t.store_id || null,
         taken_by: (S.user && S.user.email) || null,
         split_kind: m.__mode || "whole", split_label: m.__label || null
-      };
-      if (!(await svcWrite("pos_payments", "insert", row))) return;
+      });
+      if (!rows.length) { toast("Nothing to settle"); return; }
+      rows[0].tip_amount = parseFloat(gv("bill-tip")) || 0;
+      // one row stands for the payment in everything below; the tenders behind
+      // it can be several currencies but they settle one share of one bill
+      var row = { amount: rows.reduce(function (s, r) { return s + Number(r.amount || 0); }, 0), tip_amount: rows[0].tip_amount };
+      for (var qi = 0; qi < rows.length; qi++) { if (!(await svcWrite("pos_payments", "insert", rows[qi]))) return; }
       // mark the chosen lines settled, so the next person is not offered them again
       if ((m.__mode === "items" || m.__mode === "seat") && m.__lineIds && m.__lineIds.length) {
         for (var pi = 0; pi < m.__lineIds.length; pi++) {
@@ -19658,7 +20215,7 @@
       m.remove();
       if (left <= 0.005) {
         // the table is done: receipt, clear it, hand the floor back
-        svcPrintBill(t, { receipt: true, payments: paid.concat([row]) });
+        svcPrintBill(t, { receipt: true, payments: paid.concat(rows) });
         await svcWrite("store_tables", "update", { status: "dirty", seated_at: null, current_order_id: null }, { match: { id: t.id } });
         toast("Bill settled" + (tips ? " (tips " + money(tips) + ")" : "") + " - table free to clear");
         go("kitchen.floor");
@@ -19676,7 +20233,9 @@
     function setAmount(a, label, ids) {
       m.__amount = Math.min(due, svcR2(a)); m.__label = label || null; m.__lineIds = ids || null;
       var el = document.getElementById("bill-amt"); if (el) el.textContent = money(m.__amount);
+      if (billPad) billPad.setDue(m.__amount);   // the pad always asks for the share being settled
     }
+    loadFxRates().then(function () { billPad = tenderPad("bill-pad", m.__amount != null ? m.__amount : due); });
     function paintMode() {
       var box = document.getElementById("bill-mode"); if (!box) return;
       if (m.__mode === "even") {
@@ -20156,20 +20715,17 @@
       '<div class="bill-sum"><div><span>Items</span><b>' + money(T.sub) + '</b></div>' +
       (T.rate ? '<div><span>VAT ' + T.rate + '%</span><b>' + money(T.tax) + '</b></div>' : "") +
       '<div class="bill-due"><span>To pay</span><b>' + money(T.tot) + '</b></div></div>' +
-      '<div class="row2"><div><label>Method</label><select id="ct-meth">' +
-      PAY_METHODS.map(function (x) { return '<option value="' + x[0] + '">' + x[1] + '</option>'; }).join("") + '</select></div>' +
-      '<div><label>Cash given</label><input id="ct-cash" type="number" step="0.01" placeholder="' + money(T.tot) + '"></div></div>' +
-      '<div class="o-note" id="ct-change">Enter what they hand over and the change is worked out for you.</div>' +
+      '<label>What they hand over</label><div id="ct-pad" class="tp"></div>' +
       '<div><label>Reference</label><input id="ct-ref" placeholder="card auth, last 4"></div>';
+    var pad = null;
     var m = plotModal("Take " + money(T.tot), inner, async function () {
-      var meth = gv("ct-meth") || "cash";
-      var row = {
-        company_id: S.company.id, order_id: SERVICE.order.id, method: meth,
-        amount: T.tot, tip_amount: 0, reference: gv("ct-ref") || null,
-        store_id: SERVICE.store || null, taken_by: (S.user && S.user.email) || null,
-        split_kind: "whole"
-      };
-      if (!(await svcWrite("pos_payments", "insert", row))) return;
+      if (!pad || !pad.ready) { var tt = pad ? pad.totals() : null; toast(tt && tt.missing ? "No exchange rate for " + tt.missing + " today - add one in Settings, Currencies" : "That does not cover the bill yet"); return; }
+      var rows = pad.payments({
+        company_id: S.company.id, order_id: SERVICE.order.id, tip_amount: 0,
+        reference: gv("ct-ref") || null, store_id: SERVICE.store || null,
+        taken_by: (S.user && S.user.email) || null, split_kind: "whole"
+      });
+      for (var pi = 0; pi < rows.length; pi++) { if (!(await svcWrite("pos_payments", "insert", rows[pi]))) return; }
       var num = (await sb.rpc("pos_next_call_number", { p_company: S.company.id, p_store: SERVICE.store || null })).data;
       var now = new Date().toISOString();
       // everything goes to the kitchen at once: there are no courses at a counter
@@ -20182,22 +20738,10 @@
       }, { match: { id: SERVICE.order.id } });
       SERVICE.order.call_number = num;
       m.remove();
-      svcPrintBill(null, { receipt: true, payments: [row] });
+      svcPrintBill(null, { receipt: true, payments: rows });
       counterCalled(num, menu);
     });
-    var cash = m.querySelector("#ct-cash"), note = m.querySelector("#ct-change");
-    cash.oninput = function () {
-      var given = parseFloat(this.value);
-      note.innerHTML = given > 0
-        ? (given + 0.0001 >= T.tot
-          ? 'Change <b>' + money(given - T.tot) + '</b>'
-          : '<b>' + money(T.tot - given) + '</b> short')
-        : "Enter what they hand over and the change is worked out for you.";
-    };
-    m.querySelector("#ct-meth").onchange = function () {
-      cash.parentElement.style.display = this.value === "cash" ? "" : "none";
-      if (this.value !== "cash") note.textContent = "";
-    };
+    loadFxRates().then(function () { pad = tenderPad("ct-pad", T.tot); });
   }
   // The number, big, for the length of time it takes to hand over a receipt.
   function counterCalled(num, menu) {
@@ -20790,20 +21334,49 @@
       if (ins.error) { toast(errMsg(ins.error)); return; } renderVouchers();
     };
   }
+  // Closing a drawer that took two currencies. One counted figure cannot
+  // describe a till holding dollars and lira, so the count is per currency:
+  // every cash tender in and every bit of change out, in the money it happened
+  // in. The home-currency total is still written to the old columns so the
+  // existing shift report is unaffected.
   async function posCloseSession() {
     if (!POS.session) return;
     var sales = (await sb.from("pos_orders").select("total").eq("session_id", POS.session.id).eq("status", "paid")).data || [];
-    var cashSales = 0; var pays = (await sb.from("pos_payments").select("amount,method, pos_orders!inner(session_id)").eq("pos_orders.session_id", POS.session.id)).data || [];
-    pays.forEach(function (p) { if (p.method === "cash") cashSales += Number(p.amount) || 0; });
-    var expected = (Number(POS.session.opening_cash) || 0) + cashSales;
+    var home = S.company.currency_code;
+    var drawer = (await sb.rpc("session_drawer", { p_session: POS.session.id })).data || [];
+    var byCcy = {}; drawer.forEach(function (d) { byCcy[d.currency_code] = Number(d.expected) || 0; });
+    var openBy = POS.session.opening_ccy || {};
+    if (!byCcy[home]) byCcy[home] = 0;
+    Object.keys(openBy).forEach(function (c) { if (byCcy[c] === undefined) byCcy[c] = 0; });
+    byCcy[home] += Number(POS.session.opening_cash) || 0;
+    Object.keys(openBy).forEach(function (c) { if (c !== home) byCcy[c] += Number(openBy[c]) || 0; });
+    var ccys = Object.keys(byCcy).sort(function (a, b) { return a === home ? -1 : b === home ? 1 : a.localeCompare(b); });
+    var cashHome = 0;
+    var pays = (await sb.from("pos_payments").select("amount,method, pos_orders!inner(session_id)").eq("pos_orders.session_id", POS.session.id)).data || [];
+    pays.forEach(function (p) { if (p.method === "cash" || p.method === "change") cashHome += Number(p.amount) || 0; });
+    var expected = (Number(POS.session.opening_cash) || 0) + cashHome;
     var m = document.createElement("div"); m.className = "modal on";
-    m.innerHTML = '<div class="sheet"><h3>Close register</h3><div class="form"><div class="sub">' + sales.length + ' sales this shift. Expected cash in drawer: <b>' + money(expected) + '</b> (opening ' + money(POS.session.opening_cash) + ' + cash sales ' + money(cashSales) + ').</div>' +
-      '<div><label>Counted cash</label><input id="pos-count" type="number" step="0.01" value="' + expected.toFixed(2) + '"></div></div>' +
-      '<div class="foot"><button class="btn" id="pc-x">Cancel</button><button class="btn pri" id="pc-do" style="background:var(--app);border-color:var(--app)">Close shift</button></div></div>';
+    m.innerHTML = '<div class="sheet"><h3>Close register</h3><div class="form"><div class="sub">' + sales.length + ' sale(s) this shift. Count each currency in the drawer; what Orbit expects is beside it.</div>' +
+      ccys.map(function (c) {
+        return '<div class="row2" style="align-items:flex-end"><div><label>Counted ' + esc(c) + '</label>' +
+          '<input class="pos-cnt" data-c="' + esc(c) + '" type="number" step="0.01" value="' + (Math.round(byCcy[c] * 100) / 100) + '"></div>' +
+          '<div class="sub" style="padding-bottom:10px">expected <b>' + esc(c) + " " + money(byCcy[c]) + '</b></div></div>';
+      }).join("") +
+      '</div><div class="foot"><button class="btn" id="pc-x">Cancel</button><button class="btn pri" id="pc-do" style="background:var(--app);border-color:var(--app)">Close shift</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("pc-x").onclick = function () { m.remove(); };
     document.getElementById("pc-do").onclick = async function () {
-      await sb.from("pos_sessions").update({ status: "closed", closed_at: new Date().toISOString(), closing_cash: parseFloat(gv("pos-count")) || 0, expected_cash: expected }).eq("id", POS.session.id);
+      var declared = {}, homeCount = 0;
+      m.querySelectorAll(".pos-cnt").forEach(function (el) {
+        var v = parseFloat(el.value) || 0; declared[el.dataset.c] = v;
+        if (el.dataset.c === home) homeCount = v;
+      });
+      await sb.from("pos_sessions").update({
+        status: "closed", closed_at: new Date().toISOString(),
+        closing_cash: homeCount, declared_cash: homeCount, expected_cash: expected,
+        variance: Math.round((homeCount - expected) * 100) / 100,
+        declared_ccy: declared
+      }).eq("id", POS.session.id);
       m.remove(); POS.session = null; toast("Shift closed"); renderPOS();
     };
   }
@@ -25259,7 +25832,10 @@
       '</div><div class="foot"><button class="btn" data-x>Cancel</button><button class="btn pri" data-s style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
     document.body.appendChild(m);
     m.querySelector("[data-x]").onclick = function () { m.remove(); };
-    m.querySelector("[data-s]").onclick = function () { onSave(m); };
+    // a modal with nothing to save (a settings panel that acts as you go) keeps
+    // only the way out, rather than showing a Save button that does nothing
+    if (onSave) m.querySelector("[data-s]").onclick = function () { onSave(m); };
+    else { var sv = m.querySelector("[data-s]"); sv.parentNode.removeChild(sv); m.querySelector("[data-x]").textContent = "Done"; }
     return m;
   }
   function plotPartners() { return sb.from("partners").select("id,name,is_customer").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); }
@@ -25416,11 +25992,13 @@
       '<div><label>Bylaws reference</label><input id="pp-bylaws" value="' + esc(pf.bylaws_ref || "") + '"></div>' +
       '<div class="row2"><div><label>Also show amounts in</label><input id="pp-cur2" value="' + esc(pf.second_currency || "") + '" placeholder="e.g. LBP - leave blank for none"></div><div><label>at this rate</label><input id="pp-fx" type="number" step="0.0001" value="' + esc(pf.exchange_rate || "") + '" placeholder="per ' + esc(S.company.currency_code) + '"></div></div>' +
       '<div><label>How owners pay</label><textarea id="pp-payinfo" rows="2" placeholder="Bank details or where to hand cash in - printed on notices">' + esc(pf.payment_instructions || "") + '</textarea></div>' +
+      '<div><label>Notice language</label>' + fhint("Notice language", "Which language the arrears letters print in. A formal notice that may end up in front of a notary is usually written in Arabic; pick Both and the Arabic goes first with the English on the following page.") +
+      '<select id="pp-lang">' + [["en", "English"], ["ar", "العربية"], ["both", "Both - Arabic then English"]].map(function (l) { return '<option value="' + l[0] + '"' + ((pf.notice_lang || "en") === l[0] ? " selected" : "") + '>' + l[1] + '</option>'; }).join("") + '</select></div>' +
       '<div><label>Footer / disclaimer on documents</label><textarea id="pp-disc" rows="2">' + esc(pf.disclaimer || "") + '</textarea></div>';
     var m = plotModal(p.id ? "Edit building" : "New building", inner, async function () {
       var name = gv("pp-name"); if (!name) { toast("Enter a name"); return; }
       var row = { company_id: S.company.id, name: name, code: gv("pp-code") || null, kind: gv("pp-kind"), city: gv("pp-city") || null, country: gv("pp-country") || null, address: gv("pp-addr") || null, shares_total: Number(gv("pp-shares")) || 1000, reserve_percent: Number(gv("pp-reserve")) || 0, manager_partner_id: gv("pp-mgr") || null, income_account_id: gv("pp-inc") || null, opening_balance: Number(gv("pp-open")) || 0, cash_limit: gv("pp-limit") ? Number(gv("pp-limit")) : null,
-        profile: Object.assign({}, pf, { committee_head: gv("pp-head") || null, treasurer_name: gv("pp-treas") || null, property_number: gv("pp-propno") || null, cadastral_zone: gv("pp-cad") || null, bylaws_ref: gv("pp-bylaws") || null, payment_instructions: gv("pp-payinfo") || null, disclaimer: gv("pp-disc") || null, second_currency: (gv("pp-cur2") || "").toUpperCase() || null, exchange_rate: gv("pp-fx") ? Number(gv("pp-fx")) : null }) };
+        profile: Object.assign({}, pf, { committee_head: gv("pp-head") || null, treasurer_name: gv("pp-treas") || null, property_number: gv("pp-propno") || null, cadastral_zone: gv("pp-cad") || null, bylaws_ref: gv("pp-bylaws") || null, payment_instructions: gv("pp-payinfo") || null, notice_lang: gv("pp-lang") || "en", disclaimer: gv("pp-disc") || null, second_currency: (gv("pp-cur2") || "").toUpperCase() || null, exchange_rate: gv("pp-fx") ? Number(gv("pp-fx")) : null }) };
       var r = p.id ? await sb.from("properties").update(row).eq("id", p.id) : await sb.from("properties").insert(row).select("id").single();
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       if (!p.id && r.data) plotSetProp(r.data.id);
@@ -25979,11 +26557,20 @@
     if (n.id) plotAddDelete(m, "property_notices", n.id, "this notice");
     // Print letter button (reads the current field values)
     var foot = m.querySelector(".foot");
+    // A notice that has to stand up in front of a Lebanese notary is written in
+    // Arabic. The same letter often has to be readable by a foreign owner too,
+    // so both can go on the one envelope.
+    var lg = document.createElement("select");
+    lg.className = "btn"; lg.id = "nt-lang"; lg.style.marginRight = "6px";
+    lg.innerHTML = '<option value="en">English</option><option value="ar">العربية</option><option value="both">Both languages</option>';
+    var defLang = (props.filter(function (p) { return p.id === (n.property_id || plotGetProp()); })[0] || {}).profile;
+    lg.value = (defLang && defLang.notice_lang) || "en";
     var pr = document.createElement("button"); pr.className = "btn"; pr.textContent = "Print letter";
     pr.onclick = function () {
       var uSel = document.getElementById("nt-unit"), pSel = document.getElementById("nt-partner");
       var theProp = props.filter(function (p) { return p.id === gv("nt-prop"); })[0] || {};
       plotPrintNotice({
+        lang: lg.value,
         stage: parseInt(gv("nt-stage"), 10) || 1, amount: Number(gv("nt-amt")) || 0, months: parseInt(gv("nt-months"), 10) || 0,
         partner_id: gv("nt-partner") || null, property_id: gv("nt-prop") || null, propProfile: theProp.profile || {},
         ownerName: pSel && pSel.options[pSel.selectedIndex] ? pSel.options[pSel.selectedIndex].text : "",
@@ -25991,6 +26578,7 @@
         buildingName: theProp.name || ""
       });
     };
+    foot.insertBefore(lg, foot.querySelector("[data-s]"));
     foot.insertBefore(pr, foot.querySelector("[data-s]"));
   }
 
@@ -26358,47 +26946,103 @@
       sched = (await q.order("due_date")).data || [];
     }
     var prof = (d.propProfile || {});
-    var schedHTML = sched.length
-      ? '<h3 style="font-size:14px;margin:20px 0 6px">Schedule of unpaid charges</h3>' +
-      '<table style="border-collapse:collapse;width:100%;font-size:12.5px"><thead><tr>' +
-      ["Document", "Unit", "Issued", "Due", "Outstanding"].map(function (h) { return '<th style="text-align:' + (h === "Outstanding" ? "right" : "left") + ';border-bottom:1px solid #333;padding:5px 7px">' + h + '</th>'; }).join("") +
-      '</tr></thead><tbody>' + sched.map(function (i) {
-        return '<tr><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.number || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc((i.property_units && i.property_units.code) || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.invoice_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.due_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee;text-align:right">' + money(i.amount_residual) + '</td></tr>';
-      }).join("") +
-      '<tr><td colspan="4" style="padding:6px 7px;font-weight:700">Total</td><td style="padding:6px 7px;text-align:right;font-weight:700">' + money(sched.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0)) + '</td></tr>' +
-      '</tbody></table><p style="font-size:12.5px;color:#555">This schedule forms an integral part of this notice.</p>'
-      : '';
-    var stageBody = {
-      1: '<p>Our records show that the maintenance charges for your unit are currently overdue. This is a friendly reminder to settle the outstanding balance at your earliest convenience.</p>',
-      2: '<p>Despite our earlier reminder, the maintenance charges for your unit remain unpaid. We ask that you settle the outstanding balance without further delay. Continued non-payment affects the whole building, as shared services are funded by these contributions.</p>',
-      3: '<p>This is a formal notice regarding the maintenance charges for your unit, which remain unpaid despite previous reminders. Please settle the full outstanding balance within fifteen (15) days of the date of this letter. Should payment not be received, the syndicate reserves the right to pursue the amount due through all means available under the applicable joint-ownership law, including legal action, at your cost.</p>'
-    }[d.stage || 1];
-    var title = { 1: "Payment reminder", 2: "Second notice - overdue charges", 3: "Formal notice of arrears" }[d.stage || 1];
+    var stage = d.stage || 1;
+    var lang = d.lang || prof.notice_lang || "en";      // en | ar | both
+    var total = sched.reduce(function (s, i) { return s + Number(i.amount_residual || 0); }, 0);
     var when = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
-    var inner = '<div style="max-width:640px;margin:0 auto">' +
-      '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:22px">' +
-      '<div><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div>' + (d.buildingName ? '<div style="color:#555;font-size:13px">' + esc(d.buildingName) + '</div>' : '') + '</div>' +
-      '<div style="text-align:right;color:#555;font-size:12.5px">' + esc(when) + '</div></div>' +
-      '<div style="font-size:13px;color:#333;margin-bottom:4px">To</div>' +
-      '<div style="font-weight:700">' + esc(d.ownerName || "Unit owner") + '</div>' +
-      (d.unitCode ? '<div style="color:#555;font-size:13px;margin-bottom:16px">Unit ' + esc(d.unitCode) + '</div>' : '<div style="margin-bottom:16px"></div>') +
-      '<h1 style="font-size:18px;margin:8px 0 12px">' + esc(title) + '</h1>' +
-      stageBody +
-      '<table style="border-collapse:collapse;margin:14px 0;font-size:13px"><tr><td style="padding:6px 18px 6px 0;color:#555">Amount outstanding</td><td style="font-weight:800;font-size:16px">' + esc(amt) + '</td></tr>' +
-      (d.months ? '<tr><td style="padding:6px 18px 6px 0;color:#555">Months overdue</td><td style="font-weight:600">' + esc(d.months) + '</td></tr>' : '') + '</table>' +
-      schedHTML +
-      (prof.payment_instructions ? '<h3 style="font-size:14px;margin:18px 0 4px">How to pay</h3><div style="white-space:pre-wrap;font-size:13px">' + esc(prof.payment_instructions) + '</div>' : '') +
-      '<p style="color:#333">If you have already made this payment, please disregard this letter and accept our thanks. For any question about your account, please contact the building management.</p>' +
-      ((prof.property_number || prof.cadastral_zone || prof.bylaws_ref) ?
-        '<p style="font-size:12px;color:#555">' + [prof.property_number ? "Property no. " + prof.property_number : "", prof.cadastral_zone ? "cadastral zone " + prof.cadastral_zone : "", prof.bylaws_ref ? "bylaws ref. " + prof.bylaws_ref : ""].filter(Boolean).map(esc).join(" &middot; ") + '</p>' : '') +
-      '<div style="margin-top:34px;color:#333"><div>Respectfully,</div>' +
-      '<div style="margin-top:30px;display:flex;gap:60px">' +
-      '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.committee_head || "Committee head") + '</div></div>' +
-      '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.treasurer_name || "Treasurer") + '</div></div></div>' +
-      '<div style="font-weight:700;margin-top:18px">' + esc(c.name || "The Syndicate") + '</div></div>' +
-      (prof.disclaimer ? '<p style="font-size:11.5px;color:#777;margin-top:18px;border-top:1px solid #ddd;padding-top:8px">' + esc(prof.disclaimer) + '</p>' : '') + '</div>';
+    var whenAr = new Date().toLocaleDateString("ar-LB", { day: "numeric", month: "long", year: "numeric" });
+
+    // The letter, in one language. A notice that has to stand up in front of a
+    // Lebanese notary is written in Arabic; the same letter often has to be
+    // readable by a foreign owner, so both can be printed on the one sheet.
+    var T = {
+      en: {
+        dir: "ltr", font: "Georgia,'Times New Roman',serif",
+        to: "To", unit: "Unit", date: when,
+        title: { 1: "Payment reminder", 2: "Second notice - overdue charges", 3: "Formal notice of arrears" }[stage],
+        body: {
+          1: "Our records show that the maintenance charges for your unit are currently overdue. This is a friendly reminder to settle the outstanding balance at your earliest convenience.",
+          2: "Despite our earlier reminder, the maintenance charges for your unit remain unpaid. We ask that you settle the outstanding balance without further delay. Continued non-payment affects the whole building, as shared services are funded by these contributions.",
+          3: "This is a formal notice regarding the maintenance charges for your unit, which remain unpaid despite previous reminders. Please settle the full outstanding balance within fifteen (15) days of the date of this letter. Should payment not be received, the syndicate reserves the right to pursue the amount due through all means available under the applicable joint-ownership law, including legal action, at your cost."
+        }[stage],
+        amountLbl: "Amount outstanding", wordsLbl: "In words", monthsLbl: "Months overdue",
+        schedTitle: "Schedule of unpaid charges",
+        cols: ["Document", "Unit", "Issued", "Due", "Outstanding"], totalLbl: "Total",
+        schedNote: "This schedule forms an integral part of this notice.",
+        payTitle: "How to pay",
+        closing: "If you have already made this payment, please disregard this letter and accept our thanks. For any question about your account, please contact the building management.",
+        respect: "Respectfully,", head: "Committee head", treas: "Treasurer",
+        propNo: "Property no.", zone: "cadastral zone", bylaws: "bylaws ref.",
+        owner: "Unit owner", syndicate: "The Syndicate"
+      },
+      ar: {
+        dir: "rtl", font: "'Traditional Arabic','Simplified Arabic','Times New Roman',serif",
+        to: "إلى", unit: "الشقة", date: whenAr,
+        title: { 1: "تذكير بالدفع", 2: "إنذار ثانٍ - رسوم متأخرة", 3: "إنذار رسمي بالمتأخرات" }[stage],
+        body: {
+          1: "تُظهر سجلاتنا أن رسوم الصيانة العائدة لشقتكم متأخرة حالياً. هذا تذكير ودّي لتسوية الرصيد المستحق في أقرب فرصة ممكنة.",
+          2: "على الرغم من تذكيرنا السابق، لا تزال رسوم الصيانة العائدة لشقتكم غير مسددة. نرجو منكم تسوية الرصيد المستحق دون أي تأخير إضافي، علماً أن استمرار عدم الدفع يؤثر على المبنى بأكمله لأن الخدمات المشتركة تُموَّل من هذه المساهمات.",
+          3: "هذا إنذار رسمي بشأن رسوم الصيانة العائدة لشقتكم والتي لا تزال غير مسددة رغم التذكيرات السابقة. يرجى تسديد كامل الرصيد المستحق خلال خمسة عشر (15) يوماً من تاريخ هذا الكتاب. وفي حال عدم ورود الدفعة، يحتفظ اتحاد الملّاك بحقه في المطالبة بالمبلغ المستحق بجميع الوسائل المتاحة بموجب قانون الملكية المشتركة، بما في ذلك الملاحقة القضائية وعلى نفقتكم."
+        }[stage],
+        amountLbl: "المبلغ المستحق", wordsLbl: "المبلغ كتابةً", monthsLbl: "عدد الأشهر المتأخرة",
+        schedTitle: "بيان الرسوم غير المسددة",
+        cols: ["المستند", "الشقة", "تاريخ الإصدار", "تاريخ الاستحقاق", "المبلغ المستحق"], totalLbl: "المجموع",
+        schedNote: "يشكل هذا البيان جزءاً لا يتجزأ من هذا الإنذار.",
+        payTitle: "طريقة الدفع",
+        closing: "إذا كنتم قد سددتم هذا المبلغ، نرجو إهمال هذا الكتاب مع الشكر. ولأي استفسار بشأن حسابكم، يرجى الاتصال بإدارة المبنى.",
+        respect: "وتفضلوا بقبول فائق الاحترام،", head: "رئيس اللجنة", treas: "أمين الصندوق",
+        propNo: "رقم العقار", zone: "المنطقة العقارية", bylaws: "مرجع النظام الداخلي",
+        owner: "مالك الشقة", syndicate: "اتحاد الملّاك"
+      }
+    };
+
+    function letter(L, lg) {
+      var right = lg === "ar" ? "left" : "right";
+      var schedHTML = sched.length
+        ? '<h3 style="font-size:14px;margin:20px 0 6px">' + esc(L.schedTitle) + '</h3>' +
+        '<table style="border-collapse:collapse;width:100%;font-size:12.5px"><thead><tr>' +
+        L.cols.map(function (h, ix) { return '<th style="text-align:' + (ix === 4 ? right : (lg === "ar" ? "right" : "left")) + ';border-bottom:1px solid #333;padding:5px 7px">' + esc(h) + '</th>'; }).join("") +
+        '</tr></thead><tbody>' + sched.map(function (i) {
+          return '<tr><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.number || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc((i.property_units && i.property_units.code) || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.invoice_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee">' + esc(i.due_date || "") + '</td><td style="padding:5px 7px;border-bottom:1px solid #eee;text-align:' + right + '">' + money(i.amount_residual) + '</td></tr>';
+        }).join("") +
+        '<tr><td colspan="4" style="padding:6px 7px;font-weight:700">' + esc(L.totalLbl) + '</td><td style="padding:6px 7px;text-align:' + right + ';font-weight:700">' + money(total) + '</td></tr>' +
+        '</tbody></table><p style="font-size:12.5px;color:#555">' + esc(L.schedNote) + '</p>'
+        : '';
+      return '<div dir="' + L.dir + '" style="max-width:640px;margin:0 auto;font-family:' + L.font + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #16171c;padding-bottom:10px;margin-bottom:22px">' +
+        '<div><div style="font-size:20px;font-weight:800">' + esc(c.name || "") + '</div>' + (d.buildingName ? '<div style="color:#555;font-size:13px">' + esc(d.buildingName) + '</div>' : '') + '</div>' +
+        '<div style="text-align:' + right + ';color:#555;font-size:12.5px">' + esc(L.date) + '</div></div>' +
+        '<div style="font-size:13px;color:#333;margin-bottom:4px">' + esc(L.to) + '</div>' +
+        '<div style="font-weight:700">' + esc(d.ownerName || L.owner) + '</div>' +
+        (d.unitCode ? '<div style="color:#555;font-size:13px;margin-bottom:16px">' + esc(L.unit) + " " + esc(d.unitCode) + '</div>' : '<div style="margin-bottom:16px"></div>') +
+        '<h1 style="font-size:18px;margin:8px 0 12px">' + esc(L.title) + '</h1>' +
+        '<p>' + esc(L.body) + '</p>' +
+        '<table style="border-collapse:collapse;margin:14px 0;font-size:13px">' +
+        '<tr><td style="padding:6px 18px 6px 0;color:#555">' + esc(L.amountLbl) + '</td><td style="font-weight:800;font-size:16px">' + esc(amt) + '</td></tr>' +
+        // the figure written out: a digit can be altered, a sentence cannot
+        '<tr><td style="padding:6px 18px 6px 0;color:#555">' + esc(L.wordsLbl) + '</td><td style="font-weight:600">' + esc(amountInWords(d.amount || 0, cur, lg)) + '</td></tr>' +
+        (d.months ? '<tr><td style="padding:6px 18px 6px 0;color:#555">' + esc(L.monthsLbl) + '</td><td style="font-weight:600">' + esc(d.months) + '</td></tr>' : '') + '</table>' +
+        schedHTML +
+        (prof.payment_instructions ? '<h3 style="font-size:14px;margin:18px 0 4px">' + esc(L.payTitle) + '</h3><div style="white-space:pre-wrap;font-size:13px">' + esc(prof.payment_instructions) + '</div>' : '') +
+        '<p style="color:#333">' + esc(L.closing) + '</p>' +
+        ((prof.property_number || prof.cadastral_zone || prof.bylaws_ref) ?
+          '<p style="font-size:12px;color:#555">' + [prof.property_number ? L.propNo + " " + prof.property_number : "", prof.cadastral_zone ? L.zone + " " + prof.cadastral_zone : "", prof.bylaws_ref ? L.bylaws + " " + prof.bylaws_ref : ""].filter(Boolean).map(esc).join(" &middot; ") + '</p>' : '') +
+        '<div style="margin-top:34px;color:#333"><div>' + esc(L.respect) + '</div>' +
+        '<div style="margin-top:30px;display:flex;gap:60px">' +
+        '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.committee_head || L.head) + '</div></div>' +
+        '<div><div style="border-top:1px solid #333;width:190px;padding-top:5px;font-size:12.5px">' + esc(prof.treasurer_name || L.treas) + '</div></div></div>' +
+        '<div style="font-weight:700;margin-top:18px">' + esc(c.name || L.syndicate) + '</div></div>' +
+        (prof.disclaimer ? '<p style="font-size:11.5px;color:#777;margin-top:18px;border-top:1px solid #ddd;padding-top:8px">' + esc(prof.disclaimer) + '</p>' : '') + '</div>';
+    }
+
+    // Arabic first when both are printed: it is the one that carries legally
+    // here, and the English follows on its own page for the owner who needs it.
+    var inner = lang === "ar" ? letter(T.ar, "ar")
+      : lang === "both" ? letter(T.ar, "ar") + '<div style="page-break-before:always;height:1px"></div>' + letter(T.en, "en")
+        : letter(T.en, "en");
+    var title = (lang === "ar" ? T.ar : T.en).title;
     var w = window.open("", "_blank");
-    w.document.write('<html><head><title>' + esc(title) + '</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.6}p{margin:10px 0}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
+    w.document.write('<html><head><meta charset="utf-8"><title>' + esc(title) + '</title><style>body{font-family:Georgia,\'Times New Roman\',serif;padding:40px;color:#16171c;line-height:1.7}p{margin:10px 0}[dir=rtl]{line-height:1.9}[dir=rtl] table{direction:rtl}@page{size:A4;margin:18mm}</style></head><body>' + inner + '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},250);}</scr' + 'ipt></body></html>');
     w.document.close();
   }
 

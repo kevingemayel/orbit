@@ -141,6 +141,75 @@ badrun as (
    group by r.id, r.period, r.amount_total
   having abs(round(r.amount_total, 2) - round(coalesce(sum(i.amount_total), 0), 2)) > 0.05),
 
+-- ----------------------------------------------------------- payables & stock
+-- 16. The payables control account must agree with the unpaid supplier bills,
+--     the same way the receivable control has to agree with the chase list. If
+--     they drift, one of them is lying about what you owe, and the balance
+--     sheet and the payment run cannot both be right.
+apctrl as (
+  select c.id company_id, c.name,
+         round(coalesce((select sum(l.credit - l.debit) from public.journal_lines l
+                           join public.journal_entries e on e.id = l.entry_id and e.state = 'posted'
+                           join public.accounts a on a.id = l.account_id
+                          where l.company_id = c.id and a.type_code = 'liability_payable'), 0), 2) ledger_ap,
+         round(coalesce((select sum(i.amount_residual) from public.invoices i
+                          where i.company_id = c.id and i.state = 'posted'
+                            and i.move_type in ('in_invoice', 'in_refund')), 0), 2) open_ap
+    from public.companies c),
+badap as (
+  select * from apctrl where abs(ledger_ap - open_ap) > 0.05),
+
+-- 17. Stock is the other control account nobody checks. What the ledger says
+--     the warehouse is worth must equal the valuation layers behind it; a gap
+--     means the balance sheet carries stock that either is not there or was
+--     never priced.
+stockctrl as (
+  select c.id company_id, c.name,
+         round(coalesce((select sum(l.debit - l.credit) from public.journal_lines l
+                           join public.journal_entries e on e.id = l.entry_id and e.state = 'posted'
+                          where l.company_id = c.id
+                            -- the same order of authority the posting code uses:
+                            -- the company's configured account, then any account
+                            -- a product names, then the seeded code
+                            and l.account_id in (
+                                  select c.stock_account_id where c.stock_account_id is not null
+                                  union
+                                  select distinct p.stock_account_id from public.products p
+                                   where p.company_id = c.id and p.stock_account_id is not null
+                                  union
+                                  select a.id from public.accounts a where a.company_id = c.id and a.code = '3100')), 0), 2) ledger_stock,
+         round(coalesce((select sum(v.value) from public.stock_valuation_layers v
+                          where v.company_id = c.id), 0), 2) layers
+    from public.companies c),
+badstock as (
+  select * from stockctrl
+   where abs(ledger_stock - layers) > 0.05 and (ledger_stock <> 0 or layers <> 0)),
+
+-- ------------------------------------------------------------- multi-currency
+-- 18. A posted document in a currency that is not the company's own needs a
+--     rate on or before its date. Without one the conversion is a silent 1:1,
+--     which does not error, does not look wrong, and is wrong by whatever the
+--     rate happens to be. This is the whole reason fx_convert refuses to guess.
+norate as (
+  select e.entry_number, e.currency_code, e.date, c.name
+    from public.journal_entries e
+    join public.companies c on c.id = e.company_id
+   where e.state = 'posted'
+     and e.currency_code is not null and e.currency_code <> c.currency_code
+     and not exists (select 1 from public.currency_rates r
+                      where r.org_id = c.org_id and r.code = e.currency_code and r.rate_date <= e.date)),
+
+-- 19. A tender taken in another currency must convert to exactly what was
+--     recorded against the bill: amount = amount_ccy x fx_rate. If it does not,
+--     the drawer count and the sales figure disagree and only one of them is
+--     the money that is actually there.
+badtender as (
+  select o.number, p.currency_code, p.amount_ccy, p.fx_rate, p.amount
+    from public.pos_payments p
+    join public.pos_orders o on o.id = p.order_id
+   where p.amount_ccy is not null and p.fx_rate is not null
+     and abs(round(p.amount_ccy * p.fx_rate, 2) - round(p.amount, 2)) > 0.02),
+
 -- ------------------------------------------------------------------ tenancy
 -- 13. Every company-scoped row must point at a company that exists. An orphan
 --     is unreachable by any user and invisible to every report.
@@ -207,6 +276,22 @@ results as (
          (select count(*) from badrun),
          (select coalesce(string_agg(period || ' run ' || run || ' billed ' || billed, '; '), '') from (select * from badrun limit 3) x),
          'rounding a share down on every unit is how a building under-collects all year'
+  union all select 16, 'accounting', 'the payables control ties to the unpaid bills',
+         (select count(*) from badap),
+         (select coalesce(string_agg(name || ' ledger ' || ledger_ap || ' vs open ' || open_ap, '; '), '') from (select * from badap limit 3) x),
+         'the balance sheet and the payment run disagree about what you owe'
+  union all select 17, 'accounting', 'the stock control account ties to the valuation',
+         (select count(*) from badstock),
+         (select coalesce(string_agg(name || ' ledger ' || ledger_stock || ' vs layers ' || layers, '; '), '') from (select * from badstock limit 3) x),
+         'the balance sheet carries stock that is either not there or was never priced'
+  union all select 18, 'currency', 'every foreign-currency entry has a rate',
+         (select count(*) from norate),
+         (select coalesce(string_agg(name || ' ' || entry_number || ' ' || currency_code || ' on ' || date, '; '), '') from (select * from norate limit 3) x),
+         'with no rate the conversion is a silent 1:1, which never errors and is always wrong'
+  union all select 19, 'currency', 'a tender converts to exactly what was billed',
+         (select count(*) from badtender),
+         (select coalesce(string_agg(number || ' ' || currency_code || ' ' || amount_ccy || ' x ' || fx_rate || ' <> ' || amount, '; '), '') from (select * from badtender limit 3) x),
+         'the drawer count and the sales figure disagree, and only one is the money in the till'
   union all select 15, 'tenancy', 'no row points at a company that does not exist',
          (select coalesce(sum(n), 0) from orphans),
          (select coalesce(string_agg(t || ' ' || n, '; '), '') from orphans where n > 0),

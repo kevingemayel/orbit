@@ -1,0 +1,37 @@
+name: money invariants
+
+# The structural checks read the source. These read the money: they run
+# tests/behaviour.sql against the live database and fail if an invariant about
+# real cash breaks - a posted invoice that never reached the ledger, a control
+# account that disagrees with its own subsidiary list, a tender that converts
+# to something other than what was billed.
+#
+# Read-only. It asserts, it never writes, which is why it is safe to point at
+# production and pointless to point anywhere else.
+#
+# Daily rather than per-push on purpose: these break because of DATA, not
+# because of a commit, so the useful question is "is the ledger still true this
+# morning" and not "did this pull request break it".
+#
+# Needs two repository secrets: SUPABASE_PROJECT_REF and SUPABASE_PAT.
+# Without them the job skips rather than failing, so a fork is never noisy.
+on:
+  schedule:
+    - cron: '0 5 * * *'   # 05:00 UTC, before anyone opens the app
+  workflow_dispatch:
+
+jobs:
+  invariants:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the money invariants
+        env:
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_PAT: ${{ secrets.SUPABASE_PAT }}
+        run: |
+          if [ -z "${SUPABASE_PAT:-}" ]; then
+            echo "No SUPABASE_PAT secret set - skipping. Add it in Settings, Secrets to turn this on."
+            exit 0
+          fi
+          bash tests/behaviour.sh
