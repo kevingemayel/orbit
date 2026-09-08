@@ -1369,6 +1369,7 @@
     site: {
       name: "Contracting", icon: "▣", color: "#ca8a04", color2: "#a16207", home: "site.snags",
       menus: [
+        { label: "Field (phone)", action: "site.field" },
         { label: "Site", items: [["Install Jobs", "inst.jobs"], ["Snags", "site.snags"], ["Inspections", "site.insp"], ["Inspection Checklists", "site.inspt"], ["Site Diary", "site.diary"], ["Incidents", "site.incidents"]] },
         { label: "Plant & Tools", items: [["Plant & Equipment", "site.plant"], ["Equipment utilization", "site.plantutil"], ["Tools & Equipment", "tools.list"]] },
         { label: "Documentation", items: [["Drawing Register", "doc.drawings"], ["Submittals", "doc.subs"], ["RFIs", "doc.rfis"], ["Transmittals", "doc.trans"]] },
@@ -1573,7 +1574,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -3166,6 +3167,7 @@
       case "ops.auditactions": return renderList(cfgAuditActions());
       case "ops.exceptions": return renderExceptionReport();
       case "ops.reasons": return renderList(cfgReasonCodes());
+      case "site.field": return renderField();
       case "sc.variance": return renderCostVariance();
       case "sc.waste": return renderList(cfgWaste());
       case "sc.counts": return renderList(cfgStockCounts());
@@ -18399,6 +18401,191 @@
       rows.slice().sort(function (a, b) { return b.mins - a.mins; }).slice(0, 15).map(function (r) {
         return '<tr><td>' + esc(r.number || "") + '</td><td>' + esc(fnbTitle(r.order_type || "")) + '</td><td><span class="muted">' + esc(String(r.fired_at).replace("T", " ").slice(0, 16)) + '</span></td><td class="num"><span class="badge ' + (r.mins > 15 ? "unpaid" : r.mins > 10 ? "partial" : "paid") + '">' + (Math.round(r.mins * 10) / 10) + '</span></td></tr>';
       }).join("") + '</tbody></table></div>';
+  }
+
+  // ===========================================================================
+  // FIELD  -  the phone-first, offline screen for a crew on site.
+  //
+  // The rest of Orbit assumes a desk, a keyboard and a connection. A fitter on
+  // a facade has none of those. This is one screen, big targets, everything
+  // reachable with a thumb, and every write goes through the same outbox the
+  // till uses, so a full day with no signal loses nothing.
+  //
+  // Deliberately narrow. A crew does four things: says what they are working
+  // on, logs their hours, records a problem with a photo, and gets something
+  // signed. Anything else belongs on a desk.
+  // ===========================================================================
+  var FIELD = { project: null, tasks: [], running: null, projects: [] };
+
+  async function renderField() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Field") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading your work...</div></div></div>';
+    wireBc();
+    FIELD.projects = (await fnbCo("projects", "id,name").eq("is_active", true).order("name")).data || [];
+    if (!FIELD.project && FIELD.projects.length) FIELD.project = FIELD.projects[0].id;
+    try { FIELD.running = JSON.parse(localStorage.getItem("orbit_field_clock") || "null"); } catch (e) { FIELD.running = null; }
+    await paintField();
+  }
+  async function paintField() {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var tq = fnbCo("project_tasks", "id,name,project_id,date_deadline,completed_at,priority");
+    if (FIELD.project) tq = tq.eq("project_id", FIELD.project);
+    var tasks = (await tq.is("completed_at", null).order("date_deadline", { ascending: true }).limit(60)).data || [];
+    FIELD.tasks = tasks;
+    var mySnags = (await fnbCo("snags", "id,number,description,severity,status,created_at")
+      .in("status", ["open", "in_progress"]).order("created_at", { ascending: false }).limit(15)).data || [];
+    var r = FIELD.running;
+    body.innerHTML = '<div class="fd">' +
+      (FIELD.projects.length > 1
+        ? '<select id="fd-proj" class="fd-proj">' + FIELD.projects.map(function (p) { return '<option value="' + p.id + '"' + (FIELD.project === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>'
+        : '<div class="fd-proj-name">' + esc((FIELD.projects[0] || {}).name || "No project") + '</div>') +
+
+      '<div class="fd-clock' + (r ? " on" : "") + '">' +
+      (r ? '<div class="fd-clock-t">On the clock<span id="fd-elapsed">' + svcClock(r.at) + '</span></div>' +
+           '<div class="fd-clock-w">' + esc(r.taskName || "General") + '</div>' +
+           '<button class="fd-btn stop" id="fd-stop">Stop and log</button>'
+         : '<div class="fd-clock-t">Not clocked in</div><button class="fd-btn go" id="fd-start">Start work</button>') +
+      '</div>' +
+
+      '<div class="fd-acts">' +
+      '<button class="fd-act" id="fd-snag">' + hIcon("alert") + '<span>Report a problem</span></button>' +
+      '<button class="fd-act" id="fd-diary">' + hIcon("book") + '<span>Site diary</span></button>' +
+      '<button class="fd-act" id="fd-hours">' + hIcon("clock") + '<span>Log hours</span></button>' +
+      '</div>' +
+
+      '<div class="fd-h">Today&rsquo;s work</div>' +
+      (tasks.length
+        ? '<div class="fd-list">' + tasks.map(function (t) {
+            var late = t.date_deadline && t.date_deadline < today();
+            return '<div class="fd-task"><button class="fd-tick" data-t="' + t.id + '" aria-label="Mark done">&#10003;</button>' +
+              '<div class="fd-task-b"><div class="fd-task-n">' + esc(t.name) + '</div>' +
+              (t.date_deadline ? '<div class="fd-task-d' + (late ? " late" : "") + '">due ' + esc(t.date_deadline) + '</div>' : "") + '</div>' +
+              '<button class="fd-task-go" data-work="' + t.id + '" data-name="' + esc(t.name) + '">work on this</button></div>';
+          }).join("") + '</div>'
+        : '<div class="fd-empty">Nothing assigned on this job. Use the buttons above to log hours or report a problem.</div>') +
+
+      (mySnags.length ? '<div class="fd-h">Open problems</div><div class="fd-list">' + mySnags.map(function (s) {
+        return '<div class="fd-snag"><span class="badge ' + (s.severity === "critical" || s.severity === "high" ? "unpaid" : "partial") + '">' + esc(s.severity || "issue") + '</span>' +
+          '<span class="fd-snag-d">' + esc((s.description || "").slice(0, 90)) + '</span></div>';
+      }).join("") + '</div>' : "") +
+      '</div>';
+
+    var ps = document.getElementById("fd-proj");
+    if (ps) ps.onchange = function () { FIELD.project = this.value; paintField(); };
+    var st = document.getElementById("fd-start"); if (st) st.onclick = function () { fieldClockIn(null, null); };
+    var sp = document.getElementById("fd-stop"); if (sp) sp.onclick = function () { fieldClockOut(); };
+    document.getElementById("fd-snag").onclick = function () { fieldSnag(); };
+    document.getElementById("fd-diary").onclick = function () { fieldDiary(); };
+    document.getElementById("fd-hours").onclick = function () { fieldHours(); };
+    body.querySelectorAll(".fd-task-go").forEach(function (b) {
+      b.onclick = function () { fieldClockIn(b.dataset.work, b.dataset.name); };
+    });
+    body.querySelectorAll(".fd-tick").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true;
+        await svcWrite("project_tasks", "update", { completed_at: new Date().toISOString() }, { match: { id: b.dataset.t } });
+        toast("Marked done"); paintField();
+      };
+    });
+    svcStopTimer();
+    if (FIELD.running) {
+      SERVICE.timer = setInterval(function () {
+        var el = document.getElementById("fd-elapsed");
+        if (!el) { svcStopTimer(); return; }
+        el.textContent = svcClock(FIELD.running.at);
+      }, 1000);
+    }
+  }
+  // The clock lives in localStorage, so closing the app on a building site with
+  // no signal does not lose the morning.
+  function fieldClockIn(taskId, taskName) {
+    FIELD.running = { at: new Date().toISOString(), taskId: taskId || null, taskName: taskName || null, project: FIELD.project };
+    try { localStorage.setItem("orbit_field_clock", JSON.stringify(FIELD.running)); } catch (e) { }
+    toast("Clock started"); paintField();
+  }
+  async function fieldClockOut() {
+    var r = FIELD.running; if (!r) return;
+    var hrs = Math.round(((Date.now() - new Date(r.at).getTime()) / 3600000) * 100) / 100;
+    if (hrs < 0.02) { toast("Less than a minute, nothing logged"); }
+    else {
+      await svcWrite("timesheets", "insert", {
+        company_id: S.company.id, project_id: r.project || null, task_id: r.taskId || null,
+        work_date: today(), name: r.taskName || "Site work", hours: hrs
+      });
+      toast(hrs + " hours logged");
+    }
+    FIELD.running = null;
+    try { localStorage.removeItem("orbit_field_clock"); } catch (e) { }
+    paintField();
+  }
+  function fieldHours() {
+    var inner = '<div class="row2"><div><label>Date</label><input id="fh-d" type="date" value="' + today() + '"></div>' +
+      '<div><label>Hours</label><input id="fh-h" type="number" step="0.25" placeholder="8"></div></div>' +
+      '<div><label>What was done</label><input id="fh-n" placeholder="e.g. Glazing, grid 4 to 7"></div>';
+    var m = plotModal("Log hours", inner, async function () {
+      var h = parseFloat(gv("fh-h"));
+      if (!(h > 0)) { toast("How many hours?"); return; }
+      await svcWrite("timesheets", "insert", {
+        company_id: S.company.id, project_id: FIELD.project || null,
+        work_date: gv("fh-d") || today(), name: gv("fh-n") || "Site work", hours: h
+      });
+      m.remove(); toast(h + " hours logged"); paintField();
+    });
+  }
+  // A problem is worth nothing without a photo, so the camera is the first field.
+  function fieldSnag() {
+    var inner =
+      '<div><label>Photo</label><input id="fs-photo" type="file" accept="image/*" capture="environment"></div>' +
+      '<div id="fs-prev"></div>' +
+      '<div><label>What is wrong</label><textarea id="fs-d" rows="3" placeholder="Describe it plainly"></textarea></div>' +
+      '<div class="row2"><div><label>How bad</label><select id="fs-sev"><option value="low">Minor</option><option value="medium" selected>Needs fixing</option><option value="high">Serious</option><option value="critical">Stop work</option></select></div>' +
+      '<div><label>Where</label><input id="fs-loc" placeholder="grid / level / elevation"></div></div>' +
+      '<div class="o-note">Saved on this device if you have no signal, and sent by itself when you are back in range.</div>';
+    var m = plotModal("Report a problem", inner, async function () {
+      var d = (document.getElementById("fs-d").value || "").trim();
+      if (!d) { toast("Say what is wrong"); return; }
+      var row = {
+        company_id: S.company.id, project_id: FIELD.project || null,
+        description: d, severity: document.getElementById("fs-sev").value,
+        location: gv("fs-loc") || null, status: "open",
+        number: "SNG-" + String(Date.now()).slice(-6)
+      };
+      var saved = await svcWrite("snags", "insert", row);
+      if (!saved) return;
+      // the photo needs a connection; the snag itself does not, so it is never blocked on it
+      var f = document.getElementById("fs-photo").files[0];
+      if (f && !isOffline()) {
+        try { await mediaUpload("snag", saved.id, f); } catch (e) { toast("Problem saved; the photo will need re-adding"); }
+      } else if (f) {
+        toast("Problem saved. Add the photo again once you have signal.");
+      }
+      m.remove(); toast("Problem reported"); paintField();
+    });
+    var fp = document.getElementById("fs-photo");
+    if (fp) fp.onchange = function () {
+      var f = this.files[0], p = document.getElementById("fs-prev");
+      if (!f || !p) return;
+      var u = URL.createObjectURL(f);
+      p.innerHTML = '<img alt="Photo of the problem" src="' + u + '" style="max-height:150px;border-radius:9px;margin:4px 0">';
+    };
+  }
+  function fieldDiary() {
+    var inner = '<div class="row2"><div><label>Date</label><input id="fdy-d" type="date" value="' + today() + '"></div>' +
+      '<div><label>Weather</label><input id="fdy-w" placeholder="clear / rain / wind"></div></div>' +
+      '<div class="row2"><div><label>Men on site</label><input id="fdy-m" type="number" step="1"></div>' +
+      '<div><label>Subcontractors</label><input id="fdy-s" type="number" step="1"></div></div>' +
+      '<div><label>Work done</label><textarea id="fdy-wd" rows="3"></textarea></div>' +
+      '<div><label>Delays or problems</label><textarea id="fdy-dl" rows="2"></textarea></div>';
+    var m = plotModal("Site diary", inner, async function () {
+      await svcWrite("site_diaries", "insert", {
+        company_id: S.company.id, project_id: FIELD.project || null,
+        diary_date: gv("fdy-d") || today(), weather: gv("fdy-w") || null,
+        manpower: parseInt(gv("fdy-m"), 10) || null, subcontractor_count: parseInt(gv("fdy-s"), 10) || null,
+        work_done: (document.getElementById("fdy-wd").value || "").trim() || null,
+        delays: (document.getElementById("fdy-dl").value || "").trim() || null
+      });
+      m.remove(); toast("Diary saved");
+    });
   }
 
   // ===========================================================================

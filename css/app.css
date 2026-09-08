@@ -1903,3 +1903,37 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .o-offline.off{background:var(--bad);color:#fff}
 .o-offline.sync{background:var(--warn);color:#fff}
 .o-offline b{font-variant-numeric:tabular-nums}
+
+/* ===========================================================================
+   Field: a phone in a gloved hand on a building site. One column, big targets,
+   nothing that needs a hover or a precise tap.
+   ======================================================================== */
+.fd{max-width:520px;margin:0 auto;padding:14px 16px 40px;display:flex;flex-direction:column;gap:12px}
+.fd-proj,.fd-proj-name{width:100%;height:46px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--ink);
+  font:inherit;font-size:15px;font-weight:600;padding:0 14px}
+.fd-proj-name{display:flex;align-items:center}
+.fd-clock{border:1px solid var(--line);border-radius:14px;background:var(--panel);padding:16px;text-align:center}
+.fd-clock.on{border-color:var(--good);background:var(--good-s)}
+.fd-clock-t{font-size:13px;color:var(--ink2);display:flex;justify-content:center;align-items:baseline;gap:10px}
+.fd-clock-t span{font-size:30px;font-weight:800;color:var(--ink);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.fd-clock-w{font-size:13.5px;color:var(--ink2);margin-top:2px}
+.fd-btn{width:100%;height:52px;margin-top:12px;border:0;border-radius:12px;font:inherit;font-size:16px;font-weight:700;color:#fff;cursor:pointer}
+.fd-btn.go{background:var(--good)} .fd-btn.stop{background:var(--bad)}
+.fd-btn:active{transform:scale(.98)}
+.fd-acts{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.fd-act{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-height:78px;padding:10px 6px;
+  border:1px solid var(--line);border-radius:12px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer;text-align:center}
+.fd-act svg{width:21px;height:21px;color:var(--accent)}
+.fd-act:active{transform:scale(.97)}
+.fd-h{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);margin-top:6px}
+.fd-list{display:flex;flex-direction:column;gap:8px}
+.fd-task{display:grid;grid-template-columns:44px 1fr auto;gap:11px;align-items:center;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.fd-tick{width:44px;height:44px;border:2px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--ink3);font-size:20px;cursor:pointer}
+.fd-tick:active{background:var(--good);border-color:var(--good);color:#fff}
+.fd-task-n{font-size:14.5px;font-weight:600;line-height:1.3}
+.fd-task-d{font-size:12px;color:var(--ink3)}
+.fd-task-d.late{color:var(--bad);font-weight:700}
+.fd-task-go{border:0;background:none;color:var(--accent);font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:8px}
+.fd-snag{display:flex;gap:9px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}
+.fd-snag-d{font-size:13px;color:var(--ink2);line-height:1.4}
+.fd-empty{padding:22px 14px;text-align:center;color:var(--ink3);font-size:13.5px;border:1px dashed var(--line);border-radius:12px}
