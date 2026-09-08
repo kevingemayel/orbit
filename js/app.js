@@ -713,6 +713,7 @@
       { t: "Price lists and quotation templates", h: "<p>Two tools under <b>Sales &rsaquo; Configuration</b> save you retyping and keep your pricing consistent:</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:tag}} Pricelists</div><p>A <b>pricelist</b> sets different prices for different situations - a trade discount for one customer, a lower rate above a certain quantity. Orbit picks the right price on a quote automatically, so nobody has to remember the special rate.</p></div><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:doc}} Quotation Templates</div><p>A <b>template</b> is a ready-made quote - the usual lines, terms and wording - so you start from something 90% done instead of a blank page. Great for jobs you quote again and again.</p></div></div>" }
     ] },
     { key: "crm", title: "Winning work (CRM)", articles: [
+      { t: "Finding a project, and getting rid of one", h: "<p>Two questions everyone asks in the first week.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:search}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Finding one</div><p>Type into the <b>search box in the top bar</b>, from anywhere in Orbit. It finds a lead by its <b>name</b>, by its <b>area</b>, or by the <b>person</b> on it, so &ldquo;Faqra&rdquo;, &ldquo;Villa sahab&rdquo; and &ldquo;Rabih&rdquo; all work. Click the result and it opens.</p><p>Inside <b>CRM &rsaquo; Leads</b> the search box above the list goes further: it also reads the notes and the next action, so you can find the one where somebody wrote &ldquo;waiting for his reply&rdquo;.</p></div></div><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:funnel}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Or stop searching and filter</div><p>The list groups by <b>area</b>, by <b>how they stand</b> or by <b>their project stage</b>, and filters to the interested ones, the quoted ones, the ones with a next action, or the ones never contacted. For a round of visits, group by area and work down.</p></div></div><h4>Getting rid of one</h4><p>Open the lead and use <b>Delete</b> at the top, or tick several in the list and use <b>Delete</b> on the bar that appears. Deleting is permanent.</p><div class=\"man-cal warn\"><span class=\"man-ci\">{{ico:alert}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Archive is nearly always the better answer</div><p>A prospect who said no this year is a prospect again next year, and the photographs, the numbers and the history are worth keeping. <b>Archive</b> takes it out of the lists and off the board without destroying anything; the <b>Archived</b> filter brings it back into view. Reach for Delete only for something that should never have been created, such as a duplicate.</p></div></div><p>Both need permission to manage the CRM. If you cannot see the buttons, that is why.</p>" },
       { t: "When the lead is a place, not a switchboard", h: "<p>Plenty of businesses do not sell to a company with a reception desk. They sell to a <b>site</b>: a building going up, a shop being fitted out, a house being renovated. The questions are different, and a lead carries the fields to answer them.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:pin}} Where it is</div><p><b>Area</b> is the round or district, so a rep can work one at a time and the list can be grouped by it. <b>Map pin</b> is a link to the exact spot, because a pin beats a postal address when the thing you are selling to has no address yet.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:clock}} When to call</div><p><b>How they stand</b> is where the prospect is with you: interested, not interested, already has a supplier. <b>Their project stage</b> is how far along their OWN job is, which is what actually decides when to ring. A builder says &ldquo;floors pouring&rdquo;; a software buyer says &ldquo;budget approved&rdquo;.</p></div></div><p>Both boxes suggest what your company already uses, so the list stays tidy without anyone maintaining a dropdown.</p>" },
       { t: "The several people on one lead", h: "<p>A site has an owner, an architect, a contractor and whoever answered the phone. Losing which is which loses most of the value of the record, so a lead keeps <b>a list of people, each with a role</b>, rather than one contact field.</p><p>Under <b>People on this lead</b>, add a row per person with their role and number. The first one is the primary and is what shows in the list. Add them as a proper <b>customer</b> only when there is something to invoice: until then they are prospects and do not belong in your contact book.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:upload}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Photograph the site</div><p><b>Photos &amp; files</b> takes pictures straight from a phone. On a site visit that is worth more than a paragraph of notes, and it is how anyone else picks the lead up later.</p></div></div>" },
       { t: "Next actions, and what you quoted", h: "<p>Two blocks stop a pipeline going quiet.</p><p><b>Next action</b> is the single next thing anyone should do, who owns it and by when. Name an owner and it is theirs; give it a date and it chases itself. The leads list can be filtered to everything that has one, which is the Monday morning list.</p><p><b>What we have from them</b> records what they have given you so you can quote at all: drawings, a brief, a specification. Then <b>Quoted</b> holds the amount and the day it went, and <b>Against what specification</b> holds what the price was built on. Six months later that last field is the one that settles the argument.</p>" },
@@ -2791,13 +2792,24 @@
         P(canView("projects"), function () { return sb.from("projects").select("id,name").eq("company_id", cid).ilike("name", like).limit(6); }),
         P(canView("accounting"), function () { return sb.from("invoices").select("id,number,move_type").eq("company_id", cid).ilike("number", like).limit(6); }),
         P(canView("purchase"), function () { return sb.from("purchase_orders").select("id,number").eq("company_id", cid).ilike("number", like).limit(6); }),
-        P(canView("sales") || canView("inventory"), function () { return sb.from("products").select("id,name,default_code").eq("company_id", cid).ilike("name", like).limit(6); })
+        P(canView("sales") || canView("inventory"), function () { return sb.from("products").select("id,name,default_code").eq("company_id", cid).ilike("name", like).limit(6); }),
+        // A lead is often the thing people search for by name, and it was the
+        // one record type the box could not find. Search the area and the
+        // contact too, because a site is as often remembered by where it is or
+        // who is on it as by what it is called.
+        P(canView("crm"), function () {
+          return sb.from("crm_leads").select("id,name,area,contact_name")
+            .eq("company_id", cid)
+            .or("name.ilike." + like + ",area.ilike." + like + ",contact_name.ilike." + like)
+            .limit(8);
+        })
       ]);
       (res[0].data || []).forEach(function (p) { results.push({ type: "partner", id: p.id, label: p.name, sub: p.is_customer ? "Customer" : (p.is_vendor ? "Vendor" : "Contact"), extra: p.is_vendor && !p.is_customer ? "vendor" : "customer" }); });
       (res[1].data || []).forEach(function (p) { results.push({ type: "project", id: p.id, label: p.name, sub: "Project" }); });
       (res[2].data || []).forEach(function (i) { results.push({ type: "invoice", id: i.id, label: i.number || "Draft", sub: i.move_type === "in_invoice" ? "Bill" : (i.move_type === "out_refund" ? "Credit note" : "Invoice"), extra: i.move_type || "out_invoice" }); });
       (res[3].data || []).forEach(function (o) { results.push({ type: "po", id: o.id, label: o.number || "Draft", sub: "Purchase order" }); });
       (res[4].data || []).forEach(function (p) { results.push({ type: "product", id: p.id, label: p.name, sub: p.default_code ? "Item · " + p.default_code : "Item" }); });
+      (res[5].data || []).forEach(function (l) { results.push({ type: "lead", id: l.id, label: l.name, sub: "Lead" + (l.area ? " · " + l.area : "") }); });
     } catch (e) { }
     if (!results.length) { dd.innerHTML = '<div class="o-gs-empty">No matches for “' + esc(q) + '”</div>'; dd.style.display = "block"; return; }
     dd.innerHTML = results.slice(0, 24).map(function (r) { return '<button class="o-gs-item" data-type="' + r.type + '" data-id="' + r.id + '" data-extra="' + (r.extra || "") + '"><span class="o-gs-l">' + esc(r.label) + '</span><span class="o-gs-s">' + esc(r.sub) + '</span></button>'; }).join("");
@@ -2807,7 +2819,7 @@
   function openRecord(type, id, extra) {
     var dd = document.getElementById("o-gs-dd"); if (dd) { dd.style.display = "none"; dd.innerHTML = ""; }
     var gin = document.getElementById("o-gs-in"); if (gin) gin.value = "";
-    var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales" };
+    var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales", lead: "crm" };
     var app = appFor[type] || "accounting";
     if (app !== S.app) { S.app = app; applyAppColor(); renderShell(); }
     if (type === "partner") renderPartnerForm(id, extra || "customer");
@@ -2815,6 +2827,7 @@
     else if (type === "invoice") renderInvoiceForm(id, extra || "out_invoice");
     else if (type === "po") renderOrderForm(id, "purchase");
     else if (type === "product") renderProductForm(id);
+    else if (type === "lead") renderLeadForm(id);
   }
   function companySelectHTML(scope) {
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
@@ -15182,7 +15195,9 @@
     "Has another supplier, still interested", "Has another supplier, not interested", "On hold"];
   function cfgLeads() {
     return {
-      title: "Leads", pageSize: 80, table: "crm_leads",
+      // archiveField means a lead can be put away rather than destroyed, which
+      // is almost always what you want with a prospect: they come back.
+      title: "Leads", pageSize: 200, table: "crm_leads", archiveField: "is_active",
       fetch: async function () {
         var res = await Promise.all([
           sb.from("crm_leads").select("*, partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }),
