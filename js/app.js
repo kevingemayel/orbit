@@ -316,28 +316,68 @@
     if (rf == null || rh == null) return amt; // no rate -> best effort, leave as-is
     return amt * rf / rh;
   }
-  // World currencies for every picker (code + name). Majors first, then regional. Currency is
-  // always chosen from this list - it is never free-typed, so codes stay valid and consistent.
+  // Every circulating currency (ISO 4217). The ones this business actually
+  // trades in come first so they are one keystroke away; the rest follow
+  // alphabetically. Currency is always chosen from this list, never free-typed,
+  // so codes stay valid.
+  //
+  // XAF and XOF matter here rather than being trivia: ALGECO's own chart of
+  // accounts pins 53 accounts to them, for Cameroon and Benin.
+  var CUR_COMMON = ["USD", "EUR", "LBP", "GBP", "AED", "SAR", "XAF", "XOF"];
   var CURRENCIES = [
-    { c: "USD", n: "US Dollar" }, { c: "EUR", n: "Euro" }, { c: "GBP", n: "British Pound" },
-    { c: "AED", n: "UAE Dirham" }, { c: "SAR", n: "Saudi Riyal" }, { c: "QAR", n: "Qatari Riyal" },
-    { c: "KWD", n: "Kuwaiti Dinar" }, { c: "BHD", n: "Bahraini Dinar" }, { c: "OMR", n: "Omani Rial" },
-    { c: "LBP", n: "Lebanese Pound" }, { c: "EGP", n: "Egyptian Pound" }, { c: "JOD", n: "Jordanian Dinar" },
-    { c: "IQD", n: "Iraqi Dinar" }, { c: "TRY", n: "Turkish Lira" }, { c: "ILS", n: "Israeli Shekel" },
-    { c: "SYP", n: "Syrian Pound" }, { c: "RUB", n: "Russian Ruble" }, { c: "INR", n: "Indian Rupee" }, { c: "CNY", n: "Chinese Yuan" },
-    { c: "CHF", n: "Swiss Franc" }, { c: "CAD", n: "Canadian Dollar" }, { c: "AUD", n: "Australian Dollar" },
-    { c: "NZD", n: "New Zealand Dollar" }, { c: "JPY", n: "Japanese Yen" }, { c: "CNY", n: "Chinese Yuan" },
-    { c: "HKD", n: "Hong Kong Dollar" }, { c: "SGD", n: "Singapore Dollar" }, { c: "INR", n: "Indian Rupee" },
-    { c: "PKR", n: "Pakistani Rupee" }, { c: "BDT", n: "Bangladeshi Taka" }, { c: "LKR", n: "Sri Lankan Rupee" },
-    { c: "PHP", n: "Philippine Peso" }, { c: "IDR", n: "Indonesian Rupiah" }, { c: "MYR", n: "Malaysian Ringgit" },
-    { c: "THB", n: "Thai Baht" }, { c: "KRW", n: "South Korean Won" }, { c: "ZAR", n: "South African Rand" },
-    { c: "NGN", n: "Nigerian Naira" }, { c: "KES", n: "Kenyan Shilling" }, { c: "MAD", n: "Moroccan Dirham" },
-    { c: "TND", n: "Tunisian Dinar" }, { c: "DZD", n: "Algerian Dinar" }, { c: "SEK", n: "Swedish Krona" },
-    { c: "NOK", n: "Norwegian Krone" }, { c: "DKK", n: "Danish Krone" }, { c: "PLN", n: "Polish Zloty" },
-    { c: "CZK", n: "Czech Koruna" }, { c: "RON", n: "Romanian Leu" }, { c: "HUF", n: "Hungarian Forint" },
-    { c: "RUB", n: "Russian Ruble" }, { c: "UAH", n: "Ukrainian Hryvnia" }, { c: "BRL", n: "Brazilian Real" },
-    { c: "MXN", n: "Mexican Peso" }, { c: "ARS", n: "Argentine Peso" }, { c: "CLP", n: "Chilean Peso" },
-    { c: "COP", n: "Colombian Peso" }
+    { c: "USD", n: "US Dollar" }, { c: "EUR", n: "Euro" }, { c: "LBP", n: "Lebanese Pound" },
+    { c: "GBP", n: "British Pound" }, { c: "AED", n: "UAE Dirham" }, { c: "SAR", n: "Saudi Riyal" },
+    { c: "XAF", n: "Central African CFA Franc" }, { c: "XOF", n: "West African CFA Franc" },
+    { c: "AFN", n: "Afghan Afghani" }, { c: "ALL", n: "Albanian Lek" }, { c: "AMD", n: "Armenian Dram" },
+    { c: "ANG", n: "Netherlands Antillean Guilder" }, { c: "AOA", n: "Angolan Kwanza" }, { c: "ARS", n: "Argentine Peso" },
+    { c: "AUD", n: "Australian Dollar" }, { c: "AWG", n: "Aruban Florin" }, { c: "AZN", n: "Azerbaijani Manat" },
+    { c: "BAM", n: "Bosnia-Herzegovina Convertible Mark" }, { c: "BBD", n: "Barbadian Dollar" },
+    { c: "BDT", n: "Bangladeshi Taka" }, { c: "BGN", n: "Bulgarian Lev" }, { c: "BHD", n: "Bahraini Dinar" },
+    { c: "BIF", n: "Burundian Franc" }, { c: "BMD", n: "Bermudian Dollar" }, { c: "BND", n: "Brunei Dollar" },
+    { c: "BOB", n: "Bolivian Boliviano" }, { c: "BRL", n: "Brazilian Real" }, { c: "BSD", n: "Bahamian Dollar" },
+    { c: "BTN", n: "Bhutanese Ngultrum" }, { c: "BWP", n: "Botswana Pula" }, { c: "BYN", n: "Belarusian Ruble" },
+    { c: "BZD", n: "Belize Dollar" }, { c: "CAD", n: "Canadian Dollar" }, { c: "CDF", n: "Congolese Franc" },
+    { c: "CHF", n: "Swiss Franc" }, { c: "CLP", n: "Chilean Peso" }, { c: "CNY", n: "Chinese Yuan" },
+    { c: "COP", n: "Colombian Peso" }, { c: "CRC", n: "Costa Rican Colon" }, { c: "CUP", n: "Cuban Peso" },
+    { c: "CVE", n: "Cape Verdean Escudo" }, { c: "CZK", n: "Czech Koruna" }, { c: "DJF", n: "Djiboutian Franc" },
+    { c: "DKK", n: "Danish Krone" }, { c: "DOP", n: "Dominican Peso" }, { c: "DZD", n: "Algerian Dinar" },
+    { c: "EGP", n: "Egyptian Pound" }, { c: "ERN", n: "Eritrean Nakfa" }, { c: "ETB", n: "Ethiopian Birr" },
+    { c: "FJD", n: "Fijian Dollar" }, { c: "FKP", n: "Falkland Islands Pound" }, { c: "GEL", n: "Georgian Lari" },
+    { c: "GHS", n: "Ghanaian Cedi" }, { c: "GIP", n: "Gibraltar Pound" }, { c: "GMD", n: "Gambian Dalasi" },
+    { c: "GNF", n: "Guinean Franc" }, { c: "GTQ", n: "Guatemalan Quetzal" }, { c: "GYD", n: "Guyanese Dollar" },
+    { c: "HKD", n: "Hong Kong Dollar" }, { c: "HNL", n: "Honduran Lempira" }, { c: "HTG", n: "Haitian Gourde" },
+    { c: "HUF", n: "Hungarian Forint" }, { c: "IDR", n: "Indonesian Rupiah" }, { c: "ILS", n: "Israeli Shekel" },
+    { c: "INR", n: "Indian Rupee" }, { c: "IQD", n: "Iraqi Dinar" }, { c: "IRR", n: "Iranian Rial" },
+    { c: "ISK", n: "Icelandic Krona" }, { c: "JMD", n: "Jamaican Dollar" }, { c: "JOD", n: "Jordanian Dinar" },
+    { c: "JPY", n: "Japanese Yen" }, { c: "KES", n: "Kenyan Shilling" }, { c: "KGS", n: "Kyrgyzstani Som" },
+    { c: "KHR", n: "Cambodian Riel" }, { c: "KMF", n: "Comorian Franc" }, { c: "KPW", n: "North Korean Won" },
+    { c: "KRW", n: "South Korean Won" }, { c: "KWD", n: "Kuwaiti Dinar" }, { c: "KYD", n: "Cayman Islands Dollar" },
+    { c: "KZT", n: "Kazakhstani Tenge" }, { c: "LAK", n: "Lao Kip" }, { c: "LKR", n: "Sri Lankan Rupee" },
+    { c: "LRD", n: "Liberian Dollar" }, { c: "LSL", n: "Lesotho Loti" }, { c: "LYD", n: "Libyan Dinar" },
+    { c: "MAD", n: "Moroccan Dirham" }, { c: "MDL", n: "Moldovan Leu" }, { c: "MGA", n: "Malagasy Ariary" },
+    { c: "MKD", n: "Macedonian Denar" }, { c: "MMK", n: "Myanmar Kyat" }, { c: "MNT", n: "Mongolian Tugrik" },
+    { c: "MOP", n: "Macanese Pataca" }, { c: "MRU", n: "Mauritanian Ouguiya" }, { c: "MUR", n: "Mauritian Rupee" },
+    { c: "MVR", n: "Maldivian Rufiyaa" }, { c: "MWK", n: "Malawian Kwacha" }, { c: "MXN", n: "Mexican Peso" },
+    { c: "MYR", n: "Malaysian Ringgit" }, { c: "MZN", n: "Mozambican Metical" }, { c: "NAD", n: "Namibian Dollar" },
+    { c: "NGN", n: "Nigerian Naira" }, { c: "NIO", n: "Nicaraguan Cordoba" }, { c: "NOK", n: "Norwegian Krone" },
+    { c: "NPR", n: "Nepalese Rupee" }, { c: "NZD", n: "New Zealand Dollar" }, { c: "OMR", n: "Omani Rial" },
+    { c: "PAB", n: "Panamanian Balboa" }, { c: "PEN", n: "Peruvian Sol" }, { c: "PGK", n: "Papua New Guinean Kina" },
+    { c: "PHP", n: "Philippine Peso" }, { c: "PKR", n: "Pakistani Rupee" }, { c: "PLN", n: "Polish Zloty" },
+    { c: "PYG", n: "Paraguayan Guarani" }, { c: "QAR", n: "Qatari Riyal" }, { c: "RON", n: "Romanian Leu" },
+    { c: "RSD", n: "Serbian Dinar" }, { c: "RUB", n: "Russian Ruble" }, { c: "RWF", n: "Rwandan Franc" },
+    { c: "SBD", n: "Solomon Islands Dollar" }, { c: "SCR", n: "Seychellois Rupee" }, { c: "SDG", n: "Sudanese Pound" },
+    { c: "SEK", n: "Swedish Krona" }, { c: "SGD", n: "Singapore Dollar" }, { c: "SHP", n: "Saint Helena Pound" },
+    { c: "SLE", n: "Sierra Leonean Leone" }, { c: "SOS", n: "Somali Shilling" }, { c: "SRD", n: "Surinamese Dollar" },
+    { c: "SSP", n: "South Sudanese Pound" }, { c: "STN", n: "Sao Tome and Principe Dobra" },
+    { c: "SVC", n: "Salvadoran Colon" }, { c: "SYP", n: "Syrian Pound" }, { c: "SZL", n: "Swazi Lilangeni" },
+    { c: "THB", n: "Thai Baht" }, { c: "TJS", n: "Tajikistani Somoni" }, { c: "TMT", n: "Turkmenistani Manat" },
+    { c: "TND", n: "Tunisian Dinar" }, { c: "TOP", n: "Tongan Paanga" }, { c: "TRY", n: "Turkish Lira" },
+    { c: "TTD", n: "Trinidad and Tobago Dollar" }, { c: "TWD", n: "New Taiwan Dollar" },
+    { c: "TZS", n: "Tanzanian Shilling" }, { c: "UAH", n: "Ukrainian Hryvnia" }, { c: "UGX", n: "Ugandan Shilling" },
+    { c: "UYU", n: "Uruguayan Peso" }, { c: "UZS", n: "Uzbekistani Som" }, { c: "VES", n: "Venezuelan Bolivar" },
+    { c: "VND", n: "Vietnamese Dong" }, { c: "VUV", n: "Vanuatu Vatu" }, { c: "WST", n: "Samoan Tala" },
+    { c: "XCD", n: "East Caribbean Dollar" }, { c: "XPF", n: "CFP Franc" }, { c: "YER", n: "Yemeni Rial" },
+    { c: "ZAR", n: "South African Rand" }, { c: "ZMW", n: "Zambian Kwacha" }, { c: "ZWG", n: "Zimbabwe Gold" }
   ];
   var CUR_NAME = {}; CURRENCIES.forEach(function (x) { CUR_NAME[x.c] = x.n; });
   // reusable <select> of world currencies (keeps any pre-existing non-standard code as an option)
@@ -4773,15 +4813,29 @@
   }
   function cfgCompanies() {
     return {
-      title: "Companies", pageSize: 50,
-      fetch: async function () { var rows = (await sb.from("companies").select("*").order("name")).data || []; await attachThumbs(rows, "company"); return rows; },
-      searchText: function (c) { return (c.name || "") + " " + (c.legal_name || ""); },
+      // A subsidiary tucks under its parent, so a group reads as a group
+      // rather than as an alphabetical list that happens to contain both.
+      title: "Companies", pageSize: 50, nest: { parent: "parent_company_id" },
+      fetch: async function () {
+        var rows = (await sb.from("companies").select("*").order("name")).data || [];
+        await attachThumbs(rows, "company");
+        // the logo lives in the profile for companies that set one there
+        rows.forEach(function (c) {
+          if (!c._thumb && c.profile && c.profile.logo) c._thumb = c.profile.logo;
+        });
+        return rows;
+      },
+      searchText: function (c) { return (c.name || "") + " " + (c.legal_name || "") + " " + ((c.profile && c.profile.tagline) || ""); },
       columns: [
-        { label: "Name", get: function (c) { return '<b>' + esc(c.name) + '</b>'; } },
+        { label: "", cls: "thumbcol", get: function (c) { return thumbCell(c); } },
+        { label: "Name", get: function (c) {
+          var tag = (c.profile && c.profile.tagline) || "";
+          return '<b>' + esc(c.name) + '</b>' + (tag ? '<div class="muted" style="font-size:11px">' + esc(tag) + '</div>' : "");
+        } },
         { label: "Legal name", get: function (c) { return '<span class="muted">' + esc(c.legal_name || "") + '</span>'; } },
         { label: "Currency", get: function (c) { return esc(c.currency_code); } },
         { label: "Country", get: function (c) { return '<span class="muted">' + esc(c.country || "") + '</span>'; } },
-        { label: "Role", get: function (c) { return '<span class="muted">' + (c.parent_company_id ? "Subsidiary" : "Parent / standalone") + '</span>'; } }
+        { label: "Role", get: function (c) { return '<span class="muted">' + (c.parent_company_id ? "Subsidiary" + (c.ownership_pct != null && Number(c.ownership_pct) < 100 ? " " + Number(c.ownership_pct) + "%" : "") : "Parent / standalone") + '</span>'; } }
       ],
       onOpen: function (c) { openCompanyModal(c.id); },
       onNew: function () { openCompanyModal(null); },
@@ -5621,7 +5675,9 @@
     var logo = (t.show_logo && t.logo) ? '<img alt="" class="plogo" src="' + t.logo + '">' : "";
     var lines = [pfAddr(t), pfContact(t)].filter(Boolean).join("<br>");
     if (t.vat) lines += (lines ? "<br>" : "") + (t.taxLabel || "VAT") + ": " + esc(t.vat);
-    return '<div class="phead"><div class="pfrom">' + logo + '<div class="pfrom-txt"><div class="pname">' + esc(pfDisplayName(t)) + '</div>' + (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
+    return '<div class="phead"><div class="pfrom">' + logo + '<div class="pfrom-txt"><div class="pname">' + esc(pfDisplayName(t)) + '</div>' +
+      (t.tagline ? '<div class="ptag">' + esc(t.tagline) + '</div>' : "") +
+      (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
       '<div class="pdoc"><div class="pdt">' + docTitle + '</div>' + (docNum ? '<div class="pnum">' + esc(docNum) + '</div>' : "") + '</div></div>';
   }
   function pdocFoot() {
@@ -13112,7 +13168,7 @@
   function printTplData(over) {
     var c = S.company || {}, p = c.profile || {}, ps = c.print_settings || {};
     var d = {
-      name: c.name || "", legal_name: c.legal_name || "", vat: c.tax_id || "", country: c.country || "",
+      name: c.name || "", legal_name: c.legal_name || "", tagline: p.tagline || "", vat: c.tax_id || "", country: c.country || "",
       address: p.address || "", city: p.city || "", phone: p.phone || "", phone2: p.phone2 || "",
       email: p.email || "", website: p.website || "", logo: (p.logo != null ? p.logo : (ps.logo || "")) || "",
       template: Number(ps.template || 1), accent: ps.accent || "#2f6bff", footer: ps.footer || (ps.footer === "" ? "" : ""), show_logo: ps.show_logo !== false
@@ -13127,13 +13183,15 @@
   function buildPrintHeader(t, title) {
     var logo = (t.show_logo && t.logo) ? '<img alt="" class="ph-logo" src="' + t.logo + '">' : "";
     var nm = esc(pfDisplayName(t)), date = esc(new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
+    // the tagline sits under the name on every letterhead, all five templates
+    var tag = t.tagline ? '<div class="ph-tag">' + esc(t.tagline) + '</div>' : "";
     var addrContact = [addr, contact].filter(Boolean).join(" &middot; ");
     var tmpl = t.template || 1;
-    if (tmpl === 2) return '<div class="ph ph-t2">' + logo + '<div class="ph-name">' + nm + '</div>' + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '<div class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></div></div>';
-    if (tmpl === 3) return '<div class="ph ph-t3"><div class="ph-band"><div class="ph-band-l">' + logo + '<span class="ph-name">' + nm + '</span></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>' + (addrContact ? '<div class="ph-subline">' + addrContact + '</div>' : "") + '</div>';
-    if (tmpl === 4) return '<div class="ph ph-t4">' + logo + '<span class="ph-name">' + nm + '</span><span class="ph-meta"><span class="ph-title">' + ttl + '</span> &mdash; <span class="ph-date">' + date + '</span></span></div>';
-    if (tmpl === 5) return '<div class="ph ph-t5"><span class="ph-rule"></span>' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
-    return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
+    if (tmpl === 2) return '<div class="ph ph-t2">' + logo + '<div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '<div class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></div></div>';
+    if (tmpl === 3) return '<div class="ph ph-t3"><div class="ph-band"><div class="ph-band-l">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>' + (addrContact ? '<div class="ph-subline">' + addrContact + '</div>' : "") + '</div>';
+    if (tmpl === 4) return '<div class="ph ph-t4">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '<span class="ph-meta"><span class="ph-title">' + ttl + '</span> &mdash; <span class="ph-date">' + date + '</span></span></div>';
+    if (tmpl === 5) return '<div class="ph ph-t5"><span class="ph-rule"></span>' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
+    return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
   }
   function buildPrintFooter(t) {
     var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
@@ -13268,6 +13326,7 @@
       '<div class="card"><h3 class="cp-sec">Identity</h3><div class="o-groups"><div>' +
       fld("Company name", '<input id="cp-name" value="' + esc(c.name || "") + '">', "The short name used across the app.") +
       fld("Legal / registered name", '<input id="cp-legal" value="' + esc(c.legal_name || "") + '" placeholder="e.g. Skyline Facades SARL">', "Printed on official documents.") +
+      fld("Tagline", '<input id="cp-tagline" value="' + esc(p.tagline || "") + '" maxlength="90" placeholder="e.g. Aluminium and glass facades since 1978">', "A short line under the company name. It prints under the logo on every document and report, so keep it to a few words.") +
       fld("VAT / Tax number", '<input id="cp-vat" value="' + esc(c.tax_id || "") + '">') +
       '</div><div>' +
       fld("Country", countrySelectHTML("cp-country", c.country || ""), "Sets the standard VAT rates, currency and date format for this company.") +
@@ -13321,7 +13380,7 @@
     function curData() {
       var _addr = [gv("cp-addr"), gv("cp-addr2")].filter(Boolean).join(", ");
       return printTplData({
-        name: gv("cp-name"), legal_name: gv("cp-legal"), vat: gv("cp-vat"), country: gv("cp-country"),
+        name: gv("cp-name"), legal_name: gv("cp-legal"), tagline: gv("cp-tagline"), vat: gv("cp-vat"), country: gv("cp-country"),
         address: _addr, city: gv("cp-city"), website: gv("cp-web"),
         phone: collectPhone("cp-phone").combined || "", phone2: collectPhone("cp-phone2").combined || "", email: gv("cp-email"), logo: logoData,
         template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1),
@@ -13382,7 +13441,7 @@
       if (!gv("cp-city")) { toast("Enter the city"); return; }
       var sv = document.getElementById("cp-save"); sv.disabled = true;
       var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
-      var profile = { address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, wps_employer_id: gv("cp-wpseid") || "", wps_bank_code: gv("cp-wpsbank") || "", social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
+      var profile = { tagline: gv("cp-tagline") || null, address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, wps_employer_id: gv("cp-wpseid") || "", wps_bank_code: gv("cp-wpsbank") || "", social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
       var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };

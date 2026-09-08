@@ -910,6 +910,7 @@ body{top:0!important}
 .pinv .pfrom{display:flex;align-items:flex-start;gap:14px}
 .pinv .plogo{max-height:64px;max-width:220px;object-fit:contain}
 .pinv .pname{font-size:20px;font-weight:800;line-height:1.15}
+.pinv .ptag{font-size:11.5px;color:#555;font-style:italic;margin-top:2px}
 .pinv .pmuted{color:#555;font-size:12px;margin-top:4px;line-height:1.45}
 .pinv .pdoc{text-align:right;white-space:nowrap}
 .pinv .pdoc{text-align:right}
@@ -1816,6 +1817,8 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .ph{color:#111;font-family:inherit}
 .ph .ph-logo{max-height:54px;max-width:190px;object-fit:contain}
 .ph .ph-name{font-weight:700;font-size:15px;color:#111;line-height:1.2}
+.ph .ph-tag{font-size:10.5px;color:#555;font-style:italic;line-height:1.3}
+.ph-t3 .ph-tag,.ph-t4 .ph-tag{display:inline-block;margin-left:8px}
 .ph .ph-addr{font-size:10.5px;color:#444;line-height:1.45;margin-top:2px}
 .ph .ph-title{font-weight:700;font-size:14px;color:#111}
 .ph .ph-date{font-size:10.5px;color:#666}
