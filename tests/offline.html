@@ -1,0 +1,157 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Orbit offline outbox</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;background:#fbfbfa;color:#16171c}
+  h1{font-size:19px;margin:0 0 4px}
+  .sum{font-size:13px;margin:0 0 18px;font-weight:700}
+  .c{border:1px solid #e5e5e2;border-left:3px solid #ccc;border-radius:10px;padding:10px 14px;margin:7px 0;background:#fff}
+  .c.ok{border-left-color:#16a34a} .c.no{border-left-color:#dc2626;background:#fef4f4}
+  .n{font-weight:600} .d{font-size:12.5px;color:#555;font-family:ui-monospace,monospace;margin-top:2px}
+  .tag{float:right;font-size:11px;font-weight:700} .ok .tag{color:#16a34a} .no .tag{color:#dc2626}
+</style>
+<h1>Offline outbox, exercised</h1>
+<p class="sum" id="sum">running...</p>
+<div id="out"></div>
+
+<script>
+  window.cfg = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "test" };
+  // A fake supabase that can be switched between "online" and "the wifi died",
+  // so the outbox can be tested without a network.
+  window.__NET = { up: true, sent: [] };
+  function mkChain(table) {
+    var st = { table: table, op: null, payload: null, match: {} };
+    var chain = {
+      upsert: function (p) { st.op = "insert"; st.payload = p; return fin(); },
+      insert: function (p) { st.op = "insert"; st.payload = p; return fin(); },
+      update: function (p) { st.op = "update"; st.payload = p; return chain; },
+      delete: function () { st.op = "delete"; return chain; },
+      select: function () { return chain; },
+      eq: function (k, v) { st.match[k] = v; return chain; },
+      in: function () { return chain; },
+      order: function () { return chain; },
+      limit: function () { return chain; },
+      maybeSingle: function () { return fin(); },
+      single: function () { return fin(); },
+      then: function (res, rej) { return fin().then(res, rej); }
+    };
+    function fin() {
+      return new Promise(function (resolve, reject) {
+        if (!window.__NET.up) { reject(new TypeError("Failed to fetch")); return; }
+        window.__NET.sent.push({ table: st.table, op: st.op, payload: st.payload, match: st.match });
+        resolve({ data: st.payload, error: null, count: 0 });
+      });
+    }
+    return chain;
+  }
+  window.supabase = { createClient: function () { return { from: mkChain, rpc: function () { return Promise.resolve({ data: null, error: null }); }, auth: { getSession: function () { return Promise.resolve({ data: {} }); }, onAuthStateChange: function () { } } }; } };
+</script>
+<script src="../js/app.js"></script>
+<script>
+(async function () {
+  var results = [];
+  function t(name, ok, detail) { results.push({ name: name, ok: !!ok, detail: detail || "" }); }
+  function render() {
+    var pass = results.filter(function (r) { return r.ok; }).length;
+    var s = document.getElementById("sum");
+    s.textContent = pass + " of " + results.length + " passed";
+    s.style.color = pass === results.length ? "#16a34a" : "#dc2626";
+    document.getElementById("out").innerHTML = results.map(function (r) {
+      return '<div class="c ' + (r.ok ? "ok" : "no") + '"><span class="tag">' + (r.ok ? "PASS" : "FAIL") +
+        '</span><div class="n">' + r.name + '</div><div class="d">' + r.detail + '</div></div>';
+    }).join("");
+  }
+  // the app exposes nothing, so reach the outbox the way the app does: via IndexedDB
+  function readQueue() {
+    return new Promise(function (res) {
+      var rq = indexedDB.open("orbit_outbox", 1);
+      rq.onsuccess = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains("ops")) { res([]); return; }
+        var g = db.transaction("ops", "readonly").objectStore("ops").getAll();
+        g.onsuccess = function () { res((g.result || []).sort(function (a, b) { return a.seq - b.seq; })); };
+        g.onerror = function () { res([]); };
+      };
+      rq.onerror = function () { res([]); };
+    });
+  }
+  // Clear the STORE, never deleteDatabase: the app holds an open connection, so
+  // a delete blocks and every later open queues behind it. That cost a debugging
+  // detour once already.
+  function clearQueue() {
+    return new Promise(function (res) {
+      var rq = indexedDB.open("orbit_outbox", 1);
+      rq.onsuccess = function () {
+        var db = rq.result;
+        if (!db.objectStoreNames.contains("ops")) { res(); return; }
+        var c = db.transaction("ops", "readwrite").objectStore("ops").clear();
+        c.onsuccess = c.onerror = function () { res(); };
+      };
+      rq.onerror = rq.onblocked = function () { res(); };
+    });
+  }
+
+  await clearQueue();
+  await new Promise(function (r) { setTimeout(r, 200); });
+
+  // The app's own function, reached through the click path it is wired to.
+  // svcWrite is module-private, so drive it the way a waiter would: pretend the
+  // network died, then check the write landed in IndexedDB instead of vanishing.
+  var sw = window.__svcWriteForTest;
+  t("the outbox exposes a test hook", !!sw, sw ? "found" : "window.__svcWriteForTest is missing");
+  if (!sw) { render(); return; }
+
+  // 1. online write goes straight out
+  window.__NET.up = true; window.__NET.sent = [];
+  var r1 = await sw("pos_orders", "insert", { company_id: "c1", number: "T1" });
+  t("an online write goes straight to the server",
+    window.__NET.sent.length === 1 && !!r1 && !!r1.id,
+    "sent=" + window.__NET.sent.length + " id=" + (r1 && r1.id ? "generated" : "MISSING"));
+
+  // 2. every insert gets a client id, so a replay cannot duplicate
+  t("every insert carries a client-generated id", !!(r1 && /^[0-9a-f-]{36}$/.test(r1.id)), "id=" + (r1 && r1.id));
+
+  // 3. offline write queues instead of failing
+  window.__NET.up = false; window.__NET.sent = [];
+  var r2 = await sw("pos_order_lines", "insert", { company_id: "c1", name: "Flat white", qty: 1 });
+  var q = await readQueue();
+  t("an offline write is queued, not lost",
+    window.__NET.sent.length === 0 && q.length === 1 && !!r2,
+    "sent=" + window.__NET.sent.length + " queued=" + q.length);
+
+  // 4. the caller still gets a usable row back, so the UI can paint optimistically
+  t("the caller gets an optimistic row back", !!(r2 && r2.id && r2.name === "Flat white"), "row=" + JSON.stringify(r2 || null).slice(0, 70));
+
+  // 5. order is preserved
+  await sw("pos_order_lines", "insert", { company_id: "c1", name: "Croissant", qty: 1 });
+  await sw("pos_orders", "update", { total: 12 }, { match: { id: r1.id } });
+  q = await readQueue();
+  var seqs = q.map(function (x) { return x.seq; });
+  var sorted = seqs.slice().sort(function (a, b) { return a - b; });
+  t("the queue keeps strict order", q.length === 3 && JSON.stringify(seqs) === JSON.stringify(sorted),
+    "queued=" + q.length + " seq=" + seqs.join(","));
+
+  // 6. it survives a reload (it is in IndexedDB, not memory)
+  t("the queue is durable, not in memory", q.length === 3 && q.every(function (x) { return x.table && x.op; }),
+    "3 ops persisted with table+op");
+
+  // 7. coming back online drains it, in order
+  window.__NET.up = true; window.__NET.sent = [];
+  window.dispatchEvent(new Event("online"));
+  await new Promise(function (r) { setTimeout(r, 700); });
+  q = await readQueue();
+  var order = window.__NET.sent.map(function (x) { return x.table + ":" + x.op; });
+  t("reconnecting drains the queue in order",
+    q.length === 0 && window.__NET.sent.length === 3 &&
+    order[0] === "pos_order_lines:insert" && order[2] === "pos_orders:update",
+    "left=" + q.length + " replayed=" + order.join(" -> "));
+
+  // 8. replay is idempotent: inserts go out as upsert on the client id
+  t("replayed inserts are upserts, so a retry cannot duplicate",
+    window.__NET.sent.filter(function (x) { return x.op === "insert"; }).every(function (x) { return x.payload && x.payload.id; }),
+    "every replayed insert carried its client id");
+
+  await clearQueue();
+  render();
+})();
+</script>

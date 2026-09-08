@@ -36,6 +36,7 @@ const MUTATIONS = {
   "every image has alt text": s => s.replace('<img alt="" src=', "<img src="),
   "the accessibility layer is wired": s => s.replace("function a11yPromote", "function a11yRemoved"),
   "every ledger report honours the selected book": s => s.replace('bookFilter(sb.from("journal_lines").select("account_id', 'noFilter(sb.from("journal_lines").select("account_id'),
+  "the offline outbox is wired": s => s.replace("async function svcWrite", "async function svcRemoved"),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

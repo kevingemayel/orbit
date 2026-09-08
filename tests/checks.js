@@ -186,6 +186,28 @@
                                : ok(tb.length + " trial_balance call(s) and " + joins.length + " ledger query(ies) all book-aware");
       } },
 
+    { name: "the offline outbox is wired",
+      why: "A till that stops taking orders when the wifi drops is the failure this exists to prevent. If the outbox is removed, or a service write stops going through svcWrite, everything still parses and the loss only shows up mid-shift.",
+      run: function (src) {
+        var need = [
+          ["outbox write path", /async function svcWrite/],
+          ["durable queue", /indexedDB\.open\("orbit_outbox"/],
+          ["client-generated ids", /if \(op === "insert" && !payload\.id\) payload\.id = uuid\(\)/],
+          ["idempotent replay", /upsert\(entry\.payload, \{ onConflict: "id" \}\)/],
+          ["drains on reconnect", /addEventListener\("online"/],
+          ["offline indicator", /function obPaint/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // and nothing on the service path may write straight past the queue
+        var a = src.indexOf("SERVICE: the two screens"), b = src.indexOf("THE THREE REPORTS");
+        var svc = (a >= 0 && b > a) ? src.slice(a, b) : "";
+        var direct = all(svc, /(sb\.from\("[a-z_]+"\)\.(?:insert|update|delete))/g);
+        return direct.length
+          ? bad(direct.length + " service write(s) bypass the outbox, first: " + direct[0])
+          : ok(need.length + " pieces present, no service write bypasses the queue");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

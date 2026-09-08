@@ -1879,3 +1879,27 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .kds-bump:active{transform:scale(.98)}
 .kds-empty{padding:60px 20px;text-align:center;color:var(--ink3);font-size:18px;font-weight:600}
 .kds-empty span{display:block;margin-top:6px;font-size:13px;font-weight:400}
+
+/* Bill and split-payment modal */
+.bill-sum{display:grid;gap:5px;margin-bottom:10px;padding:11px 13px;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}
+.bill-sum>div{display:flex;justify-content:space-between;align-items:baseline;font-size:13.5px;color:var(--ink2)}
+.bill-sum b{font-variant-numeric:tabular-nums;color:var(--ink)}
+.bill-due{border-top:1px solid var(--line);padding-top:6px;margin-top:2px}
+.bill-due span{font-weight:600;color:var(--ink)}
+.bill-due b{font-size:20px;font-weight:800}
+.bill-split{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:10px}
+.bill-split .sub{margin-right:2px}
+.bill-sp{font-size:12.5px;padding:6px 11px}
+.bill-sp.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.bill-items{display:grid;gap:5px;max-height:200px;overflow:auto;margin-bottom:10px}
+.bill-it{display:grid;grid-template-columns:20px 1fr auto;gap:9px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);font-size:13.5px;cursor:pointer}
+.bill-it b{font-variant-numeric:tabular-nums}
+
+/* Offline / syncing indicator. Deliberately loud: a waiter needs to know the
+   order is being held on the device, not lost. */
+.o-offline{position:fixed;left:50%;transform:translateX(-50%);bottom:16px;z-index:9998;
+  padding:8px 15px;border-radius:999px;font-size:12.5px;font-weight:700;letter-spacing:.01em;
+  box-shadow:0 6px 22px rgba(20,22,28,.18);cursor:default}
+.o-offline.off{background:var(--bad);color:#fff}
+.o-offline.sync{background:var(--warn);color:#fff}
+.o-offline b{font-variant-numeric:tabular-nums}

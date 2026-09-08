@@ -17709,6 +17709,164 @@
   }
 
   // ===========================================================================
+  // OFFLINE OUTBOX
+  //
+  // A till cannot stop taking orders because the wifi dropped. The service
+  // worker keeps the app loading; this keeps the WRITES.
+  //
+  // How it works, and why this shape:
+  //
+  //   * Every offline write carries a CLIENT-GENERATED uuid. Replaying it twice
+  //     is therefore harmless, which is what makes reconnection deterministic
+  //     (spec constraint 5). Without a client id, a retry after an ambiguous
+  //     failure either duplicates the row or loses it.
+  //   * Writes queue in IndexedDB, not memory, so closing the lid or the tab
+  //     crashing does not lose a table's order.
+  //   * The queue is strictly ordered by sequence and replayed in order, so a
+  //     line inserted after its order is never sent before it.
+  //   * A write that fails for a REAL reason (rejected by the database) is not
+  //     retried forever; it is parked and surfaced, because silently retrying a
+  //     permanently invalid row hides a bug.
+  //
+  // Scope is deliberate: the service screens go through it. The rest of the ERP
+  // is a desk application and fails honestly instead.
+  // ===========================================================================
+  var OUTBOX = { db: null, pending: 0, syncing: false, seq: Date.now() };
+
+  function obOpen() {
+    if (OUTBOX.db) return Promise.resolve(OUTBOX.db);
+    return new Promise(function (res, rej) {
+      try {
+        var rq = indexedDB.open("orbit_outbox", 1);
+        rq.onupgradeneeded = function () {
+          var db = rq.result;
+          if (!db.objectStoreNames.contains("ops")) db.createObjectStore("ops", { keyPath: "seq" });
+          if (!db.objectStoreNames.contains("cache")) db.createObjectStore("cache", { keyPath: "k" });
+        };
+        rq.onsuccess = function () { OUTBOX.db = rq.result; res(rq.result); };
+        rq.onerror = function () { rej(rq.error); };
+      } catch (e) { rej(e); }
+    });
+  }
+  function obTx(store, mode) {
+    return obOpen().then(function (db) { return db.transaction(store, mode).objectStore(store); });
+  }
+  function obAll() {
+    return obTx("ops", "readonly").then(function (s) {
+      return new Promise(function (res) { var r = s.getAll(); r.onsuccess = function () { res((r.result || []).sort(function (a, b) { return a.seq - b.seq; })); }; r.onerror = function () { res([]); }; });
+    }).catch(function () { return []; });
+  }
+  function obPut(op) { return obTx("ops", "readwrite").then(function (s) { s.put(op); }).catch(function () { }); }
+  function obDel(seq) { return obTx("ops", "readwrite").then(function (s) { s.delete(seq); }).catch(function () { }); }
+
+  function uuid() {
+    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+      var r = Math.random() * 16 | 0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+  function isOffline() { return typeof navigator !== "undefined" && navigator.onLine === false; }
+  function looksOffline(err) {
+    var m = String((err && (err.message || err)) || "").toLowerCase();
+    return isOffline() || /failed to fetch|networkerror|load failed|timeout|econn/.test(m);
+  }
+
+  // The single entry point every service write goes through.
+  //   svcWrite("pos_order_lines", "insert", row)      -> row (with an id)
+  //   svcWrite("pos_orders", "update", patch, {id})   -> patch
+  async function svcWrite(table, op, payload, opts) {
+    opts = opts || {};
+    if (op === "insert" && !payload.id) payload.id = uuid();      // idempotent replay
+    var entry = { seq: ++OUTBOX.seq, table: table, op: op, payload: payload, match: opts.match || (payload.id ? { id: payload.id } : null), at: new Date().toISOString() };
+
+    if (!isOffline()) {
+      try {
+        var r = await obSend(entry);
+        if (!r.error) return payload;
+        if (!looksOffline(r.error)) { toast(errMsg(r.error)); return null; }
+      } catch (e) {
+        if (!looksOffline(e)) { toast(errMsg(e)); return null; }
+      }
+    }
+    await obPut(entry);
+    OUTBOX.pending++;
+    obPaint();
+    return payload;                                                // optimistic
+  }
+  async function obSend(entry) {
+    var q = sb.from(entry.table);
+    if (entry.op === "insert") return await q.upsert(entry.payload, { onConflict: "id" });
+    if (entry.op === "update") {
+      var u = q.update(entry.payload);
+      Object.keys(entry.match || {}).forEach(function (k) { u = u.eq(k, entry.match[k]); });
+      return await u;
+    }
+    if (entry.op === "delete") {
+      var d = q.delete();
+      Object.keys(entry.match || {}).forEach(function (k) { d = d.eq(k, entry.match[k]); });
+      return await d;
+    }
+    return { error: { message: "unknown op " + entry.op } };
+  }
+  async function obFlush() {
+    if (OUTBOX.syncing || isOffline()) return;
+    OUTBOX.syncing = true;
+    try {
+      var ops = await obAll();
+      OUTBOX.pending = ops.length;
+      for (var i = 0; i < ops.length; i++) {
+        var e = ops[i], r;
+        try { r = await obSend(e); } catch (err) { r = { error: err }; }
+        if (r && r.error) {
+          if (looksOffline(r.error)) break;                        // still down; keep the rest queued
+          // a real rejection: park it rather than retry forever, and say so
+          e.failed = errMsg(r.error); await obPut(e);
+          toast("A queued change was refused: " + e.failed);
+          continue;
+        }
+        await obDel(e.seq);
+        OUTBOX.pending = Math.max(0, OUTBOX.pending - 1);
+      }
+    } finally { OUTBOX.syncing = false; obPaint(); }
+  }
+  function obPaint() {
+    var el = document.getElementById("o-offline");
+    if (!el) return;
+    var off = isOffline(), n = OUTBOX.pending;
+    if (!off && !n) { el.style.display = "none"; return; }
+    el.style.display = "";
+    el.className = "o-offline" + (off ? " off" : " sync");
+    el.innerHTML = (off ? "Offline" : "Syncing") + (n ? ' <b>' + n + '</b> waiting' : "");
+    el.title = off
+      ? "No connection. Orders are being saved on this device and will send themselves when you are back."
+      : "Sending " + n + " change(s) saved while you were offline.";
+  }
+  // One hook so the outbox can be exercised by tests/offline.html. It exposes
+  // the write path only, nothing that could bypass a permission or read data.
+  try { window.__svcWriteForTest = function (t, o, p, x) { return svcWrite(t, o, p, x); }; } catch (e) { }
+  (function obInit() {
+    function go() {
+      try {
+        if (!document.getElementById("o-offline")) {
+          var b = document.createElement("div");
+          b.id = "o-offline"; b.className = "o-offline"; b.style.display = "none";
+          b.setAttribute("role", "status"); b.setAttribute("aria-live", "polite");
+          document.body.appendChild(b);
+        }
+        obAll().then(function (ops) { OUTBOX.pending = ops.length; obPaint(); if (ops.length) obFlush(); });
+        window.addEventListener("online", function () { obPaint(); obFlush(); });
+        window.addEventListener("offline", obPaint);
+        setInterval(function () { if (OUTBOX.pending) obFlush(); }, 20000);
+        // keep the shell available with no network
+        if ("serviceWorker" in navigator && location.protocol === "https:") {
+          navigator.serviceWorker.register("/sw.js").catch(function () { });
+        }
+      } catch (e) { }
+    }
+    if (document.body) go(); else document.addEventListener("DOMContentLoaded", go);
+  })();
+
+  // ===========================================================================
   // SERVICE: the two screens that are actually open during trading hours.
   //
   //   Floor    a waiter or floor manager on a tablet. Tables first, not
@@ -17851,6 +18009,7 @@
       '<div class="op-foot">' +
       '<div class="op-tot"><span>Total</span><b id="op-total">' + money(SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0)) + '</b></div>' +
       '<button class="btn" id="op-note">Note / allergy</button>' +
+      '<button class="btn" id="op-bill">Bill</button>' +
       '<button class="btn pri" id="op-send"' + (unsent.length ? "" : " disabled") + '>Send to kitchen' + (unsent.length ? " (" + unsent.length + ")" : "") + '</button>' +
       '</div></div></div>';
     function grid(q) {
@@ -17866,6 +18025,7 @@
     paintOrderLines();
     document.getElementById("op-send").onclick = function () { fireOrder(t); };
     document.getElementById("op-note").onclick = function () { orderNote(); };
+    document.getElementById("op-bill").onclick = function () { openBill(t); };
   }
   function paintOrderLines() {
     var el = document.getElementById("op-lines"); if (!el) return;
@@ -17882,7 +18042,7 @@
     el.querySelectorAll(".op-x").forEach(function (b) {
       b.onclick = async function () {
         var l = SERVICE.lines[+b.dataset.i];
-        if (l.id) await sb.from("pos_order_lines").delete().eq("id", l.id);
+        if (l.id) await svcWrite("pos_order_lines", "delete", {}, { match: { id: l.id } });
         SERVICE.lines.splice(+b.dataset.i, 1);
         await recalcOrder(); paintOrderLines(); refreshTotals();
       };
@@ -17933,14 +18093,15 @@
     var price = Number(p.list_price || 0) + Number(extra || 0);
     if (!SERVICE.order) {
       var n = "T" + Date.now().toString().slice(-6);
-      var ins = await sb.from("pos_orders").insert({
+      var made = await svcWrite("pos_orders", "insert", {
         company_id: S.company.id, store_id: SERVICE.store || t.store_id || null, table_id: t.id,
         order_type: "dine_in", status: "open", number: n, subtotal: 0, tax: 0, total: 0,
+        created_at: new Date().toISOString(),
         server_name: (S.user && S.user.email) || null, guest_count: t.guest_count || null
-      }).select("*").single();
-      if (ins.error) { toast(errMsg(ins.error)); return; }
-      SERVICE.order = ins.data;
-      await sb.from("store_tables").update({ status: "seated", seated_at: new Date().toISOString(), current_order_id: ins.data.id }).eq("id", t.id);
+      });
+      if (!made) return;
+      SERVICE.order = made;
+      await svcWrite("store_tables", "update", { status: "seated", seated_at: new Date().toISOString(), current_order_id: made.id }, { match: { id: t.id } });
     }
     var line = {
       company_id: S.company.id, order_id: SERVICE.order.id, product_id: p.id, name: p.name,
@@ -17948,15 +18109,15 @@
       modifier_ids: modIds || [], modifier_note: modNote || null,
       station: p.station || null, kds_status: "new"
     };
-    var li = await sb.from("pos_order_lines").insert(line).select("*").single();
-    if (li.error) { toast(errMsg(li.error)); return; }
-    SERVICE.lines.push(li.data);
+    var saved = await svcWrite("pos_order_lines", "insert", line);
+    if (!saved) return;
+    SERVICE.lines.push(saved);
     await recalcOrder(); paintOrderLines(); refreshTotals();
   }
   async function recalcOrder() {
     if (!SERVICE.order) return;
     var tot = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
-    await sb.from("pos_orders").update({ subtotal: tot, total: tot }).eq("id", SERVICE.order.id);
+    await svcWrite("pos_orders", "update", { subtotal: tot, total: tot }, { match: { id: SERVICE.order.id } });
     SERVICE.order.total = tot;
   }
   async function fireOrder(t) {
@@ -17964,15 +18125,140 @@
     var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
     if (!unsent.length) { toast("Nothing new to send"); return; }
     var now = new Date().toISOString();
-    var r = await sb.from("pos_order_lines").update({ kds_status: "fired", fired_at: now }).eq("order_id", SERVICE.order.id).eq("kds_status", "new");
-    if (r.error) { toast(errMsg(r.error)); return; }
-    await sb.from("pos_orders").update({ fired_at: SERVICE.order.fired_at || now, status: "open" }).eq("id", SERVICE.order.id);
-    await sb.from("store_tables").update({ status: "ordered" }).eq("id", t.id);
+    for (var ui = 0; ui < unsent.length; ui++) {
+      await svcWrite("pos_order_lines", "update", { kds_status: "fired", fired_at: now }, { match: { id: unsent[ui].id } });
+    }
+    await svcWrite("pos_orders", "update", { fired_at: SERVICE.order.fired_at || now, status: "open" }, { match: { id: SERVICE.order.id } });
+    await svcWrite("store_tables", "update", { status: "ordered" }, { match: { id: t.id } });
     SERVICE.order.fired_at = SERVICE.order.fired_at || now;
     SERVICE.lines.forEach(function (l) { if (l.kds_status === "new") { l.kds_status = "fired"; l.fired_at = now; } });
     toast(unsent.length + " item(s) sent to the kitchen");
     paintOrderPad(t);
   }
+  // --------------------------------------------------------------------------
+  // Taking the money at the table.
+  //
+  // A counter sale is one tender for one total. A table bill is not: several
+  // people pay, in several tenders, sometimes before the rest of the table has
+  // finished. So the model is a running balance settled by any number of
+  // tenders, and the table only frees itself when the balance reaches zero.
+  // --------------------------------------------------------------------------
+  var PAY_METHODS = [["cash", "Cash"], ["card", "Card"], ["wallet", "Wallet / gift card"], ["voucher", "Voucher"], ["points", "Loyalty points"], ["account", "On account"], ["transfer", "Transfer"]];
+
+  async function openBill(t) {
+    if (!SERVICE.order) { toast("Nothing on this table yet"); return; }
+    var oid = SERVICE.order.id;
+    var paid = (await sb.from("pos_payments").select("*").eq("order_id", oid).order("paid_at")).data || [];
+    var lines = SERVICE.lines;
+    var total = lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+    var takenSoFar = paid.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
+    var svc = Number(SERVICE.order.service_charge || 0);
+    var due = Math.round((total + svc - takenSoFar) * 100) / 100;
+
+    var inner =
+      '<div class="bill-sum"><div><span>Items</span><b>' + money(total) + '</b></div>' +
+      (svc ? '<div><span>Service</span><b>' + money(svc) + '</b></div>' : "") +
+      (takenSoFar ? '<div><span>Already paid</span><b>-' + money(takenSoFar) + '</b></div>' : "") +
+      '<div class="bill-due"><span>Still to pay</span><b id="bill-due">' + money(due) + '</b></div></div>' +
+      (paid.length ? '<div class="sub" style="margin:-2px 0 8px">' + paid.map(function (p) { return esc(fnbTitle(p.method)) + " " + money(p.amount); }).join(" &middot; ") + '</div>' : "") +
+      '<div class="bill-split"><span class="sub">Split</span>' +
+      '<button type="button" class="btn bill-sp on" data-sp="whole">Whole bill</button>' +
+      '<button type="button" class="btn bill-sp" data-sp="even">Evenly</button>' +
+      '<button type="button" class="btn bill-sp" data-sp="items">By item</button>' +
+      '<button type="button" class="btn bill-sp" data-sp="amount">By amount</button></div>' +
+      '<div id="bill-mode"></div>' +
+      '<div class="row2"><div><label>Method</label><select id="bill-meth">' + PAY_METHODS.map(function (m) { return '<option value="' + m[0] + '">' + m[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Tip</label><input id="bill-tip" type="number" step="0.01" placeholder="0.00"></div></div>' +
+      '<div><label>Reference</label><input id="bill-ref" placeholder="card auth, card last 4, voucher code"></div>' +
+      '<div class="o-note" id="bill-note">This tender will settle <b id="bill-amt">' + money(due) + '</b>. Add more than one tender if the table is paying separately.</div>';
+
+    var m = plotModal("Bill for " + (t.name || "table"), inner, async function () {
+      var amt = Number(m.__amount != null ? m.__amount : due);
+      if (!(amt > 0)) { toast("Nothing to settle"); return; }
+      if (amt > due + 0.005) { toast("That is more than is still owed"); return; }
+      var row = {
+        company_id: S.company.id, order_id: oid, method: document.getElementById("bill-meth").value,
+        amount: Math.round(amt * 100) / 100, tip_amount: parseFloat(gv("bill-tip")) || 0,
+        reference: gv("bill-ref") || null, store_id: SERVICE.store || t.store_id || null,
+        taken_by: (S.user && S.user.email) || null,
+        split_kind: m.__mode || "whole", split_label: m.__label || null
+      };
+      if (!(await svcWrite("pos_payments", "insert", row))) return;
+      // mark the chosen lines settled, so the next person is not offered them again
+      if (m.__mode === "items" && m.__lineIds && m.__lineIds.length) {
+        for (var pi = 0; pi < m.__lineIds.length; pi++) {
+          await svcWrite("pos_order_lines", "update", { paid: true, paid_at: new Date().toISOString() }, { match: { id: m.__lineIds[pi] } });
+        }
+        m.__lineIds.forEach(function (id) { var l = SERVICE.lines.filter(function (x) { return x.id === id; })[0]; if (l) l.paid = true; });
+      }
+      var nowPaid = takenSoFar + row.amount;
+      var left = Math.round((total + svc - nowPaid) * 100) / 100;
+      var tips = paid.reduce(function (s, p) { return s + Number(p.tip_amount || 0); }, 0) + row.tip_amount;
+      await svcWrite("pos_orders", "update", {
+        amount_paid: nowPaid, tip_amount: tips,
+        status: left <= 0.005 ? "paid" : "open",
+        served_at: SERVICE.order.served_at || new Date().toISOString(),
+        closed_at: left <= 0.005 ? new Date().toISOString() : null
+      }, { match: { id: oid } });
+      m.remove();
+      if (left <= 0.005) {
+        // the table is done: clear it and hand the floor back
+        await svcWrite("store_tables", "update", { status: "dirty", seated_at: null, current_order_id: null }, { match: { id: t.id } });
+        toast("Bill settled" + (tips ? " (tips " + money(tips) + ")" : "") + " - table free to clear");
+        go("kitchen.floor");
+      } else {
+        toast(money(row.amount) + " taken, " + money(left) + " still owed");
+        openTableOrder(t.id);
+      }
+    });
+
+    // --- split modes ---
+    m.__mode = "whole"; m.__amount = due; m.__label = null; m.__lineIds = null;
+    function setAmount(a, label, ids) {
+      m.__amount = Math.round(a * 100) / 100; m.__label = label || null; m.__lineIds = ids || null;
+      var el = document.getElementById("bill-amt"); if (el) el.textContent = money(m.__amount);
+    }
+    function paintMode() {
+      var box = document.getElementById("bill-mode"); if (!box) return;
+      if (m.__mode === "even") {
+        box.innerHTML = '<div class="row2"><div><label>Split how many ways</label><input id="bill-ways" type="number" min="2" value="2"></div><div><label>This tender covers</label><input id="bill-shares" type="number" min="1" value="1"></div></div>';
+        var recalc = function () {
+          var ways = Math.max(2, parseInt(gv("bill-ways"), 10) || 2), sh = Math.max(1, parseInt(gv("bill-shares"), 10) || 1);
+          setAmount(Math.min(due, (due / ways) * sh), sh + " of " + ways);
+        };
+        document.getElementById("bill-ways").oninput = recalc;
+        document.getElementById("bill-shares").oninput = recalc;
+        recalc();
+      } else if (m.__mode === "items") {
+        var open = lines.filter(function (l) { return !l.paid; });
+        box.innerHTML = open.length
+          ? '<div class="bill-items">' + open.map(function (l) { return '<label class="bill-it"><input type="checkbox" class="bill-li" value="' + l.id + '" data-a="' + Number(l.line_total || 0) + '"> <span>' + esc(l.name) + '</span><b>' + money(l.line_total) + '</b></label>'; }).join("") + '</div>'
+          : '<div class="o-note">Every item on this table has already been paid for.</div>';
+        box.querySelectorAll(".bill-li").forEach(function (c) {
+          c.onchange = function () {
+            var picked = [].filter.call(box.querySelectorAll(".bill-li"), function (x) { return x.checked; });
+            setAmount(picked.reduce(function (s, x) { return s + Number(x.dataset.a); }, 0),
+              picked.length + " item(s)", picked.map(function (x) { return x.value; }));
+          };
+        });
+        setAmount(0, "no items chosen", []);
+      } else if (m.__mode === "amount") {
+        box.innerHTML = '<div><label>Amount to take now</label><input id="bill-manual" type="number" step="0.01" value="' + (Math.round(due * 100) / 100) + '"></div>';
+        document.getElementById("bill-manual").oninput = function () { setAmount(parseFloat(this.value) || 0, "part payment"); };
+      } else {
+        box.innerHTML = "";
+        setAmount(due, null);
+      }
+    }
+    m.querySelectorAll(".bill-sp").forEach(function (b) {
+      b.onclick = function () {
+        m.querySelectorAll(".bill-sp").forEach(function (x) { x.classList.remove("on"); });
+        b.classList.add("on"); m.__mode = b.dataset.sp; paintMode();
+      };
+    });
+    paintMode();
+  }
+
   function orderNote() {
     if (!SERVICE.order) { toast("Add something to the table first"); return; }
     var inner = '<div><label>Guest name</label><input id="on-name" value="' + esc(SERVICE.order.guest_name || "") + '"></div>' +
@@ -17981,8 +18267,7 @@
       '<div class="o-note warn">An allergy note is printed on the kitchen ticket in red. Write the allergy, not the dish.</div>';
     var m = plotModal("Table note", inner, async function () {
       var row = { guest_name: gv("on-name") || null, guest_count: parseInt(gv("on-cov"), 10) || null, allergy_note: (document.getElementById("on-note").value || "").trim() || null };
-      var r = await sb.from("pos_orders").update(row).eq("id", SERVICE.order.id);
-      if (r.error) { toast(errMsg(r.error)); return; }
+      if (!(await svcWrite("pos_orders", "update", row, { match: { id: SERVICE.order.id } }))) return;
       Object.assign(SERVICE.order, row); m.remove(); toast("Saved");
     });
   }
@@ -18066,15 +18351,18 @@
     body.querySelectorAll(".kds-item").forEach(function (b) {
       b.onclick = async function () {
         var done = b.classList.contains("done");
-        await sb.from("pos_order_lines").update({ kds_status: done ? "fired" : "ready", ready_at: done ? null : new Date().toISOString() }).eq("id", b.dataset.l);
+        await svcWrite("pos_order_lines", "update", { kds_status: done ? "fired" : "ready", ready_at: done ? null : new Date().toISOString() }, { match: { id: b.dataset.l } });
         b.classList.toggle("done");
       };
     });
     body.querySelectorAll(".kds-bump").forEach(function (b) {
       b.onclick = async function () {
         var now = new Date().toISOString();
-        await sb.from("pos_order_lines").update({ kds_status: "bumped", bumped_at: now }).eq("order_id", b.dataset.o).in("kds_status", ["fired", "ready"]);
-        await sb.from("pos_orders").update({ ready_at: now, served_at: now }).eq("id", b.dataset.o);
+        var tkl = (byOrder[b.dataset.o] || { lines: [] }).lines;
+        for (var bi = 0; bi < tkl.length; bi++) {
+          await svcWrite("pos_order_lines", "update", { kds_status: "bumped", bumped_at: now }, { match: { id: tkl[bi].id } });
+        }
+        await svcWrite("pos_orders", "update", { ready_at: now, served_at: now }, { match: { id: b.dataset.o } });
         toast("Ticket bumped"); paintKDS();
       };
     });
