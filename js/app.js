@@ -680,8 +680,8 @@
       { t: "Site diary and equipment", h: "<p>The <b>Site Diary</b> is a daily record of what happened on site - the weather, who was there, and progress. It is invaluable later if there is a dispute or a claim, because it is a contemporaneous record (written at the time).</p><p>You can also register the <b>Plant &amp; Equipment</b> on site (machines and tools). Together these build the evidence trail you need for reviews and claims.</p>" },
       { t: "Install jobs and tools", h: "<p>Two more screens run the physical side of a job:</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:hardhat}} Install Jobs</div><p>An <b>install job</b> is a package of installation work scheduled on site - a floor, a zone, a batch of panels. Track its progress and tie it to the project, so what is fitted is recorded, not just what is made.</p></div><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:wrench}} Tools &amp; Equipment</div><p>A register of hand tools and kit - who has what, and where it is. It saves the daily hunt for the missing drill and the argument over who lost it.</p></div></div><p>Install jobs sit next to <b>Panel Tracking</b> in Manufacturing: the panel says &ldquo;made and delivered&rdquo;, the install job says &ldquo;fitted&rdquo;. Between them you can see a facade go up, unit by unit.</p>" }
     ] },
-    { key: "menu", title: "Menu engineering", articles: [
-      { t: "What this app is for", h: "<p>A product catalogue says what you sell. A <b>menu</b> says what you offer, to whom, at what price, at which hours, and what it really costs you to make. That gap is where the margin in food and drink is won or lost.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menus</span><span class=\"man-chip\">{{ico:layers}} Modifiers</span><span class=\"man-chip\">{{ico:cart}} Channels</span><span class=\"man-chip\">{{ico:tag}} Price list</span><span class=\"man-chip\">{{ico:chartBar}} Menu engineering</span></div><p>Recipes and items are shared with the rest of Orbit, so a coffee bean is one product whether you buy it, roast it, sell it by the bag or brew it.</p>" },
+    { key: "kitchen", title: "Kitchen (food and drink)", articles: [
+      { t: "What this app is for", h: "<p><b>Kitchen</b> is the whole food and drink operation in one place: the menu and what it really costs, the stock behind it, the stores it is served in, the guests who buy it, the platforms that deliver it, and the franchisees who run it under your name.</p><p>It is one app with ten sections rather than ten apps, because nobody running a coffee shop thinks of the roastery and the loyalty scheme as separate products. They are rooms in the same building.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menu</span><span class=\"man-chip\">{{ico:scale}} Stock control</span><span class=\"man-chip\">{{ico:building}} Estate</span><span class=\"man-chip\">{{ico:clipboardCheck}} Operations</span><span class=\"man-chip\">{{ico:shield}} Loss prevention</span><span class=\"man-chip\">{{ico:box}} Roastery</span><span class=\"man-chip\">{{ico:heart}} Guests</span><span class=\"man-chip\">{{ico:truck}} Delivery</span><span class=\"man-chip\">{{ico:people}} Franchise</span><span class=\"man-chip\">{{ico:clock}} Planning</span></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:layers}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing here is a separate system</div><p>Items, recipes, suppliers, stock, staff, customers and the ledger are the same records the rest of Orbit uses. A coffee bean is one product whether you buy it green, roast it, sell it by the bag or brew it, which is why the cost follows it all the way through.</p></div></div><p>A single site will use the first two sections and ignore the rest. Turn to Estate when you open a second shop, to Franchise when someone else opens one for you.</p>" },
       { t: "Channels: the same item, different prices", h: "<p>A latte sold at the counter, through a delivery app and to an office account is the same drink at three different prices. A <b>channel</b> is each of those routes.</p><p>Each channel carries two numbers. <b>Markup</b> is what you add to the base price on that channel to absorb its cut. <b>Commission</b> is what the channel actually takes. Keeping them apart means you can later compare what you expected to keep against what the aggregator actually paid you.</p>" },
       { t: "Prices are dated, never overwritten", h: "<p>Changing a price does not edit the old one. It writes a new price that <b>starts on a date</b>, and closes the previous one the day before. Nothing overlaps, and a report for last March still shows last March&rsquo;s prices.</p><p>Open <b>Price list</b> and click any figure. Before you commit, type the new price and the panel tells you the margin it gives you, and what is left after that channel&rsquo;s commission.</p>" },
       { t: "Modifiers: choices that change the cost, not just the price", h: "<p>A <b>modifier group</b> is a question: milk, size, shots. Each choice can do three things, and the third is the one most systems miss.</p><ol><li>Change the <b>price</b> the customer pays.</li><li>Change the <b>cost</b> to you.</li><li><b>Consume a different ingredient</b>. Set &ldquo;Consumes&rdquo; to oat milk and &ldquo;Instead of&rdquo; to dairy, and both the plate cost and the stock movement follow what the customer actually chose.</li></ol><p>Set whether the group is required, and how many choices are allowed. Orbit refuses a group where the maximum is below the minimum.</p>" },
@@ -1094,14 +1094,54 @@
       { i: "tag", n: "Cost Codes", l: "Costs", d: "The buckets you tag spend to, so cost reports add up." },
       { i: "box", n: "Materials & Remnants", l: "Costs", d: "Made-to-size material for a job, including usable offcuts." }
     ] },
-    menu: { intro: "Every screen in the <b>Menu</b> app:", list: [
-      { i: "list", n: "Menus", l: "Menus", d: "What is offered, on which channel, at which hours." },
-      { i: "layers", n: "Modifiers", l: "Modifiers", d: "Choices that change price, cost and what is consumed." },
-      { i: "cart", n: "Channels", l: "Channels", d: "Dine-in, delivery, aggregator, wholesale, each with its own prices." },
-      { i: "tag", n: "Price list", l: "Price list", d: "Every item against every channel, with margin and a price simulator." },
-      { i: "chartBar", n: "Menu engineering", l: "Menu engineering", d: "Stars, Plowhorses, Puzzles and Dogs from real sales and real cost." },
-      { i: "clipboard", n: "Recipes", l: "Recipes", d: "The shared bill of materials, with yield and waste." },
-      { i: "box", n: "Items", l: "Items", d: "The shared product catalogue." }
+    kitchen: { intro: "Every screen in the <b>Kitchen</b> app, grouped the way the menu groups them:", list: [
+      { i: "list", n: "Menus", l: "Menu", d: "What is offered, on which channel, at which hours." },
+      { i: "layers", n: "Modifiers", l: "Menu", d: "Choices that change price, cost and what is consumed." },
+      { i: "cart", n: "Channels", l: "Menu", d: "Dine-in, delivery, aggregator, wholesale, each with its own prices." },
+      { i: "tag", n: "Price list", l: "Menu", d: "Every item against every channel, with margin and a price simulator." },
+      { i: "chartBar", n: "Menu engineering", l: "Menu", d: "Stars, Plowhorses, Puzzles and Dogs from real sales and real cost." },
+      { i: "clipboard", n: "Recipes", l: "Menu", d: "The shared bill of materials, with yield and waste." },
+      { i: "box", n: "Items", l: "Menu", d: "The shared product catalogue." },
+      { i: "scale", n: "Cost variance", l: "Stock control", d: "What the recipes say you should have used against what actually went." },
+      { i: "alert", n: "Waste log", l: "Stock control", d: "Every bin trip with a reason and a cost." },
+      { i: "clipboardCheck", n: "Stock counts", l: "Stock control", d: "Full, cycle or spot, blind by default, with variance approval." },
+      { i: "truck", n: "Transfers", l: "Stock control", d: "Between your own stores, with the discrepancy visible." },
+      { i: "flag", n: "Availability (86)", l: "Stock control", d: "Turn an item off at one store and it stops being offered there." },
+      { i: "tag", n: "Waste reasons", l: "Stock control", d: "Controllable losses kept apart from staff meals and training." },
+      { i: "building", n: "Stores", l: "Estate", d: "Every trading location, its ownership model and its targets." },
+      { i: "star", n: "Brands", l: "Estate", d: "More than one brand out of the same company." },
+      { i: "globe", n: "Regions", l: "Estate", d: "Group stores by country or area." },
+      { i: "grid", n: "Tables", l: "Estate", d: "The floor plan for table service." },
+      { i: "doc", n: "Licences and documents", l: "Estate", d: "Anything with an expiry date that would close a store." },
+      { i: "clipboardCheck", n: "Checklist runs", l: "Operations", d: "Opening, closing, cleaning and HACCP rounds, with breaches flagged." },
+      { i: "list", n: "Checklist templates", l: "Operations", d: "Build the list once and every store runs the same one." },
+      { i: "wrench", n: "Equipment", l: "Operations", d: "Machines, where they are and whether they are running." },
+      { i: "refresh", n: "Maintenance", l: "Operations", d: "Backflush, descale, filter change, service, with overdue at a glance." },
+      { i: "award", n: "Store audits", l: "Operations", d: "Brand standards and food safety, scored." },
+      { i: "target", n: "Audit actions", l: "Operations", d: "Each finding with an owner and a date." },
+      { i: "shield", n: "Exception report", l: "Loss prevention", d: "Voids and discounts ranked by cashier against the average." },
+      { i: "hash", n: "Reason codes", l: "Loss prevention", d: "Nothing is voided or discounted without one." },
+      { i: "box", n: "Green lots", l: "Roastery", d: "Origin, process, cupping score and what is left." },
+      { i: "play", n: "Roast batches", l: "Roastery", d: "Green in, roasted out, roast loss calculated." },
+      { i: "gauge", n: "Grinder dial-in", l: "Roastery", d: "Dose, yield and time, with the ratio worked out." },
+      { i: "truck", n: "Wholesale accounts", l: "Roastery", d: "Office coffee and HORECA, by delivery day and route." },
+      { i: "book", n: "Training academy", l: "Roastery", d: "Courses sold to the public and used to certify staff." },
+      { i: "heart", n: "Loyalty programmes", l: "Guests", d: "Points, a stamp card, or spend tiers." },
+      { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Balances held as a liability until they are spent." },
+      { i: "refresh", n: "Subscription plans", l: "Guests", d: "The unlimited pass and the bean box, with limits." },
+      { i: "send", n: "Feedback and complaints", l: "Guests", d: "Every score and complaint, with an owner and an SLA." },
+      { i: "coin", n: "Aggregator payouts", l: "Delivery", d: "What they said they would pay against what they paid." },
+      { i: "globe", n: "Aggregator accounts", l: "Delivery", d: "One row per platform per store, carrying their commission." },
+      { i: "truck", n: "Own deliveries", l: "Delivery", d: "Riders, fees and cash settlement." },
+      { i: "calendar", n: "Reservations", l: "Delivery", d: "Bookings and the waitlist." },
+      { i: "people", n: "Franchisees", l: "Franchise", d: "Agreements, territories and renewal dates." },
+      { i: "percent", n: "Royalty schemes", l: "Franchise", d: "Percent, fixed, tiered or a percent with a floor." },
+      { i: "docMoney", n: "Reported sales", l: "Franchise", d: "What each franchisee declares, which royalty is charged on." },
+      { i: "coin", n: "Royalty run", l: "Franchise", d: "Turns reported sales into royalty and marketing charges." },
+      { i: "compass", n: "Development pipeline", l: "Franchise", d: "Lead to open door, with a stage gate at each step." },
+      { i: "shield", n: "Approved suppliers", l: "Franchise", d: "Who may be bought from, what is mandatory, and rebates." },
+      { i: "clock", n: "Labour standards", l: "Planning", d: "Sales per labour hour and the minimum crew per daypart." },
+      { i: "chartLine", n: "Sales forecast", l: "Planning", d: "What you expect to take, by store and daypart." }
     ] },
     manufacturing: { intro: "Every screen in the <b>Manufacturing</b> app:", list: [
       { i: "clipboard", n: "Work Orders", l: "Work Orders", d: "Make a quantity from a recipe, with routing steps and a completion that moves stock." },
@@ -1361,100 +1401,28 @@
         { label: "Warranties", action: "svc.warranties" }
       ]
     },
-    // The estate: stores, brands, regions. Every F&B transaction is stamped
-    // with a store, so this is the first thing a multi-site operator sets up.
-    estate: {
-      name: "Estate", icon: "⌂", color: "#0f766e", color2: "#115e59", home: "estate.stores",
+    // ---------------------------------------------------------------------
+    // Kitchen: the whole food and drink operation in one app.
+    //
+    // These started as seven separate apps and that was wrong: a coffee shop
+    // owner does not think of "Estate", "Roastery" and "Guests" as different
+    // products, they are rooms in the same building. One app, with the sections
+    // as menu categories, keeps the home grid honest and matches how the work
+    // actually divides on a shift.
+    // ---------------------------------------------------------------------
+    kitchen: {
+      name: "Kitchen", icon: "🍽", color: "#b45309", color2: "#92400e", home: "menu.list",
       menus: [
-        { label: "Stores", action: "estate.stores" },
-        { label: "Brands", action: "estate.brands" },
-        { label: "Regions", action: "estate.regions" },
-        { label: "Tables", action: "estate.tables" },
-        { label: "Licences & documents", action: "estate.docs" }
-      ]
-    },
-    // Front of house: what a shift lead and an area manager live in.
-    floor: {
-      name: "Operations", icon: "◔", color: "#c2410c", color2: "#9a3412", home: "ops.checkruns",
-      menus: [
-        { label: "Checklist runs", action: "ops.checkruns" },
-        { label: "Checklist templates", action: "ops.checktpl" },
-        { label: "Equipment", action: "ops.equipment" },
-        { label: "Maintenance", action: "ops.maintenance" },
-        { label: "Audits", items: [["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"]] },
-        { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] }
-      ]
-    },
-    // Stock, the F&B way: waste, counts, transfers, 86, and the variance that
-    // only becomes possible once recipes and modifiers are real.
-    stockops: {
-      name: "Stock control", icon: "▤", color: "#15803d", color2: "#166534", home: "sc.variance",
-      menus: [
-        { label: "Cost variance", action: "sc.variance" },
-        { label: "Waste log", action: "sc.waste" },
-        { label: "Stock counts", action: "sc.counts" },
-        { label: "Transfers", action: "sc.transfers" },
-        { label: "Availability (86)", action: "sc.availability" },
-        { label: "Setup", items: [["Waste reasons", "sc.wastereasons"]] }
-      ]
-    },
-    // The roastery.
-    roastery: {
-      name: "Roastery", icon: "◉", color: "#7c2d12", color2: "#601c08", home: "rst.lots",
-      menus: [
-        { label: "Green lots", action: "rst.lots" },
-        { label: "Roast batches", action: "rst.batches" },
-        { label: "Grinder dial-in", action: "rst.grinder" },
-        { label: "Wholesale accounts", action: "rst.wholesale" },
-        { label: "Training academy", action: "rst.courses" }
-      ]
-    },
-    // Guests: loyalty, stored value, subscriptions, feedback.
-    guests: {
-      name: "Guests", icon: "♥", color: "#be185d", color2: "#9d174d", home: "gst.loyalty",
-      menus: [
-        { label: "Loyalty programmes", action: "gst.loyalty" },
-        { label: "Gift cards & wallets", action: "gst.storedvalue" },
-        { label: "Subscription plans", action: "gst.subs" },
-        { label: "Feedback & complaints", action: "gst.feedback" },
-        { label: "Customers", action: "contacts" }
-      ]
-    },
-    // Delivery and the platforms, including the reconciliation that matters most.
-    delivery: {
-      name: "Delivery", icon: "⇢", color: "#0369a1", color2: "#075985", home: "dlv.payouts",
-      menus: [
-        { label: "Aggregator payouts", action: "dlv.payouts" },
-        { label: "Aggregator accounts", action: "dlv.accounts" },
-        { label: "Own deliveries", action: "dlv.deliveries" },
-        { label: "Reservations", action: "dlv.reservations" }
-      ]
-    },
-    // The franchise module: what turns this from a till into something a
-    // franchisor buys.
-    franchise: {
-      name: "Franchise", icon: "◈", color: "#6d28d9", color2: "#5b21b6", home: "fr.franchisees",
-      menus: [
-        { label: "Franchisees", action: "fr.franchisees" },
-        { label: "Royalty schemes", action: "fr.schemes" },
-        { label: "Reported sales", action: "fr.sales" },
-        { label: "Royalty run", action: "fr.royaltyrun" },
-        { label: "Development pipeline", action: "fr.pipeline" },
-        { label: "Approved suppliers", action: "fr.suppliers" }
-      ]
-    },
-    // Menu engineering. Sits beside POS rather than inside it, because the menu,
-    // its recipes and its channel prices are master data that outlive any till.
-    menu: {
-      name: "Menu", icon: "☕", color: "#b45309", color2: "#92400e", home: "menu.list",
-      menus: [
-        { label: "Menus", action: "menu.list" },
-        { label: "Modifiers", action: "menu.modgroups" },
-        { label: "Channels", action: "menu.channels" },
-        { label: "Price list", action: "menu.prices" },
-        { label: "Menu engineering", action: "menu.engineering" },
-        { label: "Recipes", action: "mfg.boms" },
-        { label: "Items", action: "products" }
+        { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
+        { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
+        { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
+        { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"]] },
+        { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
+        { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"]] },
+        { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
+        { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["Reservations", "dlv.reservations"]] },
+        { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
+        { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] }
       ]
     },
     pos: {
@@ -1580,7 +1548,7 @@
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
-    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "site", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "kitchen", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
@@ -1590,7 +1558,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "settings", "estate.brands": "settings", "estate.regions": "settings", "estate.tables": "settings", "estate.docs": "settings", "ops.checkruns": "site", "ops.checktpl": "site", "ops.equipment": "site", "ops.maintenance": "site", "ops.audits": "site", "ops.auditactions": "site", "ops.exceptions": "pos", "ops.reasons": "pos", "sc.variance": "inventory", "sc.waste": "inventory", "sc.counts": "inventory", "sc.transfers": "inventory", "sc.availability": "inventory", "sc.wastereasons": "inventory", "rst.lots": "inventory", "rst.batches": "manufacturing", "rst.grinder": "manufacturing", "rst.wholesale": "sales", "rst.courses": "sales", "gst.loyalty": "crm", "gst.storedvalue": "crm", "gst.subs": "crm", "gst.feedback": "crm", "dlv.payouts": "accounting", "dlv.accounts": "sales", "dlv.deliveries": "sales", "dlv.reservations": "sales", "fr.franchisees": "sales", "fr.schemes": "accounting", "fr.sales": "accounting", "fr.royaltyrun": "accounting", "fr.pipeline": "crm", "fr.suppliers": "purchase", "hr.labour": "hr", "hr.forecast": "insights", "menu.list": "menu", "menu.modgroups": "menu", "menu.channels": "menu", "menu.prices": "menu", "menu.engineering": "menu", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -1671,7 +1639,7 @@
   // Screens that moved into the Contracting app but must keep their original permission
   // module, so existing roles don't silently lose access to them.
   var ACTION_MODULE = {
-    "pc.list": "projects", "var.list": "projects", "sc.list": "projects", "proj.pnl": "projects",
+    "pc.list": "projects", "var.list": "projects", "sc.list": "kitchen", "proj.pnl": "projects",
     "proj.retention": "projects", "proj.wip": "projects", "proj.jobcost": "projects",
     "cost.codes": "projects", "proj.materials": "projects",
     "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents"
@@ -1729,6 +1697,10 @@
   var SOON = [];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
   var APP_ICONS = {
+    // Plate between a fork and a knife. Same house style as the rest: one
+    // viewBox, currentColor strokes so it takes the app tint, and a single
+    // blue accent where the other marks put theirs.
+    kitchen: '<svg viewBox="0 0 100 100"><circle cx="50" cy="52" r="23" fill="none" stroke="currentColor" stroke-width="6"/><path d="M13 15 V33 M21 15 V33 M29 15 V33" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/><path d="M13 33 C13 41 21 42 21 42 C21 42 29 41 29 33" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round" stroke-linecap="round"/><path d="M21 42 V87" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/><path d="M79 15 C88 25 88 40 79 49 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round"/><path d="M79 49 V87" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/><circle cx="50" cy="52" r="4.5" fill="#2F6BFF"/></svg>',
     counter: '<svg viewBox="0 0 100 100"><rect x="15" y="33" width="55" height="33" rx="5" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="42.5" cy="49.5" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M26 79 H85" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="80" cy="30" r="7" fill="#2F6BFF"/></svg>',
     appoint: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82 M36 16 V30 M64 16 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><circle cx="50" cy="61" r="7" fill="#2F6BFF"/></svg>',
     accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
