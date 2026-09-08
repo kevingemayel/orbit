@@ -208,6 +208,20 @@
           : ok(need.length + " pieces present, no service write bypasses the queue");
       } },
 
+    { name: "a table bill charges the same tax as the register",
+      why: "The floor pad wrote subtotal = total and left tax at 0, so the same order rung at the table came out 11% cheaper than at the counter and the sales tax report quietly under-declared. Nothing errors when this breaks; the money is just wrong.",
+      run: function (src) {
+        var need = [
+          ["reads the sales rate", /async function svcVat/],
+          ["one totals routine", /function svcTotals/],
+          ["the order stores its tax", /svcWrite\("pos_orders", "update", \{ subtotal: t\.sub, tax: t\.tax, total: t\.tot \}/],
+          ["the bill is due on the tax-inclusive total", /var due = svcR2\(T\.tot - takenSoFar\)/],
+          ["splits are tax inclusive", /var grossUp = function/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        return gone.length ? bad("missing: " + gone.join(", ")) : ok(need.length + " pieces present");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

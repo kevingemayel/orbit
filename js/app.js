@@ -16475,8 +16475,10 @@
     wireBc();
     POS.session = (await sb.from("pos_sessions").select("*").eq("company_id", S.company.id).eq("status", "open").order("opened_at", { ascending: false }).limit(1).maybeSingle()).data || null;
     var vt = (await sb.from("taxes").select("amount,amount_type,scope").eq("company_id", S.company.id).eq("is_active", true)).data || [];
-    var salesVat = vt.filter(function (t) { return (t.amount_type === "percent" || t.amount_type == null) && (t.scope == null || /sale|out|both/i.test(t.scope)); })[0] || vt[0];
-    POS.vat = salesVat ? Number(salesVat.amount) || 0 : 0;
+    var salesVat = vt.filter(function (t) { return (t.amount_type === "percent" || t.amount_type == null) && (t.scope == null || /sale|out|both/i.test(t.scope)); });
+    // highest sales rate = the standard rate; a 0% exemption must not win on row order
+    salesVat.sort(function (a, b) { return Number(b.amount) - Number(a.amount); });
+    POS.vat = salesVat.length ? Number(salesVat[0].amount) || 0 : 0;
     var wrap = document.getElementById("pos-main");
     if (!POS.session) {
       document.getElementById("pos-close").style.display = "none";
@@ -17882,7 +17884,7 @@
   // stops updating is worse than one that is a few seconds behind, and polling
   // recovers by itself from a dropped connection.
   // ===========================================================================
-  var SERVICE = { store: null, tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false };
+  var SERVICE = { store: null, tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false, vat: null };
   var STATION_DEFAULT_MIN = { barista: 3, bar: 3, kitchen: 8, pastry: 5 };
 
   function svcMins(fromIso) {
@@ -17895,8 +17897,11 @@
     return Math.floor(s / 60) + ":" + ("0" + (s % 60)).slice(-2);
   }
   // Target for a line: the item's own prep time, else the station's default.
+  // The prep time lives on the product, so the display joins it in; without that
+  // a 20 minute rack and a 3 minute coffee both turn red at the same moment.
   function svcTarget(line) {
-    if (line.prep_minutes) return Number(line.prep_minutes);
+    var p = Number(line.prep_minutes || (line.products && line.products.prep_minutes) || 0);
+    if (p) return p;
     return STATION_DEFAULT_MIN[line.station || ""] || 6;
   }
   function svcHeat(mins, target) {
@@ -17905,6 +17910,27 @@
     return "ok";
   }
   function svcStopTimer() { if (SERVICE.timer) { clearInterval(SERVICE.timer); SERVICE.timer = null; } }
+
+  // The sales tax the table is charged. Same rule the register uses, so a bill
+  // taken at the table and one taken at the counter carry the same VAT.
+  async function svcVat() {
+    if (SERVICE.vat != null) return SERVICE.vat;
+    var vt = (await fnbCo("taxes", "amount,amount_type,scope").eq("is_active", true)).data || [];
+    // the standard sales rate, not a zero-rate or exemption that happens to sort first
+    var sale = vt.filter(function (x) { return (x.amount_type === "percent" || x.amount_type == null) && (x.scope == null || /sale|out|both/i.test(x.scope)); });
+    sale.sort(function (a, b) { return Number(b.amount) - Number(a.amount); });
+    SERVICE.vat = sale.length ? Number(sale[0].amount) || 0 : 0;
+    return SERVICE.vat;
+  }
+  function svcR2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+  // Items, then service charge, then tax on both, which is the order a bill reads in.
+  function svcTotals() {
+    var sub = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+    var svc = Number((SERVICE.order || {}).service_charge || 0);
+    var rate = Number(SERVICE.vat) || 0;
+    var tax = Math.round((sub + svc) * rate) / 100;
+    return { sub: svcR2(sub), svc: svcR2(svc), rate: rate, tax: tax, tot: svcR2(sub + svc + tax) };
+  }
 
   // --------------------------------------------------------------------------
   // FLOOR
@@ -17920,6 +17946,7 @@
       ? '<select id="fl-storepick" class="o-filtbtn">' + stores.map(function (s) { return '<option value="' + s.id + '"' + (SERVICE.store === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select>' : "";
     var sp = document.getElementById("fl-storepick");
     if (sp) sp.onchange = function () { SERVICE.store = this.value; renderFloor(); };
+    await svcVat();
     await paintFloor();
     SERVICE.timer = setInterval(function () {
       if (!document.getElementById("fl-map")) { svcStopTimer(); return; }
@@ -17949,7 +17976,10 @@
         return '<div class="fl-zone"><div class="fl-zone-h">' + esc(z) + '</div><div class="fl-map" id="fl-map">' +
           zones[z].map(function (t) {
             var o = byTable[t.id];
-            var st = o ? (o.fired_at ? "ordered" : "seated") : (t.status || "free");
+            // a table that has asked for the bill keeps saying so, even though the
+            // order is still open, because that is the one the manager must go to
+            var st = t.status === "bill" ? "bill"
+              : o ? (o.fired_at ? "ordered" : "seated") : (t.status || "free");
             var since = o ? o.created_at : t.seated_at;
             return '<button class="fl-t ' + esc(st) + '" data-t="' + t.id + '">' +
               '<span class="fl-t-n">' + esc(t.name) + '</span>' +
@@ -17971,6 +18001,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(t.name || "Table", { action: "kitchen.floor", title: "Floor" }) + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
     wireBc();
+    await svcVat();
     // an open order for this table, or a new one
     var ord = (await fnbCo("pos_orders", "*").eq("table_id", tableId).in("status", ["open", "draft", "fired"]).order("created_at", { ascending: false }).limit(1)).data || [];
     SERVICE.order = ord[0] || null;
@@ -17999,6 +18030,7 @@
     var body = document.getElementById("o-body"); if (!body) return;
     var o = SERVICE.order;
     var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; });
+    var opT = svcTotals();
     body.innerHTML = '<div class="op-wrap">' +
       '<div class="op-left">' +
       '<input id="op-search" placeholder="Search the menu..." autocomplete="off">' +
@@ -18009,7 +18041,9 @@
       '<span class="muted">' + (o ? (o.fired_at ? "sent " + svcMins(o.fired_at) + "m ago" : "not sent yet") : "new order") + '</span></div>' +
       '<div class="op-lines" id="op-lines"></div>' +
       '<div class="op-foot">' +
-      '<div class="op-tot"><span>Total</span><b id="op-total">' + money(SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0)) + '</b></div>' +
+      '<div class="op-tot sub" id="op-subrow"' + (opT.rate ? "" : " hidden") + '><span>Subtotal</span><b id="op-sub">' + money(opT.sub) + '</b></div>' +
+      '<div class="op-tot sub" id="op-taxrow"' + (opT.rate ? "" : " hidden") + '><span>VAT ' + opT.rate + '%</span><b id="op-tax">' + money(opT.tax) + '</b></div>' +
+      '<div class="op-tot"><span>Total</span><b id="op-total">' + money(opT.tot) + '</b></div>' +
       '<button class="btn" id="op-note">Note / allergy</button>' +
       '<button class="btn" id="op-bill">Bill</button>' +
       '<button class="btn pri" id="op-send"' + (unsent.length ? "" : " disabled") + '>Send to kitchen' + (unsent.length ? " (" + unsent.length + ")" : "") + '</button>' +
@@ -18051,8 +18085,10 @@
     });
   }
   function refreshTotals() {
-    var tot = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
-    var el = document.getElementById("op-total"); if (el) el.textContent = money(tot);
+    var t = svcTotals();
+    var el = document.getElementById("op-total"); if (el) el.textContent = money(t.tot);
+    var es = document.getElementById("op-sub"); if (es) es.textContent = money(t.sub);
+    var ex = document.getElementById("op-tax"); if (ex) ex.textContent = money(t.tax);
     var unsent = SERVICE.lines.filter(function (l) { return l.kds_status === "new"; }).length;
     var sb2 = document.getElementById("op-send");
     if (sb2) { sb2.disabled = !unsent; sb2.textContent = "Send to kitchen" + (unsent ? " (" + unsent + ")" : ""); }
@@ -18118,9 +18154,9 @@
   }
   async function recalcOrder() {
     if (!SERVICE.order) return;
-    var tot = SERVICE.lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
-    await svcWrite("pos_orders", "update", { subtotal: tot, total: tot }, { match: { id: SERVICE.order.id } });
-    SERVICE.order.total = tot;
+    var t = svcTotals();
+    await svcWrite("pos_orders", "update", { subtotal: t.sub, tax: t.tax, total: t.tot }, { match: { id: SERVICE.order.id } });
+    SERVICE.order.subtotal = t.sub; SERVICE.order.tax = t.tax; SERVICE.order.total = t.tot;
   }
   async function fireOrder(t) {
     if (!SERVICE.order) return;
@@ -18152,14 +18188,15 @@
     var oid = SERVICE.order.id;
     var paid = (await sb.from("pos_payments").select("*").eq("order_id", oid).order("paid_at")).data || [];
     var lines = SERVICE.lines;
-    var total = lines.reduce(function (s, l) { return s + Number(l.line_total || 0); }, 0);
+    var T = svcTotals();
+    var total = T.sub, svc = T.svc;
     var takenSoFar = paid.reduce(function (s, p) { return s + Number(p.amount || 0); }, 0);
-    var svc = Number(SERVICE.order.service_charge || 0);
-    var due = Math.round((total + svc - takenSoFar) * 100) / 100;
+    var due = svcR2(T.tot - takenSoFar);
 
     var inner =
       '<div class="bill-sum"><div><span>Items</span><b>' + money(total) + '</b></div>' +
       (svc ? '<div><span>Service</span><b>' + money(svc) + '</b></div>' : "") +
+      (T.rate ? '<div><span>VAT ' + T.rate + '%</span><b>' + money(T.tax) + '</b></div>' : "") +
       (takenSoFar ? '<div><span>Already paid</span><b>-' + money(takenSoFar) + '</b></div>' : "") +
       '<div class="bill-due"><span>Still to pay</span><b id="bill-due">' + money(due) + '</b></div></div>' +
       (paid.length ? '<div class="sub" style="margin:-2px 0 8px">' + paid.map(function (p) { return esc(fnbTitle(p.method)) + " " + money(p.amount); }).join(" &middot; ") + '</div>' : "") +
@@ -18194,7 +18231,7 @@
         m.__lineIds.forEach(function (id) { var l = SERVICE.lines.filter(function (x) { return x.id === id; })[0]; if (l) l.paid = true; });
       }
       var nowPaid = takenSoFar + row.amount;
-      var left = Math.round((total + svc - nowPaid) * 100) / 100;
+      var left = svcR2(T.tot - nowPaid);
       var tips = paid.reduce(function (s, p) { return s + Number(p.tip_amount || 0); }, 0) + row.tip_amount;
       await svcWrite("pos_orders", "update", {
         amount_paid: nowPaid, tip_amount: tips,
@@ -18216,8 +18253,10 @@
 
     // --- split modes ---
     m.__mode = "whole"; m.__amount = due; m.__label = null; m.__lineIds = null;
+    // Every split is expressed tax-inclusive, so the shares add up to the bill.
+    var grossUp = function (a) { return a * (1 + T.rate / 100); };
     function setAmount(a, label, ids) {
-      m.__amount = Math.round(a * 100) / 100; m.__label = label || null; m.__lineIds = ids || null;
+      m.__amount = Math.min(due, svcR2(a)); m.__label = label || null; m.__lineIds = ids || null;
       var el = document.getElementById("bill-amt"); if (el) el.textContent = money(m.__amount);
     }
     function paintMode() {
@@ -18226,7 +18265,7 @@
         box.innerHTML = '<div class="row2"><div><label>Split how many ways</label><input id="bill-ways" type="number" min="2" value="2"></div><div><label>This tender covers</label><input id="bill-shares" type="number" min="1" value="1"></div></div>';
         var recalc = function () {
           var ways = Math.max(2, parseInt(gv("bill-ways"), 10) || 2), sh = Math.max(1, parseInt(gv("bill-shares"), 10) || 1);
-          setAmount(Math.min(due, (due / ways) * sh), sh + " of " + ways);
+          setAmount((due / ways) * sh, sh + " of " + ways);
         };
         document.getElementById("bill-ways").oninput = recalc;
         document.getElementById("bill-shares").oninput = recalc;
@@ -18234,12 +18273,12 @@
       } else if (m.__mode === "items") {
         var open = lines.filter(function (l) { return !l.paid; });
         box.innerHTML = open.length
-          ? '<div class="bill-items">' + open.map(function (l) { return '<label class="bill-it"><input type="checkbox" class="bill-li" value="' + l.id + '" data-a="' + Number(l.line_total || 0) + '"> <span>' + esc(l.name) + '</span><b>' + money(l.line_total) + '</b></label>'; }).join("") + '</div>'
+          ? '<div class="bill-items">' + open.map(function (l) { return '<label class="bill-it"><input type="checkbox" class="bill-li" value="' + l.id + '" data-a="' + Number(l.line_total || 0) + '"> <span>' + esc(l.name) + '</span><b>' + money(grossUp(Number(l.line_total || 0))) + '</b></label>'; }).join("") + '</div>'
           : '<div class="o-note">Every item on this table has already been paid for.</div>';
         box.querySelectorAll(".bill-li").forEach(function (c) {
           c.onchange = function () {
             var picked = [].filter.call(box.querySelectorAll(".bill-li"), function (x) { return x.checked; });
-            setAmount(picked.reduce(function (s, x) { return s + Number(x.dataset.a); }, 0),
+            setAmount(grossUp(picked.reduce(function (s, x) { return s + Number(x.dataset.a); }, 0)),
               picked.length + " item(s)", picked.map(function (x) { return x.value; }));
           };
         });
@@ -18311,11 +18350,15 @@
   }
   async function paintKDS(quiet) {
     var body = document.getElementById("o-body"); if (!body) return;
-    var lq = sb.from("pos_order_lines").select("*, pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status)")
+    var lq = sb.from("pos_order_lines").select("*, products(prep_minutes), pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status)")
       .eq("company_id", S.company.id).in("kds_status", ["fired", "ready"]);
     if (SERVICE.station) lq = lq.eq("station", SERVICE.station);
     var lines = (await lq.order("fired_at")).data || [];
     if (SERVICE.store) lines = lines.filter(function (l) { return !l.pos_orders.store_id || l.pos_orders.store_id === SERVICE.store; });
+    // The display is usually the first screen a kitchen opens, without ever
+    // visiting the floor, so it fetches the table names itself rather than
+    // relying on the floor having been drawn first.
+    if (!(SERVICE.tables || []).length) SERVICE.tables = (await fnbCo("store_tables", "id,name,store_id")).data || [];
     var tabs = {};
     (SERVICE.tables || []).forEach(function (t) { tabs[t.id] = t.name; });
     if (!lines.length) {

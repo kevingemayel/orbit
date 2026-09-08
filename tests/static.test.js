@@ -37,6 +37,8 @@ const MUTATIONS = {
   "the accessibility layer is wired": s => s.replace("function a11yPromote", "function a11yRemoved"),
   "every ledger report honours the selected book": s => s.replace('bookFilter(sb.from("journal_lines").select("account_id', 'noFilter(sb.from("journal_lines").select("account_id'),
   "the offline outbox is wired": s => s.replace("async function svcWrite", "async function svcRemoved"),
+  "a table bill charges the same tax as the register":
+    s => s.replace("var due = svcR2(T.tot - takenSoFar)", "var due = svcR2(T.sub - takenSoFar)"),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

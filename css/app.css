@@ -1841,6 +1841,8 @@ select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
 .op-foot{border-top:1px solid var(--line);padding:11px 12px;display:flex;flex-direction:column;gap:8px}
 .op-tot{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}
 .op-tot b{font-size:20px;font-variant-numeric:tabular-nums}
+.op-tot.sub{font-size:12.5px;color:var(--muted);margin-bottom:-4px}
+.op-tot.sub b{font-size:13px;font-weight:600;color:var(--muted)}
 .op-foot .btn{width:100%;height:44px;font-size:15px;font-weight:700}
 .mp-g{margin-bottom:12px}
 .mp-h{font-size:13px;font-weight:700;margin-bottom:6px}
