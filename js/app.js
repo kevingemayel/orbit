@@ -1104,6 +1104,7 @@
       { t: "Custom fields (your own boxes)", h: "<p>Orbit's forms already have the usual boxes, but every business is a little different. <b>Custom fields</b> let you add your own boxes to a form.</p><ol><li>Open <b>Settings &rsaquo; Custom Fields</b>.</li><li>Pick where the box should appear: Contacts, Projects or Products.</li><li>Choose the kind of box - text, number, date, a dropdown of choices, or a simple yes/no - give it a name, and (if you want) make it required.</li></ol><p>Your new box then appears on that form under &ldquo;More details&rdquo; and is saved with every record, just like the built-in ones.</p>" },
       { t: "Renaming words (terminology)", h: "<p>Not every business uses the same words. If you say &ldquo;Suppliers&rdquo; where Orbit says &ldquo;Vendors&rdquo;, you can change it.</p><p>Open <b>Settings &rsaquo; Terminology</b>, find the word, and type what you would rather it said. The whole app - menus, headings, app names - updates to your word, and only for your company. It is cosmetic: it changes the label, not how anything works.</p>" },
       { t: "Automatic reminders (automations)", h: "<p><b>Automations</b> are little robots that watch your data and drop a note in the bell when something needs attention, so you do not have to remember to check.</p><ol><li>Open <b>Settings &rsaquo; Automations</b>.</li><li>Switch on the reminders you want: an <b>overdue invoice</b>, a <b>bill due soon</b>, a <b>project deadline</b> approaching, or a <b>quotation</b> going stale with no reply.</li><li>Set how many days each should trigger at, and save. Use <b>Run now</b> to test.</li></ol><p>They run once a day and are smart enough never to nag you twice about the same thing on the same day.</p>" },
+      { t: "Backups, and proving one works", h: "<p>Every company on Orbit gets a copy of itself taken automatically, kept, and downloadable. <b>Settings &rsaquo; Backups</b> is where you set how often and how many to keep, and where you press <span class=\"man-key\">Back up now</span> before doing anything you are nervous about.</p><p><b>What is in one.</b> Every row of every table that belongs to your company. Not a list somebody wrote down once: Orbit walks the database each time it runs and takes everything carrying your company, plus everything hanging off those rows, so a feature added next year is in the backup the day it exists.</p><p><b>What is not.</b> The files themselves. Photographs, drawings and PDFs live in file storage and the backup carries the index rather than the contents, which is what keeps a backup a single file you can email instead of a disc you cannot. Keep a copy of those separately.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">A backup nobody has restored is not a backup</div><p>So the restore is a button, not a procedure in a document. <span class=\"man-key\">Restore</span> builds a <b>new company</b> from the file, beside the one you have and never over it, then tells you how many rows came back against how many the file holds. Do it once a quarter. If the two numbers match, you know. If they do not, you have found out on a quiet afternoon rather than on the worst day of the year.</p></div></div><p>When you are finished looking at a restored copy, open it in <b>Settings &rsaquo; Companies</b> and discard it. Only a company that a restore created can be discarded that way, so there is no path from that button to your real books.</p><p><span class=\"man-key\">Download</span> gives you the whole thing as one file. Keep it somewhere that is not this computer and not this account, because the copy nobody can take away from you is the one you are holding.</p>" },
       { t: "Somebody asks what you hold about them", h: "<p>Sooner or later a customer, an ex-employee or someone whose details you were given writes and asks for a copy of everything you hold about them, or asks you to delete it. In the UK and the EU you have <b>one month</b> to answer, and &ldquo;we could not work out where it all is&rdquo; is not an answer.</p><p><b>Settings &rsaquo; Privacy &amp; data requests</b> does both.</p><ol><li>Choose whether they are a contact, an employee or a lead, and search for them.</li><li><span class=\"man-key\">Export their data</span> gathers every record in this company that names them or carries their email address, as one file you can send back.</li><li><span class=\"man-key\">Erase them</span> removes the person - name, email, phone, address - from every record they appear in.</li></ol><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Erasing does not touch the books</div><p>Invoices, ledger entries and payments are kept: tax law requires them, and the right to erasure has an explicit exception for exactly that. What changes is that they point at an anonymous record instead of a person. If you delete an invoice to satisfy a privacy request you break the law you were trying to obey.</p></div></div><p>Every export and every erasure is logged on the same screen, permanently. That log is what you show when someone asks whether you answered.</p><p>Underneath sits the <b>record of processing activities</b>: what personal data the business holds, why it is allowed to, how long it keeps it, and who else touches it. It is the first document asked for in any investigation. Print it and keep it with your policies.</p>" },
       { t: "Your calendar in Google or Outlook, and theirs in Orbit", h: "<p>Field and sales people live in the calendar on their phone. A booking they cannot see there is a booking they miss. So it goes both ways, and neither direction needs you to sign in to Google or Microsoft.</p><p>Open the <b>Calendar</b> and press <span class=\"man-key\">Sync</span>.</p><ol><li><b>Orbit into your calendar app.</b> Copy the address shown and add it as a subscribed calendar: in Google that is <i>Other calendars &rsaquo; From URL</i>, in Outlook <i>Add calendar &rsaquo; Subscribe from web</i>, on an iPhone <i>Calendars &rsaquo; Add subscribed calendar</i>. Your appointments and diary entries appear there and keep themselves up to date.</li><li><b>Your calendar into Orbit.</b> Paste your own secret iCalendar address - in Google, <i>Settings &rsaquo; your calendar &rsaquo; Secret address in iCal format</i>. Every hour Orbit reads it, and when you are busy shows on the Orbit calendar so nobody books a site visit on top of it.</li></ol><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:lock}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Two things worth knowing</div><p>Coming in, Orbit keeps <b>only when you are busy</b>, never who with or about what. Going out, that address is the only thing protecting your diary: anyone who has it can read it, so treat it like a password. If it gets out, <span class=\"man-key\">Create a new address</span> kills the old one at once.</p></div></div>" },
       { t: "Document numbers", h: "<p>Every invoice, order and certificate gets a number so you can refer to it. <b>Settings &rsaquo; Document Numbering</b> lets you choose the style: the <b>prefix</b> (like INV), whether to include the <b>year</b>, and how many <b>digits</b> the running number has (so you get INV/2026/0001). Changes only affect new documents, and each company can have its own style.</p>" },
@@ -1657,6 +1658,7 @@
       { i: "globe", n: "Portal Access", l: "Settings", d: "Let a customer or supplier log in to their own limited view." },
       { i: "hash", n: "Document Numbering", l: "Settings", d: "How invoices, orders and certificates are numbered." },
       { i: "upload", n: "Import Data", l: "Settings", d: "Bring customers, products and more in from a spreadsheet." },
+      { i: "shield", n: "Backups", l: "Settings", d: "How often a copy of everything is taken, download one, and prove it restores." },
       { i: "shield", n: "Privacy & data requests", l: "Settings", d: "Answer a subject access request, erase a person, and see what you hold about whom." },
       { i: "plus", n: "Custom Fields", l: "Settings", d: "Add your own boxes to Contacts, Projects or Products." },
       { i: "text", n: "Terminology", l: "Settings", d: "Rename words to match your business." },
@@ -1934,6 +1936,7 @@
         { label: "Custom Fields", action: "settings.customfields" },
         { label: "Terminology", action: "settings.terminology" },
         { label: "Automations", action: "settings.automations" },
+        { label: "Backups", action: "settings.backups" },
         { label: "Privacy & data requests", action: "settings.privacy" },
         { label: "Developers (API)", action: "settings.api" },
         { label: "Appearance", action: "appearance" }
@@ -1998,7 +2001,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.backups": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "site", "doc.subs": "site", "doc.rfis": "site", "doc.trans": "site",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -4140,6 +4143,7 @@
       case "settings.terminology": return renderTerminologyAdmin();
       case "settings.automations": return renderAutomations();
       case "settings.privacy": return renderPrivacy();
+      case "settings.backups": return renderBackups();
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
       case "settings.audit": return renderList(cfgAuditLog());
@@ -8459,6 +8463,21 @@
     if (id) wireAttach("company");
     document.getElementById("co-cancel").onclick = function () { m.remove(); };
     var coDel = document.getElementById("co-del");
+    if (coDel && c.profile && c.profile.restored_from_backup) {
+      // a copy made by a restore can always be thrown away again, which is what
+      // makes testing a restore something you can do on a Tuesday
+      coDel.textContent = "Discard this restored copy";
+      coDel.onclick = async function () {
+        if (S.company && S.company.id === id) { toast("Switch to another company first, then discard this copy."); return; }
+        if (!confirm("Discard “" + (c.name || "") + "”?\n\nThis was created by restoring a backup on " + String(c.profile.restored_at || "").slice(0, 10) + ". The backup itself is kept, and the company it was restored from is untouched.")) return;
+        coDel.disabled = true; coDel.textContent = "Discarding...";
+        var dr = await sb.rpc("backup_discard_restored", { p_company: id });
+        if (dr.error) { toast(errMsg(dr.error)); coDel.disabled = false; coDel.textContent = "Discard this restored copy"; return; }
+        try { S.companies = (await sb.from("companies").select("*").order("name")).data || S.companies; } catch (e) { }
+        m.remove(); toast("Restored copy discarded"); renderView();
+      };
+      coDel = null;   // wired; skip the ordinary delete below
+    }
     if (coDel) coDel.onclick = async function () {
       if (S.company && S.company.id === id) { toast("Switch to another company first, then delete this one."); return; }
       if (!confirm("Delete the company “" + esc(c.name || "") + "” for good? This only works if it has no real data (no entries, contacts, products, employees or cash) - otherwise it's refused.")) return;
@@ -13141,6 +13160,135 @@
     var example = spec.fields.map(function (f) { return csvCell(f[3] === "num" ? "0" : ("Example " + f[1])); }).join(",");
     return "﻿" + header + "\r\n" + example;
   }
+  // ============================ BACKUPS ======================================
+  // A backup nobody has restored is not a backup, so the restore is a button on
+  // this screen rather than a procedure in a document. It always restores into
+  // a NEW company: a restore that can overwrite the thing you are recovering is
+  // how people lose their data twice.
+  var BK_EVERY = [[6, "Every 6 hours"], [12, "Twice a day"], [24, "Every day"], [72, "Every 3 days"], [168, "Every week"]];
+  var BK_KEEP = [3, 7, 14, 30, 60, 90];
+  function bkSize(n) {
+    n = Number(n) || 0;
+    return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? Math.round(n / 1024) + " KB" : n + " bytes";
+  }
+  function bkWhen(t) { return t ? String(t).slice(0, 16).replace("T", " ") : "never"; }
+  async function renderBackups() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Backups") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    var cid = S.company.id;
+    var st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data;
+    if (!st) {
+      await sb.from("backup_settings").insert({ company_id: cid, enabled: true, every_hours: 24, keep_last: 14, next_run_at: new Date().toISOString() });
+      st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data || { enabled: true, every_hours: 24, keep_last: 14 };
+    }
+    // never select the payload in a list: it is the whole company
+    var list = (await sb.from("backups").select("id,created_at,kind,table_count,row_count,size_bytes,verified_at,verify_result")
+      .eq("company_id", cid).order("created_at", { ascending: false }).limit(60)).data || [];
+
+    document.getElementById("o-body").innerHTML =
+      '<div class="card"><h3 class="cp-sec">How often</h3>' +
+      '<div class="sub" style="max-width:78ch;margin:-4px 0 12px">A copy of <b>everything belonging to this company</b> is taken on a schedule and kept here. ' +
+      'Each one is a single file you can download and keep somewhere else, which is the only copy nobody can take away from you.</div>' +
+      '<div class="row2" style="align-items:flex-end">' +
+      '<div><label>Take a backup</label><select id="bk-every">' + BK_EVERY.map(function (e) { return '<option value="' + e[0] + '"' + (Number(st.every_hours) === e[0] ? " selected" : "") + '>' + e[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><label>Keep the last</label><select id="bk-keep">' + BK_KEEP.map(function (k) { return '<option value="' + k + '"' + (Number(st.keep_last) === k ? " selected" : "") + '>' + k + ' backups</option>'; }).join("") + '</select></div></div>' +
+      '<div class="o-chkline"><input type="checkbox" id="bk-on"' + (st.enabled ? " checked" : "") + '><label for="bk-on">Take them automatically</label></div>' +
+      '<div class="sub" style="margin-top:8px">Last taken <b>' + esc(bkWhen(st.last_run_at)) + '</b>. Next due <b>' + esc(bkWhen(st.next_run_at)) + '</b>. ' +
+      'Holding <b>' + list.length + '</b>, ' + esc(bkSize(list.reduce(function (s2, x) { return s2 + Number(x.size_bytes || 0); }, 0))) + ' if you downloaded them all.' +
+      (st.last_error ? ' <span style="color:var(--bad-t)">Last attempt failed: ' + esc(st.last_error) + '</span>' : '') + '</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn pri" id="bk-now">Back up now</button><button class="btn" id="bk-save">Save the schedule</button></div></div>' +
+
+      '<div class="card"><h3 class="cp-sec">The backups you have</h3>' +
+      (list.length ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Taken</th><th></th><th class="num">Tables</th><th class="num">Rows</th><th class="num">Size</th><th>Checked</th><th></th></tr></thead><tbody>' +
+        list.map(function (b) {
+          var v = b.verify_result || {};
+          return '<tr><td><b>' + esc(bkWhen(b.created_at)) + '</b></td>' +
+            '<td><span class="badge' + (b.kind === "scheduled" ? "" : " unpaid") + '">' + (b.kind === "scheduled" ? "Automatic" : "By hand") + '</span></td>' +
+            '<td class="num">' + (b.table_count || 0) + '</td><td class="num">' + (b.row_count || 0) + '</td><td class="num">' + esc(bkSize(b.size_bytes)) + '</td>' +
+            '<td class="muted">' + (b.verified_at ? esc(bkWhen(b.verified_at)) + (v.checksum_matches === false ? ' <span style="color:var(--bad-t)">failed</span>' : ' <span style="color:var(--good-t)">good</span>') : "not yet") + '</td>' +
+            '<td style="text-align:right;white-space:nowrap">' +
+            '<button class="btn sm bk-dl" data-id="' + b.id + '" data-at="' + esc(String(b.created_at).slice(0, 10)) + '">Download</button> ' +
+            '<button class="btn sm bk-ck" data-id="' + b.id + '">Check</button> ' +
+            '<button class="btn sm bk-rs" data-id="' + b.id + '" data-at="' + esc(bkWhen(b.created_at)) + '">Restore</button> ' +
+            '<button class="btn sm bk-rm" data-id="' + b.id + '" style="color:var(--bad-t)">Delete</button></td></tr>';
+        }).join("") + '</tbody></table></div>'
+        : '<div class="sub">None yet. Press <b>Back up now</b> and one appears here in a few seconds.</div>') +
+      '</div>' +
+
+      '<div class="card"><h3 class="cp-sec">What is in one, and what is not</h3>' +
+      '<div class="sub" style="max-width:78ch">' +
+      '<p><b>In it:</b> every row of every table that belongs to this company. Not a list somebody wrote down: Orbit walks the database each time and takes everything with your company on it, plus everything hanging off those rows, so a table added next year is in the backup the day it exists.</p>' +
+      '<p><b>Not in it:</b> the files themselves. Photographs, drawings and PDFs live in file storage, and the backup carries the index of them rather than the contents, so that a backup stays a file you can email rather than a disc you cannot. Keep a copy of the files separately.</p>' +
+      '<p><b>Restoring</b> always builds a <b>new company</b> beside the old one, never over it, and then tells you how many rows came back against how many the file holds. That is the only way to know a backup works: put it back and count.</p>' +
+      '</div></div>';
+
+    document.getElementById("bk-save").onclick = async function () {
+      var r = await sb.from("backup_settings").update({
+        enabled: document.getElementById("bk-on").checked,
+        every_hours: parseInt(gv("bk-every"), 10) || 24,
+        keep_last: parseInt(gv("bk-keep"), 10) || 14, updated_at: new Date().toISOString()
+      }).eq("company_id", cid);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast("Saved"); renderBackups();
+    };
+    document.getElementById("bk-now").onclick = async function () {
+      var b = this; b.disabled = true; b.textContent = "Taking a copy...";
+      var r = await sb.rpc("backup_run", { p_company: cid, p_kind: "manual" });
+      b.disabled = false; b.textContent = "Back up now";
+      if (r.error) { toast(errMsg(r.error)); return; }
+      toast("Backed up"); renderBackups();
+    };
+    document.querySelectorAll(".bk-dl").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true; b.textContent = "Preparing...";
+        var r = await sb.from("backups").select("payload").eq("id", b.dataset.id).maybeSingle();
+        b.disabled = false; b.textContent = "Download";
+        if (r.error || !r.data) { toast(r.error ? errMsg(r.error) : "Could not read that backup"); return; }
+        downloadBlob("orbit-backup-" + (S.company.name || "company").replace(/[^\w]+/g, "-").toLowerCase() + "-" + b.dataset.at + ".json",
+          JSON.stringify(r.data.payload), "application/json");
+        toast("Downloaded. Keep it somewhere that is not this computer.");
+      };
+    });
+    document.querySelectorAll(".bk-ck").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true; b.textContent = "Checking...";
+        var r = await sb.rpc("backup_verify", { p_backup: b.dataset.id });
+        b.disabled = false; b.textContent = "Check";
+        if (r.error) { toast(errMsg(r.error)); return; }
+        alert((r.data && r.data.verdict) || "Checked.");
+        renderBackups();
+      };
+    });
+    document.querySelectorAll(".bk-rm").forEach(function (b) {
+      b.onclick = async function () {
+        if (!confirm("Delete this backup? The others are untouched.")) return;
+        var r = await sb.from("backups").delete().eq("id", b.dataset.id);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        toast("Deleted"); renderBackups();
+      };
+    });
+    document.querySelectorAll(".bk-rs").forEach(function (b) { b.onclick = function () { bkRestoreModal(b.dataset.id, b.dataset.at); }; });
+  }
+  function bkRestoreModal(id, at) {
+    var inner = '<div class="o-note">This builds a <b>new company</b> from the backup taken on <b>' + esc(at) + '</b>. Nothing that exists now is touched or overwritten. ' +
+      'Use it to check the backup really works, or to recover after something has gone wrong.</div>' +
+      '<div><label>Name for the restored copy</label><input id="bk-name" value="' + esc((S.company.name || "Company") + " (restored " + at.slice(0, 10) + ")") + '"></div>' +
+      '<div class="sub">It can take a minute. When it finishes you will be told how many rows came back against how many the file holds, which is the only honest way to know a backup worked.</div>';
+    var m = plotModal("Restore into a new company", inner, async function () {
+      var nm = gv("bk-name"); if (!nm || nm.length < 2) { toast("Give it a name"); return; }
+      var btn = m.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Restoring...";
+      var r = await sb.rpc("backup_restore", { p_backup: id, p_new_name: nm });
+      btn.disabled = false; btn.textContent = "Save";
+      if (r.error) { toast(errMsg(r.error)); return; }
+      var d = r.data || {};
+      m.remove();
+      var extra = d.rows_failed > 0 ? "\n\nRows that did not come back: " + d.rows_failed + "\n" + JSON.stringify(d.failures || {}, null, 1) : "";
+      alert(d.verdict + "\n\n" + d.rows_restored + " of " + d.expected_rows + " rows restored into “" + d.name + "”." + extra +
+        "\n\nSwitch to it from the company picker to look around. You can throw the copy away afterwards from Settings, Companies.");
+      renderBackups();
+    }, true);
+  }
+
   // ============================ PRIVACY & DATA REQUESTS ======================
   // What a regulator actually asks: someone wrote to you and said "send me
   // everything you hold about me", or "delete me". Can you do it, and can you
