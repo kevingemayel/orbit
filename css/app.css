@@ -657,7 +657,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
    for the title bar, and it is remembered per browser */
 .o-bc-min{width:22px;height:22px;margin-left:2px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink3);cursor:pointer;display:grid;place-items:center;flex:none;padding:0}
 .o-bc-min:hover{border-color:var(--line);color:var(--accent);background:var(--panel2)}
+.o-bc-min.on{color:var(--accent);background:var(--accent-soft)}
 .o-app.cp-mini .o-bc-min svg{transform:rotate(180deg)}
+/* a long page title shortens rather than wrapping the whole bar onto two rows */
+.o-bc{min-width:0}
+.o-bc>span:not(.up):not(.sepc){overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.o-cp{transition:min-height .16s ease,padding .16s ease}
 .o-app.cp-mini .o-cp{min-height:0;padding:3px 14px;gap:7px}
 .o-app.cp-mini .o-bc{font-size:13px}
 .o-app.cp-mini .o-bc .up,.o-app.cp-mini .o-bc .sepc{display:none}

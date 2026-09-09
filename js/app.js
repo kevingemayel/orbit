@@ -4285,13 +4285,34 @@
       '<button class="o-bc-min" id="bc-min" aria-label="Minimise the page header" title="Minimise the page header">' +
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div>';
   }
+  // The page header collapses on its own as soon as you scroll, the way a large
+  // title does on a phone, and comes back when you return to the top. The
+  // chevron pins it shut for people who never want it back.
+  var _cpScrolled = false;
   function cpMiniApply() {
-    var app = document.querySelector(".o-app"); if (app) app.classList.toggle("cp-mini", !!S.cpMini);
+    var app = document.querySelector(".o-app");
+    if (app) app.classList.toggle("cp-mini", !!S.cpMini || _cpScrolled);
     var b = document.getElementById("bc-min");
     if (b) {
-      b.setAttribute("aria-label", S.cpMini ? "Restore the page header" : "Minimise the page header");
-      b.setAttribute("title", S.cpMini ? "Restore the page header" : "Minimise the page header");
+      var lbl = S.cpMini ? "Let the page header come back when you scroll up" : "Keep the page header minimised";
+      b.setAttribute("aria-label", lbl); b.setAttribute("title", lbl);
+      b.classList.toggle("on", !!S.cpMini);
     }
+  }
+  // The scrolling element is not the same on every screen (a list scrolls in
+  // .o-body, a form in .o-form-bg), so take whichever this screen actually has.
+  function cpWatchScroll() {
+    var view = document.querySelector("#o-main .o-view") || document.getElementById("o-main");
+    if (!view) return;
+    var sc = view.querySelector(".o-body, .o-form-bg, .o-report, .o-sheet-wrap");
+    if (!sc) { var kids = view.children; sc = kids.length > 1 ? kids[kids.length - 1] : null; }
+    if (!sc || sc._cpWatched) return;
+    sc._cpWatched = 1;
+    if (_cpScrolled && sc.scrollTop <= 4) { _cpScrolled = false; }
+    sc.addEventListener("scroll", function () {
+      var on = sc.scrollTop > 14;
+      if (on !== _cpScrolled) { _cpScrolled = on; cpMiniApply(); }
+    }, { passive: true });
   }
   function wireBc() {
     var g = document.getElementById("bc-grid"); if (g) g.onclick = renderHome;
@@ -4304,7 +4325,9 @@
       try { localStorage.setItem("orbit_cpmini", S.cpMini ? "1" : "0"); } catch (e) { }
       cpMiniApply();
     };
+    _cpScrolled = false;            // a new screen starts at the top
     cpMiniApply();
+    setTimeout(cpWatchScroll, 0);   // the body exists by the time this runs
   }
 
   // ============================ LIST ENGINE ============================
