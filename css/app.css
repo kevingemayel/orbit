@@ -4,7 +4,10 @@
   --line:#e4e0d8;--accent:#2f6bff;--accent2:#1f4fd6;--accent-soft:#e9eeff;
   --good:#0ea66f;--good-s:#e4f6ee;--warn:#c58217;--warn-s:#fbf0da;--bad:#f4573d;--bad-s:#fdeae6;--good-t:#0a7d54;--warn-t:#8a5a0d;--bad-t:#c8351c;--slate:#55565c;--slate-s:#f1eee8;
   --mono:"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace;
-  --ui:"Onest",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* The platform's own interface font: San Francisco on a Mac or an iPad,
+     Segoe UI Variable on Windows, Roboto on Android. It is the face every
+     other app on the machine uses, so Orbit stops looking like a website. */
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif;
   --brand:"Onest","Segoe UI",sans-serif;
   --sh:0 1px 2px rgba(22,23,28,.05),0 14px 40px -20px rgba(22,23,28,.22);
   --sh-sm:0 1px 2px rgba(22,23,28,.07);
@@ -59,7 +62,11 @@
 .o-appname,.o-brand,.o-title,.o-home-top b,.o-report h1,.login h1{font-family:var(--brand);letter-spacing:-.01em}
 .o-title input{font-family:var(--brand)}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:var(--ui);background:var(--bg);color:var(--ink);font-size:13.5px}
+/* 14px with the platform font, antialiased, and the slight negative tracking
+   Apple uses on interface text. Headings tighten further, the way SF Display
+   does above 20px. */
+body{font-family:var(--ui);background:var(--bg);color:var(--ink);font-size:14px;letter-spacing:-.006em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+h1,h2,h3,h4{letter-spacing:-.021em}
 .boot{display:grid;place-items:center;height:100vh;color:var(--ink3)}
 a{color:var(--accent);text-decoration:none}
 button{font-family:inherit}
@@ -497,6 +504,27 @@ select option{background:var(--panel);color:var(--ink)}
 
 /* dropdown menus (app menu + systray) */
 .o-dd{position:absolute;top:44px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--sh);padding:6px;min-width:210px;z-index:40}
+/* ---- Appearance: three modes, and a colour when it is Colourful ---- */
+.o-appear{width:268px;padding:10px}
+.o-appear-h,.o-appear-h2{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin:0 0 7px}
+.o-appear-h2{margin-top:12px}
+.o-appear-modes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.o-appear-m{display:flex;flex-direction:column;align-items:center;gap:6px;padding:9px 4px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.o-appear-m:hover{border-color:var(--accent)}
+.o-appear-m.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);color:var(--accent)}
+.o-appear-m .sw{width:34px;height:22px;border-radius:6px;border:1px solid var(--line)}
+.sw-light{background:linear-gradient(135deg,#fff 50%,#f6f4ee 50%)}
+.sw-dark{background:linear-gradient(135deg,#16181f 50%,#0c0d12 50%)}
+.sw-colorful{background:linear-gradient(135deg,#fff 50%,var(--accent) 50%)}
+.o-appear-sw{display:grid;grid-template-columns:repeat(6,1fr);gap:6px}
+.o-appear-c{padding:0;border:1px solid var(--line);border-radius:8px;background:none;cursor:pointer;height:28px;display:grid;place-items:center}
+.o-appear-c i{display:block;width:100%;height:100%;border-radius:7px}
+.o-appear-c:hover{border-color:var(--ink3)}
+.o-appear-c.on{box-shadow:0 0 0 2px var(--accent);border-color:transparent}
+.o-appear-hex{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;margin-top:10px}
+.o-appear-hex label{grid-column:1/-1;font-size:11.5px;color:var(--ink3)}
+.o-appear-hex input{padding:6px 9px;font-size:12.5px;font-family:var(--mono);border:1px solid var(--line);border-radius:7px;background:var(--panel);color:var(--ink);min-width:0}
+.o-appear-note{font-size:11px;color:var(--ink3);margin-top:9px;line-height:1.45}
 .o-dd .sec{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);padding:8px 10px 3px;font-weight:700}
 .o-dd .it{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:7px;color:var(--ink);font-size:13px;cursor:pointer;border:none;background:none}
 .o-dd .it:hover{background:var(--accent-soft);color:var(--accent)}
@@ -555,6 +583,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 /* ===== app switcher home ===== */
 .o-home{height:100%;overflow:auto;background:var(--bg)}
 .o-home-top{display:flex;align-items:center;height:46px;background:var(--panel);border-bottom:1px solid var(--line);padding:0 16px;gap:10px}
+/* the same search as the app bar, on the home where people start */
+.o-gs-home{margin-left:14px;flex:1 1 260px;max-width:420px}
+@media(max-width:760px){.o-gs-home{flex:1 1 120px;margin-left:8px}}
 .o-home-top .logo{width:26px;height:26px;display:grid;place-items:center;color:var(--ink)}
 .o-home-top .logo svg{width:26px;height:26px;display:block}
 .o-home-top .lockup{color:var(--ink);display:flex;align-items:center}
@@ -572,10 +603,26 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-home-soon{opacity:.7}
 /* app store + home edit mode */
 .o-home-edithint{max-width:980px;margin:0 auto;padding:10px 20px 0;font-size:12.5px;color:var(--ink3)}
-.o-tile-edit{position:relative;border:1px dashed var(--line)!important;background:var(--panel2)!important}
-.o-tile-edit.off{opacity:.5}
-.o-tile-tog{position:absolute;top:5px;right:7px;width:20px;height:20px;border-radius:50%;background:var(--bad);color:#fff;font-size:14px;font-weight:700;display:grid;place-items:center;line-height:1}
-.o-tile-edit.off .o-tile-tog{background:var(--good)}
+/* ---- Arranging the home, the way a phone does it ----
+   Press and hold and everything wobbles, each tile carrying a small x. The
+   wobble is two alternating rotations with a per-tile delay so they never move
+   in lockstep, which is what makes it read as "loose" rather than "animated". */
+.o-tile-edit{position:relative;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+.o-tile-edit.off{opacity:.45}
+.o-tile-edit .ic{animation:tile-wobble .28s linear infinite alternate}
+.o-tile-edit:nth-child(2n) .ic{animation-delay:-.09s}
+.o-tile-edit:nth-child(3n) .ic{animation-delay:-.17s}
+.o-tile-edit:nth-child(5n) .ic{animation-duration:.31s}
+@keyframes tile-wobble{from{transform:rotate(-1.6deg) translateY(-.5px)}to{transform:rotate(1.6deg) translateY(.5px)}}
+.o-tile-tog{position:absolute;top:8px;left:calc(50% - 42px);width:22px;height:22px;padding:0;border:1px solid rgba(0,0,0,.12);border-radius:50%;background:var(--ink);color:var(--panel);font-size:15px;font-weight:700;display:grid;place-items:center;line-height:1;cursor:pointer;box-shadow:var(--sh-sm);z-index:2}
+.o-tile-tog:hover{background:var(--bad);color:#fff;border-color:transparent}
+.o-tile-edit.off .o-tile-tog{background:var(--good);color:#fff}
+/* the tile being dragged rides under the cursor; its old slot stays as an outline */
+.o-tile-ghost{position:fixed;top:0;left:0;z-index:80;pointer-events:none;opacity:.95;transform-origin:center;box-shadow:0 18px 40px -12px rgba(20,22,28,.45);border-radius:12px;background:var(--panel)}
+.o-tile-ghost .ic{animation:none;transform:scale(1.06)}
+.o-tile-holder{opacity:.28}
+.o-tile-holder .ic{animation:none}
+@media (prefers-reduced-motion:reduce){.o-tile-edit .ic,.o-tile-ghost .ic{animation:none!important}}
 .as-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .as-card{display:flex;flex-direction:column;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;padding:14px 10px;background:var(--panel)}
 .as-card .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:#16171c;color:#fff;box-shadow:var(--sh-sm);border:1px solid rgba(255,255,255,.08)}
@@ -606,6 +653,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-view{display:grid;grid-template-rows:auto 1fr;overflow:hidden;height:100%}
 .o-cp{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 14px;background:var(--panel);border-bottom:1px solid var(--line);min-height:48px}
 .o-bc{display:flex;align-items:center;gap:7px;font-size:15px;font-weight:600}
+/* minimise the page header: the menu has always collapsed, this is the same
+   for the title bar, and it is remembered per browser */
+.o-bc-min{width:22px;height:22px;margin-left:2px;border:1px solid transparent;border-radius:6px;background:none;color:var(--ink3);cursor:pointer;display:grid;place-items:center;flex:none;padding:0}
+.o-bc-min:hover{border-color:var(--line);color:var(--accent);background:var(--panel2)}
+.o-app.cp-mini .o-bc-min svg{transform:rotate(180deg)}
+.o-app.cp-mini .o-cp{min-height:0;padding:3px 14px;gap:7px}
+.o-app.cp-mini .o-bc{font-size:13px}
+.o-app.cp-mini .o-bc .up,.o-app.cp-mini .o-bc .sepc{display:none}
+.o-app.cp-mini .o-cp .o-new{padding:5px 12px;font-size:12.5px;box-shadow:none}
+.o-app.cp-mini .o-cp .o-filtbtn,.o-app.cp-mini .o-cp .btn{padding:4px 9px;font-size:12px}
+.o-app.cp-mini .o-cp input,.o-app.cp-mini .o-cp select{padding:4px 8px;font-size:12.5px}
 .o-bc .up{color:var(--ink3);font-weight:500;cursor:pointer}
 .o-bc .up:hover{color:var(--accent)}
 .o-bc .sepc{color:var(--ink3);font-weight:400}
@@ -1526,14 +1584,17 @@ body{top:0!important}
 .o-toolhist td{font-size:12.5px}
 
 /* ---- Row thumbnails on list views ---- */
-.o-list td.thumbcol{width:46px;padding:4px 6px}
-.o-rowthumb{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:7px;overflow:hidden;background:var(--panel2);border:1px solid var(--line)}
-/* shrink to fit, never crop: at 34px a cropped picture shows nothing useful,
-   and a cropped logo is just wrong */
-.o-rowthumb img{width:100%;height:100%;object-fit:contain;display:block;padding:2px;box-sizing:border-box}
-/* a logo is usually dark ink on transparency, so it needs a light ground to
-   read in the dark themes - the same white it sits on when printed */
+.o-list td.thumbcol{width:52px;padding:4px 6px}
+.o-rowthumb{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border-radius:8px;overflow:hidden;background:var(--panel2);border:1px solid var(--line)}
+/* A photograph fills its tile: a face or a product reads better edge to edge
+   than letterboxed, and shrinking it to fit made every row thumbnail look
+   smaller than it was. */
+.o-rowthumb img{width:100%;height:100%;object-fit:cover;display:block}
+/* A LOGO is the exception, and the reason this class exists: it is a shape,
+   not a scene, so cropping it cuts the name in half. It also tends to be dark
+   ink on transparency, so it gets the white ground it has on paper. */
 .o-rowthumb.logo{background:#fff;border-color:rgba(0,0,0,.14)}
+.o-rowthumb.logo img{object-fit:contain;padding:2px;box-sizing:border-box}
 .o-rowthumb.none{border-style:dashed;opacity:.5}
 
 /* ---- Photo slot next to the form name + dotted upload tile ---- */

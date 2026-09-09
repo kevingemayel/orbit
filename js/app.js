@@ -28,14 +28,88 @@
   function colKey(c, i) { return c && c.label ? "L:" + c.label : "#" + i; }
   var STMT_PRESET_PARTNER = null; // one-shot: preselect this partner when the statement screen next opens
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
-  function loadUI() { try { var u = JSON.parse(localStorage.getItem("orbit_ui")); if (u && u.theme) return { theme: u.theme, font: u.font || "inter", size: u.size || "normal" }; } catch (e) { } return { theme: "spacework", font: "inter", size: "normal" }; }
+  // Eight themes became three. Anyone carrying one of the old five is moved to
+  // the nearest of the new ones rather than being left on a setting the picker
+  // can no longer show; the two that were really just a colour bring their
+  // colour with them.
+  var LEGACY_THEME = { spacework: "light", system: "light", corporate: "light", blue: "colorful", pink: "colorful" };
+  var LEGACY_ACCENT = { blue: "#2563eb", pink: "#db2777", corporate: "#1f4e79" };
+  function loadUI() {
+    try {
+      var u = JSON.parse(localStorage.getItem("orbit_ui"));
+      if (u && u.theme) {
+        var th = LEGACY_THEME[u.theme] || u.theme;
+        if (["light", "dark", "colorful"].indexOf(th) < 0) th = "light";
+        return {
+          theme: th,
+          font: (u.font === "inter" ? "system" : (u.font || "system")),   // "inter" was the old default, not a choice
+          size: u.size || "normal",
+          accent: u.accent || LEGACY_ACCENT[u.theme] || ""
+        };
+      }
+    } catch (e) { }
+    return { theme: "light", font: "system", size: "normal", accent: "" };
+  }
   function saveUI() { try { localStorage.setItem("orbit_ui", JSON.stringify(S.ui)); } catch (e) { } }
-  function fontStack(f) { return ({ system: '"Segoe UI",-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif', onest: '"Onest",system-ui,sans-serif', inter: '"Onest",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
+  // "System" is the platform's own interface face: San Francisco on a Mac or an
+  // iPad, Segoe UI Variable on Windows, Roboto on Android. It is the default
+  // because it is the face every other app on the machine already uses.
+  function fontStack(f) { return ({ system: '-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",Arial,sans-serif', onest: '"Onest",system-ui,sans-serif', inter: '"Onest",system-ui,sans-serif', rounded: '"Nunito","Segoe UI",system-ui,sans-serif', serif: '"Lora",Georgia,"Times New Roman",serif', mono: '"JetBrains Mono","SF Mono","Cascadia Code","Consolas",ui-monospace,monospace' })[f] || "inherit"; }
+  // ---- Appearance -----------------------------------------------------------
+  // Three modes, not eight: Light, Dark, Colourful. Only Colourful takes a
+  // colour, and it takes any colour - a dozen ready-made ones for someone who
+  // wants to choose in two seconds, and a hex box for a company that has a
+  // brand colour and wants exactly that one.
+  var THEME_MODES = [["light", "Light"], ["dark", "Dark"], ["colorful", "Colourful"]];
+  var ACCENTS = [
+    ["#0F4C81", "Classic Blue"], ["#5A5B9F", "Blue Iris"], ["#6667AB", "Very Peri"],
+    ["#5F4B8B", "Ultra Violet"], ["#B163A3", "Radiant Orchid"], ["#C74375", "Fuchsia Rose"],
+    ["#9B1B30", "Chili Pepper"], ["#DD4124", "Tangerine"], ["#955251", "Marsala"],
+    ["#88B04B", "Greenery"], ["#009874", "Emerald"], ["#45B5AA", "Turquoise"]
+  ];
+  function hexRGB(h) {
+    h = String(h || "").trim().replace(/^#/, "");
+    if (h.length === 3) h = h.split("").map(function (c) { return c + c; }).join("");
+    if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function rgbHex(a) { return "#" + a.map(function (v) { v = Math.max(0, Math.min(255, Math.round(v))); return ("0" + v.toString(16)).slice(-2); }).join(""); }
+  function mixWhite(hex, t) { var c = hexRGB(hex); return c ? rgbHex(c.map(function (v) { return v + (255 - v) * t; })) : hex; }
+  function shade(hex, t) { var c = hexRGB(hex); return c ? rgbHex(c.map(function (v) { return v * (1 - t); })) : hex; }
+  function relLum(hex) {
+    var c = hexRGB(hex); if (!c) return 1;
+    var s = c.map(function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * s[0] + 0.7152 * s[1] + 0.0722 * s[2];
+  }
+  // Buttons put white text on the accent, so a pale accent is unreadable text,
+  // not just a pale button. Darken it until it clears 4.5:1 rather than
+  // refusing the colour someone chose.
+  function accentSafe(hex) {
+    var h = hex, guard = 0;
+    while ((1.05 / (relLum(h) + 0.05)) < 4.5 && guard++ < 24) h = shade(h, 0.06);
+    return h;
+  }
+  function applyAccent() {
+    var s = document.documentElement.style;
+    ["--accent", "--accent2", "--accent-soft", "--bg", "--panel2", "--line"].forEach(function (p) { s.removeProperty(p); });
+    if (S.ui.theme !== "colorful") return;
+    if (!hexRGB(S.ui.accent)) return;
+    var a = accentSafe(S.ui.accent);
+    s.setProperty("--accent", a);
+    s.setProperty("--accent2", shade(a, 0.18));
+    s.setProperty("--accent-soft", mixWhite(a, 0.90));
+    // only the surfaces take the tint; ink and the status colours stay as the
+    // theme defines them, because those are the ones contrast was measured on
+    s.setProperty("--bg", mixWhite(a, 0.955));
+    s.setProperty("--panel2", mixWhite(a, 0.93));
+    s.setProperty("--line", mixWhite(a, 0.86));
+  }
   function applyTheme() {
     var de = document.documentElement;
     if (S.ui.theme && S.ui.theme !== "system") de.setAttribute("data-theme", S.ui.theme); else de.removeAttribute("data-theme");
     de.style.setProperty("--ui", fontStack(S.ui.font));
-    applyAppColor(); applyFontScale();
+    applyAppColor(); applyAccent(); applyFontScale();
   }
   function applyAppColor() {
     // Orbit brand: the navbar is always ink; app identity lives in the colorful
@@ -2087,7 +2161,7 @@
     appoint: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82 M36 16 V30 M64 16 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><circle cx="50" cy="61" r="7" fill="#2F6BFF"/></svg>',
     accounting: '<svg viewBox="0 0 100 100"><path d="M28 14 H72 V86 L64.7 80 L57.3 86 L50 80 L42.7 86 L35.3 80 L28 86 Z M38 30 H62 M38 42 H62 M38 54 H50" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="60" cy="66" r="5" fill="#2F6BFF"/></svg>',
     sales: '<svg viewBox="0 0 100 100"><path d="M8 34 H26 L42 48 M92 34 H74 L58 48 M8 62 H24 M92 62 H76 M40 60 L47 67 M52 55 L59 62" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><path d="M42 48 L50 41 L66 55 L58 62 Z" fill="currentColor" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><circle cx="50" cy="22" r="7" fill="#2F6BFF"/></svg>',
-    purchase: '<svg viewBox="0 0 100 100"><path d="M24 38 H76 L70 80 H30 Z M38 38 C38 24 62 24 62 38" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><circle cx="76" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    purchase: '<svg viewBox="0 0 100 100"><path d="M10 18 H24 L38 62 H80" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><path d="M30 32 H88 L80 56 H37" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="44" cy="80" r="7" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="74" cy="80" r="7" fill="#2F6BFF"/></svg>',
     crm: '<svg viewBox="0 0 100 100"><circle cx="39" cy="52" r="21" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="63" cy="52" r="21" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="51" cy="23" r="7" fill="#2F6BFF"/></svg>',
     inventory: '<svg viewBox="0 0 100 100"><rect x="22" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="55" y="22" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="22" y="55" width="25" height="25" fill="none" stroke="currentColor" stroke-width="8"/><rect x="60" y="60" width="15" height="15" fill="currentColor" transform="rotate(45 67.5 67.5)"/><circle cx="84" cy="51" r="7" fill="#2F6BFF"/></svg>',
     project: '<svg viewBox="0 0 100 100"><path d="M 71 40 L 81 50 L 50 81 L 19 50 L 50 19 L 59 28" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><rect x="43.5" y="43.5" width="13" height="13" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="67" cy="32" r="7" fill="#2F6BFF"/></svg>',
@@ -2095,14 +2169,26 @@
     help: '<svg viewBox="0 0 100 100"><path d="M50 32 C42 25 26 25 20 29 V76 C26 72 42 72 50 79 C58 72 74 72 80 76 V29 C74 25 58 25 50 32 Z M50 32 V79" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><circle cx="80" cy="24" r="7" fill="#2F6BFF"/></svg>',
     settings: '<svg viewBox="0 0 100 100"><path d="M44 12 H56 L58 22 A30 30 0 0 1 66.5 26.9 L76 23 L84 33 L78 41.5 A30 30 0 0 1 80 51 L89 56 L85 68 L74.9 67.4 A30 30 0 0 1 68.9 74.9 L71 85 L59.5 89 L54 80.4 A30 30 0 0 1 44.4 80 L38 88 L27 83 L29.9 73.2 A30 30 0 0 1 23.4 65.4 L13 65 L11 53 L20.5 49.7 A30 30 0 0 1 22.7 40 L16 32 L24 22.5 L33.6 26.6 A30 30 0 0 1 42 22 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter"/><rect x="44" y="44" width="12" height="12" fill="currentColor" transform="rotate(45 50 50)"/><circle cx="76" cy="20" r="7" fill="#2F6BFF"/></svg>',
     estimation: '<svg viewBox="0 0 100 100"><rect x="28" y="14" width="44" height="72" rx="3" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M38 28 H62" stroke="currentColor" stroke-width="7" fill="none"/><circle cx="42" cy="52" r="3.5" fill="currentColor"/><circle cx="58" cy="52" r="3.5" fill="currentColor"/><circle cx="42" cy="66" r="3.5" fill="currentColor"/><circle cx="58" cy="66" r="3.5" fill="currentColor"/><circle cx="42" cy="78" r="3.5" fill="currentColor"/><circle cx="58" cy="78" r="7" fill="#2F6BFF"/></svg>',
-    manufacturing: '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
+    manufacturing: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="32" fill="none" stroke="currentColor" stroke-width="7"/><path d="M84 50 H93 M74 74 L80 80 M50 84 V93 M26 74 L20 80 M16 50 H7 M26 26 L20 20 M50 16 V7 M74 26 L80 20" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><circle cx="50" cy="50" r="9" fill="#2F6BFF"/></svg>',
+    // Field Service: an open-ended spanner on a bolt head. A wrench is what
+    // people picture when they think "someone is coming to fix it", which is
+    // exactly what this app is for.
+    // Events: a party popper with confetti coming out of it.
+    events: '<svg viewBox="0 0 100 100"><path d="M14 88 L40 42 L58 60 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><path d="M52 32 l7-7 M70 44 l9-3 M62 68 l9 5" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><rect x="74" y="16" width="12" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="5.5" transform="rotate(24 80 22)"/><circle cx="64" cy="48" r="5.5" fill="#2F6BFF"/></svg>',
+    // Website: a globe, because the thing being built is on the open internet.
+    website: '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="33" fill="none" stroke="currentColor" stroke-width="7"/><path d="M50 17 C34 30 34 70 50 83 M50 17 C66 30 66 70 50 83" fill="none" stroke="currentColor" stroke-width="6"/><path d="M18 50 H82" stroke="currentColor" stroke-width="6"/><circle cx="68" cy="34" r="6" fill="#2F6BFF"/></svg>',
+    // My Desk: a laptop. It is the one app that is about your own day.
+    desk: '<svg viewBox="0 0 100 100"><rect x="24" y="24" width="52" height="36" rx="5" fill="none" stroke="currentColor" stroke-width="7"/><path d="M12 68 H88 L80 80 H20 Z" fill="none" stroke="currentColor" stroke-width="6.5" stroke-linejoin="round"/><circle cx="50" cy="42" r="6" fill="#2F6BFF"/></svg>',
+    // App Store: four tiles, one of them the blue one you are about to add.
+    appstore: '<svg viewBox="0 0 100 100"><rect x="14" y="14" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="56" y="14" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="14" y="56" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="56" y="56" width="30" height="30" rx="9" fill="#2F6BFF"/><path d="M71 64 V78 M64 71 H78" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>',
+    service: '<svg viewBox="0 0 100 100"><path d="M44 56 L62 38" stroke="currentColor" stroke-width="13" stroke-linecap="round" fill="none"/><circle cx="34" cy="66" r="15" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="34" cy="66" r="6" fill="#2F6BFF"/><path d="M58 22 a16 16 0 1 1 18 18" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>',
     installation: '<svg viewBox="0 0 100 100"><path d="M16 64 H84" stroke="currentColor" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M26 62 C26 34 74 34 74 62" fill="none" stroke="currentColor" stroke-width="8" stroke-linejoin="miter"/><path d="M43 38 V28 H57 V38" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="miter"/><circle cx="74" cy="30" r="7" fill="#2F6BFF"/></svg>',
     documents: '<svg viewBox="0 0 100 100"><path d="M28 14 H62 L78 30 V86 H28 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M62 14 V30 H78" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="miter"/><path d="M40 48 H64 M40 60 H60" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="66" cy="72" r="7" fill="#2F6BFF"/></svg>',
     contacts: '<svg viewBox="0 0 100 100"><rect x="22" y="18" width="56" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><circle cx="50" cy="44" r="9" fill="none" stroke="currentColor" stroke-width="6"/><path d="M34 70 C34 58 66 58 66 70" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"/><circle cx="72" cy="26" r="6" fill="#2F6BFF"/></svg>',
     site: '<svg viewBox="0 0 100 100"><rect x="26" y="20" width="48" height="64" rx="7" fill="none" stroke="currentColor" stroke-width="7"/><rect x="40" y="13" width="20" height="13" rx="4" fill="none" stroke="currentColor" stroke-width="6"/><path d="M37 52 l8 8 17 -19" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/><circle cx="65" cy="73" r="6" fill="#2F6BFF"/></svg>',
     calendar: '<svg viewBox="0 0 100 100"><rect x="18" y="24" width="64" height="58" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 40 H82" stroke="currentColor" stroke-width="7"/><path d="M34 15 V30 M66 15 V30" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="63" cy="61" r="7" fill="#2F6BFF"/></svg>',
     sign: '<svg viewBox="0 0 100 100"><path d="M18 70 C34 70 38 36 52 36 C62 36 58 60 70 60 C76 60 78 54 80 50" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><path d="M16 84 H84" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="82" cy="28" r="7" fill="#2F6BFF"/></svg>',
-    recruitment: '<svg viewBox="0 0 100 100"><circle cx="46" cy="38" r="16" fill="none" stroke="currentColor" stroke-width="7"/><path d="M18 84 C18 60 74 60 74 84" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="78" cy="34" r="8" fill="#2F6BFF"/></svg>',
+    recruitment: '<svg viewBox="0 0 100 100"><rect x="22" y="18" width="56" height="70" rx="8" fill="none" stroke="currentColor" stroke-width="7"/><path d="M40 18 V12 H60 V18" fill="none" stroke="currentColor" stroke-width="6" stroke-linejoin="round"/><path d="M33 40 l5 5 10-11" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 58 l5 5 10-11" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M33 76 l5 5 10-11" fill="none" stroke="#2F6BFF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/><path d="M58 42 H68 M58 60 H68 M58 78 H68" stroke="currentColor" stroke-width="5.5" stroke-linecap="round"/></svg>',
     knowledge: '<svg viewBox="0 0 100 100"><path d="M50 30 C41 22 26 22 16 26 V76 C26 72 41 72 50 80 C59 72 74 72 84 76 V26 C74 22 59 22 50 30 Z" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><path d="M50 30 V80" stroke="currentColor" stroke-width="6"/><circle cx="50" cy="24" r="6" fill="#2F6BFF"/></svg>',
     insights: '<svg viewBox="0 0 100 100"><path d="M18 82 H86" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><rect x="26" y="52" width="13" height="26" fill="none" stroke="currentColor" stroke-width="6"/><rect x="47" y="38" width="13" height="40" fill="none" stroke="currentColor" stroke-width="6"/><rect x="68" y="24" width="13" height="54" fill="none" stroke="currentColor" stroke-width="6"/><circle cx="74" cy="16" r="7" fill="#2F6BFF"/></svg>',
     "Manufacturing": '<svg viewBox="0 0 100 100"><path d="M38 12 H62 V36 L56 42 V64 H44 V42 L38 36 Z" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><path d="M44 64 H56 L51.5 86 H48.5 Z M46 12 V22 M54 12 V22" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="miter" transform="rotate(-45 50 50)"/><circle cx="78" cy="26" r="7" fill="#2F6BFF"/></svg>',
@@ -2399,44 +2485,162 @@
   function homeSetHidden(k, hide) { var p = homePref(); p.hidden = p.hidden || {}; if (hide) p.hidden[k] = 1; else delete p.hidden[k]; p.userSet = true; try { localStorage.setItem(homePrefKey(), JSON.stringify(p)); } catch (e) { } }
   function homeTop(extraLeft, extraRight) {
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
-    return '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div>' + (extraLeft || '<span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>') +
-      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + (extraRight || "") + companySelectHTML("home") + '<button class="o-theme-tog" id="home-theme" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle><path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g><path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button><div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>';
+    // The same search that lives in the app bar. It was reachable only once you
+    // were inside an app, which is the one place you already know where you are.
+    var search = '<div class="o-gs o-gs-home"><input id="o-gs-in" type="text" placeholder="Search anything, or ask the manual" aria-label="Search records and help" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>';
+    return '<div class="o-home-top"><div class="lockup">' + orbitLockup() + '</div>' + (extraLeft || '<span class="muted" style="font-size:12.5px">&nbsp; ' + esc(S.org ? S.org.name : "") + '</span>') + search +
+      '<div style="margin-left:auto;display:flex;align-items:center;gap:8px">' + (extraRight || "") + companySelectHTML("home") + bellHTML() + themeTogHTML("home-theme") + '<div class="o-ava" id="ava" style="background:var(--accent-soft);color:var(--accent)">' + initials + '</div></div></div>';
+  }
+  // The App Store is an app now, sitting on the home with everything else,
+  // instead of a button in the bar above it. It is the one tile that cannot be
+  // taken off, because it is how you put the others back.
+  var STORE_TILE = "__store";
+  function homeLayoutKey() { return homePrefKey() + "_lay"; }
+  function homeLayout() { try { return JSON.parse(localStorage.getItem(homeLayoutKey()) || "{}") || {}; } catch (e) { return {}; } }
+  function homeSaveLayout(root2) {
+    var lay = {};
+    root2.querySelectorAll(".o-home-grp[data-grp]").forEach(function (sec) {
+      lay[sec.dataset.grp] = [].map.call(sec.querySelectorAll(".o-tile[data-key]"), function (t) { return t.dataset.key; });
+    });
+    try { localStorage.setItem(homeLayoutKey(), JSON.stringify(lay)); } catch (e) { }
   }
   function renderHome() {
     S.app = null; S.action = null;
     var hid = (homePref().hidden) || {};
     function tileHTML(k) {
-      var a = APPS[k];
+      var isStore = k === STORE_TILE;
+      var a = isStore ? { name: "App Store", color: "#0f766e" } : APPS[k];
       var col = a.color || "#16171c";   // each app's icon square wears the app's own colour (matches its in-app brand chip)
-      if (HOME_EDIT) return '<div class="o-tile o-tile-edit' + (hid[k] ? " off" : "") + '" data-edit="' + k + '"><span class="o-tile-tog">' + (hid[k] ? "+" : "&times;") + '</span><span class="ic" aria-hidden="true" style="background:' + col + '">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></div>';
-      return '<button class="o-tile" data-app="' + k + '" aria-label="Open ' + esc(term(a.name)) + '"><span class="ic" aria-hidden="true" style="background:' + col + '">' + (APP_ICONS[k] || a.icon) + '</span><span class="nm">' + esc(term(a.name)) + '</span></button>';
+      var ic = isStore ? APP_ICONS.appstore : (APP_ICONS[k] || a.icon);
+      var body = '<span class="ic" aria-hidden="true" style="background:' + col + '">' + ic + '</span><span class="nm">' + esc(term(a.name)) + '</span>';
+      if (HOME_EDIT) {
+        return '<div class="o-tile o-tile-edit' + (hid[k] ? " off" : "") + '" data-key="' + k + '" role="button" tabindex="0" aria-label="' + esc(term(a.name)) + '">' +
+          (isStore ? "" : '<button class="o-tile-tog" data-edit="' + k + '" aria-label="' + (hid[k] ? "Put " : "Take ") + esc(term(a.name)) + (hid[k] ? " back on the home" : " off the home") + '">' + (hid[k] ? "+" : "&times;") + '</button>') +
+          body + '</div>';
+      }
+      return '<button class="o-tile" data-key="' + k + '"' + (isStore ? ' data-store-tile="1"' : ' data-app="' + k + '"') + ' aria-label="Open ' + esc(term(a.name)) + '">' + body + '</button>';
     }
-    var viewable = Object.keys(APPS).filter(function (k) { return k !== "help" && canViewApp(k) && (HOME_EDIT || !hid[k]); }), placed = {};
-    var tiles = APP_GROUPS.map(function (g) {
-      var ks = g.apps.filter(function (k) { return APPS[k] && viewable.indexOf(k) >= 0; });
-      ks.forEach(function (k) { placed[k] = 1; });
-      if (!ks.length) return "";
-      return '<section class="o-home-grp' + (ks.length > 4 ? " wide" : "") + '"><div class="o-home-grp-t">' + esc(g.title) + '</div><div class="o-grid">' + ks.map(tileHTML).join("") + '</div></section>';
+    var viewable = Object.keys(APPS).filter(function (k) { return k !== "help" && canViewApp(k) && (HOME_EDIT || !hid[k]); });
+    viewable.push(STORE_TILE);
+    // The user's own arrangement wins; anything they have never moved falls back
+    // to the group it was designed into.
+    var lay = homeLayout(), placed = {}, secs = APP_GROUPS.map(function (g) { return { title: g.title, keys: [] }; });
+    secs.push({ title: "More", keys: [] });
+    secs.forEach(function (s) {
+      (lay[s.title] || []).forEach(function (k) {
+        if (placed[k] || viewable.indexOf(k) < 0) return;
+        placed[k] = 1; s.keys.push(k);
+      });
+    });
+    APP_GROUPS.forEach(function (g, gi) {
+      g.apps.forEach(function (k) { if (viewable.indexOf(k) >= 0 && !placed[k]) { placed[k] = 1; secs[gi].keys.push(k); } });
+    });
+    viewable.forEach(function (k) { if (!placed[k]) { placed[k] = 1; secs[secs.length - 1].keys.push(k); } });
+    var tiles = secs.filter(function (s) { return s.keys.length; }).map(function (s) {
+      return '<section class="o-home-grp' + (s.keys.length > 4 ? " wide" : "") + '" data-grp="' + esc(s.title) + '"><div class="o-home-grp-t">' + esc(s.title) + '</div><div class="o-grid">' + s.keys.map(tileHTML).join("") + '</div></section>';
     }).join("");
-    var extra = viewable.filter(function (k) { return !placed[k]; });
-    if (extra.length) tiles += '<section class="o-home-grp' + (extra.length > 4 ? " wide" : "") + '"><div class="o-home-grp-t">More</div><div class="o-grid">' + extra.map(tileHTML).join("") + '</div></section>';
     var soonT = HOME_EDIT ? "" : SOON.map(function (s) { return '<div class="o-tile soon" aria-disabled="true"><span class="ic" aria-hidden="true">' + (APP_ICONS[s[0]] || s[1]) + '</span><span class="nm">' + esc(s[0]) + '</span></div>'; }).join("");
     var soon = soonT ? '<section class="o-home-grp o-home-soon"><div class="o-home-grp-t">Coming soon</div><div class="o-grid">' + soonT + '</div></section>' : "";
-    var rightBtns = '<button class="o-filtbtn" id="home-store" title="Add or remove apps from this home">&#9638; App Store</button><button class="o-filtbtn' + (HOME_EDIT ? " on" : "") + '" id="home-edit">' + (HOME_EDIT ? "Done" : "Edit") + '</button>';
+    var rightBtns = '<button class="o-filtbtn' + (HOME_EDIT ? " on" : "") + '" id="home-edit">' + (HOME_EDIT ? "Done" : "Edit") + '</button>';
     root.innerHTML =
-      '<div class="o-home">' + supportBarHTML() + homeTop(null, rightBtns) +
-      (HOME_EDIT ? '<div class="o-home-edithint">Tap &times; to take an app off the home, + to put it back. Hidden apps stay in the App Store and in search - nothing is lost.</div>' : '') +
+      '<div class="o-home' + (HOME_EDIT ? " editing" : "") + '">' + supportBarHTML() + homeTop(null, rightBtns) +
+      (HOME_EDIT ? '<div class="o-home-edithint">Drag an app anywhere, including into another group. Tap &times; to take one off the home, + to put it back. Nothing is lost: everything stays in the App Store and in search.</div>' : '') +
       '<div class="o-home-groups">' + tiles + soon + '</div></div>';
-    root.querySelectorAll(".o-tile-edit[data-edit]").forEach(function (t) { t.onclick = function () { var k = t.dataset.edit; homeSetHidden(k, !((homePref().hidden || {})[k])); renderHome(); }; });
-    var _st = document.getElementById("home-store"); if (_st) _st.onclick = function () { HOME_EDIT = false; renderAppStore(); };
+    root.querySelectorAll(".o-tile-tog[data-edit]").forEach(function (t) {
+      t.onclick = function (e) { e.stopPropagation(); var k = t.dataset.edit; homeSetHidden(k, !((homePref().hidden || {})[k])); renderHome(); };
+    });
+    root.querySelectorAll(".o-tile[data-store-tile]").forEach(function (t) { t.onclick = function () { HOME_EDIT = false; renderAppStore(); }; });
+    homeWireTiles(root);
     var _ed = document.getElementById("home-edit"); if (_ed) _ed.onclick = function () { HOME_EDIT = !HOME_EDIT; renderHome(); };
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
-    var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); toast(S.ui.theme === "dark" ? "Dark appearance" : "Colourful appearance"); };
+    wireTheme("home-theme"); wireBell(); wireHomeSearch();
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
     setupBannerInject();
     invitesBannerInject();
+  }
+  function wireHomeSearch() {
+    var gs = document.getElementById("o-gs-in"); if (!gs) return;
+    var t;
+    gs.oninput = function () { var v = this.value; clearTimeout(t); t = setTimeout(function () { runGlobalSearch(v); }, 250); };
+    gs.onkeydown = function (e) { if (e.key === "Escape") { this.value = ""; runGlobalSearch(""); this.blur(); } };
+  }
+  // ---------------------------------------------------------------------------
+  // Arranging the home the way a phone does it.
+  //
+  // Press and hold an app and everything starts to wobble, each tile with a
+  // small x on it; drag one anywhere, including into another group; press Done
+  // when you are finished. It is the one rearranging gesture that nobody has to
+  // be taught, and the arrangement is remembered per person, per company.
+  // ---------------------------------------------------------------------------
+  function homeWireTiles(root2) {
+    var holdT = null, held = false, holdX = 0, holdY = 0;
+    var drag = null, ghost = null, gx = 0, gy = 0;
+    function endHold() { clearTimeout(holdT); holdT = null; }
+
+    root2.querySelectorAll(".o-tile[data-key]").forEach(function (tile) {
+      tile.addEventListener("pointerdown", function (e) {
+        if (e.button > 0) return;
+        held = false; holdX = e.clientX; holdY = e.clientY;
+        if (!HOME_EDIT) {
+          // press and hold to start arranging, exactly like a phone
+          holdT = setTimeout(function () { held = true; HOME_EDIT = true; renderHome(); }, 480);
+          return;
+        }
+        if (e.target.closest(".o-tile-tog")) return;      // the x is a button, not a handle
+        var r = tile.getBoundingClientRect();
+        drag = { tile: tile, dx: e.clientX - r.left, dy: e.clientY - r.top, x0: e.clientX, y0: e.clientY, on: false };
+        try { tile.setPointerCapture(e.pointerId); } catch (er) { }
+      });
+      tile.addEventListener("pointermove", function (e) {
+        if (holdT && (Math.abs(e.clientX - holdX) > 8 || Math.abs(e.clientY - holdY) > 8)) endHold();
+        if (!drag) return;
+        if (!drag.on) {
+          if (Math.abs(e.clientX - drag.x0) < 6 && Math.abs(e.clientY - drag.y0) < 6) return;
+          drag.on = true;
+          var r0 = tile.getBoundingClientRect();
+          ghost = tile.cloneNode(true);
+          ghost.className = "o-tile o-tile-ghost";
+          ghost.style.width = r0.width + "px"; ghost.style.height = r0.height + "px";
+          document.body.appendChild(ghost);
+          tile.classList.add("o-tile-holder");
+        }
+        gx = e.clientX - drag.dx; gy = e.clientY - drag.dy;
+        ghost.style.transform = "translate(" + gx + "px," + gy + "px)";
+        var el = document.elementFromPoint(e.clientX, e.clientY);
+        var over = el && el.closest ? el.closest(".o-tile[data-key]") : null;
+        if (over && over !== tile) {
+          var rr = over.getBoundingClientRect();
+          over.parentNode.insertBefore(tile, (e.clientX < rr.left + rr.width / 2) ? over : over.nextSibling);
+        } else {
+          var grid = el && el.closest ? el.closest(".o-grid") : null;   // dropping into an empty part of another group
+          if (grid && grid !== tile.parentNode && !grid.closest(".o-home-soon")) grid.appendChild(tile);
+        }
+      });
+      function done(e) {
+        endHold();
+        if (drag && drag.on) {
+          if (ghost) { ghost.remove(); ghost = null; }
+          tile.classList.remove("o-tile-holder");
+          homeSaveLayout(root2);
+        } else if (!HOME_EDIT && !held && drag == null && e && e.type === "pointerup") {
+          // a plain tap: the click handler on the tile does the opening
+        }
+        drag = null;
+      }
+      tile.addEventListener("pointerup", done);
+      tile.addEventListener("pointercancel", done);
+      tile.addEventListener("pointerleave", function () { endHold(); });
+      tile.addEventListener("keydown", function (e) {
+        if (HOME_EDIT && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); }
+      });
+    });
+    if (HOME_EDIT) {
+      document.addEventListener("keydown", function esc(e) {
+        if (e.key === "Escape") { HOME_EDIT = false; document.removeEventListener("keydown", esc); renderHome(); }
+      });
+    }
   }
   // ===========================================================================
   // MY DESK
@@ -2679,9 +2883,10 @@
     var left = '<button class="o-filtbtn" id="as-back">&#8249; Home</button><b style="margin-left:10px">App Store</b><span class="muted" style="margin-left:8px;font-size:12px;">Add apps to your home or take unwanted ones off. Every app stays reachable here and in search.</span>';
     root.innerHTML = '<div class="o-home">' + supportBarHTML() + homeTop(left, "") + '<div class="o-home-groups">' + groups + '</div></div>';
     document.getElementById("as-back").onclick = renderHome;
+    wireHomeSearch();
     root.querySelectorAll("[data-store]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.store; homeSetHidden(k, !((homePref().hidden || {})[k])); renderAppStore(); }; });
     root.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = function () { openApp(b.dataset.open); }; });
-    var _th = document.getElementById("home-theme"); if (_th) _th.onclick = function () { S.ui.theme = (S.ui.theme === "dark" ? "colorful" : "dark"); saveUI(); applyTheme(); };
+    wireTheme("home-theme"); wireBell();
     wireCompanySelect("home");
     var _av = document.getElementById("ava"); if (_av) _av.onclick = function (e) { openAvatarMenu(e.currentTarget); };
   }
@@ -2870,7 +3075,7 @@
       '<span class="o-appname">' + esc(term(a.name)) + '</span>' +
       (APP_FLOW[S.app] ? '<button class="o-howto" id="ohowto" title="How ' + esc(term(a.name)) + ' works" aria-label="How ' + esc(term(a.name)) + ' works"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2.2"/><circle cx="19" cy="12" r="2.2"/><path d="M7.2 12h7.6"/><path d="M13 9l3 3-3 3"/></svg><span>How this works</span></button>' : '') +
       '<div class="o-gs"><input id="o-gs-in" type="text" placeholder="Search records..." aria-label="Search records" autocomplete="off"><div class="o-gs-dd" id="o-gs-dd"></div></div>' +
-      '<div class="o-systray">' + bookChipHTML() + companySelectHTML("bar") + '<button class="o-help" id="olang" aria-label="Change language" title="Translate this app to any language"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg></button><button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
+      '<div class="o-systray">' + bookChipHTML() + companySelectHTML("bar") + '<button class="o-help" id="olang" aria-label="Change language" title="Translate this app to any language"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M3 12h18"></path><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"></path></svg></button><button class="o-help o-print" id="oprint" aria-label="Print this page" title="Print this page"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V3h12v6"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></button><button class="o-help" id="ohelp" aria-label="Help &amp; guides" title="Help &amp; guides">?</button>' + themeTogHTML("app-theme", "o-help") + bellHTML() + '<button class="o-ava" id="ava" aria-label="Account menu">' + initials + '</button></div>' +
       '</header>' +
       '<div class="o-shell">' +
       '<nav class="o-side' + (S.sideCollapsed ? " collapsed" : "") + '" id="oside" aria-label="' + esc(a.name) + ' menu">' +
@@ -2894,10 +3099,8 @@
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     var _hlp = document.getElementById("ohelp"); if (_hlp) _hlp.onclick = function () { openHelp(); };
     var _how = document.getElementById("ohowto"); if (_how) _how.onclick = function () { openFlowModal(S.app); };
-    var _bell = document.getElementById("bell"); if (_bell) _bell.onclick = function (e) { openNotifPanel(e.currentTarget); };
-    refreshBell();
-    if (window._bellIv) clearInterval(window._bellIv);
-    window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
+    wireTheme("app-theme");
+    wireBell();
     wireCompanySelect("bar");
     document.querySelectorAll("#oside .o-si[data-go]").forEach(function (b) { b.onclick = function () { go(b.dataset.go); if (window.innerWidth <= 760 && !S.sideCollapsed) { S.sideCollapsed = true; var sd0 = document.getElementById("oside"); if (sd0) sd0.classList.add("collapsed"); } }; });
     document.querySelectorAll("#oside .o-si-grp").forEach(function (b) { b.onclick = function () { var sub = document.querySelector('.o-sub[data-sub="' + b.dataset.grp + '"]'); if (!sub) return; if (sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); b.setAttribute("aria-expanded", "true"); } else { sub.setAttribute("hidden", ""); b.setAttribute("aria-expanded", "false"); } }; });
@@ -2937,6 +3140,20 @@
       (res[4].data || []).forEach(function (p) { results.push({ type: "product", id: p.id, label: p.name, sub: p.default_code ? "Item · " + p.default_code : "Item" }); });
       (res[5].data || []).forEach(function (l) { results.push({ type: "lead", id: l.id, label: l.name, sub: "Lead" + (l.area ? " · " + l.area : "") }); });
     } catch (e) { }
+    // and the manual, because half of what people search for is not a record at
+    // all, it is "how do I do this"
+    try {
+      var ql = q.toLowerCase(), hits = 0;
+      (HELP_MANUAL || []).forEach(function (ch) {
+        (ch.articles || []).forEach(function (ar, ai) {
+          if (hits >= 4) return;
+          var plain = String(ar.h || "").replace(/<[^>]*>/g, " ");
+          if (ar.t.toLowerCase().indexOf(ql) < 0 && plain.toLowerCase().indexOf(ql) < 0) return;
+          hits++;
+          results.push({ type: "help", id: ch.key + "|" + ai, label: ar.t, sub: "Help · " + ch.title });
+        });
+      });
+    } catch (e) { }
     if (!results.length) { dd.innerHTML = '<div class="o-gs-empty">No matches for “' + esc(q) + '”</div>'; dd.style.display = "block"; return; }
     dd.innerHTML = results.slice(0, 24).map(function (r) { return '<button class="o-gs-item" data-type="' + r.type + '" data-id="' + r.id + '" data-extra="' + (r.extra || "") + '"><span class="o-gs-l">' + esc(r.label) + '</span><span class="o-gs-s">' + esc(r.sub) + '</span></button>'; }).join("");
     dd.style.display = "block";
@@ -2945,6 +3162,7 @@
   function openRecord(type, id, extra) {
     var dd = document.getElementById("o-gs-dd"); if (dd) { dd.style.display = "none"; dd.innerHTML = ""; }
     var gin = document.getElementById("o-gs-in"); if (gin) gin.value = "";
+    if (type === "help") { openHelp(String(id).split("|")[0]); return; }
     var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales", lead: "crm" };
     var app = appFor[type] || "accounting";
     if (app !== S.app) { S.app = app; applyAppColor(); renderShell(); }
@@ -3035,11 +3253,80 @@
   }
   function closeDropdowns() { document.querySelectorAll("[data-dd]").forEach(function (d) { d.remove(); }); }
   document.addEventListener("click", function (e) {
-    if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest("#bell") || e.target.closest(".o-filtbtn")) return;
+    if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest("#bell") || e.target.closest("#home-theme") || e.target.closest("#app-theme") || e.target.closest(".o-filtbtn")) return;
     closeDropdowns();
   });
 
   // ============================ NOTIFICATIONS ============================
+  // The appearance switch and the notification bell belong in BOTH headers.
+  // They were split by accident: the bell only existed inside an app and the
+  // appearance switch only on the home screen, so each was missing exactly
+  // where you were standing when you wanted it.
+  function themeTogHTML(id, cls) {
+    return '<button class="' + (cls || "o-theme-tog") + '" id="' + id + '" title="Switch appearance (colourful / dark)" aria-label="Switch appearance between colourful and dark">' +
+      '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="5"></circle>' +
+      '<path d="M12 1.2v2.4M12 20.4v2.4M4 4l1.6 1.6M18.4 18.4L20 20M0.8 12h2.4M20.8 12h2.4M4 20l1.6-1.6M18.4 5.6L20 4"></path></g>' +
+      '<path d="M12 7a5 5 0 0 0 0 10z" fill="currentColor"></path></svg></button>';
+  }
+  function wireTheme(id) {
+    var b = document.getElementById(id); if (!b) return;
+    b.onclick = function (e) { e.stopPropagation(); openAppearanceMenu(e.currentTarget); };
+  }
+  // The appearance switch used to flip blindly between two of the eight themes,
+  // which meant you could not get to the one you wanted without going to
+  // Settings. It now opens the choice itself, from either header.
+  function openAppearanceMenu(anchor) {
+    closeDropdowns();
+    var r = anchor.getBoundingClientRect();
+    var dd = document.createElement("div");
+    dd.className = "o-dd o-appear"; dd.dataset.dd = "1";
+    dd.style.right = Math.max(8, window.innerWidth - r.right) + "px"; dd.style.left = "auto";
+    dd.style.top = (r.bottom + 6) + "px";
+    function draw() {
+      dd.innerHTML = '<div class="o-appear-h">Appearance</div>' +
+        '<div class="o-appear-modes">' + THEME_MODES.map(function (m) {
+          return '<button class="o-appear-m' + (S.ui.theme === m[0] ? " on" : "") + '" data-mode="' + m[0] + '">' +
+            '<span class="sw sw-' + m[0] + '"></span>' + m[1] + '</button>';
+        }).join("") + '</div>' +
+        (S.ui.theme === "colorful"
+          ? '<div class="o-appear-h2">Your colour</div><div class="o-appear-sw">' +
+          ACCENTS.map(function (a) {
+            return '<button class="o-appear-c' + ((S.ui.accent || "").toLowerCase() === a[0].toLowerCase() ? " on" : "") + '" data-acc="' + a[0] + '" title="' + a[1] + '" aria-label="' + a[1] + '"><i style="background:' + a[0] + '"></i></button>';
+          }).join("") + '</div>' +
+          '<div class="o-appear-hex"><label for="ap-hex">Or a hex code</label>' +
+          '<input id="ap-hex" maxlength="7" placeholder="#0F4C81" value="' + esc(S.ui.accent || "") + '"><button class="btn sm" id="ap-hexgo">Use</button></div>' +
+          '<div class="o-appear-note">A colour too pale for white text is darkened just enough to stay readable.</div>'
+          : '');
+      dd.querySelectorAll("[data-mode]").forEach(function (b2) {
+        b2.onclick = function () {
+          S.ui.theme = b2.dataset.mode;
+          if (S.ui.theme === "colorful" && !hexRGB(S.ui.accent)) S.ui.accent = ACCENTS[0][0];
+          saveUI(); applyTheme(); draw();
+        };
+      });
+      dd.querySelectorAll("[data-acc]").forEach(function (b2) {
+        b2.onclick = function () { S.ui.accent = b2.dataset.acc; saveUI(); applyTheme(); draw(); };
+      });
+      var hg = dd.querySelector("#ap-hexgo");
+      if (hg) hg.onclick = function () {
+        var v = (dd.querySelector("#ap-hex").value || "").trim();
+        if (!hexRGB(v)) { toast("That is not a colour code. It looks like #0F4C81."); return; }
+        S.ui.accent = v.charAt(0) === "#" ? v : "#" + v;
+        saveUI(); applyTheme(); draw();
+      };
+      var hx = dd.querySelector("#ap-hex");
+      if (hx) hx.onkeydown = function (e2) { if (e2.key === "Enter") { e2.preventDefault(); hg.click(); } };
+    }
+    draw();
+    document.body.appendChild(dd);
+  }
+  function wireBell() {
+    var b = document.getElementById("bell"); if (!b) return;
+    b.onclick = function (e) { openNotifPanel(e.currentTarget); };
+    refreshBell();
+    if (window._bellIv) clearInterval(window._bellIv);
+    window._bellIv = setInterval(function () { if (document.getElementById("bell")) refreshBell(); }, 45000);
+  }
   function bellHTML() {
     return '<button class="o-bell" id="bell" title="Notifications"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span class="o-bell-dot" id="bell-dot" style="display:none"></span></button>';
   }
@@ -3986,12 +4273,33 @@
     var up = '<span class="up bc-grid" id="bc-grid" title="Back to all apps"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</span><span class="sepc">/</span>';
     up += '<span class="up" id="bc-home">' + esc(term(app.name)) + '</span><span class="sepc">/</span>';
     if (parent) up += '<span class="up" data-go="' + parent.action + '">' + esc(term(parent.title)) + '</span><span class="sepc">/</span>';
-    return '<div class="o-bc">' + up + '<span>' + esc(term(title)) + '</span></div>';
+    // The title bar sits on every screen and never gave the space back. The
+    // menu has collapsed for a long time; this is the same for the header, so
+    // a laptop gets two more rows of the thing you actually came to look at.
+    return '<div class="o-bc">' + up + '<span>' + esc(term(title)) + '</span>' +
+      '<button class="o-bc-min" id="bc-min" aria-label="Minimise the page header" title="Minimise the page header">' +
+      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div>';
+  }
+  function cpMiniApply() {
+    var app = document.querySelector(".o-app"); if (app) app.classList.toggle("cp-mini", !!S.cpMini);
+    var b = document.getElementById("bc-min");
+    if (b) {
+      b.setAttribute("aria-label", S.cpMini ? "Restore the page header" : "Minimise the page header");
+      b.setAttribute("title", S.cpMini ? "Restore the page header" : "Minimise the page header");
+    }
   }
   function wireBc() {
     var g = document.getElementById("bc-grid"); if (g) g.onclick = renderHome;
     var h = document.getElementById("bc-home"); if (h) h.onclick = function () { go(APPS[S.app].home); };
     document.querySelectorAll(".o-bc [data-go]").forEach(function (e) { e.onclick = function () { go(e.dataset.go); }; });
+    if (S.cpMini === undefined) { var _cm = localStorage.getItem("orbit_cpmini"); S.cpMini = _cm === "1"; }
+    var mb = document.getElementById("bc-min");
+    if (mb) mb.onclick = function () {
+      S.cpMini = !S.cpMini;
+      try { localStorage.setItem("orbit_cpmini", S.cpMini ? "1" : "0"); } catch (e) { }
+      cpMiniApply();
+    };
+    cpMiniApply();
   }
 
   // ============================ LIST ENGINE ============================
@@ -14551,27 +14859,41 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Appearance") + '</div><div class="o-form-bg"><div class="appr" id="appr"></div></div></div>';
     wireBc();
+    // Three modes. The eight presets that used to be here were eight ways of
+    // asking the same question, and none of them let anyone use their own
+    // brand colour, which is the only one a company actually wants.
     var THEMES = [
-      ["spacework", "Space Work", ["#fafaf8", "#2f6bff", "#16171c"]],
-      ["system", "System", ["#fafaf8", "#2f6bff", "#16171c"]],
-      ["light", "Light", ["#ffffff", "#2f6bff", "#16171c"]],
-      ["dark", "Dark", ["#16181f", "#6f9bff", "#0c0d12"]],
-      ["corporate", "Corporate", ["#eef1f5", "#1f4e79", "#1f4e79"]],
-      ["colorful", "Colorful", ["#f6f4ff", "#7c3aed", "#db2777"]],
-      ["blue", "Blue", ["#eef4fc", "#2563eb", "#1d4ed8"]],
-      ["pink", "Pink", ["#fdf2f7", "#db2777", "#be185d"]]
+      ["light", "Light", ["#ffffff", "#f6f4ee", "#2f6bff"]],
+      ["dark", "Dark", ["#16181f", "#0c0d12", "#6f9bff"]],
+      ["colorful", "Colourful", ["#ffffff", "#f6f4ff", "#7c3aed"]]
     ];
     var FONTS = [["system", "System"], ["onest", "Onest"], ["rounded", "Rounded"], ["serif", "Serif"], ["mono", "Mono"]];
     var SIZES = [["small", "Small"], ["normal", "Normal"], ["large", "Large"]];
     function draw() {
       document.getElementById("appr").innerHTML =
-        '<h3>Theme</h3><div class="themes">' + THEMES.map(function (t) {
-          return '<div class="th' + (S.ui.theme === t[0] ? " on" : "") + '" data-theme="' + t[0] + '"><div class="sw">' + t[2].map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</div><div class="nm">' + t[1] + (S.ui.theme === t[0] ? " &#10003;" : "") + '</div></div>';
+        '<h3>Appearance</h3><div class="themes">' + THEMES.map(function (t) {
+          var sw = t[0] === "colorful" && hexRGB(S.ui.accent) ? ["#ffffff", mixWhite(S.ui.accent, .93), accentSafe(S.ui.accent)] : t[2];
+          return '<div class="th' + (S.ui.theme === t[0] ? " on" : "") + '" data-theme="' + t[0] + '"><div class="sw">' + sw.map(function (c) { return '<i style="background:' + c + '"></i>'; }).join("") + '</div><div class="nm">' + t[1] + (S.ui.theme === t[0] ? " &#10003;" : "") + '</div></div>';
         }).join("") + '</div>' +
+        (S.ui.theme === "colorful"
+          ? '<h3>Your colour</h3><div class="opts o-appear-sw">' +
+          ACCENTS.map(function (a) {
+            return '<button class="o-appear-c' + ((S.ui.accent || "").toLowerCase() === a[0].toLowerCase() ? " on" : "") + '" data-acc="' + a[0] + '" title="' + a[1] + '" aria-label="' + a[1] + '"><i style="background:' + a[0] + '"></i></button>';
+          }).join("") + '</div>' +
+          '<div class="o-appear-hex" style="max-width:340px"><label for="ap-hex2">Or your own hex code</label><input id="ap-hex2" maxlength="7" placeholder="#0F4C81" value="' + esc(S.ui.accent || "") + '"><button class="btn sm" id="ap-hexgo2">Use</button></div>' +
+          '<div class="hint">Pick one of the twelve, or paste the hex code from your brand guidelines. A colour too pale for white text is darkened just enough to stay readable, so a button never says something you cannot read.</div>'
+          : '') +
         '<h3>Font</h3><div class="opts">' + FONTS.map(function (f) { return '<button class="opt' + (S.ui.font === f[0] ? " on" : "") + '" data-font="' + f[0] + '">' + f[1] + '</button>'; }).join("") + '</div>' +
         '<h3>Text size</h3><div class="opts">' + SIZES.map(function (s) { return '<button class="opt' + (S.ui.size === s[0] ? " on" : "") + '" data-size="' + s[0] + '">' + s[1] + '</button>'; }).join("") + '</div>' +
         '<div class="hint">Saved on this device; applies across the whole app instantly.</div>';
-      document.querySelectorAll("#appr [data-theme]").forEach(function (x) { x.onclick = function () { S.ui.theme = x.dataset.theme; saveUI(); applyTheme(); draw(); }; });
+      document.querySelectorAll("#appr [data-acc]").forEach(function (x) { x.onclick = function () { S.ui.accent = x.dataset.acc; saveUI(); applyTheme(); draw(); }; });
+      var hg2 = document.getElementById("ap-hexgo2");
+      if (hg2) hg2.onclick = function () {
+        var v = (document.getElementById("ap-hex2").value || "").trim();
+        if (!hexRGB(v)) { toast("That is not a colour code. It looks like #0F4C81."); return; }
+        S.ui.accent = v.charAt(0) === "#" ? v : "#" + v; saveUI(); applyTheme(); draw();
+      };
+      document.querySelectorAll("#appr [data-theme]").forEach(function (x) { x.onclick = function () { S.ui.theme = x.dataset.theme; if (S.ui.theme === "colorful" && !hexRGB(S.ui.accent)) S.ui.accent = ACCENTS[0][0]; saveUI(); applyTheme(); draw(); }; });
       document.querySelectorAll("#appr [data-font]").forEach(function (x) { x.style.fontFamily = fontStack(x.dataset.font); x.onclick = function () { S.ui.font = x.dataset.font; saveUI(); applyTheme(); draw(); }; });
       document.querySelectorAll("#appr [data-size]").forEach(function (x) { x.onclick = function () { S.ui.size = x.dataset.size; saveUI(); applyFontScale(); draw(); }; });
     }
