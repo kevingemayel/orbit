@@ -1104,7 +1104,7 @@
       { t: "Custom fields (your own boxes)", h: "<p>Orbit's forms already have the usual boxes, but every business is a little different. <b>Custom fields</b> let you add your own boxes to a form.</p><ol><li>Open <b>Settings &rsaquo; Custom Fields</b>.</li><li>Pick where the box should appear: Contacts, Projects or Products.</li><li>Choose the kind of box - text, number, date, a dropdown of choices, or a simple yes/no - give it a name, and (if you want) make it required.</li></ol><p>Your new box then appears on that form under &ldquo;More details&rdquo; and is saved with every record, just like the built-in ones.</p>" },
       { t: "Renaming words (terminology)", h: "<p>Not every business uses the same words. If you say &ldquo;Suppliers&rdquo; where Orbit says &ldquo;Vendors&rdquo;, you can change it.</p><p>Open <b>Settings &rsaquo; Terminology</b>, find the word, and type what you would rather it said. The whole app - menus, headings, app names - updates to your word, and only for your company. It is cosmetic: it changes the label, not how anything works.</p>" },
       { t: "Automatic reminders (automations)", h: "<p><b>Automations</b> are little robots that watch your data and drop a note in the bell when something needs attention, so you do not have to remember to check.</p><ol><li>Open <b>Settings &rsaquo; Automations</b>.</li><li>Switch on the reminders you want: an <b>overdue invoice</b>, a <b>bill due soon</b>, a <b>project deadline</b> approaching, or a <b>quotation</b> going stale with no reply.</li><li>Set how many days each should trigger at, and save. Use <b>Run now</b> to test.</li></ol><p>They run once a day and are smart enough never to nag you twice about the same thing on the same day.</p>" },
-      { t: "Backups, and proving one works", h: "<p>Every company on Orbit gets a copy of itself taken automatically, kept, and downloadable. <b>Settings &rsaquo; Backups</b> is where you set how often and how many to keep, and where you press <span class=\"man-key\">Back up now</span> before doing anything you are nervous about.</p><p><b>What is in one.</b> Every row of every table that belongs to your company. Not a list somebody wrote down once: Orbit walks the database each time it runs and takes everything carrying your company, plus everything hanging off those rows, so a feature added next year is in the backup the day it exists.</p><p><b>What is not.</b> The files themselves. Photographs, drawings and PDFs live in file storage and the backup carries the index rather than the contents, which is what keeps a backup a single file you can email instead of a disc you cannot. Keep a copy of those separately.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">A backup nobody has restored is not a backup</div><p>So the restore is a button, not a procedure in a document. <span class=\"man-key\">Restore</span> builds a <b>new company</b> from the file, beside the one you have and never over it, then tells you how many rows came back against how many the file holds. Do it once a quarter. If the two numbers match, you know. If they do not, you have found out on a quiet afternoon rather than on the worst day of the year.</p></div></div><p>When you are finished looking at a restored copy, open it in <b>Settings &rsaquo; Companies</b> and discard it. Only a company that a restore created can be discarded that way, so there is no path from that button to your real books.</p><p><span class=\"man-key\">Download</span> gives you the whole thing as one file. Keep it somewhere that is not this computer and not this account, because the copy nobody can take away from you is the one you are holding.</p>" },
+      { t: "Backups: one file, on your machine", h: "<p><b>Settings &rsaquo; Backups</b>, then <span class=\"man-key\">Back up now, with the files</span>. You get a <b>zip file</b> saved wherever you keep things. Do it before anything you are nervous about, and on whatever day of the month you will remember.</p><p><b>What is inside it.</b> <code>data.json</code> is every record belonging to your company. Orbit works out what that means each time it runs, by walking the database, so a feature added next year is in the backup the day it exists. <code>files/</code> is the attachments themselves, the actual photographs, drawings and PDFs. And a readme saying what is what, for whoever opens it in five years.</p><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing is kept in the cloud, on purpose</div><p>A backup stored inside the system it protects survives somebody deleting a record and nothing else, which is the case it exists for. So Orbit keeps only the <b>note</b> that you took one, and the copy that protects you is the one in your hand. Move it off the computer that made it.</p></div></div><p><b>Putting it back.</b> <span class=\"man-key\">Restore from a backup file</span>, choose the zip, give the copy a name. It builds a <b>new company</b> beside the one you have and never writes over it, puts every record back with new identifiers, re-uploads every attachment, and then tells you how many rows and files came back against how many the file holds. That last number is the only honest way to know a backup works.</p><p>Do a restore once a quarter even when nothing is wrong. If the counts match, you know. If they do not, you have found out on a quiet afternoon instead of on the worst day of the year. When you are done looking, discard the copy from <b>Settings &rsaquo; Companies</b>; only a company that a restore created can be discarded that way, so there is no path from that button to your real books.</p><p><b>Data only, no files</b> gives you a much smaller zip with just the records, which is handy for a quick copy before an import. It is not a full backup and the screen says so.</p>" },
       { t: "Somebody asks what you hold about them", h: "<p>Sooner or later a customer, an ex-employee or someone whose details you were given writes and asks for a copy of everything you hold about them, or asks you to delete it. In the UK and the EU you have <b>one month</b> to answer, and &ldquo;we could not work out where it all is&rdquo; is not an answer.</p><p><b>Settings &rsaquo; Privacy &amp; data requests</b> does both.</p><ol><li>Choose whether they are a contact, an employee or a lead, and search for them.</li><li><span class=\"man-key\">Export their data</span> gathers every record in this company that names them or carries their email address, as one file you can send back.</li><li><span class=\"man-key\">Erase them</span> removes the person - name, email, phone, address - from every record they appear in.</li></ol><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:shield}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Erasing does not touch the books</div><p>Invoices, ledger entries and payments are kept: tax law requires them, and the right to erasure has an explicit exception for exactly that. What changes is that they point at an anonymous record instead of a person. If you delete an invoice to satisfy a privacy request you break the law you were trying to obey.</p></div></div><p>Every export and every erasure is logged on the same screen, permanently. That log is what you show when someone asks whether you answered.</p><p>Underneath sits the <b>record of processing activities</b>: what personal data the business holds, why it is allowed to, how long it keeps it, and who else touches it. It is the first document asked for in any investigation. Print it and keep it with your policies.</p>" },
       { t: "Your calendar in Google or Outlook, and theirs in Orbit", h: "<p>Field and sales people live in the calendar on their phone. A booking they cannot see there is a booking they miss. So it goes both ways, and neither direction needs you to sign in to Google or Microsoft.</p><p>Open the <b>Calendar</b> and press <span class=\"man-key\">Sync</span>.</p><ol><li><b>Orbit into your calendar app.</b> Copy the address shown and add it as a subscribed calendar: in Google that is <i>Other calendars &rsaquo; From URL</i>, in Outlook <i>Add calendar &rsaquo; Subscribe from web</i>, on an iPhone <i>Calendars &rsaquo; Add subscribed calendar</i>. Your appointments and diary entries appear there and keep themselves up to date.</li><li><b>Your calendar into Orbit.</b> Paste your own secret iCalendar address - in Google, <i>Settings &rsaquo; your calendar &rsaquo; Secret address in iCal format</i>. Every hour Orbit reads it, and when you are busy shows on the Orbit calendar so nobody books a site visit on top of it.</li></ol><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:lock}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Two things worth knowing</div><p>Coming in, Orbit keeps <b>only when you are busy</b>, never who with or about what. Going out, that address is the only thing protecting your diary: anyone who has it can read it, so treat it like a password. If it gets out, <span class=\"man-key\">Create a new address</span> kills the old one at once.</p></div></div>" },
       { t: "Document numbers", h: "<p>Every invoice, order and certificate gets a number so you can refer to it. <b>Settings &rsaquo; Document Numbering</b> lets you choose the style: the <b>prefix</b> (like INV), whether to include the <b>year</b>, and how many <b>digits</b> the running number has (so you get INV/2026/0001). Changes only affect new documents, and each company can have its own style.</p>" },
@@ -1658,7 +1658,7 @@
       { i: "globe", n: "Portal Access", l: "Settings", d: "Let a customer or supplier log in to their own limited view." },
       { i: "hash", n: "Document Numbering", l: "Settings", d: "How invoices, orders and certificates are numbered." },
       { i: "upload", n: "Import Data", l: "Settings", d: "Bring customers, products and more in from a spreadsheet." },
-      { i: "shield", n: "Backups", l: "Settings", d: "How often a copy of everything is taken, download one, and prove it restores." },
+      { i: "shield", n: "Backups", l: "Settings", d: "Download the whole company as one zip, records and attachments, and put it back." },
       { i: "shield", n: "Privacy & data requests", l: "Settings", d: "Answer a subject access request, erase a person, and see what you hold about whom." },
       { i: "plus", n: "Custom Fields", l: "Settings", d: "Add your own boxes to Contacts, Projects or Products." },
       { i: "text", n: "Terminology", l: "Settings", d: "Rename words to match your business." },
@@ -13160,6 +13160,101 @@
     var example = spec.fields.map(function (f) { return csvCell(f[3] === "num" ? "0" : ("Example " + f[1])); }).join(",");
     return "﻿" + header + "\r\n" + example;
   }
+  // ============================ ZIP =========================================
+  // A zip writer and reader in about a hundred lines, with no library.
+  //
+  // Orbit is one file with no build step, and a backup is the last thing that
+  // should depend on a script loaded from somebody else's server. The format
+  // is old and simple: each file gets a small header, then the bytes, then a
+  // directory at the end listing where everything is.
+  //
+  // Compression is the browser's own CompressionStream, which every current
+  // browser has. Where it is missing, files are stored uncompressed: a bigger
+  // file is a far better outcome than no backup.
+  var CRC_T = (function () {
+    var t = new Uint32Array(256), c, i, k;
+    for (i = 0; i < 256; i++) { c = i; for (k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[i] = c >>> 0; }
+    return t;
+  })();
+  function crc32(buf) {
+    var c = 0xFFFFFFFF;
+    for (var i = 0; i < buf.length; i++) c = CRC_T[(c ^ buf[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+  }
+  async function deflateRaw(bytes) {
+    if (typeof CompressionStream === "undefined") return null;
+    try {
+      var cs = new CompressionStream("deflate-raw");
+      var ab = await new Response(new Blob([bytes]).stream().pipeThrough(cs)).arrayBuffer();
+      return new Uint8Array(ab);
+    } catch (e) { return null; }
+  }
+  async function inflateRaw(bytes) {
+    var ds = new DecompressionStream("deflate-raw");
+    var ab = await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new Uint8Array(ab);
+  }
+  function dosTime(d) {
+    return ((d.getHours() << 11) | (d.getMinutes() << 5) | (Math.floor(d.getSeconds() / 2))) & 0xFFFF;
+  }
+  function dosDate(d) {
+    return (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+  }
+  // entries: [{name, bytes:Uint8Array, store:boolean}]
+  async function zipBuild(entries, onProgress) {
+    var parts = [], central = [], offset = 0, now = new Date(), enc = new TextEncoder();
+    for (var i = 0; i < entries.length; i++) {
+      var e = entries[i], data = e.bytes, crc = crc32(data), usize = data.length;
+      var method = 0, out = data;
+      if (!e.store) { var z = await deflateRaw(data); if (z && z.length < usize) { out = z; method = 8; } }
+      var name = enc.encode(e.name);
+      var lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true);
+      lh.setUint16(8, method, true); lh.setUint16(10, dosTime(now), true); lh.setUint16(12, dosDate(now), true);
+      lh.setUint32(14, crc, true); lh.setUint32(18, out.length, true); lh.setUint32(22, usize, true);
+      lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+      parts.push(new Uint8Array(lh.buffer), name, out);
+      var ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+      ch.setUint16(8, 0x0800, true); ch.setUint16(10, method, true);
+      ch.setUint16(12, dosTime(now), true); ch.setUint16(14, dosDate(now), true);
+      ch.setUint32(16, crc, true); ch.setUint32(20, out.length, true); ch.setUint32(24, usize, true);
+      ch.setUint16(28, name.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true);
+      ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true);
+      ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), name);
+      offset += 30 + name.length + out.length;
+      if (onProgress) onProgress(i + 1, entries.length);
+    }
+    var cdStart = offset, cdSize = central.reduce(function (s, p) { return s + p.length; }, 0);
+    var eo = new DataView(new ArrayBuffer(22));
+    eo.setUint32(0, 0x06054b50, true); eo.setUint16(4, 0, true); eo.setUint16(6, 0, true);
+    eo.setUint16(8, entries.length, true); eo.setUint16(10, entries.length, true);
+    eo.setUint32(12, cdSize, true); eo.setUint32(16, cdStart, true); eo.setUint16(20, 0, true);
+    return new Blob(parts.concat(central, [new Uint8Array(eo.buffer)]), { type: "application/zip" });
+  }
+  // returns { name: Uint8Array }
+  async function zipRead(arrayBuffer) {
+    var u = new Uint8Array(arrayBuffer), dv = new DataView(arrayBuffer), dec = new TextDecoder();
+    var eocd = -1;
+    for (var i = u.length - 22; i >= 0 && i > u.length - 66000; i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+    if (eocd < 0) throw new Error("That is not a zip file.");
+    var count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true), p = cdOff, out = {};
+    for (var n = 0; n < count; n++) {
+      if (dv.getUint32(p, true) !== 0x02014b50) break;
+      var method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+      var nameLen = dv.getUint16(p + 28, true), extraLen = dv.getUint16(p + 30, true), cmtLen = dv.getUint16(p + 32, true);
+      var lho = dv.getUint32(p + 42, true);
+      var name = dec.decode(u.subarray(p + 46, p + 46 + nameLen));
+      var lnLen = dv.getUint16(lho + 26, true), lxLen = dv.getUint16(lho + 28, true);
+      var dstart = lho + 30 + lnLen + lxLen;
+      var raw = u.subarray(dstart, dstart + csize);
+      out[name] = method === 8 ? await inflateRaw(raw) : raw.slice();
+      p += 46 + nameLen + extraLen + cmtLen;
+    }
+    return out;
+  }
+
   // ============================ BACKUPS ======================================
   // A backup nobody has restored is not a backup, so the restore is a button on
   // this screen rather than a procedure in a document. It always restores into
@@ -13172,120 +13267,216 @@
     return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? Math.round(n / 1024) + " KB" : n + " bytes";
   }
   function bkWhen(t) { return t ? String(t).slice(0, 16).replace("T", " ") : "never"; }
+  // ============================ BACKUPS ======================================
+  // The backup is a ZIP FILE ON YOUR MACHINE, not a copy in the cloud, for two
+  // reasons that are the whole point:
+  //
+  //   A backup without the photographs and drawings is not the company. Half of
+  //   a site visit or a facade job is the attachments.
+  //
+  //   A backup stored inside the database it protects survives somebody
+  //   deleting a record and nothing else, which is the case it exists for.
+  //
+  // So: the data as one JSON document, every attachment beside it, a readme,
+  // zipped in the browser and saved wherever you keep things. Orbit keeps only
+  // the note that you took it.
+  var BK_EVERY = [[24, "Every day"], [72, "Every 3 days"], [168, "Every week"], [336, "Every 2 weeks"], [720, "Every month"]];
+  function bkSize(n) {
+    n = Number(n) || 0;
+    return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? Math.round(n / 1024) + " KB" : n + " bytes";
+  }
+  function bkWhen(t) { return t ? String(t).slice(0, 16).replace("T", " ") : "never"; }
+  function bkSay(msg) { var el = document.getElementById("bk-say"); if (el) el.innerHTML = msg; }
+
   async function renderBackups() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Backups") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
     var cid = S.company.id;
     var st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data;
     if (!st) {
-      await sb.from("backup_settings").insert({ company_id: cid, enabled: true, every_hours: 24, keep_last: 14, next_run_at: new Date().toISOString() });
-      st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data || { enabled: true, every_hours: 24, keep_last: 14 };
+      await sb.from("backup_settings").insert({ company_id: cid, enabled: true, every_hours: 168, keep_last: 7, next_run_at: new Date().toISOString() });
+      st = { enabled: true, every_hours: 168 };
     }
-    // never select the payload in a list: it is the whole company
-    var list = (await sb.from("backups").select("id,created_at,kind,table_count,row_count,size_bytes,verified_at,verify_result")
-      .eq("company_id", cid).order("created_at", { ascending: false }).limit(60)).data || [];
+    var log = (await sb.from("backups").select("*").eq("company_id", cid).order("created_at", { ascending: false }).limit(30)).data || [];
+    var files = (await sb.from("media").select("id", { count: "exact", head: true }).eq("company_id", cid)).count || 0;
+    var due = st.last_run_at ? (Date.now() - new Date(st.last_run_at).getTime()) / 3600000 > Number(st.every_hours || 168) : true;
 
     document.getElementById("o-body").innerHTML =
-      '<div class="card"><h3 class="cp-sec">How often</h3>' +
-      '<div class="sub" style="max-width:78ch;margin:-4px 0 12px">A copy of <b>everything belonging to this company</b> is taken on a schedule and kept here. ' +
-      'Each one is a single file you can download and keep somewhere else, which is the only copy nobody can take away from you.</div>' +
+      (due ? '<div class="card" style="border-left:3px solid var(--bad)"><h3 class="cp-sec" style="margin-top:0">' +
+        (st.last_run_at ? "It has been a while" : "You have never taken a backup") + '</h3>' +
+        '<div class="sub">' + (st.last_run_at ? "The last one was " + esc(bkWhen(st.last_run_at)) + "." : "Nothing about this company exists anywhere except here.") +
+        ' Press the button below and keep the file somewhere that is not this computer.</div></div>' : "") +
+
+      '<div class="card"><h3 class="cp-sec">Take a backup</h3>' +
+      '<div class="sub" style="max-width:80ch;margin:-4px 0 12px">One <b>zip file</b>, saved to this machine. Inside it: every record belonging to <b>' + esc(S.company.name) + '</b> as a single document, ' +
+      '<b>' + files + ' attachment' + (files === 1 ? "" : "s") + '</b> (the photographs, drawings and PDFs themselves, not a list of them), and a readme explaining what is what.</div>' +
+      '<div class="o-note" id="bk-say">Nothing is kept in the cloud. The copy that protects you is the one you are holding.</div>' +
+      '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
+      '<button class="btn pri" id="bk-go">Back up now, with the files</button>' +
+      '<button class="btn" id="bk-godata">Data only, no files</button>' +
+      '<label class="btn" style="cursor:pointer">Restore from a backup file<input type="file" id="bk-file" accept=".zip,.json" style="display:none"></label>' +
+      '</div></div>' +
+
+      '<div class="card"><h3 class="cp-sec">Remind me</h3>' +
       '<div class="row2" style="align-items:flex-end">' +
-      '<div><label>Take a backup</label><select id="bk-every">' + BK_EVERY.map(function (e) { return '<option value="' + e[0] + '"' + (Number(st.every_hours) === e[0] ? " selected" : "") + '>' + e[1] + '</option>'; }).join("") + '</select></div>' +
-      '<div><label>Keep the last</label><select id="bk-keep">' + BK_KEEP.map(function (k) { return '<option value="' + k + '"' + (Number(st.keep_last) === k ? " selected" : "") + '>' + k + ' backups</option>'; }).join("") + '</select></div></div>' +
-      '<div class="o-chkline"><input type="checkbox" id="bk-on"' + (st.enabled ? " checked" : "") + '><label for="bk-on">Take them automatically</label></div>' +
-      '<div class="sub" style="margin-top:8px">Last taken <b>' + esc(bkWhen(st.last_run_at)) + '</b>. Next due <b>' + esc(bkWhen(st.next_run_at)) + '</b>. ' +
-      'Holding <b>' + list.length + '</b>, ' + esc(bkSize(list.reduce(function (s2, x) { return s2 + Number(x.size_bytes || 0); }, 0))) + ' if you downloaded them all.' +
-      (st.last_error ? ' <span style="color:var(--bad-t)">Last attempt failed: ' + esc(st.last_error) + '</span>' : '') + '</div>' +
-      '<div style="display:flex;gap:8px;margin-top:12px"><button class="btn pri" id="bk-now">Back up now</button><button class="btn" id="bk-save">Save the schedule</button></div></div>' +
+      '<div><label>Nudge me to take one</label><select id="bk-every">' + BK_EVERY.map(function (e) { return '<option value="' + e[0] + '"' + (Number(st.every_hours) === e[0] ? " selected" : "") + '>' + e[1] + '</option>'; }).join("") + '</select></div>' +
+      '<div><div class="o-chkline"><input type="checkbox" id="bk-on"' + (st.enabled ? " checked" : "") + '><label for="bk-on">Remind me at all</label></div></div></div>' +
+      '<div class="sub" style="margin-top:8px">A reminder lands in the bell. Orbit cannot put a file on your computer by itself, so this is the honest version of a schedule.</div>' +
+      '<div style="margin-top:10px"><button class="btn" id="bk-save">Save</button></div></div>' +
 
-      '<div class="card"><h3 class="cp-sec">The backups you have</h3>' +
-      (list.length ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Taken</th><th></th><th class="num">Tables</th><th class="num">Rows</th><th class="num">Size</th><th>Checked</th><th></th></tr></thead><tbody>' +
-        list.map(function (b) {
-          var v = b.verify_result || {};
-          return '<tr><td><b>' + esc(bkWhen(b.created_at)) + '</b></td>' +
-            '<td><span class="badge' + (b.kind === "scheduled" ? "" : " unpaid") + '">' + (b.kind === "scheduled" ? "Automatic" : "By hand") + '</span></td>' +
-            '<td class="num">' + (b.table_count || 0) + '</td><td class="num">' + (b.row_count || 0) + '</td><td class="num">' + esc(bkSize(b.size_bytes)) + '</td>' +
-            '<td class="muted">' + (b.verified_at ? esc(bkWhen(b.verified_at)) + (v.checksum_matches === false ? ' <span style="color:var(--bad-t)">failed</span>' : ' <span style="color:var(--good-t)">good</span>') : "not yet") + '</td>' +
-            '<td style="text-align:right;white-space:nowrap">' +
-            '<button class="btn sm bk-dl" data-id="' + b.id + '" data-at="' + esc(String(b.created_at).slice(0, 10)) + '">Download</button> ' +
-            '<button class="btn sm bk-ck" data-id="' + b.id + '">Check</button> ' +
-            '<button class="btn sm bk-rs" data-id="' + b.id + '" data-at="' + esc(bkWhen(b.created_at)) + '">Restore</button> ' +
-            '<button class="btn sm bk-rm" data-id="' + b.id + '" style="color:var(--bad-t)">Delete</button></td></tr>';
-        }).join("") + '</tbody></table></div>'
-        : '<div class="sub">None yet. Press <b>Back up now</b> and one appears here in a few seconds.</div>') +
-      '</div>' +
-
-      '<div class="card"><h3 class="cp-sec">What is in one, and what is not</h3>' +
-      '<div class="sub" style="max-width:78ch">' +
-      '<p><b>In it:</b> every row of every table that belongs to this company. Not a list somebody wrote down: Orbit walks the database each time and takes everything with your company on it, plus everything hanging off those rows, so a table added next year is in the backup the day it exists.</p>' +
-      '<p><b>Not in it:</b> the files themselves. Photographs, drawings and PDFs live in file storage, and the backup carries the index of them rather than the contents, so that a backup stays a file you can email rather than a disc you cannot. Keep a copy of the files separately.</p>' +
-      '<p><b>Restoring</b> always builds a <b>new company</b> beside the old one, never over it, and then tells you how many rows came back against how many the file holds. That is the only way to know a backup works: put it back and count.</p>' +
-      '</div></div>';
+      '<div class="card"><h3 class="cp-sec">What you have taken</h3>' +
+      (log.length ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Taken</th><th>By</th><th class="num">Tables</th><th class="num">Rows</th><th class="num">Files</th><th class="num">Size</th><th>Saved as</th></tr></thead><tbody>' +
+        log.map(function (b) {
+          return '<tr><td><b>' + esc(bkWhen(b.created_at)) + '</b></td><td class="muted">' + esc((b.taken_by_email || "").split("@")[0]) + '</td>' +
+            '<td class="num">' + (b.table_count || 0) + '</td><td class="num">' + (b.row_count || 0) + '</td>' +
+            '<td class="num">' + (b.file_count == null ? "-" : b.file_count) + '</td><td class="num">' + esc(bkSize(b.size_bytes)) + '</td>' +
+            '<td class="muted" style="font-size:11.5px">' + esc(b.filename || "") + '</td></tr>';
+        }).join("") + '</tbody></table></div>' +
+        '<div class="sub" style="margin-top:8px">This is the record that a backup was taken, not the backup. Those are on the machines of the people who took them.</div>'
+        : '<div class="sub">Nothing yet.</div>') + '</div>';
 
     document.getElementById("bk-save").onclick = async function () {
       var r = await sb.from("backup_settings").update({
         enabled: document.getElementById("bk-on").checked,
-        every_hours: parseInt(gv("bk-every"), 10) || 24,
-        keep_last: parseInt(gv("bk-keep"), 10) || 14, updated_at: new Date().toISOString()
+        every_hours: parseInt(gv("bk-every"), 10) || 168, updated_at: new Date().toISOString()
       }).eq("company_id", cid);
       if (r.error) { toast(errMsg(r.error)); return; }
       toast("Saved"); renderBackups();
     };
-    document.getElementById("bk-now").onclick = async function () {
-      var b = this; b.disabled = true; b.textContent = "Taking a copy...";
-      var r = await sb.rpc("backup_run", { p_company: cid, p_kind: "manual" });
-      b.disabled = false; b.textContent = "Back up now";
-      if (r.error) { toast(errMsg(r.error)); return; }
-      toast("Backed up"); renderBackups();
-    };
-    document.querySelectorAll(".bk-dl").forEach(function (b) {
-      b.onclick = async function () {
-        b.disabled = true; b.textContent = "Preparing...";
-        var r = await sb.from("backups").select("payload").eq("id", b.dataset.id).maybeSingle();
-        b.disabled = false; b.textContent = "Download";
-        if (r.error || !r.data) { toast(r.error ? errMsg(r.error) : "Could not read that backup"); return; }
-        downloadBlob("orbit-backup-" + (S.company.name || "company").replace(/[^\w]+/g, "-").toLowerCase() + "-" + b.dataset.at + ".json",
-          JSON.stringify(r.data.payload), "application/json");
-        toast("Downloaded. Keep it somewhere that is not this computer.");
-      };
-    });
-    document.querySelectorAll(".bk-ck").forEach(function (b) {
-      b.onclick = async function () {
-        b.disabled = true; b.textContent = "Checking...";
-        var r = await sb.rpc("backup_verify", { p_backup: b.dataset.id });
-        b.disabled = false; b.textContent = "Check";
-        if (r.error) { toast(errMsg(r.error)); return; }
-        alert((r.data && r.data.verdict) || "Checked.");
-        renderBackups();
-      };
-    });
-    document.querySelectorAll(".bk-rm").forEach(function (b) {
-      b.onclick = async function () {
-        if (!confirm("Delete this backup? The others are untouched.")) return;
-        var r = await sb.from("backups").delete().eq("id", b.dataset.id);
-        if (r.error) { toast(errMsg(r.error)); return; }
-        toast("Deleted"); renderBackups();
-      };
-    });
-    document.querySelectorAll(".bk-rs").forEach(function (b) { b.onclick = function () { bkRestoreModal(b.dataset.id, b.dataset.at); }; });
+    document.getElementById("bk-go").onclick = function () { bkTake(true); };
+    document.getElementById("bk-godata").onclick = function () { bkTake(false); };
+    document.getElementById("bk-file").onchange = function () { if (this.files[0]) bkRestoreFile(this.files[0]); };
   }
-  function bkRestoreModal(id, at) {
-    var inner = '<div class="o-note">This builds a <b>new company</b> from the backup taken on <b>' + esc(at) + '</b>. Nothing that exists now is touched or overwritten. ' +
-      'Use it to check the backup really works, or to recover after something has gone wrong.</div>' +
-      '<div><label>Name for the restored copy</label><input id="bk-name" value="' + esc((S.company.name || "Company") + " (restored " + at.slice(0, 10) + ")") + '"></div>' +
-      '<div class="sub">It can take a minute. When it finishes you will be told how many rows came back against how many the file holds, which is the only honest way to know a backup worked.</div>';
-    var m = plotModal("Restore into a new company", inner, async function () {
-      var nm = gv("bk-name"); if (!nm || nm.length < 2) { toast("Give it a name"); return; }
+
+  // Build the zip: the data, then every attachment, then a readme.
+  async function bkTake(withFiles) {
+    var cid = S.company.id, t0 = Date.now();
+    var btns = document.querySelectorAll("#bk-go,#bk-godata");
+    btns.forEach(function (b) { b.disabled = true; });
+    try {
+      bkSay("Gathering every record...");
+      var built = await sb.rpc("backup_build", { p_company: cid });
+      if (built.error) throw new Error(errMsg(built.error));
+      var row = Array.isArray(built.data) ? built.data[0] : built.data;
+      if (!row || !row.payload) throw new Error("Nothing came back from the database.");
+      var doc = row.payload;
+      var enc = new TextEncoder();
+      var entries = [{ name: "data.json", bytes: enc.encode(JSON.stringify(doc)) }];
+      var fileCount = 0, fileBytes = 0;
+
+      if (withFiles) {
+        var med = (await sb.from("media").select("id,path,mime,kind,entity,caption").eq("company_id", cid)).data || [];
+        for (var i = 0; i < med.length; i++) {
+          bkSay("Adding attachment <b>" + (i + 1) + "</b> of <b>" + med.length + "</b>...");
+          try {
+            var dl = await sb.storage.from(MEDIA_BUCKET).download(med[i].path);
+            if (dl.error || !dl.data) continue;
+            var ab = await dl.data.arrayBuffer();
+            var ext = (med[i].path.split(".").pop() || "bin").split("?")[0].slice(0, 8);
+            // named by the record it belongs to, so a restore can find it again
+            entries.push({ name: "files/" + med[i].id + "." + ext, bytes: new Uint8Array(ab), store: true });
+            fileCount++; fileBytes += ab.byteLength;
+          } catch (e) { /* one unreadable file must not lose the whole backup */ }
+        }
+      }
+
+      entries.push({
+        name: "README.txt", bytes: enc.encode(
+          "ORBIT BACKUP\r\n\r\n" +
+          "Company:   " + (S.company.name || "") + "\r\n" +
+          "Taken:     " + new Date().toISOString() + "\r\n" +
+          "Records:   " + row.row_count + " rows across " + row.table_count + " tables\r\n" +
+          "Files:     " + fileCount + "\r\n\r\n" +
+          "data.json  every record belonging to this company.\r\n" +
+          "files/     the attachments, named by their record.\r\n\r\n" +
+          "TO PUT IT BACK: open Orbit, Settings, Backups, and choose\r\n" +
+          "'Restore from a backup file'. It builds a NEW company from this\r\n" +
+          "file and never writes over the one you have.\r\n\r\n" +
+          "Keep this file somewhere that is not the computer it was made on.\r\n")
+      });
+
+      bkSay("Packing " + entries.length + " item" + (entries.length === 1 ? "" : "s") + "...");
+      var blob = await zipBuild(entries, function (n, tot) { if (n % 10 === 0) bkSay("Packing <b>" + n + "</b> of <b>" + tot + "</b>..."); });
+      var fname = "orbit-backup-" + (S.company.name || "company").replace(/[^\w]+/g, "-").toLowerCase() + "-" + today() + ".zip";
+      var url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = fname; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+
+      await sb.rpc("backup_log", {
+        p_company: cid, p_tables: row.table_count, p_rows: row.row_count, p_files: withFiles ? fileCount : null,
+        p_bytes: blob.size, p_files_bytes: fileBytes, p_checksum: row.checksum, p_manifest: row.manifest, p_filename: fname
+      });
+      bkSay('Saved <b>' + fname + '</b>, ' + bkSize(blob.size) + ', in ' + Math.round((Date.now() - t0) / 1000) + 's. ' +
+        '<b>Now move it off this computer.</b> A backup that lives beside the thing it protects is not a backup.');
+      toast("Backup saved");
+      setTimeout(renderBackups, 2500);
+    } catch (e) {
+      bkSay('<span style="color:var(--bad-t)">That did not finish: ' + esc((e && e.message) || "unknown error") + '</span>');
+    }
+    btns.forEach(function (b) { b.disabled = false; });
+  }
+
+  // Read a backup file and put it back, into a new company.
+  async function bkRestoreFile(file) {
+    var name = (file.name || "").toLowerCase();
+    var inner = '<div class="o-note" id="bk-rsay">Reading <b>' + esc(file.name) + '</b>...</div>' +
+      '<div><label>Name for the restored copy</label><input id="bk-rname" value="' + esc((S.company.name || "Company") + " (restored)") + '"></div>' +
+      '<div class="sub">This builds a <b>new company</b> beside the one you have. Nothing that exists now is touched. ' +
+      'When it finishes you are told how many rows and files came back against how many the file holds, which is the only honest way to know a backup works.</div>';
+    var m = plotModal("Restore from a backup file", inner, async function () {
+      var nm = gv("bk-rname"); if (!nm || nm.length < 2) { toast("Give it a name"); return; }
       var btn = m.querySelector("[data-s]"); btn.disabled = true; btn.textContent = "Restoring...";
-      var r = await sb.rpc("backup_restore", { p_backup: id, p_new_name: nm });
-      btn.disabled = false; btn.textContent = "Save";
-      if (r.error) { toast(errMsg(r.error)); return; }
-      var d = r.data || {};
-      m.remove();
-      var extra = d.rows_failed > 0 ? "\n\nRows that did not come back: " + d.rows_failed + "\n" + JSON.stringify(d.failures || {}, null, 1) : "";
-      alert(d.verdict + "\n\n" + d.rows_restored + " of " + d.expected_rows + " rows restored into “" + d.name + "”." + extra +
-        "\n\nSwitch to it from the company picker to look around. You can throw the copy away afterwards from Settings, Companies.");
-      renderBackups();
+      function say(s) { var e = m.querySelector("#bk-rsay"); if (e) e.innerHTML = s; }
+      try {
+        var doc = null, zipFiles = null;
+        if (name.slice(-4) === ".zip") {
+          say("Opening the zip...");
+          zipFiles = await zipRead(await file.arrayBuffer());
+          if (!zipFiles["data.json"]) throw new Error("There is no data.json inside that zip.");
+          doc = JSON.parse(new TextDecoder().decode(zipFiles["data.json"]));
+        } else {
+          doc = JSON.parse(await file.text());
+        }
+        say("Putting the records back...");
+        var r = await sb.rpc("backup_restore_doc", { p_payload: doc, p_new_name: nm });
+        if (r.error) throw new Error(errMsg(r.error));
+        var d = r.data || {};
+
+        // the attachments: upload each one under the restored record and point
+        // its row at the new place, because the old path names a company and a
+        // record that no longer apply
+        var fOK = 0, fBad = 0;
+        if (zipFiles) {
+          var med = (await sb.from("media").select("id,entity,entity_id,path").eq("company_id", d.restored_into)).data || [];
+          var byOld = {};
+          Object.keys(zipFiles).forEach(function (k) { if (k.indexOf("files/") === 0) byOld[k.slice(6).split(".")[0]] = k; });
+          // the media rows were remapped, so match on what the old row said
+          var oldRows = (doc.media || []);
+          var oldByPath = {}; oldRows.forEach(function (o) { oldByPath[o.path] = o.id; });
+          for (var i = 0; i < med.length; i++) {
+            say("Putting back attachment <b>" + (i + 1) + "</b> of <b>" + med.length + "</b>...");
+            var oldId = oldByPath[med[i].path];
+            var key = oldId && byOld[oldId];
+            if (!key) { fBad++; continue; }
+            var ext = key.split(".").pop();
+            var newPath = S.company.org_id + "/" + med[i].entity + "/" + med[i].entity_id + "/" + uuid4() + "." + ext;
+            var up = await sb.storage.from(MEDIA_BUCKET).upload(newPath, new Blob([zipFiles[key]]), { upsert: false });
+            if (up.error) { fBad++; continue; }
+            await sb.rpc("backup_fix_media_path", { p_media: med[i].id, p_path: newPath });
+            fOK++;
+          }
+        }
+        m.remove();
+        var msg = d.verdict + "\n\n" + d.rows_restored + " rows restored into “" + d.name + "”.";
+        if (zipFiles) msg += "\n" + fOK + " attachment(s) put back" + (fBad ? ", " + fBad + " could not be" : "") + ".";
+        if (d.rows_failed > 0) msg += "\n\nRows that did not come back: " + d.rows_failed + "\n" + JSON.stringify(d.failures || {}, null, 1);
+        msg += "\n\nSwitch to it from the company picker to look around, and discard it from Settings, Companies when you are done.";
+        alert(msg);
+        renderBackups();
+      } catch (e) {
+        btn.disabled = false; btn.textContent = "Save";
+        say('<span style="color:var(--bad-t)">' + esc((e && e.message) || "That file could not be read.") + '</span>');
+      }
     }, true);
   }
 
@@ -20073,7 +20264,14 @@
           // with the rate, and the home value beside it
           var foreign = p.currency_code && p.currency_code !== cc && p.amount_ccy != null;
           return '<div class="trow tt"><span class="tn">' + esc(fnbTitle(p.method === "change" ? "Change" : (p.method || ""))) +
-            (foreign ? '<span class="tmod">' + esc(p.currency_code) + " " + money(Math.abs(p.amount_ccy)) + " at " + Number(p.fx_rate).toFixed(6).replace(/0+$/, "").replace(/\.$/, "") + '</span>' : "") +
+            // a lira is 0.0000111732 dollars, which is unreadable on a receipt.
+            // Anything that small prints the way people say it: 1 dollar = 89,500 lira.
+            (foreign ? '<span class="tmod">' + esc(p.currency_code) + " " + money(Math.abs(p.amount_ccy)) +
+              (Number(p.fx_rate) > 0
+                ? (Number(p.fx_rate) < 0.01
+                  ? " (1 " + esc(cc) + " = " + money(1 / Number(p.fx_rate)) + " " + esc(p.currency_code) + ")"
+                  : " at " + Number(p.fx_rate).toFixed(6).replace(/0+$/, "").replace(/\.$/, ""))
+                : "") + '</span>' : "") +
             (p.reference ? '<span class="tmod">' + esc(p.reference) + '</span>' : "") +
             (p.split_label ? '<span class="tmod">' + esc(p.split_label) + '</span>' : "") +
             '</span><span class="ta">' + money(p.amount) + '</span></div>';
@@ -20546,7 +20744,8 @@
     }
     async function rateFor(c) {
       if (rates[c] != null) return rates[c];
-      var r = await cashFx(1, c, home, today());
+      // precise, or a lira comes back as zero and the drawer swallows the money
+      var r = await cashFx(1, c, home, today(), { precise: true });
       rates[c] = r.ok ? r.value : null;
       return rates[c];
     }
@@ -25234,12 +25433,17 @@
   // Strict FX for the cash SCREEN: convert `amount` from -> to and report success.
   // Unlike cashToFunc it never silently falls back to 1:1 - a missing rate returns
   // {ok:false} so the Cash Desk can flag it instead of showing a wrong total.
-  async function cashFx(amount, from, to, date) {
+  // opts.precise keeps ten decimals instead of four. Four is right for an
+  // AMOUNT and catastrophic for a RATE: one lira is 0.0000111732 dollars, which
+  // rounds to four places as ZERO, and every lira the till took converted to
+  // nothing at all.
+  async function cashFx(amount, from, to, date, opts) {
+    var dp = (opts && opts.precise) ? 1e10 : 10000;
     var a = Number(amount) || 0;
-    if (!from || !to || from === to) return { ok: true, value: Math.round(a * 10000) / 10000 };
+    if (!from || !to || from === to) return { ok: true, value: Math.round(a * dp) / dp };
     var fc = await sb.rpc("fx_convert", { p_org: S.org.id, p_amount: a, p_from: from, p_to: to, p_date: date, p_type: "spot" });
     if (fc.error || fc.data == null) return { ok: false, value: 0, from: from, to: to };
-    return { ok: true, value: Math.round(Number(fc.data) * 10000) / 10000 };
+    return { ok: true, value: Math.round(Number(fc.data) * dp) / dp };
   }
   // Post a balanced 2-line cash entry (Dr/Cr cash vs an account), tagging a partner on the non-cash leg.
   async function cashPostEntry(dir, cashGl, otherGl, famt, jrnCode, date, ref, narr, partnerTag, sourceType) {
