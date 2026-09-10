@@ -13308,8 +13308,9 @@
         ' Press the button below and keep the file somewhere that is not this computer.</div></div>' : "") +
 
       '<div class="card"><h3 class="cp-sec">Take a backup</h3>' +
-      '<div class="sub" style="max-width:80ch;margin:-4px 0 12px">One <b>zip file</b>, saved to this machine. Inside it: every record belonging to <b>' + esc(S.company.name) + '</b> as a single document, ' +
-      '<b>' + files + ' attachment' + (files === 1 ? "" : "s") + '</b> (the photographs, drawings and PDFs themselves, not a list of them), and a readme explaining what is what.</div>' +
+      '<div class="sub" style="max-width:80ch;margin:-4px 0 12px">One <b>zip file</b>, saved to this machine. Inside it: every record belonging to <b>' + esc(S.company.name) + '</b>, ' +
+      '<b>' + files + ' attachment' + (files === 1 ? "" : "s") + '</b> (the photographs, drawings and PDFs themselves, not a list of them), ' +
+      'the <b>whole shape of the database</b> as SQL, and <b>a copy of Orbit</b>. Given an empty PostgreSQL database, that zip rebuilds the system and puts the company back into it, without this website and without us.</div>' +
       '<div class="o-note" id="bk-say">Nothing is kept in the cloud. The copy that protects you is the one you are holding.</div>' +
       '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">' +
       '<button class="btn pri" id="bk-go">Back up now, with the files</button>' +
@@ -13328,8 +13329,8 @@
       '<div class="sub" style="max-width:80ch">' +
       '<p><b>Somebody deleted something, or an import went wrong.</b> Restore the zip here. It builds a <b>new company beside this one</b>, so you can look at both, take what you need across, or simply work in the restored one. Nothing you have now is touched.</p>' +
       '<p><b>A whole company was deleted.</b> Same thing. The restore does not need the original to exist.</p>' +
-      '<p><b>Orbit itself is gone.</b> The zip holds your data; the shape it goes back into lives in the code. Someone creates an empty Orbit from the repository, signs in, and restores this file into it. The readme inside every zip spells this out, so it does not depend on anyone remembering.</p>' +
-      '<p><b>And if there is no Orbit at all.</b> <code>data.json</code> is plain readable JSON and the attachments are ordinary files. Anything that reads JSON can get your records out. That is why the backup is in this format and not a private one.</p>' +
+      '<p><b>Orbit itself is gone.</b> The zip rebuilds it. Alongside your records it carries <code>rebuild/schema.sql</code>, the entire shape of the database written out as SQL, and <code>rebuild/app/</code>, Orbit itself. Given an empty PostgreSQL database: run the SQL, serve the app, sign up, restore this file. It knows the old organisation no longer exists and puts the company into your new one. The readme inside every zip spells out all five steps, so recovery does not depend on anyone remembering them.</p>' +
+      '<p><b>And if you never want to see Orbit again.</b> <code>data.json</code> is plain readable JSON and the attachments are ordinary files. Anything that reads JSON gets your records out. That is why the backup is in this format and not a private one.</p>' +
       '<p style="margin-bottom:0"><b>Do a restore once a quarter when nothing is wrong.</b> If the counts match, you know it works. If they do not, you have found out on a quiet afternoon rather than on the worst day of the year.</p>' +
       '</div></div>' +
 
@@ -13373,6 +13374,30 @@
       var entries = [{ name: "data.json", bytes: enc.encode(JSON.stringify(doc)) }];
       var fileCount = 0, fileBytes = 0;
 
+      // The shape as well as the contents. Without this the zip could only be
+      // restored into an Orbit that already existed, which is not the case a
+      // backup is for.
+      try {
+        bkSay("Writing down the shape of the database...");
+        var sch = await sb.rpc("backup_schema_sql");
+        if (!sch.error && sch.data) entries.push({ name: "rebuild/schema.sql", bytes: enc.encode(sch.data) });
+      } catch (e) { /* the data still matters more */ }
+
+      // And Orbit itself. It is one page and two files, so the kit is complete:
+      // a database, this schema, this code, these records, these attachments.
+      try {
+        bkSay("Adding a copy of Orbit itself...");
+        var base = location.origin + location.pathname.replace(/[^/]*$/, "");
+        var app = [["index.html", "index.html"], ["js/app.js", "app.js"], ["css/app.css", "app.css"], ["config.js", "config.js"]];
+        for (var ai = 0; ai < app.length; ai++) {
+          try {
+            var rr2 = await fetch(base + app[ai][0] + "?bk=" + Date.now());
+            if (!rr2.ok) continue;
+            entries.push({ name: "rebuild/app/" + app[ai][0], bytes: new Uint8Array(await rr2.arrayBuffer()) });
+          } catch (e2) { }
+        }
+      } catch (e) { }
+
       if (withFiles) {
         var med = (await sb.from("media").select("id,path,mime,kind,entity,caption").eq("company_id", cid)).data || [];
         for (var i = 0; i < med.length; i++) {
@@ -13406,10 +13431,18 @@
           "Files:     " + fileCount + "\r\n" +
           "Checksum:  " + (row.checksum || "") + " (md5 of data.json as written)\r\n\r\n" +
           "WHAT IS IN HERE\r\n" +
-          "  data.json    every record belonging to this company, one JSON object\r\n" +
-          "               per table. Plain text: you can read it in any editor.\r\n" +
-          "  files/       the attachments themselves, named by the record they\r\n" +
-          "               belong to, so they can be matched up again.\r\n\r\n" +
+          "  data.json           every record belonging to this company, one\r\n" +
+          "                      JSON object per table. Plain text: readable in\r\n" +
+          "                      any editor.\r\n" +
+          "  files/              the attachments themselves, named by the record\r\n" +
+          "                      they belong to, so they can be matched up again.\r\n" +
+          "  rebuild/schema.sql  the whole shape of the database as SQL: every\r\n" +
+          "                      table, key, index, function, trigger and access\r\n" +
+          "                      rule, written out at the moment this was taken.\r\n" +
+          "  rebuild/app/        Orbit itself. It is one page and two files.\r\n\r\n" +
+          "This zip is therefore the whole thing. Given an empty PostgreSQL\r\n" +
+          "database you can rebuild the system and put the company back into it,\r\n" +
+          "without this company, this website, or us.\r\n\r\n" +
           "HOW TO PUT IT BACK\r\n\r\n" +
           "1. If Orbit is still running and you can sign in:\r\n" +
           "     Settings > Backups > Restore from a backup file, choose this\r\n" +
@@ -13417,16 +13450,23 @@
           "     one you have and never writes over it, puts every record back,\r\n" +
           "     re-uploads every attachment, and tells you how many rows and\r\n" +
           "     files came back against how many are in this file.\r\n\r\n" +
-          "2. If Orbit itself is gone:\r\n" +
-          "     you need an empty Orbit first. Create a new database from the\r\n" +
-          "     project at github.com/kevingemayel/orbit (supabase/schema.sql,\r\n" +
-          "     then the numbered migrations in order), sign in, then follow\r\n" +
-          "     step 1. This file holds your DATA. The SHAPE it goes back into\r\n" +
-          "     lives in that repository.\r\n\r\n" +
-          "3. If you have no Orbit at all and never will:\r\n" +
+          "2. If Orbit is gone and you are starting from nothing:\r\n" +
+          "     a. Create an empty PostgreSQL database. Supabase is what this\r\n" +
+          "        was built on and is the least work; any PostgreSQL 15 or\r\n" +
+          "        later will do.\r\n" +
+          "     b. Run rebuild/schema.sql into it, once, from top to bottom.\r\n" +
+          "        That creates the entire system, empty.\r\n" +
+          "     c. Serve rebuild/app/ as a website, and point config.js at the\r\n" +
+          "        new database (its URL and its public key).\r\n" +
+          "     d. Sign up in it. The first account becomes the owner.\r\n" +
+          "     e. Settings > Backups > Restore from a backup file, and choose\r\n" +
+          "        this same zip. It knows the old organisation is gone and\r\n" +
+          "        restores into your new one.\r\n\r\n" +
+          "3. If you never want to see Orbit again:\r\n" +
           "     data.json is plain JSON and files/ are ordinary files. Anything\r\n" +
-          "     that reads JSON can get your records out. That is the point of\r\n" +
-          "     keeping it in this format rather than a private one.\r\n\r\n" +
+          "     that reads JSON gets your records out, and any computer opens\r\n" +
+          "     the attachments. That is the point of keeping it in this format\r\n" +
+          "     rather than a private one.\r\n\r\n" +
           "KEEP THIS FILE somewhere that is not the computer it was made on.\r\n" +
           "A copy that sits beside the thing it protects is not a copy.\r\n\r\n" +
           "WHAT IS IN data.json\r\n" + manLines + "\r\n")
