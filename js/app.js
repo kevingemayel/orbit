@@ -13324,6 +13324,15 @@
       '<div class="sub" style="margin-top:8px">A reminder lands in the bell. Orbit cannot put a file on your computer by itself, so this is the honest version of a schedule.</div>' +
       '<div style="margin-top:10px"><button class="btn" id="bk-save">Save</button></div></div>' +
 
+      '<div class="card"><h3 class="cp-sec">If the worst happens</h3>' +
+      '<div class="sub" style="max-width:80ch">' +
+      '<p><b>Somebody deleted something, or an import went wrong.</b> Restore the zip here. It builds a <b>new company beside this one</b>, so you can look at both, take what you need across, or simply work in the restored one. Nothing you have now is touched.</p>' +
+      '<p><b>A whole company was deleted.</b> Same thing. The restore does not need the original to exist.</p>' +
+      '<p><b>Orbit itself is gone.</b> The zip holds your data; the shape it goes back into lives in the code. Someone creates an empty Orbit from the repository, signs in, and restores this file into it. The readme inside every zip spells this out, so it does not depend on anyone remembering.</p>' +
+      '<p><b>And if there is no Orbit at all.</b> <code>data.json</code> is plain readable JSON and the attachments are ordinary files. Anything that reads JSON can get your records out. That is why the backup is in this format and not a private one.</p>' +
+      '<p style="margin-bottom:0"><b>Do a restore once a quarter when nothing is wrong.</b> If the counts match, you know it works. If they do not, you have found out on a quiet afternoon rather than on the worst day of the year.</p>' +
+      '</div></div>' +
+
       '<div class="card"><h3 class="cp-sec">What you have taken</h3>' +
       (log.length ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Taken</th><th>By</th><th class="num">Tables</th><th class="num">Rows</th><th class="num">Files</th><th class="num">Size</th><th>Saved as</th></tr></thead><tbody>' +
         log.map(function (b) {
@@ -13380,19 +13389,47 @@
         }
       }
 
+      // The readme has to be readable by somebody who has never seen Orbit,
+      // years from now, holding only this file. A backup whose recovery
+      // procedure lives in somebody's head is half a backup.
+      var man = row.manifest || {};
+      var manLines = Object.keys(man).sort().map(function (k) { return "  " + k + new Array(Math.max(2, 34 - k.length)).join(" ") + man[k]; }).join("\r\n");
       entries.push({
         name: "README.txt", bytes: enc.encode(
-          "ORBIT BACKUP\r\n\r\n" +
+          "ORBIT BACKUP\r\n" +
+          "============\r\n\r\n" +
           "Company:   " + (S.company.name || "") + "\r\n" +
+          "Currency:  " + (S.company.currency_code || "") + "\r\n" +
           "Taken:     " + new Date().toISOString() + "\r\n" +
+          "Taken by:  " + ((S.user && S.user.email) || "") + "\r\n" +
           "Records:   " + row.row_count + " rows across " + row.table_count + " tables\r\n" +
-          "Files:     " + fileCount + "\r\n\r\n" +
-          "data.json  every record belonging to this company.\r\n" +
-          "files/     the attachments, named by their record.\r\n\r\n" +
-          "TO PUT IT BACK: open Orbit, Settings, Backups, and choose\r\n" +
-          "'Restore from a backup file'. It builds a NEW company from this\r\n" +
-          "file and never writes over the one you have.\r\n\r\n" +
-          "Keep this file somewhere that is not the computer it was made on.\r\n")
+          "Files:     " + fileCount + "\r\n" +
+          "Checksum:  " + (row.checksum || "") + " (md5 of data.json as written)\r\n\r\n" +
+          "WHAT IS IN HERE\r\n" +
+          "  data.json    every record belonging to this company, one JSON object\r\n" +
+          "               per table. Plain text: you can read it in any editor.\r\n" +
+          "  files/       the attachments themselves, named by the record they\r\n" +
+          "               belong to, so they can be matched up again.\r\n\r\n" +
+          "HOW TO PUT IT BACK\r\n\r\n" +
+          "1. If Orbit is still running and you can sign in:\r\n" +
+          "     Settings > Backups > Restore from a backup file, choose this\r\n" +
+          "     zip, give the copy a name. It builds a NEW company beside the\r\n" +
+          "     one you have and never writes over it, puts every record back,\r\n" +
+          "     re-uploads every attachment, and tells you how many rows and\r\n" +
+          "     files came back against how many are in this file.\r\n\r\n" +
+          "2. If Orbit itself is gone:\r\n" +
+          "     you need an empty Orbit first. Create a new database from the\r\n" +
+          "     project at github.com/kevingemayel/orbit (supabase/schema.sql,\r\n" +
+          "     then the numbered migrations in order), sign in, then follow\r\n" +
+          "     step 1. This file holds your DATA. The SHAPE it goes back into\r\n" +
+          "     lives in that repository.\r\n\r\n" +
+          "3. If you have no Orbit at all and never will:\r\n" +
+          "     data.json is plain JSON and files/ are ordinary files. Anything\r\n" +
+          "     that reads JSON can get your records out. That is the point of\r\n" +
+          "     keeping it in this format rather than a private one.\r\n\r\n" +
+          "KEEP THIS FILE somewhere that is not the computer it was made on.\r\n" +
+          "A copy that sits beside the thing it protects is not a copy.\r\n\r\n" +
+          "WHAT IS IN data.json\r\n" + manLines + "\r\n")
       });
 
       bkSay("Packing " + entries.length + " item" + (entries.length === 1 ? "" : "s") + "...");
