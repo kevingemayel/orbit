@@ -1,0 +1,17 @@
+{
+  "name": "Orbit",
+  "short_name": "Orbit",
+  "description": "Business management for the built environment",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f6f4ee",
+  "theme_color": "#16171c",
+  "lang": "en",
+  "icons": [
+    { "src": "icons/orbit-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/orbit-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/orbit-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

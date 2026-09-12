@@ -1,93 +1,47 @@
-/* ===========================================================================
- * Orbit service worker.
- *
- * Purpose: a till and a kitchen screen must keep working when the connection
- * drops, which in Lebanon is not an edge case. This caches the app shell so
- * Orbit LOADS with no network at all. Keeping the data usable offline is the
- * outbox's job, in app.js; this only guarantees there is an app to run.
- *
- * Strategy per resource:
- *   shell (html/css/js)  network first, fall back to cache. A deploy is picked
- *                        up immediately when online, and the last known-good
- *                        copy is used when not.
- *   fonts / cdn          cache first. They change rarely and are big.
- *   supabase / api       never touched. Data goes through the outbox, and a
- *                        stale cached API response would be worse than an
- *                        honest failure.
- * ======================================================================== */
-var VERSION = "orbit-v1";
-var SHELL = [
-  "/", "/index.html", "/css/app.css", "/js/app.js", "/config.js",
-  "/portal.html", "/approve.html"
-];
+// Orbit's service worker. Two jobs, deliberately small:
+//   1. Let the phone install Orbit as an app (a manifest needs a worker).
+//   2. Open with no signal: the shell (page, script, stylesheet, config, the
+//      one library) is kept in a cache and served when the network fails.
+// The network wins whenever it is there, so nobody ever runs a stale build.
+// Nothing from Supabase is ever cached: data, auth and files always go live.
+var CACHE = "orbit-shell-v1";
+var SHELL = ["/", "/index.html", "/css/app.css", "/js/app.js", "/config.js", "/manifest.json", "/portal.html", "/approve.html", "/icons/orbit-192.png", "/icons/orbit-512.png"];
+var LIB_HOSTS = ["cdn.jsdelivr.net", "js.hcaptcha.com", "fonts.googleapis.com", "fonts.gstatic.com"];
+
+function key(req) {
+  // app.js and app.css carry a cache-buster (?t=...) on every load; the cache
+  // keeps one copy per path, not one per second
+  var u = new URL(req.url); u.searchParams.delete("t");
+  return new Request(u.toString(), { mode: "cors", credentials: "omit" });
+}
 
 self.addEventListener("install", function (e) {
-  // Pre-cache what we can; a missing optional file must not fail the install.
-  e.waitUntil(
-    caches.open(VERSION).then(function (c) {
-      return Promise.all(SHELL.map(function (u) {
-        return c.add(new Request(u, { cache: "reload" })).catch(function () { });
-      }));
-    }).then(function () { return self.skipWaiting(); })
-  );
+  e.waitUntil(caches.open(CACHE).then(function (c) { return c.addAll(SHELL).catch(function () { }); }).then(function () { return self.skipWaiting(); }));
 });
-
 self.addEventListener("activate", function (e) {
-  e.waitUntil(
-    caches.keys().then(function (keys) {
-      return Promise.all(keys.filter(function (k) { return k !== VERSION; })
-        .map(function (k) { return caches.delete(k); }));
-    }).then(function () { return self.clients.claim(); })
-  );
+  e.waitUntil(caches.keys().then(function (keys) {
+    return Promise.all(keys.filter(function (k) { return k !== CACHE; }).map(function (k) { return caches.delete(k); }));
+  }).then(function () { return self.clients.claim(); }));
 });
-
-function isShell(url) {
-  return url.origin === self.location.origin &&
-    !/\/api\//.test(url.pathname) &&
-    !/\/functions\//.test(url.pathname);
-}
-function isStatic(url) {
-  return /fonts\.(googleapis|gstatic)\.com|cdn\.jsdelivr\.net/.test(url.host);
-}
-
 self.addEventListener("fetch", function (e) {
   var req = e.request;
-  if (req.method !== "GET") return;                 // writes are the outbox's job
+  if (req.method !== "GET") return;
   var url;
-  try { url = new URL(req.url); } catch (_) { return; }
-  if (/supabase\.co/.test(url.host)) return;        // never cache data
-
-  if (isStatic(url)) {
-    e.respondWith(
-      caches.match(req).then(function (hit) {
-        return hit || fetch(req).then(function (res) {
-          var copy = res.clone();
-          caches.open(VERSION).then(function (c) { c.put(req, copy); });
-          return res;
-        }).catch(function () { return hit; });
-      })
-    );
-    return;
-  }
-
-  if (!isShell(url)) return;
-
-  e.respondWith(
-    fetch(req).then(function (res) {
-      if (res && res.status === 200) {
-        var copy = res.clone();
-        caches.open(VERSION).then(function (c) { c.put(req, copy); });
-      }
-      return res;
-    }).catch(function () {
-      return caches.match(req).then(function (hit) {
-        return hit || caches.match("/index.html") || Response.error();
-      });
-    })
-  );
-});
-
-// The app asks for a fresh shell after a deploy without a hard reload.
-self.addEventListener("message", function (e) {
-  if (e.data === "skipWaiting") self.skipWaiting();
+  try { url = new URL(req.url); } catch (x) { return; }
+  var mine = url.origin === self.location.origin;
+  if (mine && url.pathname.indexOf("/api/") === 0) return;          // the edge functions are live only
+  if (!mine && LIB_HOSTS.indexOf(url.hostname) < 0) return;          // Supabase and everything else: never touched
+  e.respondWith(fetch(req).then(function (res) {
+    if (res && (res.ok || res.type === "opaque")) {
+      var copy = res.clone();
+      caches.open(CACHE).then(function (c) { c.put(mine ? key(req) : req, copy); }).catch(function () { });
+    }
+    return res;
+  }).catch(function () {
+    return caches.match(mine ? key(req) : req, { ignoreSearch: mine }).then(function (hit) {
+      if (hit) return hit;
+      if (req.mode === "navigate") return caches.match("/index.html");
+      return new Response("", { status: 504, statusText: "offline" });
+    });
+  }));
 });
