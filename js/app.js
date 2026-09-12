@@ -26,6 +26,8 @@
   function colPrefs(action) { var p = COL_PREFS[action || "_"] || {}; if (!p.hidden) p.hidden = {}; if (!p.width) p.width = {}; COL_PREFS[action || "_"] = p; return p; }
   function saveColPrefs() { try { localStorage.setItem("orbit_cols", JSON.stringify(COL_PREFS)); } catch (e) { } }
   function colKey(c, i) { return c && c.label ? "L:" + c.label : "#" + i; }
+  // A column can start hidden (c.hide) until the person shows it; the saved preference wins either way.
+  function colHidden(c, i) { var h = (L && L.cols && L.cols.hidden) || {}, k = colKey(c, i); return h[k] == null ? !!(c && c.hide) : !!h[k]; }
   var STMT_PRESET_PARTNER = null; // one-shot: preselect this partner when the statement screen next opens
   var FIXED_APP_THEMES = ["spacework", "corporate", "blue", "pink"];
   // Eight themes became three. Anyone carrying one of the old five is moved to
@@ -1095,7 +1097,7 @@
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
-      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p>" },
+      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
       { t: "Service (jobs, warranties and maintenance)", h: "<p>The <b>Service</b> app runs repair and maintenance work: a customer reports a problem, a technician fixes it, and you bill whatever the warranty does not cover.</p><ol class=\"man-steps\"><li class=\"man-step\">Raise a <b>ticket</b> with the customer, the item and its serial number. If a warranty covers that item Orbit flags it automatically.</li><li class=\"man-step\">Add the <b>parts and labour</b> used. Tick <i>covered</i> on anything the warranty pays for, so it is not billed.</li><li class=\"man-step\">Use <b>Bill to</b> to say who pays - the customer, or the manufacturer on a back-to-back RMA claim.</li><li class=\"man-step\">Record the <b>customer rating</b> when the job is done.</li></ol><p><b>Schedule</b> is a week grid of technicians against days: drag a job onto another person or another day to reschedule it. <b>Maintenance</b> holds recurring plans - set &ldquo;every 90 days&rdquo; and press <b>Generate due tickets</b> to raise them when they fall due.</p>" }
@@ -4485,12 +4487,15 @@
       };
     });
   }
-  function saveListView() { if (S.action) LIST_VIEW[S.action] = { view: L.view, kanbanGroupIdx: L.kanbanGroupIdx, kwidth: L.kwidth }; }
+  function saveListView() { var k = (L && L.key) || S.action; if (k) LIST_VIEW[k] = { view: L.view, kanbanGroupIdx: L.kanbanGroupIdx, kwidth: L.kwidth }; }
+  // One list engine for every table in Orbit. Normally it owns the whole screen
+  // (title bar, toolbar, body). Give it cfg.host and it lives inside another page
+  // instead, the guest list inside an event for one, with the same toolbar, the
+  // same click-to-edit cells, the same sort, filters, column chooser and widths.
+  // cfg.key names the saved preferences when there is no screen action to key on.
   function renderList(cfg) {
-    var main = document.getElementById("o-main");
-    main.innerHTML =
-      '<div class="o-view">' +
-      '<div class="o-cp">' + bcHTML(cfg.title) +
+    var host = cfg.host || null, key = cfg.key || S.action;
+    var bar =
       (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-new">New</button>' : '') +
       (cfg.action && canManageApp(S.app) ? '<button class="o-filtbtn" id="o-action">' + esc(cfg.action.label) + '</button>' : '') +
       '<div class="o-search"><span style="display:flex">' + SEARCH_SVG + '</span><span id="o-facets"></span><input id="o-q" placeholder="Search..."></div>' +
@@ -4500,28 +4505,34 @@
       '<select class="o-filtbtn o-psize" id="o-psize" title="How many rows to show per page"><option value="25">25 / page</option><option value="50">50 / page</option><option value="100">100 / page</option><option value="200">200 / page</option><option value="500">500 / page</option><option value="1000000">Show all</option></select>' +
       '<div class="gap"></div>' +
       '<span class="o-pager" id="o-pager"></span>' +
-      '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
+      (cfg.views === false ? '' : '<div class="o-vs" id="o-vs"><button data-v="list" class="on" title="List">&#9776;</button>' +
       '<button data-v="thumb" title="Thumbnails" aria-label="Thumbnail view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.6"></circle><path d="M21 15l-5-4L5 20"></path></svg></button>' +
       '<button data-v="kanban" title="Kanban board" aria-label="Kanban board view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4" width="5" height="16" rx="1"></rect><rect x="10" y="4" width="5" height="11" rx="1"></rect><rect x="17" y="4" width="5" height="14" rx="1"></rect></svg></button>' +
       (cfg.tree ? '<button data-v="tree" title="Tree view" aria-label="Tree view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="10" y1="6" x2="20" y2="6"></line><line x1="13" y1="12" x2="20" y2="12"></line><line x1="13" y1="18" x2="20" y2="18"></line><path d="M4 4v13a2 2 0 0 0 2 2h5"></path><path d="M4 11h7"></path></svg></button>' : "") +
       (cfg.orgChart ? '<button data-v="org" title="Org chart" aria-label="Org chart view"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="5" rx="1"></rect><rect x="2" y="16" width="6" height="5" rx="1"></rect><rect x="16" y="16" width="6" height="5" rx="1"></rect><path d="M12 7v3M5 16v-3h14v3M12 10v3"></path></svg></button>' : "") +
-      '</div>' +
+      '</div>') +
       '<button class="o-filtbtn" id="o-selbtn" title="Select rows for bulk export">Select</button>' +
-      '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>' +
-      '</div>' +
-      '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div>' +
-      '</div>';
-    wireBc();
-    var _lv = (S.action && LIST_VIEW[S.action]) || {};
-    var _cp = colPrefs(S.action);   // per-screen prefs: {hidden, width, size}
-    L = { cfg: cfg, all: [], view: _lv.view || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+      '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>';
+    var bodyHTML = '<div class="o-body' + (host ? ' o-body-embed' : '') + '" id="o-body"><div class="o-empty">Loading...</div></div>';
+    if (host) {
+      host.innerHTML = '<div class="o-lbar">' + bar + '</div>' + bodyHTML;
+    } else {
+      document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(cfg.title) + bar + '</div>' + bodyHTML + '</div>';
+      wireBc();
+    }
+    var _lv = (key && LIST_VIEW[key]) || {};
+    var _cp = colPrefs(key);   // per-screen prefs: {hidden, width, size}
+    L = { cfg: cfg, key: key, all: [], view: (cfg.views === false ? "list" : _lv.view) || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
-    document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x.dataset.v === L.view); });
-    document.getElementById("o-vs").querySelectorAll("[data-v]").forEach(function (b) {
-      b.onclick = function () { L.view = b.dataset.v; saveListView(); document.querySelectorAll("#o-vs [data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
-    });
+    var _vs = document.getElementById("o-vs");
+    if (_vs) {
+      _vs.querySelectorAll("[data-v]").forEach(function (x) { x.classList.toggle("on", x.dataset.v === L.view); });
+      _vs.querySelectorAll("[data-v]").forEach(function (b) {
+        b.onclick = function () { L.view = b.dataset.v; saveListView(); _vs.querySelectorAll("[data-v]").forEach(function (x) { x.classList.toggle("on", x === b); }); paintBody(); };
+      });
+    }
     if (cfg.filters) document.getElementById("o-fbtn").onclick = function () { openListDropdown(this, "filters"); };
     if (cfg.groupBy) document.getElementById("o-gbtn").onclick = function () { openListDropdown(this, "group"); };
     document.getElementById("o-colbtn").onclick = function () { openColsDropdown(this); };
@@ -4729,7 +4740,7 @@
   }
   // Columns the user has chosen to show (in original order, keeping their real index for
   // sort/group/filter/edit which key by index). Never returns empty.
-  function visibleCols(cfg) { var h = L.cols.hidden || {}, out = []; cfg.columns.forEach(function (c, i) { if (!h[colKey(c, i)]) out.push({ c: c, i: i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
+  function visibleCols(cfg) { var h = L.cols.hidden || {}, out = []; cfg.columns.forEach(function (c, i) { if (!colHidden(c, i)) out.push({ c: c, i: i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
   function colgroupHTML(cfg) {
     var w = L.cols.width || {}, cols = (L.selMode ? '<col style="width:34px">' : "");
     cols += visibleCols(cfg).map(function (o) { var ww = w[colKey(o.c, o.i)]; return '<col' + (ww ? ' style="width:' + ww + 'px"' : "") + '>'; }).join("");
@@ -4750,8 +4761,8 @@
     closeDropdowns();
     var cfg = L.cfg, r = btn.getBoundingClientRect();
     var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1"; dd.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 240)) + "px";
-    dd.innerHTML = '<div class="sec">Show columns</div>' + cfg.columns.map(function (c, i) { var vis = !L.cols.hidden[colKey(c, i)]; return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
-    dd.querySelectorAll("[data-ci]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.ci, k = colKey(cfg.columns[i], i), hiding = !L.cols.hidden[k]; if (hiding && visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); return; } if (hiding) L.cols.hidden[k] = 1; else delete L.cols.hidden[k]; saveColPrefs(); paintBody(); openColsDropdown(btn); }; });
+    dd.innerHTML = '<div class="sec">Show columns</div>' + cfg.columns.map(function (c, i) { var vis = !colHidden(c, i); return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
+    dd.querySelectorAll("[data-ci]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.ci, k = colKey(cfg.columns[i], i), hiding = !colHidden(cfg.columns[i], i); if (hiding && visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); return; } if (hiding) L.cols.hidden[k] = 1; else L.cols.hidden[k] = 0; saveColPrefs(); paintBody(); openColsDropdown(btn); }; });
     dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; saveColPrefs(); paintBody(); closeDropdowns(); };
     document.body.appendChild(dd);
   }
@@ -4880,7 +4891,7 @@
     var patch = {}; patch[field] = val;
     var r = await sb.from(cfg.editTable || cfg.table).update(patch).eq("id", id);
     if (r.error) { toast("Could not save: " + errMsg(r.error)); td.innerHTML = prev; return; }
-    row[field] = val; td.innerHTML = col.get(row); toast("Saved");
+    row[field] = val; td.innerHTML = col.get(row); toast("Saved"); if (cfg.onSaved) cfg.onSaved(row, field, val);
   }
   // A gallery tile for the thumbnail view: the row photo (where a list attaches one)
   // over the first column as a title and the second as a subtitle; a lettered
@@ -8753,119 +8764,94 @@
     };
     evWireTools("cc", function () { var rows = []; host.querySelectorAll(".cc-sec").forEach(function (el) { rows.push([el.querySelector(".cc-title").value.trim(), el.querySelector(".cc-body").value.trim()]); }); return { name: "brief", title: "Concept & Brief - " + EV.event.name, headers: ["Section", "Content"], rows: rows, printSel: "#cc-list" }; });
   }
-  // ---- guests ----
+  // The table is the shared list engine, the same one behind Contacts, so the
+  // guest list gets click-to-edit cells, sort, filters, group by, a column
+  // chooser and remembered column widths, and it keeps up whenever the engine
+  // grows. Board and Pivot stay as they were.
   async function evGuests(host) {
-    var rows = (await sb.from("event_guests").select("*, event_tables:table_id(name)").eq("event_id", EV.eventId).order("family_name")).data || [];
+    async function load() { return (await sb.from("event_guests").select("*").eq("event_id", EV.eventId).order("family_name")).data || []; }
+    var rows = await load();
     var gTables = (await sb.from("event_tables").select("id,name").eq("event_id", EV.eventId).order("name")).data || [];
-    var target = EV.event.guest_target || 0;
-    var invited = rows.filter(function (r) { return ["invited", "confirmed"].indexOf(r.invite_stage) >= 0; }).length;
-    var confirmed = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).length;
-    var heads = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).reduce(function (a, r) { return a + 1 + (Number(r.plus_ones) || 0); }, 0);
-    var over = target && invited > target;
-    var pct = target ? Math.min(100, Math.round(invited / target * 100)) : 0;
-    var cap = '<div class="ev-cap"><div class="ev-cap-bar"><div class="ev-cap-fill' + (over ? " over" : "") + '" style="width:' + pct + '%"></div></div>' +
-      '<div class="ev-cap-txt"><b>' + invited + '</b> invited / confirmed' + (target ? ' of <b>' + target + '</b> target' : "") + (over ? ' <span class="badge unpaid">over by ' + (invited - target) + '</span>' : "") + ' &middot; ' + confirmed + ' confirmed &middot; ' + heads + ' heads (incl. +1s)</div></div>';
-    var view = EV._guestView || "board";
-    host.innerHTML = cap +
-      '<div class="ev-toolbar"><button class="pri" id="g-add">+ Add guest</button>' +
-      '<input id="g-q" class="ev-search" placeholder="Search guests...">' +
-      '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="table"' + (view === "table" ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="pivot"' + (view === "pivot" ? ' class="on"' : "") + '>&#9783; Pivot</button></div>' +
+    var tableName = {}; gTables.forEach(function (t) { tableName[t.id] = t.name; });
+    function capHTML() {
+      var target = EV.event.guest_target || 0;
+      var invited = rows.filter(function (r) { return ["invited", "confirmed"].indexOf(r.invite_stage) >= 0; }).length;
+      var confirmed = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).length;
+      var heads = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).reduce(function (a, r) { return a + 1 + (Number(r.plus_ones) || 0); }, 0);
+      var over = target && invited > target;
+      var pct = target ? Math.min(100, Math.round(invited / target * 100)) : 0;
+      return '<div class="ev-cap"><div class="ev-cap-bar"><div class="ev-cap-fill' + (over ? " over" : "") + '" style="width:' + pct + '%"></div></div>' +
+        '<div class="ev-cap-txt"><b>' + invited + '</b> invited / confirmed' + (target ? ' of <b>' + target + '</b> target' : "") + (over ? ' <span class="badge unpaid">over by ' + (invited - target) + '</span>' : "") + ' &middot; ' + confirmed + ' confirmed &middot; ' + heads + ' heads (incl. +1s)</div></div>';
+    }
+    function paintCap() { var el = document.getElementById("g-cap"); if (el) el.innerHTML = capHTML(); }
+    var view = EV._guestView || "table", isTable = view === "table";
+    host.innerHTML = '<div id="g-cap">' + capHTML() + '</div>' +
+      '<div class="ev-toolbar">' +
+      (isTable ? '' : '<button class="pri" id="g-add">+ Add guest</button><input id="g-q" class="ev-search" placeholder="Search guests...">') +
+      '<div class="gap"></div><div class="o-vs" id="g-vs"><button data-v="table"' + (isTable ? ' class="on"' : "") + '>&#9776; Table</button><button data-v="board"' + (view === "board" ? ' class="on"' : "") + '>&#9638; Board</button><button data-v="pivot"' + (view === "pivot" ? ' class="on"' : "") + '>&#9783; Pivot</button></div>' +
       evTools("g") + '<button class="o-filtbtn" id="g-import">Import</button><button class="o-filtbtn" id="g-reglink">Registration link</button></div>' +
       '<div id="g-body"></div>';
-    document.getElementById("g-add").onclick = function () { openGuestModal(null); };
+    var addBtn = document.getElementById("g-add"); if (addBtn) addBtn.onclick = function () { openGuestModal(null); };
     document.getElementById("g-import").onclick = function () { openGuestImport(); };
     document.getElementById("g-reglink").onclick = function () { openRegLinkModal(); };
     document.getElementById("g-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._guestView = b.dataset.v; evGuests(host); }; });
-    evWireTools("g", function () { return { name: "guests", title: "Guests - " + EV.event.name, headers: ["Side", "First name", "Family name", "Category", "Priority", "Invite stage", "RSVP", "Plus ones", "Email", "Phone", "Table"], rows: rows.map(function (r) { return [r.side, r.first_name, r.family_name, r.category, r.priority, evLabel(GUEST_STAGE, r.invite_stage), evLabel(RSVP_OPTS, r.rsvp), r.plus_ones, r.email, r.phone, r.event_tables ? r.event_tables.name : ""]; }), printSel: "#g-body table" }; });
+    evWireTools("g", function () { return { name: "guests", title: "Guests - " + EV.event.name, headers: ["Side", "First name", "Family name", "Category", "Priority", "Invite stage", "RSVP", "Plus ones", "Email", "Phone", "Table"], rows: rows.map(function (r) { return [r.side, r.first_name, r.family_name, r.category, r.priority, evLabel(GUEST_STAGE, r.invite_stage), evLabel(RSVP_OPTS, r.rsvp), r.plus_ones, r.email, r.phone, tableName[r.table_id] || ""]; }), printSel: "#g-body table" }; });
+    function cfgGuests(body) {
+      var blank = [["", "-"]];
+      function txt(f) { return function (r) { return esc(r[f] || ""); }; }
+      return {
+        host: body, key: "ev.guests", title: "Guests", views: false,
+        editTable: "event_guests",
+        fetch: async function () { rows = await load(); paintCap(); return rows; },
+        searchText: function (r) { return [r.first_name, r.family_name, r.side, r.category, r.email, r.phone, r.dietary, r.notes, tableName[r.table_id]].join(" "); },
+        columns: [
+          { label: "First name", edit: { field: "first_name", type: "text" }, get: function (r) { return '<b>' + esc(r.first_name || "") + '</b>'; } },
+          { label: "Family name", edit: { field: "family_name", type: "text" }, get: function (r) { return '<b>' + esc(r.family_name || "") + '</b>' + (r.is_vip ? ' <span class="badge">VIP</span>' : ""); } },
+          { label: "Side", edit: { field: "side", type: "text" }, get: txt("side") },
+          { label: "Category", edit: { field: "category", type: "text" }, get: txt("category") },
+          { label: "Priority", edit: { field: "priority", type: "select", options: blank.concat(GUEST_PRIO) }, get: function (r) { return r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : ""; } },
+          { label: "Stage", edit: { field: "invite_stage", type: "select", options: GUEST_STAGE }, get: function (r) { return '<span class="badge ' + guestStageCls(r.invite_stage) + '">' + esc(evLabel(GUEST_STAGE, r.invite_stage || "longlist")) + '</span>'; } },
+          { label: "RSVP", edit: { field: "rsvp", type: "select", options: RSVP_OPTS }, get: function (r) { var v = r.rsvp || "pending"; return v === "pending" ? '<span class="muted">Pending</span>' : esc(evLabel(RSVP_OPTS, v)); } },
+          { label: "+1", num: true, edit: { field: "plus_ones", type: "number" }, get: function (r) { return Number(r.plus_ones) ? "+" + Number(r.plus_ones) : '<span class="muted">0</span>'; } },
+          { label: "Table", edit: { field: "table_id", type: "select", options: function () { return blank.concat(gTables.map(function (t) { return [t.id, t.name]; })); } }, get: function (r) { return esc(tableName[r.table_id] || ""); } },
+          { label: "Email", edit: { field: "email", type: "text" }, get: txt("email") },
+          { label: "Phone", edit: { field: "phone", type: "text" }, get: txt("phone") },
+          { label: "Dietary", hide: true, edit: { field: "dietary", type: "text" }, get: txt("dietary") },
+          { label: "VIP", hide: true, edit: { field: "is_vip", type: "checkbox" }, get: function (r) { return r.is_vip ? "&#10003;" : ""; } },
+          { label: "Notes", hide: true, edit: { field: "notes", type: "text" }, get: txt("notes") }
+        ],
+        filters: [
+          { label: "Confirmed", test: function (r) { return r.invite_stage === "confirmed"; } },
+          { label: "Invited, no answer yet", test: function (r) { return r.invite_stage === "invited" && (r.rsvp || "pending") === "pending"; } },
+          { label: "Said yes", test: function (r) { return r.rsvp === "yes"; } },
+          { label: "Declined", test: function (r) { return r.invite_stage === "declined" || r.rsvp === "no"; } },
+          { label: "VIP", test: function (r) { return !!r.is_vip; } },
+          { label: "Not seated", test: function (r) { return !r.table_id; } },
+          { label: "Bringing someone", test: function (r) { return Number(r.plus_ones) > 0; } },
+          { label: "Registered themselves", test: function (r) { return r.source === "self_registered"; } }
+        ],
+        groupBy: [
+          { label: "Side", get: function (r) { return r.side || "None"; } },
+          { label: "Category", get: function (r) { return r.category || "None"; } },
+          { label: "Priority", get: function (r) { return r.priority || "None"; } },
+          { label: "Stage", get: function (r) { return evLabel(GUEST_STAGE, r.invite_stage || "longlist"); } },
+          { label: "RSVP", get: function (r) { return evLabel(RSVP_OPTS, r.rsvp || "pending"); } },
+          { label: "Table", get: function (r) { return tableName[r.table_id] || "Not seated"; } }
+        ],
+        emptyHint: "Add your first guest, or import a list. Every guest gets a personal link to confirm.",
+        onOpen: function (r) { openGuestModal(r); }, onNew: function () { openGuestModal(null); },
+        onSaved: function () { paintCap(); evOverviewStats(); }
+      };
+    }
     var q = "";
     function paint() {
-      var shown = rows.filter(function (r) { return !q || ((r.first_name || "") + " " + (r.family_name || "") + " " + (r.category || "") + " " + (r.side || "")).toLowerCase().indexOf(q) >= 0; });
       var body = document.getElementById("g-body");
-      if (view === "pivot") { return evGuestPivot(body, shown); }
-      if (view === "board") {
-        evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openGuestModal(s); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
-      } else {
-        if (!shown.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No guests yet</div><div class="o-empty2-h">Add your first guest, or Import a list.</div></div>'; return; }
-        // Inline-editable table: edit fields right in the view, then Save.
-        function optsFor(list, cur, blank) { return (blank != null ? '<option value="">' + blank + '</option>' : "") + list.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(cur == null ? "" : cur) === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
-        function tblOptsFor(cur) { return '<option value="">-</option>' + gTables.map(function (t) { return '<option value="' + t.id + '"' + (String(cur || "") === String(t.id) ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
-        // Column-driven so guests get the same "choose which columns show and their width"
-        // control as Contacts. Preferences persist per user in orbit_cols under ev.guests.
-        var GCOLS = [
-          { k: "side", label: "Side", cell: function (r) { return '<input class="gce" data-f="side" value="' + esc(r.side || "") + '">'; } },
-          { k: "first_name", label: "First name", cell: function (r) { return '<input class="gce" data-f="first_name" value="' + esc(r.first_name || "") + '">'; } },
-          { k: "family_name", label: "Family name", cell: function (r) { return '<input class="gce" data-f="family_name" value="' + esc(r.family_name || "") + '">'; } },
-          { k: "category", label: "Category", cell: function (r) { return '<input class="gce" data-f="category" value="' + esc(r.category || "") + '">'; } },
-          { k: "priority", label: "Priority", cell: function (r) { return '<select class="gce" data-f="priority">' + optsFor(GUEST_PRIO, r.priority, "-") + '</select>'; } },
-          { k: "invite_stage", label: "Stage", cell: function (r) { return '<select class="gce" data-f="invite_stage">' + optsFor(GUEST_STAGE, r.invite_stage || "longlist", null) + '</select>'; } },
-          { k: "rsvp", label: "RSVP", cell: function (r) { return '<select class="gce" data-f="rsvp">' + optsFor(RSVP_OPTS, r.rsvp || "pending", null) + '</select>'; } },
-          { k: "plus_ones", label: "+1", num: true, cell: function (r) { return '<input class="gce" type="number" min="0" data-f="plus_ones" value="' + (r.plus_ones || 0) + '" style="width:64px">'; } },
-          { k: "table_id", label: "Table", cell: function (r) { return '<select class="gce" data-f="table_id">' + tblOptsFor(r.table_id) + '</select>'; } }
-        ];
-        var gprefs = colPrefs("ev.guests");
-        var gvis = GCOLS.filter(function (c) { return !gprefs.hidden[c.k]; }); if (!gvis.length) gvis = [GCOLS[1]];
-        body.innerHTML = '<div class="gt-bar"><button class="btn pri" id="g-save" disabled style="background:var(--app);border-color:var(--app)">Save changes</button><span class="muted" id="g-dirty" style="font-size:12.5px"></span><span style="flex:1"></span><button class="o-filtbtn" id="g-cols" title="Choose which columns show; drag a column edge to resize">Columns &#9660;</button><span class="muted" style="font-size:12px">Edit any cell, then Save</span></div>' +
-          '<div style="overflow-x:auto"><table class="o-list gtbl"><colgroup>' + gvis.map(function (c) { var w = gprefs.width[c.k]; return '<col' + (w ? ' style="width:' + w + 'px"' : '') + '>'; }).join("") + '<col style="width:34px"></colgroup>' +
-          '<thead><tr>' + gvis.map(function (c) { return '<th data-ck="' + c.k + '"' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '<span class="o-th-rs" data-rs="' + c.k + '"></span></th>'; }).join("") + '<th></th></tr></thead><tbody>' +
-          shown.map(function (r) {
-            return '<tr data-id="' + r.id + '">' +
-              gvis.map(function (c) { return '<td>' + c.cell(r) + '</td>'; }).join("") +
-              '<td><button class="gt-open" data-open="' + r.id + '" title="Open full details">&#8942;</button></td>' +
-              '</tr>';
-          }).join("") + '</tbody></table></div>';
-        // column chooser
-        document.getElementById("g-cols").onclick = function (e) {
-          e.stopPropagation();
-          var old = document.getElementById("g-colsdd"); if (old) { old.remove(); return; }
-          var dd = document.createElement("div"); dd.id = "g-colsdd"; dd.className = "o-dd on";
-          dd.style.cssText = "position:absolute;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px;box-shadow:0 8px 24px rgba(0,0,0,.15);min-width:180px";
-          dd.innerHTML = GCOLS.map(function (c) { return '<label style="display:flex;gap:8px;align-items:center;padding:4px 6px;font-size:13px;cursor:pointer"><input type="checkbox" data-ck="' + c.k + '"' + (gprefs.hidden[c.k] ? '' : ' checked') + '> ' + esc(c.label) + '</label>'; }).join("");
-          document.body.appendChild(dd);
-          var rct = this.getBoundingClientRect(); dd.style.left = Math.max(8, rct.left) + "px"; dd.style.top = (rct.bottom + 4) + "px";
-          dd.querySelectorAll("input[data-ck]").forEach(function (cb) { cb.onchange = function () { if (cb.checked) delete gprefs.hidden[cb.dataset.ck]; else gprefs.hidden[cb.dataset.ck] = 1; saveColPrefs(); dd.remove(); paint(); }; });
-          setTimeout(function () { document.addEventListener("click", function h() { var d = document.getElementById("g-colsdd"); if (d) d.remove(); document.removeEventListener("click", h); }); }, 0);
-        };
-        // drag a column edge to resize
-        body.querySelectorAll(".o-th-rs").forEach(function (grip) {
-          grip.style.cssText = "position:absolute;right:0;top:0;height:100%;width:6px;cursor:col-resize;user-select:none";
-          var th = grip.parentElement; th.style.position = "relative";
-          grip.addEventListener("mousedown", function (ev) {
-            ev.preventDefault(); ev.stopPropagation();
-            var startX = ev.clientX, startW = th.getBoundingClientRect().width, key = grip.dataset.rs;
-            function mv(e2) { var w = Math.max(50, Math.round(startW + (e2.clientX - startX))); gprefs.width[key] = w; var idx = gvis.map(function (c) { return c.k; }).indexOf(key); var cg = body.querySelector("colgroup"); if (cg && cg.children[idx]) cg.children[idx].style.width = w + "px"; }
-            function up() { document.removeEventListener("mousemove", mv); document.removeEventListener("mouseup", up); saveColPrefs(); }
-            document.addEventListener("mousemove", mv); document.addEventListener("mouseup", up);
-          });
-        });
-        var gdirty = {};
-        function markDirty() { var n = Object.keys(gdirty).length; var sv = document.getElementById("g-save"); if (sv) sv.disabled = n === 0; var dl = document.getElementById("g-dirty"); if (dl) dl.textContent = n ? (n + " row" + (n > 1 ? "s" : "") + " changed") : ""; __dirty = n > 0; }
-        body.querySelectorAll(".gce").forEach(function (el) {
-          function touch() { var tr = el.closest("tr"); gdirty[tr.dataset.id] = 1; el.classList.add("dirty"); markDirty(); }
-          el.addEventListener("input", touch); el.addEventListener("change", touch);
-        });
-        body.querySelectorAll(".gt-open").forEach(function (b) { b.onclick = function () { openGuestModal(rows.filter(function (x) { return x.id === b.dataset.open; })[0]); }; });
-        document.getElementById("g-save").onclick = async function () {
-          var sv = this; sv.disabled = true; sv.textContent = "Saving...";
-          var ids = Object.keys(gdirty), okAll = true;
-          for (var i = 0; i < ids.length; i++) {
-            var tr = body.querySelector('tr[data-id="' + ids[i] + '"]'); if (!tr) continue;
-            var upd = {};
-            tr.querySelectorAll(".gce").forEach(function (el) {
-              var f = el.dataset.f, v = el.value;
-              if (f === "plus_ones") v = parseInt(v, 10) || 0;
-              else if (v === "") v = null;
-              upd[f] = v;
-            });
-            if (!upd.first_name && !upd.family_name) { toast("Every guest needs a name"); sv.disabled = false; sv.textContent = "Save changes"; return; }
-            var u = await sb.from("event_guests").update(upd).eq("id", ids[i]);
-            if (u.error) { okAll = false; toast(errMsg(u.error)); break; }
-          }
-          if (okAll) { __dirty = false; toast(ids.length + " guest" + (ids.length > 1 ? "s" : "") + " saved"); evGuests(host); evOverviewStats(); }
-          else { sv.disabled = false; sv.textContent = "Save changes"; }
-        };
-      }
+      if (isTable) return renderList(cfgGuests(body));
+      var shown = rows.filter(function (r) { return !q || ((r.first_name || "") + " " + (r.family_name || "") + " " + (r.category || "") + " " + (r.side || "")).toLowerCase().indexOf(q) >= 0; });
+      if (view === "pivot") return evGuestPivot(body, shown);
+      evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openGuestModal(s); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
     }
-    document.getElementById("g-q").addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
+    var qEl = document.getElementById("g-q"); if (qEl) qEl.addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
     paint();
   }
   function guestStageCls(s) { return s === "confirmed" ? "paid" : s === "invited" ? "partial" : s === "declined" ? "unpaid" : "draft"; }
