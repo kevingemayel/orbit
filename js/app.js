@@ -1096,7 +1096,7 @@
     ] },
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
-      { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
+      { t: "Sign, Recruitment and Knowledge", h: "<p><b>Knowledge</b> articles are documents: type a heading with #, a list with -, steps with 1., a callout with >, and put a screenshot in with the Me menu, Take a screenshot, then Insert in the editor. They read as a page with a contents list and print on A4. <b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
       { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p><b>Concept &amp; Brief</b> is a board: titles, paragraphs, notes, instructions with a tick, links, pictures and documents, each a card you can widen, reorder or remove. Add a picture of the venue, the palette, the florist's link and the notes everyone must read.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
@@ -3366,6 +3366,7 @@
       '<button class="it" id="dd-profile">My profile</button>' +
       (S.app ? '<button class="it" id="dd-home">Apps</button>' : '') +
       '<button class="it" id="dd-help">Help &amp; guides</button>' +
+      (S.app && S.app !== "knowledge" && canManageApp("knowledge") ? '<button class="it" id="dd-shot">Take a screenshot for Knowledge</button>' : "") +
       (installOffer() ? '<button class="it" id="dd-install">Install Orbit on this device</button>' : "") +
       '<div class="sep"></div><button class="it" id="dd-out">Log out</button>';
     document.body.appendChild(dd);
@@ -3373,6 +3374,7 @@
     var h = document.getElementById("dd-home"); if (h) h.onclick = function () { closeDropdowns(); renderHome(); };
     var hp = document.getElementById("dd-help"); if (hp) hp.onclick = function () { closeDropdowns(); openHelp(); };
     var ins = document.getElementById("dd-install"); if (ins) ins.onclick = function () { closeDropdowns(); installOrbit(); };
+    var sh = document.getElementById("dd-shot"); if (sh) sh.onclick = function () { closeDropdowns(); captureScreenshot(); };
     document.getElementById("dd-out").onclick = signOut;
   }
   async function openProfileModal() {
@@ -11991,8 +11993,90 @@
       ],
       filters: [{ label: "Published", test: function (a) { return a.is_published; } }, { label: "Draft", test: function (a) { return !a.is_published; } }],
       groupBy: [{ label: "Category", get: function (a) { return a.category || "Uncategorised"; } }],
-      onOpen: function (a) { renderArticleForm(a.id); }, onNew: function () { renderArticleForm("new"); }
+      onOpen: function (a) { renderArticleView(a.id); }, onNew: function () { renderArticleForm("new"); }
     };
+  }
+  // ============================ KNOWLEDGE ============================
+  // An article is a document, not a text box. It is written in a light markup
+  // anyone can type (a heading with #, a list with -, steps with 1., a callout
+  // with >, a picture with ![caption](media:id), a link to another article
+  // with [[its title]]) and it reads as a page: title, contents, sections,
+  // pictures, callouts, tables, and a print layout that fits A4. Screenshots
+  // come from inside Orbit: Me menu, Take a screenshot, then Insert.
+  function kbInline(s) {
+    s = esc(s);
+    s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>");
+    s = s.replace(/\[\[([^\]]+)\]\]/g, function (m, t) { return '<a class="kb-xref" data-title="' + t + '">' + t + '</a>'; });
+    s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+    return s;
+  }
+  var KB_BLOCK = /^(#{1,3}\s|!\[|---|>|\s*[-*]\s|\s*\d+[.)]\s|\|)/;
+  function kbRender(text) {
+    var lines = String(text || "").replace(/\r/g, "").split("\n"), out = [], i = 0, hn = 0, m;
+    while (i < lines.length) {
+      var l = lines[i];
+      if (!l.trim()) { i++; continue; }
+      if ((m = l.match(/^(#{1,3})\s+(.*)$/))) { var lv = m[1].length + 1; hn++; out.push("<h" + lv + ' id="kb-h' + hn + '">' + kbInline(m[2]) + "</h" + lv + ">"); i++; continue; }
+      if ((m = l.match(/^!\[([^\]]*)\]\(([^)]+)\)\s*$/))) {
+        var src = m[2], cap = m[1], mid = src.match(/^media:([0-9a-f-]{36})$/i);
+        out.push('<figure class="kb-fig">' + (mid ? '<img alt="' + esc(cap) + '" data-media="' + mid[1] + '" src="">' : '<img alt="' + esc(cap) + '" src="' + esc(src) + '">') + (cap ? "<figcaption>" + kbInline(cap) + "</figcaption>" : "") + "</figure>");
+        i++; continue;
+      }
+      if (/^---+\s*$/.test(l)) { out.push("<hr>"); i++; continue; }
+      if (/^>/.test(l)) { var q = [], warn = /^>!/.test(l); while (i < lines.length && /^>/.test(lines[i])) { q.push(lines[i].replace(/^>!?\s?/, "")); i++; } out.push('<div class="kb-call' + (warn ? " warn" : "") + '">' + q.map(kbInline).join("<br>") + "</div>"); continue; }
+      if (/^\s*[-*]\s+/.test(l)) { var ul = []; while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) { ul.push(lines[i].replace(/^\s*[-*]\s+/, "")); i++; } out.push("<ul>" + ul.map(function (x) { return "<li>" + kbInline(x) + "</li>"; }).join("") + "</ul>"); continue; }
+      if (/^\s*\d+[.)]\s+/.test(l)) { var ol = []; while (i < lines.length && /^\s*\d+[.)]\s+/.test(lines[i])) { ol.push(lines[i].replace(/^\s*\d+[.)]\s+/, "")); i++; } out.push("<ol>" + ol.map(function (x) { return "<li>" + kbInline(x) + "</li>"; }).join("") + "</ol>"); continue; }
+      if (/^\|/.test(l)) {
+        var rows = []; while (i < lines.length && /^\|/.test(lines[i])) { rows.push(lines[i]); i++; }
+        rows = rows.filter(function (r) { return !/^\|\s*:?-{2,}/.test(r); });
+        out.push('<div class="kb-tw"><table class="kb-table">' + rows.map(function (r, ri) { var cells = r.replace(/^\||\|\s*$/g, "").split("|"); return "<tr>" + cells.map(function (c) { return ri === 0 ? "<th>" + kbInline(c.trim()) + "</th>" : "<td>" + kbInline(c.trim()) + "</td>"; }).join("") + "</tr>"; }).join("") + "</table></div>");
+        continue;
+      }
+      var buf = []; while (i < lines.length && lines[i].trim() && !KB_BLOCK.test(lines[i])) { buf.push(lines[i]); i++; }
+      if (buf.length) out.push("<p>" + buf.map(kbInline).join("<br>") + "</p>"); else i++;
+    }
+    return out.join("\n");
+  }
+  function kbToc(text) {
+    var out = [], n = 0;
+    String(text || "").replace(/\r/g, "").split("\n").forEach(function (l) { var m = l.match(/^(#{1,3})\s+(.*)$/); if (!m) return; n++; if (m[1].length === 1) out.push({ id: "kb-h" + n, t: m[2] }); });
+    return out;
+  }
+  async function kbResolveMedia(root) {
+    var imgs = root.querySelectorAll("img[data-media]"); if (!imgs.length) return;
+    var ids = []; imgs.forEach(function (im) { if (ids.indexOf(im.dataset.media) < 0) ids.push(im.dataset.media); });
+    var rows = (await sb.from("media").select("id,path").in("id", ids)).data || [];
+    var byId = {}; rows.forEach(function (r) { byId[r.id] = r.path; });
+    await Promise.all(ids.map(async function (id) { var p = byId[id]; if (!p) return; var u = await mediaSignedUrl(p); root.querySelectorAll('img[data-media="' + id + '"]').forEach(function (im) { im.src = u; }); }));
+  }
+  function kbWireXrefs(root, titles) {
+    root.querySelectorAll(".kb-xref").forEach(function (a) {
+      var t = (a.dataset.title || "").toLowerCase(), hit = titles.filter(function (x) { return (x.title || "").toLowerCase() === t; })[0];
+      if (hit) { a.setAttribute("href", "#"); a.onclick = function (e) { e.preventDefault(); renderArticleView(hit.id); }; } else a.classList.add("missing");
+    });
+  }
+  async function renderArticleView(id) {
+    var parent = { action: "kb.articles", title: "Articles" };
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("...", parent) + '<div class="gap"></div>' + (canManageApp(S.app) ? '<button class="o-filtbtn" id="kb-edit">Edit</button>' : "") + '<button class="o-filtbtn" id="kb-print">Print</button></div><div class="o-body kb-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
+    wireBc();
+    var a = (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data;
+    var body = document.getElementById("o-body"); if (!body) return;
+    if (!a) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">That article is gone</div></div>'; return; }
+    bcTitle(a.title || "Article");
+    var all = (await sb.from("articles").select("id,title,category").eq("company_id", S.company.id).eq("is_published", true).order("title")).data || [];
+    var related = all.filter(function (x) { return x.id !== a.id && (x.category || "") === (a.category || ""); });
+    var toc = kbToc(a.body);
+    body.innerHTML = '<div class="kb-page' + (toc.length ? "" : " no-toc") + '">' +
+      (toc.length ? '<nav class="kb-toc" aria-label="Contents"><div class="kb-toc-h">Contents</div>' + toc.map(function (h) { return '<a href="#' + h.id + '">' + esc(h.t) + '</a>'; }).join("") + "</nav>" : "") +
+      '<article class="kb-doc"><header class="kb-head">' + (a.category ? '<div class="kb-cat">' + esc(a.category) + "</div>" : "") + "<h1>" + esc(a.title || "") + '</h1><div class="kb-meta">' + esc(S.company.name) + " &middot; updated " + esc((a.updated_at || "").slice(0, 10)) + (a.is_published ? "" : ' &middot; <span class="badge draft">Draft</span>') + "</div></header>" +
+      '<div class="kb-rendered">' + kbRender(a.body) + "</div>" +
+      (related.length ? '<footer class="kb-related"><div class="kb-toc-h">In the same category</div>' + related.map(function (x) { return '<a data-id="' + x.id + '">' + esc(x.title) + "</a>"; }).join("") + "</footer>" : "") +
+      "</article></div>";
+    kbResolveMedia(body); kbWireXrefs(body, all);
+    body.querySelectorAll(".kb-related a").forEach(function (l) { l.onclick = function () { renderArticleView(l.dataset.id); }; });
+    body.querySelectorAll(".kb-toc a").forEach(function (l) { l.onclick = function (e) { e.preventDefault(); var t = document.getElementById(l.getAttribute("href").slice(1)); if (t) t.scrollIntoView({ behavior: "smooth", block: "start" }); }; });
+    var ed = document.getElementById("kb-edit"); if (ed) ed.onclick = function () { renderArticleForm(a.id); };
+    document.getElementById("kb-print").onclick = function () { window.print(); };
   }
   async function renderArticleForm(id) {
     var parent = { action: "kb.articles", title: "Articles" };
@@ -12000,23 +12084,88 @@
     wireBc();
     var a = id === "new" ? { is_published: true } : (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data || {};
     bcTitle(id === "new" ? "New" : (a.title || "Article"));
+    var shots = kbRecentShots();
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button><button id="kb-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("articles", id, "kb.articles", "article") : "") + '</div><div></div></div>' +
-      '<div class="o-sheet"><div class="o-title"><input id="kb-title" value="' + esc(a.title || "") + '" placeholder="Article title"></div>' +
-      '<div class="o-groups"><div>' + fld("Category", '<input id="kb-cat" value="' + esc(a.category || "") + '" placeholder="e.g. Method statements, HR, Safety">', "Group articles by topic.") + '</div><div>' + fld("Status", '<select id="kb-pub"><option value="1"' + (a.is_published !== false ? " selected" : "") + '>Published</option><option value="0"' + (a.is_published === false ? " selected" : "") + '>Draft</option></select>') + '</div></div>' +
-      fld("Body", '<textarea id="kb-body" rows="16" style="font-family:inherit;line-height:1.6">' + esc(a.body || "") + '</textarea>', "Write the procedure / notes. Plain text.") +
-      '</div>';
-    document.getElementById("kb-discard").onclick = function () { go("kb.articles"); };
-    document.getElementById("kb-save").onclick = async function () {
-      var kbTitle = gv("kb-title"), kbBody = (document.getElementById("kb-body") || {}).value || "";
-      if (!kbTitle || !kbTitle.trim()) { toast("Give the article a title"); return; }
-      if (document.getElementById("kb-pub").value === "1" && !kbBody.trim()) { toast("Add some content before publishing (or keep it as a draft)."); return; }
-      var row = { title: kbTitle.trim(), category: gv("kb-cat"), body: kbBody, is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button>' + (id !== "new" ? '<button id="kb-view">Read</button>' : "") + '<button id="kb-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("articles", id, "kb.articles", "article") : "") + "</div><div></div></div>" +
+      '<div class="o-sheet kb-sheet"><div class="o-title"><input id="kb-title" value="' + esc(a.title || "") + '" placeholder="Article title"></div>' +
+      '<div class="o-groups"><div>' + fld("Category", '<input id="kb-cat" value="' + esc(a.category || "") + '" placeholder="e.g. Get started, Method statements, HR, Safety">', "Articles in the same category link to each other at the bottom of the page.") + "</div><div>" + fld("Status", '<select id="kb-pub"><option value="1"' + (a.is_published !== false ? " selected" : "") + '>Published</option><option value="0"' + (a.is_published === false ? " selected" : "") + '>Draft</option></select>', "A draft is seen only by people who can edit.") + "</div></div>" +
+      '<div class="kb-edbar"><button type="button" class="o-filtbtn" data-ins="# ">Heading</button><button type="button" class="o-filtbtn" data-ins="## ">Sub-heading</button><button type="button" class="o-filtbtn" data-ins="- ">List</button><button type="button" class="o-filtbtn" data-ins="1. ">Steps</button><button type="button" class="o-filtbtn" data-ins="> ">Callout</button><button type="button" class="o-filtbtn" data-ins=">! ">Warning</button><button type="button" class="o-filtbtn" data-ins="**bold**">Bold</button><button type="button" class="o-filtbtn" data-ins="| Column | Column |&#10;| --- | --- |&#10;| a | b |">Table</button><button type="button" class="o-filtbtn" data-ins="[[Article title]]">Link to article</button>' +
+      '<label class="o-filtbtn u-ptr">Insert picture<input type="file" accept="image/*" id="kb-pic" style="display:none"></label>' +
+      (shots.length ? '<select id="kb-shot" class="o-filtbtn"><option value="">Insert a screenshot...</option>' + shots.map(function (s) { return '<option value="' + s.id + '">' + esc(s.label) + "</option>"; }).join("") + "</select>" : "") +
+      '<span class="kb-edhint">Write on the left, read on the right. Take screenshots from any screen with the Me menu, Take a screenshot, then insert them here.</span></div>' +
+      '<div class="kb-ed"><textarea id="kb-body" spellcheck="true" placeholder="# First heading&#10;&#10;A paragraph. Then a list:&#10;- one thing&#10;- another&#10;&#10;> A callout for what matters.">' + esc(a.body || "") + '</textarea><div class="kb-preview"><div class="kb-doc kb-doc-prev"><div class="kb-rendered" id="kb-prev"></div></div></div></div>' +
+      "</div>";
+    var ta = document.getElementById("kb-body"), prev = document.getElementById("kb-prev"), pt = null;
+    function refresh() { prev.innerHTML = kbRender(ta.value) || '<p class="muted">The page appears here as you write.</p>'; kbResolveMedia(prev); }
+    ta.addEventListener("input", function () { __dirty = true; clearTimeout(pt); pt = setTimeout(refresh, 250); });
+    refresh();
+    function insertAt(text) {
+      var s = ta.selectionStart, e = ta.selectionEnd, v = ta.value, sel = v.slice(s, e), ins = text;
+      if (text === "**bold**") ins = "**" + (sel || "bold") + "**";
+      else if (/\s$/.test(text) && s > 0 && v.charAt(s - 1) !== "\n") ins = "\n" + text;
+      ta.value = v.slice(0, s) + ins + v.slice(e); ta.focus();
+      var caret = s + ins.length; if (text === "**bold**" && !sel) caret = s + 2;
+      ta.selectionStart = ta.selectionEnd = caret; __dirty = true; refresh();
+    }
+    document.querySelectorAll(".kb-edbar [data-ins]").forEach(function (b) { b.onclick = function () { insertAt(b.getAttribute("data-ins")); }; });
+    async function persist() {
+      var kbTitle = gv("kb-title"), kbBody = ta.value || "";
+      if (!kbTitle) { toast("Give the article a title"); return null; }
+      if (document.getElementById("kb-pub").value === "1" && !kbBody.trim()) { toast("Add some content before publishing, or keep it as a draft."); return null; }
+      var row = { title: kbTitle, category: gv("kb-cat"), body: kbBody, is_published: document.getElementById("kb-pub").value === "1", updated_at: new Date().toISOString() };
       var sid = id;
-      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return; } sid = ins.data.id; }
-      else { if ((await sb.from("articles").update(row).eq("id", id)).error) { toast("Save failed"); return; } }
-      toast("Saved"); renderArticleForm(sid);
+      if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("articles").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; id = sid; }
+      else { var up = await sb.from("articles").update(row).eq("id", id); if (up.error) { toast(errMsg(up.error)); return null; } }
+      __dirty = false; return sid;
+    }
+    async function ensureSaved() { if (id !== "new") return id; var s = await persist(); if (s) toast("Saved as a draft so the picture has a home"); return s; }
+    var picInput = document.getElementById("kb-pic");
+    picInput.onchange = async function () {
+      var f = picInput.files[0]; if (!f) return;
+      var sid = await ensureSaved(); if (!sid) { picInput.value = ""; return; }
+      try { toast("Uploading..."); var m = await mediaUpload("article", sid, f); insertAt("\n![" + f.name.replace(/\.[a-z0-9]+$/i, "").replace(/[-_]+/g, " ") + "](media:" + m.id + ")\n"); }
+      catch (e) { toast("Upload failed: " + ((e && e.message) || e)); }
+      picInput.value = "";
     };
+    var shotSel = document.getElementById("kb-shot");
+    if (shotSel) shotSel.onchange = function () { var s = shots.filter(function (x) { return x.id === shotSel.value; })[0]; if (s) insertAt("\n![" + s.label + "](media:" + s.id + ")\n"); shotSel.value = ""; };
+    document.getElementById("kb-discard").onclick = function () { __dirty = false; go("kb.articles"); };
+    var vw = document.getElementById("kb-view"); if (vw) vw.onclick = async function () { if (__dirty) { var s = await persist(); if (!s) return; } renderArticleView(id); };
+    document.getElementById("kb-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderArticleView(sid); } };
+  }
+  // ---- screenshots from inside Orbit ----
+  // Any screen, as the person sees it, into the media store, ready to insert
+  // into an article. The last twenty are offered by name in every editor.
+  function kbRecentShots() { try { return JSON.parse(localStorage.getItem("orbit_shots") || "[]"); } catch (e) { return []; } }
+  function kbRememberShot(m, label) {
+    var s = kbRecentShots().filter(function (x) { return x.id !== m.id; });
+    s.unshift({ id: m.id, label: label, at: Date.now() });
+    try { localStorage.setItem("orbit_shots", JSON.stringify(s.slice(0, 20))); } catch (e) { }
+  }
+  function loadScript(src) {
+    return new Promise(function (res, rej) { if (document.querySelector('script[src="' + src + '"]')) return res(); var s = document.createElement("script"); s.src = src; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  }
+  async function captureScreenshot() {
+    closeDropdowns();
+    var where = (S.app && APPS[S.app] ? term(APPS[S.app].name) : "Orbit") + (document.getElementById("bc-title") ? " - " + document.getElementById("bc-title").textContent : "");
+    var label = prompt("What does this screen show? This becomes the caption.", where);
+    if (label === null) return;
+    toast("Taking the screenshot...");
+    try {
+      await loadScript("https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js");
+      var target = document.getElementById("o-main") || document.getElementById("root");
+      var canvas = await window.html2canvas(target, { useCORS: true, backgroundColor: getComputedStyle(document.body).backgroundColor, scale: Math.min(2, window.devicePixelRatio || 1), logging: false, ignoreElements: function (el) { return !!(el.classList && (el.classList.contains("toast") || el.classList.contains("o-tabbar"))); } });
+      var blob = await new Promise(function (r) { canvas.toBlob(r, "image/png"); });
+      var file = new File([blob], (label || "screenshot").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".png", { type: "image/png" });
+      var m = await mediaUpload("shot", null, file);
+      kbRememberShot(m, label || "Screenshot");
+      var tok = "![" + (label || "Screenshot") + "](media:" + m.id + ")";
+      var md = document.createElement("div"); md.className = "modal on";
+      md.innerHTML = '<div class="sheet"><h3>Screenshot saved</h3><div class="form"><p class="u-m0">It is now in <b>Insert a screenshot</b> in every article editor. To place it by hand, paste this line where the picture should go:</p><input id="shot-tok" value="' + esc(tok) + '" readonly></div><div class="foot"><button class="btn" id="shot-copy">Copy the line</button><button class="btn pri u-accent" id="shot-ok">Done</button></div></div>';
+      document.body.appendChild(md);
+      md.querySelector("#shot-ok").onclick = function () { md.remove(); };
+      md.querySelector("#shot-copy").onclick = function () { var i = md.querySelector("#shot-tok"); i.select(); try { navigator.clipboard.writeText(tok); } catch (e) { try { document.execCommand("copy"); } catch (x) { } } toast("Copied"); };
+    } catch (e) { toast("Could not take the screenshot: " + ((e && e.message) || e)); }
   }
 
   // ============================ SITE OPS: SNAGGING / QHSE ============================
