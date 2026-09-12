@@ -2382,7 +2382,8 @@ html,body{overflow-x:hidden}
 @media(max-width:640px){
   .o-cp .o-psize,.o-cp .o-vs,.o-cp #o-selbtn{display:none}
   .o-cp .o-search{flex:1 1 100%;max-width:none;order:-1}
-  .o-cp .o-new{order:-2}
+  .o-cp .o-bc{order:-3;flex:1 1 auto;min-width:0}
+  .o-cp .o-new{order:-2;margin-left:auto}
   .o-cp .o-pager{margin-left:auto}
   .o-lbar .o-psize,.o-lbar #o-selbtn{display:none}
   .o-lbar .o-search{flex:1 1 100%;max-width:none}
