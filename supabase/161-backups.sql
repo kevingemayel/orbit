@@ -84,7 +84,7 @@ as $fn$
 declare added integer; d integer := 0;
 begin
   create temp table if not exists _bk_plan (tbl text primary key, fk_col text, parent text, depth integer) on commit drop;
-  delete from _bk_plan;
+  truncate _bk_plan;
 
   insert into _bk_plan (tbl, fk_col, parent, depth)
   select c.table_name, 'company_id', null, 0
@@ -133,7 +133,7 @@ declare
   ids uuid[]; sz bigint; sql text;
 begin
   create temp table if not exists _bk_ids (tbl text primary key, ids uuid[]) on commit drop;
-  delete from _bk_ids;
+  truncate _bk_ids;
 
   for pl in select * from public.backup_table_plan() loop
     begin
@@ -260,7 +260,7 @@ as $fn$
 declare emitted text[] := '{}'; remaining text[] := p_tables; batch text[]; guard integer := 0;
 begin
   create temp table if not exists _bk_edge (child text, parent text) on commit drop;
-  delete from _bk_edge;
+  truncate _bk_edge;
   insert into _bk_edge (child, parent)
   select distinct ch.relname, pa.relname
     from pg_constraint con
@@ -306,9 +306,9 @@ begin
   if p_new_name is null or length(trim(p_new_name)) < 2 then raise exception 'give the restored company a name'; end if;
 
   create temp table if not exists _bk_map (old uuid primary key, new uuid) on commit drop;
-  delete from _bk_map;
+  truncate _bk_map;
   create temp table if not exists _bk_retry (tbl text, row_json jsonb, why text) on commit drop;
-  delete from _bk_retry;
+  truncate _bk_retry;
 
   -- 1. a new company to restore into
   co := b.payload -> '_company';

@@ -560,6 +560,7 @@ select option{background:var(--panel);color:var(--ink)}
 .o-si-caret{color:var(--ink3);font-size:17px;line-height:1;transition:transform .15s}
 .o-si-grp[aria-expanded="true"] .o-si-caret{transform:rotate(90deg)}
 .o-sub{display:flex;flex-direction:column;gap:1px;padding:1px 0 4px}
+.o-sub[hidden]{display:none}
 .o-si-sub{padding-left:20px;font-size:13px;min-height:36px;color:var(--ink3)}
 .o-si-sub .o-si-ic{width:17px}
 .o-si-sub .o-si-ic svg{width:15px;height:15px}

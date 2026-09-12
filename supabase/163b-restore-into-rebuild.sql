@@ -24,9 +24,9 @@ begin
   if p_new_name is null or length(trim(p_new_name)) < 2 then raise exception 'give the restored company a name'; end if;
 
   create temp table if not exists _bk_map (old uuid primary key, new uuid) on commit drop;
-  delete from _bk_map;
+  truncate _bk_map;
   create temp table if not exists _bk_retry (tbl text, row_json jsonb, why text) on commit drop;
-  delete from _bk_retry;
+  truncate _bk_retry;
 
   newco := gen_random_uuid();
   insert into _bk_map (old, new) values ((co ->> 'id')::uuid, newco);

@@ -1978,7 +1978,7 @@
       ]
     },
     plot: {
-      name: "Property", icon: "⌂", color: "#0ea66f", color2: "#0b8659", home: "plot.dash",
+      name: "Plot", icon: "⌂", color: "#0ea66f", color2: "#0b8659", home: "plot.dash",
       menus: [
         { label: "Overview", action: "plot.dash" },
         { label: "Buildings", action: "plot.buildings" },
@@ -2188,7 +2188,7 @@
     appstore: '<svg viewBox="0 0 100 100"><rect x="14" y="14" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="56" y="14" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="14" y="56" width="30" height="30" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="56" y="56" width="30" height="30" rx="9" fill="#2F6BFF"/><path d="M71 64 V78 M64 71 H78" stroke="#fff" stroke-width="6" stroke-linecap="round"/></svg>',
     // Property: a building with a lit window. It was the last app still
     // drawing a text character, which is why it never matched the others.
-    plot: '<svg viewBox="0 0 100 100"><path d="M18 46 L50 19 L82 46" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/><path d="M28 43 V85 H72 V43" fill="none" stroke="currentColor" stroke-width="7" stroke-linejoin="round"/><rect x="37" y="52" width="12" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="5"/><rect x="55" y="52" width="12" height="12" rx="2.5" fill="#2F6BFF"/><path d="M43 85 V71 h14 v14" fill="none" stroke="currentColor" stroke-width="5.5" stroke-linejoin="round"/></svg>',
+    plot: '<svg viewBox="0 0 100 100"><path d="M17 52 L50 22 L83 52" fill="none" stroke="#fff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/><rect x="41" y="52" width="18" height="18" fill="#fff" transform="rotate(45 50 61)"/><path d="M30 60 V82 H70 V60" fill="none" stroke="#fff" stroke-width="9" stroke-linejoin="round" opacity=".55"/><circle cx="74" cy="27" r="7" fill="#2f6bff"/></svg>',
     // Point of Sale: a card terminal with the card going in.
     pos: '<svg viewBox="0 0 100 100"><rect x="26" y="34" width="48" height="56" rx="9" fill="none" stroke="currentColor" stroke-width="7"/><rect x="37" y="44" width="26" height="14" rx="3" fill="none" stroke="currentColor" stroke-width="5"/><path d="M39 69 h3 M48 69 h3 M57 69 h3 M39 79 h3 M48 79 h3 M57 79 h3" stroke="currentColor" stroke-width="6.5" stroke-linecap="round"/><rect x="36" y="16" width="40" height="15" rx="3.5" fill="#2F6BFF" transform="rotate(-12 56 23)"/></svg>',
     service: '<svg viewBox="0 0 100 100"><path d="M44 56 L62 38" stroke="currentColor" stroke-width="13" stroke-linecap="round" fill="none"/><circle cx="34" cy="66" r="15" fill="none" stroke="currentColor" stroke-width="8"/><circle cx="34" cy="66" r="6" fill="#2F6BFF"/><path d="M58 22 a16 16 0 1 1 18 18" fill="none" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg>',
@@ -2222,8 +2222,9 @@
   var _hcaptchaId = null;
   function mountHcaptcha() {
     if (!HCAPTCHA_SITE_KEY) return;
-    window.__cfToken = ""; _hcaptchaId = null;
     var el = document.getElementById("cf-widget"); if (!el) return;
+    // only a fresh box starts from nothing; a box that is already ticked keeps its token
+    if (!el.childNodes.length) { window.__cfToken = ""; _hcaptchaId = null; }
     function render() {
       if (!window.hcaptcha || typeof window.hcaptcha.render !== "function") return false;
       if (el.childNodes.length) return true; // already rendered
@@ -2234,6 +2235,21 @@
       var s = document.createElement("script"); s.id = "hcaptcha-js"; s.src = "https://js.hcaptcha.com/1/api.js?render=explicit"; s.async = true; s.defer = true; document.head.appendChild(s);
     }
     var n = 0, iv = setInterval(function () { if (render() || ++n > 80) clearInterval(iv); }, 100);
+  }
+  // The token is read from the widget itself at the moment of signing in. The
+  // callback variable can be empty while the box on screen is still ticked
+  // (a re-mount, a failed reset), and a phone then sent the sign-in with no
+  // token and got "no captcha_token found" back.
+  function captchaToken() {
+    var t = "";
+    try { if (window.hcaptcha && typeof window.hcaptcha.getResponse === "function") t = _hcaptchaId != null ? window.hcaptcha.getResponse(_hcaptchaId) : window.hcaptcha.getResponse(); } catch (e) { t = ""; }
+    return t || window.__cfToken || "";
+  }
+  function captchaReset() {
+    window.__cfToken = "";
+    try { if (window.hcaptcha) { if (_hcaptchaId != null) window.hcaptcha.reset(_hcaptchaId); else window.hcaptcha.reset(); return; } } catch (e) { }
+    // a reset that fails leaves a ticked box with no token behind it; draw a fresh one
+    var el = document.getElementById("cf-widget"); if (el) { el.innerHTML = ""; _hcaptchaId = null; mountHcaptcha(); }
   }
   function renderLogin(mode) {
     mode = mode || "in";
@@ -2273,11 +2289,18 @@
     var rm = document.getElementById("remember"); if (rm) { _remember = rm.checked; localStorage.setItem(REMEMBER_KEY, _remember ? "1" : "0"); }
     var creds = { email: email, password: pw };
     if (HCAPTCHA_SITE_KEY) {
-      if (!window.__cfToken) { err.textContent = "Please complete the verification below."; return; }
-      creds.options = { captchaToken: window.__cfToken };
+      var tok = captchaToken();
+      if (!tok) { err.textContent = "Please tick the verification box below, then sign in."; return; }
+      creds.options = { captchaToken: tok };
     }
     var res = mode === "in" ? await sb.auth.signInWithPassword(creds) : await sb.auth.signUp(creds);
-    if (res.error) { err.textContent = res.error.message; if (HCAPTCHA_SITE_KEY && window.hcaptcha) { try { window.hcaptcha.reset(_hcaptchaId); } catch (e) {} window.__cfToken = ""; } return; }
+    if (res.error) {
+      var msg = res.error.message || "Sign-in failed";
+      if (/captcha/i.test(msg)) msg = "The verification expired or did not reach the server. Tick the box again, then sign in.";
+      err.textContent = msg;
+      if (HCAPTCHA_SITE_KEY) captchaReset();
+      return;
+    }
     if (mode === "up" && !res.data.session) { err.textContent = "Check your email to confirm, then sign in."; return; }
     boot();
   }
@@ -2465,10 +2488,10 @@
     { title: "Sales & Customers", apps: ["crm", "sales", "contacts", "estimation"] },
     { title: "Procurement & Finance", apps: ["purchase", "inventory", "accounting", "counter"] },
     { title: "Execution", apps: ["project", "manufacturing", "site"] },
-    { title: "People", apps: ["hr", "recruitment"] },
+    { title: "HR", apps: ["hr", "recruitment"] },
     { title: "Workspace", apps: ["desk", "documents", "calendar", "sign", "knowledge", "insights", "activity"] },
-    { title: "Specialty", apps: ["events", "appoint"] },
-    { title: "Admin", apps: ["settings"] }
+    { title: "Specialty", apps: ["events", "appoint", "plot", "pos", "kitchen", "service"] },
+    { title: "Admin", apps: ["settings", "website", "__store"] }
   ];
   // App Store: the home shows only apps you keep; the rest are hidden (still fully
   // usable via the App Store + global search). A new company starts with a sensible
@@ -2694,7 +2717,7 @@
       sb.from("calendar_events").select("id,title,event_date,start_time,location,done,assigned_to")
         .eq("company_id", S.company.id).gte("event_date", today()).lte("event_date", soon).neq("done", true)
         .order("event_date").order("start_time").limit(12),
-      sb.from("notifications").select("*").eq("company_id", S.company.id)
+      sb.from("notifications").select("*").eq("company_id", S.company.id).or("user_id.is.null,user_id.eq." + S.user.id)
         .or("user_id.eq." + uid + ",user_id.is.null").eq("is_read", false)
         .order("created_at", { ascending: false }).limit(10),
       sb.from("approvals").select("*, approval_rules(approver_employee_id, hr_employees(name,user_id))")
@@ -3187,11 +3210,11 @@
     function P(ok, builder) { return ok ? builder() : Promise.resolve({ data: [] }); }
     try {
       var res = await Promise.all([
-        P(canView("accounting") || canView("contacts"), function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("company_id", S.company.id).ilike("name", like).limit(6); }),
+        P(canView("accounting") || canView("contacts"), function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("company_id", S.company.id).or("name.ilike." + like + ",email.ilike." + like + ",phone.ilike." + like + ",contact_person.ilike." + like).limit(6); }),
         P(canView("projects"), function () { return sb.from("projects").select("id,name").eq("company_id", cid).ilike("name", like).limit(6); }),
         P(canView("accounting"), function () { return sb.from("invoices").select("id,number,move_type").eq("company_id", cid).ilike("number", like).limit(6); }),
         P(canView("purchase"), function () { return sb.from("purchase_orders").select("id,number").eq("company_id", cid).ilike("number", like).limit(6); }),
-        P(canView("sales") || canView("inventory"), function () { return sb.from("products").select("id,name,default_code").eq("company_id", cid).ilike("name", like).limit(6); }),
+        P(canView("sales") || canView("inventory"), function () { return sb.from("products").select("id,name,default_code").eq("company_id", cid).or("name.ilike." + like + ",default_code.ilike." + like).limit(6); }),
         // A lead is often the thing people search for by name, and it was the
         // one record type the box could not find. Search the area and the
         // contact too, because a site is as often remembered by where it is or
@@ -3201,7 +3224,18 @@
             .eq("company_id", cid)
             .or("name.ilike." + like + ",area.ilike." + like + ",contact_name.ilike." + like)
             .limit(8);
-        })
+        }),
+        // Everything else a person might type: a colleague, an event, a task, a
+        // ticket, a work order, a tender, an asset, a site, a knowledge article.
+        P(canView("hr"), function () { return sb.from("hr_employees").select("id,name,role_title").eq("company_id", cid).ilike("name", like).limit(5); }),
+        P(canView("events"), function () { return sb.from("event_events").select("id,name,event_date").eq("company_id", cid).ilike("name", like).limit(5); }),
+        P(canView("project"), function () { return sb.from("project_tasks").select("id,name,project_id").eq("company_id", cid).ilike("name", like).limit(5); }),
+        P(canView("service"), function () { return sb.from("service_tickets").select("id,number,title").eq("company_id", cid).or("number.ilike." + like + ",title.ilike." + like).limit(5); }),
+        P(canView("manufacturing"), function () { return sb.from("work_orders").select("id,number").eq("company_id", cid).ilike("number", like).limit(5); }),
+        P(canView("site"), function () { return sb.from("tenders").select("id,number,name").eq("company_id", cid).or("number.ilike." + like + ",name.ilike." + like).limit(5); }),
+        P(canView("accounting"), function () { return sb.from("assets").select("id,number,name").eq("company_id", cid).or("number.ilike." + like + ",name.ilike." + like).limit(5); }),
+        P(canView("service"), function () { return sb.from("sites").select("id,name").eq("company_id", cid).ilike("name", like).limit(5); }),
+        P(canView("knowledge"), function () { return sb.from("articles").select("id,title,category").eq("company_id", cid).or("title.ilike." + like + ",body.ilike." + like).limit(5); })
       ]);
       (res[0].data || []).forEach(function (p) { results.push({ type: "partner", id: p.id, label: p.name, sub: p.is_customer ? "Customer" : (p.is_vendor ? "Vendor" : "Contact"), extra: p.is_vendor && !p.is_customer ? "vendor" : "customer" }); });
       (res[1].data || []).forEach(function (p) { results.push({ type: "project", id: p.id, label: p.name, sub: "Project" }); });
@@ -3209,6 +3243,15 @@
       (res[3].data || []).forEach(function (o) { results.push({ type: "po", id: o.id, label: o.number || "Draft", sub: "Purchase order" }); });
       (res[4].data || []).forEach(function (p) { results.push({ type: "product", id: p.id, label: p.name, sub: p.default_code ? "Item · " + p.default_code : "Item" }); });
       (res[5].data || []).forEach(function (l) { results.push({ type: "lead", id: l.id, label: l.name, sub: "Lead" + (l.area ? " · " + l.area : "") }); });
+      (res[6].data || []).forEach(function (e) { results.push({ type: "employee", id: e.id, label: e.name, sub: "Employee" + (e.role_title ? " · " + e.role_title : "") }); });
+      (res[7].data || []).forEach(function (e) { results.push({ type: "event", id: e.id, label: e.name, sub: "Event" + (e.event_date ? " · " + String(e.event_date).slice(0, 10) : "") }); });
+      (res[8].data || []).forEach(function (t) { results.push({ type: "task", id: t.id, label: t.name, sub: "Task", extra: t.project_id }); });
+      (res[9].data || []).forEach(function (t) { results.push({ type: "ticket", id: t.id, label: t.number || t.title || "Ticket", sub: "Ticket" + (t.number && t.title ? " · " + t.title : "") }); });
+      (res[10].data || []).forEach(function (w) { results.push({ type: "wo", id: w.id, label: w.number || "Work order", sub: "Work order" }); });
+      (res[11].data || []).forEach(function (t) { results.push({ type: "tender", id: t.id, label: t.number || t.name || "Tender", sub: "Tender" + (t.number && t.name ? " · " + t.name : "") }); });
+      (res[12].data || []).forEach(function (a) { results.push({ type: "asset", id: a.id, label: a.name || a.number || "Asset", sub: "Asset" + (a.number ? " · " + a.number : "") }); });
+      (res[13].data || []).forEach(function (s) { results.push({ type: "site", id: s.id, label: s.name, sub: "Site" }); });
+      (res[14].data || []).forEach(function (a) { results.push({ type: "article", id: a.id, label: a.title, sub: "Knowledge" + (a.category ? " · " + a.category : "") }); });
     } catch (e) { }
     // and the manual, because half of what people search for is not a record at
     // all, it is "how do I do this"
@@ -3233,7 +3276,7 @@
     var dd = document.getElementById("o-gs-dd"); if (dd) { dd.style.display = "none"; dd.innerHTML = ""; }
     var gin = document.getElementById("o-gs-in"); if (gin) gin.value = "";
     if (type === "help") { openHelp(String(id).split("|")[0]); return; }
-    var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales", lead: "crm" };
+    var appFor = { partner: "accounting", project: "project", invoice: "accounting", po: "purchase", product: "sales", lead: "crm", employee: "hr", event: "events", task: "project", ticket: "service", wo: "manufacturing", tender: "site", asset: "accounting", site: "service", article: "knowledge" };
     var app = appFor[type] || "accounting";
     if (app !== S.app) { S.app = app; applyAppColor(); renderShell(); }
     if (type === "partner") renderPartnerForm(id, extra || "customer");
@@ -3242,6 +3285,15 @@
     else if (type === "po") renderOrderForm(id, "purchase");
     else if (type === "product") renderProductForm(id);
     else if (type === "lead") renderLeadForm(id);
+    else if (type === "employee") renderEmployeeForm(id);
+    else if (type === "event") renderEventWorkspace(id, "overview");
+    else if (type === "task") { if (extra) renderProjectForm(extra); openTaskPanel(id, extra || null); }
+    else if (type === "ticket") renderTicketForm(id);
+    else if (type === "wo") renderWorkOrderForm(id);
+    else if (type === "tender") renderTenderForm(id);
+    else if (type === "asset") renderAssetForm(id);
+    else if (type === "site") renderSiteForm(id);
+    else if (type === "article") renderArticleForm(id);
   }
   function companySelectHTML(scope) {
     var opts = S.companies.map(function (c) { return '<option value="' + c.id + '"' + (c.id === S.company.id ? " selected" : "") + ">" + esc(c.name) + " (" + esc(c.currency_code) + ")</option>"; }).join("");
@@ -3403,7 +3455,7 @@
   async function refreshBell() {
     var dot = document.getElementById("bell-dot"); if (!dot) return;
     try {
-      var r = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("is_read", false);
+      var r = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("is_read", false).or("user_id.is.null,user_id.eq." + S.user.id);
       var n = r.count || 0;
       if (n > 0) { dot.style.display = "flex"; dot.textContent = n > 9 ? "9+" : String(n); } else dot.style.display = "none"; var tb = document.getElementById("tb-dot"); if (tb) { tb.hidden = n === 0; tb.textContent = n > 9 ? "9+" : String(n); }
     } catch (e) {}
@@ -3425,7 +3477,7 @@
     dd.style.right = (window.innerWidth - r.right) + "px"; dd.style.left = "auto";
     dd.innerHTML = '<div class="o-notif-h">Notifications<button class="o-notif-all" id="nt-all">Mark all read</button></div><div class="o-notif-list" id="nt-list"><div class="o-notif-empty">Loading...</div></div>';
     document.body.appendChild(dd);
-    var rows = (await sb.from("notifications").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(40)).data || [];
+    var rows = (await sb.from("notifications").select("*").eq("company_id", S.company.id).or("user_id.is.null,user_id.eq." + S.user.id).order("created_at", { ascending: false }).limit(40)).data || [];
     var list = document.getElementById("nt-list");
     if (!rows.length) { list.innerHTML = '<div class="o-notif-empty">You are all caught up.</div>'; }
     else list.innerHTML = rows.map(function (n) {
@@ -4755,7 +4807,7 @@
     body.querySelectorAll("[data-id]").forEach(function (el) {
       var open = function () { var r = L.all.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
       el.onclick = open;
-      if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
+      if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.target !== el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
@@ -13511,7 +13563,6 @@
   // this screen rather than a procedure in a document. It always restores into
   // a NEW company: a restore that can overwrite the thing you are recovering is
   // how people lose their data twice.
-  var BK_EVERY = [[6, "Every 6 hours"], [12, "Twice a day"], [24, "Every day"], [72, "Every 3 days"], [168, "Every week"]];
   var BK_KEEP = [3, 7, 14, 30, 60, 90];
   // ============================ BACKUPS ======================================
   // The backup is a ZIP FILE ON YOUR MACHINE, not a copy in the cloud, for two
@@ -13540,12 +13591,12 @@
     var cid = S.company.id;
     var st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data;
     if (!st) {
-      await sb.from("backup_settings").insert({ company_id: cid, enabled: true, every_hours: 168, keep_last: 7, next_run_at: new Date().toISOString() });
-      st = { enabled: true, every_hours: 168 };
+      await sb.from("backup_settings").insert({ company_id: cid, enabled: true, every_hours: 720, keep_last: 7, next_run_at: new Date().toISOString() });
+      st = { enabled: true, every_hours: 720 };
     }
     var log = (await sb.from("backups").select("*").eq("company_id", cid).order("created_at", { ascending: false }).limit(30)).data || [];
     var files = (await sb.from("media").select("id", { count: "exact", head: true }).eq("company_id", cid)).count || 0;
-    var due = st.last_run_at ? (Date.now() - new Date(st.last_run_at).getTime()) / 3600000 > Number(st.every_hours || 168) : true;
+    var due = st.last_run_at ? (Date.now() - new Date(st.last_run_at).getTime()) / 3600000 > Number(st.every_hours || 720) : true;
 
     document.getElementById("o-body").innerHTML =
       (due ? '<div class="card" style="border-left:3px solid var(--bad)"><h3 class="cp-sec" style="margin-top:0">' +
@@ -13594,7 +13645,7 @@
     document.getElementById("bk-save").onclick = async function () {
       var r = await sb.from("backup_settings").update({
         enabled: document.getElementById("bk-on").checked,
-        every_hours: parseInt(gv("bk-every"), 10) || 168, updated_at: new Date().toISOString()
+        every_hours: parseInt(gv("bk-every"), 10) || 720, updated_at: new Date().toISOString()
       }).eq("company_id", cid);
       if (r.error) { toast(errMsg(r.error)); return; }
       toast("Saved"); renderBackups();
