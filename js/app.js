@@ -13012,9 +13012,14 @@
   async function renderMyWork(empId) {
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Work") + '<div class="gap"></div><select id="mw-emp" class="o-filtbtn"></select></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
-    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name,user_id,work_email").eq("company_id", S.company.id).order("name")).data || [];
     var sel = document.getElementById("mw-emp");
-    if (empId === undefined) empId = AGS.member || (emps[0] && emps[0].id) || "";
+    // the signed-in person's own work first; the picker is for managers
+    if (empId === undefined) {
+      var myEmail = ((S.user && S.user.email) || "").toLowerCase();
+      var mine = emps.filter(function (e) { return (e.user_id && S.user && e.user_id === S.user.id) || (e.work_email && myEmail && e.work_email.toLowerCase() === myEmail); })[0];
+      empId = (mine && mine.id) || AGS.member || (emps[0] && emps[0].id) || "";
+    }
     sel.innerHTML = '<option value="">Pick a team member</option>' + emps.map(function (e) { return '<option value="' + e.id + '"' + (empId === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>'; }).join("");
     sel.onchange = function () { renderMyWork(sel.value); };
     var body = document.getElementById("o-body");
