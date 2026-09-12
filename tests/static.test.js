@@ -48,6 +48,7 @@ const MUTATIONS = {
     s => s.replace("var due = svcR2(T.tot - takenSoFar)", "var due = svcR2(T.sub - takenSoFar)"),
   "record forms name the breadcrumb through bcTitle":
     s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
+  "no function is declared twice": s => s + "\n  function bcTitle() {}\n",
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

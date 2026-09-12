@@ -277,6 +277,14 @@
         return n ? ok(n + " forms use bcTitle") : bad("no form calls bcTitle");
       } },
 
+    { name: "no function is declared twice",
+      why: "Orbit is one scope, so a second function with the same name silently replaces the first wherever it sits in the file. A list-engine helper called wireQuickAdd was shadowed by an older agile-board helper of the same name, and the add line did nothing, without an error anywhere.",
+      run: function (src) {
+        var seen = {}, dup = [];
+        all(src, /^  (?:async )?function ([A-Za-z_$][\w$]*)\s*\(/gm).forEach(function (n) { if (seen[n]) { if (dup.indexOf(n) < 0) dup.push(n); } seen[n] = 1; });
+        return dup.length ? bad("declared twice: " + dup.join(", ")) : ok(Object.keys(seen).length + " top-level functions, all unique");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

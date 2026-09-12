@@ -4646,7 +4646,7 @@
       } else {
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No matches</div><div class="o-empty2-h">Nothing matches your current search or filters. Clear them to see everything.</div></div>';
       }
-      if (quickAddOn(cfg)) { body.insertAdjacentHTML("beforeend", listTableOpen(cfg) + listTableClose(cfg)); wireQuickAdd(cfg); }
+      if (quickAddOn(cfg)) { body.insertAdjacentHTML("beforeend", listTableOpen(cfg) + listTableClose(cfg)); qaWire(cfg); }
       return;
     }
     if (L.view === "tree" && cfg.tree) {
@@ -4696,7 +4696,7 @@
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
-    wireColResize(cfg); wireColDrag(cfg); wireQuickAdd(cfg);
+    wireColResize(cfg); wireColDrag(cfg); qaWire(cfg);
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
@@ -4842,7 +4842,7 @@
     if (qa) html += quickAddRowHTML(cfg);
     return html + '</tbody></table>' + (qa ? quickAddBarHTML() : "");
   }
-  function wireQuickAdd(cfg) {
+  function qaWire(cfg) {
     var body = document.getElementById("o-body"); if (!body) return;
     var tr = body.querySelector("tr.o-qa"); if (!tr) return;
     tr.querySelectorAll(".o-qa-in").forEach(function (inp) {
@@ -13398,11 +13398,6 @@
   // how people lose their data twice.
   var BK_EVERY = [[6, "Every 6 hours"], [12, "Twice a day"], [24, "Every day"], [72, "Every 3 days"], [168, "Every week"]];
   var BK_KEEP = [3, 7, 14, 30, 60, 90];
-  function bkSize(n) {
-    n = Number(n) || 0;
-    return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? Math.round(n / 1024) + " KB" : n + " bytes";
-  }
-  function bkWhen(t) { return t ? String(t).slice(0, 16).replace("T", " ") : "never"; }
   // ============================ BACKUPS ======================================
   // The backup is a ZIP FILE ON YOUR MACHINE, not a copy in the cloud, for two
   // reasons that are the whole point:
