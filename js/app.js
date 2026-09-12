@@ -1097,7 +1097,7 @@
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
-      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. Board and Pivot sit beside it for the same guests.</p>" },
+      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
       { t: "Service (jobs, warranties and maintenance)", h: "<p>The <b>Service</b> app runs repair and maintenance work: a customer reports a problem, a technician fixes it, and you bill whatever the warranty does not cover.</p><ol class=\"man-steps\"><li class=\"man-step\">Raise a <b>ticket</b> with the customer, the item and its serial number. If a warranty covers that item Orbit flags it automatically.</li><li class=\"man-step\">Add the <b>parts and labour</b> used. Tick <i>covered</i> on anything the warranty pays for, so it is not billed.</li><li class=\"man-step\">Use <b>Bill to</b> to say who pays - the customer, or the manufacturer on a back-to-back RMA claim.</li><li class=\"man-step\">Record the <b>customer rating</b> when the job is done.</li></ol><p><b>Schedule</b> is a week grid of technicians against days: drag a job onto another person or another day to reschedule it. <b>Maintenance</b> holds recurring plans - set &ldquo;every 90 days&rdquo; and press <b>Generate due tickets</b> to raise them when they fall due.</p>" }
@@ -4709,7 +4709,10 @@
       if (quickAddOn(cfg)) { body.insertAdjacentHTML("beforeend", listTableOpen(cfg) + listTableClose(cfg)); qaWire(cfg); }
       return;
     }
-    if (L.view === "tree" && cfg.tree) {
+    if (phoneCards(cfg)) {
+      body.innerHTML = cardListHTML(cfg, rows);
+    }
+    else if (L.view === "tree" && cfg.tree) {
       body.innerHTML = treeViewHTML(cfg, rows); wireTree(cfg, rows);
     }
     else if (L.view === "org" && cfg.orgChart) {
@@ -4808,6 +4811,58 @@
     cols += visibleCols(cfg).map(function (o) { var ww = w[colKey(o.c, o.i)]; return '<col' + (ww ? ' style="width:' + ww + 'px"' : "") + '>'; }).join("");
     return '<colgroup>' + cols + '</colgroup>';
   }
+  // ---- lists on a phone are cards ----
+  // A table with eight columns on a 375px screen scrolls in two directions.
+  // Under 640px the plain list view draws one card per row instead: the first
+  // column as the title, the second as the line under it, then the next four
+  // visible columns as label and value. A tap opens the record, as before, and
+  // the add line becomes one box and a button. A list can insist on staying a
+  // table with cfg.phone = "table".
+  function phoneCards(cfg) {
+    return cfg.phone !== "table" && L.view === "list" && !L.selMode && !!(window.matchMedia && window.matchMedia("(max-width:640px)").matches);
+  }
+  function cardHTML(cfg, r) {
+    var cols = visibleCols(cfg).filter(function (o) { return o.c.cls !== "thumbcol"; });
+    var title = cols[0] ? cols[0].c.get(r) : esc(r.name || r.number || "");
+    var sub = cols[1] ? cols[1].c.get(r) : "";
+    var rest = cols.slice(2, 6).map(function (o) {
+      var v = o.c.get(r); if (!v || !htmlToText(v)) return "";
+      return '<div class="o-rc-kv"><span class="k">' + esc(o.c.label) + '</span><span class="v">' + v + '</span></div>';
+    }).join("");
+    return '<div class="o-rcard" data-id="' + r.id + '">' + (r._thumb ? '<img class="o-rc-img" alt="" src="' + r._thumb + '">' : "") +
+      '<div class="o-rc-main"><div class="o-rc-t">' + title + '</div>' +
+      (sub && htmlToText(sub) ? '<div class="o-rc-s">' + sub + '</div>' : "") +
+      (rest ? '<div class="o-rc-grid">' + rest + '</div>' : "") + '</div></div>';
+  }
+  function cardListHTML(cfg, rows) {
+    var html = '<div class="o-rcards">';
+    if (L.colGroup != null || L.group != null) {
+      var groups = {}, keyFn;
+      if (L.colGroup != null && cfg.columns[L.colGroup]) { var gc = cfg.columns[L.colGroup]; keyFn = function (r) { return colText(gc, r) || "None"; }; }
+      else { var g = cfg.groupBy[L.group]; keyFn = function (r) { return g.get(r) || "None"; }; }
+      rows.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
+      Object.keys(groups).sort().forEach(function (k) {
+        html += '<div class="o-rc-grp">' + esc(k) + ' <span class="cnt">' + groups[k].length + '</span></div>' + groups[k].map(function (r) { return cardHTML(cfg, r); }).join("");
+      });
+    } else {
+      html += rows.slice(L.page * L.size, (L.page + 1) * L.size).map(function (r) { return cardHTML(cfg, r); }).join("");
+    }
+    if (L.recent && L.recent.length) L.recent.forEach(function (id) { var r = L.all.filter(function (x) { return x.id === id; })[0]; if (r) html += cardHTML(cfg, r); });
+    html += '</div>';
+    if (quickAddOn(cfg)) {
+      var rec = cfg.newRow() || {};
+      var first = visibleCols(cfg).filter(function (o) { return o.c.edit && o.c.edit.type !== "checkbox" && o.c.edit.type !== "select"; })[0];
+      if (first) html += '<div class="o-qa o-qa-card">' + quickAddEditor(first.c, first.i, rec, true) + '<button type="button" class="btn sm pri o-qa-add" style="background:var(--app);border-color:var(--app)">Add</button></div>';
+    }
+    return html;
+  }
+  // Turning a phone, or dragging a window narrower, redraws the open list in
+  // whichever shape now fits.
+  var _lrs = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(_lrs);
+    _lrs = setTimeout(function () { if (L && L.cfg && document.getElementById("o-body")) paintBody(); }, 160);
+  });
   // ---- spreadsheet habits, for every list at once ----
   // Columns keep the order the person dragged them into. A column the list did
   // not have when the order was saved falls in at the end.
@@ -4904,7 +4959,7 @@
   }
   function qaWire(cfg) {
     var body = document.getElementById("o-body"); if (!body) return;
-    var tr = body.querySelector("tr.o-qa"); if (!tr) return;
+    var tr = body.querySelector(".o-qa"); if (!tr) return;
     tr.querySelectorAll(".o-qa-in").forEach(function (inp) {
       inp.addEventListener("keydown", function (e) {
         if (e.key === "Enter") { e.preventDefault(); quickAddSave(cfg, tr); }
@@ -4936,7 +4991,7 @@
     L.all.push(row); L.recent = L.recent || []; L.recent.push(row.id);
     if (cfg.onSaved) cfg.onSaved(row, null, null);
     paintBody();
-    var first = document.querySelector("#o-body tr.o-qa .o-qa-in"); if (first) first.focus();
+    var first = document.querySelector("#o-body .o-qa .o-qa-in"); if (first) first.focus();
     toast("Added");
   }
   function listTableOpen(cfg) { ensureColStyle(); return '<table class="o-list">' + colgroupHTML(cfg) + '<thead>' + headRow(cfg) + '</thead><tbody>'; }
@@ -4964,7 +5019,7 @@
     var table = body.querySelector("table.o-list"); if (!table) return;
     var cg = table.querySelector("colgroup"), vis = visibleCols(cfg);
     body.querySelectorAll(".o-th-rs").forEach(function (gr) {
-      gr.onmousedown = function (e) {
+      gr.onpointerdown = function (e) {
         e.preventDefault(); e.stopPropagation();
         var th = gr.closest("th"), ci = +gr.dataset.ci, pos = -1;
         for (var j = 0; j < vis.length; j++) { if (vis[j].i === ci) { pos = j; break; } }
@@ -4972,8 +5027,8 @@
         var startX = e.clientX, startW = th.getBoundingClientRect().width, w = startW;
         gr.classList.add("drag"); document.body.style.cursor = "col-resize";
         function mm(ev) { w = Math.max(48, startW + (ev.clientX - startX)); if (colEl) colEl.style.width = w + "px"; th.style.width = w + "px"; }
-        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); document.body.style.cursor = ""; gr.classList.remove("drag"); L.cols.width[colKey(cfg.columns[ci], ci)] = Math.round(w); saveColPrefs(); }
-        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+        function mu() { document.removeEventListener("pointermove", mm); document.removeEventListener("pointerup", mu); document.body.style.cursor = ""; gr.classList.remove("drag"); L.cols.width[colKey(cfg.columns[ci], ci)] = Math.round(w); saveColPrefs(); }
+        document.addEventListener("pointermove", mm); document.addEventListener("pointerup", mu);
       };
     });
   }
@@ -9649,18 +9704,18 @@
       tb.addEventListener("drop", function (e) { e.preventDefault(); tb.classList.remove("drop-over"); var gid = e.dataTransfer.getData("text/plain"); if (gid) assign(gid, tb.dataset.id); });
       tb.addEventListener("dblclick", function () { openTableModal(tables.filter(function (x) { return x.id === tb.dataset.id; })[0], zones); });
       var handle = tb.querySelector(".seat-move");
-      if (handle) handle.addEventListener("mousedown", function (e) {
+      if (handle) handle.addEventListener("pointerdown", function (e) {
         e.preventDefault(); tb._moving = true; var sx = e.clientX, sy = e.clientY, ox = parseFloat(tb.style.left) || 0, oy = parseFloat(tb.style.top) || 0;
         function mm(ev) { tb.style.left = Math.max(0, ox + (ev.clientX - sx)) + "px"; tb.style.top = Math.max(0, oy + (ev.clientY - sy)) + "px"; }
-        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ x: parseFloat(tb.style.left) || 0, y: parseFloat(tb.style.top) || 0 }).eq("id", tb.dataset.id); }
-        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+        function mu() { document.removeEventListener("pointermove", mm); document.removeEventListener("pointerup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ x: parseFloat(tb.style.left) || 0, y: parseFloat(tb.style.top) || 0 }).eq("id", tb.dataset.id); }
+        document.addEventListener("pointermove", mm); document.addEventListener("pointerup", mu);
       });
       var rz = tb.querySelector(".seat-resize");
-      if (rz) rz.addEventListener("mousedown", function (e) {
+      if (rz) rz.addEventListener("pointerdown", function (e) {
         e.preventDefault(); e.stopPropagation(); tb._moving = true; var sx = e.clientX, sy = e.clientY, ow = tb.offsetWidth, oh = tb.offsetHeight;
         function mm(ev) { tb.style.width = Math.max(70, ow + (ev.clientX - sx)) + "px"; tb.style.minHeight = Math.max(70, oh + (ev.clientY - sy)) + "px"; }
-        function mu() { document.removeEventListener("mousemove", mm); document.removeEventListener("mouseup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ w: parseFloat(tb.style.width) || 110, h: parseFloat(tb.style.minHeight) || 100 }).eq("id", tb.dataset.id); }
-        document.addEventListener("mousemove", mm); document.addEventListener("mouseup", mu);
+        function mu() { document.removeEventListener("pointermove", mm); document.removeEventListener("pointerup", mu); setTimeout(function () { tb._moving = false; }, 60); sb.from("event_tables").update({ w: parseFloat(tb.style.width) || 110, h: parseFloat(tb.style.minHeight) || 100 }).eq("id", tb.dataset.id); }
+        document.addEventListener("pointermove", mm); document.addEventListener("pointerup", mu);
       });
     });
     var un = document.getElementById("seat-unassigned");

@@ -2351,3 +2351,46 @@ html,body{overflow-x:hidden}
 .o-empty.o-skel{padding:18px 16px;text-align:left}
 .boot{height:100vh;height:100dvh}
 .login{min-height:100vh;min-height:100dvh}
+
+/* ============================================================================
+   Lists on a phone are cards; the toolbar keeps one row of what matters; the
+   home bar fits; the till, the seating plan and the column grips answer to a
+   finger as well as a mouse.
+   ========================================================================== */
+.o-rcards{display:grid;gap:8px;padding:10px 10px 12px;background:var(--bg)}
+.o-body:has(.o-rcards){background:var(--bg)}
+.o-rcard{display:flex;gap:12px;align-items:flex-start;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;cursor:pointer;box-shadow:var(--sh-sm);-webkit-tap-highlight-color:transparent}
+.o-rcard:active{background:var(--panel2)}
+.o-rc-img{width:44px;height:44px;border-radius:var(--r-sm);object-fit:cover;flex:none}
+.o-rc-main{min-width:0;flex:1}
+.o-rc-t{font-weight:700;font-size:var(--t-md);line-height:1.3;overflow-wrap:anywhere}
+.o-rc-t .muted,.o-rc-t div{font-weight:500}
+.o-rc-s{color:var(--ink2);font-size:var(--t-sm);margin-top:2px}
+.o-rc-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:9px}
+.o-rc-kv{display:flex;flex-direction:column;min-width:0}
+.o-rc-kv .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:700}
+.o-rc-kv .v{font-size:var(--t-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.o-rc-grp{font-size:var(--t-xs);letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:700;padding:10px 4px 2px}
+.o-rc-grp .cnt{font-weight:600;color:var(--ink2)}
+.o-qa-card{display:flex;gap:8px;padding:10px;position:sticky;bottom:0;background:var(--panel);border-top:1px solid var(--line)}
+.o-qa-card .o-qa-in{flex:1;min-width:0}
+@media(max-width:760px){
+  .o-gs.o-gs-home{display:block}
+  .o-home-top #home-edit{display:none}
+  .o-home-top .o-cosel{max-width:40vw;flex:0 1 auto;min-width:0}
+}
+@media(max-width:640px){
+  .o-cp .o-psize,.o-cp .o-vs,.o-cp #o-selbtn{display:none}
+  .o-cp .o-search{flex:1 1 100%;max-width:none;order:-1}
+  .o-cp .o-new{order:-2}
+  .o-cp .o-pager{margin-left:auto}
+  .o-lbar .o-psize,.o-lbar #o-selbtn{display:none}
+  .o-lbar .o-search{flex:1 1 100%;max-width:none}
+}
+/* fingers */
+.seat-move,.seat-resize,.o-th-rs{touch-action:none}
+@media(pointer:coarse){
+  .seat-resize{width:22px;height:22px}
+  .pos-wrap button,.tp-rows button,.tp-meth button,.kds-wrap button,.pos-cell,.pos-tile{min-height:48px}
+  .o-tile{padding:16px 6px}
+}
