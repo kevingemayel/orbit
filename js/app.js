@@ -3081,14 +3081,17 @@
     menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
     apps: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>',
     bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
-    me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
+    me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+    work: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="m8.5 13 2.5 2.5 4.5-5"/></svg>'
   };
   function tabbarHTML(where) {
     function b(id, label, svg, on) { return '<button type="button" id="tb-' + id + '"' + (on ? ' class="on" aria-current="page"' : '') + ' aria-label="' + label + '">' + svg + '<span>' + label + '</span></button>'; }
+    // Home sits in the middle, under the thumb. The left slot is this app's menu,
+    // or, on the home, My work: the one page every person needs on a phone.
     return '<nav class="o-tabbar" id="o-tabbar" aria-label="Quick bar">' +
-      b("home", "Home", TB_ICONS.home, where === "home") +
+      (where === "app" ? b("menu", "Menu", TB_ICONS.menu) : b("work", "My work", TB_ICONS.work)) +
       b("search", "Search", TB_ICONS.search) +
-      (where === "app" ? b("menu", "Menu", TB_ICONS.menu) : b("apps", "Apps", TB_ICONS.apps, where === "store")) +
+      b("home", "Home", TB_ICONS.home, where === "home") +
       b("alerts", "Alerts", TB_ICONS.bell + '<span class="o-tb-dot" id="tb-dot" hidden></span>') +
       b("me", "Me", TB_ICONS.me) + '</nav>';
   }
@@ -3103,7 +3106,12 @@
     g("search").onclick = openPhoneSearch;
     var m = g("menu");
     if (m) m.onclick = function () { var sd = document.getElementById("oside"); if (!sd) return; S.sideCollapsed = !S.sideCollapsed; sd.classList.toggle("collapsed", S.sideCollapsed); m.classList.toggle("on", !S.sideCollapsed); };
-    var ap = g("apps"); if (ap) ap.onclick = function () { if (where !== "store") renderAppStore(); };
+    var wk = g("work");
+    if (wk) wk.onclick = function () {
+      if (!canGo("proj.mywork")) { toast("My work lives in Projects, which you do not have access to"); return; }
+      if (__dirty && !confirm("You have unsaved changes on this page. Leave without saving?")) return;
+      __dirty = false; S.app = "project"; applyAppColor(); go("proj.mywork");
+    };
     g("alerts").onclick = function (e) { openNotifPanel(e.currentTarget); };
     g("me").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     // a tap on the page closes the menu sheet, like a backdrop that is not modal
