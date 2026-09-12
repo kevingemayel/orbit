@@ -3149,6 +3149,7 @@
   function renderShell() {
     var a = APPS[S.app];
     if (S.sideCollapsed === undefined) { var _ss = localStorage.getItem("orbit_side"); S.sideCollapsed = _ss === null ? (window.innerWidth <= 760) : _ss === "1"; }
+    if (window.innerWidth <= 760) S.sideCollapsed = true;   // a phone always arrives with the menu closed; the quick bar opens it
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
     function menuItemVisible(action) { return action === "settings.roles" ? canManageRoles() : canGo(action); }
     var vmenus = a.menus.map(function (m) {
