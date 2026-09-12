@@ -267,6 +267,16 @@
         return gone.length ? bad("missing: " + gone.join(", ")) : ok(need.length + " pieces present");
       } },
 
+    { name: "record forms name the breadcrumb through bcTitle",
+      why: "A positional selector on the breadcrumb (span:last-child) broke every record form the day a button was added after the title. The title has an id and one helper writes it.",
+      run: function (src) {
+        if (src.indexOf(".o-bc span:last-child") >= 0) return bad("a screen still uses the positional selector");
+        if (!/id="bc-title"/.test(src)) return bad("bcHTML no longer names the title span");
+        if (!/function bcTitle\(/.test(src)) return bad("bcTitle helper is missing");
+        var n = (src.match(/^\s+bcTitle\(/gm) || []).length;
+        return n ? ok(n + " forms use bcTitle") : bad("no form calls bcTitle");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

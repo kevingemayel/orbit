@@ -4285,9 +4285,16 @@
     // The title bar sits on every screen and never gave the space back. The
     // menu has collapsed for a long time; this is the same for the header, so
     // a laptop gets two more rows of the thing you actually came to look at.
-    return '<div class="o-bc">' + up + '<span>' + esc(term(title)) + '</span>' +
+    return '<div class="o-bc">' + up + '<span class="bc-title" id="bc-title">' + esc(term(title)) + '</span>' +
       '<button class="o-bc-min" id="bc-min" aria-label="Minimise the page header" title="Minimise the page header">' +
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div>';
+  }
+  // Every record form names itself in the breadcrumb once its row has loaded.
+  // It used to reach for the last span in the bar, which stopped being the
+  // title the day a button was added after it, and 51 forms died on one null.
+  function bcTitle(text) {
+    var el = document.getElementById("bc-title");
+    if (el) el.textContent = text == null ? "" : String(text);
   }
   // The page header collapses on its own as soon as you scroll, the way a large
   // title does on a phone, and comes back when you return to the top. The
@@ -4930,7 +4937,7 @@
     var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).eq("scope", "sale")).data || [];
     var lines = id === "new" ? [] : (await sb.from("recurring_invoice_lines").select("*").eq("recurring_id", id).order("sequence")).data || [];
     var prodById = {}; products.forEach(function (p) { prodById[p.id] = p; });
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.name || "Recurring");
+    bcTitle(id === "new" ? "New" : (r.name || "Recurring"));
     var custOpts = '<option value="">(select customer)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (r.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     function prodOptsFor(sel) { return '<option value="">(custom line)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
     function taxOptsFor(sel) { return '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '"' + (sel === t.id ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join(""); }
@@ -5174,7 +5181,7 @@
     var lines = id === "new" ? [{}, {}] : ((await sb.from("journal_lines").select("*").eq("entry_id", id).order("id")).data || []);
     if (!lines.length) lines = [{}, {}];
     var posted = ent.state === "posted";
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (ent.number || ent.ref || "Entry");
+    bcTitle(id === "new" ? "New" : (ent.number || ent.ref || "Entry"));
     function acctOpts(cur) { return '<option value="">Account...</option>' + accts.map(function (a) { return '<option value="' + a.id + '"' + (cur === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>'; }).join(""); }
     function totals() { var d = 0, c = 0; lines.forEach(function (l) { d += Number(l.debit) || 0; c += Number(l.credit) || 0; }); return { d: d, c: c, bal: Math.abs(d - c) < 0.005 && (d > 0 || c > 0) }; }
     function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> &nbsp; ' + (t.bal ? '<span style="color:var(--good-t);font-weight:700">Balanced</span>' : '<span style="color:var(--bad-t);font-weight:700">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
@@ -5493,7 +5500,7 @@
     function fxRate(from, to, d) { if (from === to) return 1; var rf = rateOf(from, d), rt = rateOf(to, d); return (rf == null || rt == null) ? null : rf / rt; }
 
     // breadcrumb title
-    document.querySelector(".o-bc span:last-child").textContent = inv ? (inv.number || "Draft") : "New";
+    bcTitle(inv ? (inv.number || "Draft") : "New");
 
     // status bar buttons
     var btns = "";
@@ -6392,7 +6399,7 @@
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
     var ordUoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = order ? (order.number || "Draft") : "New";
+    bcTitle(order ? (order.number || "Draft") : "New");
     var invCount = 0, firstInvId = null;
     if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
     var smart = (order && invCount) ? '<div class="o-smart"><button class="sb" id="o-sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isSale ? "Invoices" : "Bills") + '</span></button></div>' : "";
@@ -6800,7 +6807,7 @@
     else if (preset.items && preset.items.length) initLines = preset.items.slice();
     if (!initLines.length) initLines.push({ product_id: null, name: "", uom: "", qty: 1, destination: "warehouse" });
     var showOrdered = !!fromOrder;
-    document.querySelector(".o-bc span:last-child").textContent = "Receive Goods";
+    bcTitle("Receive Goods");
     var prodOpts = '<option value="">- pick a product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
     var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (((fromOrder && fromOrder.partner_id === v.id) || (preset.supplierId === v.id)) ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
@@ -6993,7 +7000,7 @@
     }
     function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    bcTitle(id === "new" ? "New" : (p.name || ""));
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="p-save">Save</button><button id="p-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? '<button id="p-arch">' + (p.is_active === false ? "Restore" : "Archive") + '</button>' + formDelBtn("partners", id, backAction, isContact ? "contact" : (isCust ? "customer" : "vendor")) : "") + '</div><div></div></div>' +
@@ -7173,7 +7180,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { is_active: true } : (await sb.from("accounts").select("*").eq("id", id).maybeSingle()).data || {};
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.code + " " + a.name);
+    bcTitle(id === "new" ? "New" : (a.code + " " + a.name));
     var jiCount = id === "new" ? 0 : ((await sb.from("journal_lines").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("account_id", id)).count || 0);
     var aSmart = id !== "new" ? '<div class="o-smart"><button class="sb" id="a-sm-gl"><span class="v">' + jiCount + '</span><span class="k">Journal Items</span></button></div>' : "";
     var typeOpts = S.types.map(function (t) { return '<option value="' + t.code + '"' + (a.type_code === t.code ? " selected" : "") + '>' + esc(t.name) + '</option>'; }).join("");
@@ -7626,7 +7633,7 @@
     var purTax = taxes.filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === "purchase"; });
     var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    bcTitle(id === "new" ? "New" : (p.name || ""));
     var prSmart = "";
     if (id !== "new" && p.type === "storable") { var _oh = await onHandMap(); prSmart = '<div class="o-smart"><button class="sb" id="pr-sm-oh"><span class="v">' + Number(_oh[id] || 0) + '</span><span class="k">On Hand</span></button></div>'; }
     function sel(id2, list, cur, blank) { return '<select id="' + id2 + '">' + (blank ? '<option value="">' + blank + '</option>' : '') + list.map(function (x) { return '<option value="' + (x.id || x.code) + '"' + ((cur === (x.id || x.code)) ? " selected" : "") + '>' + esc(x.name ? ((x.code ? x.code + " " : "") + x.name) : x) + (x.amount != null ? " (" + x.amount + "%)" : "") + '</option>'; }).join("") + '</select>'; }
@@ -8059,7 +8066,7 @@
     var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var moves = id === "new" ? [] : ((await sb.from("tool_movements").select("*").eq("tool_id", id).order("at", { ascending: false }).limit(12)).data || []);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "");
+    bcTitle(id === "new" ? "New" : (t.name || ""));
     function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
     var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (t.holder_partner_id === v.id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
@@ -8182,7 +8189,7 @@
     var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     _prCodeAuto = false;
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (it.name || "");
+    bcTitle(id === "new" ? "New" : (it.name || ""));
     var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (it.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pi-save">Save</button><button id="pi-discard">Discard</button>' +
@@ -8287,7 +8294,7 @@
     var pitems = (await sb.from("project_items").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var lines = id === "new" ? [] : ((await sb.from("production_consumption").select("*").eq("run_id", id)).data || []);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.name || "");
+    bcTitle(id === "new" ? "New" : (r.name || ""));
     var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (r.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var outOpts = '<option value="">(none)</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (r.output_product_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
@@ -8384,7 +8391,7 @@
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var dnUoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var lines = id === "new" ? [] : ((await sb.from("delivery_note_lines").select("*").eq("note_id", id)).data || []);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || "New");
+    bcTitle(id === "new" ? "New" : (d.number || "New"));
     var custOpts = '<option value="">(none)</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (d.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
@@ -8611,7 +8618,7 @@
     var e = id === "new" ? { status: "planning", event_type: "wedding", currency: (S.company && S.company.currency_code) || "USD" } : (await sb.from("event_events").select("*").eq("id", id).maybeSingle()).data || {};
     var evCustomers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
     var evProjects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New event" : (e.name || "");
+    bcTitle(id === "new" ? "New event" : (e.name || ""));
     function osel(list, cur) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + o[1] + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ev-save">Save</button><button id="ev-discard">Discard</button></div><div></div></div>' +
@@ -10984,7 +10991,7 @@
     wireBc();
     var a = id === "new" ? { state: "draft", appraisal_date: today(), rating: 3 } : (await sb.from("appraisals").select("*, hr_employees(name)").eq("id", id).maybeSingle()).data || {};
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((a.hr_employees ? a.hr_employees.name : "") + " " + (a.period || ""));
+    bcTitle(id === "new" ? "New" : ((a.hr_employees ? a.hr_employees.name : "") + " " + (a.period || "")));
     var done = a.state === "done", dis = done ? " disabled" : "";
     var btns = (done ? '<button id="ap-reopen">Reopen</button>' : '<button class="pri" id="ap-save">Save</button><button id="ap-discard">Discard</button>' + (id !== "new" ? '<button id="ap-done">Mark done</button>' : '')) + (id !== "new" && canManageApp(S.app) ? formDelBtn("appraisals", id, "hr.appraisals", "appraisal") : "");
     document.querySelector(".o-form").innerHTML =
@@ -11331,7 +11338,7 @@
     var s = id === "new" ? { status: "draft", doc_type: "document" } : (await sb.from("sign_requests").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var sigs = id === "new" ? [] : (await sb.from("sign_signatures").select("*").eq("request_id", id).order("sequence")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || s.title || "Request");
+    bcTitle(id === "new" ? "New" : (s.number || s.title || "Request"));
     var st = s.status || "draft", done = st === "signed" || st === "declined";
     var typeOpts = SIGN_TYPES.map(function (x) { return '<option value="' + x[0] + '"' + (s.doc_type === x[0] ? " selected" : "") + '>' + x[1] + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (s.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
@@ -11429,7 +11436,7 @@
     wireBc();
     var a = id === "new" ? { stage: "new", applied_date: today(), rating: 0 } : (await sb.from("applicants").select("*").eq("id", id).maybeSingle()).data || {};
     var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.name || "Applicant");
+    bcTitle(id === "new" ? "New" : (a.name || "Applicant"));
     var jobOpts = '<option value="">(none)</option>' + jobs.map(function (j) { return '<option value="' + j.id + '"' + (a.job_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("");
     var stageBtns = APP_STAGES.filter(function (x) { return x[0] !== a.stage; }).map(function (x) { return '<button id="ap-stage-' + x[0] + '">' + (x[0] === "hired" ? "Hire" : x[0] === "rejected" ? "Reject" : "Move to " + x[1]) + '</button>'; }).join("");
     var stages = '<div class="o-stages">' + APP_STAGES.filter(function (x) { return x[0] !== "rejected"; }).map(function (x) { var idx = APP_STAGES.map(function (z) { return z[0]; }).indexOf(a.stage), cur = APP_STAGES.map(function (z) { return z[0]; }).indexOf(x[0]); return '<span class="st ' + (a.stage === x[0] ? "on" : (cur < idx ? "done" : "")) + '">' + x[1] + '</span>'; }).join("") + '</div>';
@@ -11483,7 +11490,7 @@
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { is_published: true } : (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data || {};
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.title || "Article");
+    bcTitle(id === "new" ? "New" : (a.title || "Article"));
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="kb-save">Save</button><button id="kb-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("articles", id, "kb.articles", "article") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="kb-title" value="' + esc(a.title || "") + '" placeholder="Article title"></div>' +
@@ -11852,7 +11859,7 @@
     wireBc();
     var d = id === "new" ? { diary_date: today() } : (await sb.from("site_diaries").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.diary_date || "Diary");
+    bcTitle(id === "new" ? "New" : (d.diary_date || "Diary"));
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="sd-save">Save</button><button id="sd-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("site_diaries", id, "site.diary", "diary entry") : "") + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-groups"><div>' +
@@ -12539,7 +12546,7 @@
     var p = id === "new" ? { is_active: true, currency_code: S.company.currency_code } : (await sb.from("pricelists").select("*").eq("id", id).maybeSingle()).data || {};
     var items = id === "new" ? [] : (await sb.from("pricelist_items").select("*").eq("pricelist_id", id).order("sequence")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "Pricelist");
+    bcTitle(id === "new" ? "New" : (p.name || "Pricelist"));
     function prodOpts(sel) { return '<option value="">(any product)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="pi-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="pi-min" type="number" step="0.01" value="' + (l.min_qty || 1) + '" style="width:70px;text-align:right"></td><td><input class="pi-fixed" type="number" step="0.01" value="' + (l.fixed_price != null ? l.fixed_price : "") + '" placeholder="fixed" style="width:90px;text-align:right"></td><td><input class="pi-off" type="number" step="0.01" value="' + (l.percent_off || 0) + '" style="width:70px;text-align:right"></td><td><button class="pi-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     document.querySelector(".o-form").innerHTML =
@@ -12582,7 +12589,7 @@
     var t = id === "new" ? {} : (await sb.from("quote_templates").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("quote_template_lines").select("*").eq("template_id", id).order("sequence")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,list_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "Template");
+    bcTitle(id === "new" ? "New" : (t.name || "Template"));
     function prodOpts(sel) { return '<option value="">(free text)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc((x.default_code ? x.default_code + " " : "") + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="qt-prod">' + prodOpts(l.product_id) + '</select></td><td><input class="qt-name" value="' + esc(l.name || "") + '" placeholder="Description"></td><td><input class="qt-qty" type="number" step="0.01" value="' + (l.quantity || 1) + '" style="width:64px;text-align:right"></td><td><input class="qt-price" type="number" step="0.01" value="' + (l.unit_price || 0) + '" style="width:90px;text-align:right"></td><td><button class="qt-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var btns = '<button class="pri" id="qt-save">Save</button><button id="qt-discard">Discard</button>' + (id !== "new" ? '<button id="qt-quote">Create quotation</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("quote_templates", id, "sale.qtempl", "template") : "");
@@ -12662,7 +12669,7 @@
     var a = id === "new" ? { state: "draft", method: "linear", life_months: 60, asset_account: "2100", depr_account: "2800", expense_account: "6800", acquisition_date: today() } : (await sb.from("assets").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("asset_lines").select("*").eq("asset_id", id).order("seq")).data || [];
     var cc = S.company.currency_code, running = a.state === "running", closed = a.state === "closed", dis = (running || closed) ? " disabled" : "";
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (a.number || a.name || "Asset");
+    bcTitle(id === "new" ? "New" : (a.number || a.name || "Asset"));
     var postedTot = lines.filter(function (l) { return l.posted; }).reduce(function (s, l) { return s + Number(l.depreciation || 0); }, 0);
     var bookNow = Number(a.acquisition_value || 0) - postedTot;
     var dueCount = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); }).length;
@@ -12787,7 +12794,7 @@
     var b = id === "new" ? { date_start: yr + "-01-01", date_end: yr + "-12-31" } : (await sb.from("budgets").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("budget_lines").select("*").eq("budget_id", id).order("sequence")).data || [];
     var accts = (await sb.from("accounts").select("code,name").eq("company_id", S.company.id).order("code")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (b.name || "Budget");
+    bcTitle(id === "new" ? "New" : (b.name || "Budget"));
     function acctOpts(sel) { return accts.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt" type="number" step="0.01" value="' + (l.planned || 0) + '" style="text-align:right"></td><td><button class="bl-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var btns = '<button class="pri" id="bg-save">Save</button><button id="bg-discard">Discard</button>' + (id !== "new" ? '<button id="bg-report">Budget vs actual</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("budgets", id, "budget.list", "budget") : "");
@@ -12822,7 +12829,7 @@
     var cc = S.company.currency_code;
     var b = (await sb.from("budgets").select("*").eq("id", budgetId).maybeSingle()).data || {};
     var lines = (await sb.from("budget_lines").select("*").eq("budget_id", budgetId).order("sequence")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = b.name || "Budget";
+    bcTitle(b.name || "Budget");
     var jl = (await bookFilter(sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id,book_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end), "journal_entries.book_id")).data || [];
     var actByCode = {}, typeByCode = {};
     jl.forEach(function (l) { var c = l.accounts && l.accounts.code; if (!c) return; typeByCode[c] = l.accounts.type_code; actByCode[c] = (actByCode[c] || 0) + (Number(l.debit || 0) - Number(l.credit || 0)); });
@@ -13802,7 +13809,7 @@
     var products = (await sb.from("products").select("id,name,default_code,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var openPOs = (await sb.from("purchase_orders").select("id,number").eq("company_id", S.company.id).in("state", ["draft", "sent", "purchase"]).order("date_order", { ascending: false })).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || "Shipment");
+    bcTitle(id === "new" ? "New" : (s.number || "Shipment"));
     var prodBy = {}; products.forEach(function (p) { prodBy[p.id] = p; });
     var prodOpts = '<option value="">- product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
     function opt(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (o) { return '<option value="' + o[0] + '"' + (cur === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
@@ -14834,7 +14841,7 @@
     var d = id === "new" ? { status: "in_progress" } : (await sb.from("drawings").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var revs = id === "new" ? [] : (await sb.from("drawing_revisions").select("*").eq("drawing_id", id).order("sequence")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (d.number || d.title || "Drawing");
+    bcTitle(id === "new" ? "New" : (d.number || d.title || "Drawing"));
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     function revRow(r) {
       return '<tr><td><b>' + esc(r.revision || "") + '</b></td><td>' + esc((REV_STATUS.filter(function (x) { return x[0] === r.status; })[0] || [null, r.status || "draft"])[1]) + '</td><td>' + esc(r.issue_purpose || "") + '</td><td class="muted">' + esc(r.issued_date || "") + '</td><td><a class="dw-open" data-rev="' + r.id + '" style="cursor:pointer;color:var(--accent);font-weight:600">Open / files</a></td><td><button class="dw-del" data-rev="' + r.id + '" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>';
@@ -14931,7 +14938,7 @@
     wireBc();
     var s = id === "new" ? { status: "draft", revision: "A", doc_type: "shop_drawing" } : (await sb.from("submittals").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (s.number || s.title || "Submittal");
+    bcTitle(id === "new" ? "New" : (s.number || s.title || "Submittal"));
     var st = s.status || "draft", terminal = st === "superseded", dis = terminal ? " disabled" : "";
     var btns = (terminal ? "" : '<button class="pri" id="sm-save">Save</button><button id="sm-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("submittals", id, "doc.subs", "submittal") : "");
     if (id !== "new") {
@@ -15019,7 +15026,7 @@
     wireBc();
     var r = id === "new" ? { status: "open", raised_date: today() } : (await sb.from("rfis").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (r.number || r.subject || "RFI");
+    bcTitle(id === "new" ? "New" : (r.number || r.subject || "RFI"));
     var st = r.status || "open";
     var btns = '<button class="pri" id="rf-save">Save</button><button id="rf-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("rfis", id, "doc.rfis", "RFI") : "");
     if (id !== "new" && st === "open") btns += '<button id="rf-answer">Mark answered</button>';
@@ -15080,7 +15087,7 @@
     var t = id === "new" ? { transmittal_date: today() } : (await sb.from("transmittals").select("*, projects(name)").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var items = id === "new" ? [] : (await sb.from("transmittal_items").select("*").eq("transmittal_id", id).order("sequence")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || "Transmittal");
+    bcTitle(id === "new" ? "New" : (t.number || "Transmittal"));
     function rowHtml(it) { it = it || {}; return '<tr><td><input class="ti-desc" value="' + esc(it.description || "") + '" placeholder="Document"></td><td><input class="ti-ref" value="' + esc(it.doc_ref || "") + '" placeholder="Ref"></td><td><input class="ti-rev" value="' + esc(it.revision || "") + '" placeholder="Rev" style="width:60px"></td><td><input class="ti-cop" type="number" value="' + (it.copies || 1) + '" style="width:70px"></td><td><button class="ti-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td></tr>'; }
     var projOpts = '<option value="">(none)</option>' + projs.map(function (p) { return '<option value="' + p.id + '"' + (t.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var btns = '<button class="pri" id="tr-save">Save</button><button id="tr-discard">Discard</button>' + (id !== "new" ? '<button id="tr-print">Print</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("transmittals", id, "doc.trans", "transmittal") : "");
@@ -15225,7 +15232,7 @@
     var bankJ = journals.filter(function (j) { return j.code === "BNK" || j.code === "CSH" || /bank|cash/i.test(j.name); }); if (!bankJ.length) bankJ = journals;
     var accounts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var isNew = id === "new";
-    document.querySelector(".o-bc span:last-child").textContent = stmt ? stmt.name : "New";
+    bcTitle(stmt ? stmt.name : "New");
     var jrnCode = stmt && stmt.journals ? stmt.journals.code : "BNK";
     var accOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
 
@@ -16149,7 +16156,7 @@
       if (!t.approved) { unapprovedHours += Number(t.hours || 0); return; }
       if (!t.is_invoiced) { unbilledHours += Number(t.hours || 0); unbilledIds.push(t.id); }
     });
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.name || "");
+    bcTitle(id === "new" ? "New" : (p.name || ""));
     var cc = S.company.currency_code;
     var boqTot = id === "new" ? 0 : ((await sb.from("project_boq").select("amount").eq("project_id", id)).data || []).reduce(function (s, x) { return s + Number(x.amount || 0); }, 0);
     var certTot = id === "new" ? 0 : ((await sb.from("project_certificates").select("current_certified,state").eq("project_id", id)).data || []).filter(function (x) { return x.state !== "draft"; }).reduce(function (s, x) { return s + Number(x.current_certified || 0); }, 0);
@@ -16265,7 +16272,7 @@
     wireBc();
     var t = id === "new" ? {} : (await sb.from("project_tasks").select("*").eq("id", id).maybeSingle()).data || {};
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.name || "");
+    bcTitle(id === "new" ? "New" : (t.name || ""));
     var projOpts = projects.map(function (pr) { return '<option value="' + pr.id + '"' + (t.project_id === pr.id ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tf-save">Save</button><button id="tf-discard">Discard</button></div><div></div></div>' +
@@ -16534,7 +16541,7 @@
       '<div class="o-nb-pg">' + attachBlockHTML("lead", id, { label: "Site photos" }) + '</div></div>';
 
     if (id === "new" && !l.stage_id && stages[0]) l.stage_id = stages[0].id;
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (l.name || "");
+    bcTitle(id === "new" ? "New" : (l.name || ""));
     var stageBar = '<div class="o-stages">' + stages.map(function (s) { return '<span class="st ' + (l.stage_id === s.id ? "on" : "") + '" data-stage="' + s.id + '">' + esc(s.name) + '</span>'; }).join("") + '</div>';
     var custOpts = '<option value="">(none yet)</option>' + customers.map(function (c) { return '<option value="' + c.id + '"' + (l.partner_id === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
     var btns = '<button class="pri" id="ld-save">Save</button><button id="ld-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("crm_leads", id, "crm.pipe", "lead") : "");
@@ -16782,7 +16789,7 @@
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var leaveCount = id === "new" ? 0 : ((await sb.from("hr_leaves").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("employee_id", id)).count || 0);
     var ctCount = id === "new" ? 0 : ((await sb.from("hr_contracts").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("employee_id", id)).count || 0);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (e.name || "");
+    bcTitle(id === "new" ? "New" : (e.name || ""));
     function opts(list, cur, blank) { return (blank ? '<option value="">' + blank + '</option>' : "") + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="e-sm-lv"><span class="v">' + leaveCount + '</span><span class="k">Time Off</span></button><button class="sb" id="e-sm-ct"><span class="v">' + ctCount + '</span><span class="k">Contract</span></button></div>' : "";
     function ghdr(t) { return '<div style="font-weight:700;font-size:11.5px;color:var(--ink3);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 2px">' + t + '</div>'; }
@@ -17258,7 +17265,7 @@
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var structs = (await sb.from("hr_salary_structures").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var slipCount = id === "new" ? 0 : ((await sb.from("hr_payslips").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("contract_id", id)).count || 0);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((emps.filter(function (e) { return e.id === c.employee_id; })[0] || {}).name || "Contract");
+    bcTitle(id === "new" ? "New" : ((emps.filter(function (e) { return e.id === c.employee_id; })[0] || {}).name || "Contract"));
     function opt(list, cur) { return '<option value="">None</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (cur === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join(""); }
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="ct-sm-slip"><span class="v">' + slipCount + '</span><span class="k">Payslips</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
@@ -17467,7 +17474,7 @@
     function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
     var run = id === "new" ? { name: now.toLocaleDateString("en-US", { month: "long", year: "numeric" }), date_from: ymd(y, mo + 1, 1), date_to: ymd(y, mo + 1, new Date(y, mo + 1, 0).getDate()), state: "draft" } : (await sb.from("hr_payslip_runs").select("*").eq("id", id).maybeSingle()).data || {};
     var slips = id === "new" ? [] : (await sb.from("hr_payslips").select("*, hr_employees(name)").eq("company_id", S.company.id).eq("run_id", id).order("created_at")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (run.name || "Run");
+    bcTitle(id === "new" ? "New" : (run.name || "Run"));
     var slipRows = slips.map(function (s) { return '<tr data-slip="' + s.id + '" style="cursor:pointer"><td>' + esc(s.hr_employees ? s.hr_employees.name : "") + '</td><td class="num">' + Number(s.worked_days || 0) + '</td><td class="num">' + Number(s.ot_hours || 0) + '</td><td class="num">' + money(s.gross) + '</td><td class="num">' + money(s.total_deductions) + '</td><td class="num"><b>' + money(s.net) + '</b></td></tr>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="pr-save">Save</button><button id="pr-discard">Discard</button>' + (id !== "new" ? '<button id="pr-gen">Generate payslips</button><button id="pr-postall">Post all</button><button id="pr-bank">Bank file</button><button id="pr-wps">WPS SIF</button>' : "") + '</div><div></div></div>' +
@@ -17585,7 +17592,7 @@
     function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
     var slip = id === "new" ? { date_from: ymd(y, mo + 1, 1), date_to: ymd(y, mo + 1, new Date(y, mo + 1, 0).getDate()), state: "draft" } : (await sb.from("hr_payslips").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("hr_payslip_lines").select("*").eq("payslip_id", id).order("sequence")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : ((emps.filter(function (e) { return e.id === slip.employee_id; })[0] || {}).name || "Payslip");
+    bcTitle(id === "new" ? "New" : ((emps.filter(function (e) { return e.id === slip.employee_id; })[0] || {}).name || "Payslip"));
     var cc = slip.currency_code || S.company.currency_code, posted = slip.state === "confirmed" || slip.state === "paid";
     function lineRows(ls) {
       var earn = ls.filter(function (l) { return l.category === "earning" || l.category === "benefit"; });
@@ -18100,7 +18107,7 @@
     var prevLines = prevCert ? ((await sb.from("project_certificate_lines").select("boq_id,cum_amount,cum_pct").eq("certificate_id", prevCert.id)).data || []) : [];
     var prevByBoq = {}; prevLines.forEach(function (l) { prevByBoq[l.boq_id] = l; });
     var savedByBoq = {}; certLines.forEach(function (l) { savedByBoq[l.boq_id] = l; });
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (cert.number || "Certificate");
+    bcTitle(id === "new" ? "New" : (cert.number || "Certificate"));
     var projField = (id === "new") ? '<select id="pc-proj">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (cert.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(proj.name || "") + '</span>';
     // The IPC claim is an independent spreadsheet (client valuation), NOT tied to our costs.
     // Seed order: this cert's own saved sheet -> roll the previous cert's sheet forward
@@ -18312,7 +18319,7 @@
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
     var proj = (await sb.from("projects").select("id,name,contract_value").eq("id", projectId).maybeSingle()).data || {};
-    document.querySelector(".o-bc span:last-child").textContent = proj.name || "Project";
+    bcTitle(proj.name || "Project");
     var certs = (await sb.from("project_certificates").select("number,date_to,current_certified,state").eq("project_id", projectId).order("date_to")).data || [];
     var budgets = (await sb.from("project_budgets").select("category,description,amount").eq("project_id", projectId).order("id")).data || [];
     var bills = (await sb.from("invoices").select("number,invoice_date,amount_untaxed, partners(name)").eq("company_id", S.company.id).eq("move_type", "in_invoice").eq("state", "posted").eq("project_id", projectId).order("invoice_date")).data || [];
@@ -18723,7 +18730,7 @@
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New position" : "...", { action: "web.jobs", title: "Careers" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
     wireBc();
     var j = id === "new" ? {} : ((await sb.from("job_postings").select("*").eq("id", id).maybeSingle()).data || {});
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New position" : (j.title || "Position");
+    bcTitle(id === "new" ? "New position" : (j.title || "Position"));
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="jb-save">Save</button><button id="jb-disc">Discard</button></div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (j.is_published ? "done" : "on") + '">' + (j.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="jb-title" value="' + esc(j.title || "") + '" placeholder="Job title, e.g. Site Engineer"></div>' +
@@ -19192,7 +19199,7 @@
     var g = id === "new" ? { min_select: 0, max_select: 1, sort: 10, is_active: true } : (await sb.from("modifier_groups").select("*").eq("id", id).maybeSingle()).data || {};
     var opts = id === "new" ? [] : (await sb.from("modifiers").select("*").eq("group_id", id).order("sort")).data || [];
     var prods = (await sb.from("products").select("id,name,cost_price,uom").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (g.name || "Group");
+    bcTitle(id === "new" ? "New" : (g.name || "Group"));
     function prodOpts(sel) { return '<option value="">(none)</option>' + prods.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="mg-save">Save</button><button id="mg-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("modifier_groups", id, "menu.modgroups", "modifier group") : "") + '</div></div>' +
@@ -19290,7 +19297,7 @@
     var chans = (await sb.from("sales_channels").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
     var prods = (await sb.from("products").select("id,name,list_price").eq("company_id", S.company.id).eq("is_active", true).eq("is_sellable", true).order("name")).data || [];
     var items = id === "new" ? [] : (await sb.from("menu_items").select("*").eq("menu_id", id).order("sort")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (m.name || "Menu");
+    bcTitle(id === "new" ? "New" : (m.name || "Menu"));
     var chosen = {}; items.forEach(function (i) { chosen[i.product_id] = i; });
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="mn-save">Save</button><button id="mn-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("menus", id, "menu.list", "menu") : "") + '</div>' +
@@ -22326,7 +22333,7 @@
     var equip = (await sb.from("plant_equipment").select("id,name,code").eq("company_id", S.company.id).order("name")).data || [];
     var techs = await svcTechnicians();
     var warrs = (await sb.from("service_warranties").select("*").eq("company_id", S.company.id)).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New ticket" : (t.number || t.title || "Ticket");
+    bcTitle(id === "new" ? "New ticket" : (t.number || t.title || "Ticket"));
     function opt(list, v, lab) { return '<option value="">' + (lab || "(none)") + '</option>' + list.map(function (o) { return '<option value="' + o.id + '"' + (v === o.id ? " selected" : "") + '>' + esc(o.name || o.code || "") + '</option>'; }).join(""); }
     function selList(list, v) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (v === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
     function warrantyFor(pid, serial) { return warrs.filter(function (w) { return (!serial || !w.serial_no || w.serial_no === serial) && (!pid || !w.product_id || w.product_id === pid) && (!w.end_date || w.end_date >= today()); })[0]; }
@@ -22418,7 +22425,7 @@
     var w = id === "new" ? { wtype: "company", covers: "both", start_date: today() } : ((await sb.from("service_warranties").select("*").eq("id", id).maybeSingle()).data || {});
     var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var prods = (await sb.from("products").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New warranty" : (w.reference || w.serial_no || "Warranty");
+    bcTitle(id === "new" ? "New warranty" : (w.reference || w.serial_no || "Warranty"));
     function opt(list, v) { return '<option value="">(none)</option>' + list.map(function (o) { return '<option value="' + o.id + '"' + (v === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join(""); }
     function sel(list, v) { return list.map(function (o) { return '<option value="' + o[0] + '"' + (v === o[0] ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
@@ -22532,7 +22539,7 @@
     var th = s.theme || {};
     var pages = id === "new" ? [] : (await sb.from("site_pages").select("id,path,title,is_published,sort").eq("site_id", id).order("sort").order("path")).data || [];
     var hosts = id === "new" ? [] : (await sb.from("site_hostnames").select("*").eq("site_id", id).order("created_at")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New site" : (s.name || "Site");
+    bcTitle(id === "new" ? "New site" : (s.name || "Site"));
     var host = webHost(s);
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="ws-save">Save</button><button id="ws-discard">Discard</button>' + (id !== "new" ? '<button id="ws-visit">Open live</button>' : '') + (id !== "new" && canManageApp(S.app) ? formDelBtn("sites", id, "web.sites", "site") : "") + '</div>' + (id !== "new" ? '<div class="o-stages"><span class="st ' + (s.is_published ? "done" : "on") + '">' + (s.is_published ? "Published" : "Draft") + '</span></div>' : '') + '</div>' +
@@ -23265,7 +23272,7 @@
     var teamUsers = await companyUsers();
     var uoms = (await sb.from("uoms").select("name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var ordered = req.state === "ordered";
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (req.number || "Take-off");
+    bcTitle(id === "new" ? "New" : (req.number || "Take-off"));
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
     var btns = ordered ? '<button id="mr-discard">Back</button>' :
       ('<button class="pri" id="mr-save">Save</button>' + (id !== "new" ? '<button id="mr-rfq">Create RFQ</button><button id="mr-po">Create Purchase Order</button>' : "") + '<button id="mr-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("material_requisitions", id, "pur.req", "requisition") : ""));
@@ -23739,7 +23746,7 @@
     var retPct = Number(sc.retention_pct) || 0, scAmt = Number(sc.amount) || 0;
     var prevCerts = (await sb.from("subcontract_certificates").select("*").eq("company_id", S.company.id).eq("subcontract_id", cert.subcontract_id).neq("id", id === "new" ? "00000000-0000-0000-0000-000000000000" : id).in("state", ["certified", "billed"]).order("date_to", { ascending: false })).data || [];
     var prevNet = prevCerts[0] ? Number(prevCerts[0].net_to_date) : 0;
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (cert.number || "Certificate");
+    bcTitle(id === "new" ? "New" : (cert.number || "Certificate"));
     var scField = (id === "new") ? '<select id="sx-sc">' + scs.map(function (x) { return '<option value="' + x.id + '"' + (cert.subcontract_id === x.id ? " selected" : "") + '>' + esc((x.number ? x.number + " - " : "") + x.name + (x.partners ? " (" + x.partners.name + ")" : "")) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((sc.number ? sc.number + " - " : "") + sc.name) + '</span>';
     var initPct = scAmt ? (Number(cert.gross_to_date || 0) / scAmt * 100) : Number(cert.percent_complete || 0);
     document.querySelector(".o-form").innerHTML =
@@ -24062,7 +24069,7 @@
     var srcLead = t.source_lead_id ? (await sb.from("crm_leads").select("id,name").eq("id", t.source_lead_id).maybeSingle()).data : null;
     var locked = t.status === "won";
     var defMargin = Number(t.margin_pct != null ? t.margin_pct : 15);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (t.number || t.name || "Tender");
+    bcTitle(id === "new" ? "New" : (t.number || t.name || "Tender"));
     function num(v) { return parseFloat(v) || 0; }
     var btns = (locked ? "" : '<button class="pri" id="tn-save">Save</button>') + '<button id="tn-discard">Discard</button><button id="tn-print">Print</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("tenders", id, "est.list", "tender") : "");
     if (id !== "new" && t.status === "draft") btns += '<button id="tn-submit">Mark Submitted</button>';
@@ -24203,7 +24210,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var wos = (await sb.from("work_orders").select("id,number").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (p.code || p.label || "Panel");
+    bcTitle(id === "new" ? "New" : (p.code || p.label || "Panel"));
     var st = p.state || "fabrication", order = PANEL_STATES.map(function (y) { return y[0]; }), idx = order.indexOf(st);
     var projOpts = '<option value="">(none)</option>' + projs.map(function (x) { return '<option value="' + x.id + '"' + (p.project_id === x.id ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("");
     var prodOpts = '<option value="">(none)</option>' + products.map(function (x) { return '<option value="' + x.id + '"' + (p.product_id === x.id ? " selected" : "") + '>' + esc((x.default_code ? "[" + x.default_code + "] " : "") + x.name) + '</option>'; }).join("");
@@ -24306,7 +24313,7 @@
     var bom = id === "new" ? { output_qty: 1 } : (await sb.from("boms").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("bom_lines").select("*").eq("bom_id", id).order("sequence")).data || [];
     var products = (await sb.from("products").select("id,name,default_code,uom,cost_price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (bom.name || "BOM");
+    bcTitle(id === "new" ? "New" : (bom.name || "BOM"));
     function prodOpts(sel) { return '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '"' + (sel === p.id ? " selected" : "") + '>' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join(""); }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="bm-save">Save</button><button id="bm-discard">Discard</button>' + (id !== "new" && canManageApp(S.app) ? formDelBtn("boms", id, "mfg.boms", "BOM") : "") + '</div></div>' +
@@ -24386,7 +24393,7 @@
     var selBom = boms.filter(function (b) { return b.id === wo.bom_id; })[0];
     var factor = selBom && Number(selBom.output_qty) ? (Number(wo.quantity || 0) / Number(selBom.output_qty)) : Number(wo.quantity || 0);
     var matCost = blines.reduce(function (s, l) { return s + Number(l.quantity || 0) * factor * Number(l.products ? l.products.cost_price : 0); }, 0);
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (wo.number || "Work order");
+    bcTitle(id === "new" ? "New" : (wo.number || "Work order"));
     var cc = S.company.currency_code;
     var btns = (done ? "" : '<button class="pri" id="wo-save">Save</button><button id="wo-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("work_orders", id, "mfg.wo", "work order") : "");
     if (id !== "new" && wo.state === "draft") btns += '<button id="wo-start">Start</button>';
@@ -24509,7 +24516,7 @@
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var logs = id === "new" ? [] : (await sb.from("install_logs").select("*").eq("job_id", id).order("log_date", { ascending: false })).data || [];
     var done = j.status === "done", cc = S.company.currency_code;
-    document.querySelector(".o-bc span:last-child").textContent = id === "new" ? "New" : (j.number || j.description || "Job");
+    bcTitle(id === "new" ? "New" : (j.number || j.description || "Job"));
     var planned = Number(j.planned_qty || 0), installed = Number(j.installed_qty || 0), pct = planned ? Math.round(installed / planned * 100) : 0;
     var btns = (done ? "" : '<button class="pri" id="ij-save">Save</button><button id="ij-discard">Discard</button>') + (id !== "new" && canManageApp(S.app) ? formDelBtn("install_jobs", id, "inst.jobs", "install job") : "");
     if (id !== "new" && j.status === "draft") btns += '<button id="ij-start">Start</button>';
