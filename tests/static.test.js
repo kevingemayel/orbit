@@ -46,6 +46,8 @@ const MUTATIONS = {
     s => s.replace('sb.rpc("approval_decide"', 'sb.rpc("approval_decide_OFF"'),
   "a table bill charges the same tax as the register":
     s => s.replace("var due = svcR2(T.tot - takenSoFar)", "var due = svcR2(T.sub - takenSoFar)"),
+  "record forms name the breadcrumb through bcTitle":
+    s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 
