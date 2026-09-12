@@ -2675,3 +2675,4 @@ body{background:transparent}
 /* printing keeps paper white and drops the frost */
 @media print{body::before{display:none}.o-body,.card,.o-form,.o-report,.kb-doc{background:#fff!important;box-shadow:none!important}}
 @media(prefers-reduced-transparency:reduce){.o-navbar,.o-home-top,.o-cp,.o-side,.o-tabbar,.o-lbar,.o-statusbar,.o-dd,.sheet,.o-gs-dd,.bd-menu,.o-notif,.card,.o-form,.o-report,.o-home-grp,.kb-doc,.o-body{background:var(--panel);-webkit-backdrop-filter:none;backdrop-filter:none}}
+.o-cp .o-new,.o-lbar .o-new,.o-statusbar .pri,.o-statusbar button{border-radius:var(--r-pill)}
