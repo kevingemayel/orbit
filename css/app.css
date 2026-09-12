@@ -678,6 +678,13 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-lbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:0 0 10px}
 .o-lbar .gap{flex:1}
 .o-body-embed{border:1px solid var(--line);border-radius:10px}
+.o-qa td{background:var(--panel2);padding:4px 6px;border-top:1px dashed var(--line);white-space:nowrap}
+.o-qa-in{width:100%;min-width:70px;box-sizing:border-box;font:inherit;font-size:12.5px;padding:5px 7px;border:1px dashed var(--line);border-radius:6px;background:var(--panel);color:var(--ink)}
+.o-qa-in:focus{border-style:solid;border-color:var(--accent);outline:none}
+.o-qa-bar{display:flex;align-items:center;gap:10px;padding:7px 10px;font-size:12px;color:var(--ink3);border-top:1px solid var(--line);background:var(--panel)}
+.o-list th.o-drop-l{box-shadow:inset 3px 0 0 var(--accent)}
+.o-list th.o-drop-r{box-shadow:inset -3px 0 0 var(--accent)}
+.o-th-l[draggable]{cursor:grab}
 .o-search{display:flex;align-items:center;gap:6px;background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:3px 6px 3px 10px;min-width:220px;max-width:440px;flex-wrap:wrap}
 .o-search svg{opacity:.5;flex:none}
 .o-facet{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);color:var(--accent);border-radius:6px;padding:2px 6px;font-size:12px;font-weight:600}

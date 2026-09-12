@@ -1097,7 +1097,7 @@
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
-      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. Board and Pivot sit beside it for the same guests.</p>" },
+      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
       { t: "Service (jobs, warranties and maintenance)", h: "<p>The <b>Service</b> app runs repair and maintenance work: a customer reports a problem, a technician fixes it, and you bill whatever the warranty does not cover.</p><ol class=\"man-steps\"><li class=\"man-step\">Raise a <b>ticket</b> with the customer, the item and its serial number. If a warranty covers that item Orbit flags it automatically.</li><li class=\"man-step\">Add the <b>parts and labour</b> used. Tick <i>covered</i> on anything the warranty pays for, so it is not billed.</li><li class=\"man-step\">Use <b>Bill to</b> to say who pays - the customer, or the manufacturer on a back-to-back RMA claim.</li><li class=\"man-step\">Record the <b>customer rating</b> when the job is done.</li></ol><p><b>Schedule</b> is a week grid of technicians against days: drag a job onto another person or another day to reschedule it. <b>Maintenance</b> holds recurring plans - set &ldquo;every 90 days&rdquo; and press <b>Generate due tickets</b> to raise them when they fall due.</p>" }
@@ -4522,7 +4522,7 @@
     }
     var _lv = (key && LIST_VIEW[key]) || {};
     var _cp = colPrefs(key);   // per-screen prefs: {hidden, width, size}
-    L = { cfg: cfg, key: key, all: [], view: (cfg.views === false ? "list" : _lv.view) || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
+    L = { cfg: cfg, key: key, all: [], view: (cfg.views === false ? "list" : _lv.view) || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, recent: [], cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
     var _qt = null; document.getElementById("o-q").addEventListener("input", function () { var v = this.value.toLowerCase(); clearTimeout(_qt); _qt = setTimeout(function () { L.query = v; L.page = 0; paintBody(); }, 160); });
@@ -4611,6 +4611,7 @@
   }
   function paintBody() {
     var cfg = L.cfg, rows = applyRows(), body = document.getElementById("o-body");
+    var pinned = (L.view === "list" && L.recent) ? L.recent.length : 0; if (pinned) rows = rows.filter(function (r) { return L.recent.indexOf(r.id) < 0; });
     var total = rows.length;
     // nesting: children (e.g. employees) tucked under their parent row in the plain list view
     var nestOn = !!(cfg.nest && L.view === "list" && L.group == null && L.colGroup == null);
@@ -4631,7 +4632,7 @@
       pgp.onclick = function () { if (L.page > 0) { L.page--; paintBody(); } };
       pgn.onclick = function () { if (to < punits) { L.page++; paintBody(); } };
     }
-    if (!total) {
+    if (!total && !pinned) {
       var noneAtAll = !(L.all && L.all.length);
       var titleWord = (cfg.title || "records").toLowerCase();
       if (noneAtAll) {
@@ -4645,6 +4646,7 @@
       } else {
         body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No matches</div><div class="o-empty2-h">Nothing matches your current search or filters. Clear them to see everything.</div></div>';
       }
+      if (quickAddOn(cfg)) { body.insertAdjacentHTML("beforeend", listTableOpen(cfg) + listTableClose(cfg)); wireQuickAdd(cfg); }
       return;
     }
     if (L.view === "tree" && cfg.tree) {
@@ -4672,7 +4674,7 @@
         html += '<tr class="o-grp"><td colspan="' + (visibleCols(cfg).length + (L.selMode ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
         groups[k].forEach(function (r) { html += rowHTML(cfg, r); });
       });
-      body.innerHTML = html + "</tbody></table>";
+      body.innerHTML = html + listTableClose(cfg);
     } else if (nestOn) {
       ensureNestStyle();
       var rp = nestData.roots.slice(L.page * L.size, (L.page + 1) * L.size);
@@ -4682,19 +4684,19 @@
         nh += rowHTML(cfg, r, { depth: 0, kids: ch.length, collapsed: coll });
         for (var i = 0; i < ch.length; i++) nh += rowHTML(cfg, ch[i], { depth: 1, kids: 0, parent: r.id, hidden: coll });
       });
-      body.innerHTML = nh + '</tbody></table>';
+      body.innerHTML = nh + listTableClose(cfg);
     } else {
       var page = rows.slice(L.page * L.size, (L.page + 1) * L.size);
-      body.innerHTML = listTableOpen(cfg) + page.map(function (r) { return rowHTML(cfg, r); }).join("") + '</tbody></table>';
+      body.innerHTML = listTableOpen(cfg) + page.map(function (r) { return rowHTML(cfg, r); }).join("") + listTableClose(cfg);
     }
     body.querySelectorAll("[data-id]").forEach(function (el) {
-      var open = function () { var r = rows.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
+      var open = function () { var r = L.all.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
       el.onclick = open;
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
-    wireColResize(cfg);
+    wireColResize(cfg); wireColDrag(cfg); wireQuickAdd(cfg);
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
     if (L.selMode) {
       var selbar = document.createElement("div"); selbar.className = "o-selbar";
@@ -4740,11 +4742,142 @@
   }
   // Columns the user has chosen to show (in original order, keeping their real index for
   // sort/group/filter/edit which key by index). Never returns empty.
-  function visibleCols(cfg) { var h = L.cols.hidden || {}, out = []; cfg.columns.forEach(function (c, i) { if (!colHidden(c, i)) out.push({ c: c, i: i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
+  function visibleCols(cfg) { var out = []; orderedCols(cfg).forEach(function (o) { if (!colHidden(o.c, o.i)) out.push({ c: o.c, i: o.i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
   function colgroupHTML(cfg) {
     var w = L.cols.width || {}, cols = (L.selMode ? '<col style="width:34px">' : "");
     cols += visibleCols(cfg).map(function (o) { var ww = w[colKey(o.c, o.i)]; return '<col' + (ww ? ' style="width:' + ww + 'px"' : "") + '>'; }).join("");
     return '<colgroup>' + cols + '</colgroup>';
+  }
+  // ---- spreadsheet habits, for every list at once ----
+  // Columns keep the order the person dragged them into. A column the list did
+  // not have when the order was saved falls in at the end.
+  function orderedCols(cfg) {
+    var ord = (L.cols && L.cols.order) || [];
+    var all = cfg.columns.map(function (c, i) { return { c: c, i: i, k: colKey(c, i) }; });
+    if (!ord.length) return all;
+    return all.sort(function (a, b) {
+      var ka = ord.indexOf(a.k), kb = ord.indexOf(b.k);
+      if (ka < 0 && kb < 0) return a.i - b.i;
+      if (ka < 0) return 1;
+      if (kb < 0) return -1;
+      return ka - kb;
+    });
+  }
+  function moveCol(cfg, fromKey, toKey, after) {
+    var keys = orderedCols(cfg).map(function (o) { return o.k; });
+    var fi = keys.indexOf(fromKey); if (fi < 0 || fromKey === toKey) return;
+    keys.splice(fi, 1);
+    var ti = keys.indexOf(toKey); if (ti < 0) return;
+    keys.splice(ti + (after ? 1 : 0), 0, fromKey);
+    L.cols.order = keys; saveColPrefs(); paintBody();
+  }
+  // Drag a heading onto another heading to reorder. The column menu has Move
+  // left and Move right for keyboards and touch.
+  function wireColDrag(cfg) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var dragKey = null;
+    body.querySelectorAll("table.o-list thead th[data-ck]").forEach(function (th) {
+      var lab = th.querySelector(".o-th-l"); if (!lab) return;
+      lab.setAttribute("draggable", "true");
+      lab.addEventListener("dragstart", function (e) { dragKey = th.dataset.ck; try { e.dataTransfer.setData("text/plain", dragKey); e.dataTransfer.effectAllowed = "move"; } catch (x) { } });
+      lab.addEventListener("dragend", function () { dragKey = null; body.querySelectorAll(".o-drop-l,.o-drop-r").forEach(function (t) { t.classList.remove("o-drop-l", "o-drop-r"); }); });
+      th.addEventListener("dragover", function (e) {
+        if (!dragKey || dragKey === th.dataset.ck) return;
+        e.preventDefault();
+        var r = th.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2;
+        th.classList.toggle("o-drop-l", !after); th.classList.toggle("o-drop-r", after);
+      });
+      th.addEventListener("dragleave", function () { th.classList.remove("o-drop-l", "o-drop-r"); });
+      th.addEventListener("drop", function (e) {
+        if (!dragKey || dragKey === th.dataset.ck) return;
+        e.preventDefault();
+        var r = th.getBoundingClientRect(), after = e.clientX > r.left + r.width / 2;
+        th.classList.remove("o-drop-l", "o-drop-r");
+        moveCol(cfg, dragKey, th.dataset.ck, after); dragKey = null;
+      });
+    });
+  }
+  // Enter saves and moves down, Tab saves and moves along, the way a sheet works.
+  function editNeighbour(td, dx, dy) {
+    var tr = td.closest("tr"); if (!tr) return;
+    if (dy) {
+      var trs = Array.prototype.slice.call(tr.parentElement.querySelectorAll("tr[data-id]")), nr = trs[trs.indexOf(tr) + dy];
+      if (nr) { var nt = nr.querySelector('td.o-ecell[data-eci="' + td.dataset.eci + '"]'); if (nt) startCellEdit(nt); return; }
+      var qa = dy > 0 ? tr.parentElement.querySelector('tr.o-qa .o-qa-in[data-ci="' + td.dataset.eci + '"]') : null;
+      if (qa) qa.focus();
+      return;
+    }
+    var cells = Array.prototype.slice.call(tr.querySelectorAll("td.o-ecell")), nx = cells[cells.indexOf(td) + dx];
+    if (nx) startCellEdit(nx);
+  }
+  // The last line of a table is where the next record gets typed, so adding
+  // forty guests is forty lines and not forty forms. A list opts in with
+  // cfg.newRow (the defaults, including what scopes the record to this company
+  // or event) and, optionally, cfg.quickAddCheck to refuse a half-typed line.
+  function quickAddOn(cfg) { return !!(cfg.newRow && (cfg.editTable || cfg.table) && canManageApp(S.app) && L.view === "list"); }
+  function quickAddEditor(col, ci, rec, first) {
+    var e = col.edit, cur = rec[e.field];
+    if (e.type === "select") {
+      var opts = typeof e.options === "function" ? e.options(rec) : (e.options || []);
+      return '<select class="o-qa-in" data-ci="' + ci + '" aria-label="' + esc(col.label) + '">' + opts.map(function (o) { var v = Array.isArray(o) ? o[0] : o, l = Array.isArray(o) ? o[1] : o; return '<option value="' + esc(String(v)) + '"' + (String(cur == null ? "" : cur) === String(v) ? " selected" : "") + '>' + esc(String(l)) + '</option>'; }).join("") + '</select>';
+    }
+    if (e.type === "checkbox") return '<input type="checkbox" class="o-qa-in" data-ci="' + ci + '" aria-label="' + esc(col.label) + '"' + (cur ? " checked" : "") + ' style="width:auto">';
+    return '<input class="o-qa-in" data-ci="' + ci + '" type="' + (e.type === "number" ? "number" : e.type === "date" ? "date" : "text") + '" placeholder="' + (first ? "+ " : "") + esc(col.label) + '" aria-label="' + esc(col.label) + '"' + (e.type === "number" ? ' step="any"' : "") + (cur != null && e.type !== "date" ? ' value="' + esc(String(cur)) + '"' : "") + '>';
+  }
+  function quickAddRowHTML(cfg) {
+    var rec = cfg.newRow() || {}, first = true;
+    return '<tr class="o-qa">' + (L.selMode ? '<td class="o-selcol"></td>' : "") + visibleCols(cfg).map(function (o) {
+      var c = o.c, ci = o.i, cell = "";
+      if (c.edit) { cell = quickAddEditor(c, ci, rec, first); first = false; }
+      return '<td class="' + (c.num ? "num" : "") + '">' + cell + '</td>';
+    }).join("") + '</tr>';
+  }
+  function quickAddBarHTML() {
+    return '<div class="o-qa-bar"><span>Type on the last line and press <b>Enter</b> to add it. Tab moves along the line, Esc clears it.</span><span style="flex:1"></span><button class="btn sm pri o-qa-add" style="background:var(--app);border-color:var(--app)">Add line</button></div>';
+  }
+  function listTableClose(cfg) {
+    var html = "";
+    if (L.view === "list" && L.recent && L.recent.length) L.recent.forEach(function (id) { var r = L.all.filter(function (x) { return x.id === id; })[0]; if (r) html += rowHTML(cfg, r); });
+    var qa = quickAddOn(cfg);
+    if (qa) html += quickAddRowHTML(cfg);
+    return html + '</tbody></table>' + (qa ? quickAddBarHTML() : "");
+  }
+  function wireQuickAdd(cfg) {
+    var body = document.getElementById("o-body"); if (!body) return;
+    var tr = body.querySelector("tr.o-qa"); if (!tr) return;
+    tr.querySelectorAll(".o-qa-in").forEach(function (inp) {
+      inp.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") { e.preventDefault(); quickAddSave(cfg, tr); }
+        else if (e.key === "Escape") { e.preventDefault(); paintBody(); }
+      });
+    });
+    var add = body.querySelector(".o-qa-add"); if (add) add.onclick = function () { quickAddSave(cfg, tr); };
+  }
+  var _qaBusy = false;
+  async function quickAddSave(cfg, tr) {
+    if (_qaBusy) return;
+    var rec = cfg.newRow() || {}, typed = false;
+    tr.querySelectorAll(".o-qa-in").forEach(function (inp) {
+      var col = cfg.columns[+inp.dataset.ci]; if (!col || !col.edit) return;
+      var e = col.edit, v;
+      if (e.type === "checkbox") { v = !!inp.checked; if (v) typed = true; }
+      else if (e.type === "number") { v = inp.value === "" ? null : Number(inp.value); if (inp.value !== "") typed = true; }
+      else if (inp.tagName === "SELECT") { v = inp.value === "" ? null : inp.value; }
+      else { v = inp.value.trim() === "" ? null : inp.value.trim(); if (v != null) typed = true; }
+      rec[e.field] = v;
+    });
+    if (!typed) { toast("Type something on the line first"); return; }
+    if (cfg.quickAddCheck) { var why = cfg.quickAddCheck(rec); if (why) { toast(why); return; } }
+    _qaBusy = true;
+    var r = await sb.from(cfg.editTable || cfg.table).insert(rec).select("*").single();
+    _qaBusy = false;
+    if (r.error) { toast("Could not add: " + errMsg(r.error)); return; }
+    var row = r.data;
+    L.all.push(row); L.recent = L.recent || []; L.recent.push(row.id);
+    if (cfg.onSaved) cfg.onSaved(row, null, null);
+    paintBody();
+    var first = document.querySelector("#o-body tr.o-qa .o-qa-in"); if (first) first.focus();
+    toast("Added");
   }
   function listTableOpen(cfg) { ensureColStyle(); return '<table class="o-list">' + colgroupHTML(cfg) + '<thead>' + headRow(cfg) + '</thead><tbody>'; }
   function headRow(cfg) {
@@ -4752,7 +4885,7 @@
       var c = o.c, i = o.i;
       var srt = (L.sort && L.sort.i === i) ? ' <span class="o-th-sort">' + (L.sort.dir > 0 ? "↑" : "↓") + '</span>' : "";
       var on = (L.sort && L.sort.i === i) || (L.colGroup === i) || (L.colFilters[i] && Object.keys(L.colFilters[i]).length);
-      return '<th class="' + (c.num ? "num" : "") + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span><span class="o-th-rs" data-ci="' + i + '" title="Drag to resize"></span></th>';
+      return '<th class="' + (c.num ? "num" : "") + '" data-ck="' + esc(colKey(c, i)) + '"><span class="o-th-wrap"><span class="o-th-l">' + esc(c.label) + srt + '</span><button class="o-th-menu' + (on ? " on" : "") + '" data-ci="' + i + '" title="Sort, group or filter by ' + esc(c.label) + '" aria-label="Column options for ' + esc(c.label) + '">⋯</button></span><span class="o-th-rs" data-ci="' + i + '" title="Drag to resize"></span></th>';
     }).join("") + '</tr>';
   }
   var _colStyled = false;
@@ -4761,9 +4894,9 @@
     closeDropdowns();
     var cfg = L.cfg, r = btn.getBoundingClientRect();
     var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1"; dd.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 240)) + "px";
-    dd.innerHTML = '<div class="sec">Show columns</div>' + cfg.columns.map(function (c, i) { var vis = !colHidden(c, i); return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
+    dd.innerHTML = '<div class="sec">Show columns</div>' + orderedCols(cfg).map(function (o) { var c = o.c, i = o.i, vis = !colHidden(c, i); return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
     dd.querySelectorAll("[data-ci]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.ci, k = colKey(cfg.columns[i], i), hiding = !colHidden(cfg.columns[i], i); if (hiding && visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); return; } if (hiding) L.cols.hidden[k] = 1; else L.cols.hidden[k] = 0; saveColPrefs(); paintBody(); openColsDropdown(btn); }; });
-    dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; saveColPrefs(); paintBody(); closeDropdowns(); };
+    dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; L.cols.order = []; saveColPrefs(); paintBody(); closeDropdowns(); };
     document.body.appendChild(dd);
   }
   function wireColResize(cfg) {
@@ -4802,6 +4935,7 @@
       '<div class="sep"></div>' +
       '<button class="it" data-a="group">' + (isG ? "✓ Grouped &ndash; ungroup" : "Group by this column") + '</button>' +
       '<button class="it" data-a="hide">Hide this column</button>' +
+      '<button class="it" data-a="left">&#8592; Move left</button><button class="it" data-a="right">Move right &#8594;</button>' +
       '<div class="sep"></div><div class="sec">Filter values</div>' +
       '<div class="o-colf-tools"><input class="o-colf-q" placeholder="Search values..."><button class="o-colf-all" data-a="selall">All</button><button class="o-colf-all" data-a="selnone">None</button></div>' +
       '<div class="o-colf-list">' + order.map(function (v) { var ck = !cf || cf[v]; return '<label class="o-colf-row"><input type="checkbox" data-v="' + esc(v) + '"' + (ck ? " checked" : "") + '><span>' + (v === "" ? "<i>(empty)</i>" : esc(v)) + '</span><span class="o-colf-n">' + vals[v] + '</span></label>'; }).join("") + '</div>' +
@@ -4812,6 +4946,9 @@
     var ns = dd.querySelector('[data-a="nosort"]'); if (ns) ns.onclick = function () { L.sort = null; paintBody(); closeDropdowns(); };
     dd.querySelector('[data-a="group"]').onclick = function () { L.colGroup = (L.colGroup === i ? null : i); L.group = null; L.page = 0; paintBody(); closeDropdowns(); };
     dd.querySelector('[data-a="hide"]').onclick = function () { if (visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); closeDropdowns(); return; } L.cols.hidden[colKey(c, i)] = 1; saveColPrefs(); paintBody(); closeDropdowns(); };
+    var _vis = visibleCols(cfg), _vi = _vis.map(function (o) { return o.i; }).indexOf(i);
+    dd.querySelector('[data-a="left"]').onclick = function () { if (_vi > 0) moveCol(cfg, colKey(c, i), colKey(_vis[_vi - 1].c, _vis[_vi - 1].i), false); closeDropdowns(); };
+    dd.querySelector('[data-a="right"]').onclick = function () { if (_vi < _vis.length - 1) moveCol(cfg, colKey(c, i), colKey(_vis[_vi + 1].c, _vis[_vi + 1].i), true); closeDropdowns(); };
     var q = dd.querySelector(".o-colf-q"); q.oninput = function () { var t = this.value.toLowerCase(); dd.querySelectorAll(".o-colf-row").forEach(function (row) { row.style.display = row.textContent.toLowerCase().indexOf(t) >= 0 ? "" : "none"; }); };
     dd.querySelector('[data-a="selall"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = true; }); };
     dd.querySelector('[data-a="selnone"]').onclick = function () { dd.querySelectorAll(".o-colf-row").forEach(function (row) { if (row.style.display !== "none") row.querySelector("input").checked = false; }); };
@@ -4859,7 +4996,7 @@
   // save straight to the row's table - no need to open the record. A column opts in
   // with an `edit:{field,type,options}` descriptor and the cfg names its `editTable`.
   var _editStyled = false;
-  function ensureEditStyle() { if (_editStyled) return; _editStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-ecell{cursor:text}.o-list tbody tr:not(.o-grp) .o-ecell:hover{background:var(--panel2,#f2f4f7);box-shadow:inset 0 0 0 1px var(--line,#dde)}.o-ein{width:100%;box-sizing:border-box;font:inherit;padding:2px 4px;border:1px solid var(--app,#2a7);border-radius:4px;background:var(--panel,#fff);color:var(--ink,#111)}"; document.head.appendChild(s); } catch (e) { } }
+  function ensureEditStyle() { if (_editStyled) return; _editStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-ecell{position:relative}.o-list tbody tr:not(.o-grp) .o-ecell:hover::after{content:\"\\270E\";position:absolute;right:4px;top:3px;font-size:10px;line-height:1;color:var(--ink3);pointer-events:none}.o-ecell{cursor:text}.o-list tbody tr:not(.o-grp) .o-ecell:hover{background:var(--panel2,#f2f4f7);box-shadow:inset 0 0 0 1px var(--line,#dde)}.o-ein{width:100%;box-sizing:border-box;font:inherit;padding:2px 4px;border:1px solid var(--app,#2a7);border-radius:4px;background:var(--panel,#fff);color:var(--ink,#111)}"; document.head.appendChild(s); } catch (e) { } }
   function startCellEdit(td) {
     if (td.querySelector(".o-ein")) return;
     var tr = td.closest("[data-id]"); if (!tr) return;
@@ -4884,7 +5021,7 @@
       if (val === (cur == null ? (e.type === "checkbox" ? false : null) : cur)) { td.innerHTML = prev; return; }
       saveCellEdit(cfg, id, e.field, val, row, td, col, prev);
     }
-    editor.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); finish(true); } else if (ev.key === "Escape") { ev.preventDefault(); finish(false); } };
+    editor.onkeydown = function (ev) { if (ev.key === "Enter") { ev.preventDefault(); finish(true); editNeighbour(td, 0, 1); } else if (ev.key === "Tab") { ev.preventDefault(); finish(true); editNeighbour(td, ev.shiftKey ? -1 : 1, 0); } else if (ev.key === "Escape") { ev.preventDefault(); finish(false); } };
     if (e.type === "checkbox" || e.type === "select") editor.onchange = function () { finish(true); }; else editor.onblur = function () { finish(true); };
   }
   async function saveCellEdit(cfg, id, field, val, row, td, col, prev) {
@@ -8818,7 +8955,8 @@
           { label: "Phone", edit: { field: "phone", type: "text" }, get: txt("phone") },
           { label: "Dietary", hide: true, edit: { field: "dietary", type: "text" }, get: txt("dietary") },
           { label: "VIP", hide: true, edit: { field: "is_vip", type: "checkbox" }, get: function (r) { return r.is_vip ? "&#10003;" : ""; } },
-          { label: "Notes", hide: true, edit: { field: "notes", type: "text" }, get: txt("notes") }
+          { label: "Notes", hide: true, edit: { field: "notes", type: "text" }, get: txt("notes") },
+          { label: "Seat", hide: true, num: true, edit: { field: "seat_no", type: "number" }, get: function (r) { return r.seat_no == null ? "" : esc(String(r.seat_no)); } }
         ],
         filters: [
           { label: "Confirmed", test: function (r) { return r.invite_stage === "confirmed"; } },
@@ -8838,6 +8976,8 @@
           { label: "RSVP", get: function (r) { return evLabel(RSVP_OPTS, r.rsvp || "pending"); } },
           { label: "Table", get: function (r) { return tableName[r.table_id] || "Not seated"; } }
         ],
+        newRow: function () { return { event_id: EV.eventId, org_id: EV.event.org_id, invite_stage: "longlist", rsvp: "pending", plus_ones: 0, source: "internal" }; },
+        quickAddCheck: function (r) { return (r.first_name || r.family_name) ? "" : "Every guest needs a name"; },
         emptyHint: "Add your first guest, or import a list. Every guest gets a personal link to confirm.",
         onOpen: function (r) { openGuestModal(r); }, onNew: function () { openGuestModal(null); },
         onSaved: function () { paintCap(); evOverviewStats(); }
@@ -10521,10 +10661,13 @@
         { label: "Email", edit: { field: "email", type: "text" }, get: function (p) { return esc(p.email || ""); } },
         { label: "Phone", edit: { field: "phone", type: "text" }, get: function (p) { return esc(p.phone || ""); } },
         { label: "Supplies", get: function (p) { var c = p.capabilities || []; return c.slice(0, 3).map(function (x) { return '<span class="badge">' + esc(x) + '</span>'; }).join(" ") + (c.length > 3 ? ' <span class="muted">+' + (c.length - 3) + '</span>' : ""); } },
-        { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return esc(p.city || ""); } }
+        { label: "City", edit: { field: "city", type: "text" }, get: function (p) { return esc(p.city || ""); } },
+        { label: "Country", edit: { field: "country", type: "select", options: function () { return [["", "-"]].concat(COUNTRIES.map(function (c) { return [c, c]; })); } }, get: function (p) { return esc(p.country || ""); } }
       ],
       filters: [{ label: "Customers", test: function (p) { return p.is_customer; } }, { label: "Vendors", test: function (p) { return p.is_vendor; } }, { label: "Intercompany", test: function (p) { return !!p.intercompany_company_id; } }, { label: "Shared with the group", test: function (p) { return !!p.group_key; } }, { label: "Archived", test: function (p) { return p.is_active === false; } }],
       groupBy: [{ label: "Industry", get: function (p) { return p.industry || "None"; } }, { label: "Country", get: function (p) { return p.country || "None"; } }],
+      newRow: function () { return { org_id: S.company.org_id, company_id: S.company.id, contact_kind: "company", is_active: true }; },
+      quickAddCheck: function (r) { return r.name ? "" : "Give the contact a name"; },
       emptyHint: "Add the people and companies you work with - customers, suppliers, subcontractors and their staff. You can also add one instantly from any contact dropdown.",
       onOpen: function (p) { renderPartnerForm(p.id, "contact"); }, onNew: function () { renderPartnerForm("new", "contact"); }
     };
