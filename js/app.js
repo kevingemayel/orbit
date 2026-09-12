@@ -2383,7 +2383,7 @@
   // A brand-new signup applies for access: a few KYC questions + Terms acceptance.
   // apply_for_company creates a PENDING org; a Space Work admin approves within 6h.
   function renderNoCompany() {
-    var ss = 'style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px"';
+    var ss = 'style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px"';
     var btypes = ["General contractor", "Subcontractor", "Property developer", "Consultant / engineering", "Facade / cladding", "Fit-out / interiors", "Supplier / trading", "Other"];
     var emps = ["1-5", "6-20", "21-50", "51-200", "200+"];
     root.innerHTML =
@@ -2563,7 +2563,7 @@
     homeWireTiles(root);
     var _ed = document.getElementById("home-edit"); if (_ed) _ed.onclick = function () { HOME_EDIT = !HOME_EDIT; renderHome(); };
     root.querySelectorAll(".o-tile[data-app]").forEach(function (t) { t.onclick = function () { openApp(t.dataset.app); }; });
-    wireTheme("home-theme"); wireBell(); wireHomeSearch();
+    wireTheme("home-theme"); wireBell(); wireHomeSearch(); root.insertAdjacentHTML("beforeend", tabbarHTML("home")); wireTabbar("home");
     wireCompanySelect("home");
     document.getElementById("ava").onclick = function (e) { openAvatarMenu(e.currentTarget); };
     applyFontScale();
@@ -2677,7 +2677,7 @@
   }
   async function renderWorkdesk() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Desk") + '<div class="gap"></div><button class="o-filtbtn" id="wd-refresh">Refresh</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading your desk...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Desk") + '<div class="gap"></div><button class="o-filtbtn" id="wd-refresh">Refresh</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("wd-refresh").onclick = function () { renderWorkdesk(); };
 
@@ -2896,7 +2896,7 @@
     wireHomeSearch();
     root.querySelectorAll("[data-store]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var k = b.dataset.store; homeSetHidden(k, !((homePref().hidden || {})[k])); renderAppStore(); }; });
     root.querySelectorAll("[data-open]").forEach(function (b) { b.onclick = function () { openApp(b.dataset.open); }; });
-    wireTheme("home-theme"); wireBell();
+    wireTheme("home-theme"); wireBell(); root.insertAdjacentHTML("beforeend", tabbarHTML("store")); wireTabbar("store");
     wireCompanySelect("home");
     var _av = document.getElementById("ava"); if (_av) _av.onclick = function (e) { openAvatarMenu(e.currentTarget); };
   }
@@ -2963,7 +2963,7 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet" style="max-width:520px"><h3>' + esc(appName) + ' &middot; quick start</h3><div class="form">' +
       '<p style="margin:0 0 4px;color:var(--ink2);font-size:14px;line-height:1.5">' + esc(g.intro) + '</p>' +
-      '<ol style="margin:8px 0 0;padding:0;list-style:none">' + g.steps.map(function (s, i) { return '<li style="position:relative;padding:11px 0 11px 38px;font-size:13.5px;color:var(--ink);border-top:1px solid var(--line);line-height:1.45"><span style="position:absolute;left:0;top:9px;width:26px;height:26px;border-radius:8px;background:var(--app);color:#fff;font-size:12.5px;font-weight:700;display:grid;place-items:center">' + (i + 1) + '</span>' + esc(s) + '</li>'; }).join("") + '</ol>' +
+      '<ol style="margin:8px 0 0;padding:0;list-style:none">' + g.steps.map(function (s, i) { return '<li style="position:relative;padding:11px 0 11px 38px;font-size:13.5px;color:var(--ink);border-top:1px solid var(--line);line-height:1.45"><span style="position:absolute;left:0;top:9px;width:26px;height:26px;border-radius:var(--r);background:var(--app);color:#fff;font-size:12.5px;font-weight:700;display:grid;place-items:center">' + (i + 1) + '</span>' + esc(s) + '</li>'; }).join("") + '</ol>' +
       '</div><div class="foot"><label style="margin-right:auto;font-size:12px;color:var(--ink3);display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="ag-off"> Don\'t show tips</label><button class="btn pri" id="ag-got" style="background:var(--app);border-color:var(--app)">Got it</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("ag-got").onclick = function () {
@@ -3047,6 +3047,66 @@
     var act = side.querySelector(".o-si.o-si-sub.on");
     if (act) { var sub = act.closest(".o-sub"); if (sub && sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); var grp = sub.previousElementSibling; if (grp) grp.setAttribute("aria-expanded", "true"); } }
   }
+  // ---- the phone quick bar ----
+  // On a phone the top bar is out of reach and the side menu is off screen, so
+  // the five things a thumb needs sit at the bottom: Home, Search, this app's
+  // menu (Apps on the home), Alerts and Me. Desktop never sees it; the
+  // stylesheet only shows it under 760px.
+  var TB_ICONS = {
+    home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>',
+    search: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+    menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>',
+    apps: '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/></svg>',
+    bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+    me: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>'
+  };
+  function tabbarHTML(where) {
+    function b(id, label, svg, on) { return '<button type="button" id="tb-' + id + '"' + (on ? ' class="on" aria-current="page"' : '') + ' aria-label="' + label + '">' + svg + '<span>' + label + '</span></button>'; }
+    return '<nav class="o-tabbar" id="o-tabbar" aria-label="Quick bar">' +
+      b("home", "Home", TB_ICONS.home, where === "home") +
+      b("search", "Search", TB_ICONS.search) +
+      (where === "app" ? b("menu", "Menu", TB_ICONS.menu) : b("apps", "Apps", TB_ICONS.apps, where === "store")) +
+      b("alerts", "Alerts", TB_ICONS.bell + '<span class="o-tb-dot" id="tb-dot" hidden></span>') +
+      b("me", "Me", TB_ICONS.me) + '</nav>';
+  }
+  function wireTabbar(where) {
+    var n = document.getElementById("o-tabbar"); if (!n) return;
+    function g(id) { return document.getElementById("tb-" + id); }
+    g("home").onclick = function () {
+      if (where === "home") { var h = document.querySelector(".o-home"); if (h) h.scrollTo({ top: 0, behavior: "smooth" }); return; }
+      if (__dirty && !confirm("You have unsaved changes on this page. Leave without saving?")) return;
+      __dirty = false; renderHome();
+    };
+    g("search").onclick = openPhoneSearch;
+    var m = g("menu");
+    if (m) m.onclick = function () { var sd = document.getElementById("oside"); if (!sd) return; S.sideCollapsed = !S.sideCollapsed; sd.classList.toggle("collapsed", S.sideCollapsed); m.classList.toggle("on", !S.sideCollapsed); };
+    var ap = g("apps"); if (ap) ap.onclick = function () { if (where !== "store") renderAppStore(); };
+    g("alerts").onclick = function (e) { openNotifPanel(e.currentTarget); };
+    g("me").onclick = function (e) { openAvatarMenu(e.currentTarget); };
+    // a tap on the page closes the menu sheet, like a backdrop that is not modal
+    var main = document.getElementById("o-main");
+    if (main && !main._tbWired) { main._tbWired = 1; main.addEventListener("click", function () { if (window.innerWidth <= 760 && !S.sideCollapsed) { S.sideCollapsed = true; var sd = document.getElementById("oside"); if (sd) sd.classList.add("collapsed"); if (m) m.classList.remove("on"); } }, true); }
+    refreshBell();
+  }
+  // The search sheet holds the real search box, moved in from the top bar, so
+  // there is one search and one set of results to keep right.
+  function openPhoneSearch() {
+    var home = document.querySelector(".o-gs-home input");
+    if (home && home.offsetParent) { home.focus(); return; }
+    var gs = document.querySelector(".o-gs"); if (!gs) return;
+    var m = document.createElement("div"); m.className = "modal on o-psearch";
+    m.innerHTML = '<div class="sheet"><h3>Search</h3><div class="o-psearch-body"></div><div class="foot"><button class="btn" id="ps-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    var parent = gs.parentNode, next = gs.nextSibling;
+    m.querySelector(".o-psearch-body").appendChild(gs); gs.classList.add("o-gs-phone");
+    var inp = gs.querySelector("input"); if (inp) setTimeout(function () { inp.focus(); }, 60);
+    function close() { gs.classList.remove("o-gs-phone"); if (parent && parent.isConnected) parent.insertBefore(gs, next); m.remove(); }
+    m.querySelector("#ps-close").onclick = close;
+    m.onclick = function (e) { if (e.target === m) close(); };
+    gs.addEventListener("mousedown", function (e) { if (e.target.closest(".o-gs-item")) setTimeout(close, 0); });
+  }
+  // The drawing on an empty list: a tray with the first record about to land.
+  var EMPTY_ART = '<svg viewBox="0 0 104 78" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 40h20l6 8h24l6-8h20v26a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z"/><path d="M14 40l8-20h60l8 20" opacity=".5"/><path d="M52 8v18M44 18l8 8 8-8" stroke-width="2.4"/></svg>';
   function renderShell() {
     var a = APPS[S.app];
     if (S.sideCollapsed === undefined) { var _ss = localStorage.getItem("orbit_side"); S.sideCollapsed = _ss === null ? (window.innerWidth <= 760) : _ss === "1"; }
@@ -3110,7 +3170,7 @@
     var _hlp = document.getElementById("ohelp"); if (_hlp) _hlp.onclick = function () { openHelp(); };
     var _how = document.getElementById("ohowto"); if (_how) _how.onclick = function () { openFlowModal(S.app); };
     wireTheme("app-theme");
-    wireBell();
+    wireBell(); root.insertAdjacentHTML("beforeend", tabbarHTML("app")); wireTabbar("app");
     wireCompanySelect("bar");
     document.querySelectorAll("#oside .o-si[data-go]").forEach(function (b) { b.onclick = function () { go(b.dataset.go); if (window.innerWidth <= 760 && !S.sideCollapsed) { S.sideCollapsed = true; var sd0 = document.getElementById("oside"); if (sd0) sd0.classList.add("collapsed"); } }; });
     document.querySelectorAll("#oside .o-si-grp").forEach(function (b) { b.onclick = function () { var sub = document.querySelector('.o-sub[data-sub="' + b.dataset.grp + '"]'); if (!sub) return; if (sub.hasAttribute("hidden")) { sub.removeAttribute("hidden"); b.setAttribute("aria-expanded", "true"); } else { sub.setAttribute("hidden", ""); b.setAttribute("aria-expanded", "false"); } }; });
@@ -3263,7 +3323,7 @@
   }
   function closeDropdowns() { document.querySelectorAll("[data-dd]").forEach(function (d) { d.remove(); }); }
   document.addEventListener("click", function (e) {
-    if (e.target.closest("[data-dd]") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest("#bell") || e.target.closest("#home-theme") || e.target.closest("#app-theme") || e.target.closest(".o-filtbtn")) return;
+    if (e.target.closest("[data-dd]") || e.target.closest("#o-tabbar") || e.target.closest(".mi") || e.target.closest("#ava") || e.target.closest("#bell") || e.target.closest("#home-theme") || e.target.closest("#app-theme") || e.target.closest(".o-filtbtn")) return;
     closeDropdowns();
   });
 
@@ -3345,7 +3405,7 @@
     try {
       var r = await sb.from("notifications").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("is_read", false);
       var n = r.count || 0;
-      if (n > 0) { dot.style.display = "flex"; dot.textContent = n > 9 ? "9+" : String(n); } else dot.style.display = "none";
+      if (n > 0) { dot.style.display = "flex"; dot.textContent = n > 9 ? "9+" : String(n); } else dot.style.display = "none"; var tb = document.getElementById("tb-dot"); if (tb) { tb.hidden = n === 0; tb.textContent = n > 9 ? "9+" : String(n); }
     } catch (e) {}
   }
   async function notify(opts) {
@@ -3467,7 +3527,7 @@
   }
   async function renderAutomations() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Automations") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Automations") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var canEdit = !!(S.role && (S.role.full_access || canManage("settings")));
     var rules = (await sb.from("automation_rules").select("*").eq("company_id", S.company.id)).data || [];
@@ -3538,7 +3598,7 @@
     } catch (e) { if (!quiet) toast("Could not send the approval email: " + (e && e.message)); return false; }
   }
   async function renderApprovalsInbox() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Approvals") + '<div class="gap"></div><button class="o-filtbtn" id="ap-rules">Approval rules</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Approvals") + '<div class="gap"></div><button class="o-filtbtn" id="ap-rules">Approval rules</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("ap-rules").onclick = function () { go("approvals.rules"); };
     var rows = (await sb.from("approvals").select("*, approval_rules(approver_employee_id, hr_employees(name, user_id))").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(120)).data || [];
@@ -3738,7 +3798,7 @@
   var RS_DOW = [["0", "Sunday"], ["1", "Monday"], ["2", "Tuesday"], ["3", "Wednesday"], ["4", "Thursday"], ["5", "Friday"], ["6", "Saturday"]];
   async function renderReportSchedules() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Scheduled reports") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Scheduled reports") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var q = await sb.from("report_schedules").select("*, reports:report_id(name)").eq("company_id", S.company.id).order("created_at");
     if (q.error && /report_schedules|does not exist|schema cache/i.test(q.error.message || "")) {
@@ -3746,7 +3806,7 @@
     }
     var rows = q.data || [];
     var reports = (await sb.from("reports").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
     function cadLabel(r) { return r.cadence === "daily" ? "Every day" : r.cadence === "monthly" ? ("Day " + (r.day_of_month || 1) + " each month") : ("Every " + ((RS_DOW.filter(function (d) { return d[0] === String(r.day_of_week); })[0] || RS_DOW[1])[1])); }
     document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Scheduled reports</h3>' +
       '<div class="sub" style="margin:0 0 12px">Pick a dashboard report and Orbit emails it on your schedule - nobody has to remember to run it. Times are UTC.</div>' +
@@ -3807,7 +3867,7 @@
   }
   async function renderForecast() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Forecast") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Forecast") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     await loadFxRates();
     var keys = _fcMonths(12), ahead = 3, since = keys[0] + "-01";
@@ -3832,7 +3892,7 @@
     }
     var body = document.getElementById("o-body");
     body.innerHTML =
-      '<style>.fc-chart{display:flex;align-items:flex-end;gap:4px;height:130px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}.fc-col{flex:1;display:flex;align-items:flex-end;height:100%}.fc-fill{width:100%;background:var(--app,#2f5bff);border-radius:3px 3px 0 0;min-height:2px}.fc-fc .fc-fill{background:repeating-linear-gradient(45deg,var(--app,#2f5bff),var(--app,#2f5bff) 4px,transparent 4px,transparent 8px);opacity:.75}.fc-x{display:flex;gap:4px;margin-top:4px}.fc-x span{flex:1;text-align:center;font-size:10px;color:var(--ink3)}</style>' +
+      '<style>.fc-chart{display:flex;align-items:flex-end;gap:4px;height:130px;padding:8px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}.fc-col{flex:1;display:flex;align-items:flex-end;height:100%}.fc-fill{width:100%;background:var(--app,#2f5bff);border-radius:var(--r-sm) 3px 0 0;min-height:2px}.fc-fc .fc-fill{background:repeating-linear-gradient(45deg,var(--app,#2f5bff),var(--app,#2f5bff) 4px,transparent 4px,transparent 8px);opacity:.75}.fc-x{display:flex;gap:4px;margin-top:4px}.fc-x span{flex:1;text-align:center;font-size:10px;color:var(--ink3)}</style>' +
       '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:14px">' +
       '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800">' + esc(cc) + ' ' + money(totS) + '</div><div class="muted" style="font-size:12px">Forecast sales, next ' + ahead + ' months</div></div>' +
       '<div class="card" style="flex:1;min-width:170px"><div style="font-family:Archivo,sans-serif;font-size:24px;font-weight:800">' + esc(cc) + ' ' + money(totB) + '</div><div class="muted" style="font-size:12px">Forecast purchases</div></div>' +
@@ -3850,10 +3910,10 @@
   }
 
   var _drillStyled = false;
-  function ensureDrillStyle() { if (_drillStyled) return; _drillStyled = true; try { var s = document.createElement("style"); s.textContent = ".rw-click{cursor:pointer;border-radius:6px}.rw-click:hover{background:var(--panel2,#f2f4f7);outline:1px solid var(--line,#dde)}"; document.head.appendChild(s); } catch (e) { } }
+  function ensureDrillStyle() { if (_drillStyled) return; _drillStyled = true; try { var s = document.createElement("style"); s.textContent = ".rw-click{cursor:pointer;border-radius:var(--r-sm)}.rw-click:hover{background:var(--panel2,#f2f4f7);outline:1px solid var(--line,#dde)}"; document.head.appendChild(s); } catch (e) { } }
   function wireDrill(el) { el.querySelectorAll(".rw-click").forEach(function (n) { n.onclick = function (e) { e.stopPropagation(); openDrillModal(n.getAttribute("data-drill"), n.getAttribute("data-bucket")); }; }); }
   async function renderInsights() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '<div class="gap"></div><button class="o-filtbtn pri" id="rw-new">+ New report</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '<div class="gap"></div><button class="o-filtbtn pri" id="rw-new">+ New report</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("rw-new").onclick = function () { openReportModal(null); };
     var reports = (await sb.from("reports").select("*").eq("company_id", S.company.id).order("sort_order").order("created_at")).data || [];
@@ -4513,7 +4573,7 @@
       '</div>') +
       '<button class="o-filtbtn" id="o-selbtn" title="Select rows for bulk export">Select</button>' +
       '<button class="o-filtbtn" id="o-export" title="Download the current list as a CSV file (opens in Excel)">Export</button>';
-    var bodyHTML = '<div class="o-body' + (host ? ' o-body-embed' : '') + '" id="o-body"><div class="o-empty">Loading...</div></div>';
+    var bodyHTML = '<div class="o-body' + (host ? ' o-body-embed' : '') + '" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div>';
     if (host) {
       host.innerHTML = '<div class="o-lbar">' + bar + '</div>' + bodyHTML;
     } else {
@@ -4637,7 +4697,7 @@
       var titleWord = (cfg.title || "records").toLowerCase();
       if (noneAtAll) {
         var hasGuide = HELP_ARTICLES.some(function (a) { return a.apps && a.apps.indexOf(S.app) >= 0; });
-        body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No ' + esc(titleWord) + ' yet</div>' +
+        body.innerHTML = '<div class="o-empty2"><div class="o-empty2-art">' + EMPTY_ART + '</div><div class="o-empty2-t">No ' + esc(titleWord) + ' yet</div>' +
           '<div class="o-empty2-h">' + esc(cfg.emptyHint || ("Create your first " + titleWord.replace(/s$/, "") + " to get started.")) + '</div>' +
           (cfg.onNew && canManageApp(S.app) ? '<button class="o-new" id="o-empty-new" style="margin-top:16px">+ Create ' + esc(titleWord.replace(/s$/, "")) + '</button>' : '') +
           (hasGuide ? '<div style="margin-top:12px"><a id="o-empty-help" style="cursor:pointer;color:var(--accent);font-size:13px">Show me how &rsaquo;</a></div>' : '') + '</div>';
@@ -4889,7 +4949,7 @@
     }).join("") + '</tr>';
   }
   var _colStyled = false;
-  function ensureColStyle() { if (_colStyled) return; _colStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-list th{position:relative}.o-th-rs{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none;touch-action:none}.o-th-rs:hover,.o-th-rs.drag{background:var(--app,#2a7);opacity:.35}"; document.head.appendChild(s); } catch (e) { } }
+  function ensureColStyle() { if (_colStyled) return; _colStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-list th{position:sticky;top:0;z-index:2;background:var(--panel)}.o-th-rs{position:absolute;top:0;right:0;width:7px;height:100%;cursor:col-resize;user-select:none;touch-action:none}.o-th-rs:hover,.o-th-rs.drag{background:var(--app,#2a7);opacity:.35}"; document.head.appendChild(s); } catch (e) { } }
   function openColsDropdown(btn) {
     closeDropdowns();
     var cfg = L.cfg, r = btn.getBoundingClientRect();
@@ -4996,7 +5056,7 @@
   // save straight to the row's table - no need to open the record. A column opts in
   // with an `edit:{field,type,options}` descriptor and the cfg names its `editTable`.
   var _editStyled = false;
-  function ensureEditStyle() { if (_editStyled) return; _editStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-ecell{position:relative}.o-list tbody tr:not(.o-grp) .o-ecell:hover::after{content:\"\\270E\";position:absolute;right:4px;top:3px;font-size:10px;line-height:1;color:var(--ink3);pointer-events:none}.o-ecell{cursor:text}.o-list tbody tr:not(.o-grp) .o-ecell:hover{background:var(--panel2,#f2f4f7);box-shadow:inset 0 0 0 1px var(--line,#dde)}.o-ein{width:100%;box-sizing:border-box;font:inherit;padding:2px 4px;border:1px solid var(--app,#2a7);border-radius:4px;background:var(--panel,#fff);color:var(--ink,#111)}"; document.head.appendChild(s); } catch (e) { } }
+  function ensureEditStyle() { if (_editStyled) return; _editStyled = true; try { var s = document.createElement("style"); s.textContent = ".o-ecell{position:relative}.o-list tbody tr:not(.o-grp) .o-ecell:hover::after{content:\"\\270E\";position:absolute;right:4px;top:3px;font-size:10px;line-height:1;color:var(--ink3);pointer-events:none}.o-ecell{cursor:text}.o-list tbody tr:not(.o-grp) .o-ecell:hover{background:var(--panel2,#f2f4f7);box-shadow:inset 0 0 0 1px var(--line,#dde)}.o-ein{width:100%;box-sizing:border-box;font:inherit;padding:2px 4px;border:1px solid var(--app,#2a7);border-radius:var(--r-sm);background:var(--panel,#fff);color:var(--ink,#111)}"; document.head.appendChild(s); } catch (e) { } }
   function startCellEdit(td) {
     if (td.querySelector(".o-ein")) return;
     var tr = td.closest("[data-id]"); if (!tr) return;
@@ -5077,7 +5137,7 @@
   }
   async function renderRecurringForm(id) {
     var parent = { action: "inv.recurring", title: "Recurring Invoices" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var r = id === "new" ? { active: true, interval_unit: "month", interval_count: 1, start_date: today(), next_date: today(), payment_days: 30, currency_code: S.company.currency_code, auto_post: false } : (await sb.from("recurring_invoices").select("*").eq("id", id).maybeSingle()).data || {};
     var customers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
@@ -5243,7 +5303,7 @@
     var rowsH = [["Date", p.date], ["Partner", pname], ["Type", inbound ? "Customer receipt" : "Vendor payment"], ["Reference", p.reference || p.memo], ["Memo", p.memo]]
       .filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:var(--ink2);padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
     m.innerHTML = '<div class="sheet"><h3>Payment ' + esc(p.reference || "") + '</h3>' +
-      '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
+      '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
       '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' +
       '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-rev" style="color:var(--bad-t)">Reverse payment</button>' : '') + '</div></div>';
     document.body.appendChild(m);
@@ -5320,7 +5380,7 @@
   }
   async function renderJournalEntryForm(id) {
     var parent = { action: "moves", title: "Journal Entries" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var accts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
     var jrns = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
@@ -5359,7 +5419,7 @@
       (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + (posted ? " disabled" : "") + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this entry belongs to. It shows in every view that includes that book.") : "") + fld("Reference / narration", '<input id="je-narr" value="' + esc(ent.narration || ent.ref || "") + '"' + (posted ? " disabled" : "") + '>') +
       '</div></div>' +
       '<div style="overflow-x:auto;margin-top:8px"><table class="o-list" style="min-width:640px"><thead><tr><th style="width:34%">Account</th><th>Description</th><th class="num" style="width:130px">Debit</th><th class="num" style="width:130px">Credit</th><th style="width:34px"></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
-      (posted ? '' : '<button id="je-add" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>') +
+      (posted ? '' : '<button id="je-add" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>') +
       '<div id="je-tot" style="margin-top:12px;font-size:14px;text-align:right"></div></div>';
     paint();
     document.getElementById("je-discard").onclick = function () { go("moves"); };
@@ -5600,7 +5660,7 @@
     var isSale = moveType.indexOf("out_") === 0, isRefund = moveType.indexOf("refund") >= 0;
     var parent = { action: isRefund ? (isSale ? "inv.outr" : "inv.inr") : (isSale ? "inv.out" : "inv.in"), title: isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Invoices" : "Vendor Bills") };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
 
     var inv = null, lines = [];
@@ -5945,7 +6005,7 @@
       '<div class="row2"><div><label>To</label>' + fhint("To", "Where the email is sent. Defaults to the customer's email; you can change it.") + '<input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
       '<div><label>Subject</label>' + fhint("Subject") + '<input id="s-subj" value="' + esc(defSubject) + '"></div></div>' +
       '<div><label>Message to the customer (optional)</label>' + fhint("__note", "A short cover note shown at the top of the email, above the invoice.") + '<textarea id="s-note" rows="3" placeholder="e.g. Hi, please find your invoice attached below. Payment is due within 30 days. Thank you!"></textarea></div>' +
-      '<div><label>Preview &mdash; this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:8px;background:#fff"></iframe></div>' +
+      '<div><label>Preview &mdash; this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:var(--r);background:#fff"></iframe></div>' +
       '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri" id="s-send" style="background:var(--app);border-color:var(--app)">Send email</button></div></div>';
     document.body.appendChild(m);
     function renderPreview() { document.getElementById("s-preview").srcdoc = emailPreviewHtml(inv, lines || [], document.getElementById("s-note").value); }
@@ -5975,7 +6035,7 @@
     var rows = (lines || []).map(function (l) { var ls = Number(l.quantity) * Number(l.unit_price); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
     var total = Number(inv.amount_total != null ? inv.amount_total : sub), due = Number(inv.amount_residual != null ? inv.amount_residual : total);
     var partner = inv.partners ? inv.partners.name : "";
-    var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:6px;font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
+    var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:var(--r-sm);font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
     return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#152030">' +
       '<div style="max-width:640px;margin:0 auto">' +
       '<div style="display:flex;justify-content:space-between;border-bottom:2px solid #152030;padding-bottom:14px">' +
@@ -6516,7 +6576,7 @@
     var listAction = isSale ? "so.list" : "po.list";
     var parent = { action: listAction, title: isSale ? "Quotations" : "Purchase Orders" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var order = null, lines = [];
     if (id !== "new") {
@@ -6754,7 +6814,7 @@
         var vname = ps2 && ps2.value ? ((partners.filter(function (p) { return p.id === ps2.value; })[0] || {}).name || "") : "";
         var suggest = (vname ? vname + " - " : "") + (order && order.number ? order.number : today());
         var m = document.createElement("div"); m.className = "modal on"; m.setAttribute("data-noi18n", "");
-        m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New project</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px"><label class="fl">Project name<input id="np-name" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px" value="' + esc(suggest) + '"></label><div class="sub">Creates the project and tags this order to it. You can fill in the rest later from the Projects app.</div></div><div class="foot"><button class="btn" id="np-cancel">Cancel</button><button class="btn pri" id="np-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; link</button></div></div>';
+        m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New project</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px"><label class="fl">Project name<input id="np-name" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px" value="' + esc(suggest) + '"></label><div class="sub">Creates the project and tags this order to it. You can fill in the rest later from the Projects app.</div></div><div class="foot"><button class="btn" id="np-cancel">Cancel</button><button class="btn pri" id="np-save" style="background:var(--accent);border-color:var(--accent)">Create &amp; link</button></div></div>';
         document.body.appendChild(m);
         var nm = document.getElementById("np-name"); if (nm) { nm.focus(); nm.select(); }
         document.getElementById("np-cancel").onclick = function () { m.remove(); };
@@ -6940,7 +7000,7 @@
     preset = preset || {};
     var main = document.getElementById("o-main");
     var back = preset.order ? { action: "po.list", title: "Purchase Orders" } : { action: "inv.onhand", title: "On Hand" };
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Receive Goods", back) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Receive Goods", back) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var fromOrder = preset.order || null, poLines = [];
     if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
@@ -7107,7 +7167,7 @@
     var el = document.getElementById("p-people"); if (!el) return;
     var ppl = (await sb.from("partners").select("id,name,role_title,phone,mobile,email").eq("company_id", S.company.id).eq("employer_id", companyId).order("name")).data || [];
     function rowH(r) { return '<tr class="pp-row" data-id="' + r.id + '" style="cursor:pointer"><td><b>' + esc(r.name) + '</b></td><td class="muted">' + esc(r.role_title || "") + '</td><td class="muted">' + esc(r.phone || r.mobile || "") + '</td><td class="muted">' + esc(r.email || "") + '</td><td><button class="btn sm pp-del" data-id="' + r.id + '" title="Unlink from this company">&times;</button></td></tr>'; }
-    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">People at ' + esc(companyName || "this company") + '</div><div class="sub" style="margin:-2px 0 9px">The individuals you deal with here - sales, technical, accounts, management. Click one to open their record.</div>' +
       '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th></th></tr></thead><tbody id="pp-body">' + (ppl.length ? ppl.map(rowH).join("") : '<tr><td colspan="5" class="muted" style="padding:10px">No people recorded yet.</td></tr>') + '</tbody></table></div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px"><input id="pp-name" placeholder="Name" ' + inS + ' style="width:150px"><input id="pp-role" placeholder="Role (e.g. Sales)" ' + inS + ' style="width:130px"><input id="pp-phone" placeholder="Phone" ' + inS + ' style="width:120px"><input id="pp-email" placeholder="Email" ' + inS + ' style="width:150px"><button class="btn sm pri" id="pp-add" style="background:var(--app);border-color:var(--app)">Add person</button></div></div>';
@@ -7121,7 +7181,7 @@
     var parent = isContact ? { action: "contacts", title: "Contacts" } : { action: isCust ? "cust" : "vend", title: isCust ? "Customers" : "Vendors" };
     var backAction = isContact ? "contacts" : (isCust ? "cust" : "vend");
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? {} : (await sb.from("partners").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromPartners();
@@ -7187,7 +7247,7 @@
       '</div></div>' +
       (showCaps ? capsBlock() : "") +
       (showCaps ? ('<div class="o-groups" style="margin-top:12px"><div>' + fld("Price rating", ratSel("p-ratp", RAT_PRICE, p.rating_price || ""), "How this supplier compares on price.") + fld("Quality rating", ratSel("p-ratq", RAT_QUAL, p.rating_quality || ""), "Your view of the quality of what they supply.") + '</div><div>' + fld("Delivery / availability", ratSel("p-ratd", RAT_DEL, p.rating_delivery || ""), "How fast they deliver, or whether they hold stock.") + '</div></div>') : "") +
-      '<div style="margin-top:14px"><div class="o-cf-head">Notes</div><textarea id="p-notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px" placeholder="Anything worth remembering - terms, history, useful context...">' + esc(p.notes || "") + '</textarea></div>' +
+      '<div style="margin-top:14px"><div class="o-cf-head">Notes</div><textarea id="p-notes" rows="3" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px" placeholder="Anything worth remembering - terms, history, useful context...">' + esc(p.notes || "") + '</textarea></div>' +
       ((id !== "new" && ck === "company") ? '<div id="p-people" style="margin-top:16px"></div>' : "") +
       customFieldsHTML("partner", p) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Bank accounts</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Bank</th><th>Account no.</th><th>IBAN</th><th>Currency</th><th></th></tr></thead><tbody id="pb-lines">' + (banks.length ? banks.map(bankRow).join("") : "") + '</tbody></table><button id="pb-add" class="o-addln">+ Add bank account</button></div></div>' +
@@ -7325,7 +7385,7 @@
   async function renderAccountForm(id) {
     var parent = { action: "accounts", title: "Chart of Accounts" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { is_active: true } : (await sb.from("accounts").select("*").eq("id", id).maybeSingle()).data || {};
     bcTitle(id === "new" ? "New" : (a.code + " " + a.name));
@@ -7556,7 +7616,7 @@
       var supName = (r.partners && r.partners.name) || r.supplier_name || "(supplier)";
       return '<tr' + (cheap ? ' style="background:var(--ok-soft)"' : '') + '><td><b>' + esc(supName) + '</b>' + (cheap ? ' <span class="badge paid">best</span>' : '') + '</td><td class="num">' + esc(r.currency_code || cc) + ' ' + money(r.price) + '</td><td>' + esc(r.price_basis || "") + (r.uom ? " / " + esc(r.uom) : "") + '</td><td class="num">' + (r.moq != null ? r.moq : "") + '</td><td class="num">' + (r.lead_days != null ? r.lead_days + "d" : "") + '</td><td class="muted">' + esc(r.price_date || "") + '</td><td style="text-align:right;white-space:nowrap"><button class="btn sm psp-use" data-price="' + r.price + '" title="Set this as the item cost">Use</button> <button class="btn sm psp-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>';
     }
-    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Suppliers &amp; prices</div><div class="sub" style="margin:-2px 0 9px">Enter each supplier\'s price (per unit) here to compare them for the same item. The cheapest is flagged and sets this item\'s <b>Cost</b> above; press <b>Use</b> to pick a different supplier.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Supplier</th><th class="num">Price</th><th>Basis / unit</th><th class="num">MOQ</th><th class="num">Lead</th><th>Date</th><th></th></tr></thead><tbody id="psp-body">' + (rows.length ? rows.map(trOf).join("") : '<tr><td colspan="7" class="muted" style="padding:10px">No supplier prices yet.</td></tr>') + '</tbody></table></div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:8px">' +
@@ -7590,7 +7650,7 @@
     var q = await sb.from("product_barcodes").select("*").eq("product_id", productId).order("created_at");
     if (q.error) { if (/product_barcodes|does not exist|schema cache/i.test(q.error.message || "")) el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Extra barcodes</div><div class="sub">Run <span class="path">supabase/104-inventory-depth.sql</span> once to enable multiple barcodes.</div></div>'; return; }
     var rows = q.data || [];
-    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Extra barcodes</div><div class="sub" style="margin:-2px 0 9px">Additional / equivalent barcodes that also scan to this item (supplier packs, old codes, inner vs outer).</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Barcode</th><th>Label</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (r) { return '<tr><td class="mono">' + esc(r.barcode) + '</td><td>' + esc(r.label || "") + '</td><td><button class="btn sm pbc-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No extra barcodes.</td></tr>') +
@@ -7616,7 +7676,7 @@
     var cc = S.company.currency_code;
     var sumCost = rows.reduce(function (a, r) { return a + (Number((r.comp || {}).cost_price) || 0) * (Number(r.qty) || 0); }, 0);
     var sumList = rows.reduce(function (a, r) { return a + (Number((r.comp || {}).list_price) || 0) * (Number(r.qty) || 0); }, 0);
-    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Kit components</div><div class="sub" style="margin:-2px 0 9px">What goes into this kit. Selling the kit can draw each component from stock. Component totals: cost <b>' + esc(cc) + ' ' + money(sumCost) + '</b> &middot; list <b>' + esc(cc) + ' ' + money(sumList) + '</b>.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Component</th><th class="num">Qty</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (r) { var c = r.comp || {}; return '<tr><td><b>' + esc(c.name || "(deleted)") + '</b>' + (c.default_code ? ' <span class="muted">' + esc(c.default_code) + '</span>' : '') + '</td><td class="num">' + (Number(r.qty) || 0) + '</td><td><button class="btn sm pkc-del" data-id="' + r.id + '" title="Remove">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No components yet.</td></tr>') +
@@ -7640,7 +7700,7 @@
     var kids = (await sb.from("products").select("id,name,default_code,is_active").eq("parent_product_id", productId).order("name")).data || [];
     var cands = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).is("parent_product_id", null).neq("id", productId).neq("is_kit", true).order("name").limit(1000)).data || [];
     var axes = Object.keys(attrs);
-    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
+    var inS = 'style="padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"';
     el.innerHTML = '<div class="o-matspec"><div class="o-cf-head">Variants</div><div class="sub" style="margin:-2px 0 9px">Sell this item in variations (e.g. Size &times; Colour). Define the axes, then generate a product for each combination.</div>' +
       '<div id="pv-axes">' + (axes.length ? axes.map(function (k) { return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px"><b style="min-width:90px">' + esc(k) + '</b><span class="muted">' + esc((attrs[k] || []).join(", ")) + '</span> <button class="btn sm pv-axdel" data-k="' + esc(k) + '">&times;</button></div>'; }).join("") : '<div class="muted" style="margin-bottom:6px">No axes yet.</div>') + '</div>' +
       '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:6px 0 4px">' +
@@ -7696,7 +7756,7 @@
   // changing one number instead of retyping hundreds of costs.
   async function renderRecost() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Recost from weight") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Recost from weight") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var rows = (await sb.from("products").select("id,name,default_code,uom,family,cost_price,cost_source,cost_rate,kg_per_m,bar_length_mm")
       .eq("company_id", S.company.id).eq("is_active", true).gt("kg_per_m", 0).order("name")).data || [];
     var body = document.getElementById("o-body");
@@ -7767,7 +7827,7 @@
     mediaClearStage();
     var parent = { action: "products", title: "Products" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? { type: "service", is_active: true } : (await sb.from("products").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromProducts();
@@ -8207,7 +8267,7 @@
     mediaClearStage();
     var parent = { action: "tools.list", title: "Tools & Equipment" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? { status: "in_stock", condition: "good", holder_type: "none" } : (await sb.from("tools").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromPartners();
@@ -8330,7 +8390,7 @@
     mediaClearStage();
     var parent = { action: "proj.materials", title: "Project Materials" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var it = id === "new" ? (seed || { unit: "pcs", status: "planned" }) : (await sb.from("project_items").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromProducts();
@@ -8435,7 +8495,7 @@
   async function renderRunForm(id) {
     var parent = { action: "mfg.runs", title: "Production Runs" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var r = id === "new" ? { status: "draft", output_qty: 1, run_date: today() } : (await sb.from("production_runs").select("*").eq("id", id).maybeSingle()).data || {};
     var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).order("name")).data || [];
@@ -8529,7 +8589,7 @@
   async function renderDeliveryNoteForm(id) {
     var parent = { action: "dn.list", title: "Delivery Notes" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var d = id === "new" ? { status: "draft", dn_date: today() } : (await sb.from("delivery_notes").select("*").eq("id", id).maybeSingle()).data || {};
     var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
@@ -8761,7 +8821,7 @@
     mediaClearStage();
     var parent = { action: "events.list", title: "Events" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New event" : "Edit", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New event" : "Edit", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var e = id === "new" ? { status: "planning", event_type: "wedding", currency: (S.company && S.company.currency_code) || "USD" } : (await sb.from("event_events").select("*").eq("id", id).maybeSingle()).data || {};
     var evCustomers = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
@@ -8820,7 +8880,7 @@
       '<div class="ev-stats" id="ev-stats">' + (days != null ? '<div class="ev-stat"><span class="v">' + (days >= 0 ? days : "-") + '</span><span class="k">' + (days >= 0 ? "days to go" : "past") + '</span></div>' : "") + '</div>' +
       '</div></div>' +
       '<div class="ev-tabs">' + tabs + '</div>' +
-      '<div class="ev-body" id="ev-body"><div class="o-empty">Loading...</div></div>' +
+      '<div class="ev-body" id="ev-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div>' +
       '</div></div>';
     document.getElementById("ev-home").onclick = function () { go("events.list"); };
     document.getElementById("ev-edit").onclick = function () { renderEventForm(eventId); };
@@ -9052,7 +9112,7 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>Import guests</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
       '<div class="sub">Paste rows, one guest per line. Columns (tab or comma separated): <b>Side, Priority, Category, First name, Family name, Stage</b>. Only a name is required.</div>' +
-      '<textarea id="gi-txt" rows="10" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:13px monospace" placeholder="Groom&#9;A&#9;Family&#9;Maya&#9;Koussa&#9;confirmed"></textarea>' +
+      '<textarea id="gi-txt" rows="10" style="width:100%;padding:9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:13px monospace" placeholder="Groom&#9;A&#9;Family&#9;Maya&#9;Koussa&#9;confirmed"></textarea>' +
       '</div><div class="foot"><button class="btn" id="gi-cancel">Cancel</button><button class="btn pri" id="gi-save" style="background:var(--app);border-color:var(--app)">Import</button></div></div>';
     document.body.appendChild(m);
     document.getElementById("gi-cancel").onclick = function () { m.remove(); };
@@ -9076,7 +9136,7 @@
     m.innerHTML = '<div class="sheet"><h3>Public registration link</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
       '<div class="sub">Share this link so people can add themselves to your longlist. You still review and prioritise them before inviting.</div>' +
       '<label class="o-chkline"><input type="checkbox" id="rl-open"' + (EV.event.registration_open ? " checked" : "") + '> Registration is open</label>' +
-      '<div style="display:flex;gap:8px"><input id="rl-link" value="' + esc(link) + '" readonly style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"><button class="btn pri" id="rl-copy" style="background:var(--app);border-color:var(--app)">Copy</button></div>' +
+      '<div style="display:flex;gap:8px"><input id="rl-link" value="' + esc(link) + '" readonly style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:12.5px"><button class="btn pri" id="rl-copy" style="background:var(--app);border-color:var(--app)">Copy</button></div>' +
       '<div class="muted" style="font-size:11.5px">When registration is closed, the link shows a friendly &ldquo;not open yet&rdquo; message.</div>' +
       '</div><div class="foot"><button class="btn" id="rl-close">Close</button></div></div>';
     document.body.appendChild(m);
@@ -9511,7 +9571,7 @@
       (pnames.length ? '<div class="ev-kv">' + pnames.map(function (n) { var p = people[n]; return '<div class="r"><span class="k">' + esc(n) + '</span><b>' + p.done + ' / ' + p.total + ' tasks done</b></div>'; }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No one assigned yet.</div>') + '</div>';
     host.innerHTML = '<div class="ev-grid2"><div class="card"><h3>Invite a company to collaborate</h3>' +
       '<div class="sub" style="margin:-2px 0 10px">They accept a link and can then see and edit <b>this event only</b>. Their other data stays private, and yours stays private to them.</div>' +
-      '<div class="row2" style="display:flex;gap:8px"><input id="tm-email" placeholder="their email" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><select id="tm-role" style="padding:9px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink)"><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn pri" id="tm-invite" style="background:var(--app);border-color:var(--app)">Invite</button></div></div>' +
+      '<div class="row2" style="display:flex;gap:8px"><input id="tm-email" placeholder="their email" style="flex:1;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><select id="tm-role" style="padding:9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink)"><option value="editor">Editor</option><option value="viewer">Viewer</option></select><button class="btn pri" id="tm-invite" style="background:var(--app);border-color:var(--app)">Invite</button></div></div>' +
       '<div class="card"><h3>Collaborators</h3>' + (collabs.length ? '<div class="ev-kv">' + collabs.map(function (cc) {
         return '<div class="r" style="align-items:center"><span class="k">' + esc(cc.invited_email || "invited") + '<div class="muted" style="font-size:11px">' + esc(cc.role) + ' &middot; ' + esc(cc.status) + '</div></span><span style="display:flex;gap:6px">' + (cc.status === "pending" ? '<button class="btn sm tm-copy" data-token="' + cc.token + '">Copy link</button>' : "") + '<button class="btn sm tm-rem" data-id="' + cc.id + '" style="color:var(--bad-t)">Remove</button></span></div>';
       }).join("") + '</div>' : '<div class="muted" style="font-size:13px">No collaborators yet.</div>') + '</div></div>' + peopleCard;
@@ -9669,7 +9729,7 @@
   // ============================ DASHBOARD ============================
   async function renderDashboard() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '</div><div class="o-form-bg" style="padding:18px"><div id="db" class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Dashboard") + '</div><div class="o-form-bg" style="padding:18px"><div id="db" class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var rows = (await sb.rpc("trial_balance", { p_company: S.company.id, p_book_codes: bookCodes() })).data || [];
     var income = 0, expense = 0, cash = 0, recv = 0, pay = 0;
@@ -9791,7 +9851,7 @@
     var titles = { pl: "Profit and Loss", bs: "Balance Sheet", tb: "Trial Balance" };
     var pr = periodRange(REP_PERIOD);
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(titles[kind]) + '<div class="gap"></div>' + periodSelect() + bookBarHTML() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
-      '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+      '<div class="o-form-bg"><div class="o-report" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(function () { renderReport(kind); });
@@ -9826,7 +9886,7 @@
   }
   function repLine(code, name, v) { return '<tr><td class="cd">' + esc(code) + '</td><td>' + esc(name) + '</td><td class="num">' + money(v) + '</td></tr>'; }
   function repEmpty() { return '<tr><td></td><td class="muted">No entries.</td><td></td></tr>'; }
-  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + bookBarHTML() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty">Loading...</div></div></div></div>'; }
+  function repChrome(title, wide, withPeriod) { return '<div class="o-view"><div class="o-cp">' + bcHTML(title) + '<div class="gap"></div>' + (withPeriod ? periodSelect() : "") + bookBarHTML() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report' + (wide ? ' wide' : '') + '" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>'; }
   function repHead(title, cc) { return '<h1>' + esc(title) + '</h1><div class="sub">' + esc(S.company.name) + ' &middot; ' + cc + (S.book && S.books && S.books.length > 1 ? ' &middot; ' + esc(S.book.name) + ' book' : "") + ' &middot; as of ' + today() + '</div>'; }
   // Generic report export: scrape the rendered .o-rt table in #rep into CSV.
   function exportRepCsv() {
@@ -10026,7 +10086,7 @@
     var n = new Date(), defDate = S._revalDate || iso(new Date(n.getFullYear(), n.getMonth() + 1, 0)); // month end
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("FX Revaluation") + '<div class="gap"></div></div>' +
-      '<div class="o-form-bg"><div class="o-report" id="rev" style="max-width:860px"><div class="o-empty">Loading open foreign-currency positions...</div></div></div></div>';
+      '<div class="o-form-bg"><div class="o-report" id="rev" style="max-width:860px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     var rates = (S.org && S.org.id) ? ((await sb.from("currency_rates").select("code,rate,rate_date,rate_type").eq("org_id", S.org.id).order("rate_date", { ascending: false })).data || []) : [];
     var anyMap = {}, closeMap = {};
@@ -10064,7 +10124,7 @@
         '<tr style="font-size:11px;color:var(--ink3)"><td>Currency</td><td class="num">Open balance</td><td class="num">On books (' + esc(coCcy) + ')</td><td class="num">At closing rate</td><td class="num">Unrealized adj.</td></tr>' +
         rowsHtml +
         '<tr class="tot"><td></td><td></td><td></td><td>Net unrealized ' + (totalAdj >= 0 ? "gain" : "loss") + '</td><td class="num"' + (Math.abs(totalAdj) > 0.005 ? ' style="color:' + (totalAdj > 0 ? "var(--good)" : "var(--bad)") + '"' : '') + '>' + money(totalAdj) + '</td></tr></tbody></table>';
-      if (anyMissing) body += '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-top:12px;font-size:13px">Some currencies have no <b>closing</b> rate for this date - add one under <a id="rev-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Exchange Rates</a> so they can be revalued.</div>';
+      if (anyMissing) body += '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:var(--r);margin-top:12px;font-size:13px">Some currencies have no <b>closing</b> rate for this date - add one under <a id="rev-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Exchange Rates</a> so they can be revalued.</div>';
       body += '<div class="sub" style="margin-top:12px">Running this posts one balanced journal entry: each monetary account is moved to its closing-rate value and the net difference goes to the FX gain / loss account set in company settings. It is safe to run repeatedly - it only ever posts the incremental change, and reverses automatically once the underlying items settle.</div>';
     }
     document.getElementById("rev").innerHTML = body;
@@ -10218,7 +10278,7 @@
       : [];
     var icPairs = icEntries.filter(function (e) { return inGroup[e.counterparty_company_id]; }).length;
     var missKeys = Object.keys(missing);
-    var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
+    var banner = missKeys.length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:var(--r);margin-bottom:14px;font-size:13px">No exchange rate set for <b>' + esc(missKeys.join(", ")) + '</b> - those entities are shown 1:1 until you add a rate. <a id="cons-rates" style="cursor:pointer;font-weight:700;text-decoration:underline">Add a rate</a></div>' : '';
     var METHOD_LABEL = { full: "Full", proportional: "Proportional", equity: "Equity" };
     var entRows = entities.map(function (e) {
       var rc = e.cur === ref ? "1.000000" : (e.known ? Number(e.fClose).toLocaleString("en-US", { maximumFractionDigits: 6 }) : '<span style="color:var(--warn-t)">n/a</span>');
@@ -10243,7 +10303,7 @@
       : 'every company you can see &middot; ' + conCos.length + ' entities';
     document.getElementById("rep").innerHTML =
       '<h1>Consolidated Financials</h1><div class="sub">' + esc(S.org ? S.org.name : "") + ' &middot; ' + memberNote + ' &middot; presented in ' + esc(ref) + ' &middot; as of ' + today() + '</div>' + banner +
-      (grp ? "" : '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No consolidation group is defined, so this adds up <b>every company you can open</b>. That is rarely what a group report should show. Click <b>Groups</b> to define one.</div>') +
+      (grp ? "" : '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:var(--r);margin-bottom:14px;font-size:13px">No consolidation group is defined, so this adds up <b>every company you can open</b>. That is rarely what a group report should show. Click <b>Groups</b> to define one.</div>') +
       '<table class="o-rt"><tbody><tr class="sec"><td colspan="7">Entities</td></tr>' +
       '<tr style="font-size:11px;color:var(--ink3)"><td>Entity</td><td>Currency</td><td>Method</td><td class="num">Closing &rarr; ' + esc(ref) + '</td><td class="num">Average &rarr; ' + esc(ref) + '</td><td class="num">Assets</td><td class="num">Result</td></tr>' +
       entRows + '</tbody></table>' +
@@ -10545,7 +10605,7 @@
         var dl = daysLate(d.due_date), lf = lastByInv[d.id], lv = levelFor(dl);
         var stat = lf ? '<span class="muted">' + esc(lf.status) + (lf.promised_date ? ' &middot; promised ' + esc(lf.promised_date) : '') + '</span>' : '<span class="muted">-</span>';
         var sugg = lv ? '<span class="ob-flag" style="background:' + (lv.action === "legal" ? "var(--bad)" : lv.action === "letter" ? "var(--warn)" : "var(--accent)") + '" title="' + esc(lv.message || "") + '">' + esc(lv.name) + '</span>' : '<span class="muted">-</span>';
-        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad-t)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
+        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + esc(d.due_date || "") + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad-t)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
       }).join("");
       return '<tr class="sec"><td colspan="7"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
     }).join("");
@@ -10677,7 +10737,7 @@
       title: "Contact Tags", pageSize: 60,
       fetch: function () { return sb.from("contact_tags").select("*").eq("company_id", S.company.id).order("name").then(function (r) { return r.data || []; }); },
       searchText: function (t) { return t.name || ""; },
-      columns: [{ label: "Tag", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } }, { label: "Colour", get: function (t) { return t.color ? '<span style="display:inline-block;width:14px;height:14px;border-radius:4px;background:' + esc(t.color) + ';vertical-align:middle"></span> ' + esc(t.color) : ''; } }],
+      columns: [{ label: "Tag", get: function (t) { return '<b>' + esc(t.name) + '</b>'; } }, { label: "Colour", get: function (t) { return t.color ? '<span style="display:inline-block;width:14px;height:14px;border-radius:var(--r-sm);background:' + esc(t.color) + ';vertical-align:middle"></span> ' + esc(t.color) : ''; } }],
       onOpen: function (t) { openContactTagModal(t); }, onNew: function () { openContactTagModal(null); }
     };
   }
@@ -10685,16 +10745,16 @@
   // supply" ticks on a contact). Rename and delete cascade to every supplier using the value.
   async function renderCapabilities() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Services & Products") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Services & Products") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var org = S.company.org_id;
     var caps = (await sb.from("capabilities").select("id,name").eq("org_id", org).order("name")).data || [];
     var parts = (await sb.from("partners").select("capabilities").eq("company_id", S.company.id).not("capabilities", "is", null)).data || [];
     var count = {}; parts.forEach(function (p) { (p.capabilities || []).forEach(function (c) { count[c] = (count[c] || 0) + 1; }); });
     var body = document.getElementById("o-body");
-    function rowH(c) { return '<tr data-id="' + c.id + '" data-name="' + esc(c.name) + '"><td><input class="cap-name" value="' + esc(c.name) + '" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit"></td><td class="num muted">' + (count[c.name] || 0) + '</td><td style="white-space:nowrap"><button class="btn sm cap-ren">Rename</button> <button class="btn sm cap-del" style="color:var(--bad-t)">&times;</button></td></tr>'; }
+    function rowH(c) { return '<tr data-id="' + c.id + '" data-name="' + esc(c.name) + '"><td><input class="cap-name" value="' + esc(c.name) + '" style="width:100%;padding:6px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit"></td><td class="num muted">' + (count[c.name] || 0) + '</td><td style="white-space:nowrap"><button class="btn sm cap-ren">Rename</button> <button class="btn sm cap-del" style="color:var(--bad-t)">&times;</button></td></tr>'; }
     body.innerHTML = '<div style="padding:16px;max-width:640px"><div class="card"><h3 style="margin:0 0 4px">Services &amp; Products a supplier can offer</h3><div class="sub" style="margin-bottom:10px">This is the master list ticked under &ldquo;What they can supply&rdquo; on each supplier. Rename or delete cascades to every supplier using it.</div>' +
-      '<div style="display:flex;gap:6px;margin-bottom:10px"><input id="cap-add" placeholder="Add a service or product..." style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit"><button class="btn pri" id="cap-addb" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:10px"><input id="cap-add" placeholder="Add a service or product..." style="flex:1;padding:8px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><button class="btn pri" id="cap-addb" style="background:var(--app);border-color:var(--app)">Add</button></div>' +
       '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th>Name</th><th class="num">Used by</th><th></th></tr></thead><tbody id="cap-body">' + (caps.length ? caps.map(rowH).join("") : '<tr><td colspan="3" class="muted" style="padding:10px">No services yet - add some, or they appear here as you tick them on suppliers.</td></tr>') + '</tbody></table></div></div></div>';
     document.getElementById("cap-addb").onclick = async function () { var v = (gv("cap-add") || "").trim(); if (!v) return; if (caps.some(function (c) { return c.name.toLowerCase() === v.toLowerCase(); })) { toast("Already in the list"); return; } var r = await sb.from("capabilities").insert({ org_id: org, name: v }); if (r.error) { toast(errMsg(r.error)); return; } toast("Added"); renderCapabilities(); };
     body.querySelectorAll(".cap-ren").forEach(function (b) { b.onclick = async function () { var tr = b.closest("tr"); var id = tr.dataset.id, oldN = tr.dataset.name, newN = (tr.querySelector(".cap-name").value || "").trim(); if (!newN || newN === oldN) { toast("No change"); return; } var r = await sb.from("capabilities").update({ name: newN }).eq("id", id); if (r.error) { toast(errMsg(r.error)); return; } var ps = (await sb.from("partners").select("id,capabilities").eq("company_id", S.company.id).contains("capabilities", [oldN])).data || []; for (var i = 0; i < ps.length; i++) { var arr = (ps[i].capabilities || []).map(function (x) { return x === oldN ? newN : x; }); await sb.from("partners").update({ capabilities: arr }).eq("id", ps[i].id); } toast("Renamed on " + ps.length + " supplier(s)"); renderCapabilities(); }; });
@@ -10809,7 +10869,7 @@
   }
   async function renderUsers() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Users & Roles") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Users & Roles") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var oid = S.company.org_id;
     var team = ((await sb.rpc("org_team", { p_org: oid })).data) || [];
@@ -10876,7 +10936,7 @@
   async function renderRoles() {
     if (!canManageRoles()) { toast("Only owners and super admins can manage roles"); go("companies"); return; }
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roles & Permissions") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roles & Permissions") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var list = await rolesForOrg();
     var bySlug = {}; list.forEach(function (r) { bySlug[r.slug] = r; });
@@ -11116,7 +11176,7 @@
   }
   async function renderAppraisalForm(id) {
     var parent = { action: "hr.appraisals", title: "Appraisals" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { state: "draft", appraisal_date: today(), rating: 3 } : (await sb.from("appraisals").select("*, hr_employees(name)").eq("id", id).maybeSingle()).data || {};
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -11369,7 +11429,7 @@
     var now = new Date();
     if (y == null) { y = CALV ? CALV.y : now.getFullYear(); mo = CALV ? CALV.m : now.getMonth(); }
     CALV = { y: y, m: mo };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '<div class="gap"></div><button class="o-filtbtn" id="cal-prev">&#8249;</button><button class="o-filtbtn" id="cal-today">Today</button><button class="o-filtbtn" id="cal-next">&#8250;</button><button class="o-filtbtn" id="cal-agenda">Agenda</button><button class="o-filtbtn" id="cal-sync">Sync</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Calendar") + '<div class="gap"></div><button class="o-filtbtn" id="cal-prev">&#8249;</button><button class="o-filtbtn" id="cal-today">Today</button><button class="o-filtbtn" id="cal-next">&#8250;</button><button class="o-filtbtn" id="cal-agenda">Agenda</button><button class="o-filtbtn" id="cal-sync">Sync</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("cal-sync").onclick = openCalendarSync;
     document.getElementById("cal-prev").onclick = function () { var nm = mo - 1, ny = y; if (nm < 0) { nm = 11; ny--; } renderCalendar(ny, nm); };
@@ -11400,7 +11460,7 @@
     document.querySelectorAll(".cal-cell").forEach(function (c) { c.onclick = function () { openEventModal(c.dataset.date); }; });
   }
   async function renderAgenda() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Agenda") + '<div class="gap"></div><button class="o-filtbtn" id="ag-cal">Month view</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Agenda") + '<div class="gap"></div><button class="o-filtbtn" id="ag-cal">Month view</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("ag-cal").onclick = function () { renderCalendar(); };
     var now = new Date(); now.setHours(0, 0, 0, 0);
@@ -11462,7 +11522,7 @@
   }
   async function renderSignForm(id) {
     var parent = { action: "sign.list", title: "Signature Requests" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var s = id === "new" ? { status: "draft", doc_type: "document" } : (await sb.from("sign_requests").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -11476,7 +11536,7 @@
     if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
     if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
-    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:4px">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:7px;background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
+    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:var(--r-sm)">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del" style="border:none;background:none;color:var(--bad-t);cursor:pointer;font-size:16px">&times;</button></td>' : '<td></td>') + '</tr>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="sg-title" value="' + esc(s.title || "") + '" placeholder="What is being signed"' + (done ? " disabled" : "") + '></div>' +
@@ -11514,7 +11574,7 @@
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>Sign</h3><div class="form">' +
       '<div><label>Your name</label><input id="sig-name" placeholder="Type your full name"></div>' +
-      '<div><label>Draw your signature</label><canvas id="sig-canvas" width="440" height="140" style="border:1px dashed var(--line);border-radius:8px;background:#fff;touch-action:none;width:100%;max-width:440px"></canvas><div style="margin-top:4px"><button class="btn" id="sig-clear" style="font-size:12px;padding:4px 10px">Clear</button></div></div>' +
+      '<div><label>Draw your signature</label><canvas id="sig-canvas" width="440" height="140" style="border:1px dashed var(--line);border-radius:var(--r);background:#fff;touch-action:none;width:100%;max-width:440px"></canvas><div style="margin-top:4px"><button class="btn" id="sig-clear" style="font-size:12px;padding:4px 10px">Clear</button></div></div>' +
       '<div class="sub">By signing you confirm you approve this document. Your name, signature and a timestamp are recorded.</div>' +
       '</div><div class="foot"><button class="btn" id="sig-cancel">Cancel</button><button class="btn pri" id="sig-save" style="background:var(--accent);border-color:var(--accent)">Confirm signature</button></div></div>';
     document.body.appendChild(m);
@@ -11561,7 +11621,7 @@
   }
   async function renderApplicantForm(id) {
     var parent = { action: "rec.applicants", title: "Applicants" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { stage: "new", applied_date: today(), rating: 0 } : (await sb.from("applicants").select("*").eq("id", id).maybeSingle()).data || {};
     var jobs = (await sb.from("hr_jobs").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -11616,7 +11676,7 @@
   }
   async function renderArticleForm(id) {
     var parent = { action: "kb.articles", title: "Articles" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { is_published: true } : (await sb.from("articles").select("*").eq("id", id).maybeSingle()).data || {};
     bcTitle(id === "new" ? "New" : (a.title || "Article"));
@@ -11641,7 +11701,7 @@
 
   // ============================ SITE OPS: SNAGGING / QHSE ============================
   var SEV = { low: ["Low", "var(--slate)"], medium: ["Medium", "var(--warn)"], high: ["High", "#ea580c"], critical: ["Critical", "var(--bad)"] };
-  function sevBadge(s) { var m = SEV[s] || ["?", "var(--slate)"]; return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;background:' + m[1] + ';color:#fff">' + m[0] + '</span>'; }
+  function sevBadge(s) { var m = SEV[s] || ["?", "var(--slate)"]; return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:var(--r-sm);background:' + m[1] + ';color:#fff">' + m[0] + '</span>'; }
   function snagStatusBadge(s) { return (s === "closed" || s === "verified") ? '<span class="badge paid">' + esc(s.charAt(0).toUpperCase() + s.slice(1)) + '</span>' : s === "fixed" ? '<span class="badge partial">Fixed</span>' : s === "in_progress" ? '<span class="badge partial">In progress</span>' : '<span class="badge unpaid">Open</span>'; }
   function cfgSnags() {
     return {
@@ -11868,7 +11928,7 @@
     if (q.error) { if (/equipment_events|does not exist|schema cache/i.test(q.error.message || "")) el.innerHTML = '<div class="o-cf-head">Movements</div><div class="sub">Run <span class="path">supabase/108-equipment-depth.sql</span> once to enable equipment movements.</div>'; return; }
     var rows = q.data || [];
     var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name").limit(500)).data || [];
-    var inS = 'style="padding:5px 7px;border:1px solid var(--line);border-radius:6px;background:var(--panel2);color:var(--ink);font:inherit;font-size:12px"';
+    var inS = 'style="padding:5px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:12px"';
     var kindLabel = { transfer: "Transfer", meter: "Meter", rental_out: "Rented out", rental_return: "Returned", service: "Service" };
     el.innerHTML = '<div class="o-cf-head">Movements &amp; readings</div>' +
       '<div class="o-rt-wrap" style="max-height:150px;overflow:auto"><table class="o-lines"><tbody>' +
@@ -11900,7 +11960,7 @@
   // Equipment utilization report: per unit rental revenue, days, latest meter, status.
   async function renderEquipmentUtilization() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Equipment utilization") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Equipment utilization") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var units = (await sb.from("plant_equipment").select("*").eq("company_id", S.company.id).order("name")).data || [];
     var events = (await sb.from("equipment_events").select("equipment_id,kind,days,amount,meter_reading,event_date").eq("company_id", S.company.id)).data || [];
     var agg = {}; events.forEach(function (e) { var a = agg[e.equipment_id] = agg[e.equipment_id] || { days: 0, rev: 0, meter: null, last: "" }; if (e.kind === "rental_out") { a.days += Number(e.days) || 0; a.rev += Number(e.amount) || 0; } if (e.kind === "meter" && e.meter_reading != null) a.meter = e.meter_reading; if (e.event_date > a.last) a.last = e.event_date; });
@@ -11984,7 +12044,7 @@
   }
   async function renderSiteDiaryForm(id) {
     var parent = { action: "site.diary", title: "Site Diary" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var d = id === "new" ? { diary_date: today() } : (await sb.from("site_diaries").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -12038,7 +12098,7 @@
     return { float: fl, critical: crit, ok: true };
   }
   async function renderSchedule(projectId) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Programme") + '<div class="gap"></div><select id="sc-proj" class="o-filtbtn"></select><button class="o-filtbtn" id="sc-add">+ Activity</button><button class="o-filtbtn" id="sc-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Programme") + '<div class="gap"></div><select id="sc-proj" class="o-filtbtn"></select><button class="o-filtbtn" id="sc-add">+ Activity</button><button class="o-filtbtn" id="sc-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var psel = document.getElementById("sc-proj");
@@ -12140,7 +12200,7 @@
       '<select id="ab-proj" class="o-filtbtn"></select>' + vt +
       '<select id="ab-member" class="o-filtbtn" title="Filter by assignee"></select>' +
       '<button class="o-filtbtn" id="ab-new">+ Task</button></div>' +
-      '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+      '<div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var psel = document.getElementById("ab-proj");
@@ -12630,7 +12690,7 @@
   }
 
   async function renderMyWork(empId) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Work") + '<div class="gap"></div><select id="mw-emp" class="o-filtbtn"></select></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("My Work") + '<div class="gap"></div><select id="mw-emp" class="o-filtbtn"></select></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var sel = document.getElementById("mw-emp");
@@ -12670,7 +12730,7 @@
   }
   async function renderPricelistForm(id) {
     var parent = { action: "sale.pricelists", title: "Pricelists" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? { is_active: true, currency_code: S.company.currency_code } : (await sb.from("pricelists").select("*").eq("id", id).maybeSingle()).data || {};
     var items = id === "new" ? [] : (await sb.from("pricelist_items").select("*").eq("pricelist_id", id).order("sequence")).data || [];
@@ -12713,7 +12773,7 @@
   }
   async function renderQuoteTemplateForm(id) {
     var parent = { action: "sale.qtempl", title: "Quotation Templates" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? {} : (await sb.from("quote_templates").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("quote_template_lines").select("*").eq("template_id", id).order("sequence")).data || [];
@@ -12793,7 +12853,7 @@
   }
   async function renderAssetForm(id) {
     var parent = { action: "assets.list", title: "Assets" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var a = id === "new" ? { state: "draft", method: "linear", life_months: 60, asset_account: "2100", depr_account: "2800", expense_account: "6800", acquisition_date: today() } : (await sb.from("assets").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("asset_lines").select("*").eq("asset_id", id).order("seq")).data || [];
@@ -12877,7 +12937,7 @@
   // Fixed-asset register dashboard: totals, by-category book value, and disposals.
   async function renderAssetsDash() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Asset dashboard") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Asset dashboard") + '</div><div class="o-body" id="o-body" style="padding:16px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var assets = (await sb.from("assets").select("*").eq("company_id", S.company.id)).data || [];
     var posted = (await sb.from("asset_lines").select("asset_id,depreciation,posted").eq("company_id", S.company.id).eq("posted", true)).data || [];
     var deprBy = {}; posted.forEach(function (l) { deprBy[l.asset_id] = (deprBy[l.asset_id] || 0) + (Number(l.depreciation) || 0); });
@@ -12917,7 +12977,7 @@
   }
   async function renderBudgetForm(id) {
     var parent = { action: "budget.list", title: "Budgets" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var yr = new Date().getFullYear();
     var b = id === "new" ? { date_start: yr + "-01-01", date_end: yr + "-12-31" } : (await sb.from("budgets").select("*").eq("id", id).maybeSingle()).data || {};
@@ -13017,7 +13077,7 @@
   // ============================ DOCUMENT CONTROL (submittals / RFIs / transmittals) ============================
   var SUBMITTAL_TYPES = [["shop_drawing", "Shop drawing"], ["material_approval", "Material approval"], ["sample", "Sample"], ["method_statement", "Method statement"], ["other", "Other"]];
   function subTypeLabel(t) { var m = SUBMITTAL_TYPES.filter(function (x) { return x[0] === t; })[0]; return m ? m[1] : t; }
-  function docBadge(text, color) { return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:6px;background:' + color + ';color:#fff;white-space:nowrap">' + esc(text) + '</span>'; }
+  function docBadge(text, color) { return '<span style="display:inline-block;font-size:11px;font-weight:700;padding:1px 8px;border-radius:var(--r-sm);background:' + color + ';color:#fff;white-space:nowrap">' + esc(text) + '</span>'; }
   function subStatusBadge(s) { var m = { draft: ["Draft", "var(--slate)"], submitted: ["Submitted", "var(--warn)"], approved: ["Approved", "var(--good)"], approved_comments: ["Approved w/ comments", "var(--good)"], rejected: ["Rejected", "var(--bad)"], superseded: ["Superseded", "var(--slate)"] }[s] || [s, "var(--slate)"]; return docBadge(m[0], m[1]); }
   function rfiStatusBadge(s) { var m = { open: ["Open", "var(--warn)"], answered: ["Answered", "var(--good)"], closed: ["Closed", "var(--slate)"] }[s] || [s, "var(--slate)"]; return docBadge(m[0], m[1]); }
   function nextRev(r) { r = String(r || "A"); if (/^[A-Za-z]$/.test(r)) return String.fromCharCode(r.toUpperCase().charCodeAt(0) + 1); var n = parseInt(r, 10); return isNaN(n) ? r + "'" : (n + 1) + ""; }
@@ -13055,7 +13115,7 @@
   }
   async function renderSetup() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Getting started") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Getting started") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var state = await setupState();
     var doneN = state.filter(function (s) { return s.done; }).length, tot = state.length, pct = Math.round(doneN / tot * 100);
@@ -13107,7 +13167,7 @@
   // ============================ PLATFORM: PENDING SIGNUPS (approval) ============================
   async function renderPendingSignups() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pending signups") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pending signups") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var body = document.getElementById("o-body");
     if (!S.isPlatformAdmin) { body.innerHTML = '<div style="padding:18px"><div class="o-empty">Platform admins only.</div></div>'; return; }
@@ -13257,7 +13317,7 @@
   // ============================ PLATFORM: TENANTS CONSOLE ============================
   async function renderTenants() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Tenants") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Tenants") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var body = document.getElementById("o-body");
     if (!S.isPlatformAdmin) { body.innerHTML = '<div style="padding:18px"><div class="o-empty">Platform admins only.</div></div>'; return; }
@@ -13421,7 +13481,7 @@
 
   async function renderBackups() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Backups") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Backups") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var cid = S.company.id;
     var st = (await sb.from("backup_settings").select("*").eq("company_id", cid).maybeSingle()).data;
     if (!st) {
@@ -13712,7 +13772,7 @@
   ];
   async function renderPrivacy() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Privacy & data requests") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Privacy & data requests") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var reqs = (await sb.from("privacy_requests").select("*").eq("company_id", S.company.id).order("requested_at", { ascending: false }).limit(50)).data || [];
     document.getElementById("o-body").innerHTML =
       '<div class="card"><h3 class="cp-sec">Answer a request about one person</h3>' +
@@ -13867,7 +13927,7 @@
   function rfqBadge(s) {
     var col = { draft: "--ink3", sent: "--accent", closed: "--warn", awarded: "--good", cancelled: "--bad" }[s] || "--ink3";
     var txt = { draft: "Draft", sent: "Sent", closed: "Closed", awarded: "Awarded", cancelled: "Cancelled" }[s] || (s || "Draft");
-    return '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:6px;color:var(' + col + ');border:1px solid var(' + col + ')">' + esc(txt) + '</span>';
+    return '<span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-sm);color:var(' + col + ');border:1px solid var(' + col + ')">' + esc(txt) + '</span>';
   }
   // ===================== SHIPMENTS / container tracking + landed cost =====================
   var SHIP_STATUS = [["booked", "Booked"], ["in_transit", "In transit"], ["arrived", "Arrived"], ["cleared", "Customs cleared"], ["received", "Received"], ["cancelled", "Cancelled"]];
@@ -13903,7 +13963,7 @@
   function shipModeLabel(m) { var x = SHIP_MODES.filter(function (o) { return o[0] === m; })[0]; return x ? x[1] : "Sea"; }
   async function renderShipmentBoard() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Shipments board") + '<button class="o-new" id="shb-new">New shipment</button><div class="gap"></div><button class="o-filtbtn" id="shb-list">List view</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Shipments board") + '<button class="o-new" id="shb-new">New shipment</button><div class="gap"></div><button class="o-filtbtn" id="shb-list">List view</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("shb-new").onclick = function () { renderShipmentForm("new"); };
     document.getElementById("shb-list").onclick = function () { go("shp.list"); };
@@ -13924,7 +13984,7 @@
   async function renderShipmentForm(id) {
     var parent = { action: "shp.list", title: "Shipments" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var s = id === "new" ? { status: "booked", mode: "sea", pod: "Beirut", currency_code: S.company.currency_code } : (await sb.from("shipments").select("*").eq("id", id).maybeSingle()).data || {};
     var items = id === "new" ? [] : (await sb.from("shipment_items").select("*").eq("shipment_id", id).order("sequence")).data || [];
@@ -14067,7 +14127,7 @@
   }
   async function renderRFQForm(id) {
     var parent = { action: "rfq.list", title: "RFQ / Compare Quotes" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var isNew = id === "new";
     var rfq = isNew ? { status: "draft", title: "Request for Quotation" } : ((await sb.from("rfqs").select("*").eq("id", id).maybeSingle()).data || {});
@@ -14262,7 +14322,7 @@
   var API_WH_EVENTS = ["invoice.created", "bill.created", "purchase_order.created", "purchase_order.confirmed", "payment.recorded"];
   async function renderDevelopers() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Developers (API)") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Developers (API)") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var body = document.getElementById("o-body");
     var keys, hooks, setupNeeded = false;
@@ -14308,7 +14368,7 @@
     function akNew() {
       var m = document.createElement("div"); m.className = "modal on";
       m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New API key</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-        '<label class="fl">Name<input id="ak-name" placeholder="e.g. Zapier, our website" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"></label>' +
+        '<label class="fl">Name<input id="ak-name" placeholder="e.g. Zapier, our website" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"></label>' +
         '<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="ak-write"> Allow writes (create/update contacts, products, projects)</label>' +
         '<div class="sub">The key is shown once, now. Store it somewhere safe - you cannot see it again.</div></div>' +
         '<div class="foot"><button class="btn" id="ak-cancel">Cancel</button><button class="btn pri" id="ak-save" style="background:var(--accent);border-color:var(--accent)">Create key</button></div></div>';
@@ -14324,7 +14384,7 @@
     function whNew() {
       var m = document.createElement("div"); m.className = "modal on";
       m.innerHTML = '<div class="sheet" style="max-width:460px"><h3>New webhook endpoint</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px">' +
-        '<label class="fl">URL<input id="wh-url" placeholder="https://your-app.com/hooks/orbit" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"></label>' +
+        '<label class="fl">URL<input id="wh-url" placeholder="https://your-app.com/hooks/orbit" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"></label>' +
         '<div><div style="font-size:12.5px;color:var(--ink2);font-weight:600;margin-bottom:5px">Events</div>' + API_WH_EVENTS.map(function (e) { return '<label style="display:flex;gap:8px;align-items:center;font-size:13px;padding:2px 0"><input type="checkbox" class="wh-ev" value="' + e + '" checked> ' + e + '</label>'; }).join("") + '</div></div>' +
         '<div class="foot"><button class="btn" id="wh-cancel">Cancel</button><button class="btn pri" id="wh-save" style="background:var(--accent);border-color:var(--accent)">Create endpoint</button></div></div>';
       document.body.appendChild(m);
@@ -14343,7 +14403,7 @@
       var m = document.createElement("div"); m.className = "modal on";
       m.innerHTML = '<div class="sheet" style="max-width:520px"><h3>' + esc(title) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:10px">' +
         '<div class="sub" style="color:var(--bad-t)">Copy this now - it is shown only once.</div>' +
-        '<textarea readonly id="sec-val" style="width:100%;min-height:64px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-family:var(--mono);font-size:12.5px">' + esc(value || "") + '</textarea>' +
+        '<textarea readonly id="sec-val" style="width:100%;min-height:64px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-family:var(--mono);font-size:12.5px">' + esc(value || "") + '</textarea>' +
         (note ? '<div class="sub">' + esc(note) + '</div>' : '') + '</div>' +
         '<div class="foot"><button class="btn" id="sec-copy">Copy</button><button class="btn pri" id="sec-close" style="background:var(--accent);border-color:var(--accent)">Done</button></div></div>';
       document.body.appendChild(m);
@@ -14353,7 +14413,7 @@
   }
   async function renderNumbering() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     resetSeqCache(); var cfg = await loadSeqCfg(); var yr = new Date().getFullYear();
     function preview(p, pad, uy) { return esc((p || "DOC") + (uy ? "/" + yr : "") + "/" + ("000000000" + 1).slice(-Math.max(1, pad || 4))); }
@@ -14386,7 +14446,7 @@
   async function loadPaymentTerms() { var rows = (await sb.from("payment_terms").select("id,days,label,sort").eq("company_id", S.company.id).order("sort").order("days")).data || []; return rows.length ? rows : PAYTERM_DEFAULTS.map(function (d, i) { return { days: d.days, label: d.label, sort: (i + 1) * 10 }; }); }
   async function renderPaymentTerms() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Payment Terms") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Payment Terms") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var rows = await loadPaymentTerms();
     function rowHtml(r) { return '<tr><td><input class="ptt-days num" type="number" step="1" value="' + (r.days != null ? r.days : 0) + '" style="width:90px"></td><td><input class="ptt-label" value="' + esc(r.label || "") + '" placeholder="e.g. 30 days"></td><td><button class="del" type="button" title="Remove">&times;</button></td></tr>'; }
@@ -14410,10 +14470,10 @@
   var LABEL_COLORS = ["#2563eb", "#0ea66f", "#c58217", "#e11d48", "#7c3aed", "#0891b2", "#64748b"];
   async function renderTaskLabels() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Task Labels") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Task Labels") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var rows = await loadTaskLabels();
-    function rowHtml(r) { var col = r.color || LABEL_COLORS[0]; return '<tr><td><input class="tlx-name" value="' + esc(r.name || "") + '" placeholder="e.g. Fabrication"></td><td><input class="tlx-color" type="color" value="' + esc(col) + '" style="width:52px;height:30px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)"></td><td><button class="del" type="button" title="Remove">&times;</button></td></tr>'; }
+    function rowHtml(r) { var col = r.color || LABEL_COLORS[0]; return '<tr><td><input class="tlx-name" value="' + esc(r.name || "") + '" placeholder="e.g. Fabrication"></td><td><input class="tlx-color" type="color" value="' + esc(col) + '" style="width:52px;height:30px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2)"></td><td><button class="del" type="button" title="Remove">&times;</button></td></tr>'; }
     document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0">Task Labels</h3><button class="pri" id="tlx-save" style="margin-left:auto">Save</button></div>' +
       '<div class="sub" style="margin:6px 0 12px">The labels people can put on an execution task (Projects &rsaquo; Execution). Define them here so everyone uses the same set.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Label</th><th style="width:70px">Colour</th><th style="width:40px"></th></tr></thead><tbody id="tlx-body">' + (rows.length ? rows.map(rowHtml).join("") : rowHtml({})) + '</tbody></table></div>' +
@@ -14592,11 +14652,11 @@
 
   async function renderCompanyProfile() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Company Profile") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Company Profile") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var c = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
     var p = c.profile || {}, ps = c.print_settings || {}, soc = p.social || {};
-    var ta = 'style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical"';
+    var ta = 'style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;resize:vertical"';
     var tmplCards = PRINT_TEMPLATES.map(function (m) {
       return '<label class="cp-tpl" data-tpl="' + m.id + '"><input type="radio" name="cp-tpl" value="' + m.id + '"' + ((Number(ps.template || 1)) === m.id ? " checked" : "") + '><div class="cp-tpl-card"><div class="cp-tpl-mini cp-mini-' + m.id + '"><span class="cm-logo"></span><span class="cm-lines"><span></span><span></span></span></div><div class="cp-tpl-name">' + esc(m.name) + '</div><div class="cp-tpl-desc">' + esc(m.desc) + '</div></div></label>';
     }).join("");
@@ -14646,7 +14706,7 @@
       '<div class="card"><h3 class="cp-sec">Print template</h3><div class="sub" style="margin:-4px 0 12px">Pick a header &amp; footer layout. The logo appears on every printout. This is what people see on your documents.</div>' +
       '<div class="o-groups"><div>' +
       fld("Logo", '<div id="cp-logo-wrap"></div>', "PNG or JPG. Appears on every printed report.") +
-      fld("Accent colour", '<input id="cp-accent" type="color" value="' + esc(ps.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:6px;background:var(--panel2)">') +
+      fld("Accent colour", '<input id="cp-accent" type="color" value="' + esc(ps.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2)">') +
       '</div><div>' +
       fld("Show logo", '<select id="cp-showlogo"><option value="1">Yes</option><option value="0">No</option></select>', "Keep on so your brand is on every document.") +
       fld("Footer note", '<input id="cp-footer" value="' + esc(ps.footer || "") + '" placeholder="e.g. Thank you for your business">') +
@@ -14668,7 +14728,7 @@
     }
     function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Sample Document") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
     function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
-    function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img alt="Company logo" src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:8px;padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
+    function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img alt="Company logo" src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:var(--r);padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn" style="cursor:pointer">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
     paintLogo(); paintPreview();
     var locState = (c.profile && c.profile.localization) ? c.profile.localization : null;
     function paintLoc() {
@@ -14741,7 +14801,7 @@
   async function renderCustomFieldsAdmin(entity) {
     entity = entity || "partner";
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Custom Fields") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Custom Fields") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var canEdit = canManage("settings");
     var defs = (await sb.from("custom_field_defs").select("*").eq("company_id", S.company.id).eq("entity", entity).order("sort")).data || [];
@@ -14793,7 +14853,7 @@
   // ORB-06b: admin screen to rename the nouns the app shows (per active company).
   async function renderTerminologyAdmin() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Terminology") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Terminology") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var canEdit = canManage("settings");
     var cur = {}; ((await sb.from("term_overrides").select("term_key,label").eq("company_id", S.company.id)).data || []).forEach(function (r) { cur[r.term_key] = r.label; });
@@ -14823,7 +14883,7 @@
   // leaf in each; item codes are built from the node codes. This is the tree-view manager.
   async function renderClassification() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Classification") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Classification") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var canEdit = !!(S.role && (S.role.full_access || canManage("settings") || canManage("inventory")));
     var nodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
@@ -14889,12 +14949,12 @@
     var body = document.getElementById("o-body");
     body.innerHTML = '<div style="padding:16px;max-width:900px">' +
       '<div class="card"><h3 style="margin:0 0 8px">Search documents</h3>' +
-      '<input id="ds-q" placeholder="Search drawings, RFIs, submittals, transmittals and file captions..." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:14px">' +
+      '<input id="ds-q" placeholder="Search drawings, RFIs, submittals, transmittals and file captions..." style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px">' +
       '<div id="ds-res" style="margin-top:10px"><div class="muted" style="font-size:13px">Type at least two characters to search across every document in this company.</div></div></div>' +
       '<div class="card" style="margin-top:14px"><h3 style="margin:0 0 4px">Extract text from an image (OCR)</h3>' +
       '<div class="sub" style="margin:0 0 10px">Pick a photo or scan (a drawing title block, a delivery note, a label) and Orbit reads the text out of it, in your browser. Then search it or copy it into a document.</div>' +
       '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input type="file" id="ds-file" accept="image/*"><button class="btn sm pri" id="ds-ocr" style="background:var(--accent);border-color:var(--accent)">Extract text</button><span id="ds-prog" class="muted" style="font-size:12px"></span></div>' +
-      '<textarea id="ds-text" placeholder="Extracted text appears here..." style="width:100%;margin-top:10px;min-height:120px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></textarea>' +
+      '<textarea id="ds-text" placeholder="Extracted text appears here..." style="width:100%;margin-top:10px;min-height:120px;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></textarea>' +
       '<div style="display:flex;gap:8px;margin-top:8px"><button class="btn sm" id="ds-copy">Copy text</button><button class="btn sm" id="ds-search">Search this text</button></div></div></div>';
     var q = document.getElementById("ds-q"), res = document.getElementById("ds-res");
     async function runSearch(term) {
@@ -14915,7 +14975,7 @@
       md.filter(function (m) { return hit(m.caption); }).slice(0, 30).forEach(function (m) { out.push({ t: "File", n: m.caption, sub: (m.kind || "file") + " on " + (m.entity || ""), go: null }); });
       if (!out.length) { res.innerHTML = '<div class="o-empty">No documents match &ldquo;' + esc(term) + '&rdquo;.</div>'; return; }
       res.innerHTML = '<div class="sub" style="margin-bottom:6px">' + out.length + ' match' + (out.length === 1 ? "" : "es") + '</div>' + out.map(function (o, i) {
-        return '<div class="ds-hit" data-go="' + (o.go || "") + '" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:9px;margin-bottom:6px' + (o.go ? ';cursor:pointer' : '') + '"><span class="badge">' + o.t + '</span><span style="flex:1"><b>' + esc(o.n) + '</b>' + (o.sub ? ' <span class="muted" style="font-size:12px">' + o.sub + '</span>' : "") + '</span>' + (o.go ? '<span class="muted">open &rsaquo;</span>' : "") + '</div>';
+        return '<div class="ds-hit" data-go="' + (o.go || "") + '" style="display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:6px' + (o.go ? ';cursor:pointer' : '') + '"><span class="badge">' + o.t + '</span><span style="flex:1"><b>' + esc(o.n) + '</b>' + (o.sub ? ' <span class="muted" style="font-size:12px">' + o.sub + '</span>' : "") + '</span>' + (o.go ? '<span class="muted">open &rsaquo;</span>' : "") + '</div>';
       }).join("");
       res.querySelectorAll(".ds-hit[data-go]").forEach(function (el) { if (el.dataset.go) el.onclick = function () { go(el.dataset.go); }; });
     }
@@ -14960,7 +15020,7 @@
   }
   async function renderDrawingForm(id) {
     var parent = { action: "doc.drawings", title: "Drawing Register" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var d = id === "new" ? { status: "in_progress" } : (await sb.from("drawings").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -15058,7 +15118,7 @@
   }
   async function renderSubmittalForm(id) {
     var parent = { action: "doc.subs", title: "Submittals" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var s = id === "new" ? { status: "draft", revision: "A", doc_type: "shop_drawing" } : (await sb.from("submittals").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -15146,7 +15206,7 @@
   }
   async function renderRfiForm(id) {
     var parent = { action: "doc.rfis", title: "RFIs" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var r = id === "new" ? { status: "open", raised_date: today() } : (await sb.from("rfis").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -15206,7 +15266,7 @@
   }
   async function renderTransmittalForm(id) {
     var parent = { action: "doc.trans", title: "Transmittals" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? { transmittal_date: today() } : (await sb.from("transmittals").select("*, projects(name)").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -15265,7 +15325,7 @@
   // ============================ EXECUTIVE COCKPIT (group-wide) ============================
   async function renderCockpit() {
     var ref = (S.org && S.org.ref_currency) || S.company.currency_code || "USD";
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cockpit") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading group cockpit...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cockpit") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var coIds = S.companies.map(function (c) { return c.id; });
@@ -15345,7 +15405,7 @@
   async function renderBankStatementForm(id) {
     var parent = { action: "bank", title: "Bank Statements" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var stmt = null, lines = [];
     if (id !== "new") {
@@ -15408,7 +15468,7 @@
       }).join("");
       pg.innerHTML = '<div class="muted" style="margin-bottom:8px;font-size:12.5px">' + recN + ' of ' + lines.length + ' lines reconciled</div>' +
         '<table class="o-lines"><thead><tr><th style="width:110px">Date</th><th>Label</th><th style="width:110px;text-align:right">Amount</th><th style="width:320px">Reconcile with</th></tr></thead><tbody>' + (body || '<tr><td colspan="4" class="muted" style="padding:14px">No lines.</td></tr>') + '</tbody></table>' +
-        '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">Add a line</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="al-date" type="date" value="' + today() + '" style="padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><input id="al-label" placeholder="Label" style="flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><input id="al-amt" type="number" step="0.01" placeholder="Amount" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink)"><button class="btn" id="al-add">Add line</button></div></div>';
+        '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px"><div class="muted" style="font-size:12.5px;margin-bottom:6px">Add a line</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center"><input id="al-date" type="date" value="' + today() + '" style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink)"><input id="al-label" placeholder="Label" style="flex:1;min-width:140px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink)"><input id="al-amt" type="number" step="0.01" placeholder="Amount" style="width:120px;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink)"><button class="btn" id="al-add">Add line</button></div></div>';
       Array.prototype.forEach.call(document.querySelectorAll(".rec-btn"), function (b) {
         b.onclick = async function () {
           var sel = document.querySelector('.rec-acct[data-id="' + b.dataset.id + '"]');
@@ -15537,13 +15597,13 @@
     var locSel = "";
     if (inv && inv.internal.length > 1) {
       if (OH_LOC !== "all" && !inv.internal.filter(function (l) { return l.id === OH_LOC; })[0]) OH_LOC = "all";
-      locSel = '<select id="oh-loc" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px"><option value="all">All locations</option>' +
+      locSel = '<select id="oh-loc" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:var(--r);padding:6px 9px;font:inherit;font-size:13px"><option value="all">All locations</option>' +
         inv.internal.map(function (l) { return '<option value="' + l.id + '"' + (OH_LOC === l.id ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join("") + '</select>';
     } else OH_LOC = "all";
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("On Hand") +
       '<button class="o-new" id="i-recv">Receive</button><button class="btn" id="i-issue">Issue to Project</button><button class="btn" id="i-deliv">Deliver</button><button class="btn" id="i-xfer">Transfer</button><button class="btn" id="i-adj">Adjust</button>' +
       '<div class="gap"></div>' + locSel +
-      '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+      '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     wireInvBtns(prods);
@@ -15816,7 +15876,7 @@
   // add-sub / edit / delete, and a rolled-up count including descendants.
   async function renderCategoryTree() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Product Categories") + '<button class="o-new" id="cat-new">New category</button><div class="gap"></div></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Product Categories") + '<button class="o-new" id="cat-new">New category</button><div class="gap"></div></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var cats = (await sb.from("product_categories").select("*").eq("company_id", S.company.id).order("name")).data || [];
     var prods = (await sb.from("products").select("category_id").eq("company_id", S.company.id)).data || [];
@@ -16003,7 +16063,7 @@
   }
   async function renderReorder() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Replenishment") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Replenishment") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     await ensureInventory();
     var oh = await onHandMap();
@@ -16013,7 +16073,7 @@
     var ruleMap = {}; rules.forEach(function (r) { if (!r.location_id) ruleMap[r.product_id] = r; });
     var body = document.getElementById("o-body");
     if (!storable.length) { body.innerHTML = '<div class="o-empty">No storable products yet. Set a product\'s type to <b>Storable</b> to plan replenishment.</div>'; return; }
-    var inStyle = 'style="width:74px;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);text-align:right;font:inherit;font-size:13px"';
+    var inStyle = 'style="width:74px;padding:5px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);text-align:right;font:inherit;font-size:13px"';
     var rows = storable.map(function (p) {
       var r = ruleMap[p.id] || {}, min = Number(r.min_qty || 0), max = Number(r.max_qty || 0), q = oh[p.id] || 0;
       var need = (min > 0 && q < min) ? Math.max(max, min) - q : 0;
@@ -16052,7 +16112,7 @@
   // path as the per-item adjustment, so the books follow the count. No new tables.
   async function renderCycleCount() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cycle Count") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cycle Count") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var inv = await ensureInventory();
     var locs = (inv.internal || []).slice();
@@ -16067,7 +16127,7 @@
     body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Cycle Count</h3>' +
       '<label class="muted" style="font-size:12px">Location <select id="cc-loc">' + locOpts + '</select></label>' +
       '<label class="muted" style="font-size:12px">Category <select id="cc-fam">' + famOpts + '</select></label>' +
-      '<input id="cc-q" placeholder="Filter products..." style="padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px">' +
+      '<input id="cc-q" placeholder="Filter products..." style="padding:6px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px">' +
       '<button class="btn sm pri" id="cc-post" style="margin-left:auto;background:var(--accent);border-color:var(--accent)">Post adjustments</button></div>' +
       '<div class="sub" style="margin:6px 0 12px">Enter what you physically counted for each item at this location. Leave a row blank if you did not count it. <b>Post adjustments</b> writes an inventory adjustment for every variance and posts it to the ledger.</div>' +
       '<div id="cc-sum" class="sub" style="margin-bottom:8px"></div>' +
@@ -16085,7 +16145,7 @@
         var vCell = v == null ? "" : (v === 0 ? '<span class="muted">0</span>' : '<span class="badge ' + (v > 0 ? "paid" : "unpaid") + '">' + (v > 0 ? "+" : "") + (Math.round(v * 1000) / 1000) + '</span>');
         return '<tr><td class="num" style="text-align:left">' + esc(p.default_code || "") + '</td><td><b>' + esc(p.name) + '</b> <span class="muted" style="font-size:11px">' + esc(p.uom || "") + '</span></td>' +
           '<td class="num">' + (Math.round(exp * 1000) / 1000) + '</td>' +
-          '<td class="num"><input class="cc-in" data-id="' + p.id + '" type="number" step="any" value="' + (cv !== undefined ? cv : "") + '" style="width:92px;text-align:right;padding:5px 7px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></td>' +
+          '<td class="num"><input class="cc-in" data-id="' + p.id + '" type="number" step="any" value="' + (cv !== undefined ? cv : "") + '" style="width:92px;text-align:right;padding:5px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"></td>' +
           '<td class="num">' + vCell + '</td></tr>';
       }).join("");
       tb.querySelectorAll(".cc-in").forEach(function (inp) { inp.addEventListener("input", function () { counts[inp.dataset.id] = inp.value; summarise(); }); inp.addEventListener("change", function () { draw(); }); });
@@ -16214,7 +16274,7 @@
   }
   async function renderLots() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Lots / Serials") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Lots / Serials") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var lots = (await sb.from("stock_lots").select("*, products(name)").eq("company_id", S.company.id).order("name")).data || [];
     var oh = await lotOnHand();
@@ -16264,7 +16324,7 @@
     mediaClearStage();
     var parent = { action: "proj.list", title: "Projects" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var p = id === "new" ? { is_active: true, billing_type: "none" } : (await sb.from("projects").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var srcTender = (id !== "new" && p.source_tender_id) ? (await sb.from("tenders").select("id,number,name").eq("id", p.source_tender_id).maybeSingle()).data : null;
@@ -16392,7 +16452,7 @@
   async function renderTaskForm(id) {
     var parent = { action: "task.list", title: "Tasks" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? {} : (await sb.from("project_tasks").select("*").eq("id", id).maybeSingle()).data || {};
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -16407,7 +16467,7 @@
       '</div><div>' +
       fld("Deadline", '<input id="tf-deadline" type="date" value="' + (t.date_deadline || "") + '">', "When this task is due.") +
       '</div></div>' +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Description</div></div><div class="o-nb-pg"><textarea id="tf-desc" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="What needs to be done...">' + esc(t.description || "") + '</textarea></div></div>' +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Description</div></div><div class="o-nb-pg"><textarea id="tf-desc" rows="4" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="What needs to be done...">' + esc(t.description || "") + '</textarea></div></div>' +
       '</div>';
     document.getElementById("tf-discard").onclick = function () { go("task.list"); };
     document.getElementById("tf-save").onclick = async function () {
@@ -16514,7 +16574,7 @@
   }
   async function renderPipeline() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pipeline") + '<button class="o-new" id="crm-new">New</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Pipeline") + '<button class="o-new" id="crm-new">New</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("crm-new").onclick = function () { renderLeadForm("new"); };
     var stages = await ensureCrmStages();
@@ -16624,7 +16684,7 @@
   async function renderLeadForm(id) {
     var parent = { action: "crm.pipe", title: "Pipeline" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var l = id === "new" ? { probability: 10 } : (await sb.from("crm_leads").select("*, partners(name)").eq("id", id).maybeSingle()).data || {};
     var stages = await ensureCrmStages();
@@ -16905,7 +16965,7 @@
   async function renderEmployeeForm(id) {
     mediaClearStage();
     var parent = { action: "hr.emp", title: "Employees" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var e = id === "new" ? { is_active: true } : (await sb.from("hr_employees").select("*").eq("id", id).maybeSingle()).data || {};
     var depts = (await sb.from("hr_departments").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -17383,7 +17443,7 @@
   }
   async function renderContractForm(id, preEmp) {
     var parent = { action: "hr.contracts", title: "Contracts" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var c = id === "new" ? { state: "draft", working_days: 26, daily_hours: 8, ot_multiplier: 1.25, currency_code: S.company.currency_code, employee_id: preEmp || null } : (await sb.from("hr_contracts").select("*").eq("id", id).maybeSingle()).data || {};
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -17592,7 +17652,7 @@
   }
   async function renderPayslipRunForm(id) {
     var parent = { action: "hr.runs", title: "Payslip Runs" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var now = new Date(), y = now.getFullYear(), mo = now.getMonth();
     function ymd(yy, mm, dd) { return yy + "-" + ("0" + mm).slice(-2) + "-" + ("0" + dd).slice(-2); }
@@ -17709,7 +17769,7 @@
   }
   async function renderPayslipForm(id) {
     var parent = { action: "hr.slips", title: "Payslips" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var now = new Date(), y = now.getFullYear(), mo = now.getMonth();
@@ -17826,7 +17886,7 @@
     if (!ROSTER_WEEK) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); ROSTER_WEEK = ymdLocal(n); }
     var start = new Date(ROSTER_WEEK + "T00:00:00"), days = [];
     for (var i = 0; i < 7; i++) { var d = new Date(start); d.setDate(start.getDate() + i); days.push(ymdLocal(d)); }
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roster") + '<div class="gap"></div><span class="o-pager">Week of ' + ROSTER_WEEK + '</span><button class="o-filtbtn" id="rst-prev">&#8249; Prev</button><button class="o-filtbtn" id="rst-today">This week</button><button class="o-filtbtn" id="rst-next">Next &#8250;</button></div><div class="o-form-bg" style="padding:14px"><div id="rst" class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Roster") + '<div class="gap"></div><span class="o-pager">Week of ' + ROSTER_WEEK + '</span><button class="o-filtbtn" id="rst-prev">&#8249; Prev</button><button class="o-filtbtn" id="rst-today">This week</button><button class="o-filtbtn" id="rst-next">Next &#8250;</button></div><div class="o-form-bg" style="padding:14px"><div id="rst" class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("rst-prev").onclick = function () { var s = new Date(ROSTER_WEEK + "T00:00:00"); s.setDate(s.getDate() - 7); ROSTER_WEEK = ymdLocal(s); renderRoster(); };
     document.getElementById("rst-next").onclick = function () { var s = new Date(ROSTER_WEEK + "T00:00:00"); s.setDate(s.getDate() + 7); ROSTER_WEEK = ymdLocal(s); renderRoster(); };
@@ -17927,7 +17987,7 @@
       var native = co.currency_code === ref ? '' : '<div class="muted" style="font-size:11px">' + esc(co.currency_code) + " " + money(gross) + ' &rarr;</div>';
       rows.push('<tr><td>' + esc(co.name) + '</td><td class="muted">' + esc(co.currency_code) + '</td><td class="num">' + rateCell + '</td><td class="num">' + native + money(gRef) + '</td><td class="num">' + money(eRef) + '</td><td class="num">' + money(gRef + eRef) + '</td><td class="num">' + money(nRef) + '</td></tr>');
     }
-    var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:9px;margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
+    var banner = Object.keys(missing).length ? '<div style="background:var(--warn-s);color:var(--warn-t);padding:10px 14px;border-radius:var(--r);margin-bottom:14px;font-size:13px">No exchange rate for <b>' + esc(Object.keys(missing).join(", ")) + '</b> - those entities are shown 1:1. Add a rate under Accounting &gt; Exchange Rates.</div>' : '';
     document.getElementById("rep").innerHTML = '<h1>Payroll Consolidation</h1><div class="sub">All ' + S.companies.length + ' entities, converted to <b>' + esc(ref) + '</b> at the latest exchange rate (rate + native amount shown per entity) &middot; posted payslips</div>' + banner +
       '<table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Rate &rarr; ' + esc(ref) + '</td><td class="num">Gross</td><td class="num">Employer cost</td><td class="num">Total cost</td><td class="num">Net</td></tr></thead><tbody>' +
       (rows.join("") || '<tr><td colspan="7" class="muted">No posted payslips yet.</td></tr>') +
@@ -18023,12 +18083,12 @@
   // ---- Job Cost report (ORB-12): budget vs committed vs actual, by cost code ----
   async function renderJobCost() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Job Cost") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Job Cost") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
     var sel = (S.jobCostProj && projs.some(function (p) { return p.id === S.jobCostProj; })) ? S.jobCostProj : projs[0].id;
-    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills + materials issued from stock + site labour), grouped by cost code. Stock/labour show under Uncoded. The Actual total matches Project P&amp;L.</div><div id="jc-table"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills + materials issued from stock + site labour), grouped by cost code. Stock/labour show under Uncoded. The Actual total matches Project P&amp;L.</div><div id="jc-table"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     document.getElementById("jc-proj").onchange = function () { jobCostTable(this.value); };
     jobCostTable(sel);
   }
@@ -18215,7 +18275,7 @@
   }
   async function renderCertificateForm(id, presetProject) {
     var parent = { action: "pc.list", title: "Progress Certificates" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name,contract_value,retention_pct,advance_amount,partner_id").eq("company_id", S.company.id).order("name")).data || [];
     var cert = id === "new" ? { state: "draft", date_to: today(), project_id: presetProject || (projs[0] ? projs[0].id : null) } : (await sb.from("project_certificates").select("*").eq("id", id).maybeSingle()).data || {};
@@ -18383,7 +18443,7 @@
   }
 
   async function renderProjectPnL() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Project P&L") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Project P&L") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
@@ -18438,7 +18498,7 @@
 
   // ---- Per-project cost drill-down (from Project P&L rows / project smart button) ----
   async function renderProjectCosts(projectId) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("...", { action: "proj.pnl", title: "Project P&L" }) + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("...", { action: "proj.pnl", title: "Project P&L" }) + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
@@ -18526,7 +18586,7 @@
 
   // ---- Retention report (cash held on both sides) ----
   async function renderRetention() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Retention") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Retention") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
@@ -18615,7 +18675,7 @@
 
   // ---- WIP schedule (cost-to-cost % complete; over / under billing) ----
   async function renderWIP() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("WIP Schedule") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("WIP Schedule") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
@@ -18648,7 +18708,7 @@
 
   // ---- 3-way match (PO ordered vs goods received vs billed) ----
   async function renderMatch() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("3-Way Match") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("3-Way Match") + '<div class="gap"></div><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
     var cc = S.company.currency_code;
@@ -18851,7 +18911,7 @@
     };
   }
   async function renderJobForm(id) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New position" : "...", { action: "web.jobs", title: "Careers" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New position" : "...", { action: "web.jobs", title: "Careers" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var j = id === "new" ? {} : ((await sb.from("job_postings").select("*").eq("id", id).maybeSingle()).data || {});
     bcTitle(id === "new" ? "New position" : (j.title || "Position"));
@@ -18895,7 +18955,7 @@
     var origin = WEB_ORIGIN, cid = S.company.id;
     var careers = '<script src="' + origin + '/embed/erp.js" data-orbit-widget="careers" data-company="' + cid + '"></' + 'script>';
     var portal = '<script src="' + origin + '/embed/erp.js" data-orbit-widget="portal" data-company="' + cid + '"></' + 'script>';
-    function snip(code) { return '<pre style="background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;margin:6px 0">' + esc(code) + '</pre><button class="btn sm cpy" data-c="' + esc(code) + '" style="margin-bottom:6px">Copy snippet</button>'; }
+    function snip(code) { return '<pre style="background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:12px;overflow:auto;font-size:12px;white-space:pre-wrap;word-break:break-all;margin:6px 0">' + esc(code) + '</pre><button class="btn sm cpy" data-c="' + esc(code) + '" style="margin-bottom:6px">Copy snippet</button>'; }
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Connect a site") + '</div><div class="o-body" style="padding:18px"><div style="max-width:820px"><div class="card"><h3 style="margin:0 0 4px">Add Orbit to a website you already have</h3><div class="sub" style="margin-bottom:14px">Paste a snippet into your existing site where you want it. It pulls live from Orbit - no rebuild, and it restyles to your site.</div>' +
       '<h4 style="margin:0 0 2px">Careers page</h4><div class="sub">Shows your published jobs (from <b>Careers</b>) with an Apply form; applications land in <b>Applications</b>.</div>' + snip(careers) +
       '<h4 style="margin:18px 0 2px">Employee / customer portal buttons</h4><div class="sub">Login buttons to the Orbit portal.</div>' + snip(portal) +
@@ -18913,21 +18973,21 @@
     s.textContent = ".pos-wrap{display:flex;gap:0;height:calc(100vh - 120px);min-height:420px}" +
       ".pos-left{flex:1;display:flex;flex-direction:column;min-width:0;padding:14px;overflow:hidden}" +
       ".pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;overflow:auto;padding-top:12px;align-content:start}" +
-      ".pos-tile{border:1px solid var(--line);border-radius:11px;background:var(--panel);padding:12px 10px;cursor:pointer;text-align:left;transition:border-color .1s}" +
+      ".pos-tile{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:12px 10px;cursor:pointer;text-align:left;transition:border-color .1s}" +
       ".pos-tile:hover{border-color:var(--app);box-shadow:0 2px 10px rgba(0,0,0,.06)}" +
       ".pos-tile .n{font-weight:600;font-size:13px;line-height:1.25;display:block;margin-bottom:4px}.pos-tile .p{color:var(--app);font-weight:700;font-size:13px}" +
       ".pos-cart{width:340px;flex:none;border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}" +
       ".pos-lines{flex:1;overflow:auto;padding:10px 12px}" +
       ".pos-line{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line)}" +
-      ".pos-line .nm{flex:1;font-size:13px}.pos-line .qty{display:flex;align-items:center;gap:4px}.pos-line .qty button{width:24px;height:24px;border:1px solid var(--line);background:var(--panel2);border-radius:6px;cursor:pointer;color:var(--ink)}" +
+      ".pos-line .nm{flex:1;font-size:13px}.pos-line .qty{display:flex;align-items:center;gap:4px}.pos-line .qty button{width:24px;height:24px;border:1px solid var(--line);background:var(--panel2);border-radius:var(--r-sm);cursor:pointer;color:var(--ink)}" +
       ".pos-line .amt{width:74px;text-align:right;font-variant-numeric:tabular-nums}" +
       ".pos-foot{border-top:1px solid var(--line);padding:12px}.pos-tot{display:flex;justify-content:space-between;font-size:13px;margin:2px 0}.pos-tot.big{font-size:19px;font-weight:800;margin-top:6px}" +
-      ".pos-charge{width:100%;margin-top:10px;padding:13px;border:0;border-radius:10px;background:var(--app);color:#fff;font-weight:700;font-size:16px;cursor:pointer}.pos-charge:disabled{opacity:.5;cursor:default}";
+      ".pos-charge{width:100%;margin-top:10px;padding:13px;border:0;border-radius:var(--r);background:var(--app);color:#fff;font-weight:700;font-size:16px;cursor:pointer}.pos-charge:disabled{opacity:.5;cursor:default}";
     document.head.appendChild(s);
   }
   async function renderPOS() {
     var main = document.getElementById("o-main"); posStyle();
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Register") + '<div class="gap"></div><span id="pos-sesstag" class="muted" style="font-size:12px"></span> <button class="o-filtbtn" id="pos-close">Close register</button></div><div id="pos-main"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Register") + '<div class="gap"></div><span id="pos-sesstag" class="muted" style="font-size:12px"></span> <button class="o-filtbtn" id="pos-close">Close register</button></div><div id="pos-main"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     POS.session = (await sb.from("pos_sessions").select("*").eq("company_id", S.company.id).eq("status", "open").order("opened_at", { ascending: false }).limit(1).maybeSingle()).data || null;
     var vt = (await sb.from("taxes").select("amount,amount_type,scope").eq("company_id", S.company.id).eq("is_active", true)).data || [];
@@ -18959,9 +19019,9 @@
     POS.pricelist = ""; POS.plItems = {};
     wrap.innerHTML = '<div class="pos-wrap"><div class="pos-left">' +
       '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
-      '<select id="pos-cust" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><option value="">Walk-in customer</option>' + POS.customers.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
-      '<select id="pos-pl" style="min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><option value="">Standard price</option>' + POS.pricelists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
-      '<input id="pos-search" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
+      '<select id="pos-cust" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><option value="">Walk-in customer</option>' + POS.customers.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
+      '<select id="pos-pl" style="min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><option value="">Standard price</option>' + POS.pricelists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
+      '<input id="pos-search" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
       '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between"><span>Cart</span><span id="pos-loyalty" class="muted" style="font-size:11px;font-weight:400"></span></div><div class="pos-lines" id="pos-cartlines"></div>' +
       '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot" id="pos-discrow" hidden><span>Discount</span><b id="pos-disc" style="color:var(--bad-t)">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
       '<button class="pos-charge" id="pos-charge" disabled>Charge</button></div></div></div>';
@@ -19083,7 +19143,7 @@
   // POS returns: pick a paid order and refund it (creates a negative refund order + reverses loyalty).
   async function renderPosReturns() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Returns") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Returns") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var orders = (await sb.from("pos_orders").select("*, partners:partner_id(name)").eq("company_id", S.company.id).eq("status", "paid").order("created_at", { ascending: false }).limit(200)).data || [];
     document.getElementById("o-body").innerHTML = '<div class="card"><div class="sub" style="margin:0 0 10px">Pick a sale to refund. A refund records a negative order + payment and reverses any loyalty points earned.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Number</th><th>When</th><th>Customer</th><th class="num">Total</th><th></th></tr></thead><tbody>' +
@@ -19318,7 +19378,7 @@
   }
   async function renderModifierGroupForm(id) {
     var parent = { action: "menu.modgroups", title: "Modifier groups" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var g = id === "new" ? { min_select: 0, max_select: 1, sort: 10, is_active: true } : (await sb.from("modifier_groups").select("*").eq("id", id).maybeSingle()).data || {};
     var opts = id === "new" ? [] : (await sb.from("modifiers").select("*").eq("group_id", id).order("sort")).data || [];
@@ -19415,7 +19475,7 @@
   }
   async function renderMenuForm(id) {
     var parent = { action: "menu.list", title: "Menus" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var m = id === "new" ? { days_of_week: [0, 1, 2, 3, 4, 5, 6], is_active: true, sort: 10 } : (await sb.from("menus").select("*").eq("id", id).maybeSingle()).data || {};
     var chans = (await sb.from("sales_channels").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
@@ -19467,7 +19527,7 @@
   // results, and a simulator that shows the effect of a change before it is made.
   async function renderPriceList() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Price list") + '<div class="gap"></div><button class="o-filtbtn" id="pl-export">Export</button></div><div class="o-form-bg"><div class="o-report" id="pl" style="max-width:1100px"><div class="o-empty">Loading...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Price list") + '<div class="gap"></div><button class="o-filtbtn" id="pl-export">Export</button></div><div class="o-form-bg"><div class="o-report" id="pl" style="max-width:1100px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc();
     var cc = S.company.currency_code;
     var chans = (await sb.from("sales_channels").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
@@ -19545,7 +19605,7 @@
   // plate cost rather than guesswork.
   async function renderMenuEngineering() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Menu engineering") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Menu engineering") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc(); wirePeriod(renderMenuEngineering);
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("rp-export").onclick = exportRepCsv;
@@ -20517,7 +20577,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Floor") + '<div class="gap"></div>' +
       '<button class="o-filtbtn" id="fl-docket" title="Print a paper docket at the pass every time a course is sent">Dockets: ' + (svcDocketOn() ? "on" : "off") + '</button>' +
-      '<span id="fl-store"></span></div><div class="o-body" id="o-body"><div class="o-empty">Loading the floor...</div></div></div>';
+      '<span id="fl-store"></span></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("fl-docket").onclick = function () {
       svcDocketSet(!svcDocketOn());
@@ -20586,7 +20646,7 @@
     svcStopTimer();
     var t = SERVICE.tables.filter(function (x) { return x.id === tableId; })[0] || {};
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(t.name || "Table", { action: "kitchen.floor", title: "Floor" }) + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(t.name || "Table", { action: "kitchen.floor", title: "Floor" }) + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     await svcVat();
     // an open order for this table, or a new one
@@ -21675,7 +21735,7 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Collection") + '<div class="gap"></div>' +
       '<button class="o-filtbtn" id="cl-full">Full screen</button></div>' +
-      '<div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+      '<div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("cl-full").onclick = function () {
       var el = document.documentElement;
@@ -21729,7 +21789,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Kitchen display") + '<div class="gap"></div>' +
       '<select id="kds-station" class="o-filtbtn"><option value="">All stations</option><option value="kitchen">Kitchen</option><option value="barista">Barista</option><option value="bar">Bar</option><option value="pastry">Pastry</option></select>' +
       '<button class="o-filtbtn" id="kds-full">Full screen</button></div>' +
-      '<div class="o-body" id="o-body"><div class="o-empty">Loading tickets...</div></div></div>';
+      '<div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var st = document.getElementById("kds-station");
     st.value = SERVICE.station || "";
@@ -21845,7 +21905,7 @@
   // How long from sending to serving, which is the number a kitchen is judged on.
   async function renderServiceTimes() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Service times") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:900px"><div class="o-empty">Loading...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Service times") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:900px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc(); wirePeriod(renderServiceTimes);
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("rp-export").onclick = exportRepCsv;
@@ -21891,7 +21951,7 @@
 
   async function renderField() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Field") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading your work...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Field") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     FIELD.projects = (await fnbCo("projects", "id,name").eq("is_active", true).order("name")).data || [];
     if (!FIELD.project && FIELD.projects.length) FIELD.project = FIELD.projects[0].id;
@@ -22038,7 +22098,7 @@
       var f = this.files[0], p = document.getElementById("fs-prev");
       if (!f || !p) return;
       var u = URL.createObjectURL(f);
-      p.innerHTML = '<img alt="Photo of the problem" src="' + u + '" style="max-height:150px;border-radius:9px;margin:4px 0">';
+      p.innerHTML = '<img alt="Photo of the problem" src="' + u + '" style="max-height:150px;border-radius:var(--r);margin:4px 0">';
     };
   }
   function fieldDiary() {
@@ -22106,7 +22166,7 @@
   // accuses anyone; it puts the outliers in front of a manager.
   async function renderExceptionReport() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Exception report") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Exception report") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc(); wirePeriod(renderExceptionReport);
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("rp-export").onclick = exportRepCsv;
@@ -22148,7 +22208,7 @@
   // using the one shared calculation, and show the working.
   async function renderRoyaltyRun() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Royalty run") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty">Loading...</div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Royalty run") + '<div class="gap"></div>' + periodSelect() + '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report" id="rep" style="max-width:1000px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     wireBc(); wirePeriod(renderRoyaltyRun);
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("rp-export").onclick = exportRepCsv;
@@ -22188,10 +22248,10 @@
 
   async function renderPromotions() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Promotions") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Promotions") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var rows = (await sb.from("pos_promotions").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
     var cats = (await sb.from("product_categories").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
     document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Promotions</h3><div class="sub" style="margin:0 0 10px">Discounts the register applies automatically. Percent-off, quantity tier (buy N+, get % off), or buy-X-get-Y free.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Name</th><th>Type</th><th>Applies to</th><th>Rule</th><th>Active</th><th></th></tr></thead><tbody id="promo-body">' +
       (rows.length ? rows.map(function (r) { var pm = r.params || {}; var rule = r.kind === "percent_off" ? (pm.pct || 0) + "% off" : r.kind === "qty_tier" ? "buy " + (pm.min_qty || 0) + "+ , " + (pm.pct || 0) + "% off" : "buy " + (pm.buy_qty || 0) + " get " + (pm.get_qty || 0) + " free"; var scope = r.scope_type === "all" ? "All products" : r.scope_type === "category" ? "Category" : "Product"; return '<tr><td><b>' + esc(r.name) + '</b></td><td>' + esc(r.kind) + '</td><td>' + scope + '</td><td>' + esc(rule) + '</td><td>' + (r.active ? "Yes" : "No") + '</td><td><button class="btn sm promo-del" data-id="' + r.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No promotions yet.</td></tr>') +
@@ -22219,9 +22279,9 @@
   // Vouchers config.
   async function renderVouchers() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vouchers") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vouchers") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var rows = (await sb.from("pos_vouchers").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
-    var cc = S.company.currency_code; var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    var cc = S.company.currency_code; var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
     document.getElementById("o-body").innerHTML = '<div class="card"><h3 style="margin:0 0 4px">Gift &amp; cashback vouchers</h3><div class="sub" style="margin:0 0 10px">Codes a cashier can redeem at checkout for a fixed amount or a percentage off.</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Code</th><th>Value</th><th>Expiry</th><th>Status</th><th></th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (r) { return '<tr><td class="mono"><b>' + esc(r.code) + '</b></td><td>' + (r.kind === "percent" ? r.value + "%" : esc(cc) + " " + money(r.value)) + '</td><td class="muted">' + esc(r.expiry || "") + '</td><td>' + (r.used_at ? "Used" : "Active") + '</td><td><button class="btn sm vch-del" data-id="' + r.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="5" class="muted" style="padding:10px">No vouchers yet.</td></tr>') +
@@ -22302,7 +22362,7 @@
   }
   async function renderPosSessions() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Sessions") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Sessions") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var rows = (await sb.from("pos_sessions").select("*").eq("company_id", S.company.id).order("opened_at", { ascending: false }).limit(60)).data || [];
     var ids = rows.map(function (r) { return r.id; });
@@ -22356,7 +22416,7 @@
   }
   async function renderEinvoice() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("E-invoicing") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("E-invoicing") + '</div><div class="o-body" id="o-body" style="padding:18px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var company = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
     var ei = (company.profile || {}).einvoice || {};
@@ -22448,7 +22508,7 @@
     };
   }
   async function renderTicketForm(id) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New ticket" : "...", { action: "svc.tickets", title: "Tickets" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New ticket" : "...", { action: "svc.tickets", title: "Tickets" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? { status: "new", priority: "normal", channel: "internal" } : ((await sb.from("service_tickets").select("*").eq("id", id).maybeSingle()).data || {});
     var lines = id === "new" ? [] : ((await sb.from("service_ticket_lines").select("*").eq("ticket_id", id).order("seq")).data || []);
@@ -22505,7 +22565,7 @@
       '<div class="o-groups"><div>' + fld("Problem reported", '<textarea id="tk-problem" rows="3">' + esc(t.problem || "") + '</textarea>') + '</div><div>' + fld("Diagnosis / work done", '<textarea id="tk-diag" rows="3">' + esc(t.diagnosis || "") + '</textarea>') + '</div></div>' +
       '<div class="o-cf-head" style="margin-top:14px">Labour &amp; parts</div>' +
       '<div style="overflow-x:auto"><table class="o-list" style="min-width:620px"><thead><tr><th style="width:90px">Type</th><th>Description</th><th class="num" style="width:80px">Qty/Hrs</th><th class="num" style="width:100px">Unit price</th><th style="width:70px">Covered</th><th style="width:34px"></th></tr></thead><tbody id="tk-lines"></tbody></table></div>' +
-      '<button id="tk-addline" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:8px;padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>' +
+      '<button id="tk-addline" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>' +
       '<div id="tk-tot" style="margin-top:12px;font-size:14px;text-align:right"></div>' +
       '</div>';
     paintLines(); paintTot();
@@ -22544,7 +22604,7 @@
     };
   }
   async function renderWarrantyForm(id) {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New warranty" : "...", { action: "svc.warranties", title: "Warranties" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New warranty" : "...", { action: "svc.warranties", title: "Warranties" }) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var w = id === "new" ? { wtype: "company", covers: "both", start_date: today() } : ((await sb.from("service_warranties").select("*").eq("id", id).maybeSingle()).data || {});
     var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
@@ -22575,7 +22635,7 @@
   var _svcWeek = null;   // Monday of the shown week
   async function renderServiceSchedule() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:14px"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Schedule") + '</div><div class="o-body" id="o-body" style="padding:14px"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     function _lym(dt) { return dt.getFullYear() + "-" + ("0" + (dt.getMonth() + 1)).slice(-2) + "-" + ("0" + dt.getDate()).slice(-2); }
     if (!_svcWeek) { var n = new Date(); var dow = (n.getDay() + 6) % 7; n.setDate(n.getDate() - dow); _svcWeek = _lym(n); }
@@ -22591,7 +22651,7 @@
     var grid = '<div style="overflow-x:auto"><table class="sc-cal" style="border-collapse:collapse;width:100%;min-width:900px"><thead><tr><th style="width:120px;text-align:left;padding:6px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink3)">Technician</th>' + days.map(function (d) { return '<th style="padding:6px;border-bottom:1px solid var(--line);border-left:1px solid var(--line);font-size:12px;color:var(--ink3)">' + dfmt(d) + '</th>'; }).join("") + '</tr></thead><tbody>' +
       lanes.map(function (ln) { return '<tr><td style="padding:8px 6px;font-weight:600;font-size:13px;vertical-align:top">' + esc(ln.name) + '</td>' + days.map(function (d) {
         var cell = (byKey[(ln.id || "") + "|" + d] || []); return '<td class="sc-cell" data-tech="' + esc(ln.id) + '" data-day="' + d + '" style="border-left:1px solid var(--line);border-top:1px solid var(--line);vertical-align:top;padding:4px;min-width:110px;height:64px">' +
-          cell.map(function (r) { var pc = r.priority === "urgent" ? "var(--bad)" : r.priority === "high" ? "#c47d10" : "var(--app)"; return '<div class="sc-card" draggable="true" data-id="' + r.id + '" style="background:var(--panel2);border-left:3px solid ' + pc + ';border-radius:6px;padding:5px 7px;margin-bottom:4px;cursor:grab;font-size:12px"><b>' + esc((r.scheduled_at || "").slice(11, 16)) + '</b> ' + esc(r.title || "") + '<div class="muted" style="font-size:11px">' + esc(r.partners ? r.partners.name : "") + '</div></div>'; }).join("") +
+          cell.map(function (r) { var pc = r.priority === "urgent" ? "var(--bad)" : r.priority === "high" ? "#c47d10" : "var(--app)"; return '<div class="sc-card" draggable="true" data-id="' + r.id + '" style="background:var(--panel2);border-left:3px solid ' + pc + ';border-radius:var(--r-sm);padding:5px 7px;margin-bottom:4px;cursor:grab;font-size:12px"><b>' + esc((r.scheduled_at || "").slice(11, 16)) + '</b> ' + esc(r.title || "") + '<div class="muted" style="font-size:11px">' + esc(r.partners ? r.partners.name : "") + '</div></div>'; }).join("") +
           '</td>'; }).join("") + '</tr>'; }).join("") + '</tbody></table></div>';
     body.innerHTML = head + grid + '<div class="sub" style="margin-top:8px">Drag a job to another technician or day to reschedule. Click a card to open the ticket.</div>';
     document.getElementById("sc-prev").onclick = function () { var d = new Date(start); d.setDate(d.getDate() - 7); _svcWeek = _lym(d); renderServiceSchedule(); };
@@ -22618,13 +22678,13 @@
   // Planned preventive maintenance: recurring plans that generate tickets when due.
   async function renderMaintenancePlans() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Maintenance") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>'; wireBc();
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Maintenance") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>'; wireBc();
     var plans = (await sb.from("service_maintenance_plans").select("*, partners:partner_id(name), equip:equipment_id(name)").eq("company_id", S.company.id).order("next_due")).data || [];
     var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var equip = (await sb.from("plant_equipment").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var techs = await svcTechnicians();
     var due = plans.filter(function (p) { return p.active && p.next_due <= today(); }).length;
-    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
+    var inS = 'style="padding:7px 9px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px"';
     document.getElementById("o-body").innerHTML = '<div class="card"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div><h3 style="margin:0 0 3px">Preventive maintenance</h3><div class="sub" style="margin:0">Recurring plans that raise a service ticket every so often. ' + (due ? '<b style="color:var(--app)">' + due + ' due now.</b>' : 'None due right now.') + '</div></div><div class="gap" style="flex:1"></div>' + (due ? '<button class="btn pri" id="ppm-gen" style="background:var(--app);border-color:var(--app)">Generate ' + due + ' due ticket(s)</button>' : '') + '</div>' +
       '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Plan</th><th>For</th><th>Every</th><th>Next due</th><th>Active</th><th></th></tr></thead><tbody>' +
       (plans.length ? plans.map(function (p) { var overdue = p.active && p.next_due <= today(); return '<tr><td><b>' + esc(p.title) + '</b></td><td>' + esc((p.partners && p.partners.name) || (p.equip && p.equip.name) || p.serial_no || "-") + '</td><td>' + p.frequency_days + 'd</td><td><span class="' + (overdue ? "badge draft" : "muted") + '">' + esc(p.next_due) + (overdue ? " due" : "") + '</span></td><td>' + (p.active ? "Yes" : "No") + '</td><td><button class="btn sm ppm-del" data-id="' + p.id + '">&times;</button></td></tr>'; }).join("") : '<tr><td colspan="6" class="muted" style="padding:10px">No maintenance plans yet.</td></tr>') +
@@ -22657,7 +22717,7 @@
   }
   async function renderSiteForm(id) {
     var parent = { action: "web.sites", title: "Sites" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New site" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New site" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var s = id === "new" ? { theme: {}, homepage_path: "/" } : (await sb.from("sites").select("*").eq("id", id).maybeSingle()).data || {};
     var th = s.theme || {};
@@ -22743,7 +22803,7 @@
     function blockCard(b) {
       return '<div class="o-matspec wb-card" data-type="' + esc(b.type) + '" style="margin:0 0 10px;padding:12px 14px">' +
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><b style="text-transform:capitalize">' + esc((WEB_BLOCKS.filter(function (x) { return x[0] === b.type; })[0] || [b.type, b.type])[1]) + '</b><div class="gap" style="flex:1"></div>' +
-        '<button class="wb-up" title="Move up" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&uarr;</button><button class="wb-dn" title="Move down" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;cursor:pointer">&darr;</button><button class="wb-del" title="Delete" style="border:1px solid var(--line);background:var(--panel);border-radius:6px;color:var(--bad-t);cursor:pointer">&times;</button></div>' +
+        '<button class="wb-up" title="Move up" style="border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);cursor:pointer">&uarr;</button><button class="wb-dn" title="Move down" style="border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);cursor:pointer">&darr;</button><button class="wb-del" title="Delete" style="border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);color:var(--bad-t);cursor:pointer">&times;</button></div>' +
         '<div class="wb-fields" style="display:grid;gap:8px">' + webBlockFields(b.type, b.props || {}) + '</div></div>';
     }
     document.querySelector(".o-form").innerHTML =
@@ -22796,34 +22856,34 @@
     s.textContent =
       ".wb-wrap{position:fixed;inset:0;z-index:60;display:flex;flex-direction:column;background:var(--panel2,#eef1f5)}" +
       ".wb-top{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--panel,#fff);border-bottom:1px solid var(--line,#dde)}" +
-      ".wb-top input.wb-name{font-weight:600;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:6px;font:inherit;color:var(--ink)}" +
+      ".wb-top input.wb-name{font-weight:600;border:1px solid transparent;background:transparent;padding:4px 6px;border-radius:var(--r-sm);font:inherit;color:var(--ink)}" +
       ".wb-top input.wb-name:hover,.wb-top input.wb-name:focus{border-color:var(--line);background:var(--panel2)}" +
       ".wb-top .wb-sp{flex:1}" +
-      ".wb-top button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:7px;padding:6px 11px;cursor:pointer;font:inherit;font-size:13px}" +
+      ".wb-top button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--r-sm);padding:6px 11px;cursor:pointer;font:inherit;font-size:13px}" +
       ".wb-top button.pri{background:var(--app,#2a7);border-color:var(--app,#2a7);color:#fff}" +
       ".wb-top button.on{background:var(--app,#2a7);border-color:var(--app,#2a7);color:#fff}" +
-      ".wb-dev{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}.wb-dev button{border:0;border-radius:0}" +
+      ".wb-dev{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden}.wb-dev button{border:0;border-radius:0}" +
       ".wb-body{flex:1;display:flex;min-height:0}" +
       ".wb-canvas{flex:1;overflow:auto;padding:18px;display:flex;justify-content:center;background:var(--panel2,#eef1f5)}" +
-      ".wb-frame-wrap{width:100%;max-width:100%;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.1);border-radius:8px;overflow:hidden;transition:max-width .2s}" +
+      ".wb-frame-wrap{width:100%;max-width:100%;background:#fff;box-shadow:0 4px 24px rgba(0,0,0,.1);border-radius:var(--r);overflow:hidden;transition:max-width .2s}" +
       ".wb-frame-wrap.mobile{max-width:390px}" +
       "#wb-frame{width:100%;height:100%;border:0;display:block}" +
       ".wb-panel{width:320px;flex:none;background:var(--panel,#fff);border-left:1px solid var(--line,#dde);overflow:auto}" +
       ".wb-p-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--panel)}" +
-      ".wb-p-close{border:1px solid var(--line);background:var(--panel2);border-radius:6px;padding:3px 9px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
+      ".wb-p-close{border:1px solid var(--line);background:var(--panel2);border-radius:var(--r-sm);padding:3px 9px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
       ".wb-p-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px}" +
       ".wb-fld{display:flex;flex-direction:column;gap:3px}.wb-fld>span{font-size:11px;font-weight:600;color:var(--muted,#889);text-transform:uppercase;letter-spacing:.03em}" +
-      ".wb-i{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel2);color:var(--ink);width:100%;box-sizing:border-box}" +
+      ".wb-i{font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);width:100%;box-sizing:border-box}" +
       "textarea.wb-i{resize:vertical}" +
       ".wb-bool{display:flex;align-items:center;gap:6px;font-size:13px}.wb-bool .wb-i{width:auto}" +
-      ".wb-list{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--line);border-radius:8px;padding:8px}" +
-      ".wb-li{border:1px solid var(--line);border-radius:7px;padding:8px;background:var(--panel2);display:flex;flex-direction:column;gap:6px}" +
-      ".wb-li-top{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.wb-li-top .sp{flex:1}.wb-li-top button{border:1px solid var(--line);background:var(--panel);border-radius:5px;cursor:pointer;width:22px;height:22px;color:var(--ink)}" +
-      ".wb-li-add,.wb-p-foot button{border:1px solid var(--line);background:var(--panel2);border-radius:7px;padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
+      ".wb-list{display:flex;flex-direction:column;gap:8px;border:1px dashed var(--line);border-radius:var(--r);padding:8px}" +
+      ".wb-li{border:1px solid var(--line);border-radius:var(--r-sm);padding:8px;background:var(--panel2);display:flex;flex-direction:column;gap:6px}" +
+      ".wb-li-top{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}.wb-li-top .sp{flex:1}.wb-li-top button{border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);cursor:pointer;width:22px;height:22px;color:var(--ink)}" +
+      ".wb-li-add,.wb-p-foot button{border:1px solid var(--line);background:var(--panel2);border-radius:var(--r-sm);padding:6px 10px;cursor:pointer;font:inherit;font-size:12px;color:var(--ink)}" +
       ".wb-p-foot{display:flex;flex-wrap:wrap;gap:6px;padding:12px 14px;border-top:1px solid var(--line)}.wb-p-foot .del{color:var(--bad-t);border-color:var(--bad-t)}" +
       ".wb-sec{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px}" +
       ".wb-gal{display:grid;grid-template-columns:1fr 1fr;gap:8px}" +
-      ".wb-gal button{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);background:var(--panel2);border-radius:8px;padding:12px 6px;cursor:pointer;color:var(--ink);font:inherit;font-size:12px}" +
+      ".wb-gal button{display:flex;flex-direction:column;align-items:center;gap:4px;border:1px solid var(--line);background:var(--panel2);border-radius:var(--r);padding:12px 6px;cursor:pointer;color:var(--ink);font:inherit;font-size:12px}" +
       ".wb-gal button:hover{border-color:var(--app);color:var(--app)}.wb-gal button i{font-size:20px}";
     document.head.appendChild(s);
   }
@@ -22873,13 +22933,13 @@
   function wbEditorCss() {
     return ".sw-ed-block{position:relative;outline:2px solid transparent;transition:outline-color .12s;min-height:20px}" +
       ".sw-ed-block:hover{outline-color:rgba(var(--sw-pri-rgb),.35)}.sw-ed-block.sw-sel{outline-color:var(--sw-pri)}" +
-      ".sw-ed-tools{position:absolute;top:8px;right:8px;z-index:30;display:none;gap:2px;background:#14181d;border-radius:9px;padding:3px}" +
+      ".sw-ed-tools{position:absolute;top:8px;right:8px;z-index:30;display:none;gap:2px;background:#14181d;border-radius:var(--r);padding:3px}" +
       ".sw-ed-block:hover>.sw-ed-tools,.sw-ed-block.sw-sel>.sw-ed-tools{display:flex}" +
-      ".sw-ed-tools button{border:0;background:transparent;color:#fff;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;line-height:1}.sw-ed-tools button:hover{background:#333}" +
+      ".sw-ed-tools button{border:0;background:transparent;color:#fff;width:28px;height:28px;border-radius:var(--r-sm);cursor:pointer;font-size:14px;line-height:1}.sw-ed-tools button:hover{background:#333}" +
       ".sw-ed-add{position:absolute;left:50%;bottom:-15px;transform:translateX(-50%);z-index:31;width:30px;height:30px;border-radius:50%;border:2px solid #fff;background:var(--sw-pri);color:#fff;cursor:pointer;font-size:17px;line-height:1;opacity:0;transition:opacity .12s;box-shadow:0 2px 10px rgba(0,0,0,.25)}" +
       ".sw-ed-block:hover>.sw-ed-add{opacity:1}.sw-ed-add-top{opacity:1;top:-15px;bottom:auto}" +
-      "[contenteditable=true]{outline:1px dashed rgba(var(--sw-pri-rgb),.6);outline-offset:3px;border-radius:3px}[contenteditable=true]:focus{outline:2px solid var(--sw-pri);cursor:text}" +
-      ".sw-ed-empty{text-align:center;padding:90px 20px;color:#8a94a2}.sw-ed-empty .sw-ed-add{position:static;opacity:1;transform:none;width:auto;height:auto;border-radius:24px;padding:10px 18px;font-size:14px}";
+      "[contenteditable=true]{outline:1px dashed rgba(var(--sw-pri-rgb),.6);outline-offset:3px;border-radius:var(--r-sm)}[contenteditable=true]:focus{outline:2px solid var(--sw-pri);cursor:text}" +
+      ".sw-ed-empty{text-align:center;padding:90px 20px;color:#8a94a2}.sw-ed-empty .sw-ed-add{position:static;opacity:1;transform:none;width:auto;height:auto;border-radius:var(--r-xl);padding:10px 18px;font-size:14px}";
   }
   function wbEditorJs() {
     return "window.__swWire=function(){var P=parent.__WB;document.querySelectorAll('.sw-ed-block').forEach(function(blk){var bi=+blk.dataset.bi,type=P.type(bi);(P.textmap(type)||[]).forEach(function(m){var el=blk.querySelector(m.sel);if(!el||el.__swb)return;el.__swb=1;el.setAttribute('contenteditable','true');el.addEventListener('input',function(){P.text(bi,m.prop,el.textContent);});el.addEventListener('keydown',function(ev){if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();el.blur();}});el.addEventListener('click',function(ev){ev.stopPropagation();});});});};" +
@@ -23111,7 +23171,7 @@
   function okb(txt) { return '<span class="badge" style="font-size:10px">' + txt + '</span>'; }
   async function renderTraceability() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Traceability") + '<div class="gap"></div><select id="tr-proj" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:6px 9px;font:inherit;font-size:13px"></select><button class="o-filtbtn" id="tr-seal" title="Freeze a tamper-evident hash of the current lineage">Seal</button><button class="o-filtbtn" id="tr-verify" title="Check the lineage still matches the last seal">Verify</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Traceability") + '<div class="gap"></div><select id="tr-proj" style="border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:var(--r);padding:6px 9px;font:inherit;font-size:13px"></select><button class="o-filtbtn" id="tr-seal" title="Freeze a tamper-evident hash of the current lineage">Seal</button><button class="o-filtbtn" id="tr-verify" title="Check the lineage still matches the last seal">Verify</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     var sel = document.getElementById("tr-proj");
@@ -23199,12 +23259,12 @@
   }
   async function renderNesting() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut Nesting / Optimiser") + '<div class="gap"></div><label style="font-size:12px;color:var(--ink2)">Saw kerf (mm) <input id="ne-kerf" type="number" value="4" style="width:56px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:6px;padding:4px 6px"></label><label style="font-size:12px;color:var(--ink2);margin-left:8px"><input id="ne-rot" type="checkbox" checked> allow rotation</label></div><div class="o-body" id="o-body"><div class="o-empty">Loading take-offs...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut Nesting / Optimiser") + '<div class="gap"></div><label style="font-size:12px;color:var(--ink2)">Saw kerf (mm) <input id="ne-kerf" type="number" value="4" style="width:56px;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:var(--r-sm);padding:4px 6px"></label><label style="font-size:12px;color:var(--ink2);margin-left:8px"><input id="ne-rot" type="checkbox" checked> allow rotation</label></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var reqs = (await sb.from("material_requisitions").select("id,number,project_id").eq("company_id", S.company.id).order("number", { ascending: false })).data || [];
     var body = document.getElementById("o-body");
     if (!reqs.length) { body.innerHTML = '<div class="o-empty">No take-offs yet. Create a Material Take-off with sized lines, then optimise its cutting here.</div>'; return; }
-    body.innerHTML = '<div class="o-form-bg" style="padding:14px"><div style="max-width:420px"><label style="font-size:12px;color:var(--ink2);font-weight:600;display:block;margin-bottom:4px">Take-off to nest</label><select id="ne-req" style="width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:8px;padding:8px 10px;font:inherit">' + reqs.map(function (r) { return '<option value="' + r.id + '">' + esc(r.number || "(draft)") + '</option>'; }).join("") + '</select><button class="btn pri" id="ne-go" style="margin-top:10px;background:var(--app);border-color:var(--app)">Optimise cutting</button></div><div id="ne-out" style="margin-top:16px"></div></div>';
+    body.innerHTML = '<div class="o-form-bg" style="padding:14px"><div style="max-width:420px"><label style="font-size:12px;color:var(--ink2);font-weight:600;display:block;margin-bottom:4px">Take-off to nest</label><select id="ne-req" style="width:100%;border:1px solid var(--line);background:var(--panel2);color:var(--ink);border-radius:var(--r);padding:8px 10px;font:inherit">' + reqs.map(function (r) { return '<option value="' + r.id + '">' + esc(r.number || "(draft)") + '</option>'; }).join("") + '</select><button class="btn pri" id="ne-go" style="margin-top:10px;background:var(--app);border-color:var(--app)">Optimise cutting</button></div><div id="ne-out" style="margin-top:16px"></div></div>';
     document.getElementById("ne-go").onclick = function () { runNesting(document.getElementById("ne-req").value); };
   }
   async function runNesting(reqId) {
@@ -23258,7 +23318,7 @@
     toast(rows.length + " offcut(s) recorded as remnants in Projects > Materials & Remnants");
   }
   async function renderMaterialImport() {
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut List") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cut List") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     function fmtQ(n) { n = Number(n) || 0; return (Math.round(n * 1000) / 1000).toLocaleString("en-US", { maximumFractionDigits: 3 }); }
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -23270,7 +23330,7 @@
       '<div class="sub" style="margin:0 0 12px">Paste the material list your cutting / nesting software produced. Orbit matches each line to a product, <b>reserves</b> what you already have in stock for this job, and turns the <b>shortfall</b> into a draft RFQ to send suppliers. One line per material.</div>' +
       '<div class="o-groups"><div>' + fld("Project", '<select id="ci-proj">' + projOpts + '</select>', "Reservations and the RFQ are tagged to this project.") + '</div><div>' + fld("Reference", '<input id="ci-ref" placeholder="e.g. Cut list #12 / nesting run">', "A free reference kept on the reservations.") + '</div></div>' +
       '<label style="font-size:12px;color:var(--ink3);display:block;margin:8px 0 4px">Paste rows: material code or name, quantity, unit (tab or comma separated)</label>' +
-      '<textarea id="ci-paste" rows="7" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="PROF-6063&#9;120&#9;pcs&#10;Glass 6mm clear, 45, m2&#10;GASKET-EPDM 300 m"></textarea>' +
+      '<textarea id="ci-paste" rows="7" style="width:100%;padding:10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;resize:vertical" placeholder="PROF-6063&#9;120&#9;pcs&#10;Glass 6mm clear, 45, m2&#10;GASKET-EPDM 300 m"></textarea>' +
       '<div style="margin-top:10px"><button class="pri" id="ci-match">Match &amp; preview</button></div>' +
       '</div><div id="ci-result"></div></div>';
     function matchProd(txt) {
@@ -23386,7 +23446,7 @@
   // stays its own document. (Table + backend are still "material_requisitions".)
   async function renderRequisitionForm(id) {
     var parent = { action: "pur.req", title: "Material Take-off" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var req = id === "new" ? { state: "draft", req_date: today() } : (await sb.from("material_requisitions").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("material_requisition_lines").select("*").eq("requisition_id", id).order("sequence")).data || [];
@@ -23530,14 +23590,14 @@
   function vsGradeCls(g) { return g === "A" ? "paid" : g === "B" ? "partial" : g === "C" ? "draft" : "unpaid"; }
   async function renderVendorScorecards() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vendor Scorecards") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Vendor Scorecards") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     if (S.vsWindow === undefined) S.vsWindow = 12;   // months; 0 = all time
     var body = document.getElementById("o-body");
     body.innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Vendor Scorecards</h3>' +
       '<select id="vs-win" aria-label="Period" style="margin-left:auto"><option value="12"' + (S.vsWindow === 12 ? " selected" : "") + '>Last 12 months</option><option value="24"' + (S.vsWindow === 24 ? " selected" : "") + '>Last 24 months</option><option value="0"' + (S.vsWindow === 0 ? " selected" : "") + '>All time</option></select></div>' +
       '<div class="sub" style="margin:6px 0 12px">Every supplier graded on the record you already have: <b>on-time delivery</b> (receipt vs the PO&rsquo;s promised date), <b>fill rate</b> (received vs ordered), <b>price</b> (how often their RFQ quote was the cheapest) and <b>returns</b>. No extra data entry - it reads your POs, receipts and quotes.</div>' +
-      '<div id="vs-body"><div class="o-empty">Loading...</div></div></div></div>';
+      '<div id="vs-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     document.getElementById("vs-win").onchange = function () { S.vsWindow = Number(this.value); vsBody(); };
     vsBody();
   }
@@ -23653,7 +23713,7 @@
   }
   async function renderBlanketOrders() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Blanket Orders") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Blanket Orders") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var cid = S.company.id, cc = S.company.currency_code;
     var pos = (await sb.from("purchase_orders").select("id,number,partner_id,date_order,date_planned,state,amount_total,note").eq("company_id", cid)).data || [];
@@ -23679,7 +23739,7 @@
         '<td class="num">' + cc + " " + money(agreed) + '</td>' +
         '<td class="num">' + cc + " " + money(relTot) + ' <span class="muted" style="font-size:11px">(' + released.length + ')</span></td>' +
         '<td class="num"' + (remain < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + cc + " " + money(remain) + '</td>' +
-        '<td style="min-width:90px"><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + pctUsed + '%;background:var(--accent)"></div></div></td>' +
+        '<td style="min-width:90px"><div style="height:6px;border-radius:var(--r-sm);background:var(--line);overflow:hidden"><div style="height:100%;width:' + pctUsed + '%;background:var(--accent)"></div></div></td>' +
         '<td>' + statusBadge + '</td>' +
         '<td><button class="btn sm bo-rel" data-id="' + b.id + '">Release</button> <button class="btn sm bo-open" data-id="' + b.id + '">Open</button></td></tr>';
     }).join("");
@@ -23768,12 +23828,12 @@
   // received, vs the cost budget. Ties the take-off, RFQs and POs back to the job.
   async function renderProcurementStatus() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Procurement Status") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Procurement Status") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
     var sel = (S.procProj && projs.some(function (p) { return p.id === S.procProj; })) ? S.procProj : projs[0].id;
-    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Procurement Status</h3><select id="ps-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">How this job&rsquo;s material is progressing: what the take-off says it <b>needs</b>, what is out for <b>quote</b>, what is <b>ordered</b> (committed on POs) and what has been <b>received</b> - against the project&rsquo;s cost budget.</div><div id="ps-body"><div class="o-empty">Loading...</div></div></div></div>';
+    document.getElementById("o-body").innerHTML = '<div style="padding:16px"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 style="margin:0">Procurement Status</h3><select id="ps-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub" style="margin:6px 0 12px">How this job&rsquo;s material is progressing: what the take-off says it <b>needs</b>, what is out for <b>quote</b>, what is <b>ordered</b> (committed on POs) and what has been <b>received</b> - against the project&rsquo;s cost budget.</div><div id="ps-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     document.getElementById("ps-proj").onchange = function () { procStatusBody(this.value); };
     procStatusBody(sel);
   }
@@ -23860,7 +23920,7 @@
   }
   async function renderSubcontractCertForm(id, presetSc) {
     var parent = { action: "pur.sccert", title: "Subcontract Certificates" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var scs = (await sb.from("sc.list").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
     if (!scs.length) { document.querySelector(".o-form").innerHTML = '<div class="o-sheet"><div class="o-empty">No subcontracts yet. Create one first (Projects &rsaquo; Subcontracts), then certify progress here.</div></div>'; return; }
@@ -24184,7 +24244,7 @@
 
   async function renderTenderForm(id) {
     var parent = { action: "est.list", title: "Tenders" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var t = id === "new" ? { status: "draft", tender_date: today(), margin_pct: 15 } : (await sb.from("tenders").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("tender_lines").select("*").eq("tender_id", id).order("sequence")).data || [];
@@ -24327,7 +24387,7 @@
   }
   async function renderPanelForm(id) {
     var parent = { action: "mfg.panels", title: "Panel Tracking" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     function fmtTs(t) { return t ? String(t).slice(0, 10) : "-"; }
     var p = id === "new" ? { state: "fabrication" } : (await sb.from("panels").select("*").eq("id", id).maybeSingle()).data || {};
@@ -24432,7 +24492,7 @@
   }
   async function renderBomForm(id) {
     var parent = { action: "mfg.boms", title: "Bills of Materials" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var bom = id === "new" ? { output_qty: 1 } : (await sb.from("boms").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("bom_lines").select("*").eq("bom_id", id).order("sequence")).data || [];
@@ -24505,7 +24565,7 @@
   }
   async function renderWorkOrderForm(id) {
     var parent = { action: "mfg.wo", title: "Work Orders" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var wo = id === "new" ? { state: "draft", quantity: 1, date_planned: today() } : (await sb.from("work_orders").select("*").eq("id", id).maybeSingle()).data || {};
     var products = (await sb.from("products").select("id,name,default_code").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -24634,7 +24694,7 @@
   }
   async function renderInstallJobForm(id) {
     var parent = { action: "inst.jobs", title: "Install Jobs" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty">Loading...</div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var j = id === "new" ? { status: "draft", start_date: today() } : (await sb.from("install_jobs").select("*").eq("id", id).maybeSingle()).data || {};
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -25475,14 +25535,14 @@
     var recent = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(15)).data || [];
     var total = d.total || 0; // functional-currency grand total (wallets converted, so mixed currencies add up correctly)
     var cards = d.accts.map(function (a) {
-      return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px 14px">'
+      return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">'
         + '<div style="font-weight:700">' + esc(a.name) + '</div>'
         + '<div class="muted" style="font-size:12px">' + esc(a.kind === "bank" ? "Bank" : "Cash") + ' &middot; ' + esc(a.currency_code || S.company.currency_code) + '</div>'
         + '<div style="font-size:18px;font-weight:800;margin-top:6px">' + moneyC(d.bal[a.id] || 0, a.currency_code || S.company.currency_code) + '</div>'
         + ((d.func[a.id] === null) ? '<div style="font-size:11px;color:var(--warn-t);margin-top:3px;font-weight:600">No ' + esc((a.currency_code || "") + " → " + d.fn) + ' rate · not in total</div>' : '')
         + '</div>';
     }).join("");
-    var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:10px;padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn-t);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
+    var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:var(--r);padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn-t);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
     var rows = recent.map(function (m) {
       var sign = m.direction === "in" ? "+" : "-";
       return '<tr style="border-top:1px solid var(--line)"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
@@ -25533,7 +25593,7 @@
       + (dir === "in" ? '<div class="row2"><div><label>Cash tendered (optional)</label><input id="cm-tender" type="number" step="0.01" placeholder="If they hand over more"></div><div><label>Change to give back</label><input id="cm-change" type="number" step="0.01" readonly></div></div>' : '')
       + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Method</label><select id="cm-method">' + methodOpts + '</select></div></div>'
-      + '<div id="cm-alloc-wrap" style="display:none;border:1px solid var(--line);border-radius:9px;padding:10px 12px;background:var(--panel2)"></div>'
+      + '<div id="cm-alloc-wrap" style="display:none;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;background:var(--panel2)"></div>'
       + '<details id="cm-split"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Split across payment methods (part cash, part card...)</summary><div style="margin-top:8px;display:flex;flex-direction:column;gap:7px">'
       + '<div style="display:flex;gap:7px"><select class="cm-tm" style="flex:1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
       + '<div style="display:flex;gap:7px"><select class="cm-tm" style="flex:1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
@@ -25880,7 +25940,7 @@
     var t = printTplData();
     var logo = (t.show_logo && t.logo) ? '<img alt="" src="' + t.logo + '" style="max-height:54px;max-width:210px;object-fit:contain;display:block">' : "";
     var rows = [["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "Received from" : "Paid to"), m.handler_name], ["Method", m.method], ["Reference", m.reference], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:#666;padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td style="font-weight:600">' + esc(String(r[1])) + '</td></tr>'; }).join("");
-    var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:10px;display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
+    var amt = '<div style="margin:20px 0;padding:15px 18px;border:1px solid #ddd;border-radius:var(--r);display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;color:#666">' + (m.direction === "in" ? "Amount received" : "Amount paid") + '</span><span style="font-size:24px;font-weight:800;font-variant-numeric:tabular-nums">' + esc(moneyC(m.amount, m.currency_code)) + '</span></div>';
     var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<table style="font-size:13px;margin:-8px 0 4px"><tr><td style="color:#666;padding:2px 16px 2px 0">Cash tendered</td><td style="font-weight:600">' + esc(moneyC(m.tendered, m.currency_code)) + '</td></tr><tr><td style="color:#666;padding:2px 16px 2px 0">Change given</td><td style="font-weight:600">' + esc(moneyC(m.change_given, m.currency_code)) + '</td></tr></table>' : '';
     var html = '<div style="max-width:520px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;color:#1a1a1a">'
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #222;padding-bottom:12px;margin-bottom:18px">'
@@ -25997,9 +26057,9 @@
       + '<div class="row2"><div><label>Expected (system)</label><input id="cc-exp" type="number" step="0.01" readonly></div>'
       + '<div><label>Counted (physical)</label><input id="cc-cnt" type="number" step="0.01"></div></div>'
       + '<div class="muted" id="cc-var" style="font-size:13px"></div>'
-      + '<details style="border:1px solid var(--line);border-radius:9px;padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Count by denomination (optional)</summary>'
+      + '<details style="border:1px solid var(--line);border-radius:var(--r);padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Count by denomination (optional)</summary>'
       + '<table style="width:100%;font-size:13px;margin-top:8px;border-collapse:collapse"><thead><tr><th style="text-align:left;font-weight:600;color:var(--ink2)">Note / coin</th><th style="font-weight:600;color:var(--ink2)">Qty</th><th style="text-align:right;font-weight:600;color:var(--ink2)">Total</th></tr></thead><tbody id="cc-denom"></tbody></table>'
-      + '<button type="button" id="cc-denom-add" style="margin-top:6px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:7px;padding:5px 10px;cursor:pointer;font:inherit">+ Add row</button></details>'
+      + '<button type="button" id="cc-denom-add" style="margin-top:6px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r-sm);padding:5px 10px;cursor:pointer;font:inherit">+ Add row</button></details>'
       + '<div><label>Date</label><input id="cc-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Note</label><input id="cc-note" placeholder="Anything to explain a difference?"></div>'
       + '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button><button class="btn pri" id="cc-save" style="background:var(--app);border-color:var(--app)">Close &amp; sign</button></div></div>';
@@ -26282,7 +26342,7 @@
       var keys = Object.keys(byDay).sort();
       content = keys.length ? keys.map(function (k) {
         return '<div style="margin:16px 0 6px;font-weight:800;font-size:14px">' + esc(apptFmtDate(k + "T12:00")) + '</div>' + byDay[k].map(function (a) {
-          return '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:7px;cursor:pointer;background:var(--panel)"><div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:64px">' + esc(apptFmtTime(a.starts_at)) + '</div><div style="flex:1"><div style="font-weight:600">' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + '</div><div class="muted" style="font-size:12px">' + esc((a.appt_services ? a.appt_services.name : "") + (a.hr_employees ? (" &middot; " + a.hr_employees.name) : "")) + '</div></div><div>' + apptStatusPill(a.status) + '</div></div>';
+          return '<div class="ap-row" data-id="' + a.id + '" style="display:flex;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);margin-bottom:7px;cursor:pointer;background:var(--panel)"><div style="font-weight:700;font-variant-numeric:tabular-nums;min-width:64px">' + esc(apptFmtTime(a.starts_at)) + '</div><div style="flex:1"><div style="font-weight:600">' + esc(a.partners ? a.partners.name : (a.title || "(no " + apptTermClient().toLowerCase() + ")")) + '</div><div class="muted" style="font-size:12px">' + esc((a.appt_services ? a.appt_services.name : "") + (a.hr_employees ? (" &middot; " + a.hr_employees.name) : "")) + '</div></div><div>' + apptStatusPill(a.status) + '</div></div>';
         }).join("");
       }).join("") : '<p class="muted" style="padding:18px 0">Nothing booked' + (V === "day" ? " this day" : (V === "agenda" ? " yet" : "")) + '. Click + New to add one.</p>';
     }
@@ -26695,7 +26755,7 @@
       apptVertSummary();
     };
     apptVertSummary();
-    function apptRenderLink() { var s = (document.getElementById("st-slug").value || "").trim(); var box = document.getElementById("st-linkbox"); if (!s) { box.innerHTML = ""; return; } var link = location.origin + "/book?s=" + encodeURIComponent(s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "")); box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 11px"><a href="' + esc(link) + '" target="_blank" style="flex:1;font-size:12.5px;color:var(--accent);word-break:break-all">' + esc(link) + '</a><button class="btn" id="st-copy" style="padding:4px 10px;font-size:12px">Copy</button></div>'; document.getElementById("st-copy").onclick = function () { try { navigator.clipboard.writeText(link); toast("Link copied"); } catch (e) { toast("Select and copy the link"); } }; }
+    function apptRenderLink() { var s = (document.getElementById("st-slug").value || "").trim(); var box = document.getElementById("st-linkbox"); if (!s) { box.innerHTML = ""; return; } var link = location.origin + "/book?s=" + encodeURIComponent(s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "")); box.innerHTML = '<div style="display:flex;gap:8px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:8px 11px"><a href="' + esc(link) + '" target="_blank" style="flex:1;font-size:12.5px;color:var(--accent);word-break:break-all">' + esc(link) + '</a><button class="btn" id="st-copy" style="padding:4px 10px;font-size:12px">Copy</button></div>'; document.getElementById("st-copy").onclick = function () { try { navigator.clipboard.writeText(link); toast("Link copied"); } catch (e) { toast("Select and copy the link"); } }; }
     document.getElementById("st-slug").oninput = apptRenderLink; apptRenderLink();
     document.getElementById("st-save").onclick = async function () {
       var vert = document.getElementById("st-vert").value;
@@ -26787,7 +26847,7 @@
   // ---- Overview ----
   async function renderPlotDash() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Property") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Property") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps();
     var body = document.getElementById("o-body");
@@ -27132,7 +27192,7 @@
   // ---- Billing runs ----
   async function renderPlotRuns() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Billing runs") + '<div class="gap"></div><button class="o-filtbtn pri" id="pr-gen">Generate charges</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Billing runs") + '<div class="gap"></div><button class="o-filtbtn pri" id="pr-gen">Generate charges</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var runs = (await sb.from("property_charge_runs").select("*, properties(name)").is("deleted_at", null).eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(200)).data || [];
     var body = document.getElementById("o-body");
@@ -27336,7 +27396,7 @@
     box.innerHTML = '<div class="o-cf-head">Agenda &amp; motions</div>' +
       (items.length ? items.map(function (it) {
         var v = verdict(it), isMotion = it.kind === "motion";
-        return '<div style="border:1px solid var(--line);border-radius:9px;padding:9px 11px;margin-bottom:7px">' +
+        return '<div style="border:1px solid var(--line);border-radius:var(--r);padding:9px 11px;margin-bottom:7px">' +
           '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><b>' + esc(it.title) + '</b>' +
           '<span class="badge">' + esc(it.kind) + '</span>' +
           (isMotion ? '<span class="badge">' + esc(PLOT_AUTH[it.authority] || it.authority || "") + '</span>' : '') +
@@ -28022,7 +28082,7 @@
   // ---- Arrears: who owes what, with the dunning stage worked out ----
   async function renderPlotArrears() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Arrears") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Arrears") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps(), body = document.getElementById("o-body");
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
@@ -28086,7 +28146,7 @@
   // ---- Building expenses (vendor bills carrying this property) ----
   async function renderPlotExpenses() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Expenses") + '<div class="gap"></div><button class="o-filtbtn pri" id="ex-new">New bill</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Expenses") + '<div class="gap"></div><button class="o-filtbtn pri" id="ex-new">New bill</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     document.getElementById("ex-new").onclick = function () { go("inv.in"); };
     var props = await plotProps(), body = document.getElementById("o-body");
@@ -28110,7 +28170,7 @@
   var _plotBudId = null;   // which budget year the user is looking at
   async function renderPlotBudget() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Annual budget") + '<div class="gap"></div><button class="o-filtbtn" id="bd-seed">Fill from charges</button><button class="o-filtbtn pri" id="bd-line">Add line</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Annual budget") + '<div class="gap"></div><button class="o-filtbtn" id="bd-seed">Fill from charges</button><button class="o-filtbtn pri" id="bd-line">Add line</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps(), body = document.getElementById("o-body");
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
@@ -28221,7 +28281,7 @@
   }
   async function renderPlotReports() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Building reports") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Building reports") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps(), body = document.getElementById("o-body");
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
@@ -28353,7 +28413,7 @@
   // ---- Committee view: the building's money without exposing a neighbour ----
   async function renderPlotCommittee() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Committee view") + '<div class="gap"></div><button class="o-filtbtn" id="cm-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Committee view") + '<div class="gap"></div><button class="o-filtbtn" id="cm-print">Print</button></div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps(), body = document.getElementById("o-body");
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
@@ -28394,7 +28454,7 @@
   //      This is the whole app for whoever actually does the rounds.
   async function renderPlotConcierge() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Today's round") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Today's round") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var props = await plotProps(), body = document.getElementById("o-body");
     if (!props.length) { body.innerHTML = '<div class="o-empty2"><div class="o-empty2-t">No buildings yet</div></div>'; return; }
@@ -28785,7 +28845,7 @@
   function plotRowLabel(t, r) { return r.title || r.name || r.code || r.label || r.doc_number || ("record " + String(r.id).slice(0, 8)); }
   async function renderPlotArchive() {
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Archive") + '</div><div class="o-body" id="o-body"><div class="o-empty">Loading...</div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Archive") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var body = document.getElementById("o-body"), out = [];
     for (var i = 0; i < PLOT_SOFT.length; i++) {
