@@ -1097,7 +1097,7 @@
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
-      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
+      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p><b>Concept &amp; Brief</b> is a board: titles, paragraphs, notes, instructions with a tick, links, pictures and documents, each a card you can widen, reorder or remove. Add a picture of the venue, the palette, the florist's link and the notes everyone must read.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
       { t: "Service (jobs, warranties and maintenance)", h: "<p>The <b>Service</b> app runs repair and maintenance work: a customer reports a problem, a technician fixes it, and you bill whatever the warranty does not cover.</p><ol class=\"man-steps\"><li class=\"man-step\">Raise a <b>ticket</b> with the customer, the item and its serial number. If a warranty covers that item Orbit flags it automatically.</li><li class=\"man-step\">Add the <b>parts and labour</b> used. Tick <i>covered</i> on anything the warranty pays for, so it is not billed.</li><li class=\"man-step\">Use <b>Bill to</b> to say who pays - the customer, or the manufacturer on a back-to-back RMA claim.</li><li class=\"man-step\">Record the <b>customer rating</b> when the job is done.</li></ol><p><b>Schedule</b> is a week grid of technicians against days: drag a job onto another person or another day to reschedule it. <b>Maintenance</b> holds recurring plans - set &ldquo;every 90 days&rdquo; and press <b>Generate due tickets</b> to raise them when they fall due.</p>" }
@@ -4634,6 +4634,7 @@
     }
     var _lv = (key && LIST_VIEW[key]) || {};
     var _cp = colPrefs(key);   // per-screen prefs: {hidden, width, size}
+    applyExtraCols(cfg, _cp);
     L = { cfg: cfg, key: key, all: [], view: (cfg.views === false ? "list" : _lv.view) || "list", page: 0, size: _cp.size || 100, query: "", filters: {}, group: null, sort: null, colGroup: null, colFilters: {}, selMode: false, sel: {}, ncoll: {}, recent: [], cols: _cp, kanbanGroupIdx: _lv.kanbanGroupIdx || 0, kwidth: _lv.kwidth || "m" };
     var _newBtn = document.getElementById("o-new"); if (_newBtn && cfg.onNew) _newBtn.onclick = cfg.onNew;
     var _actBtn = document.getElementById("o-action"); if (_actBtn && cfg.action) _actBtn.onclick = function () { cfg.action.run(_actBtn); };
@@ -4915,6 +4916,65 @@
     clearTimeout(_lrs);
     _lrs = setTimeout(function () { if (L && L.cfg && document.getElementById("o-body")) paintBody(); }, 160);
   });
+  // ---- any field can be a column ----
+  // A list shows the columns it was designed with. Every record has more in
+  // it than that, and the person looking at the list knows which ones matter
+  // to them. Columns lets them add any field of the record as a column, with
+  // editing where the list edits, and remembers it with the widths and order.
+  function humanizeField(f) { return String(f).replace(/_id$/, "").replace(/_/g, " ").replace(/^\w/, function (c) { return c.toUpperCase(); }); }
+  function fieldType(rows, k) {
+    for (var i = 0; i < rows.length; i++) {
+      var v = rows[i][k]; if (v === null || v === undefined || v === "") continue;
+      if (typeof v === "boolean") return "checkbox";
+      if (typeof v === "number") return "number";
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) return "date";
+      if (typeof v === "string" && /^\d{4}-\d{2}-\d{2}T/.test(v)) return "datetime";
+      return "text";
+    }
+    return "text";
+  }
+  function fieldCandidates(cfg) {
+    var rows = (L.all || []).slice(0, 80), seen = {}, out = [], shown = {};
+    cfg.columns.forEach(function (c) { if (c.edit && c.edit.field) shown[c.edit.field] = 1; if (c.extra) shown[c.extra] = 1; });
+    rows.forEach(function (r) {
+      Object.keys(r).forEach(function (k) {
+        if (seen[k] || shown[k]) return;
+        if (k === "id" || /_id$/.test(k) || k.charAt(0) === "_" || /token|secret|password|hash/i.test(k)) return;
+        var v = r[k]; if (v !== null && typeof v === "object") return;   // joins and json stay off the table
+        seen[k] = 1; out.push({ field: k, type: fieldType(rows, k) });
+      });
+    });
+    return out.sort(function (a, b) { return a.field < b.field ? -1 : 1; });
+  }
+  function extraColumn(x) {
+    var f = x.field, t = x.type || "text";
+    var col = { label: humanizeField(f), extra: f, num: t === "number",
+      get: function (r) {
+        var v = r[f]; if (v === null || v === undefined || v === "") return "";
+        if (t === "checkbox") return v ? "&#10003;" : "";
+        if (t === "datetime") return '<span class="muted">' + esc(String(v).slice(0, 16).replace("T", " ")) + '</span>';
+        return esc(String(v));
+      } };
+    if (t !== "datetime") col.edit = { field: f, type: t };
+    return col;
+  }
+  // The saved extra fields become real columns before the list draws.
+  function applyExtraCols(cfg, prefs) {
+    if (cfg._extrasApplied) return; cfg._extrasApplied = true;
+    var extras = (prefs && prefs.extra) || []; if (!extras.length) return;
+    cfg.columns = cfg.columns.slice();
+    extras.forEach(function (x) { if (!cfg.columns.some(function (c) { return c.extra === x.field; })) cfg.columns.push(extraColumn(x)); });
+  }
+  function addExtraCol(cfg, x) {
+    L.cols.extra = (L.cols.extra || []).filter(function (e) { return e.field !== x.field; }).concat([{ field: x.field, type: x.type }]);
+    cfg.columns.push(extraColumn(x)); saveColPrefs(); paintBody();
+  }
+  function removeExtraCol(cfg, field) {
+    L.cols.extra = (L.cols.extra || []).filter(function (e) { return e.field !== field; });
+    var i = cfg.columns.map(function (c) { return c.extra; }).indexOf(field); if (i >= 0) cfg.columns.splice(i, 1);
+    L.sort = null; L.colGroup = null; L.colFilters = {};   // those point by index, and the indexes just moved
+    saveColPrefs(); paintBody();
+  }
   // ---- spreadsheet habits, for every list at once ----
   // Columns keep the order the person dragged them into. A column the list did
   // not have when the order was saved falls in at the end.
@@ -5060,10 +5120,21 @@
   function openColsDropdown(btn) {
     closeDropdowns();
     var cfg = L.cfg, r = btn.getBoundingClientRect();
-    var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1"; dd.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 240)) + "px";
-    dd.innerHTML = '<div class="sec">Show columns</div>' + orderedCols(cfg).map(function (o) { var c = o.c, i = o.i, vis = !colHidden(c, i); return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + '</button>'; }).join("") + '<div class="sep"></div><button class="it" data-a="reset">Reset columns &amp; widths</button>';
+    var dd = document.createElement("div"); dd.className = "o-dd"; dd.dataset.dd = "1"; dd.style.left = Math.max(6, Math.min(r.left, window.innerWidth - 260)) + "px";
+    var extras = cfg.columns.filter(function (c) { return c.extra; });
+    var cands = fieldCandidates(cfg);
+    dd.innerHTML = '<div class="sec">Show columns</div>' +
+      orderedCols(cfg).map(function (o) { var c = o.c, i = o.i, vis = !colHidden(c, i); return '<button class="it" data-ci="' + i + '">' + (vis ? "&#10003; " : '<span style="opacity:0">&#10003;</span> ') + esc(c.label || ("Column " + (i + 1))) + (c.extra ? ' <span class="o-colf-n">added</span>' : "") + '</button>'; }).join("") +
+      (extras.length ? '<div class="sep"></div><div class="sec">Added fields</div>' + extras.map(function (c) { return '<button class="it" data-rm="' + esc(c.extra) + '">&times; Remove ' + esc(c.label) + '</button>'; }).join("") : "") +
+      '<div class="sep"></div><div class="sec">Add a field from the record</div>' +
+      (cands.length ? '<div class="o-addf"><select class="o-addf-sel" aria-label="Field to add">' + cands.map(function (c) { return '<option value="' + esc(c.field) + '" data-t="' + c.type + '">' + esc(humanizeField(c.field)) + '</option>'; }).join("") + '</select><button type="button" class="btn sm o-addf-btn">Add</button></div>' : '<div class="o-addf-none">Every field of this record is already a column.</div>') +
+      '<div class="sep"></div><button class="it" data-a="reset">Reset columns, widths &amp; added fields</button>';
     dd.querySelectorAll("[data-ci]").forEach(function (b) { b.onclick = function () { var i = +b.dataset.ci, k = colKey(cfg.columns[i], i), hiding = !colHidden(cfg.columns[i], i); if (hiding && visibleCols(cfg).length <= 1) { toast("Keep at least one column showing"); return; } if (hiding) L.cols.hidden[k] = 1; else L.cols.hidden[k] = 0; saveColPrefs(); paintBody(); openColsDropdown(btn); }; });
-    dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; L.cols.order = []; saveColPrefs(); paintBody(); closeDropdowns(); };
+    dd.querySelectorAll("[data-rm]").forEach(function (b) { b.onclick = function () { removeExtraCol(cfg, b.dataset.rm); openColsDropdown(btn); }; });
+    var addBtn = dd.querySelector(".o-addf-btn");
+    if (addBtn) addBtn.onclick = function (e) { e.stopPropagation(); var sel = dd.querySelector(".o-addf-sel"), op = sel.options[sel.selectedIndex]; if (!op) return; addExtraCol(cfg, { field: op.value, type: op.dataset.t }); openColsDropdown(btn); };
+    var selEl = dd.querySelector(".o-addf-sel"); if (selEl) selEl.onclick = function (e) { e.stopPropagation(); };
+    dd.querySelector('[data-a="reset"]').onclick = function () { L.cols.hidden = {}; L.cols.width = {}; L.cols.order = []; L.cols.extra = []; cfg.columns = cfg.columns.filter(function (c) { return !c.extra; }); L.sort = null; L.colGroup = null; L.colFilters = {}; saveColPrefs(); paintBody(); closeDropdowns(); };
     document.body.appendChild(dd);
   }
   function wireColResize(cfg) {
@@ -9053,20 +9124,121 @@
     if (!out.length) out = [{ title: "The feeling", body: "" }, { title: "Aesthetic", body: "" }, { title: "Signature moments", body: "" }];
     return out;
   }
+  // ---- the concept and brief is a board ----
+  // A brief used to be titled paragraphs. A planner thinks in a board: the
+  // venue photo beside the colour palette beside the florist's link beside the
+  // note about the aunt who must not sit near the bar. So the brief is a grid
+  // of blocks of nine kinds, each its own card, stored on the event itself.
+  var BOARD_KINDS = [
+    ["title", "Title", "A big heading for a part of the board"],
+    ["subtitle", "Subtitle", "A smaller heading"],
+    ["paragraph", "Paragraph", "A block of text under a heading"],
+    ["text", "Text", "A short line"],
+    ["note", "Note", "A sticky note"],
+    ["instruction", "Instruction", "Something that must be done, with a tick"],
+    ["link", "Link", "A web page: a supplier, a venue, an idea"],
+    ["image", "Picture", "A photo, a palette, a drawing"],
+    ["doc", "Document", "A PDF or any file"]
+  ];
+  function boardBlocks(c) {
+    c = c || {};
+    if (Array.isArray(c.blocks)) return c.blocks.slice();
+    // the old titled sections become paragraph blocks; nothing is lost
+    return conceptSections(c).map(function (s) { return { id: uuid4(), kind: "paragraph", title: s.title || "", body: s.body || "", span: 1 }; });
+  }
+  function linkHost(u) { try { return new URL(u).host.replace(/^www\./, ""); } catch (e) { return ""; } }
   function evConcept(host) {
-    var secs = conceptSections(EV.event.concept);
-    function rowHtml(s) { return '<div class="cc-sec"><div class="cc-h"><input class="cc-title" value="' + esc(s.title || "") + '" placeholder="Section title"><button class="cc-del" title="Remove section">&times;</button></div><textarea class="cc-body" rows="3" placeholder="Write here...">' + esc(s.body || "") + '</textarea></div>'; }
-    host.innerHTML = '<div class="ev-toolbar"><button class="pri" id="cc-save">Save brief</button><button class="o-filtbtn" id="cc-add">+ Add section</button><div class="sub" style="margin-left:6px">Titles are editable &mdash; rename or add your own.</div><div class="gap"></div>' + evTools("cc") + '</div>' +
-      '<div class="card" id="cc-list">' + secs.map(rowHtml).join("") + '</div>';
-    function wireDel() { host.querySelectorAll(".cc-del").forEach(function (b) { b.onclick = function () { b.closest(".cc-sec").remove(); }; }); }
-    wireDel();
-    document.getElementById("cc-add").onclick = function () { var d = document.createElement("div"); d.innerHTML = rowHtml({ title: "", body: "" }); document.getElementById("cc-list").appendChild(d.firstChild); wireDel(); };
-    document.getElementById("cc-save").onclick = async function () {
-      var sections = []; host.querySelectorAll(".cc-sec").forEach(function (el) { var t = el.querySelector(".cc-title").value.trim(), b = el.querySelector(".cc-body").value.trim(); if (t || b) sections.push({ title: t, body: b }); });
-      var r = await sb.from("event_events").update({ concept: { sections: sections } }).eq("id", EV.eventId); if (r.error) { toast(errMsg(r.error)); return; }
-      EV.event.concept = { sections: sections }; toast("Brief saved");
-    };
-    evWireTools("cc", function () { var rows = []; host.querySelectorAll(".cc-sec").forEach(function (el) { rows.push([el.querySelector(".cc-title").value.trim(), el.querySelector(".cc-body").value.trim()]); }); return { name: "brief", title: "Concept & Brief - " + EV.event.name, headers: ["Section", "Content"], rows: rows, printSel: "#cc-list" }; });
+    var blocks = boardBlocks(EV.event.concept), urls = {};
+    async function persist() {
+      var sections = blocks.filter(function (b) { return b.kind === "paragraph" || b.kind === "text" || b.kind === "note"; }).map(function (b) { return { title: b.title || "", body: b.body || "" }; });
+      var r = await sb.from("event_events").update({ concept: { blocks: blocks, sections: sections } }).eq("id", EV.eventId);
+      if (r.error) { toast(errMsg(r.error)); return false; }
+      EV.event.concept = { blocks: blocks, sections: sections }; return true;
+    }
+    function tools(i) {
+      return '<div class="bd-tools">' +
+        '<button type="button" class="bd-t" data-a="up" data-i="' + i + '" title="Move earlier" aria-label="Move earlier">&#8249;</button>' +
+        '<button type="button" class="bd-t" data-a="down" data-i="' + i + '" title="Move later" aria-label="Move later">&#8250;</button>' +
+        '<button type="button" class="bd-t" data-a="size" data-i="' + i + '" title="Wider or narrower" aria-label="Wider or narrower">&#9707;</button>' +
+        '<button type="button" class="bd-t" data-a="edit" data-i="' + i + '" title="Edit" aria-label="Edit">&#9998;</button>' +
+        '<button type="button" class="bd-t bd-x" data-a="del" data-i="' + i + '" title="Remove" aria-label="Remove">&times;</button></div>';
+    }
+    function para(s) { return esc(s || "").replace(/\n/g, "<br>"); }
+    function blockHTML(b, i) {
+      var inner = "";
+      switch (b.kind) {
+        case "title": inner = '<h2 class="bd-h1">' + esc(b.body || b.title || "") + '</h2>'; break;
+        case "subtitle": inner = '<h3 class="bd-h2">' + esc(b.body || b.title || "") + '</h3>'; break;
+        case "text": inner = '<div class="bd-text">' + esc(b.body || "") + '</div>'; break;
+        case "paragraph": case "note": inner = (b.title ? '<div class="bd-h">' + esc(b.title) + '</div>' : "") + '<div class="bd-p">' + para(b.body) + '</div>'; break;
+        case "instruction": inner = '<label class="bd-ins"><input type="checkbox" data-a="done" data-i="' + i + '"' + (b.done ? " checked" : "") + '><span>' + (b.title ? '<b>' + esc(b.title) + '</b><br>' : "") + para(b.body) + '</span></label>'; break;
+        case "link": var u = b.url || ""; inner = '<a class="bd-link" href="' + esc(u) + '" target="_blank" rel="noopener"><span class="bd-link-ic">&#128279;</span><span class="bd-link-t">' + esc(b.title || linkHost(u) || u) + '</span><span class="bd-link-u">' + esc(linkHost(u) || u) + '</span></a>' + (b.body ? '<div class="bd-p">' + para(b.body) + '</div>' : ""); break;
+        case "image": inner = '<div class="bd-img">' + (urls[b.media_path] ? '<img alt="' + esc(b.title || "") + '" src="' + urls[b.media_path] + '">' : '<div class="bd-img-ph">Picture</div>') + '</div>' + (b.title || b.body ? '<div class="bd-cap">' + esc(b.title || "") + (b.body ? ' <span class="muted">' + esc(b.body) + '</span>' : "") + '</div>' : ""); break;
+        case "doc": inner = '<a class="bd-doc" href="' + (urls[b.media_path] || "#") + '" target="_blank" rel="noopener"><span class="bd-doc-ic">' + esc((b.ext || "file").toUpperCase().slice(0, 4)) + '</span><span class="bd-doc-t"><b>' + esc(b.title || b.name || "Document") + '</b>' + (b.body ? '<div class="muted">' + esc(b.body) + '</div>' : "") + '</span></a>'; break;
+      }
+      return '<div class="bd-card bd-' + b.kind + (b.span === 2 ? " bd-wide" : "") + '" data-i="' + i + '">' + tools(i) + inner + '</div>';
+    }
+    async function paint() {
+      var need = blocks.filter(function (b) { return b.media_path && !urls[b.media_path]; });
+      await Promise.all(need.map(async function (b) { urls[b.media_path] = await mediaSignedUrl(b.media_path); }));
+      host.innerHTML = '<div class="ev-toolbar"><div class="bd-add"><button class="pri" id="bd-add-btn">+ Add to the board</button>' +
+        '<div class="bd-menu" id="bd-menu" hidden>' + BOARD_KINDS.map(function (k) { return '<button type="button" class="bd-kind" data-k="' + k[0] + '"><b>' + k[1] + '</b><span>' + k[2] + '</span></button>'; }).join("") + '</div></div>' +
+        evTools("bd") + '<div class="sub" style="margin-left:6px">A mood board of the whole event: pictures, links, notes, instructions and the brief itself.</div></div>' +
+        '<div class="bd-grid" id="bd-grid">' + (blocks.length ? blocks.map(blockHTML).join("") : '<div class="o-empty2" style="grid-column:1/-1"><div class="o-empty2-t">An empty board</div><div class="o-empty2-h">Add a picture of the venue, the colours, a link to the florist, and the notes everyone must read.</div></div>') + '</div>';
+      wire();
+    }
+    function wire() {
+      var btn = document.getElementById("bd-add-btn"), menu = document.getElementById("bd-menu");
+      btn.onclick = function (e) { e.stopPropagation(); menu.hidden = !menu.hidden; };
+      document.addEventListener("click", function h(e) { if (!menu.isConnected) { document.removeEventListener("click", h); return; } if (!e.target.closest(".bd-add")) menu.hidden = true; });
+      menu.querySelectorAll(".bd-kind").forEach(function (k) { k.onclick = function () { menu.hidden = true; openBlockModal(k.dataset.k, null); }; });
+      host.querySelectorAll(".bd-t").forEach(function (t) {
+        t.onclick = async function (e) {
+          e.stopPropagation();
+          var i = +t.dataset.i, a = t.dataset.a;
+          if (a === "edit") { openBlockModal(blocks[i].kind, i); return; }
+          if (a === "del") { if (!confirm("Remove this from the board?")) return; blocks.splice(i, 1); }
+          else if (a === "size") { blocks[i].span = blocks[i].span === 2 ? 1 : 2; }
+          else if (a === "up" && i > 0) { var tmp = blocks[i - 1]; blocks[i - 1] = blocks[i]; blocks[i] = tmp; }
+          else if (a === "down" && i < blocks.length - 1) { var tmp2 = blocks[i + 1]; blocks[i + 1] = blocks[i]; blocks[i] = tmp2; }
+          else return;
+          if (await persist()) paint();
+        };
+      });
+      host.querySelectorAll('input[data-a="done"]').forEach(function (cb) { cb.onchange = async function () { blocks[+cb.dataset.i].done = cb.checked; await persist(); }; });
+      evWireTools("bd", function () { return { name: "brief", title: "Brief - " + EV.event.name, headers: ["Kind", "Title", "Text", "Link"], rows: blocks.map(function (b) { return [b.kind, b.title || "", b.body || "", b.url || ""]; }), printSel: "#bd-grid" }; });
+    }
+    function openBlockModal(kind, idx) {
+      var b = idx == null ? { id: uuid4(), kind: kind, span: 1 } : Object.assign({}, blocks[idx]);
+      var K = BOARD_KINDS.filter(function (k) { return k[0] === kind; })[0] || [kind, "Block"];
+      var oneLine = kind === "title" || kind === "subtitle" || kind === "text";
+      var m = document.createElement("div"); m.className = "modal on";
+      m.innerHTML = '<div class="sheet"><h3>' + (idx == null ? "Add a " : "Edit the ") + esc(K[1].toLowerCase()) + '</h3><div class="form">' +
+        (oneLine ? '<div><label>Text</label><input id="bd-body" value="' + esc(b.body || "") + '"></div>' :
+          '<div><label>' + (kind === "image" ? "Caption" : "Title") + '</label><input id="bd-title" value="' + esc(b.title || "") + '"></div>' +
+          (kind === "link" ? '<div><label>Web address</label><input id="bd-url" value="' + esc(b.url || "") + '" placeholder="https://"></div>' : "") +
+          (kind === "image" || kind === "doc" ? '<div><label>' + (kind === "image" ? "Picture" : "File") + '</label><input type="file" id="bd-file"' + (kind === "image" ? ' accept="image/*"' : "") + '>' + (b.media_path ? '<div class="sub">Keeping the current one unless you choose another.</div>' : "") + '</div>' : "") +
+          '<div><label>' + (kind === "instruction" ? "What must be done" : "Notes") + '</label><textarea id="bd-body" rows="' + (kind === "paragraph" || kind === "note" || kind === "instruction" ? 6 : 2) + '">' + esc(b.body || "") + '</textarea></div>') +
+        '</div><div class="foot"><button class="btn" id="bd-cancel">Cancel</button><button class="btn pri" id="bd-save" style="background:var(--app);border-color:var(--app)">Save</button></div></div>';
+      document.body.appendChild(m);
+      m.querySelector("#bd-cancel").onclick = function () { m.remove(); };
+      m.querySelector("#bd-save").onclick = async function () {
+        var sv = this, t = m.querySelector("#bd-title"), u = m.querySelector("#bd-url"), bo = m.querySelector("#bd-body"), f = m.querySelector("#bd-file");
+        if (t) b.title = t.value.trim(); if (u) b.url = u.value.trim(); if (bo) b.body = bo.value.trim();
+        if (kind === "link" && b.url && !/^https?:\/\//i.test(b.url)) b.url = "https://" + b.url;
+        if (f && f.files && f.files[0]) {
+          sv.disabled = true; sv.textContent = "Uploading...";
+          try { var med = await mediaUpload("event_board", EV.eventId, f.files[0]); b.media_path = med.path; b.media_id = med.id; b.ext = (f.files[0].name.split(".").pop() || "").slice(0, 5); b.name = f.files[0].name; }
+          catch (e) { toast("Upload failed: " + ((e && e.message) || e)); sv.disabled = false; sv.textContent = "Save"; return; }
+        }
+        if ((kind === "image" || kind === "doc") && !b.media_path) { toast(kind === "image" ? "Choose a picture" : "Choose a file"); sv.disabled = false; sv.textContent = "Save"; return; }
+        if (oneLine && !b.body) { toast("Type the text"); return; }
+        if (idx == null) blocks.push(b); else blocks[idx] = b;
+        if (await persist()) { m.remove(); toast("Saved"); paint(); }
+        else { sv.disabled = false; sv.textContent = "Save"; }
+      };
+    }
+    paint();
   }
   // The table is the shared list engine, the same one behind Contacts, so the
   // guest list gets click-to-edit cells, sort, filters, group by, a column

@@ -2396,3 +2396,52 @@ html,body{overflow-x:hidden}
   .pos-wrap button,.tp-rows button,.tp-meth button,.kds-wrap button,.pos-cell,.pos-tile{min-height:48px}
   .o-tile{padding:16px 6px}
 }
+
+/* ===== add a field as a column ===== */
+.o-addf{display:flex;gap:6px;padding:4px 6px;align-items:center}
+.o-addf-sel{flex:1;min-width:0;font:inherit;font-size:12.5px;padding:5px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink)}
+.o-addf-none{padding:6px 10px;font-size:12px;color:var(--ink3)}
+
+/* ===== the event board: a brief you can look at ===== */
+.bd-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));grid-auto-flow:dense;gap:12px;padding:12px 0 24px}
+.bd-card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;box-shadow:var(--sh-sm);min-height:110px;min-width:0;overflow-wrap:anywhere}
+.bd-wide{grid-column:span 2}
+.bd-card.bd-title,.bd-card.bd-subtitle{grid-column:1/-1;min-height:0;background:none;border:0;box-shadow:none;padding:10px 4px 0}
+.bd-h1{margin:0;font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.bd-h2{margin:0;font-size:17px;font-weight:700;color:var(--ink2)}
+.bd-h{font-weight:700;margin-bottom:5px}
+.bd-p{font-size:13.5px;line-height:1.55;color:var(--ink2)}
+.bd-text{font-size:15px;line-height:1.5}
+.bd-note{background:var(--warn-s);border-color:color-mix(in srgb,var(--warn) 45%,var(--line));transform:rotate(-.5deg)}
+.bd-note .bd-p,.bd-note .bd-h{color:var(--warn-t)}
+.bd-instruction{border-left:4px solid var(--accent)}
+.bd-ins{display:flex;gap:10px;align-items:flex-start;cursor:pointer;font-size:13.5px;line-height:1.5}
+.bd-ins input{margin-top:3px;width:18px;height:18px;flex:none}
+.bd-ins input:checked+span{text-decoration:line-through;color:var(--ink3)}
+.bd-link{display:flex;flex-direction:column;gap:2px;text-decoration:none;color:var(--ink);padding-right:8px}
+.bd-link-ic{font-size:18px}
+.bd-link-t{font-weight:700;font-size:14px}
+.bd-link-u{font-size:12px;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bd-image{padding:0 0 10px}
+.bd-img{border-radius:var(--r-lg) var(--r-lg) 0 0;overflow:hidden;aspect-ratio:4/3;background:var(--panel2)}
+.bd-img img{width:100%;height:100%;object-fit:cover;display:block}
+.bd-img-ph{display:grid;place-items:center;height:100%;color:var(--ink3)}
+.bd-cap{font-size:12.5px;padding:8px 14px 0;font-weight:600}
+.bd-doc{display:flex;gap:12px;align-items:center;text-decoration:none;color:var(--ink);min-height:70px}
+.bd-doc-ic{width:44px;height:54px;border-radius:var(--r-sm);background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font-size:11px;font-weight:800;flex:none;letter-spacing:.04em}
+.bd-doc-t{min-width:0;font-size:13.5px}
+.bd-tools{position:absolute;top:6px;right:6px;display:flex;gap:2px;opacity:0;transition:opacity .12s;z-index:2}
+.bd-card:hover .bd-tools,.bd-card:focus-within .bd-tools{opacity:1}
+.bd-t{border:1px solid var(--line);background:var(--panel);color:var(--ink2);border-radius:var(--r-sm);width:26px;height:26px;cursor:pointer;font-size:14px;line-height:1;display:grid;place-items:center;padding:0}
+.bd-t:hover{color:var(--accent);border-color:var(--accent)}
+.bd-x:hover{color:var(--bad-t);border-color:var(--bad-t)}
+.bd-add{position:relative}
+.bd-menu{position:absolute;top:42px;left:0;z-index:30;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:6px;display:grid;grid-template-columns:1fr 1fr;gap:4px;width:min(460px,92vw)}
+.bd-menu[hidden]{display:none}
+.bd-kind{text-align:left;border:1px solid transparent;background:none;border-radius:var(--r-sm);padding:8px 10px;cursor:pointer;color:var(--ink);font:inherit}
+.bd-kind:hover{background:var(--panel2)}
+.bd-kind b{display:block;font-size:13px}
+.bd-kind span{font-size:11.5px;color:var(--ink3)}
+@media(pointer:coarse){.bd-tools{opacity:1}}
+@media(max-width:640px){.bd-grid{grid-template-columns:1fr 1fr;gap:8px}.bd-wide{grid-column:span 2}.bd-menu{grid-template-columns:1fr}}
+@media print{.bd-tools,.bd-add{display:none!important}.bd-grid{gap:8px}}
