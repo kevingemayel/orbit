@@ -2277,8 +2277,22 @@
     var email = (document.getElementById("email") || {}).value ? document.getElementById("email").value.trim() : "";
     var err = document.getElementById("err"); if (err) err.textContent = "";
     if (!email) { if (err) err.textContent = "Enter your email above first, then click Forgot your password."; return; }
-    var res = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-    if (err) { err.style.color = res.error ? "" : "var(--good)"; err.textContent = res.error ? res.error.message : "If that email has an account, a password-reset link is on its way. Open it on this device to set a new password."; }
+    // the reset goes through the same verification as a sign-in; without the
+    // token the server refuses it with a message nobody should have to read
+    var opts = { redirectTo: location.origin + location.pathname };
+    if (HCAPTCHA_SITE_KEY) {
+      var tok = captchaToken();
+      if (!tok) { if (err) err.textContent = "Tick the verification box below first, then click Forgot your password."; return; }
+      opts.captchaToken = tok;
+    }
+    var res = await sb.auth.resetPasswordForEmail(email, opts);
+    if (HCAPTCHA_SITE_KEY) captchaReset();   // a token is good for one request
+    if (err) {
+      var rmsg = res.error ? (res.error.message || "That did not work") : "";
+      if (rmsg && /captcha/i.test(rmsg)) rmsg = "The verification expired. Tick the box again, then click Forgot your password.";
+      err.style.color = res.error ? "" : "var(--good)";
+      err.textContent = res.error ? rmsg : "If that email has an account, a password-reset link is on its way. Open it on this device to set a new password.";
+    }
   }
   async function doAuth(mode) {
     var email = document.getElementById("email").value.trim();
