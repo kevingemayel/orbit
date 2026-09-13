@@ -4830,7 +4830,7 @@
       rows.forEach(function (r) { var k = keyFn(r); (groups[k] = groups[k] || []).push(r); });
       var html = listTableOpen(cfg);
       Object.keys(groups).sort().forEach(function (k) {
-        html += '<tr class="o-grp"><td colspan="' + (visibleCols(cfg).length + (L.selMode ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
+        html += '<tr class="o-grp"><td colspan="' + (visibleCols(cfg).length + (L.selMode ? 1 : 0) + (openCol(cfg) ? 1 : 0)) + '">' + esc(k) + ' <span class="cnt">(' + groups[k].length + ')</span></td></tr>';
         groups[k].forEach(function (r) { html += rowHTML(cfg, r); });
       });
       body.innerHTML = html + listTableClose(cfg);
@@ -4854,6 +4854,7 @@
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.target !== el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
+    body.querySelectorAll(".o-open").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var r = L.all.filter(function (x) { return x.id === b.dataset.open; })[0]; if (r && cfg.onOpen) cfg.onOpen(r); }; });
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
     wireColResize(cfg); wireColDrag(cfg); qaWire(cfg);
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
@@ -4903,7 +4904,7 @@
   // sort/group/filter/edit which key by index). Never returns empty.
   function visibleCols(cfg) { var out = []; orderedCols(cfg).forEach(function (o) { if (!colHidden(o.c, o.i)) out.push({ c: o.c, i: o.i }); }); return out.length ? out : [{ c: cfg.columns[0], i: 0 }]; }
   function colgroupHTML(cfg) {
-    var w = L.cols.width || {}, cols = (L.selMode ? '<col style="width:34px">' : "");
+    var w = L.cols.width || {}, cols = (L.selMode ? '<col style="width:34px">' : "") + (openCol(cfg) ? '<col style="width:38px">' : "");
     cols += visibleCols(cfg).map(function (o) { var ww = w[colKey(o.c, o.i)]; return '<col' + (ww ? ' style="width:' + ww + 'px"' : "") + '>'; }).join("");
     return '<colgroup>' + cols + '</colgroup>';
   }
@@ -5084,6 +5085,8 @@
   // forty guests is forty lines and not forty forms. A list opts in with
   // cfg.newRow (the defaults, including what scopes the record to this company
   // or event) and, optionally, cfg.quickAddCheck to refuse a half-typed line.
+  // A list that edits in its cells gets a small button at the left of every row to open the record, since a tap on a cell now edits it.
+  function openCol(cfg) { return !!(cfg.onOpen && (cfg.editTable || cfg.table)); }
   function quickAddOn(cfg) { return !!(cfg.newRow && (cfg.editTable || cfg.table) && canManageApp(S.app) && L.view === "list"); }
   function quickAddEditor(col, ci, rec, first) {
     var e = col.edit, cur = rec[e.field];
@@ -5096,7 +5099,7 @@
   }
   function quickAddRowHTML(cfg) {
     var rec = cfg.newRow() || {}, first = true;
-    return '<tr class="o-qa">' + (L.selMode ? '<td class="o-selcol"></td>' : "") + visibleCols(cfg).map(function (o) {
+    return '<tr class="o-qa">' + (L.selMode ? '<td class="o-selcol"></td>' : "") + (openCol(cfg) ? '<td class="o-opencol"></td>' : "") + visibleCols(cfg).map(function (o) {
       var c = o.c, ci = o.i, cell = "";
       if (c.edit) { cell = quickAddEditor(c, ci, rec, first); first = false; }
       return '<td class="' + (c.num ? "num" : "") + '">' + cell + '</td>';
@@ -5151,7 +5154,7 @@
   }
   function listTableOpen(cfg) { ensureColStyle(); return '<table class="o-list">' + colgroupHTML(cfg) + '<thead>' + headRow(cfg) + '</thead><tbody>'; }
   function headRow(cfg) {
-    return '<tr>' + (L.selMode ? '<th class="o-selcol"><input type="checkbox" class="o-selall" title="Select all on this page"></th>' : "") + visibleCols(cfg).map(function (o) {
+    return '<tr>' + (L.selMode ? '<th class="o-selcol"><input type="checkbox" class="o-selall" title="Select all on this page"></th>' : "") + (openCol(cfg) ? '<th class="o-opencol"></th>' : "") + visibleCols(cfg).map(function (o) {
       var c = o.c, i = o.i;
       var srt = (L.sort && L.sort.i === i) ? ' <span class="o-th-sort">' + (L.sort.dir > 0 ? "↑" : "↓") + '</span>' : "";
       var on = (L.sort && L.sort.i === i) || (L.colGroup === i) || (L.colFilters[i] && Object.keys(L.colFilters[i]).length);
@@ -5189,7 +5192,7 @@
         e.preventDefault(); e.stopPropagation();
         var th = gr.closest("th"), ci = +gr.dataset.ci, pos = -1;
         for (var j = 0; j < vis.length; j++) { if (vis[j].i === ci) { pos = j; break; } }
-        var colEl = cg ? cg.children[(L.selMode ? 1 : 0) + pos] : null;
+        var colEl = cg ? cg.children[(L.selMode ? 1 : 0) + (openCol(cfg) ? 1 : 0) + pos] : null;
         var startX = e.clientX, startW = th.getBoundingClientRect().width, w = startW;
         gr.classList.add("drag"); document.body.style.cursor = "col-resize";
         function mm(ev) { w = Math.max(48, startW + (ev.clientX - startX)); if (colEl) colEl.style.width = w + "px"; th.style.width = w + "px"; }
@@ -5246,7 +5249,7 @@
     var clsAttr = (nest && nest.depth) ? ' class="o-nest-child"' : '';
     var extra = '';
     if (nest && nest.depth) { extra += ' data-parent="' + esc(nest.parent) + '"'; if (nest.hidden) extra += ' style="display:none"'; }
-    return '<tr data-id="' + r.id + '"' + clsAttr + extra + '>' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + visibleCols(cfg).map(function (o, vi) {
+    return '<tr data-id="' + r.id + '"' + clsAttr + extra + '>' + (L.selMode ? '<td class="o-selcol"><input type="checkbox" class="o-selrow" data-sid="' + r.id + '"' + (L.sel[r.id] ? " checked" : "") + '></td>' : "") + (openCol(cfg) ? '<td class="o-opencol"><button type="button" class="o-open" data-open="' + r.id + '" title="Open the record" aria-label="Open the record">&#8599;</button></td>' : "") + visibleCols(cfg).map(function (o, vi) {
       var c = o.c, ci = o.i, ed = et && c.edit && canManageApp(S.app);
       var lead = "";
       if (nest && vi === 0) {
