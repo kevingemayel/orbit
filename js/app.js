@@ -1097,7 +1097,7 @@
     { key: "more", title: "The other apps", articles: [
       { t: "Contacts, Calendar and Activity", h: "<p><b>Contacts</b> is your shared address book - customers, vendors and people - used everywhere you pick a party, so each is entered once. <b>Calendar</b> gathers the dates that matter (deadlines, follow-ups, events) in one place. <b>Activity</b> is a running feed of what has changed across an app, so you can catch up at a glance.</p>" },
       { t: "Sign, Recruitment and Knowledge", h: "<p><b>Knowledge</b> articles are documents: type a heading with #, a list with -, steps with 1., a callout with >, and put a screenshot in with the Me menu, Take a screenshot, then Insert in the editor. They read as a page with a contents list and print on A4. <b>Sign</b> collects signatures on a document (an approval, a delivery note). <b>Recruitment</b> tracks job openings and applicants through to hire. <b>Knowledge</b> is your internal wiki - method statements, how-tos and standards your team can search. Each is optional; open the ones you need and ignore the rest.</p>" },
-      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p><b>Concept &amp; Brief</b> is a board: titles, paragraphs, notes, instructions with a tick, links, pictures and documents, each a card you can widen, reorder or remove. Add a picture of the venue, the palette, the florist's link and the notes everyone must read.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
+      { t: "Events", h: "<p>The <b>Events</b> app runs event projects - conferences, launches, functions - with their own budget, tasks, zones, tickets and suppliers. If you deliver events it is a project workspace tuned for them; if you do not, you can hide it from the app grid.</p><p><b>Concept &amp; Brief</b> is a board: titles, paragraphs, notes, instructions with a tick, links, pictures and documents, each a card you can widen, reorder or remove. Add a picture of the venue, the palette, the florist's link and the notes everyone must read.</p><p>Inside an event, <b>Guests</b> is a list that works like Contacts: click any cell to change it, sort or filter by any column, pick which columns show, and drag a column edge to set its width. The last line of the table is where you type the next guest: fill it and press Enter. <b>Stages &amp; Priorities</b> is where an event renames its invitation stages and priority levels, adds its own, and says what each stage counts as, so the capacity bar stays right. On a phone the same list shows as cards, one guest each, and the box under them adds the next. Board and Pivot sit beside it for the same guests.</p>" },
       { t: "My Desk (your personal start page)", h: "<p>The home screen shows every app. <b>My Desk</b> shows <i>your day</i>.</p><p>Open it and you get, in one place: the <b>tasks assigned to you</b> across every project with their due dates, <b>what is coming up</b> in the calendar for the next two weeks, your <b>alerts</b> from the notification system, and <b>quick actions</b> to start a quotation, an invoice, a service ticket or open the register.</p><div class=\"man-cal note\"><b>Seeing &ldquo;link your user to an employee record&rdquo;?</b> Tasks are assigned to employees, so Orbit needs to know which employee you are. Open <b>People &rsaquo; Employees</b>, find yourself, and make sure your user account is linked to that record.</div>" },
       { t: "Point of Sale (the register)", h: "<p><b>Point of Sale</b> is a touch register for selling over a counter, rather than raising an invoice.</p><ol class=\"man-steps\"><li class=\"man-step\"><b>Open the register</b> and count the cash in the drawer to start a shift.</li><li class=\"man-step\">Tap products to build the cart. Pick a <b>customer</b> if you want the sale on their record and their loyalty points.</li><li class=\"man-step\">Press <b>Charge</b>, take cash, card or transfer, and Orbit works out the change.</li><li class=\"man-step\">At the end of the day <b>Close register</b> and count the drawer; Orbit shows the difference against what it expected.</li></ol><p>Retail extras: <b>Promotions</b> apply themselves to the cart (percent off, quantity tiers, or buy-X-get-Y), <b>vouchers</b> are redeemed by code at checkout, <b>loyalty points</b> are earned and can be spent, and a <b>price list</b> can override prices for a customer or a period. <b>Returns</b> refunds a past sale and reverses the points.</p><div class=\"man-cal tip\"><b>Prices come from the product.</b> If items ring up at 0.00 they have no sale price yet - set one on the product, or use <b>Company Profile &rsaquo; Default sales markup</b> to price everything from cost in one go.</div>" },
       { t: "Service (jobs, warranties and maintenance)", h: "<p>The <b>Service</b> app runs repair and maintenance work: a customer reports a problem, a technician fixes it, and you bill whatever the warranty does not cover.</p><ol class=\"man-steps\"><li class=\"man-step\">Raise a <b>ticket</b> with the customer, the item and its serial number. If a warranty covers that item Orbit flags it automatically.</li><li class=\"man-step\">Add the <b>parts and labour</b> used. Tick <i>covered</i> on anything the warranty pays for, so it is not billed.</li><li class=\"man-step\">Use <b>Bill to</b> to say who pays - the customer, or the manufacturer on a back-to-back RMA claim.</li><li class=\"man-step\">Record the <b>customer rating</b> when the job is done.</li></ol><p><b>Schedule</b> is a week grid of technicians against days: drag a job onto another person or another day to reschedule it. <b>Maintenance</b> holds recurring plans - set &ldquo;every 90 days&rdquo; and press <b>Generate due tickets</b> to raise them when they fall due.</p>" }
@@ -8969,7 +8969,99 @@
   var GUEST_STAGE = [["longlist", "Longlist"], ["shortlisted", "Shortlisted"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["maybe", "Maybe"], ["declined", "Declined"]];
   var GUEST_PRIO = [["A", "A"], ["B", "B"], ["C", "C"], ["D", "D"]];
   var RSVP_OPTS = [["pending", "Pending"], ["yes", "Yes"], ["no", "No"], ["maybe", "Maybe"]];
-  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["contracts", "Contracts"], ["team", "Team"]];
+  // ---- each event owns its invitation stages and its priorities ----
+  // The standard lists are the defaults. An event can rename them, reorder
+  // them and add its own. A stage carries what it counts as (not yet invited,
+  // invited, confirmed, declined), so the capacity bar and the badges keep
+  // their meaning whatever the words are. Keys never change; labels do.
+  var GUEST_STAGE_DEFAULT = [
+    { key: "longlist", label: "Longlist", counts: "none" }, { key: "shortlisted", label: "Shortlisted", counts: "none" },
+    { key: "invited", label: "Invited", counts: "invited" }, { key: "confirmed", label: "Confirmed", counts: "confirmed" },
+    { key: "maybe", label: "Maybe", counts: "none" }, { key: "declined", label: "Declined", counts: "declined" }
+  ];
+  var GUEST_PRIO_DEFAULT = [{ key: "A", label: "A", color: "#dc2626" }, { key: "B", label: "B", color: "#ea580c" }, { key: "C", label: "C", color: "#0891b2" }, { key: "D", label: "D", color: "#64748b" }];
+  function evCfg() { return (typeof EV !== "undefined" && EV && EV.event && EV.event.guest_config) || {}; }
+  function evStageDefs() { var s = evCfg().stages; return Array.isArray(s) && s.length ? s : GUEST_STAGE_DEFAULT; }
+  function evPrioDefs() { var p = evCfg().priorities; return Array.isArray(p) && p.length ? p : GUEST_PRIO_DEFAULT; }
+  function evStageList() { return evStageDefs().map(function (s) { return [s.key, s.label]; }); }
+  function evPrioList() { return evPrioDefs().map(function (p) { return [p.key, p.label]; }); }
+  function stageCounts(key) { var s = evStageDefs().filter(function (x) { return x.key === key; })[0]; return s ? (s.counts || "none") : "none"; }
+  function stageIsInvited(key) { var c = stageCounts(key); return c === "invited" || c === "confirmed"; }
+  function stageIsConfirmed(key) { return stageCounts(key) === "confirmed"; }
+  function prioBadge(key) {
+    if (!key) return "";
+    var p = evPrioDefs().filter(function (x) { return x.key === key; })[0], col = p && p.color, label = p ? p.label : key;
+    return '<span class="ev-prio p' + esc(key) + '"' + (col ? ' style="background:' + esc(col) + '"' : "") + ' title="' + esc(label) + '">' + esc(label) + '</span>';
+  }
+  async function evStagesSetup(host) {
+    var cfg = { stages: evStageDefs().map(function (s) { return Object.assign({}, s); }), priorities: evPrioDefs().map(function (p) { return Object.assign({}, p); }) };
+    var g = (await sb.from("event_guests").select("invite_stage,priority").eq("event_id", EV.eventId)).data || [];
+    var useS = {}, useP = {};
+    g.forEach(function (x) { if (x.invite_stage) useS[x.invite_stage] = (useS[x.invite_stage] || 0) + 1; if (x.priority) useP[x.priority] = (useP[x.priority] || 0) + 1; });
+    var COUNTS = [["none", "Not yet invited"], ["invited", "Invited"], ["confirmed", "Confirmed"], ["declined", "Declined"]];
+    function slug(s, taken) { var k = String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 24) || "stage", b = k, n = 2; while (taken.indexOf(k) >= 0) k = b + "_" + (n++); return k; }
+    function use(n) { return n ? '<span class="muted cfg-use">' + n + " guest" + (n > 1 ? "s" : "") + "</span>" : '<span class="cfg-use"></span>'; }
+    function tools(k, i) { return '<span class="cfg-tools"><button type="button" class="bd-t" data-a="up" data-k="' + k + '" data-i="' + i + '" title="Move up" aria-label="Move up">&#8593;</button><button type="button" class="bd-t" data-a="down" data-k="' + k + '" data-i="' + i + '" title="Move down" aria-label="Move down">&#8595;</button><button type="button" class="bd-t bd-x" data-a="del" data-k="' + k + '" data-i="' + i + '" title="Remove" aria-label="Remove">&times;</button></span>'; }
+    function paint() {
+      host.innerHTML = '<div class="ev-toolbar"><div class="sub">Every event has its own invitation stages and priority levels. Rename them, add your own, put them in the order you work in. The guest list, the board, the pivot and the capacity bar follow. A stage says what it counts as, so the numbers stay right whatever the words.</div></div>' +
+        '<div class="ev-cfg"><div class="card ev-cfg-card"><h3>Invitation stages</h3><div class="ev-cfg-head"><span>Name</span><span>Counts as</span><span></span><span></span></div>' +
+        cfg.stages.map(function (s, i) { return '<div class="ev-cfg-row"><input class="cfg-label" data-k="stages" data-i="' + i + '" value="' + esc(s.label) + '" placeholder="Stage name"><select class="cfg-counts" data-i="' + i + '">' + COUNTS.map(function (c) { return '<option value="' + c[0] + '"' + ((s.counts || "none") === c[0] ? " selected" : "") + '>' + c[1] + "</option>"; }).join("") + "</select>" + use(useS[s.key]) + tools("stages", i) + "</div>"; }).join("") +
+        '<button type="button" class="o-filtbtn cfg-add" data-add="stages">+ Add a stage</button></div>' +
+        '<div class="card ev-cfg-card"><h3>Priorities</h3><div class="ev-cfg-head"><span>Name</span><span>Colour</span><span></span><span></span></div>' +
+        cfg.priorities.map(function (p, i) { return '<div class="ev-cfg-row"><input class="cfg-label" data-k="priorities" data-i="' + i + '" value="' + esc(p.label) + '" placeholder="Priority"><input type="color" class="cfg-color" data-i="' + i + '" value="' + esc(p.color || "#64748b") + '" title="Colour" aria-label="Colour">' + use(useP[p.key]) + tools("priorities", i) + "</div>"; }).join("") +
+        '<button type="button" class="o-filtbtn cfg-add" data-add="priorities">+ Add a priority</button></div></div>' +
+        '<div class="ev-toolbar"><button class="pri" id="cfg-save">Save</button><button class="o-filtbtn" id="cfg-reset">Back to the standard lists</button><div class="sub" style="margin-left:6px">A stage or a priority still used by guests cannot be removed; move them first.</div></div>';
+      wire();
+    }
+    function read() {
+      host.querySelectorAll(".cfg-label").forEach(function (inp) { var it = cfg[inp.dataset.k][+inp.dataset.i]; if (it) it.label = inp.value.trim() || it.label; });
+      host.querySelectorAll(".cfg-counts").forEach(function (sel) { var it = cfg.stages[+sel.dataset.i]; if (it) it.counts = sel.value; });
+      host.querySelectorAll(".cfg-color").forEach(function (inp) { var it = cfg.priorities[+inp.dataset.i]; if (it) it.color = inp.value; });
+    }
+    function wire() {
+      host.querySelectorAll("[data-a]").forEach(function (b) {
+        b.onclick = function () {
+          read();
+          var list = cfg[b.dataset.k], i = +b.dataset.i, a = b.dataset.a;
+          if (a === "del") {
+            var n = b.dataset.k === "stages" ? useS[list[i].key] : useP[list[i].key];
+            if (n) { toast(n + " guest" + (n > 1 ? "s" : "") + " still use this. Move them first."); return; }
+            if (list.length <= 1) { toast("Keep at least one"); return; }
+            list.splice(i, 1);
+          } else if (a === "up" && i > 0) { var t = list[i - 1]; list[i - 1] = list[i]; list[i] = t; }
+          else if (a === "down" && i < list.length - 1) { var t2 = list[i + 1]; list[i + 1] = list[i]; list[i] = t2; }
+          else return;
+          paint();
+        };
+      });
+      host.querySelectorAll("[data-add]").forEach(function (b) {
+        b.onclick = function () {
+          read();
+          var k = b.dataset.add, taken = cfg[k].map(function (x) { return x.key; });
+          if (k === "stages") cfg.stages.push({ key: slug("stage " + (cfg.stages.length + 1), taken), label: "New stage", counts: "none" });
+          else cfg.priorities.push({ key: slug("p" + (cfg.priorities.length + 1), taken), label: "New", color: "#64748b" });
+          paint();
+          var inputs = host.querySelectorAll('.cfg-label[data-k="' + k + '"]'), last = inputs[inputs.length - 1]; if (last) { last.focus(); last.select(); }
+        };
+      });
+      document.getElementById("cfg-save").onclick = async function () {
+        read();
+        var r = await sb.from("event_events").update({ guest_config: cfg }).eq("id", EV.eventId);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        EV.event.guest_config = cfg; toast("Saved"); evOverviewStats(); paint();
+      };
+      document.getElementById("cfg-reset").onclick = async function () {
+        if (!confirm("Back to the standard stages and priorities? Guests keep their values.")) return;
+        var r = await sb.from("event_events").update({ guest_config: {} }).eq("id", EV.eventId);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        EV.event.guest_config = {};
+        cfg = { stages: GUEST_STAGE_DEFAULT.map(function (s) { return Object.assign({}, s); }), priorities: GUEST_PRIO_DEFAULT.map(function (p) { return Object.assign({}, p); }) };
+        toast("Standard lists"); paint();
+      };
+    }
+    paint();
+  }
+  var EV_SECTIONS = [["overview", "Overview"], ["concept", "Concept & Brief"], ["guests", "Guests"], ["stages", "Stages & Priorities"], ["seating", "Seating"], ["suppliers", "Suppliers"], ["budget", "Budget"], ["payments", "Payments"], ["procurement", "Procurement"], ["revenues", "Revenues"], ["tasks", "Tasks"], ["contracts", "Contracts"], ["team", "Team"]];
   var SUPPLIER_STATUS = [["to_contact", "To contact"], ["contacted", "Contacted"], ["quoted", "Quoted"], ["shortlisted", "Shortlisted"], ["booked", "Booked"], ["rejected", "Rejected"]];
   var PROC_STATUS = [["planned", "Planned"], ["ordered", "Ordered"], ["confirmed", "Confirmed"], ["delivered", "Delivered"]];
   var EV_TASK_STATUS = [["not_started", "Not started"], ["in_progress", "In progress"], ["done", "Done"], ["blocked", "Blocked"]];
@@ -9118,6 +9210,7 @@
     if (section === "overview") return evOverview(host);
     if (section === "concept") return evConcept(host);
     if (section === "guests") return evGuests(host);
+    if (section === "stages") return evStagesSetup(host);
     if (section === "seating") return evSeating(host);
     if (section === "budget") return evBudget(host);
     if (section === "payments") return evPayments(host);
@@ -9132,7 +9225,7 @@
   }
   async function evOverviewStats() {
     var g = (await sb.from("event_guests").select("invite_stage,plus_ones").eq("event_id", EV.eventId)).data || [];
-    var conf = g.filter(function (x) { return x.invite_stage === "confirmed"; }), inv = g.filter(function (x) { return ["invited", "confirmed"].indexOf(x.invite_stage) >= 0; });
+    var conf = g.filter(function (x) { return stageIsConfirmed(x.invite_stage); }), inv = g.filter(function (x) { return stageIsInvited(x.invite_stage); });
     var head = conf.reduce(function (a, x) { return a + 1 + (Number(x.plus_ones) || 0); }, 0);
     var bud = (await sb.from("event_budget_lines").select("estimated,actual").eq("event_id", EV.eventId)).data || [];
     var est = bud.reduce(function (a, x) { return a + (Number(x.estimated) || 0); }, 0), act = bud.reduce(function (a, x) { return a + (Number(x.actual) || 0); }, 0);
@@ -9148,7 +9241,7 @@
   async function evOverview(host) {
     var g = (await sb.from("event_guests").select("invite_stage,rsvp,plus_ones,priority").eq("event_id", EV.eventId)).data || [];
     function cnt(f) { return g.filter(f).length; }
-    var stageRows = GUEST_STAGE.map(function (s) { return '<div class="r"><span class="k">' + s[1] + '</span><b>' + cnt(function (x) { return x.invite_stage === s[0]; }) + '</b></div>'; }).join("");
+    var stageRows = evStageList().map(function (s) { return '<div class="r"><span class="k">' + s[1] + '</span><b>' + cnt(function (x) { return x.invite_stage === s[0]; }) + '</b></div>'; }).join("");
     var pay = (await sb.from("event_payments").select("amount,paid,due_date").eq("event_id", EV.eventId)).data || [];
     var due = pay.filter(function (p) { return !p.paid; }).reduce(function (a, p) { return a + (Number(p.amount) || 0); }, 0);
     var paid = pay.filter(function (p) { return p.paid; }).reduce(function (a, p) { return a + (Number(p.amount) || 0); }, 0);
@@ -9297,9 +9390,9 @@
     var tableName = {}; gTables.forEach(function (t) { tableName[t.id] = t.name; });
     function capHTML() {
       var target = EV.event.guest_target || 0;
-      var invited = rows.filter(function (r) { return ["invited", "confirmed"].indexOf(r.invite_stage) >= 0; }).length;
-      var confirmed = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).length;
-      var heads = rows.filter(function (r) { return r.invite_stage === "confirmed"; }).reduce(function (a, r) { return a + 1 + (Number(r.plus_ones) || 0); }, 0);
+      var invited = rows.filter(function (r) { return stageIsInvited(r.invite_stage); }).length;
+      var confirmed = rows.filter(function (r) { return stageIsConfirmed(r.invite_stage); }).length;
+      var heads = rows.filter(function (r) { return stageIsConfirmed(r.invite_stage); }).reduce(function (a, r) { return a + 1 + (Number(r.plus_ones) || 0); }, 0);
       var over = target && invited > target;
       var pct = target ? Math.min(100, Math.round(invited / target * 100)) : 0;
       return '<div class="ev-cap"><div class="ev-cap-bar"><div class="ev-cap-fill' + (over ? " over" : "") + '" style="width:' + pct + '%"></div></div>' +
@@ -9317,7 +9410,7 @@
     document.getElementById("g-import").onclick = function () { openGuestImport(); };
     document.getElementById("g-reglink").onclick = function () { openRegLinkModal(); };
     document.getElementById("g-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { EV._guestView = b.dataset.v; evGuests(host); }; });
-    evWireTools("g", function () { return { name: "guests", title: "Guests - " + EV.event.name, headers: ["Side", "First name", "Family name", "Category", "Priority", "Invite stage", "RSVP", "Plus ones", "Email", "Phone", "Table"], rows: rows.map(function (r) { return [r.side, r.first_name, r.family_name, r.category, r.priority, evLabel(GUEST_STAGE, r.invite_stage), evLabel(RSVP_OPTS, r.rsvp), r.plus_ones, r.email, r.phone, tableName[r.table_id] || ""]; }), printSel: "#g-body table" }; });
+    evWireTools("g", function () { return { name: "guests", title: "Guests - " + EV.event.name, headers: ["Side", "First name", "Family name", "Category", "Priority", "Invite stage", "RSVP", "Plus ones", "Email", "Phone", "Table"], rows: rows.map(function (r) { return [r.side, r.first_name, r.family_name, r.category, r.priority, evLabel(evStageList(), r.invite_stage), evLabel(RSVP_OPTS, r.rsvp), r.plus_ones, r.email, r.phone, tableName[r.table_id] || ""]; }), printSel: "#g-body table" }; });
     function cfgGuests(body) {
       var blank = [["", "-"]];
       function txt(f) { return function (r) { return esc(r[f] || ""); }; }
@@ -9331,8 +9424,8 @@
           { label: "Family name", edit: { field: "family_name", type: "text" }, get: function (r) { return '<b>' + esc(r.family_name || "") + '</b>' + (r.is_vip ? ' <span class="badge">VIP</span>' : ""); } },
           { label: "Side", edit: { field: "side", type: "text" }, get: txt("side") },
           { label: "Category", edit: { field: "category", type: "text" }, get: txt("category") },
-          { label: "Priority", edit: { field: "priority", type: "select", options: blank.concat(GUEST_PRIO) }, get: function (r) { return r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : ""; } },
-          { label: "Stage", edit: { field: "invite_stage", type: "select", options: GUEST_STAGE }, get: function (r) { return '<span class="badge ' + guestStageCls(r.invite_stage) + '">' + esc(evLabel(GUEST_STAGE, r.invite_stage || "longlist")) + '</span>'; } },
+          { label: "Priority", edit: { field: "priority", type: "select", options: blank.concat(evPrioList()) }, get: function (r) { return r.priority ? prioBadge(r.priority) : ""; } },
+          { label: "Stage", edit: { field: "invite_stage", type: "select", options: evStageList() }, get: function (r) { return '<span class="badge ' + guestStageCls(r.invite_stage) + '">' + esc(evLabel(evStageList(), r.invite_stage || evStageDefs()[0].key)) + '</span>'; } },
           { label: "RSVP", edit: { field: "rsvp", type: "select", options: RSVP_OPTS }, get: function (r) { var v = r.rsvp || "pending"; return v === "pending" ? '<span class="muted">Pending</span>' : esc(evLabel(RSVP_OPTS, v)); } },
           { label: "+1", num: true, edit: { field: "plus_ones", type: "number" }, get: function (r) { return Number(r.plus_ones) ? "+" + Number(r.plus_ones) : '<span class="muted">0</span>'; } },
           { label: "Table", edit: { field: "table_id", type: "select", options: function () { return blank.concat(gTables.map(function (t) { return [t.id, t.name]; })); } }, get: function (r) { return esc(tableName[r.table_id] || ""); } },
@@ -9344,10 +9437,10 @@
           { label: "Seat", hide: true, num: true, edit: { field: "seat_no", type: "number" }, get: function (r) { return r.seat_no == null ? "" : esc(String(r.seat_no)); } }
         ],
         filters: [
-          { label: "Confirmed", test: function (r) { return r.invite_stage === "confirmed"; } },
-          { label: "Invited, no answer yet", test: function (r) { return r.invite_stage === "invited" && (r.rsvp || "pending") === "pending"; } },
+          { label: "Confirmed", test: function (r) { return stageIsConfirmed(r.invite_stage); } },
+          { label: "Invited, no answer yet", test: function (r) { return stageCounts(r.invite_stage) === "invited" && (r.rsvp || "pending") === "pending"; } },
           { label: "Said yes", test: function (r) { return r.rsvp === "yes"; } },
-          { label: "Declined", test: function (r) { return r.invite_stage === "declined" || r.rsvp === "no"; } },
+          { label: "Declined", test: function (r) { return stageCounts(r.invite_stage) === "declined" || r.rsvp === "no"; } },
           { label: "VIP", test: function (r) { return !!r.is_vip; } },
           { label: "Not seated", test: function (r) { return !r.table_id; } },
           { label: "Bringing someone", test: function (r) { return Number(r.plus_ones) > 0; } },
@@ -9357,11 +9450,11 @@
           { label: "Side", get: function (r) { return r.side || "None"; } },
           { label: "Category", get: function (r) { return r.category || "None"; } },
           { label: "Priority", get: function (r) { return r.priority || "None"; } },
-          { label: "Stage", get: function (r) { return evLabel(GUEST_STAGE, r.invite_stage || "longlist"); } },
+          { label: "Stage", get: function (r) { return evLabel(evStageList(), r.invite_stage || evStageDefs()[0].key); } },
           { label: "RSVP", get: function (r) { return evLabel(RSVP_OPTS, r.rsvp || "pending"); } },
           { label: "Table", get: function (r) { return tableName[r.table_id] || "Not seated"; } }
         ],
-        newRow: function () { return { event_id: EV.eventId, org_id: EV.event.org_id, invite_stage: "longlist", rsvp: "pending", plus_ones: 0, source: "internal" }; },
+        newRow: function () { return { event_id: EV.eventId, org_id: EV.event.org_id, invite_stage: evStageDefs()[0].key, rsvp: "pending", plus_ones: 0, source: "internal" }; },
         quickAddCheck: function (r) { return (r.first_name || r.family_name) ? "" : "Every guest needs a name"; },
         emptyHint: "Add your first guest, or import a list. Every guest gets a personal link to confirm.",
         onOpen: function (r) { openGuestModal(r); }, onNew: function () { openGuestModal(null); },
@@ -9374,21 +9467,21 @@
       if (isTable) return renderList(cfgGuests(body));
       var shown = rows.filter(function (r) { return !q || ((r.first_name || "") + " " + (r.family_name || "") + " " + (r.category || "") + " " + (r.side || "")).toLowerCase().indexOf(q) >= 0; });
       if (view === "pivot") return evGuestPivot(body, shown);
-      evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: GUEST_STAGE }, { label: "Priority", field: "priority", options: GUEST_PRIO }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openGuestModal(s); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
+      evBoard(body, { rows: shown, table: "event_guests", groups: [{ label: "Invite stage", field: "invite_stage", options: evStageList() }, { label: "Priority", field: "priority", options: evPrioList() }, { label: "Side", field: "side" }, { label: "RSVP", field: "rsvp", options: RSVP_OPTS }], stateKey: "guests", onOpen: function (r) { openGuestModal(r); }, onAdd: function (f, v) { var s = {}; s[f] = v; openGuestModal(s); }, refresh: function () { evGuests(host); }, cardHTML: guestCardHTML });
     }
     var qEl = document.getElementById("g-q"); if (qEl) qEl.addEventListener("input", function () { q = this.value.toLowerCase(); paint(); });
     paint();
   }
-  function guestStageCls(s) { return s === "confirmed" ? "paid" : s === "invited" ? "partial" : s === "declined" ? "unpaid" : "draft"; }
+  function guestStageCls(s) { var c = stageCounts(s); return c === "confirmed" ? "paid" : c === "invited" ? "partial" : c === "declined" ? "unpaid" : "draft"; }
   function guestCardHTML(r) {
     return '<div class="t">' + esc(((r.first_name || "") + " " + (r.family_name || "")).trim() || "Guest") + (r.is_vip ? ' <span class="badge">VIP</span>' : "") + '</div>' +
       '<div class="muted">' + esc(r.category || r.side || "") + '</div>' +
-      '<div class="r">' + (r.priority ? '<span class="ev-prio p' + esc(r.priority) + '">' + esc(r.priority) + '</span>' : "<span></span>") + '<span>' + (r.plus_ones ? "+" + r.plus_ones : "") + ' ' + (r.rsvp && r.rsvp !== "pending" ? esc(evLabel(RSVP_OPTS, r.rsvp)) : "") + '</span></div>';
+      '<div class="r">' + (r.priority ? prioBadge(r.priority) : "<span></span>") + '<span>' + (r.plus_ones ? "+" + r.plus_ones : "") + ' ' + (r.rsvp && r.rsvp !== "pending" ? esc(evLabel(RSVP_OPTS, r.rsvp)) : "") + '</span></div>';
   }
   function evGuestPivot(body, rows) {
     var DIMS = [["side", "Side"], ["category", "Category"], ["priority", "Priority"], ["invite_stage", "Invite stage"], ["rsvp", "RSVP"]];
     var rby = EV._pivR || "category", cby = EV._pivC || "invite_stage";
-    function labelOf(field, val) { if (!val) return "-"; if (field === "invite_stage") return evLabel(GUEST_STAGE, val); if (field === "rsvp") return evLabel(RSVP_OPTS, val); return String(val); }
+    function labelOf(field, val) { if (!val) return "-"; if (field === "invite_stage") return evLabel(evStageList(), val); if (field === "rsvp") return evLabel(RSVP_OPTS, val); return String(val); }
     var rowKeys = [], colKeys = [], seenR = {}, seenC = {}, cells = {}, rowTot = {}, colTot = {}, grand = 0;
     rows.forEach(function (r) {
       var rk = r[rby] || "", ck = r[cby] || "";
@@ -9414,7 +9507,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (isNew ? "Add guest" : "Edit guest") + '</h3><div class="form u-formpad">' +
       '<div class="row2"><div><label>First name</label><input id="gm-first" value="' + esc(g.first_name || "") + '"></div><div><label>Family name</label><input id="gm-fam" value="' + esc(g.family_name || "") + '"></div></div>' +
       '<div class="row2"><div><label>Side</label>' + sug("gm-side", g.side, "guest_side", "e.g. Bride / Groom") + '</div><div><label>Category</label>' + sug("gm-cat", g.category, "guest_cat", "e.g. Family") + '</div></div>' +
-      '<div class="row2"><div><label>Priority</label><select id="gm-prio"><option value="">-</option>' + osel(GUEST_PRIO, g.priority) + '</select></div><div><label>Invite stage</label><select id="gm-stage">' + osel(GUEST_STAGE, g.invite_stage || "longlist") + '</select></div></div>' +
+      '<div class="row2"><div><label>Priority</label><select id="gm-prio"><option value="">-</option>' + osel(evPrioList(), g.priority) + '</select></div><div><label>Invite stage</label><select id="gm-stage">' + osel(evStageList(), g.invite_stage || evStageDefs()[0].key) + '</select></div></div>' +
       '<div class="row2"><div><label>RSVP</label><select id="gm-rsvp">' + osel(RSVP_OPTS, g.rsvp || "pending") + '</select></div><div><label>Plus ones</label><input id="gm-plus" type="number" min="0" value="' + (g.plus_ones || 0) + '"></div></div>' +
       '<div class="row2"><div><label>Email</label><input id="gm-email" value="' + esc(g.email || "") + '"></div><div><label>Phone</label><input id="gm-phone" value="' + esc(g.phone || "") + '"></div></div>' +
       '<div class="row2"><div><label>Dietary / notes</label><input id="gm-diet" value="' + esc(g.dietary || "") + '"></div><div><label style="display:flex;align-items:center;gap:8px;margin-top:22px"><input type="checkbox" id="gm-vip"' + (g.is_vip ? " checked" : "") + '> VIP</label></div></div>' +
@@ -9444,10 +9537,10 @@
     document.getElementById("gi-save").onclick = async function () {
       var lines = (document.getElementById("gi-txt").value || "").split(/\r?\n/).map(function (l) { return l.trim(); }).filter(Boolean);
       if (!lines.length) { m.remove(); return; }
-      var stageKeys = GUEST_STAGE.map(function (s) { return s[0]; });
+      var stageKeys = evStageList().map(function (s) { return s[0]; });
       var rows = lines.map(function (l) {
         var c = l.split(/\t|,/).map(function (x) { return x.trim(); });
-        var stage = (c[5] || "longlist").toLowerCase().replace(/\s+/g, ""); if (stageKeys.indexOf(stage) < 0) stage = "longlist";
+        var stage = (c[5] || evStageDefs()[0].key).toLowerCase().replace(/\s+/g, ""); if (stageKeys.indexOf(stage) < 0) stage = evStageDefs()[0].key;
         return { event_id: EV.eventId, org_id: EV.event.org_id, side: c[0] || null, priority: (c[1] || "").toUpperCase().slice(0, 1) || null, category: c[2] || null, first_name: c[3] || null, family_name: c[4] || null, invite_stage: stage };
       });
       var r = await sb.from("event_guests").insert(rows); if (r.error) { toast(errMsg(r.error)); return; }

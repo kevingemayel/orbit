@@ -2683,3 +2683,17 @@ body{background:transparent}
 .o-open{width:26px;height:26px;border:1px solid var(--glass-line);border-radius:var(--r-pill);background:var(--glass-strong);color:var(--ink3);cursor:pointer;font:inherit;font-size:13px;line-height:1;display:inline-grid;place-items:center;box-shadow:inset 0 1px 0 var(--glass-hi)}
 .o-open:hover{color:var(--accent);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
 @media(pointer:coarse){.o-open{width:34px;height:34px}}
+/* ===== event: stages and priorities of its own ===== */
+.ev-cfg{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:12px 0 4px}
+.ev-cfg-card{padding:14px 16px 12px}
+.ev-cfg-card h3{margin:0 0 8px;font-size:15px}
+.ev-cfg-head,.ev-cfg-row{display:grid;grid-template-columns:1fr 150px 70px auto;gap:8px;align-items:center}
+.ev-cfg-head{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink3);font-weight:700;padding:0 0 4px}
+.ev-cfg-row{padding:6px 0;border-top:1px dashed var(--line)}
+.ev-cfg-row .cfg-label,.ev-cfg-row .cfg-counts{width:100%;min-width:0;padding:7px 9px}
+.ev-cfg-row .cfg-color{width:44px;height:32px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel)}
+.cfg-use{font-size:11.5px;white-space:nowrap}
+.cfg-tools{display:flex;gap:2px}
+.cfg-add{margin-top:10px}
+.ev-prio{width:auto;min-width:22px;padding:0 6px}
+@media(max-width:760px){.ev-cfg{grid-template-columns:1fr}.ev-cfg-head,.ev-cfg-row{grid-template-columns:1fr 120px auto auto}.cfg-use{display:none}}
