@@ -2697,3 +2697,22 @@ body{background:transparent}
 .cfg-add{margin-top:10px}
 .ev-prio{width:auto;min-width:22px;padding:0 6px}
 @media(max-width:760px){.ev-cfg{grid-template-columns:1fr}.ev-cfg-head,.ev-cfg-row{grid-template-columns:1fr 120px auto auto}.cfg-use{display:none}}
+
+/* ===== the journal voucher ===== */
+.je-wrap{overflow-x:auto;margin-top:10px;-webkit-overflow-scrolling:touch}
+.je-grid{min-width:1080px}
+.je-grid th:nth-child(1){width:22%}.je-grid th:nth-child(2){width:15%}.je-grid th:nth-child(4){width:84px}.je-grid th:nth-child(5){width:210px}
+.je-grid th:nth-child(6),.je-grid th:nth-child(7){width:118px}.je-grid th:nth-child(8){width:110px}.je-grid th:nth-child(9){width:34px}
+.je-grid td{padding:4px 5px;vertical-align:middle}
+.je-grid tbody tr:hover{background:transparent}
+.je-grid .je-in{width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px}
+.je-grid .je-in:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring,0 0 0 3px var(--accent-soft))}
+.je-grid .je-in:disabled{background:transparent;border-color:transparent;color:var(--ink)}
+.je-rate{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink2);white-space:nowrap}
+.je-rate .je-in{width:96px;flex:none}
+.je-flip{border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);cursor:pointer;padding:3px 6px;color:var(--ink2);font-size:12px;line-height:1}
+.je-flip:hover{color:var(--accent);border-color:var(--accent)}
+.je-base{font-size:12px;white-space:nowrap}
+.je-addline{margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit}
+.je-hint{font-size:12px;margin-left:10px}
+.je-tot{margin:12px 0 16px;font-size:14px;text-align:right;font-variant-numeric:tabular-nums}

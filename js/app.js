@@ -610,7 +610,56 @@
   // often the only feedback that a save worked.
   function toast(msg) { var t = document.createElement("div"); t.className = "toast"; t.setAttribute("role", "status"); t.setAttribute("aria-live", "polite"); t.textContent = msg; document.body.appendChild(t); requestAnimationFrame(function () { t.classList.add("on"); }); setTimeout(function () { t.classList.remove("on"); setTimeout(function () { t.remove(); }, 250); }, 2400); }
   // ORB-16: turn raw database / API errors into plain language for toasts
+  // An error that says "a required field is missing" without saying which one
+  // leaves the person guessing. The database always names the column, the
+  // value and the table; this turns those into the words on the screen.
+  var ERR_FIELDS = {
+    account_id: "Account", partner_id: "Contact", journal_id: "Journal", product_id: "Item", currency_code: "Currency",
+    invoice_date: "Date", date: "Date", due_date: "Due date", name: "Name", code: "Code", entry_id: "Journal entry",
+    invoice_id: "Bill or invoice", tax_id: "Tax", uom_id: "Unit", amount_currency: "Amount in currency", debit: "Debit",
+    credit: "Credit", quantity: "Quantity", price_unit: "Unit price", move_type: "Document type", number: "Number",
+    email: "Email", book_id: "Book", employee_id: "Employee", project_id: "Project", warehouse_id: "Warehouse",
+    location_id: "Location", label: "Description", rate: "Rate", amount: "Amount", company_id: "Company"
+  };
+  var ERR_TABLES = {
+    invoices: "bill or invoice", invoice_lines: "line", journal_entries: "journal entry", journal_lines: "journal line",
+    partners: "contact", products: "item", payments: "payment", accounts: "account", journals: "journal",
+    purchase_orders: "purchase order", purchase_order_lines: "order line", sale_orders: "sales order",
+    hr_employees: "employee", projects: "project", stock_moves: "stock move", companies: "company"
+  };
+  function errField(col) { return ERR_FIELDS[col] || humanizeField(col); }
   function errMsg(e) {
+    var m = (e && (e.message || e.msg)) || (typeof e === "string" ? e : "") || "Something went wrong.";
+    var det = String((e && (e.details || e.hint)) || ""), code = e && e.code, x;
+    // our own raises are written for people already
+    if (code === "P0001" && !/^not allowed$/i.test(m)) return m.charAt(0).toUpperCase() + m.slice(1);
+    if ((x = String(m).match(/null value in column "([a-z0-9_]+)"(?: of relation "([a-z0-9_]+)")?/i))) {
+      if (x[1] === "account_id" && /journal_lines|invoice_lines/.test(x[2] || "")) return "Orbit could not find an account to post this to. Choose an account on every line, or set the company's accounts in Settings, Companies.";
+      if (x[1] === "company_id") return "Orbit lost track of which company you are in. Reload the page and try again.";
+      return "Fill in " + errField(x[1]) + (ERR_TABLES[x[2]] ? " on the " + ERR_TABLES[x[2]] : "") + ". It is required.";
+    }
+    if (/duplicate key|unique constraint/i.test(m) && (x = det.match(/Key \(([^)]+)\)=\(([^)]*)\)/))) {
+      var cols = x[1].split(/,\s*/), vals = x[2].split(/,\s*/), shown = [];
+      cols.forEach(function (c, i) { if (c !== "company_id" && c !== "org_id" && !/_id$/.test(c)) shown.push(errField(c) + " " + (vals[i] || "")); });
+      return shown.length ? "A record with " + shown.join(" and ") + " already exists. Use a different one." : "That already exists.";
+    }
+    if ((x = String(m).match(/insert or update on table "([a-z0-9_]+)" violates foreign key/i)) && (x = det.match(/Key \(([a-z0-9_]+)\)=/) || x)) {
+      return "The " + errField(x[1] || "") + " chosen no longer exists. Pick it again.";
+    }
+    if ((x = String(m).match(/update or delete on table "([a-z0-9_]+)" violates foreign key constraint "[^"]+" on table "([a-z0-9_]+)"/i))) {
+      return "This " + (ERR_TABLES[x[1]] || "record") + " is used by a " + (ERR_TABLES[x[2]] || humanizeField(x[2]).toLowerCase()) + ", so it cannot be removed. Archive it instead.";
+    }
+    if ((x = String(m).match(/violates check constraint "([a-z0-9_]+)"/i))) {
+      var cn = x[1].replace(/_check$/, "").replace(/^[a-z]+_/, "");
+      return "The value for " + errField(cn) + " is not allowed here.";
+    }
+    if ((x = String(m).match(/invalid input syntax for type (numeric|integer|bigint|double precision|real): "([^"]*)"/i))) return "A number was expected but \"" + x[2] + "\" was entered.";
+    if ((x = String(m).match(/invalid input syntax for type date: "([^"]*)"/i))) return "A date was expected but \"" + x[1] + "\" was entered.";
+    if (/invalid input syntax for type uuid/i.test(m)) return "One of the choices is empty or invalid. Pick it again from the list.";
+    if ((x = String(m).match(/value too long for type character varying\((\d+)\)/i))) return "One of the texts is longer than " + x[1] + " characters.";
+    return errMsgBasic(e);
+  }
+  function errMsgBasic(e) {
     var m = (e && (e.message || e.msg)) || (typeof e === "string" ? e : "") || "Something went wrong.";
     var s = String(m).toLowerCase();
     if (/posted invoice|locked|greater than zero|non-zero/.test(s)) return m;            // our own friendly raises
@@ -5584,10 +5633,10 @@
       // The list obeys the selected book, so it never shows entries that the
       // reports on the same book are excluding.
       fetch: function () { return bookFilter(sb.from("journal_entries").select("*, journals(code,name), books(name,code,is_primary)").eq("company_id", S.company.id), "book_id").order("date", { ascending: false }).then(function (r) { return r.data || []; }); },
-      searchText: function (m) { return (m.number || "") + " " + (m.ref || "") + " " + (m.narration || ""); },
+      searchText: function (m) { return (m.entry_number || m.number || "") + " " + (m.ref || "") + " " + (m.narration || ""); },
       columns: [
         { label: "Date", get: function (m) { return '<span class="muted">' + esc(m.date || "") + '</span>'; } },
-        { label: "Number", get: function (m) { return '<b>' + esc(m.number || m.ref || "/") + '</b>'; } },
+        { label: "Number", get: function (m) { return '<b>' + esc(m.entry_number || m.number || m.ref || "/") + '</b>'; } },
         { label: "Journal", get: function (m) { return esc(m.journals ? m.journals.name : ""); } }
       ].concat(S.books && S.books.length > 1 ? [
         // A non-primary book is badged, so an entry that will not appear on the
@@ -5604,79 +5653,239 @@
       onNew: canManageApp("accounting") ? function () { renderJournalEntryForm("new"); } : null
     };
   }
-  async function renderJournalEntryForm(id) {
+  // ---- the journal voucher ----
+  // A line is the account, its auxiliary when it has them, the description,
+  // the currency, the rate when that currency is not the company's, and the
+  // amount in that currency. The ledger keeps the company-currency figure,
+  // the currency amount and the rate, so a foreign line reads back exactly as
+  // it was typed and can be revalued later. The voucher is numbered when it
+  // is saved, and the scanned invoice or receipt behind it is attached to it.
+  async function renderJournalEntryForm(id, copyFrom) {
+    mediaClearStage();
     var parent = { action: "moves", title: "Journal Entries" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
-    var accts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var base = S.company.currency_code || "USD";
+    var accts = (await sb.from("accounts").select("id,code,name,currency_code,parent_account_id,is_active").eq("company_id", S.company.id).order("code")).data || [];
     var jrns = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
+    var ccyRows = (await sb.from("currencies").select("code").eq("org_id", S.company.org_id).order("code")).data || [];
     var genJ = jrns.filter(function (j) { return j.code === "MISC" || j.code === "GEN"; })[0] || jrns[0];
-    var ent = id === "new" ? { date: today(), state: "draft", journal_id: genJ ? genJ.id : null } : (await sb.from("journal_entries").select("*").eq("id", id).maybeSingle()).data || {};
-    var lines = id === "new" ? [{}, {}] : ((await sb.from("journal_lines").select("*").eq("entry_id", id).order("id")).data || []);
-    if (!lines.length) lines = [{}, {}];
-    var posted = ent.state === "posted";
-    bcTitle(id === "new" ? "New" : (ent.number || ent.ref || "Entry"));
-    function acctOpts(cur) { return '<option value="">Account...</option>' + accts.map(function (a) { return '<option value="' + a.id + '"' + (cur === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>'; }).join(""); }
-    function totals() { var d = 0, c = 0; lines.forEach(function (l) { d += Number(l.debit) || 0; c += Number(l.credit) || 0; }); return { d: d, c: c, bal: Math.abs(d - c) < 0.005 && (d > 0 || c > 0) }; }
-    function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> &nbsp; ' + (t.bal ? '<span style="color:var(--good-t);font-weight:700">Balanced</span>' : '<span style="color:var(--bad-t);font-weight:700">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
-    function paint() {
-      document.getElementById("je-grid").innerHTML = lines.map(function (l, i) {
-        return '<tr>' +
-          '<td><select data-i="' + i + '" data-f="account_id"' + (posted ? " disabled" : "") + '>' + acctOpts(l.account_id) + '</select></td>' +
-          '<td><input data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Description"' + (posted ? " disabled" : "") + '></td>' +
-          '<td><input data-i="' + i + '" data-f="debit" type="number" step="0.01" class="u-r" value="' + (l.debit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
-          '<td><input data-i="' + i + '" data-f="credit" type="number" step="0.01" class="u-r" value="' + (l.credit || "") + '"' + (posted ? " disabled" : "") + '></td>' +
-          '<td class="u-c">' + (posted ? "" : '<button data-del="' + i + '" class="u-xbtn">&times;</button>') + '</td></tr>';
-      }).join("");
+    var byId = {}, kids = {};
+    function isAux(a) { return !!(a && a.parent_account_id && String(a.code).indexOf(".") > 0); }
+    accts.forEach(function (a) { byId[a.id] = a; });
+    accts.forEach(function (a) { if (isAux(a) && a.is_active !== false) (kids[a.parent_account_id] = kids[a.parent_account_id] || []).push(a); });
+    var mains = accts.filter(function (a) { return !isAux(a) && a.is_active !== false; });
+    var ccys = [base];
+    ccyRows.forEach(function (c) { if (c.code && ccys.indexOf(c.code) < 0) ccys.push(c.code); });
+    accts.forEach(function (a) { if (a.currency_code && ccys.indexOf(a.currency_code) < 0) ccys.push(a.currency_code); });
+
+    var ent, raw = [];
+    if (copyFrom) {
+      var cp = (await sb.from("journal_entries").select("*").eq("id", copyFrom).maybeSingle()).data || {};
+      ent = { date: today(), state: "draft", journal_id: cp.journal_id || (genJ ? genJ.id : null), book_id: cp.book_id || null, narration: cp.narration || "", ref: "" };
+      raw = (await sb.from("journal_lines").select("*").eq("entry_id", copyFrom).order("created_at")).data || [];
+      id = "new";
+    } else if (id === "new") {
+      ent = { date: today(), state: "draft", journal_id: genJ ? genJ.id : null };
+    } else {
+      ent = (await sb.from("journal_entries").select("*").eq("id", id).maybeSingle()).data || {};
+      raw = (await sb.from("journal_lines").select("*").eq("entry_id", id).order("created_at")).data || [];
+    }
+    var posted = ent.state === "posted", dis = posted ? " disabled" : "";
+    bcTitle(id === "new" ? "New voucher" : (ent.entry_number || ent.ref || "Voucher"));
+
+    function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+    var lines = raw.map(function (l) {
+      var a = byId[l.account_id], main = isAux(a) ? byId[a.parent_account_id] : a;
+      var ccy = l.currency_code || base, foreign = ccy !== base, fc = Number(l.amount_currency) || 0, bs = (Number(l.debit) || 0) - (Number(l.credit) || 0);
+      var rate = foreign ? (Number(l.fx_rate) || (fc ? Math.abs(bs / fc) : 0)) : 1;
+      return {
+        acct: main ? main.id : "", aux: isAux(a) ? a.id : "", label: l.label || "", ccy: ccy, rate: rate, inv: foreign && rate > 0 && rate < 1,
+        dr: foreign ? (fc > 0 ? fc : "") : (Number(l.debit) || ""), cr: foreign ? (fc < 0 ? -fc : "") : (Number(l.credit) || "")
+      };
+    });
+    while (lines.length < 2) lines.push({ acct: "", aux: "", label: "", ccy: base, rate: 1, inv: false, dr: "", cr: "" });
+
+    function baseOf(l) { var f = l.ccy === base ? 1 : (Number(l.rate) || 0); return { d: r2((Number(l.dr) || 0) * f), c: r2((Number(l.cr) || 0) * f) }; }
+    function totals() { var d = 0, c = 0; lines.forEach(function (l) { var b = baseOf(l); d += b.d; c += b.c; }); d = r2(d); c = r2(c); return { d: d, c: c, bal: Math.abs(d - c) < 0.005 && d > 0 }; }
+    function totHTML() { var t = totals(); return 'Debit <b>' + money(t.d) + '</b> &nbsp; Credit <b>' + money(t.c) + '</b> ' + esc(base) + ' &nbsp; ' + (t.bal ? '<span class="u-good u-b">Balanced</span>' : '<span class="u-bad u-b">Off by ' + money(Math.abs(t.d - t.c)) + '</span>'); }
+    function acctLabel(a) { return a ? a.code + " " + a.name : ""; }
+    function resolveAcct(v) {
+      v = String(v || "").trim(); if (!v) return null;
+      var hit = accts.filter(function (a) { return acctLabel(a) === v; })[0]; if (hit) return hit;
+      var tok = v.split(/\s+/)[0];
+      hit = accts.filter(function (a) { return a.code === tok; })[0]; if (hit) return hit;
+      var lv = v.toLowerCase();
+      return mains.filter(function (a) { return a.name.toLowerCase() === lv; })[0] || null;
+    }
+    var rateCache = {};
+    async function rateOf(ccy) {
+      var date = gv("je-date") || today(), k = ccy + "|" + date;
+      if (rateCache[k] != null) return rateCache[k];
+      var r = await sb.rpc("fx_convert", { p_org: S.company.org_id, p_amount: 1, p_from: ccy, p_to: base, p_date: date, p_type: "spot" });
+      if (r.error || !(Number(r.data) > 0)) { toast("There is no " + ccy + " rate for " + date + " in Accounting, Exchange Rates. Type the rate on the line."); rateCache[k] = 0; return 0; }
+      rateCache[k] = Number(r.data); return rateCache[k];
+    }
+    async function setCcy(l, ccy) {
+      l.ccy = ccy;
+      if (ccy === base) { l.rate = 1; l.inv = false; return; }
+      var r = await rateOf(ccy); l.rate = r; l.inv = r ? r < 1 : true;
+    }
+    function rateShown(l) { var r = Number(l.rate) || 0; if (!r) return ""; return l.inv ? +(1 / r).toFixed(4) : +r.toFixed(6); }
+    function rowHTML(l, i) {
+      var ks = l.acct ? (kids[l.acct] || []) : [], foreign = l.ccy !== base, b = baseOf(l);
+      return '<tr data-row="' + i + '">' +
+        '<td><input class="je-in je-acct" list="je-accts" data-i="' + i + '" value="' + esc(acctLabel(byId[l.acct])) + '" placeholder="Code or name" autocomplete="off"' + dis + '></td>' +
+        '<td><select class="je-in" data-i="' + i + '" data-f="aux"' + (ks.length && !posted ? "" : " disabled") + '>' +
+          (ks.length ? '<option value="">None</option>' + ks.map(function (k) { return '<option value="' + k.id + '"' + (l.aux === k.id ? " selected" : "") + '>' + esc(k.code.split(".").pop() + " " + k.name) + '</option>'; }).join("") : '<option value="">' + (l.acct ? "None" : "") + '</option>') +
+        '</select></td>' +
+        '<td><input class="je-in" data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Description"' + dis + '></td>' +
+        '<td><select class="je-in" data-i="' + i + '" data-f="ccy"' + dis + '>' + ccys.map(function (c) { return '<option' + (l.ccy === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") + '</select></td>' +
+        '<td>' + (foreign
+          ? '<div class="je-rate"><span>1 ' + esc(l.inv ? base : l.ccy) + ' =</span><input class="je-in" type="number" step="any" min="0" data-i="' + i + '" data-f="rate" value="' + rateShown(l) + '"' + dis + '><span>' + esc(l.inv ? l.ccy : base) + '</span>' +
+            (posted ? '' : '<button type="button" class="je-flip" data-flip="' + i + '" title="Type the rate the other way round" aria-label="Type the rate the other way round">&#8646;</button>') + '</div>'
+          : '<span class="muted">1</span>') + '</td>' +
+        '<td><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="dr" value="' + (l.dr === "" || l.dr == null ? "" : l.dr) + '"' + dis + '></td>' +
+        '<td><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="cr" value="' + (l.cr === "" || l.cr == null ? "" : l.cr) + '"' + dis + '></td>' +
+        '<td class="num muted je-base" id="je-base-' + i + '">' + (foreign && (b.d || b.c) ? money(b.d || b.c) : "") + '</td>' +
+        '<td class="u-c">' + (posted ? "" : '<button type="button" data-del="' + i + '" class="u-xbtn" aria-label="Remove line">&times;</button>') + '</td></tr>';
+    }
+    function focusCell(row, f) {
+      var el = f === "acct" ? document.querySelector('#je-grid .je-acct[data-i="' + row + '"]') : document.querySelector('#je-grid [data-i="' + row + '"][data-f="' + f + '"]');
+      if (el && !el.disabled) { el.focus(); try { if (el.select) el.select(); } catch (x) { } }
+    }
+    function refreshRow(i) {
+      var l = lines[i], b = baseOf(l), cell = document.getElementById("je-base-" + i);
+      if (cell) cell.textContent = l.ccy !== base && (b.d || b.c) ? money(b.d || b.c) : "";
       document.getElementById("je-tot").innerHTML = totHTML();
-      document.querySelectorAll("#je-grid [data-i]").forEach(function (el) {
-        el.oninput = el.onchange = function () { lines[+el.dataset.i][el.dataset.f] = el.value; document.getElementById("je-tot").innerHTML = totHTML(); };
+    }
+    function addLine() {
+      var prev = lines[lines.length - 1] || {}, t = totals(), diff = r2(t.d - t.c);
+      var nl = { acct: "", aux: "", label: prev.label || gv("je-narr") || "", ccy: base, rate: 1, inv: false, dr: "", cr: "" };
+      // the new line offers what balances the voucher, in the company currency
+      if (diff > 0) nl.cr = diff; else if (diff < 0) nl.dr = -diff;
+      lines.push(nl); paint({ row: lines.length - 1, f: "acct" });
+    }
+    function paint(focus) {
+      var grid = document.getElementById("je-grid");
+      grid.innerHTML = lines.map(rowHTML).join("");
+      document.getElementById("je-tot").innerHTML = totHTML();
+      function enterKey(el, i) {
+        el.addEventListener("keydown", function (e) {
+          if (e.key !== "Enter" || posted) return;
+          e.preventDefault();
+          if (i === lines.length - 1) addLine(); else focusCell(i + 1, "acct");
+        });
+      }
+      grid.querySelectorAll(".je-acct").forEach(function (inp) {
+        var i = +inp.dataset.i;
+        inp.onchange = async function () {
+          var l = lines[i], a = resolveAcct(inp.value);
+          if (!a) { if (inp.value.trim()) toast("No account has the code or name " + inp.value.trim() + "."); l.acct = ""; l.aux = ""; paint({ row: i, f: "acct" }); return; }
+          __dirty = true;
+          if (isAux(a)) { l.acct = a.parent_account_id; l.aux = a.id; } else { l.acct = a.id; l.aux = ""; }
+          var ccyHint = (isAux(a) && a.currency_code) || a.currency_code || (byId[l.acct] && byId[l.acct].currency_code) || base;
+          await setCcy(l, ccyHint);
+          paint({ row: i, f: (!l.aux && (kids[l.acct] || []).length) ? "aux" : "label" });
+        };
+        enterKey(inp, i);
       });
-      document.querySelectorAll("#je-grid [data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({}); paint(); }; });
+      grid.querySelectorAll("[data-f]").forEach(function (el) {
+        var i = +el.dataset.i, f = el.dataset.f;
+        if (f === "aux") el.onchange = async function () { var l = lines[i], k = byId[el.value]; l.aux = el.value; __dirty = true; if (k && k.currency_code && k.currency_code !== l.ccy) await setCcy(l, k.currency_code); paint({ row: i, f: "label" }); };
+        else if (f === "ccy") el.onchange = async function () { __dirty = true; await setCcy(lines[i], el.value); paint({ row: i, f: lines[i].ccy === base ? "dr" : "rate" }); };
+        else if (f === "rate") el.oninput = function () { var v = Number(el.value) || 0, l = lines[i]; l.rate = l.inv ? (v ? 1 / v : 0) : v; __dirty = true; refreshRow(i); };
+        else el.oninput = function () {
+          var l = lines[i]; l[f] = el.value; __dirty = true;
+          // a line is a debit or a credit, not both
+          if ((f === "dr" || f === "cr") && Number(el.value)) {
+            var other = f === "dr" ? "cr" : "dr"; l[other] = "";
+            var o = document.querySelector('#je-grid [data-i="' + i + '"][data-f="' + other + '"]'); if (o) o.value = "";
+          }
+          refreshRow(i);
+        };
+        enterKey(el, i);
+      });
+      grid.querySelectorAll("[data-flip]").forEach(function (b) { b.onclick = function () { var l = lines[+b.dataset.flip]; l.inv = !l.inv; paint({ row: +b.dataset.flip, f: "rate" }); }; });
+      grid.querySelectorAll("[data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({ acct: "", aux: "", label: "", ccy: base, rate: 1, inv: false, dr: "", cr: "" }); __dirty = true; paint(); }; });
+      if (focus) focusCell(focus.row, focus.f);
     }
+
+    var number = ent.entry_number || "";
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns">' +
+      (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') +
+      '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' +
+      (id !== "new" && canManageApp("accounting") ? '<button id="je-dup" title="Start a new voucher with the same lines">Duplicate</button>' : '') +
+      (posted && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
       '<div class="o-stages"><span class="st ' + (posted ? "done" : "on") + '">Draft</span><span class="st ' + (posted ? "on" : "") + '">Posted</span></div></div>' +
-      '<div class="o-sheet"><div class="o-title">Journal entry ' + esc(ent.number || ent.ref || "") + '</div>' +
+      '<div class="o-sheet"><div class="o-title">Journal voucher ' + (number ? '<b>' + esc(number) + '</b>' : '<span class="muted">' + (copyFrom ? "copied, numbered when saved" : "numbered when saved") + '</span>') + '</div>' +
       '<div class="o-groups"><div>' +
-      fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + (posted ? " disabled" : "") + '>') +
-      fld("Journal", '<select id="je-journal"' + (posted ? " disabled" : "") + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
+      fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + dis + '>') +
+      fld("Journal", '<select id="je-journal"' + dis + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
+      (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + dis + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this voucher belongs to.") : '') +
       '</div><div>' +
-      (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + (posted ? " disabled" : "") + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this entry belongs to. It shows in every view that includes that book.") : "") + fld("Reference / narration", '<input id="je-narr" value="' + esc(ent.narration || ent.ref || "") + '"' + (posted ? " disabled" : "") + '>') +
+      fld("Reference", '<input id="je-ref" value="' + esc(ent.ref || "") + '" placeholder="The supplier invoice or receipt number"' + dis + '>', "The number of the paper behind this voucher.") +
+      fld("Narration", '<input id="je-narr" value="' + esc(ent.narration || "") + '" placeholder="What this voucher is for"' + dis + '>', "Copied to every line whose description you leave blank.") +
       '</div></div>' +
-      '<div style="overflow-x:auto;margin-top:8px"><table class="o-list" style="min-width:640px"><thead><tr><th style="width:34%">Account</th><th>Description</th><th class="num" style="width:130px">Debit</th><th class="num" style="width:130px">Credit</th><th style="width:34px"></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
-      (posted ? '' : '<button id="je-add" style="margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit">+ Add line</button>') +
-      '<div id="je-tot" style="margin-top:12px;font-size:14px;text-align:right"></div></div>';
+      '<div class="je-wrap"><table class="o-list je-grid"><thead><tr><th>Account No.</th><th>Auxiliary</th><th>Description</th><th>Currency</th><th>Rate</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">In ' + esc(base) + '</th><th></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
+      '<datalist id="je-accts">' + mains.map(function (a) { return '<option value="' + esc(acctLabel(a)) + '"></option>'; }).join("") + '</datalist>' +
+      (posted ? '' : '<button type="button" id="je-add" class="je-addline">+ Add line</button><span class="muted je-hint">Enter moves to the next line. A new line copies the description above it and offers the amount that balances.</span>') +
+      '<div id="je-tot" class="je-tot"></div>' +
+      attachBlockHTML("journal_entry", id === "new" ? "" : id, { label: "Related documents: the scanned invoice, receipt or contract behind this voucher", accept: "image/*,application/pdf" }) +
+      '</div>';
     paint();
-    document.getElementById("je-discard").onclick = function () { go("moves"); };
-    var addB = document.getElementById("je-add"); if (addB) addB.onclick = function () { lines.push({}); paint(); };
-    async function collect() {
-      var clean = lines.filter(function (l) { return l.account_id && ((Number(l.debit) || 0) > 0 || (Number(l.credit) || 0) > 0); });
-      return clean.map(function (l) { return { account_id: l.account_id, label: (l.label || "").slice(0, 160), debit: Number(l.debit) || 0, credit: Number(l.credit) || 0 }; });
-    }
+    wireAttach("journal_entry");
+    document.getElementById("je-date").addEventListener("change", function () { rateCache = {}; });
+    document.getElementById("je-discard").onclick = function () { __dirty = false; go("moves"); };
+    var addB = document.getElementById("je-add"); if (addB) addB.onclick = addLine;
+    var dupB = document.getElementById("je-dup"); if (dupB) dupB.onclick = function () { if (__dirty && !confirm("You have unsaved changes on this voucher. Leave without saving?")) return; __dirty = false; renderJournalEntryForm("new", id); };
+
+    var savedId = id;
     async function persist() {
-      var rows = await collect();
-      if (rows.length < 2) { toast("Add at least two lines"); return null; }
-      var t = totals(); if (!t.bal) { toast("Debits and credits must balance"); return null; }
-      var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: gv("je-narr"), ref: gv("je-narr"), currency_code: S.company.currency_code, book_id: (document.getElementById("je-book") ? document.getElementById("je-book").value : null) || null, source_type: "manual" };
-      var eid = id;
-      if (id === "new") { head.company_id = S.company.id; head.state = "draft"; var ins = await sb.from("journal_entries").insert(head).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } eid = ins.data.id; }
-      else { var up = await sb.from("journal_entries").update(head).eq("id", id); if (up.error) { toast(errMsg(up.error)); return null; } await sb.from("journal_lines").delete().eq("entry_id", id); }
-      var pls = rows.map(function (l) { return { entry_id: eid, company_id: S.company.id, account_id: l.account_id, label: l.label, debit: l.debit, credit: l.credit }; });
-      var li = await sb.from("journal_lines").insert(pls); if (li.error) { toast(errMsg(li.error)); return null; }
+      var narr = gv("je-narr"), rows = [];
+      for (var i = 0; i < lines.length; i++) {
+        var l = lines[i], dr = Number(l.dr) || 0, cr = Number(l.cr) || 0, foreign = l.ccy !== base;
+        if (!l.acct && !dr && !cr) continue;
+        if (!l.acct) { toast("Line " + (i + 1) + ": choose an account."); focusCell(i, "acct"); return null; }
+        if (!dr && !cr) { toast("Line " + (i + 1) + ": enter a debit or a credit."); focusCell(i, "dr"); return null; }
+        if (dr && cr) { toast("Line " + (i + 1) + ": a line is a debit or a credit, not both."); focusCell(i, "dr"); return null; }
+        if (foreign && !(Number(l.rate) > 0)) { toast("Line " + (i + 1) + ": enter the " + l.ccy + " rate."); focusCell(i, "rate"); return null; }
+        var b = baseOf(l);
+        rows.push({ account_id: l.aux || l.acct, label: (l.label || narr || "").slice(0, 160), debit: b.d, credit: b.c,
+          amount_currency: foreign ? (dr ? dr : -cr) : r2(b.d - b.c), currency_code: l.ccy, fx_rate: foreign ? Number(l.rate) : 1 });
+      }
+      if (rows.length < 2) { toast("A voucher needs at least two lines."); return null; }
+      var t = totals(); if (!t.bal) { toast("Debits and credits must balance in " + base + ". They are off by " + money(Math.abs(t.d - t.c)) + "."); return null; }
+      var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: narr, ref: gv("je-ref"),
+        currency_code: base, book_id: (document.getElementById("je-book") ? document.getElementById("je-book").value : null) || null, source_type: "manual" };
+      var eid = savedId;
+      if (savedId === "new") {
+        head.company_id = S.company.id; head.state = "draft";
+        var ins = await sb.from("journal_entries").insert(head).select("id").single();
+        if (ins.error) { toast(errMsg(ins.error)); return null; }
+        eid = savedId = ins.data.id;
+        await mediaFlush("journal_entry", eid);
+      } else {
+        var up = await sb.from("journal_entries").update(head).eq("id", eid); if (up.error) { toast(errMsg(up.error)); return null; }
+        var dl = await sb.from("journal_lines").delete().eq("entry_id", eid); if (dl.error) { toast(errMsg(dl.error)); return null; }
+      }
+      var li = await sb.from("journal_lines").insert(rows.map(function (r) { return Object.assign({ entry_id: eid, company_id: S.company.id }, r); }));
+      if (li.error) { toast(errMsg(li.error)); return null; }
+      __dirty = false;
       return eid;
     }
     var saveB = document.getElementById("je-save"); if (saveB) saveB.onclick = async function () { var eid = await persist(); if (eid) { toast("Draft saved"); renderJournalEntryForm(eid); } };
     var postB = document.getElementById("je-post"); if (postB) postB.onclick = async function () {
       if (isLocked(gv("je-date"))) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
       var eid = await persist(); if (!eid) return;
-      var _t = totals(); var _jg = await approvalGate("journal_entry", eid, gv("je-narr") || "Journal entry", _t.d, null); if (_jg === "blocked") { go("moves"); return; }
-      var pe = await sb.rpc("post_entry", { p_entry: eid }); if (pe.error) { toast("Could not post: " + errMsg(pe.error)); return; }
-      toast("Posted"); go("moves");
+      var _t = totals(); var _jg = await approvalGate("journal_entry", eid, gv("je-narr") || "Journal voucher", _t.d, null); if (_jg === "blocked") { go("moves"); return; }
+      var pe = await sb.rpc("post_entry", { p_entry: eid }); if (pe.error) { toast("Could not post: " + errMsg(pe.error)); renderJournalEntryForm(eid); return; }
+      toast("Posted"); renderJournalEntryForm(eid);
     };
     var revB = document.getElementById("je-rev"); if (revB) revB.onclick = async function () {
-      if (!confirm("Reverse this entry? A mirror entry is posted to cancel it.")) return;
-      var rv = await reverseEntry(id, "REV/" + (ent.number || ent.ref || ""), "Reversal of " + (ent.number || ent.ref || "")); if (rv.error) { toast(errMsg(rv.error)); return; }
+      if (!confirm("Reverse this voucher? A mirror voucher is posted to cancel it.")) return;
+      var rv = await reverseEntry(id, "REV/" + (ent.entry_number || ent.ref || ""), "Reversal of " + (ent.entry_number || ent.ref || "")); if (rv.error) { toast(errMsg(rv.error)); return; }
       toast("Reversed"); go("moves");
     };
   }
@@ -6619,7 +6828,7 @@
     ["INV", "Customer invoice"], ["RINV", "Customer credit note"], ["BILL", "Vendor bill"], ["RBILL", "Vendor refund"],
     ["SO", "Sales order / quotation"], ["PO", "Purchase order"], ["TND", "Tender / estimate"],
     ["SUB", "Submittal"], ["RFI", "RFI"], ["TRN", "Transmittal"],
-    ["SNAG", "Snag / punch item"], ["INSP", "Inspection"], ["INS", "Install job"], ["SIGN", "Signature request"], ["WO", "Work order"]
+    ["SNAG", "Snag / punch item"], ["INSP", "Inspection"], ["INS", "Install job"], ["SIGN", "Signature request"], ["WO", "Work order"], ["JV", "Journal voucher"]
   ];
   var _seqCache = null, _seqCacheCo = null;
   async function loadSeqCfg() {
@@ -8873,6 +9082,16 @@
     ["wip_account_id", "Work in progress", "Materials consumed by a production run, until the finished item exists."],
     ["stock_adj_account_id", "Stock adjustment", "Where a count difference or a write-off is charged."]
   ];
+  // Where invoices, bills and payments post. Blank falls back to Orbit's own
+  // account codes, and a posting that finds neither says which one is missing.
+  var POST_GL = [
+    ["receivable_account_id", "Customers owe us", "The receivable control. A customer invoice debits it; a receipt credits it."],
+    ["payable_account_id", "We owe suppliers", "The payable control. A vendor bill credits it; a payment debits it."],
+    ["sale_tax_account_id", "VAT on sales", "The VAT a customer invoice collects."],
+    ["purchase_tax_account_id", "VAT on purchases", "The VAT a vendor bill lets you deduct."],
+    ["income_account_id", "Default income", "Used for an invoice line that names no account of its own."],
+    ["expense_account_id", "Default expense", "Used for a bill line that names no account of its own."]
+  ];
   function stockGlHTML(c, accs) {
     if (!accs.length) return "";
     function sel(k) {
@@ -8880,7 +9099,7 @@
         return '<option value="' + a.id + '"' + (c[k] === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>';
       }).join("") + '</select>';
     }
-    return '<details class="o-acc"><summary>Stock accounting</summary><div class="sub" style="margin:8px 0 10px">' +
+    return '<details class="o-acc" open><summary>Accounting accounts</summary><div class="sub" style="margin:8px 0 10px">Where invoices, bills and payments post. Left blank, Orbit falls back to its own account codes and says so if they do not exist.</div>' + POST_GL.map(function (g) { return '<div><label>' + g[1] + '</label>' + fhint(g[1], g[2]) + sel(g[0]) + '</div>'; }).join("") + '</details><details class="o-acc"><summary>Stock accounting</summary><div class="sub" style="margin:8px 0 10px">' +
       'Where perpetual inventory posts. Set once; if any is left blank, stock moves are recorded but never reach the ledger.</div>' +
       STOCK_GL.map(function (g) { return '<div><label>' + g[1] + '</label>' + fhint(g[1], g[2]) + sel(g[0]) + '</div>'; }).join("") +
       '</details>';
@@ -8944,7 +9163,7 @@
     document.getElementById("co-save").onclick = async function () {
       var name = gv("co-name"); if (!name) { toast("Enter a company name"); return; }
       var row = { name: name, legal_name: gv("co-legal") || null, currency_code: (gv("co-cur") || "USD").toUpperCase().slice(0, 3), country: document.getElementById("co-country").value || null, parent_company_id: document.getElementById("co-parent").value || null };
-      STOCK_GL.forEach(function (g) { var el = document.getElementById("co-" + g[0]); if (el) row[g[0]] = el.value || null; });
+      STOCK_GL.concat(POST_GL).forEach(function (g) { var el = document.getElementById("co-" + g[0]); if (el) row[g[0]] = el.value || null; });
       if (id) {
         var up = await sb.from("companies").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; }
         if (S.company && S.company.id === id) { Object.assign(S.company, row); INVACC = null; }
