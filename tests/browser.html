@@ -22,7 +22,13 @@
 (async function () {
   var src = await fetch("../js/app.js?cb=" + Math.random()).then(function (r) { return r.text(); });
   var css = await fetch("../css/app.css?cb=" + Math.random()).then(function (r) { return r.text(); });
-  var res = ORBIT_CHECKS.run(src, css);
+  // the screen help pages: the files app.js lists in SCREEN_HELP_FILES
+  var fm = /var SCREEN_HELP_FILES = \[([^\]]*)\]/.exec(src), help = {};
+  var names = fm ? (fm[1].match(/"[a-z0-9-]+"/g) || []).map(function (s) { return s.slice(1, -1); }) : [];
+  for (var i = 0; i < names.length; i++) {
+    help[names[i]] = await fetch("../js/help/" + names[i] + ".js?cb=" + Math.random()).then(function (r) { return r.ok ? r.text() : ""; });
+  }
+  var res = ORBIT_CHECKS.run(src, css, help);
   var pass = res.filter(function (r) { return r.ok; }).length;
   document.getElementById("sum").textContent = pass + " of " + res.length + " passed";
   document.getElementById("sum").style.color = pass === res.length ? "#16a34a" : "#dc2626";

@@ -303,6 +303,29 @@
         return bad1.length ? bad(bad1.length + " impossible table name(s): " + bad1.join(", ")) : ok("every sb.from() names a plain identifier");
       } },
 
+    { name: "every screen has its own help page",
+      why: "Every screen explains itself: what it is for, when and how to use it, every field, and how it connects to the other apps. A screen added to a menu without a page quietly has none, a help file that does not parse takes every page in it down, and a link to a screen that does not exist is a dead end in the middle of the explanation.",
+      run: function (src, css, help) {
+        var fm = /var SCREEN_HELP_FILES = \[([^\]]*)\]/.exec(src);
+        if (!fm) return bad("SCREEN_HELP_FILES is missing from app.js");
+        var files = all(fm[1], /"([a-z0-9-]+)"/g);
+        help = help || {};
+        var absent = files.filter(function (f) { return !help[f]; });
+        if (absent.length) return bad("help file(s) listed but not found: " + absent.map(function (f) { return "js/help/" + f + ".js"; }).join(", "));
+        for (var i = 0; i < files.length; i++) {
+          try { new Function(help[files[i]]); } catch (e) { return bad("js/help/" + files[i] + ".js does not parse: " + e.message); }
+          if (help[files[i]].indexOf("—") >= 0) return bad("js/help/" + files[i] + ".js contains an em dash");
+        }
+        // the header comment documents the page shape with example keys; skip it
+        var text = files.map(function (f) { return help[f]; }).join("\n").replace(/\/\*[\s\S]*?\*\//g, "");
+        var pages = uniq(all(text, /^\s*"([a-zA-Z0-9_.]+)":\s*\{/gm));
+        var gone = menuActions(src).filter(function (a) { return !isDynamic(a) && pages.indexOf(a) < 0; });
+        if (gone.length) return bad(gone.length + " screen(s) with no help page: " + gone.join(", "));
+        var routed = routedActions(src);
+        var dead = uniq(all(text, /\bto:\s*"([a-zA-Z0-9_.]+)"/g)).filter(function (a) { return routed.indexOf(a) < 0 && !isDynamic(a); });
+        return dead.length ? bad("help links to screen(s) that do not exist: " + dead.join(", ")) : ok(pages.length + " pages in " + files.length + " files, every menu screen covered");
+      } },
+
     { name: "a posted document is reopened by the database, never set back to draft by the app",
       why: "Edit on a posted voucher or bill goes through reopen_journal_entry and reopen_invoice, which keep the posted version in document_revisions, refuse a closed period and keep a bill's payments matched. An update that set state to draft directly would skip all three, and the database refuses it, so the button would only ever fail.",
       run: function (src) {
@@ -314,16 +337,19 @@
 
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
-      run: function (src) {
-        var n = (src.match(/—/g) || []).length;
-        return n ? bad(n + " em dash character(s) present") : ok("none");
+      run: function (src, css, help) {
+        // the character itself, and the entity or escape that draws the same thing on screen,
+        // in the app and in every screen help file
+        var text = src + "\n" + Object.keys(help || {}).map(function (k) { return help[k]; }).join("\n");
+        var n = (text.match(/—|&mdash;|&#8212;|\\u2014/g) || []).length;
+        return n ? bad(n + " em dash(es) present, as the character, &mdash; or &#8212;") : ok("none, as a character or an entity");
       } }
   ];
 
-  function run(src, css) {
+  function run(src, css, help) {
     return checks.map(function (c) {
       var r;
-      try { r = c.run(src, css); } catch (e) { r = bad("check threw: " + e.message); }
+      try { r = c.run(src, css, help); } catch (e) { r = bad("check threw: " + e.message); }
       return { name: c.name, why: c.why, ok: r.ok, detail: r.detail };
     });
   }

@@ -14,11 +14,19 @@ const root = path.join(__dirname, "..");
 const src = fs.readFileSync(path.join(root, "js", "app.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "css", "app.css"), "utf8");
 const CHECKS = require("./checks.js");
+// the screen help pages, one file per group of apps, keyed by file name
+const help = {};
+const helpDir = path.join(root, "js", "help");
+if (fs.existsSync(helpDir)) {
+  for (const f of fs.readdirSync(helpDir)) {
+    if (f.endsWith(".js")) help[f.slice(0, -3)] = fs.readFileSync(path.join(helpDir, f), "utf8");
+  }
+}
 
 for (const check of CHECKS.checks) {
   test(check.name, () => {
     let r;
-    try { r = check.run(src, css); } catch (e) { assert.fail("check threw: " + e.stack); }
+    try { r = check.run(src, css, help); } catch (e) { assert.fail("check threw: " + e.stack); }
     assert.ok(r.ok, r.detail + "\n\n  why this matters: " + check.why);
   });
 }
@@ -52,6 +60,7 @@ const MUTATIONS = {
     s => s.replace('sb.from("subcontracts")', 'sb.from("sc.list")'),
   "record forms name the breadcrumb through bcTitle":
     s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
+  "every screen has its own help page": s => s.replace('"inv.in": {', '"inv.in.gone": {'),
   "a posted document is reopened by the database, never set back to draft by the app":
     s => s + '\n sb.from("invoices").update({ state: "draft" }).eq("id", x);',
   "no function is declared twice": s => s + "\n  function bcTitle() {}\n",
@@ -63,11 +72,19 @@ test("the checks actually catch their bug", async (t) => {
     await t.test(check.name, () => {
       const mutate = MUTATIONS[check.name];
       assert.ok(mutate, "no mutation defined - add one so this check is proven to work");
+      // the help check mutates the help files instead of the source
+      if (/own help page/.test(check.name)) {
+        const brokenHelp = {};
+        for (const k of Object.keys(help)) brokenHelp[k] = mutate(help[k]);
+        assert.notDeepStrictEqual(brokenHelp, help, "the mutation changed nothing, so the check was never exercised");
+        assert.strictEqual(check.run(src, css, brokenHelp).ok, false, "the check passed on deliberately broken help");
+        return;
+      }
       // a CSS-level check mutates the stylesheet instead of the source
       const cssCheck = /status colours/.test(check.name);
       const broken = mutate(cssCheck ? css : src);
       assert.notStrictEqual(broken, cssCheck ? css : src, "the mutation changed nothing, so the check was never exercised");
-      const r = cssCheck ? check.run(src, broken) : check.run(broken, css);
+      const r = cssCheck ? check.run(src, broken, help) : check.run(broken, css, help);
       assert.strictEqual(r.ok, false, "the check passed on deliberately broken source");
     });
   }

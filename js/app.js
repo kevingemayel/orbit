@@ -2196,7 +2196,10 @@
       var rows = (await sb.from("roles").select("*").eq("slug", slug).or("org_id.eq." + S.company.org_id + ",org_id.is.null")).data || [];
       var orgRole = rows.filter(function (r) { return r.org_id === S.company.org_id; })[0];
       var globalRole = rows.filter(function (r) { return !r.org_id; })[0];
-      return orgRole || globalRole || { slug: slug, full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 };
+      if (orgRole || globalRole) return orgRole || globalRole;
+      // the member's role no longer exists (a custom role that was deleted): no access
+      // until someone gives them a role, rather than all of it
+      return { slug: slug, name: "No role", full_access: false, can_manage_roles: false, can_see_money: false, rank: 0, permissions: {}, missing: true };
     } catch (e) { return { slug: "owner", full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 }; }
   }
   // platform-operator "support mode": true when I'm an operator viewing a company outside my own orgs
@@ -2204,7 +2207,7 @@
   function maybeLogSupport() { if (isSupportView()) { try { sb.rpc("log_platform_access", { p_company: S.company.id }); } catch (e) { } } }
   function supportBarHTML() {
     if (!isSupportView()) return "";
-    return '<div class="o-support" role="status"><span class="o-support-dot" aria-hidden="true"></span>Support mode &mdash; you are viewing <b>' + esc(S.company.name) + '</b>, which is not your organisation. Your access is logged.</div>';
+    return '<div class="o-support" role="status"><span class="o-support-dot" aria-hidden="true"></span>Support mode: you are viewing <b>' + esc(S.company.name) + '</b>, which is not your organisation. Your access is logged.</div>';
   }
   var SOON = [];
   // Orbit brand module icons (viewBox 0 0 100 100, currentColor stroke so they work on any tile, exactly one blue AI dot).
@@ -2520,7 +2523,7 @@
       '<h1 style="font-size:20px">' + (rejected ? "Application not approved" : "Application received") + '</h1>' +
       '<p class="sub">' + (rejected
         ? "Your account was not approved. If you think this is a mistake, reply to our email or contact us."
-        : "Thanks, " + esc(S.user.email) + ". Your account is under review &mdash; we&rsquo;ll email you within <b>6 hours</b>. You can close this window; sign back in after you hear from us.") + '</p>' +
+        : "Thanks, " + esc(S.user.email) + ". Your account is under review. We&rsquo;ll email you within <b>6 hours</b>. You can close this window; sign back in after you hear from us.") + '</p>' +
       '<button class="btn u-mt14" id="pa-out">Sign out</button>' +
       '</div></div>';
     document.getElementById("pa-out").onclick = signOut;
@@ -2537,7 +2540,7 @@
       '<li><b>Suspension &amp; termination.</b> We may suspend or terminate access that breaches these Terms, poses a security risk, or where an application is not approved. You may stop using the Service and close your account at any time.</li>' +
       '<li><b>Changes to these Terms.</b> We may update these Terms from time to time; the current version is shown at sign-up, and continued use of the Service means you accept the version in force.</li>' +
       '<li><b>Governing law.</b> These Terms are governed by the laws of <b>Lebanon</b>, and any dispute is subject to the competent courts of <b>Beirut</b>.</li>' +
-      '<li><b>Contact.</b> Space Work S.A.R.L &mdash; info@spacework.ai.</li>' +
+      '<li><b>Contact.</b> Space Work S.A.R.L, info@spacework.ai.</li>' +
       '</ol>';
   }
   function openTermsModal() {
@@ -4496,6 +4499,7 @@
     // menu has collapsed for a long time; this is the same for the header, so
     // a laptop gets two more rows of the thing you actually came to look at.
     return '<div class="o-bc">' + up + '<span class="bc-title" id="bc-title">' + esc(term(title)) + '</span>' +
+      '<button class="o-bc-help" id="bc-help" aria-label="Help for this screen" title="Help for this screen: what it is for, every field, how it connects">?</button>' +
       '<button class="o-bc-min" id="bc-min" aria-label="Minimise the page header" title="Minimise the page header">' +
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div>';
   }
@@ -4540,6 +4544,7 @@
     var h = document.getElementById("bc-home"); if (h) h.onclick = function () { go(APPS[S.app].home); };
     document.querySelectorAll(".o-bc [data-go]").forEach(function (e) { e.onclick = function () { go(e.dataset.go); }; });
     if (S.cpMini === undefined) { var _cm = localStorage.getItem("orbit_cpmini"); S.cpMini = _cm === "1"; }
+    var hb = document.getElementById("bc-help"); if (hb) hb.onclick = function () { openScreenHelp(S.action); };
     var mb = document.getElementById("bc-min");
     if (mb) mb.onclick = function () {
       S.cpMini = !S.cpMini;
@@ -5472,12 +5477,23 @@
     var taxMap = {}; ((await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || []).forEach(function (t) { taxMap[t.id] = Number(t.amount) || 0; });
     var untax = 0, tax = 0;
     lns.forEach(function (l) { var sub = Number(l.quantity || 0) * Number(l.unit_price || 0); untax += sub; tax += sub * (l.tax_id ? (taxMap[l.tax_id] || 0) : 0) / 100; });
-    var invDate = rec.next_date || today(), due = addDaysStr(invDate, rec.payment_days || 30);
+    var invDate = rec.next_date || today(), due = addDaysStr(invDate, rec.payment_days == null ? 30 : Number(rec.payment_days));
     var hdr = { company_id: S.company.id, move_type: "out_invoice", state: "draft", number: await nextNumber("out_invoice"), invoice_date: invDate, due_date: due, partner_id: rec.partner_id, currency_code: rec.currency_code || S.company.currency_code, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax, ref: "Recurring: " + (rec.name || "") };
     var ins = await sb.from("invoices").insert(hdr).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; }
     var invId = ins.data.id;
     await sb.from("invoice_lines").insert(lns.map(function (l, k) { return { company_id: S.company.id, invoice_id: invId, sequence: (k + 1) * 10, product_id: l.product_id || null, name: l.name || "", tax_id: l.tax_id || null, quantity: Number(l.quantity || 0), unit_price: Number(l.unit_price || 0), price_subtotal: Number(l.quantity || 0) * Number(l.unit_price || 0) }; }));
-    if (rec.auto_post) { try { await sb.rpc("post_invoice", { p_invoice: invId }); } catch (e) { } }
+    if (rec.auto_post) {
+      // a recurring invoice follows the same approval rules as one posted by hand, and a
+      // failure says so instead of leaving a silent draft
+      var _gate = await approvalGate("customer_invoice", invId, hdr.number, untax + tax, "inv.out");
+      if (_gate !== "blocked") {
+        var _pp = await sb.rpc("post_invoice", { p_invoice: invId });
+        if (_pp.error) {
+          notify({ kind: "reminder", title: "Recurring invoice not posted: " + hdr.number, body: errMsg(_pp.error), link_action: "inv.out" });
+          toast("Recurring invoice " + hdr.number + " was created but not posted: " + errMsg(_pp.error));
+        }
+      }
+    }
     await sb.from("recurring_invoices").update({ next_date: addInterval(rec.next_date || today(), rec.interval_unit, rec.interval_count), last_invoice_at: today() }).eq("id", recId);
     return invId;
   }
@@ -6060,7 +6076,7 @@
     m.innerHTML = '<div class="sheet"><h3>' + (rate.id ? "Edit exchange rate" : "New exchange rate") + '</h3><div class="form u-formpad">' +
       '<div><label>Currency</label>' + fhint("Currency", "The currency you are quoting a rate for. Pick from the list.") + currencySelectHTML("r-code", rate.code || "EUR") + '</div>' +
       '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date this rate applies from. The latest rate on or before a date is used.") + '<input id="r-date" type="date" value="' + (rate.rate_date || today()) + '"></div><div><label>Type</label>' + fhint("Type", "Spot for day-to-day, Closing for balance sheet, Average for P&L.") + '<select id="r-type"><option value="spot">Spot</option><option value="closing">Closing</option><option value="average">Average</option></select></div></div>' +
-      '<div><label>Rate &mdash; value of 1 unit in ' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09" value="' + (rate.rate != null ? rate.rate : "") + '"></div>' +
+      '<div><label>Rate: value of 1 unit in' + esc(ref) + '</label>' + fhint("__rate", "How many " + ref + " one unit of this currency is worth. E.g. 1 EUR = 1.09 " + ref + ".") + '<input id="r-rate" type="number" step="0.0000001" placeholder="e.g. 1.09" value="' + (rate.rate != null ? rate.rate : "") + '"></div>' +
       '</div><div class="foot"><button class="btn" id="r-cancel">Cancel</button>' + (rate.id ? '<button class="btn u-bad" id="r-del">Delete</button>' : '') + '<button class="btn pri u-app" id="r-save">Save</button></div></div>';
     document.body.appendChild(m);
     if (rate.rate_type) document.getElementById("r-type").value = rate.rate_type;
@@ -6531,7 +6547,7 @@
       '<div class="row2"><div><label>To</label>' + fhint("To", "Where the email is sent. Defaults to the customer's email; you can change it.") + '<input id="s-to" type="email" value="' + esc(to) + '" placeholder="customer@email.com"></div>' +
       '<div><label>Subject</label>' + fhint("Subject") + '<input id="s-subj" value="' + esc(defSubject) + '"></div></div>' +
       '<div><label>Message to the customer (optional)</label>' + fhint("__note", "A short cover note shown at the top of the email, above the invoice.") + '<textarea id="s-note" rows="3" placeholder="e.g. Hi, please find your invoice attached below. Payment is due within 30 days. Thank you!"></textarea></div>' +
-      '<div><label>Preview &mdash; this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:var(--r);background:#fff"></iframe></div>' +
+      '<div><label>Preview: this is exactly what your customer receives</label><iframe id="s-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:var(--r);background:#fff"></iframe></div>' +
       '</div><div class="foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn pri u-app" id="s-send">Send email</button></div></div>';
     document.body.appendChild(m);
     function renderPreview() { document.getElementById("s-preview").srcdoc = emailPreviewHtml(inv, lines || [], document.getElementById("s-note").value); }
@@ -7143,7 +7159,8 @@
     // Description-only lines need no receipt; over-receipt/over-bill is already blocked.
     var _prodLines = (lines || []).filter(function (l) { return l.product_id; });
     var fullyReceived = _prodLines.length > 0 && _prodLines.every(function (l) { return Number(l.qty_received || 0) >= Number(l.quantity || 0) - 0.0001; });
-    var fullyBilled = (lines || []).length > 0 && (lines || []).every(function (l) { return Number(l.qty_billed || 0) >= Number(l.quantity || 0) - 0.0001; });
+    // a sale order line records what was invoiced in qty_invoiced, a purchase line in qty_billed
+    var fullyBilled = (lines || []).length > 0 && (lines || []).every(function (l) { return Number((isSale ? l.qty_invoiced : l.qty_billed) || 0) >= Number(l.quantity || 0) - 0.0001; });
     var btns = "";
     if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
     else if (confirmed) {
@@ -7606,7 +7623,11 @@
         var lineUom = cur.uom || rv.uom;
         var recvLU = (rv.uom && lineUom && rv.uom !== lineUom) ? uomConvert(rv.qty, rv.uom, lineUom, uoms) : rv.qty;
         var remain = Math.max(0, Number(cur.quantity || 0) - Number(cur.qty_received || 0));
-        if (recvLU > remain + 0.0001) { toast('Cannot receive more than ordered on "' + (rv.name || "the line") + '": only ' + (Math.round(remain * 1000) / 1000) + ' ' + (lineUom || "") + ' left on the PO.'); return; }
+        if (opType === "return") {
+          // a return sends goods back: it can take back what was received, and no more
+          var _gotSoFar = Number(cur.qty_received || 0);
+          if (recvLU > _gotSoFar + 0.0001) { toast('Cannot return more than was received on "' + (rv.name || "the line") + '": ' + (Math.round(_gotSoFar * 1000) / 1000) + ' ' + (lineUom || "") + ' received so far.'); return; }
+        } else if (recvLU > remain + 0.0001) { toast('Cannot receive more than ordered on "' + (rv.name || "the line") + '": only ' + (Math.round(remain * 1000) / 1000) + ' ' + (lineUom || "") + ' left on the PO.'); return; }
         rv._recvLineUom = recvLU; rv._liveReceived = Number(cur.qty_received || 0);
       }
       var isReturn = opType === "return";
@@ -7618,7 +7639,11 @@
         if (!isReturn && (r.destination || "warehouse") !== "site" && !r.product_id) { toast('Line "' + (r.name || "") + '" has no product - add one, or set destination to Site (cost only), to receive it.'); continue; }
         var stockUnit = (pr && pr.uom) || "Unit";
         var qtyBase = (r.uom && r.uom !== "__addu") ? uomConvert(r.qty, r.uom, stockUnit, uoms) : r.qty;
-        if (r.po_line_id) await sb.from("purchase_order_lines").update({ qty_received: (r._liveReceived != null ? r._liveReceived : (Number(r.already) || 0)) + (r._recvLineUom != null ? r._recvLineUom : r.qty) }).eq("id", r.po_line_id);
+        if (r.po_line_id) {
+          var _was = r._liveReceived != null ? r._liveReceived : (Number(r.already) || 0), _moved = r._recvLineUom != null ? r._recvLineUom : r.qty;
+          // a return takes the quantity back off what was received; a receipt adds to it
+          await sb.from("purchase_order_lines").update({ qty_received: isReturn ? Math.max(0, _was - _moved) : _was + _moved }).eq("id", r.po_line_id);
+        }
         var dest = r.destination || "warehouse";
         if (!isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
@@ -7635,7 +7660,7 @@
           }
         } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var srcLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
-          if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("deliver", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
+          if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("return", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
         }
       }
       toast(got ? ("Receipt saved - " + got + " item(s) " + (isReturn ? "returned" : "added to inventory")) : "Receipt saved");
@@ -7664,13 +7689,19 @@
     var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (taxAmt[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: new Date(Date.now() + 2592e6).toISOString().slice(0, 10), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
+    if (!isSale && order.cost_code_id) hdr.cost_code_id = order.cost_code_id;   // the bill books to the order's cost code
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
     var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var isStock = p && (p.type === "storable" || p.type === "consumable"); var acc = isSale ? (p ? p.income_account_id : null) : ((isStock && _interimAcc) ? _interimAcc : (p ? p.expense_account_id : null)); return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Invoice lines failed: " + errMsg(lr.error)); return; }
-    if (!isSale) { for (var i = 0; i < lines.length; i++) { if (lines[i].id) await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id); } }
+    // mark the order's lines invoiced or billed, so Create Invoice / Create Bill is not offered again
+    for (var i = 0; i < lines.length; i++) {
+      if (!lines[i].id) continue;
+      if (isSale) await sb.from("sale_order_lines").update({ qty_invoiced: Number(lines[i].quantity || 0) }).eq("id", lines[i].id);
+      else await sb.from("purchase_order_lines").update({ qty_billed: Number(lines[i].quantity || 0) }).eq("id", lines[i].id);
+    }
     toast(isSale ? "Invoice created (draft)" : "Bill created (draft)");
     renderInvoiceForm(invId, moveType);
   }
@@ -13860,13 +13891,17 @@
     var pp = document.getElementById("as-post"); if (pp) pp.onclick = async function () {
       var duel = lines.filter(function (l) { return !l.posted && parseD(l.line_date) <= new Date(); });
       if (!duel.length) { toast("Nothing due to post"); return; }
-      var n = 0;
+      var n = 0, failMsg = "";
       for (var i = 0; i < duel.length; i++) {
         var l = duel[i];
-        var eid = await postRetentionEntry(a.expense_account || "6800", a.depr_account || "2800", Number(l.depreciation || 0), "Depreciation " + (a.number || "") + " - " + (a.name || ""), a.id, "depreciation");
-        await sb.from("asset_lines").update({ posted: true, journal_entry_id: eid || null }).eq("id", l.id); n++;
+        if (!(Number(l.depreciation || 0) > 0.005)) { await sb.from("asset_lines").update({ posted: true }).eq("id", l.id); n++; continue; }
+        // dated at the schedule month, and only marked posted once its entry is in the ledger
+        var eid = await postRetentionEntry(a.expense_account || "6800", a.depr_account || "2800", Number(l.depreciation || 0), "Depreciation " + (a.number || "") + " - " + (a.name || ""), a.id, "depreciation", l.line_date);
+        if (!eid) { failMsg = "Depreciation for " + l.line_date + " could not be posted. Check that accounts " + (a.expense_account || "6800") + " and " + (a.depr_account || "2800") + " exist in the Chart of Accounts, that a MISC journal exists, and that the period is not closed." + (n ? " " + n + " earlier month(s) were posted." : ""); break; }
+        await sb.from("asset_lines").update({ posted: true, journal_entry_id: eid }).eq("id", l.id); n++;
       }
-      toast("Posted " + n + " depreciation " + (n === 1 ? "entry" : "entries")); renderAssetForm(id);
+      if (failMsg) toast(failMsg); else toast("Posted " + n + " depreciation " + (n === 1 ? "entry" : "entries"));
+      renderAssetForm(id);
     };
     var cl = document.getElementById("as-close"); if (cl) cl.onclick = async function () { await sb.from("assets").update({ state: "closed" }).eq("id", id); toast("Closed"); renderAssetForm(id); };
     var dp = document.getElementById("as-dispose"); if (dp) dp.onclick = function () {
@@ -14820,7 +14855,7 @@
     document.getElementById("o-body").innerHTML =
       '<div style="padding:16px;max-width:820px"><div class="card">' +
       '<h3 style="margin-top:0">Import data from a spreadsheet</h3>' +
-      '<div class="sub" style="margin:0 0 14px">Pick what to import, download the template, fill it in (keep the header row), and upload it. Columns marked <b>*</b> are required. Existing records are not changed &mdash; this adds new rows.</div>' +
+      '<div class="sub" style="margin:0 0 14px">Pick what to import, download the template, fill it in (keep the header row), and upload it. Columns marked <b>*</b> are required. Existing records are not changed: this adds new rows.</div>' +
       '<div class="su-fg" style="max-width:340px"><label for="im-entity">What are you importing?</label><select id="im-entity">' + entityOpts + '</select></div>' +
       '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0"><button class="btn" id="im-tmpl">Download template</button><label class="btn" for="im-file" style="cursor:pointer;background:var(--accent);border-color:var(--accent);color:#fff">Choose CSV file</label><input id="im-file" type="file" accept=".csv,text/csv" style="display:none"></div>' +
       '<div id="im-fields" class="mini"></div>' +
@@ -15481,7 +15516,7 @@
     var tmpl = t.template || 1;
     if (tmpl === 2) return '<div class="ph ph-t2">' + logo + '<div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '<div class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></div></div>';
     if (tmpl === 3) return '<div class="ph ph-t3"><div class="ph-band"><div class="ph-band-l">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>' + (addrContact ? '<div class="ph-subline">' + addrContact + '</div>' : "") + '</div>';
-    if (tmpl === 4) return '<div class="ph ph-t4">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '<span class="ph-meta"><span class="ph-title">' + ttl + '</span> &mdash; <span class="ph-date">' + date + '</span></span></div>';
+    if (tmpl === 4) return '<div class="ph ph-t4">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '<span class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></span></div>';
     if (tmpl === 5) return '<div class="ph ph-t5"><span class="ph-rule"></span>' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
     return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
   }
@@ -16717,6 +16752,9 @@
     var dr, cr, sQ = qty, sV = value;
     if (kind === "receive") { dr = a.inv; cr = a.susp; }
     else if (kind === "deliver") { dr = a.cogs; cr = a.inv; sQ = -qty; sV = -value; }
+    // goods sent back to the supplier undo their receipt: out of inventory, back against the
+    // goods-received (interim) account the receipt credited, never into cost of sales
+    else if (kind === "return") { dr = a.susp || a.cogs; cr = a.inv; sQ = -qty; sV = -value; }
     else if (kind === "adjust_up") { dr = a.inv; cr = a.adj; }
     else if (kind === "wip_consume") { dr = a.wip; cr = a.inv; sQ = -qty; sV = -value; }
     else if (kind === "wip_output") { dr = a.inv; cr = a.wip; }
@@ -18640,12 +18678,18 @@
       var usable = [];
       contracts.forEach(function (ct) {
         if (ct.date_end && pFrom && String(ct.date_end) < String(pFrom)) { skipped++; return; } // contract ended before the period
+        if (ct.date_start && pTo && String(ct.date_start) > String(pTo)) { skipped++; return; } // contract starts after the period
         if (!ct.structure_id || !(Number(ct.wage) > 0)) { skipped++; return; }
         if (seenEmp[ct.employee_id]) { return; } seenEmp[ct.employee_id] = 1;
         usable.push(ct);
       });
       if (!usable.length) { toast("Nothing to pay: " + skipped + " running contract(s) have no wage/structure or have ended."); return; }
-      await sb.from("hr_payslips").delete().eq("company_id", S.company.id).eq("run_id", id);
+      // A posted payslip's pay is already in the ledger. Deleting it and generating again
+      // posted the same salaries a second time, so a run with posted payslips is refused,
+      // and only drafts are ever replaced.
+      var postedSlips = (await sb.from("hr_payslips").select("id").eq("company_id", S.company.id).eq("run_id", id).neq("state", "draft")).data || [];
+      if (postedSlips.length) { toast("This run already has " + postedSlips.length + " posted payslip(s), so it cannot be generated again. Their pay is in the ledger. Start a new run for any correction."); return; }
+      await sb.from("hr_payslips").delete().eq("company_id", S.company.id).eq("run_id", id).eq("state", "draft");
       var made = 0;
       for (var i = 0; i < usable.length; i++) {
         var ct = usable[i];
@@ -18663,8 +18707,10 @@
       var _payTot = todo.reduce(function (s, x) { return s + Number(x.net || 0); }, 0);
       var _pg = await approvalGate("payroll", id, (run.name || "Payroll run"), _payTot, null); if (_pg === "blocked") return;
       var n = 0; for (var i = 0; i < todo.length; i++) { if (await postPayslip(todo[i])) n++; }
-      await sb.from("hr_payslip_runs").update({ state: "done" }).eq("id", id);
-      toast(n + " payslip(s) posted to the ledger"); renderPayslipRunForm(id);
+      // the run is done only when every payslip reached the ledger
+      if (n === todo.length) { await sb.from("hr_payslip_runs").update({ state: "done" }).eq("id", id); toast(n + " payslip(s) posted to the ledger"); }
+      else toast(n + " of " + todo.length + " payslip(s) posted. The rest are still drafts: open one to see why, fix it, then click Post all again.");
+      renderPayslipRunForm(id);
     };
     var bkb = document.getElementById("pr-bank"); if (bkb) bkb.onclick = async function () {
       var sl = (await sb.from("hr_payslips").select("net,currency_code, hr_employees(name,bank_account,work_email)").eq("company_id", S.company.id).eq("run_id", id)).data || [];
@@ -18874,7 +18920,7 @@
     var sel = '<select id="eos-emp" class="o-filtbtn" style="min-width:200px"><option value="">Select employee...</option>' + emps.map(function (e) { return '<option value="' + e.id + '">' + esc(e.name) + '</option>'; }).join("") + '</select>';
     var eosCfg = (S.company.profile && S.company.profile.eos) || {};
     var eDiv = Number(eosCfg.divisor) || 30, eD1 = (eosCfg.days1 != null ? Number(eosCfg.days1) : 21), eCap = (eosCfg.cap != null ? Number(eosCfg.cap) : 5), eD2 = (eosCfg.days2 != null ? Number(eosCfg.days2) : 30);
-    var rulesBar = '<div class="eos-rules">Gratuity rule &nbsp; day rate = basic &divide; <input id="eos-div" type="number" step="1" min="1" value="' + eDiv + '"> &nbsp;&middot;&nbsp; <input id="eos-d1" type="number" step="1" min="0" value="' + eD1 + '"> days/yr for the first <input id="eos-cap" type="number" step="1" min="0" value="' + eCap + '"> years, then <input id="eos-d2" type="number" step="1" min="0" value="' + eD2 + '"> days/yr <button class="o-filtbtn" id="eos-saverules">Save as company default</button><div class="eos-hint">Defaults are Gulf/UAE (basic&divide;30, 21 then 30 days). Set to your law &mdash; e.g. KSA half then full month, or Lebanon\'s indemnity &mdash; then Save.</div></div>';
+    var rulesBar = '<div class="eos-rules">Gratuity rule &nbsp; day rate = basic &divide; <input id="eos-div" type="number" step="1" min="1" value="' + eDiv + '"> &nbsp;&middot;&nbsp; <input id="eos-d1" type="number" step="1" min="0" value="' + eD1 + '"> days/yr for the first <input id="eos-cap" type="number" step="1" min="0" value="' + eCap + '"> years, then <input id="eos-d2" type="number" step="1" min="0" value="' + eD2 + '"> days/yr <button class="o-filtbtn" id="eos-saverules">Save as company default</button><div class="eos-hint">Defaults are Gulf/UAE (basic&divide;30, 21 then 30 days). Set to your law, for example KSA half then full month, or Lebanon\'s indemnity, then Save.</div></div>';
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("End of Service") + '<div class="gap"></div>' + sel + '<input id="eos-date" type="date" class="o-filtbtn" value="' + today() + '"><button class="o-filtbtn" id="eos-calc">Calculate</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg">' + rulesBar + '<div class="o-report" id="eos" style="max-width:660px"><div class="o-empty">Pick an employee and their last working day, then Calculate the end-of-service gratuity.</div></div></div></div>';
     wireBc();
     document.getElementById("rp-print").onclick = function () { window.print(); };
@@ -18977,7 +19023,7 @@
     wireBc();
     var lines = (await sb.from("project_budgets").select("*").eq("project_id", projectId).order("id")).data || [];
     var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
-    function ccOpts(sel) { return '<option value="">&mdash;</option>' + ccs.map(function (c) { return '<option value="' + c.id + '"' + (sel === c.id ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join(""); }
+    function ccOpts(sel) { return '<option value="">(none)</option>' + ccs.map(function (c) { return '<option value="' + c.id + '"' + (sel === c.id ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join(""); }
     var body = document.getElementById("bg-body"), cv = Number(proj.contract_value) || 0;
     function recalc() { var tot = 0; body.querySelectorAll("tr").forEach(function (tr) { tot += parseFloat(tr.querySelector(".bg-amt").value) || 0; }); document.getElementById("bg-tot").innerHTML = '<div class="r"><span class="k">Total budgeted cost</span><span>' + S.company.currency_code + " " + money(tot) + '</span></div><div class="r"><span class="k">Contract value</span><span>' + S.company.currency_code + " " + money(cv) + '</span></div><div class="r tt"><span class="k">Estimated margin</span><span>' + S.company.currency_code + " " + money(cv - tot) + " (" + (cv ? ((cv - tot) / cv * 100).toFixed(1) : "0") + '%)</span></div>'; }
     function addRow(l) { var tr = document.createElement("tr"); tr.innerHTML = '<td><select class="bg-cc">' + ccOpts(l ? l.cost_code_id : "") + '</select></td><td><input class="bg-cat" value="' + esc(l ? l.category : "") + '" placeholder="e.g. Labour"></td><td><input class="bg-desc" value="' + esc(l ? l.description : "") + '"></td><td><input class="bg-amt num" type="number" step="0.01" value="' + (l ? l.amount : 0) + '"></td><td><button class="del">&times;</button></td>'; body.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); }; tr.querySelectorAll("input").forEach(function (i) { i.addEventListener("input", recalc); }); }
@@ -19039,7 +19085,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Job Cost") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
+    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet. Create a project first.</div></div>'; return; }
     var sel = (S.jobCostProj && projs.some(function (p) { return p.id === S.jobCostProj; })) ? S.jobCostProj : projs[0].id;
     document.getElementById("o-body").innerHTML = '<div class="u-p16"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 class="u-m0">Job Cost</h3><select id="jc-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub u-m6012">Budget vs committed (open + billed purchase orders) vs actual (posted supplier bills + materials issued from stock + site labour), grouped by cost code. Stock/labour show under Uncoded. The Actual total matches Project P&amp;L.</div><div id="jc-table"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     document.getElementById("jc-proj").onchange = function () { jobCostTable(this.value); };
@@ -19519,21 +19565,23 @@
 
   // Book retention as a real GL balance: a separate balanced entry (positive dr/cr, no negative lines
   // so it passes the journal_lines non-negative check). Client: Dr 4110 / Cr 7000. Sub: Dr 6100 / Cr 4010.
-  async function postRetentionEntry(drCode, crCode, amount, narration, invId, sourceType) {
+  async function postRetentionEntry(drCode, crCode, amount, narration, invId, sourceType, onDate) {
     if (!(Number(amount) > 0.005)) return;
     var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", [drCode, crCode])).data || [];
     var by = {}; accs.forEach(function (a) { by[a.code] = a.id; });
     if (!by[drCode] || !by[crCode]) return;
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     if (!jr) return;
-    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: today(), ref: "", narration: narration, currency_code: S.company.currency_code, state: "draft", source_type: sourceType || "retention", source_id: invId ? String(invId) : "" }).select("id").single();
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: onDate || today(), ref: "", narration: narration, currency_code: S.company.currency_code, state: "draft", source_type: sourceType || "retention", source_id: invId ? String(invId) : "" }).select("id").single();
     if (e.error) return;
     var lr = await sb.from("journal_lines").insert([
       { entry_id: e.data.id, company_id: S.company.id, account_id: by[drCode], label: narration, debit: Number(amount), credit: 0 },
       { entry_id: e.data.id, company_id: S.company.id, account_id: by[crCode], label: narration, debit: 0, credit: Number(amount) }
     ]);
     if (lr.error) return;
-    await sb.rpc("post_entry", { p_entry: e.data.id });
+    var pe = await sb.rpc("post_entry", { p_entry: e.data.id });
+    // an entry that could not post (a closed period, say) is not left behind as a draft
+    if (pe.error) { await sb.from("journal_entries").delete().eq("id", e.data.id); return null; }
     return e.data.id;
   }
 
@@ -20237,7 +20285,12 @@
       if (spec.before) { var ok = spec.before(row, rec); if (ok === false) return; }
       var r;
       if (rec && rec.id) r = await sb.from(spec.table).update(row).eq("id", rec.id);
-      else { row.company_id = S.company.id; r = await sb.from(spec.table).insert(row); }
+      else {
+        // a field left on (none) or blank is left out of a new record, so the column's own
+        // default applies; sending an explicit null broke every NOT NULL column with a default
+        Object.keys(row).forEach(function (k) { if (row[k] == null) delete row[k]; });
+        row.company_id = S.company.id; r = await sb.from(spec.table).insert(row);
+      }
       if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); fnbClearLookups(); toast("Saved"); renderView();
     }, spec.wide);
@@ -24784,7 +24837,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Procurement Status") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var projs = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet &mdash; create a project first.</div></div>'; return; }
+    if (!projs.length) { document.getElementById("o-body").innerHTML = '<div style="padding:18px"><div class="o-empty">No projects yet. Create a project first.</div></div>'; return; }
     var sel = (S.procProj && projs.some(function (p) { return p.id === S.procProj; })) ? S.procProj : projs[0].id;
     document.getElementById("o-body").innerHTML = '<div class="u-p16"><div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><h3 class="u-m0">Procurement Status</h3><select id="ps-proj" aria-label="Project" style="margin-left:auto;max-width:100%">' + projs.map(function (p) { return '<option value="' + p.id + '"' + (p.id === sel ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></div><div class="sub u-m6012">How this job&rsquo;s material is progressing: what the take-off says it <b>needs</b>, what is out for <b>quote</b>, what is <b>ordered</b> (committed on POs) and what has been <b>received</b> - against the project&rsquo;s cost budget.</div><div id="ps-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
     document.getElementById("ps-proj").onchange = function () { procStatusBody(this.value); };
@@ -25871,6 +25924,110 @@
     if (completed) { if (id) { try { localStorage.setItem("orbit_tour_done_" + id, "1"); } catch (e) {} } toast("Nicely done - that guide is marked complete and won't pop up again."); }
   }
   // ---- help panel (slide-over) ----
+  // ============================ SCREEN HELP ============================
+  // A full page of help for every screen: what it is for, when to use it, a
+  // worked how-to, every field and button, what it changes in other apps and
+  // the problems people run into. The pages live in js/help/*.js so the app
+  // stays light: they load the first time any help is opened, and each file
+  // hands its pages to orbitScreenHelp({ "menu.action": { ... } }). The ? in
+  // every page header opens the page for the screen you are on, and each app's
+  // help lists every one of its screens in full, ready to print.
+  var SCREEN_HELP = {};
+  var SCREEN_HELP_FILES = ["accounting-documents", "accounting-ledger", "accounting-reports", "sales-purchase", "operations", "projects-contracting", "people", "workspace", "kitchen-service", "kitchen-business", "plot", "specialty"];
+  window.orbitScreenHelp = function (pages) { Object.keys(pages || {}).forEach(function (k) { SCREEN_HELP[k] = pages[k]; }); };
+  var _shLoading = null, _shStamp = Date.now(), _shText = {};
+  function loadScreenHelp() {
+    if (_shLoading) return _shLoading;
+    var failed = false;
+    _shLoading = Promise.all(SCREEN_HELP_FILES.map(function (f) {
+      return new Promise(function (done) {
+        var s = document.createElement("script");
+        s.src = "js/help/" + f + ".js?t=" + _shStamp;
+        s.onload = done; s.onerror = function () { failed = true; done(); };
+        document.head.appendChild(s);
+      });
+    })).then(function () { if (failed) _shLoading = null; });   // offline: try again next time
+    return _shLoading;
+  }
+  function shTeaser(html) { var t = htmlToText(html); if (t.length <= 110) return t; t = t.slice(0, 110); return t.slice(0, t.lastIndexOf(" ")) + "..."; }
+  function shSearchText(k) { return _shText[k] || (_shText[k] = htmlToText(JSON.stringify(SCREEN_HELP[k])).toLowerCase()); }
+  function shReqBadge(r) {
+    return r === "required" ? '<span class="sh-req">Required</span>' : r === "auto" ? '<span class="sh-auto">Fills itself</span>' : '<span class="sh-opt">Optional</span>';
+  }
+  function screenHelpHTML(h) {
+    function li(a) { return (a || []).map(function (x) { return "<li>" + x + "</li>"; }).join(""); }
+    var o = '<div class="sh">';
+    if (h.what) o += '<p class="sh-what">' + h.what + '</p>';
+    if (h.when && h.when.length) o += '<h4>When to use it</h4><ul>' + li(h.when) + '</ul>';
+    if (h.how && h.how.length) o += '<h4>How to use it</h4><ol>' + li(h.how) + '</ol>';
+    if (h.fields && h.fields.length) o += '<h4>What to fill in</h4><div class="sh-tw"><table class="sh-t"><tbody>' + h.fields.map(function (f) { return '<tr><td><b>' + f[0] + '</b></td><td>' + f[1] + '</td><td>' + shReqBadge(f[2]) + '</td></tr>'; }).join("") + '</tbody></table></div>';
+    if (h.buttons && h.buttons.length) o += '<h4>The buttons</h4><div class="sh-tw"><table class="sh-t"><tbody>' + h.buttons.map(function (b) { return '<tr><td><span class="man-key">' + b[0] + '</span></td><td colspan="2">' + b[1] + '</td></tr>'; }).join("") + '</tbody></table></div>';
+    if (h.after) o += '<h4>What it changes elsewhere</h4><p>' + h.after + '</p>';
+    if (h.links && h.links.length) o += '<h4>How it connects to the rest of Orbit</h4><ul>' + h.links.map(function (l) { return '<li>' + (l.to ? '<a href="#" data-shgo="' + esc(l.to) + '"><b>' + l.name + '</b></a>' : '<b>' + l.name + '</b>') + ': ' + l.how + '</li>'; }).join("") + '</ul>';
+    if (h.mistakes && h.mistakes.length) o += '<h4>If something goes wrong</h4><dl class="sh-dl">' + h.mistakes.map(function (m) { return '<dt>' + m[0] + '</dt><dd>' + m[1] + '</dd>'; }).join("") + '</dl>';
+    if (h.tips && h.tips.length) o += '<div class="man-cal tip" style="margin-top:16px"><span class="man-ci">' + hIcon("check") + '</span><div class="man-cal-b"><div class="man-cal-t">Good to know</div><ul>' + li(h.tips) + '</ul></div></div>';
+    return o + '</div>';
+  }
+  function wireScreenHelpLinks(root, before) {
+    root.querySelectorAll("[data-shgo]").forEach(function (a) {
+      a.onclick = function (e) { e.preventDefault(); if (before) before(); goApp(a.getAttribute("data-shgo")); };
+    });
+  }
+  // the screens of an app, in menu order, each once
+  function appScreenActions(appKey) {
+    var out = [], seen = {};
+    ((APPS[appKey] || {}).menus || []).forEach(function (m) {
+      var its = m.action ? [[m.label, m.action]] : (m.items || []);
+      its.forEach(function (it) { if (it[1] && !seen[it[1]] && it[1].indexOf("help.") !== 0) { seen[it[1]] = 1; out.push([it[0], it[1]]); } });
+    });
+    return out;
+  }
+  function chapterScreenActions(chapterKey) {
+    if (chapterKey === "overview" || chapterKey === "glossary") return [];
+    var out = [], seen = {};
+    Object.keys(APP_HELP).forEach(function (app) {
+      if (!APPS[app] || (APP_HELP[app] || []).indexOf(chapterKey) < 0) return;
+      appScreenActions(app).forEach(function (x) { if (!seen[x[1]]) { seen[x[1]] = 1; out.push(x); } });
+    });
+    return out;
+  }
+  function fillScreenHelpList(acts) {
+    loadScreenHelp().then(function () {
+      var box = document.getElementById("sh-all"); if (!box) return;
+      box.innerHTML = '<p>Every screen here, each with what it is for, when to use it, what to fill in, what it changes and how it connects to the rest of Orbit. Open a screen to read it. <button class="btn" type="button" id="sh-print">Print all of it</button></p>' +
+        acts.map(function (x) {
+          var h = SCREEN_HELP[x[1]];
+          return '<details class="sh-d"><summary><b>' + esc(term(x[0])) + '</b>' + (h && h.what ? '<span>' + esc(shTeaser(h.what)) + '</span>' : '') + '</summary>' +
+            (h ? screenHelpHTML(h) : '<div class="sh"><p>This screen has no page yet.</p></div>') + '</details>';
+        }).join("");
+      var pb = document.getElementById("sh-print");
+      if (pb) pb.onclick = function () { box.querySelectorAll("details").forEach(function (d) { d.open = true; }); setTimeout(function () { window.print(); }, 60); };
+      wireScreenHelpLinks(box);
+    });
+  }
+  function helpScreen(key) {
+    var body = document.getElementById("helpBody"); if (!body) return;
+    var h = SCREEN_HELP[key];
+    if (!h) { helpList(""); return; }
+    var appKey = ACTION_APP[key] || S.app, appName = APPS[appKey] ? term(APPS[appKey].name) : "Orbit";
+    var panel = body.parentNode; if (panel && panel.classList) panel.classList.add("wide");
+    body.innerHTML = '<button class="help-back" id="helpBack">&#8249; All guides</button><div class="help-article"><div class="help-cat">' + esc(appName) + '</div><h2>' + esc(h.title || key) + '</h2>' + screenHelpHTML(h) +
+      '<p style="margin-top:16px"><button class="btn" id="sh-app">Every screen in ' + esc(appName) + '</button></p></div>';
+    body.scrollTop = 0;
+    document.getElementById("helpBack").onclick = function () { if (panel && panel.classList) panel.classList.remove("wide"); helpList(""); };
+    document.getElementById("sh-app").onclick = function () {
+      closeHelp();
+      if (appKey !== S.app && APPS[appKey] && canViewApp(appKey)) { S.app = appKey; applyAppColor(); renderShell(); }
+      go(appKey + ".help");
+    };
+    wireScreenHelpLinks(body, closeHelp);
+  }
+  function openScreenHelp(key) {
+    openHelp();
+    var body = document.getElementById("helpBody");
+    if (body && !SCREEN_HELP[key]) body.insertAdjacentHTML("afterbegin", '<div class="help-empty" id="sh-wait">Opening the help for this screen...</div>');
+    loadScreenHelp().then(function () { var w = document.getElementById("sh-wait"); if (w) w.remove(); if (SCREEN_HELP[key]) helpScreen(key); });
+  }
   function closeHelp() { var p = document.getElementById("helpWrap"); if (p) p.remove(); }
   function openHelp(startId) {
     closeHelp();
@@ -25880,6 +26037,8 @@
     document.getElementById("helpBackdrop").onclick = closeHelp;
     document.getElementById("helpX").onclick = closeHelp;
     if (startId) helpArticle(startId); else helpList("");
+    // the screen pages arrive a moment later; show "This screen" once they do
+    if (!startId) loadScreenHelp().then(function () { var qi = document.getElementById("helpQ"); if (qi && !qi.value && !document.getElementById("helpBack")) helpList(""); });
   }
   function helpList(q) {
     var body = document.getElementById("helpBody"); if (!body) return;
@@ -25888,16 +26047,21 @@
     var contextual = !q && S.app ? HELP_ARTICLES.filter(function (a) { return a.apps && a.apps.indexOf(S.app) >= 0; }) : [];
     var tourHtml = !q ? '<div class="help-sec">Guided tours</div><div class="help-tours">' + Object.keys(HELP_TOURS).map(function (k) { var t = HELP_TOURS[k], done = tourDone(k); return '<button class="help-tour' + (done ? " done" : "") + '" data-tour="' + k + '"><span class="ht-play">' + (done ? "&#10003;" : "&#9658;") + '</span><span><b>' + esc(t.title) + (done ? ' <span class="ht-done">Done</span>' : "") + '</b><span class="ht-desc">' + (done ? "Completed - click to watch again" : esc(t.desc) + ' &middot; ' + t.mins + ' min') + '</span></span></button>'; }).join("") + '</div>' : '';
     function card(a) { return '<button class="help-art" data-art="' + a.id + '"><b>' + esc(a.title) + '</b><span>' + esc(a.teaser) + '</span></button>'; }
-    var ctxHtml = contextual.length ? '<div class="help-sec">For this screen</div>' + contextual.map(card).join("") : "";
+    var shHere = !q && S.action && SCREEN_HELP[S.action];
+    var shCard = shHere ? '<div class="help-sec">This screen</div><button class="help-art" data-shkey="' + esc(S.action) + '"><b>' + esc(shHere.title || "About this screen") + '</b><span>What it is for, when to use it, every field and how it connects</span></button>' : "";
+    var shHits = q ? Object.keys(SCREEN_HELP).filter(function (k) { return shSearchText(k).indexOf(q) >= 0; }).slice(0, 15) : [];
+    var shHitsHtml = shHits.length ? '<div class="help-sec">Screens</div>' + shHits.map(function (k) { var h = SCREEN_HELP[k]; return '<button class="help-art" data-shkey="' + esc(k) + '"><b>' + esc(h.title || k) + '</b><span>' + esc(shTeaser(h.what || "")) + '</span></button>'; }).join("") : "";
+    var ctxHtml = shCard + (contextual.length ? '<div class="help-sec">For this screen</div>' + contextual.map(card).join("") : "");
     var cats = {}; match.forEach(function (a) { (cats[a.cat] = cats[a.cat] || []).push(a); });
-    var listHtml = Object.keys(cats).map(function (c) { return '<div class="help-sec">' + esc(c) + '</div>' + cats[c].map(card).join(""); }).join("") || '<div class="help-empty">No guides match "' + esc(q) + '".</div>';
+    var listHtml = Object.keys(cats).map(function (c) { return '<div class="help-sec">' + esc(c) + '</div>' + cats[c].map(card).join(""); }).join("") || (shHits.length ? "" : '<div class="help-empty">No guides match "' + esc(q) + '".</div>');
     var manualBtn = !q ? '<button class="help-manual" id="help-manual">&#128214; Open the full user manual</button>' : '';
-    body.innerHTML = '<div class="help-search"><input id="helpQ" type="text" placeholder="Search help..." value="' + esc(q) + '" autocomplete="off"></div>' + manualBtn + tourHtml + ctxHtml + listHtml;
+    body.innerHTML = '<div class="help-search"><input id="helpQ" type="text" placeholder="Search help..." value="' + esc(q) + '" autocomplete="off"></div>' + manualBtn + tourHtml + ctxHtml + shHitsHtml + listHtml;
     var qi = document.getElementById("helpQ"); qi.oninput = function () { helpList(this.value); };
     var mb = document.getElementById("help-manual"); if (mb) mb.onclick = function () { closeHelp(); openApp("help"); };
     if (q) { qi.focus(); qi.setSelectionRange(q.length, q.length); }
     body.querySelectorAll(".help-tour").forEach(function (b) { b.onclick = function () { startTour(b.dataset.tour); }; });
     body.querySelectorAll(".help-art").forEach(function (b) { b.onclick = function () { helpArticle(b.dataset.art); }; });
+    body.querySelectorAll("[data-shkey]").forEach(function (b) { b.onclick = function () { helpScreen(b.getAttribute("data-shkey")); }; });
   }
   function helpArticle(id) {
     var body = document.getElementById("helpBody"); if (!body) return;
@@ -26292,7 +26456,10 @@
     wireBc();
     var body = document.getElementById("o-body");
     var arts = sec.articles.map(function (a, i) { return '<article class="man-art" id="man-' + i + '"><h3>' + a.t + '</h3>' + a.h + '</article>'; }).join("");
-    var toc = sec.articles.length > 1 ? '<nav class="man-toc">' + sec.articles.map(function (a, i) { return '<a data-i="' + i + '">' + a.t + '</a>'; }).join("") + '</nav>' : "";
+    // every screen of the apps this chapter belongs to, each page in full
+    var shActs = chapterScreenActions(key), shIdx = sec.articles.length;
+    if (shActs.length) { arts += '<article class="man-art" id="man-' + shIdx + '"><h3>Every screen, in full</h3><div id="sh-all"><p class="muted">Loading every screen...</p></div></article>'; fillScreenHelpList(shActs); }
+    var toc = (sec.articles.length > 1 || shActs.length) ? '<nav class="man-toc">' + sec.articles.map(function (a, i) { return '<a data-i="' + i + '">' + a.t + '</a>'; }).join("") + (shActs.length ? '<a data-i="' + shIdx + '">Every screen, in full</a>' : '') + '</nav>' : "";
     var flow = HELP_FLOWS[key]; var flowHtml = flow ? mfPanel(flow) : "";
     body.innerHTML = '<div class="man-wrap">' +
       '<div class="man-search"><input id="man-q" type="text" placeholder="Search the whole manual..." autocomplete="off"><div class="man-results" id="man-results"></div></div>' +
@@ -26333,6 +26500,12 @@
         toc.push('<a data-i="' + idx + '">' + a.t + '</a>'); idx++;
       });
     });
+    var shActs = appScreenActions(appKey);
+    if (shActs.length) {
+      arts += '<article class="man-art" id="man-' + idx + '"><h3>Every screen, in full</h3><div id="sh-all"><p class="muted">Loading every screen...</p></div></article>';
+      toc.push('<a data-i="' + idx + '">Every screen, in full</a>'); idx++;
+      fillScreenHelpList(shActs);
+    }
     var tocHtml = idx > 1 ? '<nav class="man-toc">' + toc.join("") + '</nav>' : "";
     body.innerHTML = '<div class="man-wrap">' +
       '<div class="man-search"><input id="man-q" type="text" placeholder="Search all help..." autocomplete="off"><div class="man-results" id="man-results"></div></div>' +
@@ -26860,12 +27033,17 @@
     var vb = document.getElementById("mr-void"); if (vb) vb.onclick = async function () { if (!confirm("Void " + (m.number || "this movement") + "? This reverses it in the books and on the customer statement, and restores any invoices it settled.")) return; vb.disabled = true; vb.textContent = "Voiding..."; var r = await voidCashMovement(m); if (r && r.error) { toast("Could not void: " + errMsg(r.error)); vb.disabled = false; vb.textContent = "Void"; return; } if (r && r.already) { vb.disabled = false; return; } mm.remove(); toast("Voided " + (m.number || "")); renderView(); };
   }
   async function reverseEntry(entryId, refNo, narr) {
-    var lns = (await sb.from("journal_lines").select("account_id,debit,credit,partner_id,label").eq("entry_id", entryId)).data || [];
+    // an entry is reversed once: the reversal names it, and a second press finds that and stops
+    var done = (await sb.from("journal_entries").select("id,entry_number").eq("company_id", S.company.id).eq("source_type", "cash_void").eq("source_id", String(entryId)).limit(1)).data || [];
+    if (done.length) return { error: { message: "This entry was already reversed by " + (done[0].entry_number || "an earlier reversal") + "." } };
+    var orig = (await sb.from("journal_entries").select("book_id").eq("id", entryId).maybeSingle()).data || {};
+    var lns = (await sb.from("journal_lines").select("account_id,debit,credit,partner_id,label,amount_currency,currency_code,fx_rate").eq("entry_id", entryId)).data || [];
     if (!lns.length) return { ok: true };
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
-    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: today(), ref: refNo, narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "cash_void" }).select("id").single();
+    // the reversal lands in the same book as the entry it cancels, with the same currency detail
+    var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: today(), ref: refNo, narration: narr, currency_code: S.company.currency_code, state: "draft", source_type: "cash_void", source_id: String(entryId), book_id: orig.book_id || null }).select("id").single();
     if (e.error) return { error: e.error };
-    var rows = lns.map(function (l) { return { entry_id: e.data.id, company_id: S.company.id, account_id: l.account_id, label: "Reversal: " + (l.label || ""), debit: Number(l.credit) || 0, credit: Number(l.debit) || 0, partner_id: l.partner_id || null }; });
+    var rows = lns.map(function (l) { return { entry_id: e.data.id, company_id: S.company.id, account_id: l.account_id, label: "Reversal: " + (l.label || ""), debit: Number(l.credit) || 0, credit: Number(l.debit) || 0, partner_id: l.partner_id || null, amount_currency: l.amount_currency != null ? -Number(l.amount_currency) : null, currency_code: l.currency_code || null, fx_rate: l.fx_rate != null ? Number(l.fx_rate) : null }; });
     var li = await sb.from("journal_lines").insert(rows);
     if (li.error) return { error: li.error };
     var pe = await sb.rpc("post_entry", { p_entry: e.data.id });
@@ -29588,13 +29766,17 @@
       var sel = document.getElementById("pp-inv"), opt = sel.options[sel.selectedIndex];
       var amt = Number(gv("pp-amt")) || 0, res = Number(opt.dataset.res) || 0;
       if (amt <= 0) { toast("Enter the amount received"); return; }
-      if (amt > res + 0.005 && !confirm("That is more than the " + moneyC(res) + " outstanding on this charge. Continue?")) return;
+      if (amt > res + 0.005) { toast("That is more than the " + moneyC(res) + " outstanding on this charge. Record " + moneyC(res) + " here, and any advance as a separate receipt."); return; }
       var btn = mm.querySelector("[data-s]"); btn.disabled = true;
-      var pay = await sb.from("payments").insert({ company_id: S.company.id, partner_id: opt.dataset.p || null, payment_type: "inbound", date: gv("pp-date") || today(), amount: amt, currency_code: S.company.currency_code, amount_company: amt, memo: "Building charges " + opt.textContent.slice(0, 60), reference: gv("pp-ref") || null, state: "posted", method: gv("pp-method"), payer_type: gv("pp-ptype"), payer_name: gv("pp-pname") || opt.dataset.n || null }).select("id").single();
-      if (pay.error) { toast(errMsg(pay.error)); btn.disabled = false; return; }
+      // The payment goes through the ledger like any other: register_payment posts the
+      // bank or cash entry, matches it to the charge and updates what is left. It used to
+      // write only the payment row, so the charge showed paid while the ledger still said owed.
+      var rp = await sb.rpc("register_payment", { p_invoice: sel.value, p_amount: amt, p_date: gv("pp-date") || today(), p_journal_code: gv("pp-method") === "cash" ? "CSH" : "BNK", p_method: gv("pp-method"), p_ref: gv("pp-ref") || "" });
+      if (rp.error) { toast(errMsg(rp.error)); btn.disabled = false; return; }
+      var payId = rp.data;
+      if (payId) await sb.from("payments").update({ method: gv("pp-method"), payer_type: gv("pp-ptype"), payer_name: gv("pp-pname") || opt.dataset.n || null, memo: "Building charges " + opt.textContent.slice(0, 60) }).eq("id", payId);
       var left = Math.max(0, Math.round((res - amt) * 100) / 100);
-      await sb.from("invoices").update({ amount_residual: left, payment_state: left <= 0.005 ? "paid" : "partial" }).eq("id", sel.value);
-      plotLog("received", "payments", pay.data.id, moneyC(amt), "from " + (gv("pp-pname") || opt.dataset.n || ""), propId);
+      plotLog("received", "payments", payId, moneyC(amt), "from " + (gv("pp-pname") || opt.dataset.n || ""), propId);
       m.remove(); toast("Payment recorded");
       plotReceiptDoc({ amount: amt, date: gv("pp-date") || today(), who: gv("pp-pname") || opt.dataset.n || "", method: gv("pp-method"), ref: gv("pp-ref"), doc: opt.textContent, left: left });
       renderView();
