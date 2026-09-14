@@ -2716,3 +2716,6 @@ body{background:transparent}
 .je-addline{margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit}
 .je-hint{font-size:12px;margin-left:10px}
 .je-tot{margin:12px 0 16px;font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
+/* ===== statement of account ===== */
+.st-verdict{margin:12px 0 4px;font-weight:700;font-size:15px}
+.st-h2{font-size:15px;font-weight:700;margin:24px 0 8px}

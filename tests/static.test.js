@@ -48,6 +48,8 @@ const MUTATIONS = {
     s => s.replace("var due = svcR2(T.tot - takenSoFar)", "var due = svcR2(T.sub - takenSoFar)"),
   "account and ledger reads page past the 1,000-row cap":
     s => s + '\n var x = (await sb.from("accounts").select("id").eq("company_id", S.company.id)).data || [];',
+  "every table name is a real table name":
+    s => s.replace('sb.from("subcontracts")', 'sb.from("sc.list")'),
   "record forms name the breadcrumb through bcTitle":
     s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
   "no function is declared twice": s => s + "\n  function bcTitle() {}\n",

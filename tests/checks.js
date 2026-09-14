@@ -291,9 +291,16 @@
         if (!/async function allRows\(/.test(src)) return bad("the allRows paging helper is missing");
         var acc = /\(await sb\.from\("accounts"\)\.select\("[^"]*"\)\.eq\("company_id", [A-Za-z.]+\)(?:\.eq\("is_active", true\)|\.or\("is_active\.is\.null,is_active\.eq\.true"\))?(?:\.order\("code"\))?\)\.data/g;
         var led = /\(await bookFilter\(sb\.from\("journal_lines"\)/g;
-        var n = (src.match(acc) || []).length, m = (src.match(led) || []).length + (/var q = sb\.from\("journal_lines"\)/.test(src) ? 1 : 0);
+        var n = (src.match(acc) || []).length, m = (src.match(led) || []).length + (/var q = sb\.from\("journal_lines"\)[\s\S]{0,400}?\(await q\)\.data/.test(src) ? 1 : 0);
         if (n || m) return bad((n ? n + " full account list(s)" : "") + (n && m ? " and " : "") + (m ? m + " ledger read(s)" : "") + " without paging");
         return ok("every full account list and ledger read pages");
+      } },
+
+    { name: "every table name is a real table name",
+      why: "A search-and-replace for the Subcontracts screen key turned sb.from(\"subcontracts\") into sb.from(\"sc.list\") in six places. Nothing errored at load; the list, the form, the approval hand-off and the certificate lookup all read a table that cannot exist, for weeks.",
+      run: function (src) {
+        var bad1 = uniq(all(src, /sb\.from\("([^"]*)"\)/g)).filter(function (t) { return !/^[a-z][a-z0-9_]*$/.test(t); });
+        return bad1.length ? bad(bad1.length + " impossible table name(s): " + bad1.join(", ")) : ok("every sb.from() names a plain identifier");
       } },
 
     { name: "no em dash",

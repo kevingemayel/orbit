@@ -1497,7 +1497,7 @@
       { i: "chartLine", n: "Cash Flow Forecast", l: "Reporting", d: "Projected cash in and out over the coming weeks." },
       { i: "hand", n: "Collections", l: "Reporting", d: "A chase list of overdue customers to follow up." },
       { i: "percent", n: "VAT / Tax Report", l: "Reporting", d: "Tax collected minus tax paid: what you owe the tax office." },
-      { i: "doc", n: "Partner Statement", l: "Reporting", d: "A printable statement to send a customer." },
+      { i: "doc", n: "Statement of Account", l: "Reporting", d: "For a contact or any account over any period: balance brought forward, every movement, balance carried forward." },
       { i: "layers", n: "Consolidation", l: "Reporting", d: "Add several companies into one set of group reports." },
       { i: "heart", n: "Data Health Check", l: "Reporting", d: "Spot-checks that flag entries which look wrong." },
       { i: "fingerprint", n: "Traceability", l: "Reporting", d: "Follow any job from take-off to the GL entry, and seal it so tampering is caught." },
@@ -1772,7 +1772,7 @@
         { label: "Customers", items: [["Invoices", "inv.out"], ["Recurring Invoices", "inv.recurring"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
         { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Asset dashboard", "assets.dash"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Partner Statement", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Statement of Account", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
         { label: "Configuration", items: [["Taxes", "taxes"], ["E-invoicing", "acc.einvoice"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
     },
@@ -2058,7 +2058,7 @@
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.recost": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
-    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "kitchen", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
+    "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "site", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
@@ -2149,7 +2149,7 @@
   // Screens that moved into the Contracting app but must keep their original permission
   // module, so existing roles don't silently lose access to them.
   var ACTION_MODULE = {
-    "pc.list": "projects", "var.list": "projects", "sc.list": "kitchen", "proj.pnl": "projects",
+    "pc.list": "projects", "var.list": "projects", "sc.list": "projects", "proj.pnl": "projects",
     "proj.retention": "projects", "proj.wip": "projects", "proj.jobcost": "projects",
     "cost.codes": "projects", "proj.materials": "projects",
     "doc.drawings": "documents", "doc.subs": "documents", "doc.rfis": "documents", "doc.trans": "documents"
@@ -10680,54 +10680,114 @@
       '<div class="sub u-mt14">Output VAT is tax you collected on sales; input VAT is tax you paid on purchases. Payable = output minus input. Credit notes are netted out. Posted documents only.</div>';
   }
 
-  async function renderStatement(pid) {
+  // ---- statement of account ----
+  // For a contact or for any account, over any period: the balance brought
+  // forward, every posted movement with a running balance, the totals for the
+  // period and the balance carried forward. An account can be read on its own
+  // or with its auxiliaries, which is how one employee, one bank account or one
+  // supplier is read when the chart keeps them as auxiliaries; read that way it
+  // also shows a trial balance by auxiliary.
+  var STMT_MODE = "contact", STMT_PID = "", STMT_ACCT = "", STMT_AUX = true;
+  async function renderStatement(pid, acctId) {
     if (!pid && STMT_PRESET_PARTNER) { pid = STMT_PRESET_PARTNER; STMT_PRESET_PARTNER = null; }
-    var cc = S.company.currency_code;
-    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var sel = '<select id="stmt-sel" class="o-filtbtn" style="min-width:220px"><option value="">Select a partner...</option>' +
-      partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === pid ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>';
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Partner Statement") + '<div class="gap"></div>' + sel +
-      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div><div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">Select a partner above to view their statement of account.</div></div></div></div>';
+    if (pid) { STMT_MODE = "contact"; STMT_PID = pid; }
+    if (acctId) { STMT_MODE = "account"; STMT_ACCT = acctId; }
+    var cc = S.company.currency_code, pr = periodRange(REP_PERIOD);
+    var partners = await allRows(function () { return sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name"); });
+    var accts = await allRows(function () { return sb.from("accounts").select("id,code,name,parent_account_id").eq("company_id", S.company.id).order("code"); });
+    var accById = {}; accts.forEach(function (a) { accById[a.id] = a; });
+    function accLabel(a) { return a ? a.code + " " + a.name : ""; }
+    function kidsOf(id) { return accts.filter(function (a) { return a.parent_account_id === id && String(a.code).indexOf(".") > 0; }); }
+    var isContact = STMT_MODE === "contact";
+    var modeSel = '<select id="st-mode" class="o-filtbtn" aria-label="Statement for"><option value="contact"' + (isContact ? " selected" : "") + '>For a contact</option><option value="account"' + (!isContact ? " selected" : "") + '>For an account</option></select>';
+    var pick = isContact
+      ? '<select id="st-pid" class="o-filtbtn" style="min-width:220px" aria-label="Contact"><option value="">Choose a contact...</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (p.id === STMT_PID ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>'
+      : '<input id="st-acct" class="o-filtbtn" list="st-accts" style="min-width:240px" placeholder="Account code or name" aria-label="Account" autocomplete="off" value="' + esc(accLabel(accById[STMT_ACCT])) + '"><datalist id="st-accts">' + accts.map(function (a) { return '<option value="' + esc(accLabel(a)) + '"></option>'; }).join("") + '</datalist>' +
+        (STMT_ACCT && kidsOf(STMT_ACCT).length ? '<label class="o-filtbtn u-ptr"><input type="checkbox" id="st-aux"' + (STMT_AUX ? " checked" : "") + '> With its auxiliaries</label>' : '');
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Statement of Account") + '<div class="gap"></div>' + modeSel + pick + periodSelect() + bookBarHTML() +
+      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
+      '<div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">' + (isContact ? "Choose a contact" : "Choose an account") + ' and a period above.</div></div></div></div>';
     wireBc();
-    document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
-    var selEl = document.getElementById("stmt-sel");
-    selEl.onchange = function () { renderStatement(selEl.value); };
-    if (!pid) return;
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
+    function again() { renderStatement(); }
+    wirePeriod(again);
+    document.getElementById("st-mode").onchange = function () { STMT_MODE = this.value; again(); };
+    var pe = document.getElementById("st-pid"); if (pe) pe.onchange = function () { STMT_PID = this.value; again(); };
+    var ae = document.getElementById("st-acct");
+    if (ae) ae.onchange = function () {
+      var v = ae.value.trim(), tok = v.split(/\s+/)[0];
+      var a = accts.filter(function (x) { return accLabel(x) === v; })[0] || accts.filter(function (x) { return x.code === tok; })[0];
+      if (!a) { if (v) toast("No account has the code or name " + v + "."); return; }
+      STMT_ACCT = a.id; again();
+    };
+    var xe = document.getElementById("st-aux"); if (xe) xe.onchange = function () { STMT_AUX = xe.checked; again(); };
+
+    var subject = "", ids = [];
+    if (isContact) {
+      if (!STMT_PID) return;
+      subject = (partners.filter(function (p) { return p.id === STMT_PID; })[0] || {}).name || "Contact";
+    } else {
+      if (!STMT_ACCT || !accById[STMT_ACCT]) return;
+      ids = [STMT_ACCT];
+      if (STMT_AUX) kidsOf(STMT_ACCT).forEach(function (k) { ids.push(k.id); });
+      subject = accLabel(accById[STMT_ACCT]) + (ids.length > 1 ? " with its auxiliaries" : "");
+    }
     var rep = document.getElementById("rep");
-    var partner = partners.filter(function (p) { return p.id === pid; })[0] || { name: "" };
-    var invs = (await sb.from("invoices").select("number,move_type,invoice_date,due_date,amount_total,currency_code").eq("company_id", S.company.id).eq("partner_id", pid).eq("state", "posted")).data || [];
-    var pays = (await sb.from("payments").select("date,amount,currency_code,payment_type,reference,memo").eq("company_id", S.company.id).eq("partner_id", pid).in("state", ["posted", "reconciled"])).data || [];
-    var home = cc, ev = [];
-    invs.forEach(function (v) {
-      var t = v.move_type, docs = { out_invoice: "Invoice", out_refund: "Credit Note", in_invoice: "Vendor Bill", in_refund: "Vendor Refund" };
-      var delta = (t === "out_invoice" || t === "in_refund" ? 1 : -1) * Number(v.amount_total || 0);
-      ev.push({ date: v.invoice_date || "", doc: docs[t] || t, ref: v.number || "", due: v.due_date || "", delta: delta, ccy: v.currency_code || home });
+    rep.innerHTML = '<div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div>';
+    var lines = await allRows(function () {
+      var q = sb.from("journal_lines").select("debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
+        .eq("company_id", S.company.id).eq("journal_entries.state", "posted");
+      q = isContact ? q.eq("partner_id", STMT_PID) : q.in("account_id", ids);
+      if (pr.to) q = q.lte("journal_entries.date", pr.to);
+      return bookFilter(q, "journal_entries.book_id").order("id");
     });
-    pays.forEach(function (p) {
-      var delta = (p.payment_type === "inbound" ? -1 : 1) * Number(p.amount || 0);
-      ev.push({ date: p.date || "", doc: p.payment_type === "inbound" ? "Payment received" : "Payment made", ref: p.reference || p.memo || "", due: "", delta: delta, ccy: p.currency_code || home });
+    if (!document.getElementById("rep")) return;
+    function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+    var open = 0, inP = [], byAcc = {};
+    lines.forEach(function (l) {
+      var d = (l.journal_entries || {}).date || "", amt = (Number(l.debit) || 0) - (Number(l.credit) || 0);
+      var b = byAcc[l.account_id] || (byAcc[l.account_id] = { open: 0, dr: 0, cr: 0 });
+      if (pr.from && d < pr.from) { open += amt; b.open += amt; }
+      else { inP.push(l); b.dr += Number(l.debit) || 0; b.cr += Number(l.credit) || 0; }
     });
-    if (!ev.length) { rep.innerHTML = repHead("Statement - " + partner.name, home) + '<div class="o-empty">No posted documents for this partner yet.</div>'; return; }
-    // group by document currency so each currency's balance nets correctly (a EUR invoice
-    // and its EUR payment cancel out; mixing currencies in one running balance would not)
-    var byCcy = {}; ev.forEach(function (e) { (byCcy[e.ccy] || (byCcy[e.ccy] = [])).push(e); });
-    var ccys = Object.keys(byCcy).sort(function (a, b) { return a === home ? -1 : b === home ? 1 : (a < b ? -1 : 1); });
-    var multi = ccys.length > 1;
-    var sections = ccys.map(function (ccy) {
-      var list = byCcy[ccy].slice().sort(function (a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
-      var bal = 0;
-      var body = list.map(function (e) {
-        bal += e.delta;
-        var charge = e.delta > 0 ? money(e.delta) : "", credit = e.delta < 0 ? money(-e.delta) : "";
-        return '<tr><td>' + esc(e.date) + '</td><td>' + esc(e.doc) + '</td><td>' + esc(e.ref) + '</td><td>' + esc(e.due) + '</td><td class="num">' + charge + '</td><td class="num">' + credit + '</td><td class="num">' + money(bal) + '</td></tr>';
-      }).join("");
-      var owed = bal, dir = owed > 0.005 ? partner.name + " owes you" : owed < -0.005 ? "You owe " + partner.name : "Settled";
-      var secHdr = multi ? '<tr class="sec"><td colspan="7">In ' + esc(ccy) + '</td></tr>' : '';
-      return '<div class="o-rt-wrap u-mt16"' + (multi ? '' : '') + '><table class="o-rt"><thead><tr><td>Date</td><td>Document</td><td>Reference</td><td>Due</td><td class="num">Charges (' + esc(ccy) + ')</td><td class="num">Payments (' + esc(ccy) + ')</td><td class="num">Balance (' + esc(ccy) + ')</td></tr></thead><tbody>' +
-        secHdr + body + '<tr class="tot"><td colspan="6">' + esc(dir) + '</td><td class="num">' + moneyC(Math.abs(owed), ccy) + '</td></tr></tbody></table></div>';
-    }).join("");
-    rep.innerHTML = repHead("Statement of Account - " + partner.name, multi ? home : ccys[0]) + sections +
-      '<div class="sub u-mt14">Charges increase the balance owed to you; payments and credit notes reduce it. A positive closing balance is what the partner still owes. Amounts are shown in each document\'s own currency' + (multi ? ', grouped by currency' : '') + '. Posted documents only.</div>';
+    inP.sort(function (x, y) {
+      var a = x.journal_entries || {}, b = y.journal_entries || {};
+      return a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.entry_number || "").localeCompare(String(b.entry_number || ""));
+    });
+    var showAcc = isContact || ids.length > 1, n = showAcc ? 9 : 8, bal = r2(open), td = 0, tc = 0, body = "";
+    var head = '<tr><td>Date</td><td>Voucher</td><td>Reference</td>' + (showAcc ? '<td>Account</td>' : '') + '<td>Description</td><td class="num">In currency</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Balance</td></tr>';
+    if (pr.from) body += '<tr class="sec"><td colspan="' + (n - 1) + '">Balance brought forward at ' + esc(pr.from) + '</td><td class="num">' + money(bal) + '</td></tr>';
+    inP.forEach(function (l) {
+      var e = l.journal_entries || {}, d = Number(l.debit) || 0, c = Number(l.credit) || 0, ac = l.accounts || {};
+      bal = r2(bal + d - c); td += d; tc += c;
+      var fx = l.currency_code && l.currency_code !== cc && Number(l.amount_currency) ? moneyC(Math.abs(Number(l.amount_currency)), l.currency_code) : "";
+      body += '<tr><td>' + esc(e.date || "") + '</td><td>' + esc(e.entry_number || "") + '</td><td>' + esc(e.ref || "") + '</td>' +
+        (showAcc ? '<td>' + esc((ac.code || "") + " " + (ac.name || "")) + '</td>' : '') +
+        '<td>' + esc(l.label || (l.partners && l.partners.name) || "") + '</td><td class="num muted">' + fx + '</td>' +
+        '<td class="num">' + (d ? money(d) : "") + '</td><td class="num">' + (c ? money(c) : "") + '</td><td class="num">' + money(bal) + '</td></tr>';
+    });
+    if (!inP.length) body += '<tr><td colspan="' + n + '" class="muted">No posted movements in this period.</td></tr>';
+    body += '<tr class="tot"><td colspan="' + (n - 3) + '">Movements in the period</td><td class="num">' + money(r2(td)) + '</td><td class="num">' + money(r2(tc)) + '</td><td class="num">' + money(r2(td - tc)) + '</td></tr>';
+    body += '<tr class="tot"><td colspan="' + (n - 1) + '">Balance carried forward' + (pr.to ? ' at ' + esc(pr.to) : '') + '</td><td class="num">' + money(bal) + '</td></tr>';
+    var verdict = isContact
+      ? (bal > 0.005 ? esc(subject) + " owes you " + moneyC(bal, cc) : bal < -0.005 ? "You owe " + esc(subject) + " " + moneyC(-bal, cc) : "Nothing is owed either way")
+      : (bal > 0.005 ? "Debit balance of " + moneyC(bal, cc) : bal < -0.005 ? "Credit balance of " + moneyC(-bal, cc) : "The balance is zero");
+    var tb = "";
+    if (!isContact && ids.length > 1) {
+      var rowsTb = ids.map(function (id) { var b = byAcc[id] || { open: 0, dr: 0, cr: 0 }; return { a: accById[id], open: r2(b.open), dr: r2(b.dr), cr: r2(b.cr), close: r2(b.open + b.dr - b.cr) }; })
+        .filter(function (x) { return x.open || x.dr || x.cr; });
+      if (rowsTb.length) {
+        var so = 0, sd = 0, sc = 0, scl = 0;
+        tb = '<h2 class="st-h2">Trial balance by auxiliary</h2><div class="o-rt-wrap"><table class="o-rt st-tb"><thead><tr><td>Account</td><td class="num">Brought forward</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Carried forward</td></tr></thead><tbody>' +
+          rowsTb.map(function (x) { so += x.open; sd += x.dr; sc += x.cr; scl += x.close; return '<tr><td>' + esc(accLabel(x.a)) + '</td><td class="num">' + money(x.open) + '</td><td class="num">' + (x.dr ? money(x.dr) : "") + '</td><td class="num">' + (x.cr ? money(x.cr) : "") + '</td><td class="num">' + money(x.close) + '</td></tr>'; }).join("") +
+          '<tr class="tot"><td>Total</td><td class="num">' + money(r2(so)) + '</td><td class="num">' + money(r2(sd)) + '</td><td class="num">' + money(r2(sc)) + '</td><td class="num">' + money(r2(scl)) + '</td></tr></tbody></table></div>';
+      }
+    }
+    rep.innerHTML = repHead("Statement of Account - " + subject, cc) +
+      '<div class="sub">' + esc(pr.label) + (pr.from ? ", from " + esc(pr.from) : "") + (pr.to ? " to " + esc(pr.to) : "") + '. Posted entries only, in ' + esc(cc) + '; foreign amounts are shown beside them.</div>' +
+      '<div class="o-rt-wrap u-mt14"><table class="o-rt"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="st-verdict">' + verdict + '</div>' + tb;
   }
 
   // ============================ CONSOLIDATION ============================
@@ -19009,7 +19069,7 @@
   function cfgSubcontracts() {
     return {
       title: "Subcontracts", pageSize: 80, table: "subcontracts",
-      fetch: function () { return sb.from("sc.list").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      fetch: function () { return sb.from("subcontracts").select("*, projects(name), partners(name)").eq("company_id", S.company.id).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
       searchText: function (s) { return (s.number || "") + " " + (s.name || "") + " " + (s.partners ? s.partners.name : ""); },
       columns: [
         { label: "Number", get: function (s) { return '<b>' + esc(s.number || "/") + '</b>'; } },
@@ -19043,15 +19103,15 @@
       if (!gv("sc-name")) { toast("Name required"); return; }
       var row = { name: gv("sc-name"), number: gv("sc-num"), vendor_id: document.getElementById("sc-vend").value || null, project_id: document.getElementById("sc-proj").value || null, amount: parseFloat(gv("sc-amt")) || 0, retention_pct: parseFloat(gv("sc-ret")) || 0, currency_code: S.company.currency_code, state: document.getElementById("sc-state").value };
       var r, sid = sc.id;
-      if (sc.id) r = await sb.from("sc.list").update(row).eq("id", sc.id);
-      else { row.company_id = S.company.id; var ins = await sb.from("sc.list").insert(row).select("id").single(); r = ins; sid = ins.data && ins.data.id; }
+      if (sc.id) r = await sb.from("subcontracts").update(row).eq("id", sc.id);
+      else { row.company_id = S.company.id; var ins = await sb.from("subcontracts").insert(row).select("id").single(); r = ins; sid = ins.data && ins.data.id; }
       if (r.error) { toast(errMsg(r.error)); return; }
       // Committing to a subcontractor is a spending decision the size of a
       // purchase order, and "subcontract" was offered in the rule editor
       // without anything ever checking it.
       if (row.state === "active" && sid) {
         var _sg = await approvalGate("subcontract", sid, row.number || row.name, row.amount, "sc.list");
-        if (_sg === "blocked") { await sb.from("sc.list").update({ state: "draft" }).eq("id", sid); m.remove(); renderView(); return; }
+        if (_sg === "blocked") { await sb.from("subcontracts").update({ state: "draft" }).eq("id", sid); m.remove(); renderView(); return; }
       }
       m.remove(); toast("Saved"); renderView();
     };
@@ -24726,7 +24786,7 @@
     var parent = { action: "pur.sccert", title: "Subcontract Certificates" };
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
-    var scs = (await sb.from("sc.list").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
+    var scs = (await sb.from("subcontracts").select("id,name,number,amount,retention_pct, partners(name), projects(name)").eq("company_id", S.company.id).order("created_at", { ascending: false })).data || [];
     if (!scs.length) { document.querySelector(".o-form").innerHTML = '<div class="o-sheet"><div class="o-empty">No subcontracts yet. Create one first (Projects &rsaquo; Subcontracts), then certify progress here.</div></div>'; return; }
     var cert = id === "new" ? { state: "draft", date_to: today(), subcontract_id: presetSc || scs[0].id } : (await sb.from("subcontract_certificates").select("*").eq("id", id).maybeSingle()).data || {};
     var sc = scs.filter(function (x) { return x.id === cert.subcontract_id; })[0] || scs[0];
@@ -24779,7 +24839,7 @@
     document.getElementById("sx-save").onclick = async function () { var sid = await persist(); if (sid) { toast("Saved"); renderSubcontractCertForm(sid); } };
     var cb = document.getElementById("sx-certify"); if (cb) cb.onclick = async function () { var sid = await persist(); if (!sid) return; await sb.from("subcontract_certificates").update({ state: "certified" }).eq("id", sid); toast("Certified"); renderSubcontractCertForm(sid); };
     var bb = document.getElementById("sx-bill"); if (bb) bb.onclick = async function () {
-      var full = (await sb.from("sc.list").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
+      var full = (await sb.from("subcontracts").select("vendor_id, project_id, name").eq("id", cert.subcontract_id).maybeSingle()).data || {};
       if (!full.vendor_id) { toast("Set a Vendor on the subcontract first."); return; }
       var num = await nextNumber("in_invoice");
       var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id).in("code", ["6100", "6000"])).data || [];
