@@ -2140,7 +2140,9 @@
   async function loadRole() {
     try {
       if (!S.company || !S.company.org_id) return { slug: "owner", full_access: true, can_manage_roles: true, can_see_money: true, rank: 100 };
-      var mem = (await sb.from("org_members").select("role").eq("org_id", S.company.org_id).eq("user_id", S.user.id).maybeSingle()).data;
+      var mem = (await sb.from("org_members").select("role,company_ids").eq("org_id", S.company.org_id).eq("user_id", S.user.id).maybeSingle()).data;
+      // a member limited to some companies is that company's admin at most, never the organisation's
+      S.memberScope = (mem && mem.company_ids && mem.company_ids.length) ? mem.company_ids.slice() : null;
       var slug = mem && mem.role ? mem.role : "owner";   // fail-open to owner (only ever hits owners in practice)
       var rows = (await sb.from("roles").select("*").eq("slug", slug).or("org_id.eq." + S.company.org_id + ",org_id.is.null")).data || [];
       var orgRole = rows.filter(function (r) { return r.org_id === S.company.org_id; })[0];
@@ -11216,7 +11218,7 @@
     return Object.keys(bySlug).map(function (k) { return bySlug[k]; }).sort(function (a, b) { return b.rank - a.rank; });
   }
   // client-side mirror of the DB can_manage_team() (owner-class or a can_manage_roles role)
-  function canManageTeam() { return !!(S.role && (S.role.full_access || S.role.can_manage_roles)) || !!S.isPlatformAdmin; }
+  function canManageTeam() { return !!S.isPlatformAdmin || (!S.memberScope && !!(S.role && (S.role.full_access || S.role.can_manage_roles))); }
   function companyAccessLabel(cids) {
     if (!cids || !cids.length) return "All companies";
     var names = cids.map(function (id) { var c = S.companies.filter(function (x) { return x.id === id; })[0]; return c ? c.name : null; }).filter(Boolean);

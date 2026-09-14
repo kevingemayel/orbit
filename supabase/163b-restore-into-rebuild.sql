@@ -18,7 +18,7 @@ begin
   orgid := public.backup_target_org(fileorg);
   rebuilt := (orgid is distinct from fileorg);
   if orgid is null then raise exception 'you do not belong to an organisation this can be restored into'; end if;
-  if not exists (select 1 from public.org_members m where m.org_id = orgid and m.user_id = auth.uid() and m.role in ('owner','admin','accountant')) then
+  if not public.is_org_admin(orgid) then
     raise exception 'you cannot write to that organisation';
   end if;
   if p_new_name is null or length(trim(p_new_name)) < 2 then raise exception 'give the restored company a name'; end if;
