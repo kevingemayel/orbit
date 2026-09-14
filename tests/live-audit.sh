@@ -37,6 +37,8 @@ EC=orbit-audit-c@example.com; FA2="$OA/partner/$PA2/audit.jpg"
 # a posted invoice in company A, in the sibling A2 and in tenant B, for Edit
 INVA=aaaa0000-0000-4000-8000-0000000000e1; INVA2=aaaa0000-0000-4000-8000-0000000000e2
 INVB=bbbb0000-0000-4000-8000-0000000000e3
+# one person known to both tenants by the same email: a customer in A, a guest in B
+PAE=aaaa0000-0000-4000-8000-0000000000e6; EVB=bbbb0000-0000-4000-8000-0000000000e4; EGB=bbbb0000-0000-4000-8000-0000000000e5
 
 pass=0; fail=0
 sql() { curl -s -X POST "$MGMT/database/query" -H "Authorization: Bearer $PAT" \
@@ -59,6 +61,9 @@ teardown() {
   sql "delete from public.org_members where org_id in ('$OA','$OB')" >/dev/null
   # a posted invoice refuses deletion, so the fixtures are cancelled first
   sql "update public.invoices set state='cancel' where company_id in ('$CA','$CB','$CA2')" >/dev/null
+  sql "delete from public.event_guests where id = '$EGB'" >/dev/null
+  sql "delete from public.event_events where id = '$EVB'" >/dev/null
+  sql "delete from public.privacy_requests where company_id in ('$CA','$CB','$CA2')" >/dev/null
   sql "delete from public.companies where id in ('$CA','$CB','$CA2','$CA3')" >/dev/null
   sql "delete from public.orgs where id in ('$OA','$OB')" >/dev/null
   for e in "$EA" "$EB" "$EC"; do
@@ -100,6 +105,9 @@ sql "insert into public.org_members (org_id,user_id,role,status,company_ids) val
 sql "insert into public.partners (id,org_id,company_id,name,is_customer) values ('$PA2','$OA','$CA2','ORBITAUDIT Secret A2',true) on conflict (id) do nothing" >/dev/null
 sql "insert into public.media (id,org_id,company_id,entity,entity_id,path,kind,mime) values ('$MA2','$OA','$CA2','partner','$PA2','$FA2','image','image/jpeg') on conflict (id) do nothing" >/dev/null
 sql "insert into public.invoices (id,company_id,move_type,number,state,invoice_date,amount_untaxed,amount_tax,amount_total,amount_residual) values ('$INVA','$CA','out_invoice','AUDIT/A/1','posted',current_date,10,0,10,10),('$INVA2','$CA2','out_invoice','AUDIT/A2/1','posted',current_date,10,0,10,10),('$INVB','$CB','out_invoice','AUDIT/B/1','posted',current_date,10,0,10,10) on conflict (id) do nothing" >/dev/null
+sql "insert into public.partners (id,org_id,company_id,name,email,is_customer) values ('$PAE','$OA','$CA','ORBITAUDIT Shared Person','shared-person@example.com',true) on conflict (id) do nothing" >/dev/null
+sql "insert into public.event_events (id,org_id,company_id,name) values ('$EVB','$OB','$CB','ORBITAUDIT Event B') on conflict (id) do nothing" >/dev/null
+sql "insert into public.event_guests (id,org_id,event_id,first_name,email) values ('$EGB','$OB','$EVB','ORBITAUDIT Guest B','shared-person@example.com') on conflict (id) do nothing" >/dev/null
 printf 'not really a jpeg' | curl -s -X POST "$API/storage/v1/object/attachments/$FA2" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" -H "Content-Type: image/jpeg" --data-binary @- >/dev/null
 HTC=$(curl -s -X POST "$API/auth/v1/admin/generate_link" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" \
      -H "Content-Type: application/json" -d "{\"type\":\"magiclink\",\"email\":\"$EC\"}" \
@@ -219,6 +227,30 @@ inv "the refused attempts left both invoices posted" \
     "select count(*) as n from public.invoices where id in ('$INVA2','$INVB') and state='posted'" 2
 inv "the allowed edit kept the posted version" \
     "select count(*) as n from public.document_revisions where doc_type='invoice' and doc_id='$INVA'" 1
+
+echo
+echo "backups and privacy requests"
+JWT=$ANON
+probe "an anonymous caller downloads company A's backup"          deny  POST  "rpc/backup_build" "{\"p_company\":\"$CA\"}"
+JWT=$JWTA
+probe "tenant A downloads tenant B's backup"                      deny  POST  "rpc/backup_build" "{\"p_company\":\"$CB\"}"
+probe "tenant A downloads its own backup"                         allow POST  "rpc/backup_build" "{\"p_company\":\"$CA\"}"
+JWT=$JWTC
+probe "the limited member downloads the sibling company's backup" deny  POST  "rpc/backup_build" "{\"p_company\":\"$CA2\"}"
+JWT=$JWTA
+inv "the shared-email fixtures exist" \
+    "select count(*) as n from public.event_guests where id='$EGB' and email='shared-person@example.com'" 1
+px=$(curl -s -X POST "$API/rest/v1/rpc/gdpr_export" -H "apikey: $ANON" -H "Authorization: Bearer $JWTA" -H "Content-Type: application/json" \
+     -d "{\"p_company\":\"$CA\",\"p_kind\":\"partner\",\"p_id\":\"$PAE\"}")
+if printf '%s' "$px" | grep -q 'ORBITAUDIT Shared Person' && ! printf '%s' "$px" | grep -q "$EGB"
+then printf '  PASS  %s\n' "A's data export holds A's customer and not B's guest with the same email"; pass=$((pass+1))
+else printf '  FAIL  %s\n        %.200s\n' "A's data export holds A's customer and not B's guest with the same email" "$px"; fail=$((fail+1)); fi
+curl -s -X POST "$API/rest/v1/rpc/gdpr_erase" -H "apikey: $ANON" -H "Authorization: Bearer $JWTA" -H "Content-Type: application/json" \
+     -d "{\"p_company\":\"$CA\",\"p_kind\":\"partner\",\"p_id\":\"$PAE\"}" >/dev/null
+inv "erasing the person in A leaves B's guest untouched" \
+    "select count(*) as n from public.event_guests where id='$EGB' and email='shared-person@example.com'" 1
+inv "erasing the person in A did erase A's customer" \
+    "select count(*) as n from public.partners where id='$PAE' and email is null and name like 'Erased %'" 1
 
 echo
 echo "=================================="
