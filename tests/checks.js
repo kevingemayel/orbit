@@ -285,6 +285,17 @@
         return dup.length ? bad("declared twice: " + dup.join(", ")) : ok(Object.keys(seen).length + " top-level functions, all unique");
       } },
 
+    { name: "account and ledger reads page past the 1,000-row cap",
+      why: "Supabase returns at most 1,000 rows a request. ALGECO's chart has 1,136 accounts, so every screen that read the whole chart in one request silently lost the last 136: the income accounts vanished from pickers, and a company setting showed 'not set' and would have been wiped on save. The ledger reports add journal lines up in the browser, so the same cap would make a trial balance come out short without any error.",
+      run: function (src) {
+        if (!/async function allRows\(/.test(src)) return bad("the allRows paging helper is missing");
+        var acc = /\(await sb\.from\("accounts"\)\.select\("[^"]*"\)\.eq\("company_id", [A-Za-z.]+\)(?:\.eq\("is_active", true\)|\.or\("is_active\.is\.null,is_active\.eq\.true"\))?(?:\.order\("code"\))?\)\.data/g;
+        var led = /\(await bookFilter\(sb\.from\("journal_lines"\)/g;
+        var n = (src.match(acc) || []).length, m = (src.match(led) || []).length + (/var q = sb\.from\("journal_lines"\)/.test(src) ? 1 : 0);
+        if (n || m) return bad((n ? n + " full account list(s)" : "") + (n && m ? " and " : "") + (m ? m + " ledger read(s)" : "") + " without paging");
+        return ok("every full account list and ledger read pages");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

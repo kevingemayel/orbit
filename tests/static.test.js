@@ -46,6 +46,8 @@ const MUTATIONS = {
     s => s.replace('sb.rpc("approval_decide"', 'sb.rpc("approval_decide_OFF"'),
   "a table bill charges the same tax as the register":
     s => s.replace("var due = svcR2(T.tot - takenSoFar)", "var due = svcR2(T.sub - takenSoFar)"),
+  "account and ledger reads page past the 1,000-row cap":
+    s => s + '\n var x = (await sb.from("accounts").select("id").eq("company_id", S.company.id)).data || [];',
   "record forms name the breadcrumb through bcTitle":
     s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
   "no function is declared twice": s => s + "\n  function bcTitle() {}\n",

@@ -5612,7 +5612,7 @@
     var tName = {}; S.types.forEach(function (t) { tName[t.code] = t.name; });
     return {
       title: "Chart of Accounts", pageSize: 200, editTable: "accounts", archiveField: "is_active",
-      fetch: function () { return sb.from("accounts").select("*").eq("company_id", S.company.id).order("code").then(function (r) { return r.data || []; }); },
+      fetch: function () { return allRows(function () { return sb.from("accounts").select("*").eq("company_id", S.company.id).order("code"); }); },
       searchText: function (a) { return (a.code || "") + " " + (a.name || ""); },
       columns: [
         { label: "Code", edit: { field: "code", type: "text" }, get: function (a) { return '<span class="num" style="text-align:left">' + esc(a.code) + '</span>'; } },
@@ -5666,7 +5666,7 @@
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var base = S.company.currency_code || "USD";
-    var accts = (await sb.from("accounts").select("id,code,name,currency_code,parent_account_id,is_active").eq("company_id", S.company.id).order("code")).data || [];
+    var accts = (await allRows(function () { return sb.from("accounts").select("id,code,name,currency_code,parent_account_id,is_active").eq("company_id", S.company.id).order("code"); }));
     var jrns = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
     var ccyRows = (await sb.from("currencies").select("code").eq("org_id", S.company.org_id).order("code")).data || [];
     var genJ = jrns.filter(function (j) { return j.code === "MISC" || j.code === "GEN"; })[0] || jrns[0];
@@ -5729,9 +5729,9 @@
     async function setCcy(l, ccy) {
       l.ccy = ccy;
       if (ccy === base) { l.rate = 1; l.inv = false; return; }
-      var r = await rateOf(ccy); l.rate = r; l.inv = r ? r < 1 : true;
+      var r = await rateOf(ccy); if (r && r < 1 && 1 / r >= 1000) r = 1 / Math.round(1 / r); l.rate = r; l.inv = r ? r < 1 : true;
     }
-    function rateShown(l) { var r = Number(l.rate) || 0; if (!r) return ""; return l.inv ? +(1 / r).toFixed(4) : +r.toFixed(6); }
+    function rateShown(l) { var r = Number(l.rate) || 0; if (!r) return ""; var v = l.inv ? 1 / r : r; return v >= 1000 ? +v.toFixed(2) : +v.toFixed(v >= 1 ? 4 : 6); }
     function rowHTML(l, i) {
       var ks = l.acct ? (kids[l.acct] || []) : [], foreign = l.ccy !== base, b = baseOf(l);
       return '<tr data-row="' + i + '">' +
@@ -5786,6 +5786,8 @@
           if (isAux(a)) { l.acct = a.parent_account_id; l.aux = a.id; } else { l.acct = a.id; l.aux = ""; }
           var ccyHint = (isAux(a) && a.currency_code) || a.currency_code || (byId[l.acct] && byId[l.acct].currency_code) || base;
           await setCcy(l, ccyHint);
+          // an empty line offers what balances the voucher, as a new one does
+          if (!Number(l.dr) && !Number(l.cr) && l.ccy === base) { var bt = 0; lines.forEach(function (o, oi) { if (oi !== i) { var ob = baseOf(o); bt += ob.d - ob.c; } }); bt = r2(bt); if (bt > 0) l.cr = bt; else if (bt < 0) l.dr = -bt; }
           paint({ row: i, f: (!l.aux && (kids[l.acct] || []).length) ? "aux" : "label" });
         };
         enterKey(inp, i);
@@ -6122,7 +6124,7 @@
       return '<div class="ob-banner" style="margin:0 0 12px">! Over credit limit &middot; ' + esc(partner.name) + ' would owe ' + S.company.currency_code + ' ' + money(exposure) + ' against a limit of ' + S.company.currency_code + ' ' + money(lim) + ' (' + S.company.currency_code + ' ' + money(exposure - lim) + ' over). You can still post it.</div>';
     }
     async function refreshCreditWarn() { var el = document.getElementById("f-credit-warn"); if (el) el.innerHTML = await creditWarnHtml(); }
-    var accounts = ((await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [])
+    var accounts = ((await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code"); })))
       .filter(function (a) { return (a.type_code || "").indexOf(isSale ? "income" : "expense") === 0; });
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [])
       .filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
@@ -8268,7 +8270,7 @@
     await sugSeedFromProducts();
     var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
     _prCodeAuto = (id === "new" && !p.default_code);   // auto-build the item code from the tree until the user edits it
-    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var accs = (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code"); }));
     var inc = accs.filter(function (a) { return (a.type_code || "").indexOf("income") === 0; });
     var exp = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
     var taxes = (await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || [];
@@ -9108,7 +9110,7 @@
     var existing = (await sb.from("companies").select("id,name").eq("org_id", S.company.org_id).order("name")).data || [];
     var c = id ? (await sb.from("companies").select("*").eq("id", id).maybeSingle()).data || {} : { currency_code: (S.company && S.company.currency_code) || "USD" };
     var others = existing.filter(function (x) { return x.id !== id; });
-    var coAccs = id ? ((await sb.from("accounts").select("id,code,name").eq("company_id", id).eq("is_active", true).order("code")).data || []) : [];
+    var coAccs = id ? ((await allRows(function () { return sb.from("accounts").select("id,code,name").eq("company_id", id).or("is_active.is.null,is_active.eq.true").order("code"); }))) : [];
     var countryOpts = '<option value="">(select country)</option>' + COUNTRIES.map(function (co) { return '<option' + (c.country === co ? " selected" : "") + '>' + esc(co) + '</option>'; }).join("");
     var parentOpts = '<option value="">(none - top level)</option>' + others.map(function (o) { return '<option value="' + o.id + '"' + (c.parent_company_id === o.id ? " selected" : "") + '>' + esc(o.name) + '</option>'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "comodal";
@@ -9163,7 +9165,7 @@
     document.getElementById("co-save").onclick = async function () {
       var name = gv("co-name"); if (!name) { toast("Enter a company name"); return; }
       var row = { name: name, legal_name: gv("co-legal") || null, currency_code: (gv("co-cur") || "USD").toUpperCase().slice(0, 3), country: document.getElementById("co-country").value || null, parent_company_id: document.getElementById("co-parent").value || null };
-      STOCK_GL.concat(POST_GL).forEach(function (g) { var el = document.getElementById("co-" + g[0]); if (el) row[g[0]] = el.value || null; });
+      STOCK_GL.concat(POST_GL).forEach(function (g) { var el = document.getElementById("co-" + g[0]); if (el && !el.value && c[g[0]] && !el.querySelector('option[value="' + c[g[0]] + '"]')) return; /* an account the list could not show is kept, not wiped */  if (el) row[g[0]] = el.value || null; });
       if (id) {
         var up = await sb.from("companies").update(row).eq("id", id); if (up.error) { toast("Could not save: " + errMsg(up.error)); return; }
         if (S.company && S.company.id === id) { Object.assign(S.company, row); INVACC = null; }
@@ -10486,10 +10488,8 @@
   // Recreates the trial_balance rpc row shape ({code,name,type_code,debit,credit,balance})
   // from posted journal_lines, but honouring a date window so reports can be period-scoped.
   async function computeRows(fromD, toD) {
-    var q = sb.from("journal_lines").select("debit,credit, accounts!inner(code,name,type_code), journal_entries!inner(date,state,book_id)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted");
-    q = bookFilter(q, "journal_entries.book_id");
-    var lines = (await q).data || [];
+    var lines = await allRows(function () { return bookFilter(sb.from("journal_lines").select("debit,credit, accounts!inner(code,name,type_code), journal_entries!inner(date,state,book_id)")
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted"), "journal_entries.book_id").order("id"); });
     var acc = {};
     lines.forEach(function (l) {
       var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return;
@@ -10565,9 +10565,9 @@
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     wirePeriod(renderGeneralLedger);
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
-    var lines = (await bookFilter(sb.from("journal_lines")
+    var lines = (await allRows(function () { return bookFilter(sb.from("journal_lines")
       .select("debit,credit,label, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted"), "journal_entries.book_id")).data || [];
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted"), "journal_entries.book_id").order("id"); }));
     lines = lines.filter(function (l) { var d = l.journal_entries ? l.journal_entries.date : null; if (!d) return false; if (pr.from && d < pr.from) return false; if (pr.to && d > pr.to) return false; return true; });
     if (!lines.length) { rep.innerHTML = repHead("General Ledger - " + pr.label, cc) + '<div class="o-empty">No posted journal entries in this period.</div>'; return; }
     var byAcc = {};
@@ -10595,9 +10595,9 @@
     document.getElementById("o-main").innerHTML = repChrome("Partner Ledger", true);
     wireBc(); document.getElementById("rp-print").onclick = function () { window.print(); }; var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     var cc = S.company.currency_code, rep = document.getElementById("rep");
-    var lines = (await bookFilter(sb.from("journal_lines")
+    var lines = (await allRows(function () { return bookFilter(sb.from("journal_lines")
       .select("debit,credit,label,partner_id, accounts!inner(code,name,type_code), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
-      .eq("company_id", S.company.id).eq("journal_entries.state", "posted").not("partner_id", "is", null), "journal_entries.book_id")).data || [];
+      .eq("company_id", S.company.id).eq("journal_entries.state", "posted").not("partner_id", "is", null), "journal_entries.book_id").order("id"); }));
     lines = lines.filter(function (l) { var t = (l.accounts && l.accounts.type_code) || ""; return t === "asset_receivable" || t === "liability_payable"; });
     if (!lines.length) { rep.innerHTML = repHead("Partner Ledger", cc) + '<div class="o-empty">No receivable or payable entries with a partner yet.</div>'; return; }
     var byP = {};
@@ -10746,9 +10746,9 @@
     rates.forEach(function (r) { if (anyMap[r.code] === undefined) anyMap[r.code] = Number(r.rate); if (r.rate_type === "closing" && closeMap[r.code] === undefined) closeMap[r.code] = Number(r.rate); });
     function closeOf(code) { if (code === ref) return 1; return closeMap[code] !== undefined ? closeMap[code] : anyMap[code]; }
     var fRefFunc = closeOf(coCcy); // presentation-per-functional
-    var accs = (await sb.from("accounts").select("id,type_code,reconcilable").eq("company_id", co.id)).data || [];
+    var accs = (await allRows(function () { return sb.from("accounts").select("id,type_code,reconcilable").eq("company_id", co.id).order("code"); }));
     var mon = {}; accs.forEach(function (a) { if (a.reconcilable || a.type_code === "asset_cash" || /^liability/.test(a.type_code || "")) mon[a.id] = 1; });
-    var lines = (await bookFilter(sb.from("journal_lines").select("account_id,debit,credit,amount_currency,currency_code, journal_entries!inner(state,date,company_id,book_id)").eq("journal_entries.company_id", co.id).eq("journal_entries.state", "posted").lte("journal_entries.date", defDate).not("currency_code", "is", null), "journal_entries.book_id")).data || [];
+    var lines = (await allRows(function () { return bookFilter(sb.from("journal_lines").select("account_id,debit,credit,amount_currency,currency_code, journal_entries!inner(state,date,company_id,book_id)").eq("journal_entries.company_id", co.id).eq("journal_entries.state", "posted").lte("journal_entries.date", defDate).not("currency_code", "is", null), "journal_entries.book_id").order("id"); }));
     var byCcy = {};
     lines.forEach(function (l) {
       if (!mon[l.account_id]) return;
@@ -13787,7 +13787,7 @@
     var yr = new Date().getFullYear();
     var b = id === "new" ? { date_start: yr + "-01-01", date_end: yr + "-12-31" } : (await sb.from("budgets").select("*").eq("id", id).maybeSingle()).data || {};
     var lines = id === "new" ? [] : (await sb.from("budget_lines").select("*").eq("budget_id", id).order("sequence")).data || [];
-    var accts = (await sb.from("accounts").select("code,name").eq("company_id", S.company.id).order("code")).data || [];
+    var accts = (await allRows(function () { return sb.from("accounts").select("code,name").eq("company_id", S.company.id).order("code"); }));
     bcTitle(id === "new" ? "New" : (b.name || "Budget"));
     function acctOpts(sel) { return accts.map(function (x) { return '<option value="' + x.code + '"' + (x.code === sel ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join(""); }
     function rowHtml(l) { l = l || {}; return '<tr><td><select class="bl-acc">' + acctOpts(l.account_code) + '</select></td><td><input class="bl-lbl" value="' + esc(l.label || "") + '" placeholder="Note"></td><td><input class="bl-amt u-r" type="number" step="0.01" value="' + (l.planned || 0) + '"></td><td><button class="bl-del u-xbtn">&times;</button></td></tr>'; }
@@ -13824,7 +13824,7 @@
     var b = (await sb.from("budgets").select("*").eq("id", budgetId).maybeSingle()).data || {};
     var lines = (await sb.from("budget_lines").select("*").eq("budget_id", budgetId).order("sequence")).data || [];
     bcTitle(b.name || "Budget");
-    var jl = (await bookFilter(sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id,book_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end), "journal_entries.book_id")).data || [];
+    var jl = (await allRows(function () { return bookFilter(sb.from("journal_lines").select("debit,credit, accounts(code,type_code), journal_entries!inner(date,state,company_id,book_id)").eq("journal_entries.company_id", S.company.id).eq("journal_entries.state", "posted").gte("journal_entries.date", b.date_start).lte("journal_entries.date", b.date_end), "journal_entries.book_id").order("id"); }));
     var actByCode = {}, typeByCode = {};
     jl.forEach(function (l) { var c = l.accounts && l.accounts.code; if (!c) return; typeByCode[c] = l.accounts.type_code; actByCode[c] = (actByCode[c] || 0) + (Number(l.debit || 0) - Number(l.credit || 0)); });
     var rows = "", tp = 0, ta = 0;
@@ -16218,7 +16218,7 @@
     }
     var journals = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
     var bankJ = journals.filter(function (j) { return j.code === "BNK" || j.code === "CSH" || /bank|cash/i.test(j.name); }); if (!bankJ.length) bankJ = journals;
-    var accounts = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code")).data || [];
+    var accounts = (await allRows(function () { return sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("code"); }));
     var isNew = id === "new";
     bcTitle(stmt ? stmt.name : "New");
     var jrnCode = stmt && stmt.journals ? stmt.journals.code : "BNK";
@@ -18073,7 +18073,7 @@
   // Accounts Payable, so it becomes a payable to reimburse. Balanced by post_entry.
   async function postExpenseEntry(exp) {
     var amt = Number(exp.amount) || 0; if (!(amt > 0.005)) { toast("The expense amount is zero."); return false; }
-    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var accs = (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code"); }));
     var expAcc = (accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0 && /travel|expense|sundry|misc|admin|staff/i.test(a.name); })[0] || accs.filter(function (a) { return a.code === "6500"; })[0] || accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; })[0] || {}).id;
     var ap = (accs.filter(function (a) { return a.code === "4000"; })[0] || accs.filter(function (a) { return (a.type_code || "").indexOf("liability") === 0; })[0] || {}).id;
     if (!expAcc || !ap) { toast("Need an expense account and a payable (4000) in the chart of accounts."); return false; }
@@ -18171,7 +18171,7 @@
     return { worked_days: wdays, worked_hours: Math.round(wh * 100) / 100, ot_hours: Math.round(Math.max(0, wh - expected) * 100) / 100, ut_hours: Math.round(Math.max(0, expected - wh) * 100) / 100, leave_days: lv.reduce(function (s, x) { return s + Number(x.days || 0); }, 0) };
   }
   async function postPayslip(slip) {
-    var accs = (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var accs = (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code"); }));
     var expAccs = accs.filter(function (a) { return (a.type_code || "").indexOf("expense") === 0; });
     var payAccs = accs.filter(function (a) { return (a.type_code || "").indexOf("liability") === 0; });
     // Gross salary is a P&L EXPENSE (prefer a salary/personnel expense account).
@@ -19240,7 +19240,7 @@
   // so committed purchase orders can be split by category for early over-budget warnings.
   async function productCatMap() {
     var prods = (await sb.from("products").select("id,expense_account_id").eq("company_id", S.company.id)).data || [];
-    var accs = (await sb.from("accounts").select("id,code").eq("company_id", S.company.id)).data || [];
+    var accs = (await allRows(function () { return sb.from("accounts").select("id,code").eq("company_id", S.company.id).order("code"); }));
     var codeById = {}; accs.forEach(function (a) { codeById[a.id] = a.code; });
     var m = {}; prods.forEach(function (p) { m[p.id] = p.expense_account_id ? catForAccount(codeById[p.expense_account_id]) : "Material"; });
     return m;
@@ -26227,7 +26227,7 @@
   function cashKind(k) { for (var i = 0; i < CASH_KINDS.length; i++) if (CASH_KINDS[i].k === k) return CASH_KINDS[i]; return CASH_KINDS[0]; }
   function cashKindLabel(k) { return cashKind(k).label; }
   var CASH_PARTY_LABEL = { customer: "Customer", vendor: "Vendor", employee: "Employee", owner: "Owner name", payee: "Paid to / from" };
-  async function cashLoadChart() { return (await sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).order("code")).data || []; }
+  async function cashLoadChart() { return (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).order("code"); })); }
   function cashAcctByCode(list, code) { for (var i = 0; i < list.length; i++) if (list[i].code === code) return list[i]; return null; }
   async function cashLoadWallets(all) { var r = (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; return all ? r : r.filter(function (a) { return a.is_active !== false; }); }
   async function cashBalances() {
@@ -26509,6 +26509,19 @@
   // AMOUNT and catastrophic for a RATE: one lira is 0.0000111732 dollars, which
   // rounds to four places as ZERO, and every lira the till took converted to
   // nothing at all.
+  // Supabase answers at most 1,000 rows a request. A chart of accounts can be
+  // longer (ALGECO's is 1,136), and a list cut at row 1,000 looks complete while
+  // missing everything after it, so anything that must see every row pages.
+  async function allRows(build, page) {
+    page = page || 1000; var out = [], from = 0;
+    for (;;) {
+      var r = await build().range(from, from + page - 1);
+      if (r.error) { try { console.warn('allRows', r.error); } catch (e) { } return out; }
+      var d = r.data || []; out = out.concat(d);
+      if (d.length < page) return out;
+      from += page;
+    }
+  }
   async function cashFx(amount, from, to, date, opts) {
     var dp = (opts && opts.precise) ? 1e10 : 10000;
     var a = Number(amount) || 0;
