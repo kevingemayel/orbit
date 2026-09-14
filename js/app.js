@@ -5635,7 +5635,7 @@
       document.querySelectorAll("#je-grid [data-del]").forEach(function (b) { b.onclick = function () { lines.splice(+b.dataset.del, 1); if (!lines.length) lines.push({}); paint(); }; });
     }
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns">' + (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') + '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' + (posted && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
       '<div class="o-stages"><span class="st ' + (posted ? "done" : "on") + '">Draft</span><span class="st ' + (posted ? "on" : "") + '">Posted</span></div></div>' +
       '<div class="o-sheet"><div class="o-title">Journal entry ' + esc(ent.number || ent.ref || "") + '</div>' +
       '<div class="o-groups"><div>' +
