@@ -303,6 +303,15 @@
         return bad1.length ? bad(bad1.length + " impossible table name(s): " + bad1.join(", ")) : ok("every sb.from() names a plain identifier");
       } },
 
+    { name: "a posted document is reopened by the database, never set back to draft by the app",
+      why: "Edit on a posted voucher or bill goes through reopen_journal_entry and reopen_invoice, which keep the posted version in document_revisions, refuse a closed period and keep a bill's payments matched. An update that set state to draft directly would skip all three, and the database refuses it, so the button would only ever fail.",
+      run: function (src) {
+        var direct = all(src, /sb\.from\("(invoices|journal_entries)"\)\.update\(\{[^}]*\bstate:\s*"draft"/g);
+        if (direct.length) return bad(direct.length + " direct update(s) set a posted document back to draft: " + direct.join(", "));
+        var missing = ["reopen_journal_entry", "reopen_invoice"].filter(function (f) { return src.indexOf('sb.rpc("' + f + '"') < 0; });
+        return missing.length ? bad("Edit no longer calls " + missing.join(" and ")) : ok("both Edit buttons reopen through the database");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src) {

@@ -52,6 +52,8 @@ const MUTATIONS = {
     s => s.replace('sb.from("subcontracts")', 'sb.from("sc.list")'),
   "record forms name the breadcrumb through bcTitle":
     s => s.replace("    bcTitle(", "    document.querySelector(\".o-bc span:last-child\").textContent = ("),
+  "a posted document is reopened by the database, never set back to draft by the app":
+    s => s + '\n sb.from("invoices").update({ state: "draft" }).eq("id", x);',
   "no function is declared twice": s => s + "\n  function bcTitle() {}\n",
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };

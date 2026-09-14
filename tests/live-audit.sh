@@ -34,6 +34,9 @@ EA=orbit-audit-a@example.com; EB=orbit-audit-b@example.com
 CA2=aaaa0000-0000-4000-8000-00000000000c; CA3=aaaa0000-0000-4000-8000-00000000000d
 PA2=aaaa0000-0000-4000-8000-0000000000a2; MA2=aaaa0000-0000-4000-8000-0000000000a3
 EC=orbit-audit-c@example.com; FA2="$OA/partner/$PA2/audit.jpg"
+# a posted invoice in company A, in the sibling A2 and in tenant B, for Edit
+INVA=aaaa0000-0000-4000-8000-0000000000e1; INVA2=aaaa0000-0000-4000-8000-0000000000e2
+INVB=bbbb0000-0000-4000-8000-0000000000e3
 
 pass=0; fail=0
 sql() { curl -s -X POST "$MGMT/database/query" -H "Authorization: Bearer $PAT" \
@@ -54,6 +57,8 @@ teardown() {
   sql "delete from public.media where id = '$MA2'" >/dev/null
   sql "delete from public.partners where company_id in ('$CA','$CB','$CA2')" >/dev/null
   sql "delete from public.org_members where org_id in ('$OA','$OB')" >/dev/null
+  # a posted invoice refuses deletion, so the fixtures are cancelled first
+  sql "update public.invoices set state='cancel' where company_id in ('$CA','$CB','$CA2')" >/dev/null
   sql "delete from public.companies where id in ('$CA','$CB','$CA2','$CA3')" >/dev/null
   sql "delete from public.orgs where id in ('$OA','$OB')" >/dev/null
   for e in "$EA" "$EB" "$EC"; do
@@ -94,6 +99,7 @@ sql "insert into public.companies (id,org_id,name,currency_code) values ('$CA2',
 sql "insert into public.org_members (org_id,user_id,role,status,company_ids) values ('$OA','$UC','admin','active','{$CA}')" >/dev/null
 sql "insert into public.partners (id,org_id,company_id,name,is_customer) values ('$PA2','$OA','$CA2','ORBITAUDIT Secret A2',true) on conflict (id) do nothing" >/dev/null
 sql "insert into public.media (id,org_id,company_id,entity,entity_id,path,kind,mime) values ('$MA2','$OA','$CA2','partner','$PA2','$FA2','image','image/jpeg') on conflict (id) do nothing" >/dev/null
+sql "insert into public.invoices (id,company_id,move_type,number,state,invoice_date,amount_untaxed,amount_tax,amount_total,amount_residual) values ('$INVA','$CA','out_invoice','AUDIT/A/1','posted',current_date,10,0,10,10),('$INVA2','$CA2','out_invoice','AUDIT/A2/1','posted',current_date,10,0,10,10),('$INVB','$CB','out_invoice','AUDIT/B/1','posted',current_date,10,0,10,10) on conflict (id) do nothing" >/dev/null
 printf 'not really a jpeg' | curl -s -X POST "$API/storage/v1/object/attachments/$FA2" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" -H "Content-Type: image/jpeg" --data-binary @- >/dev/null
 HTC=$(curl -s -X POST "$API/auth/v1/admin/generate_link" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" \
      -H "Content-Type: application/json" -d "{\"type\":\"magiclink\",\"email\":\"$EC\"}" \
@@ -195,6 +201,24 @@ inv "every company has a primary book" \
     "select count(*) as n from public.companies c where not exists (select 1 from public.books b where b.company_id=c.id and b.is_primary)" 0
 inv "every posted journal entry balances" \
     "select count(*) as n from (select l.entry_id from public.journal_lines l join public.journal_entries e on e.id=l.entry_id where e.state='posted' group by l.entry_id having round(sum(l.debit)::numeric,2) <> round(sum(l.credit)::numeric,2)) s" 0
+
+echo
+echo "editing posted documents"
+inv "the posted invoices to probe exist" \
+    "select count(*) as n from public.invoices where id in ('$INVA','$INVA2','$INVB') and state='posted'" 3
+JWT=$JWTA
+probe "sets its own posted invoice back to draft directly"        deny  PATCH "invoices?id=eq.$INVA" '{"state":"draft"}'
+probe "reopens another tenant's posted invoice"                   deny  POST  "rpc/reopen_invoice" "{\"p_invoice\":\"$INVB\"}"
+probe "reopens its own posted invoice with Edit"                  allow POST  "rpc/reopen_invoice" "{\"p_invoice\":\"$INVA\"}"
+JWT=$JWTC
+probe "the limited member reopens the sibling company's invoice"  deny  POST  "rpc/reopen_invoice" "{\"p_invoice\":\"$INVA2\"}"
+JWT=$ANON
+probe "an anonymous caller reopens a posted invoice"              deny  POST  "rpc/reopen_invoice" "{\"p_invoice\":\"$INVA2\"}"
+JWT=$JWTA
+inv "the refused attempts left both invoices posted" \
+    "select count(*) as n from public.invoices where id in ('$INVA2','$INVB') and state='posted'" 2
+inv "the allowed edit kept the posted version" \
+    "select count(*) as n from public.document_revisions where doc_type='invoice' and doc_id='$INVA'" 1
 
 echo
 echo "=================================="

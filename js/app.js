@@ -947,7 +947,7 @@
     ] },
     { key: "sales", title: "Selling & getting paid", articles: [
       { t: "What an invoice is (and draft vs posted)", h: "<p>An <b>invoice</b> is a polite bill. It is the piece of paper (here, a screen) that says: &ldquo;You bought these things from us, here is what they cost, please pay us.&rdquo; You send it to a <b>customer</b> (someone who buys from you).</p><p>Every invoice has two stages:</p><ul><li><b>Draft</b> - a rough copy. You can change anything or delete it. It does not count in your accounts yet. Think of it as a pencil version.</li><li><b>Posted</b> - the final version. When you <b>Post</b> an invoice, Orbit writes it into your accounts for real: the customer now officially owes you, and it shows up in your reports. Think of it as going over the pencil in pen. A posted invoice is locked so its amounts, dates and numbers cannot be secretly changed later.</li></ul><p>So: build it as a draft, check it, then Post it when you are happy.</p>" },
-      { t: "Make and send an invoice (step by step)", h: "<ol><li>Open the <b>Accounting</b> app.</li><li>In the left menu click <b>Invoices</b>, then the <b>New</b> button (top-left).</li><li>Pick the <b>customer</b> at the top. If they are not in the list yet, add them first (see &ldquo;Add a customer&rdquo; below).</li><li>Check the <b>Invoice date</b> (the day you are billing) and the <b>Due date</b> (the day you expect to be paid). The due date can fill in by itself from the customer's payment terms.</li><li>Add the <b>lines</b> - one row per thing you are charging for. For each line type a description, the quantity, the price for one, and pick the tax if any. Orbit adds up the totals for you as you go.</li><li>Now choose: <b>Save</b> keeps it as a draft you can still edit, or <b>Post</b> finalises it.</li><li>Once it is posted, two useful buttons appear: <b>Email</b> sends the customer a neat PDF copy, and <b>Register payment</b> is what you click when they pay.</li></ol><p><b>Tip:</b> if the numbers look wrong, check the tax on each line and the quantity - those are the usual culprits.</p>" },
+      { t: "Make and send an invoice (step by step)", h: "<ol><li>Open the <b>Accounting</b> app.</li><li>In the left menu click <b>Invoices</b>, then the <b>New</b> button (top-left).</li><li>Pick the <b>customer</b> at the top. If they are not in the list yet, add them first (see &ldquo;Add a customer&rdquo; below).</li><li>Check the <b>Invoice date</b> (the day you are billing) and the <b>Due date</b> (the day you expect to be paid). The due date can fill in by itself from the customer's payment terms.</li><li>Add the <b>lines</b> - one row per thing you are charging for. For each line type a description, the quantity, the price for one, and pick the tax if any. Orbit adds up the totals for you as you go.</li><li>Now choose: <b>Save</b> keeps it as a draft you can still edit, or <b>Post</b> puts it in your accounts. Spot a mistake after posting? <b>Edit</b> takes it back to draft, and the posted version is kept in its history.</li><li>Once it is posted, two useful buttons appear: <b>Email</b> sends the customer a neat PDF copy, and <b>Register payment</b> is what you click when they pay.</li></ol><p><b>Tip:</b> if the numbers look wrong, check the tax on each line and the quantity - those are the usual culprits.</p>" },
       { t: "Getting paid: recording a payment", h: "<p>When a customer actually pays you, you tell Orbit so it stops showing them as owing.</p><ol><li>Open the <b>posted</b> invoice they paid.</li><li>Click <b>Register payment</b>.</li><li>Choose the <b>date</b> they paid and the <b>account</b> the money went into (usually your bank).</li><li>Save. Orbit records the money and reduces what they owe.</li></ol><p>If they only paid part of the bill, that is fine - enter the amount they paid, and Orbit keeps track of the rest still owing. You can register another payment later for the remainder.</p>" },
       { t: "Recurring invoices (bill on a schedule)", h: "<p>For anything you bill the same customer regularly - a maintenance contract, a subscription, a monthly retainer - set up a <b>recurring invoice</b> once and Orbit raises it for you every cycle.</p><ol><li>Open <b>Accounting &rsaquo; Recurring Invoices &rsaquo; New</b>.</li><li>Pick the customer, the lines to bill, and how often - weekly, monthly, quarterly or yearly.</li><li>Choose whether each generated invoice is left as a <b>draft</b> for you to review, or <b>posted automatically</b>.</li></ol><p>On the due date Orbit creates a real invoice from the template and moves the schedule forward. Use <b>Generate due now</b> to run them on demand, or let the daily check raise them for you. It is the difference between remembering to invoice every month and never having to think about it. (Taking card payment online is a separate step - it needs a payment provider connected.)</p>" },
       { t: "Fixing a mistake: credit notes", h: "<p>A <b>credit note</b> is the opposite of an invoice. An invoice says &ldquo;you owe us&rdquo;; a credit note says &ldquo;actually, we owe you back&rdquo;. You use one to cancel or refund an invoice you already posted - for example the customer returned something, or you overcharged.</p><p>You cannot simply delete a posted invoice (that would leave a hole in your records). Instead:</p><ol><li>Open the posted invoice.</li><li>Click <b>Add credit note</b>. Orbit copies the lines into a new draft credit note that undoes the original.</li><li>Adjust it if you are only refunding part, then <b>Post</b> it.</li></ol><p>You can also start one fresh from <b>Customers &rsaquo; Credit Notes</b>.</p>" },
@@ -3719,7 +3719,9 @@
     var rule = matching.sort(function (a, b) { return Number(b.min_amount) - Number(a.min_amount); })[0];
     var ex = (await sb.from("approvals").select("*").eq("doc_type", docType).eq("doc_id", docId).order("created_at", { ascending: false }).limit(1)).data || [];
     var a = ex[0];
-    if (a && a.status === "approved") return "ok";
+    // an approval covers the amount approved: a document edited after
+    // posting that now asks for more goes back to the approver
+    if (a && a.status === "approved" && Number(amount || 0) <= Number(a.doc_amount || 0) + 0.005) return "ok";
     if (a && a.status === "pending") { toast("Already awaiting approval"); return "blocked"; }
     var ins = await sb.from("approvals").insert({ company_id: S.company.id, rule_id: rule.id, doc_type: docType, doc_id: docId, doc_number: docNumber || "", doc_amount: Number(amount) || 0, requested_by: (S.user && S.user.email) || "", status: "pending", link_action: backAction || null }).select("id").single();
     notify({ kind: "approval_request", employee_id: rule.approver_employee_id || null, title: "Approval needed: " + (docNumber || APPR_DOC_LABEL[docType] || docType), body: S.company.currency_code + " " + money(amount) + " " + (APPR_DOC_LABEL[docType] || docType), link_action: "approvals.inbox" });
@@ -5437,7 +5439,7 @@
       '</div><div>' +
       '<div class="row2"><div>' + fld("Start", '<input id="rc-start" type="date" value="' + (r.start_date || today()) + '">') + '</div><div>' + fld("Next run", '<input id="rc-next" type="date" value="' + (r.next_date || today()) + '">', "The next date an invoice is generated.") + '</div></div>' +
       '<div class="row2"><div>' + fld("End (optional)", '<input id="rc-end" type="date" value="' + (r.end_date || "") + '">') + '</div><div>' + fld("Payment days", '<input id="rc-pdays" type="number" value="' + (r.payment_days != null ? r.payment_days : 30) + '">') + '</div></div>' +
-      '<div class="row2"><div>' + fld("On generate", '<select id="rc-auto"><option value="0"' + (r.auto_post ? "" : " selected") + '>Create as draft</option><option value="1"' + (r.auto_post ? " selected" : "") + '>Post automatically</option></select>', "Draft lets you review before sending; post finalises it straight away.") + '</div><div>' + fld("Status", '<select id="rc-active"><option value="1"' + (r.active === false ? "" : " selected") + '>Active</option><option value="0"' + (r.active === false ? " selected" : "") + '>Paused</option></select>') + '</div></div>' +
+      '<div class="row2"><div>' + fld("On generate", '<select id="rc-auto"><option value="0"' + (r.auto_post ? "" : " selected") + '>Create as draft</option><option value="1"' + (r.auto_post ? " selected" : "") + '>Post automatically</option></select>', "Draft lets you review before sending; post puts it in the accounts straight away.") + '</div><div>' + fld("Status", '<select id="rc-active"><option value="1"' + (r.active === false ? "" : " selected") + '>Active</option><option value="0"' + (r.active === false ? " selected" : "") + '>Paused</option></select>') + '</div></div>' +
       '</div></div>' +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Invoice lines (repeated each cycle)</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th>Description</th><th>Qty</th><th>Price</th><th>Tax</th><th></th></tr></thead><tbody id="rc-lines">' + (lines.length ? lines.map(lineRow).join("") : lineRow()) + '</tbody></table><button id="rc-add" class="o-addln">+ Add line</button></div></div>' +
       '</div>';
@@ -5653,6 +5655,56 @@
       onNew: canManageApp("accounting") ? function () { renderJournalEntryForm("new"); } : null
     };
   }
+  // ---- editing a posted voucher or bill ----
+  // Edit reopens a posted document through the database (reopen_journal_entry,
+  // reopen_invoice), which keeps the posted version in document_revisions
+  // first. A form shows that history: a banner while the document is out of
+  // the accounts, and each earlier posted version one click away.
+  function postedDocNoun(mt) { return { out_invoice: "invoice", out_refund: "credit note", in_invoice: "bill", in_refund: "vendor credit note" }[mt] || "document"; }
+  function revStamp(ts) { return ts ? String(ts).slice(0, 16).replace("T", " ") : ""; }
+  function revisionNoteHTML(revs, isDraft, noun) {
+    revs = revs || [];
+    var open = isDraft ? revs.filter(function (r) { return !r.reposted_at; })[0] : null, h = "";
+    if (open) {
+      var sn = open.snapshot || {}, paid = Number(sn.settled) || 0;
+      h += '<div class="ob-banner" style="margin:0 0 12px">This ' + esc(noun) + ' was posted and has been back in draft for editing since ' + esc(revStamp(open.created_at)) + '. It is out of the accounts until you post it again, changed or not.' +
+        (paid > 0.005 ? ' The ' + esc(moneyC(paid, (sn.invoice || {}).currency_code || S.company.currency_code)) + ' already paid stays paid.' : '') + '</div>';
+    }
+    if (revs.length) h += '<div class="muted" style="font-size:12.5px;margin:0 0 10px">Edited after posting: ' + revs.map(function (r, i) {
+      return '<a href="#" data-rev="' + i + '">' + esc(revStamp(r.created_at)) + (r.actor_email ? " by " + esc(r.actor_email) : "") + '</a>';
+    }).join(", ") + '. Click one to see what was posted before it.</div>';
+    return h;
+  }
+  function wireRevisions(revs, kind) {
+    document.querySelectorAll("#o-main [data-rev]").forEach(function (a) {
+      a.onclick = function (e) { e.preventDefault(); openRevision(revs[+a.dataset.rev], kind); };
+    });
+  }
+  function openRevision(rev, kind) {
+    if (!rev) return;
+    var s = rev.snapshot || {}, head, body;
+    if (kind === "invoice") {
+      var iv = s.invoice || {}, ccy = iv.currency_code || S.company.currency_code;
+      head = [["Number", iv.number], ["Contact", s.partner], ["Date", iv.invoice_date], ["Due", iv.due_date], ["Reference", iv.ref], ["Total", moneyC(iv.amount_total, ccy)], ["Already paid", Number(s.settled) > 0.005 ? moneyC(s.settled, ccy) : ""]];
+      body = '<thead><tr><th>Description</th><th>Account</th><th class="u-r">Qty</th><th class="u-r">Unit price</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
+        return '<tr><td>' + esc(l.name || "") + '</td><td>' + esc(l.account || "") + '</td><td class="num">' + esc(String(Number(l.quantity) || 0)) + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + esc(l.tax || "") + '</td><td class="num">' + money(l.price_subtotal) + '</td></tr>';
+      }).join("") + '</tbody>';
+    } else {
+      var en = s.entry || {};
+      head = [["Number", en.entry_number], ["Date", en.date], ["Reference", en.ref], ["Narration", en.narration]];
+      body = '<thead><tr><th>Account</th><th>Description</th><th>Currency</th><th class="u-r">Debit</th><th class="u-r">Credit</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
+        var fc = l.currency_code && l.currency_code !== S.company.currency_code ? " " + money(Math.abs(Number(l.amount_currency) || 0)) : "";
+        return '<tr><td>' + esc(l.account || "") + '</td><td>' + esc(l.label || "") + '</td><td>' + esc((l.currency_code || "") + fc) + '</td><td class="num">' + (Number(l.debit) ? money(l.debit) : "") + '</td><td class="num">' + (Number(l.credit) ? money(l.credit) : "") + '</td></tr>';
+      }).join("") + '</tbody>';
+    }
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet wide"><h3>As posted before the edit of ' + esc(revStamp(rev.created_at)) + '</h3><div style="padding:0 18px 12px;max-height:70vh;overflow:auto">' +
+      '<p class="muted">' + (rev.actor_email ? "Taken back to draft by " + esc(rev.actor_email) + ". " : "") + (rev.reposted_at ? "Posted again " + esc(revStamp(rev.reposted_at)) + "." : "Not posted again yet.") + '</p>' +
+      '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:12px">' + head.filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:var(--ink2);padding:4px 16px 4px 0">' + esc(r[0]) + '</td><td class="u-sb">' + esc(String(r[1])) + '</td></tr>'; }).join("") + '</table>' +
+      '<div class="je-wrap"><table class="o-lines">' + body + '</table></div></div><div class="foot"><button class="btn" id="rv-close">Close</button></div></div>';
+    document.body.appendChild(m);
+    m.querySelector("#rv-close").onclick = function () { m.remove(); };
+  }
   // ---- the journal voucher ----
   // A line is the account, its auxiliary when it has them, the description,
   // the currency, the rate when that currency is not the company's, and the
@@ -5691,7 +5743,14 @@
       ent = (await sb.from("journal_entries").select("*").eq("id", id).maybeSingle()).data || {};
       raw = (await sb.from("journal_lines").select("*").eq("entry_id", id).order("created_at")).data || [];
     }
-    var posted = ent.state === "posted", dis = posted ? " disabled" : "";
+    // An entry Orbit posted for a bill or invoice belongs to that document: it
+    // is edited from there, and stays read-only here even while the document
+    // is back in draft.
+    var owner = null;
+    if (ent.source_type === "invoice" && ent.source_id) owner = (await sb.from("invoices").select("id,number,move_type,state").eq("id", ent.source_id).maybeSingle()).data;
+    var manual = !ent.source_type || ent.source_type === "manual";
+    var revs = id === "new" ? [] : ((await sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", "journal_entry").eq("doc_id", id).order("created_at", { ascending: false })).data || []);
+    var isPosted = ent.state === "posted", posted = isPosted || !!owner, dis = posted ? " disabled" : "";
     bcTitle(id === "new" ? "New voucher" : (ent.entry_number || ent.ref || "Voucher"));
 
     function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
@@ -5819,9 +5878,14 @@
       (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') +
       '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' +
       (id !== "new" && canManageApp("accounting") ? '<button id="je-dup" title="Start a new voucher with the same lines">Duplicate</button>' : '') +
-      (posted && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
-      '<div class="o-stages"><span class="st ' + (posted ? "done" : "on") + '">Draft</span><span class="st ' + (posted ? "on" : "") + '">Posted</span></div></div>' +
-      '<div class="o-sheet"><div class="o-title">Journal voucher ' + (number ? '<b>' + esc(number) + '</b>' : '<span class="muted">' + (copyFrom ? "copied, numbered when saved" : "numbered when saved") + '</span>') + '</div>' +
+      (isPosted && manual && canManageApp("accounting") ? '<button id="je-edit" title="Take it back to draft to change it. It keeps its number, and the posted version is kept in its history.">Edit</button>' : '') +
+      (owner ? '<button id="je-owner">Open ' + esc(owner.number || postedDocNoun(owner.move_type)) + '</button>' : '') +
+      (isPosted && !owner && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
+      '<div class="o-stages"><span class="st ' + (isPosted ? "done" : "on") + '">Draft</span><span class="st ' + (isPosted ? "on" : "") + '">Posted</span></div></div>' +
+      '<div class="o-sheet">' +
+      (owner && !isPosted ? '<div class="ob-banner" style="margin:0 0 12px">This entry belongs to ' + esc(owner.number || postedDocNoun(owner.move_type)) + ', which is back in draft for editing. Its lines come back when that ' + postedDocNoun(owner.move_type) + ' is posted again.</div>' : '') +
+      revisionNoteHTML(revs, !isPosted, "voucher") +
+      '<div class="o-title">Journal voucher ' + (number ? '<b>' + esc(number) + '</b>' : '<span class="muted">' + (copyFrom ? "copied, numbered when saved" : "numbered when saved") + '</span>') + '</div>' +
       '<div class="o-groups"><div>' +
       fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + dis + '>') +
       fld("Journal", '<select id="je-journal"' + dis + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
@@ -5839,6 +5903,7 @@
     paint();
     wireAttach("journal_entry");
     document.getElementById("je-date").addEventListener("change", function () { rateCache = {}; });
+    wireRevisions(revs, "journal_entry");
     document.getElementById("je-discard").onclick = function () { __dirty = false; go("moves"); };
     var addB = document.getElementById("je-add"); if (addB) addB.onclick = addLine;
     var dupB = document.getElementById("je-dup"); if (dupB) dupB.onclick = function () { if (__dirty && !confirm("You have unsaved changes on this voucher. Leave without saving?")) return; __dirty = false; renderJournalEntryForm("new", id); };
@@ -5885,6 +5950,14 @@
       var pe = await sb.rpc("post_entry", { p_entry: eid }); if (pe.error) { toast("Could not post: " + errMsg(pe.error)); renderJournalEntryForm(eid); return; }
       toast("Posted"); renderJournalEntryForm(eid);
     };
+    var editB = document.getElementById("je-edit"); if (editB) editB.onclick = async function () {
+      if (!confirm("Edit " + (ent.entry_number || "this voucher") + "?\n\nIt goes back to draft and is out of the accounts until you post it again. It keeps its number, and the version posted now is kept in its history.")) return;
+      editB.disabled = true;
+      var ro = await sb.rpc("reopen_journal_entry", { p_entry: id });
+      if (ro.error) { editB.disabled = false; toast("Could not edit: " + errMsg(ro.error)); return; }
+      toast("Back in draft. Post it again when you are done."); renderJournalEntryForm(id);
+    };
+    var ownB = document.getElementById("je-owner"); if (ownB) ownB.onclick = function () { renderInvoiceForm(owner.id, owner.move_type); };
     var revB = document.getElementById("je-rev"); if (revB) revB.onclick = async function () {
       if (!confirm("Reverse this voucher? A mirror voucher is posted to cancel it.")) return;
       var rv = await reverseEntry(id, "REV/" + (ent.entry_number || ent.ref || ""), "Reversal of " + (ent.entry_number || ent.ref || "")); if (rv.error) { toast(errMsg(rv.error)); return; }
@@ -6106,6 +6179,7 @@
       lines = (await sb.from("invoice_lines").select("*").eq("invoice_id", id).order("sequence")).data || [];
     }
     var editable = !inv || inv.state === "draft";
+    var revs = inv ? ((await sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", "invoice").eq("doc_id", id).order("created_at", { ascending: false })).data || []) : [];
     var partners = (await sb.from("partners").select("id,name,payment_days,contact_person,mobile,phone,credit_limit,intercompany_company_id").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var creditCache = {};
     async function creditWarnHtml() {
@@ -6149,8 +6223,9 @@
 
     // status bar buttons
     var btns = "";
-    if (editable) btns += '<button class="pri" id="f-confirm" title="Post to the accounts. This finalises it - a posted document cannot be edited.">Confirm &amp; post</button><button id="f-save" title="Keep working on it as an editable draft.">Save draft</button><button id="f-discard">Discard</button>';
+    if (editable) btns += '<button class="pri" id="f-confirm" title="Post to the accounts. You can still change it later with Edit, which keeps the posted version.">Confirm &amp; post</button><button id="f-save" title="Keep working on it as an editable draft.">Save draft</button><button id="f-discard">Discard</button>';
     else if (inv.state === "posted" && !isRefund && Number(inv.amount_residual) > 0.005) btns += '<button class="pri" id="f-pay">Register Payment</button>';
+    if (inv && inv.state === "posted" && canManageApp("accounting")) btns += '<button id="f-edit" title="Take it back to draft to change it. It keeps its number, and the posted version is kept in its history.">Edit</button>';
     if (inv && inv.state === "posted" && !isRefund) btns += '<button id="f-refund">' + (isSale ? "Add Credit Note" : "Add Refund") + '</button>';
     if (inv) btns += '<button id="f-print">Print</button>';
     if (inv && isSale) btns += '<button id="f-email">Email</button>';
@@ -6218,7 +6293,7 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div id="f-credit-warn" style="padding:12px 20px 0"></div>' +
-      '<div class="o-sheet">' + smart + ribbon + '<div class="o-title">' + esc(title) + '</div>' + groups +
+      '<div class="o-sheet">' + smart + ribbon + revisionNoteHTML(revs, !!inv && inv.state === "draft", postedDocNoun(moveType)) + '<div class="o-title">' + esc(title) + '</div>' + groups +
       '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div></div>';
 
     // ---- notebook rendering ----
@@ -6419,6 +6494,20 @@
       document.getElementById("f-pay").onclick = function () { openPaymentModal(inv, function () { renderInvoiceForm(id, moveType); }); };
     }
     if (inv && inv.state === "posted" && !isRefund) document.getElementById("f-refund").onclick = function () { createCreditNote(inv, linesState, isSale); };
+    var _fed = document.getElementById("f-edit");
+    if (_fed) _fed.onclick = async function () {
+      var noun = postedDocNoun(moveType), ccy = inv.currency_code || S.company.currency_code;
+      var paid = Math.round((Number(inv.amount_total) - Number(inv.amount_residual == null ? inv.amount_total : inv.amount_residual)) * 100) / 100;
+      var msg = "Edit " + (inv.number || "this " + noun) + "?\n\nIt goes back to draft and is out of the accounts until you confirm and post it again. It keeps its number, and the version posted now is kept in its history.";
+      if (paid > 0.005) msg += "\n\n" + moneyC(paid, ccy) + " is already paid on it. That stays paid, so keep the same " + (isSale ? "customer" : "vendor") + " and currency, and a total of at least that much.";
+      if (inv.mirror_invoice_id) msg += "\n\nIts mirror in the other company does not change. Edit that one too if the amounts change.";
+      if (!confirm(msg)) return;
+      _fed.disabled = true;
+      var ro = await sb.rpc("reopen_invoice", { p_invoice: id });
+      if (ro.error) { _fed.disabled = false; toast("Could not edit: " + errMsg(ro.error)); return; }
+      toast("Back in draft. Confirm and post it when you are done."); renderInvoiceForm(id, moveType);
+    };
+    wireRevisions(revs, "invoice");
     if (inv) document.getElementById("f-print").onclick = function () { printInvoice(inv, linesState, isSale, taxes); };
     var _mir = document.getElementById("f-mirror");
     if (_mir) _mir.onclick = function () { mirrorIntercompany(inv, lines, icCo, isSale); };
@@ -25653,7 +25742,7 @@
         { sel: "#o-new", title: "Start a new invoice", body: "On any list, the New button (top-left) creates a fresh record. Here it starts a new customer invoice.", run: async function () { go("inv.out"); await tick(450); } },
         { sel: "#f-partner", title: "Choose the customer", body: "Pick who the invoice is for. Don't have them yet? You can add a customer from the Customers screen first.", run: async function () { await renderInvoiceForm("new", "out_invoice"); await tick(450); } },
         { sel: "#f-date", title: "Set the dates", body: "The invoice date drives your reports and the due date. Payment terms can fill the due date automatically." },
-        { sel: ".o-statusbar", title: "Save or post", body: "Save keeps it as a draft you can still edit. Post finalises it - that's when it hits your accounts and can be sent or paid." },
+        { sel: ".o-statusbar", title: "Save or post", body: "Save keeps it as a draft you can still edit. Post puts it in your accounts, ready to send or pay. Edit takes a posted one back to draft and keeps the posted version." },
         { center: true, title: "That's an invoice", body: "Add lines (description, amount, tax), pick the customer, then Save as draft or Post. You can email a posted invoice straight from Orbit." }
       ]
     },
