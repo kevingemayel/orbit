@@ -106,6 +106,59 @@ orbitScreenHelp({
     ]
   },
 
+  "inv.receipts": {
+    title: "Receipts",
+    what: "<b>Receipts</b> lists every goods receipt and every return to a supplier as a numbered document: REC/00012 for goods in, RET/00003 for goods sent back. Open one to see what came in, which location it went to, what it was worth and the journal entries that valued it, and correct it with <span class='man-key'>Edit</span>.",
+    when: [
+      "A delivery was keyed in with the wrong quantity, and the stock and the purchase order need putting right.",
+      "You want to see everything received against a purchase order, or from one supplier.",
+      "You need the journal entry that put a delivery's value into stock."
+    ],
+    how: [
+      "Open <b>Inventory &rsaquo; Operations &rsaquo; Receipts</b>. For this example 10 aluminium sheets were received against PO/2026/0014, but only 8 arrived.",
+      "Type <i>PO/2026/0014</i> in the search box. Only the receipts made against that order remain.",
+      "Click the receipt. It shows the supplier, the purchase order, the date and one line per product with its location, quantity, value and journal entry numbers.",
+      "Press <span class='man-key'>Edit</span>. A <b>New quantity</b> box appears on each line. Enter <i>8</i> on the sheet line.",
+      "Press <span class='man-key'>Save changes</span>. You should see the quantity at 8 and a second journal entry number on the line. The purchase order now shows 8 received, with 2 still to come.",
+      "Use the <span class='man-key'>&#8249;</span> and <span class='man-key'>&#8250;</span> arrows beside the title to step to the previous or next receipt in the list without going back to it."
+    ],
+    fields: [
+      ["Received from", "The supplier the goods came from (<i>Returned to</i> on a return). Can be changed with Edit.", "optional"],
+      ["Purchase order", "The order the receipt was made from. Click it to open the order.", "auto"],
+      ["Received by", "The person who checked the goods in.", "auto"],
+      ["Date", "The date the goods were received. Can be changed with Edit; the stock value keeps the date it was posted.", "required"],
+      ["Source document", "The paperwork the receipt is against, such as the supplier's delivery note number.", "optional"],
+      ["Quantity", "What the receipt put into stock (or sent back, on a return), in the product's stock unit, after any corrections.", "auto"],
+      ["New quantity", "Shown while editing. Enter the quantity that really came in; 0 takes the whole line back out.", "required"],
+      ["Value", "The stock value of the line, at the cost the goods came in at.", "auto"],
+      ["Journal entries", "The entries that put the value into stock: one for the receipt and one for each correction. Click one to open it.", "auto"]
+    ],
+    buttons: [
+      ["Receive goods", "Opens a blank goods receipt for goods that came without a purchase order."],
+      ["Edit", "Makes the supplier, date, source document and each line's quantity editable. Needs permission to manage Inventory."],
+      ["Save changes", "Saves the details, adds a correcting movement for each changed quantity, posts its value and updates the purchase order's received quantity."],
+      ["Cancel", "Leaves edit mode without changing anything."],
+      ["Open (order number)", "Opens the purchase order the receipt came from."]
+    ],
+    after: "Nothing changes until you save an edit. A saved edit never rewrites the first movement: it adds a correcting movement to the same receipt, so the stock history still shows what was keyed first and what corrected it. The version before the edit is kept, and <i>Edited after confirming</i> above the details lists each one; click one to see it.",
+    links: [
+      { name: "Purchase Orders", how: "Receive goods on a confirmed order creates a receipt here, and the order's Receipts button lists them.", to: "po.list" },
+      { name: "Stock Moves", how: "Each receipt line and each correction is a movement there.", to: "inv.moves" },
+      { name: "Overview", how: "On hand goes up with a receipt and down with a return or a lowered quantity.", to: "inv.onhand" },
+      { name: "Journal Entries", how: "The value of each receipt and correction, posted in the MISC journal.", to: "moves" },
+      { name: "Vendor Bills", how: "Billing checks the quantity received, so correct a receipt before billing the difference.", to: "inv.in" }
+    ],
+    mistakes: [
+      ["The purchase order is for 10 and 10 is received, so at most 0 more can come in", "A receipt cannot bring in more than was ordered. Edit the purchase order's quantity first, then the receipt."],
+      ["3 is left in Main Warehouse, so 5 cannot go out", "Part of the stock has already been issued or delivered. Lower the quantity by no more than what is still in that location."],
+      ["A line I received is not on the receipt", "A line sent straight to a site is a cost of that job, not stock, and a line without a stocked product is not kept in stock, so neither is listed."]
+    ],
+    tips: [
+      "A return is its own receipt with a RET number. Edit it the same way to change how much went back.",
+      "Alt and the left or right arrow key step between receipts too."
+    ]
+  },
+
   "inv.moves": {
     title: "Stock Moves",
     what: "<b>Stock Moves</b> is the history of every movement of stock: receipts, deliveries, issues to projects, adjustments, transfers, scrap and the consumption and output of work orders and production runs. Each row shows the date, the product, where it came from, where it went and the quantity. It is read-only: you correct stock with a new movement, never by editing an old one.",

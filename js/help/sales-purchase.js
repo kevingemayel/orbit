@@ -63,6 +63,8 @@ orbitScreenHelp({
       ["Discard", "Goes back to the list without saving what you changed."],
       ["+ Add a line", "Adds an empty line. The &times; at the end of a line removes it."],
       ["Create Invoice", "Shown on a confirmed sales order. Creates a draft customer invoice dated today, due in 30 days, with the order's lines, tax and project, and opens it."],
+      ["Edit", "Shown on a confirmed sales order to people who can manage Sales. Opens its lines and details for changes: prices, quantities, new lines. A line already invoiced cannot go below the invoiced quantity, change product or be removed, and invoices already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
+      ["&#8249; and &#8250;", "Beside the title when you opened the document from the list. Step to the previous or next one in the list's order without going back to it. Alt and the left or right arrow key do the same."],
       ["Print", "Prints the document, or saves it as a PDF from the print window."],
       ["Invoices", "The counter at the top of an order that has been invoiced. Opens the first invoice made from it."],
       ["Select, Export, Filters, Group By, Columns", "On the list: Filters show only Quotations or only Sales Orders, Group By gathers them by customer or status, Columns picks what shows, Export downloads the list as a CSV file."]
@@ -243,6 +245,9 @@ orbitScreenHelp({
       ["+size", "Adds another line for the same item right below, so you can order a second size of it."],
       ["Receive goods", "On a confirmed order not yet fully received. Opens the Goods Receipt page with every line that still has something to receive."],
       ["Create Bill", "On a confirmed order not yet fully billed. Creates a draft vendor bill dated today, due in 30 days, with every line at its full ordered quantity and price, marks every line as billed, and opens the bill."],
+      ["Edit", "Shown on a confirmed order to people who can manage Purchase. Opens its lines and details for changes. A line already received or billed cannot go below that quantity, change product or be removed, and receipts and bills already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed with its received and billed quantities, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
+      ["Receipts", "The counter at the top of an order that has been received. Opens its receipt, or lets you pick one when there are several. A receipt with the wrong quantity is corrected there, with Edit."],
+      ["&#8249; and &#8250;", "Beside the title when you opened the order from the list. Step to the previous or next order in the list's order without going back to it. Alt and the left or right arrow key do the same."],
       ["Print", "Prints the order with sizes and areas, or saves it as a PDF."],
       ["Bills", "The counter at the top of an order that has a bill. Opens the first bill made from it."],
       ["Confirm receipt (Goods Receipt page)", "Records what arrived, moves stock items into inventory and adds to each line's Received quantity."],
@@ -257,6 +262,7 @@ orbitScreenHelp({
       { name: "Material Take-off", how: "Create Purchase Order on a take-off creates a draft order from its lines.", to: "pur.req" },
       { name: "Blanket Orders", how: "A blanket agreement and each release are purchase orders that show in this list too.", to: "pur.blanket" },
       { name: "On Hand", how: "Stock received into the warehouse shows there.", to: "inv.onhand" },
+      { name: "Receipts", how: "Every receipt made with Receive goods is listed there with its number, and corrected there with Edit.", to: "inv.receipts" },
       { name: "Job Cost", how: "An order tagged to a project and cost code counts as committed cost.", to: "proj.jobcost" },
       { name: "Approval Rules", how: "A rule for purchase orders above an amount makes Confirm wait for the approver.", to: "approvals.rules" }
     ],

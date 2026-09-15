@@ -1521,6 +1521,7 @@
     ] },
     inventory: { intro: "Every screen in the <b>Inventory</b> app:", list: [
       { i: "box", n: "On Hand", l: "Overview", d: "How much of each product you have, where, and its value." },
+      { i: "receipt", n: "Receipts", l: "Operations", d: "Every goods receipt and return, numbered, with its value. Correct one with Edit." },
       { i: "arrows", n: "Stock Moves", l: "Operations", d: "Every receive, deliver, adjust and transfer." },
       { i: "upload", n: "Material Issues", l: "Operations", d: "Issue stock to a project; it becomes a project cost." },
       { i: "truck", n: "Delivery Notes", l: "Operations", d: "The paperwork for stock going out to a customer or site." },
@@ -1814,7 +1815,7 @@
       name: "Inventory", icon: "▦", color: "#16a34a", color2: "#15803d", home: "inv.onhand",
       menus: [
         { label: "Overview", action: "inv.onhand" },
-        { label: "Operations", items: [["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"], ["Planning", "inv.planning"], ["Cycle Count", "inv.cyclecount"]] },
+        { label: "Operations", items: [["Receipts", "inv.receipts"], ["Stock Moves", "inv.moves"], ["Material Issues", "inv.issues"], ["Delivery Notes", "dn.list"], ["Scrap", "inv.scrap"], ["Replenishment", "inv.reorder"], ["Planning", "inv.planning"], ["Cycle Count", "inv.cyclecount"]] },
         { label: "Products", items: [["Products", "products"], ["Product Categories", "inv.cats"], ["Recost from weight", "inv.recost"], ["Lots / Serials", "lots"]] },
         { label: "Configuration", items: [["Warehouses", "wh"], ["Locations", "loc"], ["Units of Measure", "inv.uoms"], ["Classification", "settings.classification"], ["Storage Categories", "inv.storage"], ["Putaway Rules", "inv.putaway"], ["Delivery Methods", "inv.delivery"], ["Package Types", "inv.packages"]] }
       ]
@@ -2056,7 +2057,7 @@
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "site", "doc.subs": "site", "doc.rfis": "site", "doc.trans": "site",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
-    "inv.onhand": "inventory", "inv.recost": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
+    "inv.onhand": "inventory", "inv.recost": "inventory", "inv.receipts": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "site", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
@@ -3366,6 +3367,7 @@
     dd.querySelectorAll(".o-gs-item").forEach(function (b) { b.onmousedown = function (e) { e.preventDefault(); openRecord(b.dataset.type, b.dataset.id, b.dataset.extra); }; });
   }
   function openRecord(type, id, extra) {
+    S.recNav = null;   // opened from search, not from a list: there are no neighbours to step to
     var dd = document.getElementById("o-gs-dd"); if (dd) { dd.style.display = "none"; dd.innerHTML = ""; }
     var gin = document.getElementById("o-gs-in"); if (gin) gin.value = "";
     if (type === "help") { openHelp(String(id).split("|")[0]); return; }
@@ -4185,6 +4187,8 @@
     if ((__dirty || __modalDirty) && action !== S.action) { if (!confirm("You have unsaved changes. Leave without saving?")) return; }
     __dirty = false; __modalDirty = false;
     document.querySelectorAll(".modal").forEach(function (m) { m.remove(); });   // don't leave an orphaned modal over the new view
+    // back to the list keeps nothing armed; another screen forgets the list altogether
+    if (S.recNav) { if (action !== S.action) S.recNav = null; else S.recNav.armed = false; }
     S.action = action;
     if (!S.app) { S.app = ACTION_APP[action] || "accounting"; applyAppColor(); }
     if (!document.getElementById("o-main")) renderShell();
@@ -4417,6 +4421,7 @@
       case "appearance": return renderAppearance();
       case "inv.onhand": return renderOnHand();
       case "inv.recost": return renderRecost();
+      case "inv.receipts": return renderList(cfgReceipts());
       case "inv.moves": return renderList(cfgStockMoves());
       case "inv.issues": return renderList(cfgMaterialIssues());
       case "inv.cats": return renderCategoryTree();
@@ -4490,7 +4495,61 @@
       default: return renderDashboard();
     }
   }
-  function bcHTML(title, parent) {
+  // ---- previous / next record ----
+  // A record opened from a list remembers that list's rows, in the order they were on
+  // screen, so its page can step to the neighbouring record without going back to the
+  // list. S.recNav = { action, ids, rows, onOpen, cur }.
+  function recNavOrder() {
+    var all = (L && L.cfg ? applyRows() : []).map(function (r) { return r.id; });
+    var pos = {}; all.forEach(function (x, i) { pos[x] = i; });
+    var dom = [].map.call(document.querySelectorAll("#o-main [data-id]"), function (el) { return el.dataset.id; }).filter(function (x) { return x in pos; });
+    // a plain list shows rows in their filtered order, so every filtered row counts,
+    // past the current page; grouped, nested, kanban and tree views are read from the page
+    var same = dom.every(function (x, i) { return i === 0 || pos[x] >= pos[dom[i - 1]]; });
+    var seen = {};
+    return (same ? all : dom).filter(function (x) { if (!x || seen[x]) return false; seen[x] = 1; return true; });
+  }
+  function recNavStart(cfg, r) {
+    if (!r || !cfg || !cfg.onOpen) return;
+    S.recNav = { action: S.action, ids: recNavOrder(), rows: L ? L.all : [], onOpen: cfg.onOpen, cur: r.id, armed: true };
+  }
+  // A record page passes its own id, so the arrows show only on a record of that list,
+  // and again after a save re-renders it. A page that passes none gets them once, on the
+  // render that follows the click in the list.
+  function recNavHTML(id) {
+    var n = S.recNav; if (!n || n.action !== S.action) return "";
+    if (!id) { if (!n.armed) return ""; id = n.cur; }
+    n.armed = false;
+    var i = n.ids.indexOf(id); if (i < 0 || n.ids.length < 2) return "";
+    n.cur = id;
+    return '<span class="o-recnav"><button type="button" class="o-recnav-b" data-recnav="-1" aria-label="Previous record" title="Previous record (Alt+Left)"' + (i === 0 ? " disabled" : "") + '>&#8249;</button>' +
+      '<span class="o-recnav-n">' + (i + 1) + ' of ' + n.ids.length + '</span>' +
+      '<button type="button" class="o-recnav-b" data-recnav="1" aria-label="Next record" title="Next record (Alt+Right)"' + (i === n.ids.length - 1 ? " disabled" : "") + '>&#8250;</button></span>';
+  }
+  function recNavGo(step) {
+    var n = S.recNav; if (!n) return;
+    var i = n.ids.indexOf(n.cur) + step; if (i < 0 || i >= n.ids.length) return;
+    if ((__dirty || __modalDirty) && !confirm("You have unsaved changes. Leave without saving?")) return;
+    __dirty = false; __modalDirty = false;
+    var next = n.ids[i], r = (n.rows || []).filter(function (x) { return x.id === next; })[0];
+    if (!r) return;
+    document.querySelectorAll(".modal").forEach(function (m) { m.remove(); });
+    n.cur = next; n.armed = true; n.onOpen(r);
+  }
+  function wireRecNav(root) {
+    if (!root) return;
+    root.querySelectorAll("[data-recnav]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); recNavGo(+b.getAttribute("data-recnav")); }; });
+    if (!window.__recNavKeys) {
+      window.__recNavKeys = true;
+      document.addEventListener("keydown", function (e) {
+        if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+        var scope = document.querySelector(".modal.on [data-recnav]") ? document.querySelector(".modal.on") : document.querySelector("#o-main .o-bc");
+        var b = scope && scope.querySelector('[data-recnav="' + (e.key === "ArrowLeft" ? "-1" : "1") + '"]');
+        if (b && !b.disabled) { e.preventDefault(); b.click(); }
+      });
+    }
+  }
+  function bcHTML(title, parent, recId) {
     var app = APPS[S.app];
     var up = '<span class="up bc-grid" id="bc-grid" title="Back to all apps"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" style="vertical-align:-2px;margin-right:3px"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>Home</span><span class="sepc">/</span>';
     up += '<span class="up" id="bc-home">' + esc(term(app.name)) + '</span><span class="sepc">/</span>';
@@ -4499,6 +4558,8 @@
     // menu has collapsed for a long time; this is the same for the header, so
     // a laptop gets two more rows of the thing you actually came to look at.
     return '<div class="o-bc">' + up + '<span class="bc-title" id="bc-title">' + esc(term(title)) + '</span>' +
+      // a record page opened from its own list steps to the neighbouring records
+      (parent ? recNavHTML(recId) : "") +
       '<button class="o-bc-help" id="bc-help" aria-label="Help for this screen" title="Help for this screen: what it is for, every field, how it connects">?</button>' +
       '<button class="o-bc-min" id="bc-min" aria-label="Minimise the page header" title="Minimise the page header">' +
       '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div>';
@@ -4545,6 +4606,7 @@
     document.querySelectorAll(".o-bc [data-go]").forEach(function (e) { e.onclick = function () { go(e.dataset.go); }; });
     if (S.cpMini === undefined) { var _cm = localStorage.getItem("orbit_cpmini"); S.cpMini = _cm === "1"; }
     var hb = document.getElementById("bc-help"); if (hb) hb.onclick = function () { openScreenHelp(S.action); };
+    wireRecNav(document.querySelector("#o-main .o-bc"));
     var mb = document.getElementById("bc-min");
     if (mb) mb.onclick = function () {
       S.cpMini = !S.cpMini;
@@ -4907,12 +4969,12 @@
       body.innerHTML = listTableOpen(cfg) + page.map(function (r) { return rowHTML(cfg, r); }).join("") + listTableClose(cfg);
     }
     body.querySelectorAll("[data-id]").forEach(function (el) {
-      var open = function () { var r = L.all.filter(function (x) { return x.id === el.dataset.id; })[0]; if (cfg.onOpen) cfg.onOpen(r); };
+      var open = function () { var r = L.all.filter(function (x) { return x.id === el.dataset.id; })[0]; recNavStart(cfg, r); if (cfg.onOpen) cfg.onOpen(r); };
       el.onclick = open;
       if (cfg.onOpen) { el.setAttribute("tabindex", "0"); el.setAttribute("role", "button"); el.onkeydown = function (e) { if (e.target !== el) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); open(); } }; }
     });
     if (cfg.editTable || cfg.table) { ensureEditStyle(); body.querySelectorAll("td.o-ecell").forEach(function (td) { td.onclick = function (e) { e.stopPropagation(); startCellEdit(td); }; }); }
-    body.querySelectorAll(".o-open").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var r = L.all.filter(function (x) { return x.id === b.dataset.open; })[0]; if (r && cfg.onOpen) cfg.onOpen(r); }; });
+    body.querySelectorAll(".o-open").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); var r = L.all.filter(function (x) { return x.id === b.dataset.open; })[0]; if (r && cfg.onOpen) { recNavStart(cfg, r); cfg.onOpen(r); } }; });
     if (nestOn) body.querySelectorAll(".o-nest-caret[data-np]").forEach(function (c) { c.onclick = function (e) { e.stopPropagation(); var pid = c.dataset.np; L.ncoll[pid] = !L.ncoll[pid]; paintBody(); }; });
     wireColResize(cfg); wireColDrag(cfg); qaWire(cfg);
     body.querySelectorAll(".o-th-menu").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); openColMenu(+b.dataset.ci, b); }; });
@@ -5588,19 +5650,25 @@
       onOpen: function (p) { openPaymentView(p); }
     };
   }
-  async function openPaymentView(p) {
+  async function openPaymentView(p, opts) {
     var pname = p.partners ? p.partners.name : ((await sb.from("partners").select("name").eq("id", p.partner_id).maybeSingle()).data || {}).name || "";
     var inbound = p.payment_type === "inbound";
     var canW = canManageApp("accounting");
     var m = document.createElement("div"); m.className = "modal on";
     var rowsH = [["Date", p.date], ["Partner", pname], ["Type", inbound ? "Customer receipt" : "Vendor payment"], ["Reference", p.reference || p.memo], ["Memo", p.memo]]
       .filter(function (r) { return r[1]; }).map(function (r) { return '<tr><td style="color:var(--ink2);padding:5px 16px 5px 0;white-space:nowrap;vertical-align:top">' + esc(r[0]) + '</td><td class="u-sb">' + esc(String(r[1])) + '</td></tr>'; }).join("");
-    m.innerHTML = '<div class="sheet"><h3>Payment ' + esc(p.reference || "") + '</h3>' +
+    // each edit keeps the version it replaced
+    var prevs = (await sb.from("document_revisions").select("created_at,actor_email,snapshot").eq("doc_type", "payment").eq("doc_id", p.id).order("created_at", { ascending: false })).data || [];
+    var histH = prevs.length ? '<div class="sub" style="margin:4px 0 8px"><b>Edited</b><br>' + prevs.map(function (v) { var s = v.snapshot || {}; return esc(fmtDate(v.created_at) + (v.actor_email ? " by " + v.actor_email : "") + ": was " + moneyC(s.amount, s.currency_code) + " on " + (s.date || "") + (s.reference ? ", ref " + s.reference : "")); }).join("<br>") + '</div>' : '';
+    m.innerHTML = '<div class="sheet"><h3 style="display:flex;align-items:center;gap:8px">Payment ' + esc(p.reference || "") + recNavHTML(p.id) + '</h3>' +
       '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
-      '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' +
-      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn u-bad" id="pv-rev">Reverse payment</button>' : '') + '</div></div>';
+      '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' + histH +
+      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-edit">Edit</button><button class="btn u-bad" id="pv-rev">Reverse payment</button>' : '') + '</div></div>';
     document.body.appendChild(m);
     document.getElementById("pv-close").onclick = function () { m.remove(); };
+    wireRecNav(m);
+    var eb = document.getElementById("pv-edit"); if (eb) eb.onclick = function () { m.remove(); openPaymentEdit(p); };
+    if (opts && opts.edit && eb) eb.click();
     var rb = document.getElementById("pv-rev"); if (rb) rb.onclick = async function () {
       if (!confirm("Reverse this payment? It backs out the journal entry and re-opens the invoice it settled.")) return;
       rb.disabled = true; rb.textContent = "Reversing...";
@@ -5625,6 +5693,56 @@
     }
     await sb.from("payments").delete().eq("id", p.id);
     return { ok: true };
+  }
+  // Edit a payment: its amount, date, journal and reference. A payment is in the ledger
+  // and matched to its invoice, so the old one is reversed and the payment registered
+  // again with the new figures, which keeps the invoice's balance right. A payment the
+  // Counter recorded is changed on its movement, and one tied to no invoice can only
+  // change its reference and memo.
+  async function openPaymentEdit(p) {
+    if (p.reference) {
+      var mv = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).eq("number", p.reference).limit(1)).data || [];
+      if (mv[0]) { toast("This payment was recorded in the Counter as " + p.reference + ". Change it there, with Edit on the movement."); openMovementReceipt(mv[0]); return; }
+    }
+    var ent = p.entry_id ? ((await sb.from("journal_entries").select("source_id,source_type").eq("id", p.entry_id).maybeSingle()).data || {}) : {};
+    var inv = (ent.source_type === "payment" && ent.source_id) ? ((await sb.from("invoices").select("id,number,amount_total,amount_residual,currency_code").eq("id", ent.source_id).maybeSingle()).data) : null;
+    var jcode = p.journal_id ? (((await sb.from("journals").select("code").eq("id", p.journal_id).maybeSingle()).data || {}).code || "BNK") : "BNK";
+    var ccy = p.currency_code || S.company.currency_code;
+    var maxAmt = inv ? Math.round((Number(inv.amount_residual || 0) + Number(p.amount || 0)) * 100) / 100 : 0;
+    var m = document.createElement("div"); m.className = "modal on";
+    m.innerHTML = '<div class="sheet"><h3>Edit payment' + (inv && inv.number ? ' for ' + esc(inv.number) : '') + '</h3><div class="form">' +
+      (inv
+        ? '<div><label>Amount (' + esc(ccy) + ')</label><input id="pe-amt" type="number" step="0.01" min="0" value="' + Number(p.amount || 0) + '"><div class="sub">Up to ' + esc(moneyC(maxAmt, ccy)) + ', what the invoice would owe without this payment.</div></div>' +
+          '<div class="row2"><div><label>Date</label><input id="pe-date" type="date" value="' + esc(p.date || today()) + '"></div><div><label>Journal</label><select id="pe-jrn"><option value="BNK"' + (jcode !== "CSH" ? " selected" : "") + '>Bank</option><option value="CSH"' + (jcode === "CSH" ? " selected" : "") + '>Cash</option></select></div></div>'
+        : '<div class="sub">This payment is not matched to an invoice, so only its reference and memo can change here.</div>') +
+      '<div><label>Reference</label><input id="pe-ref" value="' + esc(p.reference || "") + '"></div>' +
+      '<div><label>Memo</label><input id="pe-memo" value="' + esc(p.memo || "") + '"></div>' +
+      '</div><div class="foot"><button class="btn" id="pe-cancel">Cancel</button><button class="btn pri u-app" id="pe-save">Save changes</button></div></div>';
+    document.body.appendChild(m);
+    document.getElementById("pe-cancel").onclick = function () { m.remove(); };
+    document.getElementById("pe-save").onclick = async function () {
+      var btn = this, ref = gv("pe-ref"), memo = gv("pe-memo");
+      if (!inv) {
+        await sb.rpc("record_revision", { p_company: S.company.id, p_doc_type: "payment", p_doc_id: p.id, p_doc_number: p.reference || "", p_snapshot: p });
+        var up = await sb.from("payments").update({ reference: ref || null, memo: memo || null }).eq("id", p.id);
+        if (up.error) { toast("Could not save: " + errMsg(up.error)); return; }
+        m.remove(); toast("Payment updated"); renderView(); return;
+      }
+      var amt = Number(gv("pe-amt")) || 0, date = gv("pe-date") || today(), jr = document.getElementById("pe-jrn").value;
+      if (!(amt > 0)) { toast("Enter the amount paid"); return; }
+      if (amt > maxAmt + 0.005) { toast("That is more than the " + moneyC(maxAmt, ccy) + " the invoice would owe. Enter up to that amount."); return; }
+      if (isLocked(date)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
+      btn.disabled = true; btn.textContent = "Saving...";
+      var rv = await reversePayment(p);
+      if (rv && rv.error) { btn.disabled = false; btn.textContent = "Save changes"; toast("Could not change the payment: " + errMsg(rv.error)); return; }
+      var rp = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: date, p_journal_code: jr, p_method: jr === "CSH" ? "cash" : "bank", p_ref: ref || "" });
+      // the version before the edit is kept against the payment that replaces it
+      var snap = Object.assign({}, p, { partners: undefined, replaced_payment_id: p.id });
+      await sb.rpc("record_revision", { p_company: S.company.id, p_doc_type: "payment", p_doc_id: rp.data || p.id, p_doc_number: ref || p.reference || "", p_snapshot: snap });
+      if (rp.error) { m.remove(); toast("The old payment was reversed, but the new one could not be registered: " + errMsg(rp.error) + ". Register it again from the invoice."); renderView(); return; }
+      if (rp.data && memo) await sb.from("payments").update({ memo: memo }).eq("id", rp.data);
+      m.remove(); toast("Payment updated"); renderView();
+    };
   }
   function cfgAccounts() {
     var tName = {}; S.types.forEach(function (t) { tName[t.code] = t.name; });
@@ -5686,7 +5804,7 @@
       h += '<div class="ob-banner" style="margin:0 0 12px">This ' + esc(noun) + ' was posted and has been back in draft for editing since ' + esc(revStamp(open.created_at)) + '. It is out of the accounts until you post it again, changed or not.' +
         (paid > 0.005 ? ' The ' + esc(moneyC(paid, (sn.invoice || {}).currency_code || S.company.currency_code)) + ' already paid stays paid.' : '') + '</div>';
     }
-    if (revs.length) h += '<div class="muted" style="font-size:12.5px;margin:0 0 10px">Edited after posting: ' + revs.map(function (r, i) {
+    if (revs.length) h += '<div class="muted" style="font-size:12.5px;margin:0 0 10px">Edited after ' + (noun === "order" || noun === "receipt" ? "confirming" : "posting") + ': ' + revs.map(function (r, i) {
       return '<a href="#" data-rev="' + i + '">' + esc(revStamp(r.created_at)) + (r.actor_email ? " by " + esc(r.actor_email) : "") + '</a>';
     }).join(", ") + '. Click one to see what was posted before it.</div>';
     return h;
@@ -5705,9 +5823,21 @@
       body = '<thead><tr><th>Description</th><th>Account</th><th class="u-r">Qty</th><th class="u-r">Unit price</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
         return '<tr><td>' + esc(l.name || "") + '</td><td>' + esc(l.account || "") + '</td><td class="num">' + esc(String(Number(l.quantity) || 0)) + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + esc(l.tax || "") + '</td><td class="num">' + money(l.price_subtotal) + '</td></tr>';
       }).join("") + '</tbody>';
+    } else if (kind === "purchase_order" || kind === "sale_order") {
+      var od = s.order || {};
+      head = [["Number", od.number], ["Contact", s.partner], ["Order date", od.date_order], ["Reference", od.note], ["Total", moneyC(od.amount_total, od.currency_code)]];
+      body = '<thead><tr><th>Description</th><th class="u-r">Qty</th><th>Unit</th><th class="u-r">Unit price</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
+        return '<tr><td>' + esc(l.name || "") + '</td><td class="num">' + esc(String(Number(l.quantity) || 0)) + '</td><td>' + esc(l.uom || "") + '</td><td class="num">' + money(l.unit_price) + '</td><td class="num">' + money((Number(l.quantity) || 0) * (Number(l.unit_price) || 0)) + '</td></tr>';
+      }).join("") + '</tbody>';
+    } else if (kind === "stock_picking") {
+      var pkv = s.picking || {};
+      head = [["Number", pkv.number], ["Supplier", s.partner], ["Date", String(pkv.scheduled_date || "").slice(0, 10)], ["Source document", pkv.origin]];
+      body = '<thead><tr><th>Product</th><th>Location</th><th class="u-r">Quantity</th><th>Unit</th><th class="u-r">Value</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
+        return '<tr><td>' + esc(l.product || "") + '</td><td>' + esc(l.location || "") + '</td><td class="num">' + esc(String(l.qty)) + '</td><td>' + esc(l.uom || "") + '</td><td class="num">' + money(l.value) + '</td></tr>';
+      }).join("") + '</tbody>';
     } else {
       var en = s.entry || {};
-      head = [["Number", en.entry_number], ["Date", en.date], ["Reference", en.ref], ["Narration", en.narration]];
+      head = [["Number", en.entry_number], ["Date", en.date], ["Reference", en.ref], ["Description", en.narration]];
       body = '<thead><tr><th>Account</th><th>Description</th><th>Currency</th><th class="u-r">Debit</th><th class="u-r">Credit</th></tr></thead><tbody>' + (s.lines || []).map(function (l) {
         var fc = l.currency_code && l.currency_code !== S.company.currency_code ? " " + money(Math.abs(Number(l.amount_currency) || 0)) : "";
         return '<tr><td>' + esc(l.account || "") + '</td><td>' + esc(l.label || "") + '</td><td>' + esc((l.currency_code || "") + fc) + '</td><td class="num">' + (Number(l.debit) ? money(l.debit) : "") + '</td><td class="num">' + (Number(l.credit) ? money(l.credit) : "") + '</td></tr>';
@@ -5721,6 +5851,13 @@
     document.body.appendChild(m);
     m.querySelector("#rv-close").onclick = function () { m.remove(); };
   }
+  // what created an entry Orbit posted for another record, as a phrase
+  function jeSourceLabel(st) {
+    return ({ stock: "a stock movement", material_issue: "a material issue to a project", payslip: "a payslip", depreciation: "an asset's depreciation",
+      retention: "a certificate's retention", advance: "an advance recovery", install_labour: "installation labour", fx_revaluation: "a currency revaluation",
+      cash_void: "a reversal", cash_handover: "a Counter handover", expense: "an expense claim", invoice: "an invoice or bill", payment: "a payment",
+      cash_movement: "a Counter movement" })[st] || "another record";
+  }
   // ---- the journal voucher ----
   // A line is the account, its auxiliary when it has them, the description,
   // the currency, the rate when that currency is not the company's, and the
@@ -5731,13 +5868,18 @@
   async function renderJournalEntryForm(id, copyFrom) {
     mediaClearStage();
     var parent = { action: "moves", title: "Journal Entries" };
-    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent, id) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var base = S.company.currency_code || "USD";
-    var accts = (await allRows(function () { return sb.from("accounts").select("id,code,name,currency_code,parent_account_id,is_active").eq("company_id", S.company.id).order("code"); }));
+    var accts = (await allRows(function () { return sb.from("accounts").select("id,code,name,currency_code,parent_account_id,is_active,aux_kind").eq("company_id", S.company.id).order("code"); }));
     var jrns = (await sb.from("journals").select("id,code,name").eq("company_id", S.company.id).order("code")).data || [];
     var ccyRows = (await sb.from("currencies").select("code").eq("org_id", S.company.org_id).order("code")).data || [];
-    var genJ = jrns.filter(function (j) { return j.code === "MISC" || j.code === "GEN"; })[0] || jrns[0];
+    // an account whose auxiliaries are contacts (4011 suppliers, 4515 other partners)
+    // offers the company's contacts in the Auxiliary column
+    var parts = accts.some(function (a) { return a.aux_kind === "contacts"; }) ? (await allRows(function () { return sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name"); })) : [];
+    var partById = {}; parts.forEach(function (p) { partById[p.id] = p; });
+    // a new voucher opens on the Journal Voucher journal, then Miscellaneous where a company has no JV yet
+    var genJ = jrns.filter(function (j) { return j.code === "JV"; })[0] || jrns.filter(function (j) { return j.code === "MISC" || j.code === "GEN"; })[0] || jrns[0];
     var byId = {}, kids = {};
     function isAux(a) { return !!(a && a.parent_account_id && String(a.code).indexOf(".") > 0); }
     accts.forEach(function (a) { byId[a.id] = a; });
@@ -5775,7 +5917,7 @@
       var ccy = l.currency_code || base, foreign = ccy !== base, fc = Number(l.amount_currency) || 0, bs = (Number(l.debit) || 0) - (Number(l.credit) || 0);
       var rate = foreign ? (Number(l.fx_rate) || (fc ? Math.abs(bs / fc) : 0)) : 1;
       return {
-        acct: main ? main.id : "", aux: isAux(a) ? a.id : "", label: l.label || "", ccy: ccy, rate: rate, inv: foreign && rate > 0 && rate < 1,
+        acct: main ? main.id : "", aux: isAux(a) ? a.id : "", partner: l.partner_id || "", label: l.label || "", ccy: ccy, rate: rate, inv: foreign && rate > 0 && rate < 1,
         dr: foreign ? (fc > 0 ? fc : "") : (Number(l.debit) || ""), cr: foreign ? (fc < 0 ? -fc : "") : (Number(l.credit) || "")
       };
     });
@@ -5811,10 +5953,12 @@
       var ks = l.acct ? (kids[l.acct] || []) : [], foreign = l.ccy !== base, b = baseOf(l);
       return '<tr data-row="' + i + '">' +
         '<td><input class="je-in je-acct" list="je-accts" data-i="' + i + '" value="' + esc(acctLabel(byId[l.acct])) + '" placeholder="Code or name" autocomplete="off"' + dis + '></td>' +
-        '<td><select class="je-in" data-i="' + i + '" data-f="aux"' + (ks.length && !posted ? "" : " disabled") + '>' +
-          (ks.length ? '<option value="">None</option>' + ks.map(function (k) { return '<option value="' + k.id + '"' + (l.aux === k.id ? " selected" : "") + '>' + esc(k.code.split(".").pop() + " " + k.name) + '</option>'; }).join("") : '<option value="">' + (l.acct ? "None" : "") + '</option>') +
-        '</select></td>' +
-        '<td><input class="je-in" data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Description"' + dis + '></td>' +
+        (byId[l.acct] && byId[l.acct].aux_kind === "contacts"
+          ? '<td><input class="je-in" list="je-parts" data-i="' + i + '" data-f="partner" value="' + esc(l.partner && partById[l.partner] ? partById[l.partner].name : "") + '" placeholder="Contact" autocomplete="off"' + dis + '></td>'
+          : '<td><select class="je-in" data-i="' + i + '" data-f="aux"' + (ks.length && !posted ? "" : " disabled") + '>' +
+            (ks.length ? '<option value="">None</option>' + ks.map(function (k) { return '<option value="' + k.id + '"' + (l.aux === k.id ? " selected" : "") + '>' + esc(k.code.split(".").pop() + " " + k.name) + '</option>'; }).join("") : '<option value="">' + (l.acct ? "None" : "") + '</option>') +
+            '</select></td>') +
+        '<td><input class="je-in" data-i="' + i + '" data-f="label" value="' + esc(l.label || "") + '" placeholder="Line description"' + dis + '></td>' +
         '<td><select class="je-in" data-i="' + i + '" data-f="ccy"' + dis + '>' + ccys.map(function (c) { return '<option' + (l.ccy === c ? " selected" : "") + '>' + esc(c) + '</option>'; }).join("") + '</select></td>' +
         '<td>' + (foreign
           ? '<div class="je-rate"><span>1 ' + esc(l.inv ? base : l.ccy) + ' =</span><input class="je-in" type="number" step="any" min="0" data-i="' + i + '" data-f="rate" value="' + rateShown(l) + '"' + dis + '><span>' + esc(l.inv ? l.ccy : base) + '</span>' +
@@ -5859,17 +6003,24 @@
           if (!a) { if (inp.value.trim()) toast("No account has the code or name " + inp.value.trim() + "."); l.acct = ""; l.aux = ""; paint({ row: i, f: "acct" }); return; }
           __dirty = true;
           if (isAux(a)) { l.acct = a.parent_account_id; l.aux = a.id; } else { l.acct = a.id; l.aux = ""; }
+          if (!byId[l.acct] || byId[l.acct].aux_kind !== "contacts") l.partner = "";
           var ccyHint = (isAux(a) && a.currency_code) || a.currency_code || (byId[l.acct] && byId[l.acct].currency_code) || base;
           await setCcy(l, ccyHint);
           // an empty line offers what balances the voucher, as a new one does
           if (!Number(l.dr) && !Number(l.cr) && l.ccy === base) { var bt = 0; lines.forEach(function (o, oi) { if (oi !== i) { var ob = baseOf(o); bt += ob.d - ob.c; } }); bt = r2(bt); if (bt > 0) l.cr = bt; else if (bt < 0) l.dr = -bt; }
-          paint({ row: i, f: (!l.aux && (kids[l.acct] || []).length) ? "aux" : "label" });
+          paint({ row: i, f: (byId[l.acct] && byId[l.acct].aux_kind === "contacts") ? "partner" : ((!l.aux && (kids[l.acct] || []).length) ? "aux" : "label") });
         };
         enterKey(inp, i);
       });
       grid.querySelectorAll("[data-f]").forEach(function (el) {
         var i = +el.dataset.i, f = el.dataset.f;
-        if (f === "aux") el.onchange = async function () { var l = lines[i], k = byId[el.value]; l.aux = el.value; __dirty = true; if (k && k.currency_code && k.currency_code !== l.ccy) await setCcy(l, k.currency_code); paint({ row: i, f: "label" }); };
+        if (f === "partner") el.onchange = function () {
+          var v = el.value.trim(), lv = v.toLowerCase();
+          var p = parts.filter(function (x) { return x.name === v; })[0] || parts.filter(function (x) { return (x.name || "").toLowerCase() === lv; })[0];
+          if (!p && v) { toast("No contact is called " + v + ". Pick one from the list."); el.value = ""; lines[i].partner = ""; return; }
+          lines[i].partner = p ? p.id : ""; __dirty = true;
+        };
+        else if (f === "aux") el.onchange = async function () { var l = lines[i], k = byId[el.value]; l.aux = el.value; __dirty = true; if (k && k.currency_code && k.currency_code !== l.ccy) await setCcy(l, k.currency_code); paint({ row: i, f: "label" }); };
         else if (f === "ccy") el.onchange = async function () { __dirty = true; await setCcy(lines[i], el.value); paint({ row: i, f: lines[i].ccy === base ? "dr" : "rate" }); };
         else if (f === "rate") el.oninput = function () { var v = Number(el.value) || 0, l = lines[i]; l.rate = l.inv ? (v ? 1 / v : 0) : v; __dirty = true; refreshRow(i); };
         else el.oninput = function () {
@@ -5894,13 +6045,14 @@
       (posted ? '' : '<button class="pri" id="je-post">Post</button><button id="je-save">Save draft</button>') +
       '<button id="je-discard">' + (posted ? "Back" : "Discard") + '</button>' +
       (id !== "new" && canManageApp("accounting") ? '<button id="je-dup" title="Start a new voucher with the same lines">Duplicate</button>' : '') +
-      (isPosted && manual && canManageApp("accounting") ? '<button id="je-edit" title="Take it back to draft to change it. It keeps its number, and the posted version is kept in its history.">Edit</button>' : '') +
+      (isPosted && canManageApp("accounting") ? '<button id="je-edit" title="' + (manual ? "Take it back to draft to change it. It keeps its number, and the posted version is kept in its history." : "Change this entry. One that belongs to a bill, invoice, payment or Counter movement is changed from that document, so the two always agree.") + '">Edit</button>' : '') +
       (owner ? '<button id="je-owner">Open ' + esc(owner.number || postedDocNoun(owner.move_type)) + '</button>' : '') +
       (isPosted && !owner && canManageApp("accounting") ? '<button id="je-rev" class="u-bad">Reverse</button>' : '') + '</div>' +
       '<div class="o-stages"><span class="st ' + (isPosted ? "done" : "on") + '">Draft</span><span class="st ' + (isPosted ? "on" : "") + '">Posted</span></div></div>' +
       '<div class="o-sheet">' +
       (owner && !isPosted ? '<div class="ob-banner" style="margin:0 0 12px">This entry belongs to ' + esc(owner.number || postedDocNoun(owner.move_type)) + ', which is back in draft for editing. Its lines come back when that ' + postedDocNoun(owner.move_type) + ' is posted again.</div>' : '') +
       revisionNoteHTML(revs, !isPosted, "voucher") +
+      (!manual && !owner && !isPosted && id !== "new" ? '<div class="ob-banner" style="margin:0 0 12px">Orbit created this entry for ' + esc(jeSourceLabel(ent.source_type)) + '. Changing it here changes the accounting only; that record keeps its own figures.</div>' : '') +
       '<div class="o-title">Journal voucher ' + (number ? '<b>' + esc(number) + '</b>' : '<span class="muted">' + (copyFrom ? "copied, numbered when saved" : "numbered when saved") + '</span>') + '</div>' +
       '<div class="o-groups"><div>' +
       fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + dis + '>') +
@@ -5908,12 +6060,16 @@
       (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + dis + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this voucher belongs to.") : '') +
       '</div><div>' +
       fld("Reference", '<input id="je-ref" value="' + esc(ent.ref || "") + '" placeholder="The supplier invoice or receipt number"' + dis + '>', "The number of the paper behind this voucher.") +
-      fld("Narration", '<input id="je-narr" value="' + esc(ent.narration || "") + '" placeholder="What this voucher is for"' + dis + '>', "Copied to every line whose description you leave blank.") +
+      fld("Description", '<input id="je-narr" value="' + esc(ent.narration || "") + '" placeholder="What this voucher is for"' + dis + '>', "Copied to every line whose line description you leave blank.") +
       '</div></div>' +
-      '<div class="je-wrap"><table class="o-list je-grid"><thead><tr><th>Account No.</th><th>Auxiliary</th><th>Description</th><th>Currency</th><th>Rate</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">In ' + esc(base) + '</th><th></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
+      // the entries are the working area of a voucher: one framed, compact block with
+      // its debit, credit and balance in the header, so they are the first thing read
+      '<section class="je-box" aria-label="Accounting entries"><div class="je-box-h"><b>Accounting entries</b><div id="je-tot" class="je-tot"></div></div>' +
+      '<div class="je-wrap"><table class="o-list je-grid"><thead><tr><th>Account No.</th><th>Auxiliary</th><th>Line description</th><th>Currency</th><th>Rate</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">In ' + esc(base) + '</th><th></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
       '<datalist id="je-accts">' + mains.map(function (a) { return '<option value="' + esc(acctLabel(a)) + '"></option>'; }).join("") + '</datalist>' +
-      (posted ? '' : '<button type="button" id="je-add" class="je-addline">+ Add line</button><span class="muted je-hint">Enter moves to the next line. A new line copies the description above it and offers the amount that balances.</span>') +
-      '<div id="je-tot" class="je-tot"></div>' +
+      (parts.length ? '<datalist id="je-parts">' + parts.map(function (p) { return '<option value="' + esc(p.name) + '"></option>'; }).join("") + '</datalist>' : '') +
+      (posted ? '' : '<div class="je-box-f"><button type="button" id="je-add" class="je-addline">+ Add line</button><span class="muted je-hint">Enter moves to the next line. A new line copies the line description above it and offers the amount that balances.</span></div>') +
+      '</section>' +
       attachBlockHTML("journal_entry", id === "new" ? "" : id, { label: "Related documents: the scanned invoice, receipt or contract behind this voucher", accept: "image/*,application/pdf" }) +
       '</div>';
     paint();
@@ -5935,16 +6091,18 @@
         if (dr && cr) { toast("Line " + (i + 1) + ": a line is a debit or a credit, not both."); focusCell(i, "dr"); return null; }
         if (foreign && !(Number(l.rate) > 0)) { toast("Line " + (i + 1) + ": enter the " + l.ccy + " rate."); focusCell(i, "rate"); return null; }
         var b = baseOf(l);
-        rows.push({ account_id: l.aux || l.acct, label: (l.label || narr || "").slice(0, 160), debit: b.d, credit: b.c,
+        rows.push({ account_id: l.aux || l.acct, partner_id: l.partner || null, label: (l.label || narr || "").slice(0, 160), debit: b.d, credit: b.c,
           amount_currency: foreign ? (dr ? dr : -cr) : r2(b.d - b.c), currency_code: l.ccy, fx_rate: foreign ? Number(l.rate) : 1 });
       }
       if (rows.length < 2) { toast("A voucher needs at least two lines."); return null; }
       var t = totals(); if (!t.bal) { toast("Debits and credits must balance in " + base + ". They are off by " + money(Math.abs(t.d - t.c)) + "."); return null; }
       var head = { date: gv("je-date") || today(), journal_id: document.getElementById("je-journal").value || null, narration: narr, ref: gv("je-ref"),
-        currency_code: base, book_id: (document.getElementById("je-book") ? document.getElementById("je-book").value : null) || null, source_type: "manual" };
+        currency_code: base, book_id: (document.getElementById("je-book") ? document.getElementById("je-book").value : null) || null };
       var eid = savedId;
       if (savedId === "new") {
-        head.company_id = S.company.id; head.state = "draft";
+        // a voucher typed here is manual; an entry Orbit posted for another record keeps
+        // saying where it came from when it is edited
+        head.company_id = S.company.id; head.state = "draft"; head.source_type = "manual";
         var ins = await sb.from("journal_entries").insert(head).select("id").single();
         if (ins.error) { toast(errMsg(ins.error)); return null; }
         eid = savedId = ins.data.id;
@@ -5967,7 +6125,26 @@
       toast("Posted"); renderJournalEntryForm(eid);
     };
     var editB = document.getElementById("je-edit"); if (editB) editB.onclick = async function () {
-      if (!confirm("Edit " + (ent.entry_number || "this voucher") + "?\n\nIt goes back to draft and is out of the accounts until you post it again. It keeps its number, and the version posted now is kept in its history.")) return;
+      var st = ent.source_type || "manual";
+      // an entry owned by a document is changed with that document, so the two agree
+      if (st === "invoice" && owner) {
+        var noun = postedDocNoun(owner.move_type);
+        if (owner.state !== "posted") { renderInvoiceForm(owner.id, owner.move_type); return; }
+        if (!confirm("This entry belongs to " + (owner.number || "a " + noun) + ".\n\nEdit that " + noun + "? It goes back to draft, and this entry follows it when it is posted again.")) return;
+        var rio = await sb.rpc("reopen_invoice", { p_invoice: owner.id });
+        if (rio.error) { toast("Could not edit: " + errMsg(rio.error)); return; }
+        toast("Back in draft. Confirm and post it when you are done."); renderInvoiceForm(owner.id, owner.move_type); return;
+      }
+      if (st === "payment" || st === "cash_movement") {
+        var mvs = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).or("journal_id.eq." + id + ",entry_ids.cs.{" + id + "}").limit(1)).data || [];
+        if (mvs[0]) { toast("This entry was posted by the Counter. Use Edit on the movement."); openMovementReceipt(mvs[0]); return; }
+        if (st === "payment") {
+          var pay = (await sb.from("payments").select("*, partners(name)").eq("entry_id", id).maybeSingle()).data;
+          if (pay) { openPaymentEdit(pay); return; }
+        }
+      }
+      var from = manual ? "" : "\n\nOrbit created this entry for " + jeSourceLabel(st) + ". Editing changes the accounting only: that record keeps its own figures.";
+      if (!confirm("Edit " + (ent.entry_number || "this voucher") + "?\n\nIt goes back to draft and is out of the accounts until you post it again. It keeps its number, and the version posted now is kept in its history." + from)) return;
       editB.disabled = true;
       var ro = await sb.rpc("reopen_journal_entry", { p_entry: id });
       if (ro.error) { editB.disabled = false; toast("Could not edit: " + errMsg(ro.error)); return; }
@@ -6186,7 +6363,7 @@
     var isSale = moveType.indexOf("out_") === 0, isRefund = moveType.indexOf("refund") >= 0;
     var parent = { action: isRefund ? (isSale ? "inv.outr" : "inv.inr") : (isSale ? "inv.out" : "inv.in"), title: isRefund ? (isSale ? "Credit Notes" : "Vendor Credit Notes") : (isSale ? "Invoices" : "Vendor Bills") };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent, id) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
 
     var inv = null, lines = [];
@@ -7113,20 +7290,23 @@
     var hasCur = current && uniq.indexOf(current) < 0;
     return '<select id="' + id + '"' + (disabled ? " disabled" : "") + '><option value="">' + esc(placeholder || "(select)") + '</option>' + (hasCur ? '<option selected>' + esc(current) + '</option>' : "") + uniq.map(function (n) { return '<option' + (current === n ? " selected" : "") + '>' + esc(n) + '</option>'; }).join("") + '</select>';
   }
-  async function renderOrderForm(id, kind) {
+  async function renderOrderForm(id, kind, opts) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
     var listAction = isSale ? "so.list" : "po.list";
     var parent = { action: listAction, title: isSale ? "Quotations" : "Purchase Orders" };
     var main = document.getElementById("o-main");
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent, id) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var order = null, lines = [];
     if (id !== "new") {
       order = (await sb.from(tbl).select("*, partners(name)").eq("id", id).maybeSingle()).data;
       lines = (await sb.from(ltbl).select("*").eq("order_id", id).order("id")).data || [];
     }
-    var editable = !order || order.state === "draft" || order.state === "sent";
     var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
+    // Edit on a confirmed order opens the same form with its lines editable; what was
+    // already received, billed or invoiced sets how far each line can change
+    var amend = !!(opts && opts.amend && confirmed && canManageApp(isSale ? "sales" : "purchase"));
+    var editable = !order || order.state === "draft" || order.state === "sent" || amend;
     var partners = (await sb.from("partners").select("id,name,pricelist_id").eq("company_id", S.company.id).eq(isSale ? "is_customer" : "is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,list_price,cost_price,sale_tax_id,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
     var plItemsCache = {};
@@ -7152,7 +7332,10 @@
     bcTitle(order ? (order.number || "Draft") : "New");
     var invCount = 0, firstInvId = null;
     if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
-    var smart = (order && invCount) ? '<div class="o-smart"><button class="sb" id="o-sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isSale ? "Invoices" : "Bills") + '</span></button></div>' : "";
+    // receipts made from this purchase order, and the versions kept by each edit
+    var rcpts = (order && !isSale) ? ((await sb.from("stock_pickings").select("id,number,type,scheduled_date").eq("po_id", order.id).order("created_at")).data || []) : [];
+    var orevs = order ? ((await sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", isSale ? "sale_order" : "purchase_order").eq("doc_id", order.id).order("created_at", { ascending: false })).data || []) : [];
+    var smart = (order && (invCount || rcpts.length)) ? '<div class="o-smart">' + (invCount ? '<button class="sb" id="o-sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isSale ? "Invoices" : "Bills") + '</span></button>' : '') + (rcpts.length ? '<button class="sb" id="o-sm-rcp"><span class="v">' + rcpts.length + '</span><span class="k">Receipts</span></button>' : '') + '</div>' : "";
 
     // PO closure control (audit P0-5): once every product line is fully received AND
     // fully billed, stop offering unrestricted Receive / Create Bill and show it Closed.
@@ -7162,10 +7345,12 @@
     // a sale order line records what was invoiced in qty_invoiced, a purchase line in qty_billed
     var fullyBilled = (lines || []).length > 0 && (lines || []).every(function (l) { return Number((isSale ? l.qty_invoiced : l.qty_billed) || 0) >= Number(l.quantity || 0) - 0.0001; });
     var btns = "";
-    if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
+    if (amend) btns += '<button class="pri" id="o-amend-save">Save changes</button><button id="o-amend-cancel">Cancel</button>';
+    else if (editable) btns += '<button class="pri" id="o-confirm">Confirm</button><button id="o-save">Save</button><button id="o-discard">Discard</button>';
     else if (confirmed) {
       if (!isSale && !fullyReceived) btns += '<button id="o-receive">Receive goods</button>';
       if (!fullyBilled) btns += '<button class="pri" id="o-toinv">' + (isSale ? "Create Invoice" : "Create Bill") + '</button>';
+      if (canManageApp(isSale ? "sales" : "purchase")) btns += '<button id="o-amend" title="Change the lines, prices or details of this confirmed order. What was already ' + (isSale ? "invoiced" : "received or billed") + ' stays, and the version before is kept in its history.">Edit</button>';
       if ((isSale || fullyReceived) && fullyBilled) btns += '<span class="badge paid" style="align-self:center;padding:6px 12px">' + (isSale ? "Fully invoiced" : "Received &amp; billed &middot; closed") + '</span>';
     }
     if (order) btns += '<button id="o-print">Print</button>';
@@ -7185,11 +7370,22 @@
     var title = order ? (order.number || (isSale ? "Draft Quotation" : "Request for Quotation")) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
-      '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' + groups +
+      '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' +
+      (amend ? '<div class="ob-banner warn" style="margin:0 0 12px">You are editing a confirmed order. A line already ' + (isSale ? "invoiced" : "received or billed") + ' cannot go below that quantity or be removed, and the ' + (isSale ? "invoices" : "receipts and bills") + ' already made are not changed. The version before your changes is kept in this order\'s history.</div>' : '') +
+      revisionNoteHTML(orevs, false, "order") + groups +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
+    wireRevisions(orevs, isSale ? "sale_order" : "purchase_order");
+    var _smr = document.getElementById("o-sm-rcp"); if (_smr) _smr.onclick = function () {
+      if (rcpts.length === 1) { renderReceiptView(rcpts[0].id); return; }
+      var rm = document.createElement("div"); rm.className = "modal on";
+      rm.innerHTML = '<div class="sheet" style="max-width:440px"><h3>Receipts for ' + esc(order.number || "this order") + '</h3><div>' + rcpts.map(function (r, i) { return '<button type="button" class="btn" style="display:flex;justify-content:space-between;width:100%;margin:0 0 6px" data-rc="' + i + '"><b>' + esc(r.number || "Receipt") + '</b><span class="muted">' + esc((r.scheduled_date || "").slice(0, 10)) + (r.type === "return" ? " &middot; return" : "") + '</span></button>'; }).join("") + '</div><div class="foot"><button class="btn" id="rc-close">Close</button></div></div>';
+      document.body.appendChild(rm);
+      document.getElementById("rc-close").onclick = function () { rm.remove(); };
+      rm.querySelectorAll("[data-rc]").forEach(function (b) { b.onclick = function () { rm.remove(); renderReceiptView(rcpts[+b.dataset.rc].id); }; });
+    };
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: sizeThk(l.size), price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed }; });
+    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: sizeThk(l.size), price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed, qty_invoiced: l.qty_invoiced }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -7227,7 +7423,7 @@
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod"); var de = tr.querySelector(".l-dest");
-        return { name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2, ru.d3), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), thk: (ru.form === "sheet" ? (ru.d3 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
+        return { id: tr.dataset.lid || null, name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2, ru.d3), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), thk: (ru.form === "sheet" ? (ru.d3 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
       });
     }
     function renderLines() {
@@ -7313,7 +7509,14 @@
           recalc();
           var newTr = tr.nextSibling; if (newTr) { var d1 = newTr.querySelector(".l-d1"); if (d1) d1.focus(); }
         };
-        tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
+        // a saved line keeps its id, so editing a confirmed order updates it in place
+        tr.dataset.lid = l.id || "";
+        var lineDone = Math.max(isSale ? 0 : Number(l.qty_received || 0), Number((isSale ? l.qty_invoiced : l.qty_billed) || 0));
+        if (amend && l.id && lineDone > 0.0001) { var _lq = tr.querySelector(".l-qty"); _lq.min = lineDone; _lq.title = lineDone + " already " + (isSale ? "invoiced" : "received or billed") + ": the quantity cannot go below that."; }
+        tr.querySelector(".del").onclick = function () {
+          if (l.id && lineDone > 0.0001) { toast('"' + (l.name || "This line") + '" has ' + lineDone + ' already ' + (isSale ? "invoiced" : "received or billed") + ', so it stays on the order. Lower its quantity instead.'); return; }
+          tr.remove(); recalc();
+        };
         tr.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", recalc); el.addEventListener("change", recalc); });
         recalc();
       }
@@ -7330,6 +7533,27 @@
       if (!lns.length) { toast("Add at least one line"); return null; }
       var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
       var tax = lns.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+      if (amend) {
+        // what was received, billed or invoiced stays: such a line cannot be removed,
+        // change product, or drop below that quantity
+        var nowById = {}; lns.forEach(function (l) { if (l.id) nowById[l.id] = l; });
+        for (var vi = 0; vi < linesState.length; vi++) {
+          var was = linesState[vi], gotQ = isSale ? 0 : Number(was.qty_received || 0), billQ = Number((isSale ? was.qty_invoiced : was.qty_billed) || 0), doneQ = Math.max(gotQ, billQ);
+          if (!was.id || doneQ <= 0.0001) continue;
+          var what = isSale ? "invoiced" : (billQ > gotQ ? "billed" : "received"), nowL = nowById[was.id], wname = was.name || "A line";
+          if (!nowL) { toast('"' + wname + '" has ' + doneQ + ' already ' + what + ', so it stays on the order. Lower its quantity to ' + doneQ + ' instead.'); return null; }
+          if ((nowL.product_id || null) !== (was.product_id || null)) { toast('"' + wname + '" has ' + doneQ + ' already ' + what + ', so its product cannot change. Add a new line for the other product.'); return null; }
+          if (nowL.quantity < doneQ - 0.0001) { toast('"' + wname + '": ' + doneQ + ' is already ' + what + ', so the quantity cannot go below ' + doneQ + '.'); return null; }
+        }
+        // a higher total goes through the same approval rules as confirming did
+        if (untax + tax > Number(order.amount_total || 0) + 0.005) {
+          var ag = await approvalGate(isSale ? "sales_order" : "purchase_order", id, order.number, untax + tax, null);
+          if (ag === "blocked") return null;
+        }
+        var rr = await sb.rpc("record_revision", { p_company: S.company.id, p_doc_type: isSale ? "sale_order" : "purchase_order", p_doc_id: id, p_doc_number: order.number || "",
+          p_snapshot: { order: Object.assign({}, order, { partners: undefined }), partner: order.partners ? order.partners.name : "", lines: linesState } });
+        if (rr.error) { toast("Could not edit: " + errMsg(rr.error)); return null; }
+      }
       var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(), project_id: document.getElementById("o-proj") ? (document.getElementById("o-proj").value || null) : null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
       if (!isSale) hdr.cost_code_id = document.getElementById("o-costcode") ? (document.getElementById("o-costcode").value || null) : null;
       var oid = id;
@@ -7343,14 +7567,28 @@
         if (up.conflict) { conflictToast(isSale ? "quotation" : "purchase order"); return null; }
         if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
-        await sb.from(ltbl).delete().eq("order_id", id);
+        if (!amend) await sb.from(ltbl).delete().eq("order_id", id);
       }
       var rows = lns.map(function (l, i) { var row = { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; if (!isSale) row.destination = l.destination || null; return row; }); // sale_order_lines has no `destination` column (only purchase side does); omit the key for sales
+      if (amend) {
+        // a confirmed order keeps its lines, and with them what was received and billed:
+        // changed lines are updated in place, new ones added, removed ones deleted
+        var keep = {};
+        for (var ai = 0; ai < lns.length; ai++) {
+          var alid = lns[ai].id, aw;
+          if (alid) { keep[alid] = 1; aw = await sb.from(ltbl).update(rows[ai]).eq("id", alid); }
+          else aw = await sb.from(ltbl).insert(rows[ai]);
+          if (aw.error) { toast("Line " + (ai + 1) + " could not be saved: " + errMsg(aw.error)); return null; }
+        }
+        var gone = linesState.filter(function (o) { return o.id && !keep[o.id]; }).map(function (o) { return o.id; });
+        if (gone.length) { var gd = await sb.from(ltbl).delete().in("id", gone); if (gd.error) { toast("A removed line could not be deleted: " + errMsg(gd.error)); return null; } }
+        return oid;
+      }
       var lr = await sb.from(ltbl).insert(rows); if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       return oid;
     }
     if (editable) {
-      document.getElementById("o-discard").onclick = function () { go(listAction); };
+      var _dsb = document.getElementById("o-discard"); if (_dsb) _dsb.onclick = function () { go(listAction); };
       var _npb = document.getElementById("o-newproj");
       if (_npb) _npb.onclick = function () {
         var ps2 = document.getElementById("o-partner");
@@ -7373,8 +7611,13 @@
         };
       };
       if (document.getElementById("o-partner")) { if (isSale) custPickerAdd("o-partner"); else vendPickerAdd("o-partner"); }
-      document.getElementById("o-save").onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderOrderForm(nid, kind); } };
-      document.getElementById("o-confirm").onclick = async function () {
+      var _svb = document.getElementById("o-save"); if (_svb) _svb.onclick = async function () { var nid = await save(false); if (nid) { toast("Saved"); renderOrderForm(nid, kind); } };
+      var _ams = document.getElementById("o-amend-save"); if (_ams) _ams.onclick = async function () {
+        _ams.disabled = true; var nid = await save(false); _ams.disabled = false;
+        if (nid) { __dirty = false; toast((order.number || "Order") + " updated"); renderOrderForm(nid, kind); }
+      };
+      var _amc = document.getElementById("o-amend-cancel"); if (_amc) _amc.onclick = function () { __dirty = false; renderOrderForm(id, kind); };
+      var _cfb = document.getElementById("o-confirm"); if (_cfb) _cfb.onclick = async function () {
         var nid = await save(false); if (!nid) return;
         var doc = (await sb.from(tbl).select("amount_total,number").eq("id", nid).maybeSingle()).data || {};
         var gate = await approvalGate(isSale ? "sales_order" : "purchase_order", nid, doc.number, doc.amount_total, listAction);
@@ -7384,6 +7627,7 @@
     } else if (confirmed) {
       var toinvBtn = document.getElementById("o-toinv"); if (toinvBtn) toinvBtn.onclick = function () { createInvoiceFromOrder(order, linesState, kind); };
       var recBtn = document.getElementById("o-receive"); if (recBtn) recBtn.onclick = function () { renderReceiptForm({ order: order }); };
+      var amB = document.getElementById("o-amend"); if (amB) amB.onclick = function () { renderOrderForm(id, kind, { amend: true }); };
     }
     function printOrder() {
       var lns = currentLines(), cc = S.company.currency_code;
@@ -7542,7 +7786,7 @@
   async function renderReceiptForm(preset) {
     preset = preset || {};
     var main = document.getElementById("o-main");
-    var back = preset.order ? { action: "po.list", title: "Purchase Orders" } : { action: "inv.onhand", title: "On Hand" };
+    var back = preset.order ? { action: "po.list", title: "Purchase Orders" } : (S.action === "inv.receipts" ? { action: "inv.receipts", title: "Receipts" } : { action: "inv.onhand", title: "On Hand" });
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Receive Goods", back) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
     var fromOrder = preset.order || null, poLines = [];
@@ -7631,7 +7875,7 @@
         rv._recvLineUom = recvLU; rv._liveReceived = Number(cur.qty_received || 0);
       }
       var isReturn = opType === "return";
-      var pick = await sb.from("stock_pickings").insert({ company_id: S.company.id, type: opType, partner_id: partnerId, location_id: inv ? inv.supplier : null, location_dest_id: inv ? inv.stock : null, scheduled_date: schd, origin: origin || null, state: "done" }).select("id").single();
+      var pick = await sb.from("stock_pickings").insert({ company_id: S.company.id, type: opType, partner_id: partnerId, po_id: fromOrder ? fromOrder.id : null, location_id: inv ? inv.supplier : null, location_dest_id: inv ? inv.stock : null, scheduled_date: schd, origin: origin || null, state: "done" }).select("id,number").single();
       var pickId = pick.error ? null : (pick.data && pick.data.id);
       var got = 0;
       for (var i = 0; i < rows.length; i++) {
@@ -7653,18 +7897,159 @@
             // count the receipt as "materials issued". The cost is recognized only when the stock
             // is issued to the project. (Direct-to-site material is handled separately, below.)
             var _b = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size });
-            var _row = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() };
+            var _row = { company_id: S.company.id, picking_id: pickId, po_line_id: r.po_line_id || null, product_id: pr.id, quantity: qtyBase, uom: stockUnit, size: r.size || null, width: r.width || null, height: r.height || null, location_id: inv.supplier, location_dest_id: destLoc, project_id: null, received_by: recvBy, state: "done", date: new Date().toISOString() };
             if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }
             var mv = await sb.from("stock_moves").insert(_row).select("id").single();
             if (!mv.error) { await postStockValue("receive", pr, qtyBase, mv.data && mv.data.id, null, r.unit_price); got++; }
           }
         } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
           var srcLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
-          if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("return", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
+          if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, po_line_id: r.po_line_id || null, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("return", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
         }
       }
-      toast(got ? ("Receipt saved - " + got + " item(s) " + (isReturn ? "returned" : "added to inventory")) : "Receipt saved");
-      if (fromOrder) renderOrderForm(fromOrder.id, "purchase"); else renderOnHand();
+      var pickNo = (!pick.error && pick.data && pick.data.number) || "Receipt";
+      toast(got ? (pickNo + " saved - " + got + " item(s) " + (isReturn ? "returned" : "added to inventory")) : pickNo + " saved");
+      if (fromOrder) renderOrderForm(fromOrder.id, "purchase"); else if (back.action === "inv.receipts" && pickId) renderReceiptView(pickId); else renderOnHand();
+    };
+  }
+  // ---- a receipt as a document ----
+  // What a goods receipt or return put into (or took out of) stock, where, at what value
+  // and through which journal entries. Edit corrects a quantity with a movement on the
+  // same receipt, valued at the cost the goods came in at, and puts the purchase order's
+  // received quantity right; the version before is kept in its history.
+  async function renderReceiptView(id, editing) {
+    var main = document.getElementById("o-main"), parent = { action: "inv.receipts", title: "Receipts" };
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("...", parent, id) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
+    wireBc();
+    var pk = (await sb.from("stock_pickings").select("*").eq("id", id).maybeSingle()).data;
+    var form = document.querySelector(".o-form"); if (!form) return;
+    if (!pk) { form.innerHTML = '<div class="o-sheet"><div class="o-empty">This receipt no longer exists.</div></div>'; return; }
+    var res = await Promise.all([
+      sb.from("stock_moves").select("*, products(id,name,uom,type,cost_price,material_form,spec)").eq("picking_id", id).order("date"),
+      sb.from("stock_locations").select("id,name,usage").eq("company_id", S.company.id),
+      pk.partner_id ? sb.from("partners").select("name").eq("id", pk.partner_id).maybeSingle() : { data: null },
+      pk.po_id ? sb.from("purchase_orders").select("id,number").eq("id", pk.po_id).maybeSingle() : { data: null },
+      pk.po_id ? sb.from("purchase_order_lines").select("id,product_id").eq("order_id", pk.po_id) : { data: [] },
+      sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", "stock_picking").eq("doc_id", id).order("created_at", { ascending: false }),
+      editing ? sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name") : { data: [] }
+    ]);
+    var moves = res[0].data || [], locs = {}; (res[1].data || []).forEach(function (l) { locs[l.id] = l; });
+    var partnerName = (res[2].data || {}).name || "", po = res[3].data, poLines = res[4].data || [], revs = res[5].data || [], vendors = res[6].data || [];
+    var mids = moves.map(function (m) { return m.id; });
+    var layers = mids.length ? ((await sb.from("stock_valuation_layers").select("move_id,unit_cost,value,journal_entry_id").in("move_id", mids)).data || []) : [];
+    var jeSet = {}; layers.forEach(function (y) { if (y.journal_entry_id) jeSet[y.journal_entry_id] = 1; });
+    var jeIds = Object.keys(jeSet), jeNo = {};
+    if (jeIds.length) ((await sb.from("journal_entries").select("id,entry_number").in("id", jeIds)).data || []).forEach(function (e) { jeNo[e.id] = e.entry_number || "Entry"; });
+    function q3(n) { return Math.round((Number(n) || 0) * 1000) / 1000; }
+    // one line per product, location and order line: the receipt's movement plus any corrections
+    var isReturn = pk.type === "return", dir = isReturn ? -1 : 1, lines = [], byKey = {}, recvBy = "";
+    moves.forEach(function (m) {
+      var src = locs[m.location_id], dst = locs[m.location_dest_id];
+      var inbound = !!(dst && dst.usage === "internal") && !(src && src.usage === "internal");
+      var ours = inbound ? m.location_dest_id : m.location_id, pl = m.po_line_id || null;
+      if (!pl && m.product_id) { var cands = poLines.filter(function (x) { return x.product_id === m.product_id; }); if (cands.length === 1) pl = cands[0].id; }
+      var key = [m.product_id, ours, pl, m.size || ""].join("|"), l = byKey[key];
+      if (!l) { l = byKey[key] = { product: m.products, product_id: m.product_id, loc: ours, other: inbound ? m.location_id : m.location_dest_id, po_line_id: pl, uom: m.uom, size: m.size, width: m.width, height: m.height, received_by: m.received_by, qty: 0, value: 0, cost: 0, jvs: [] }; lines.push(l); }
+      if (m.received_by && !recvBy) recvBy = m.received_by;
+      l.qty += (inbound ? 1 : -1) * dir * Number(m.quantity || 0);
+      layers.forEach(function (y) {
+        if (y.move_id !== m.id) return;
+        l.value += dir * Number(y.value || 0);
+        if (!l.cost && Number(y.unit_cost) > 0) l.cost = Number(y.unit_cost);
+        if (y.journal_entry_id && l.jvs.indexOf(y.journal_entry_id) < 0) l.jvs.push(y.journal_entry_id);
+      });
+    });
+    lines.forEach(function (l) { l.qty = q3(l.qty); });
+    bcTitle(pk.number || "Receipt");
+    var canEdit = canManageApp("inventory");
+    var typeLbl = { receipt: "Receipt", "return": "Return to vendor", internal: "Internal receipt" }[pk.type] || "Receipt";
+    var date = (pk.scheduled_date || pk.created_at || "").slice(0, 10);
+    var btns = editing ? '<button class="pri" id="rv-save">Save changes</button><button id="rv-cancel">Cancel</button>'
+      : ((canEdit ? '<button class="pri" id="rv-edit">Edit</button>' : '') + (po ? '<button id="rv-po-b">Open ' + esc(po.number || "purchase order") + '</button>' : ''));
+    var rowsH = lines.map(function (l, i) {
+      return '<tr><td><b>' + esc(l.product ? l.product.name : "") + '</b>' + (l.size ? ' <span class="badge">' + esc(l.size) + '</span>' : '') + '</td><td class="muted">' + esc(locs[l.loc] ? locs[l.loc].name : "") + '</td>' +
+        '<td class="num">' + l.qty + '</td><td class="muted">' + esc(l.uom || "") + '</td>' +
+        (editing ? '<td><input class="num" type="number" step="any" min="0" data-rvq="' + i + '" value="' + l.qty + '" style="width:100px" aria-label="New quantity"></td>' : '') +
+        '<td class="num">' + money(l.value) + '</td>' +
+        '<td>' + (l.jvs.length ? l.jvs.map(function (j) { return '<a href="#" data-je="' + j + '">' + esc(jeNo[j] || "Entry") + '</a>'; }).join(", ") : '<span class="muted">-</span>') + '</td></tr>';
+    }).join("");
+    var total = lines.reduce(function (s, l) { return s + l.value; }, 0);
+    var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (v.id === pk.partner_id ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
+    form.innerHTML =
+      '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div></div>' +
+      '<div class="o-sheet"><div class="o-title">' + esc(pk.number || "Receipt") + ' <span class="badge ' + (isReturn ? "warn" : "paid") + '" style="vertical-align:middle;font-size:12px">' + esc(typeLbl) + '</span></div>' +
+      revisionNoteHTML(revs, false, "receipt") +
+      '<div class="o-groups"><div>' +
+      fld(isReturn ? "Returned to" : "Received from", editing ? '<select id="rv-from">' + vendOpts + '</select>' : '<span class="v">' + esc(partnerName || "-") + '</span>') +
+      fld("Purchase order", po ? '<span class="v"><a href="#" id="rv-po">' + esc(po.number || "Open") + '</a></span>' : '<span class="v">-</span>') +
+      fld("Received by", '<span class="v">' + esc(recvBy || "-") + '</span>') +
+      '</div><div>' +
+      fld("Date", editing ? '<input id="rv-date" type="date" value="' + esc(date) + '">' : '<span class="v">' + esc(date) + '</span>') +
+      fld("Source document", editing ? '<input id="rv-origin" value="' + esc(pk.origin || "") + '">' : '<span class="v">' + esc(pk.origin || "-") + '</span>') +
+      '</div></div>' +
+      '<div class="o-cf-head u-mt14">' + (isReturn ? "Items returned" : "Items received") + '</div>' +
+      (lines.length
+        ? '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Product</th><th>Location</th><th class="u-r">Quantity</th><th>Unit</th>' + (editing ? '<th style="width:110px">New quantity</th>' : '') + '<th class="u-r">Value</th><th>Journal entries</th></tr></thead><tbody>' + rowsH + '</tbody></table></div>' +
+          '<div class="o-tot"><div class="r tt"><span class="k">Stock value</span><span>' + esc(moneyC(total)) + '</span></div></div>'
+        : '<div class="sub">Nothing on this receipt went into stock. A line sent straight to a site is a cost of that job, and a line with no stocked product is not kept in stock, so neither is listed here.</div>') +
+      (editing ? '<div class="sub u-mt10">A changed quantity adds a correcting movement to this receipt: ' + (isReturn ? 'a higher quantity sends more back to the supplier, a lower one brings the difference back into stock' : 'a higher quantity brings the difference into stock, a lower one takes it back out') + '. Each is valued at the cost the goods came in at and posted as its own journal entry, and the purchase order\'s received quantity follows. The version before the edit is kept in this receipt\'s history.</div>' : '') +
+      '</div>';
+    wireRevisions(revs, "stock_picking");
+    form.querySelectorAll("[data-je]").forEach(function (a) { a.onclick = function (e) { e.preventDefault(); renderJournalEntryForm(a.dataset.je); }; });
+    ["rv-po", "rv-po-b"].forEach(function (bid) { var b = document.getElementById(bid); if (b) b.onclick = function (e) { e.preventDefault(); renderOrderForm(po.id, "purchase"); }; });
+    var eb = document.getElementById("rv-edit"); if (eb) eb.onclick = function () { renderReceiptView(id, true); };
+    var cb = document.getElementById("rv-cancel"); if (cb) cb.onclick = function () { __dirty = false; renderReceiptView(id); };
+    if (editing) form.querySelectorAll("input,select").forEach(function (el) { el.addEventListener("input", function () { __dirty = true; }); el.addEventListener("change", function () { __dirty = true; }); });
+    var sv = document.getElementById("rv-save"); if (sv) sv.onclick = async function () {
+      var changes = [];
+      for (var i = 0; i < lines.length; i++) {
+        var inp = form.querySelector('[data-rvq="' + i + '"]'), nq = inp ? parseFloat(inp.value) : lines[i].qty;
+        if (!(nq >= 0)) { toast("Line " + (i + 1) + ": enter a quantity of 0 or more."); if (inp) inp.focus(); return; }
+        var d = q3(nq - lines[i].qty);
+        if (Math.abs(d) > 0.0001) changes.push({ l: lines[i], inbound: dir * d > 0, qty: Math.abs(d) });
+      }
+      var hdr = { partner_id: gv("rv-from") || null, scheduled_date: gv("rv-date") || date || null, origin: gv("rv-origin") || null };
+      var hdrChanged = hdr.partner_id !== (pk.partner_id || null) || hdr.scheduled_date !== date || (hdr.origin || "") !== (pk.origin || "");
+      if (!changes.length && !hdrChanged) { __dirty = false; renderReceiptView(id); return; }
+      var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id)).data || [];
+      // every line is checked before anything is written
+      for (var c = 0; c < changes.length; c++) {
+        var ch = changes[c], l = ch.l, pname = l.product ? l.product.name : "This product";
+        if (l.po_line_id) {
+          var pl = (await sb.from("purchase_order_lines").select("quantity,qty_received,uom").eq("id", l.po_line_id).maybeSingle()).data;
+          if (pl) {
+            var lu = uomConvert(ch.qty, l.uom, pl.uom || l.uom, uoms), was = Number(pl.qty_received || 0), nr = q3(was + (ch.inbound ? lu : -lu));
+            if (nr > Number(pl.quantity || 0) + 0.0001) { toast('"' + pname + '": the purchase order is for ' + q3(pl.quantity) + ' ' + (pl.uom || "") + ' and ' + q3(was) + ' is received, so at most ' + q3(Number(pl.quantity || 0) - was) + ' more can come in.'); return; }
+            ch.poNew = Math.max(0, nr);
+          }
+        }
+        if (!ch.inbound) {
+          // stock can only leave a location that still holds it
+          var lid = l.loc, pid = l.product_id;
+          var mv = await allRows(function () { return sb.from("stock_moves").select("id,quantity,location_id,location_dest_id").eq("company_id", S.company.id).eq("product_id", pid).or("location_id.eq." + lid + ",location_dest_id.eq." + lid).order("id"); });
+          var have = q3(mv.reduce(function (s, m) { return s + (m.location_dest_id === lid ? Number(m.quantity || 0) : 0) - (m.location_id === lid ? Number(m.quantity || 0) : 0); }, 0));
+          if (ch.qty > have + 0.0001) { toast('"' + pname + '": ' + have + ' ' + (l.uom || "") + ' is left in ' + (locs[lid] ? locs[lid].name : "that location") + ', so ' + ch.qty + ' cannot go out.'); return; }
+        }
+      }
+      sv.disabled = true; sv.textContent = "Saving...";
+      var snap = { picking: pk, partner: partnerName, lines: lines.map(function (x) { return { product: x.product ? x.product.name : "", location: locs[x.loc] ? locs[x.loc].name : "", qty: x.qty, uom: x.uom || "", value: Math.round(x.value * 100) / 100 }; }) };
+      var rr = await sb.rpc("record_revision", { p_company: S.company.id, p_doc_type: "stock_picking", p_doc_id: id, p_doc_number: pk.number || "", p_snapshot: snap });
+      if (rr.error) { sv.disabled = false; sv.textContent = "Save changes"; toast("Could not edit: " + errMsg(rr.error)); return; }
+      if (hdrChanged) { var hu = await sb.from("stock_pickings").update(hdr).eq("id", id); if (hu.error) { sv.disabled = false; sv.textContent = "Save changes"; toast("Could not save: " + errMsg(hu.error)); return; } }
+      var invLoc = await ensureInventory(), baseOn = await baseColsReady(), failed = "";
+      for (var k = 0; k < changes.length; k++) {
+        var cg = changes[k], ln = cg.l, far = ln.other || (invLoc ? invLoc.supplier : null);
+        var row = { company_id: S.company.id, picking_id: id, po_line_id: ln.po_line_id || null, product_id: ln.product_id, quantity: cg.qty, uom: ln.uom, size: ln.size || null, width: ln.width || null, height: ln.height || null,
+          location_id: cg.inbound ? far : ln.loc, location_dest_id: cg.inbound ? ln.loc : far, received_by: ln.received_by || null, state: "done", date: new Date().toISOString() };
+        if (baseOn && ln.product) { var bq = baseFor(ln.product, cg.qty, { width: ln.width, height: ln.height, size: ln.size }); row.base_qty = bq.baseQty; row.base_uom = bq.baseUom; row.pack_factor = bq.factor; }
+        var mi = await sb.from("stock_moves").insert(row).select("id").single();
+        if (mi.error) { failed = (ln.product ? ln.product.name : "a line") + ": " + errMsg(mi.error); break; }
+        if (ln.product) await postStockValue(cg.inbound ? "receive" : "return", ln.product, cg.qty, mi.data.id, null, ln.cost || null);
+        if (cg.poNew != null) await sb.from("purchase_order_lines").update({ qty_received: cg.poNew }).eq("id", ln.po_line_id);
+      }
+      __dirty = false;
+      toast(failed ? "Stopped at " + failed : (pk.number || "Receipt") + " updated");
+      renderReceiptView(id);
     };
   }
   async function nextOrderNumber(kind) {
@@ -7958,13 +8343,14 @@
       '</div><div>' +
       fld("Status", '<select id="a-active"><option value="1"' + (a.is_active ? " selected" : "") + '>Active</option><option value="0"' + (!a.is_active ? " selected" : "") + '>Archived</option></select>') +
       fld("Reconcilable", '<select id="a-recon"><option value="0"' + (!a.reconcilable ? " selected" : "") + '>No</option><option value="1"' + (a.reconcilable ? " selected" : "") + '>Yes</option></select>', "Turn on for receivable/payable/bank accounts so payments can be matched and foreign-currency balances are revalued.") +
+      fld("Auxiliaries", '<select id="a-aux"><option value="">None</option><option value="accounts"' + (a.aux_kind === "accounts" ? " selected" : "") + '>Sub-accounts (for example 6011.02)</option><option value="contacts"' + (a.aux_kind === "contacts" ? " selected" : "") + '>Contacts</option></select>', "What a journal voucher offers in the Auxiliary column for this account: its sub-accounts, or your contacts (suppliers, customers, partners). The contact chosen is kept on the line, so the voucher shows on that contact's statement.") +
       '</div></div></div>';
     document.getElementById("a-discard").onclick = function () { go("accounts"); };
     if (id !== "new") { var _ag = document.getElementById("a-sm-gl"); if (_ag) _ag.onclick = function () { go("rep.gl"); }; }
     document.getElementById("a-save").onclick = async function () {
       var code = gv("a-code"), name = gv("a-name");
       if (!code || !name) { toast("Code and name are required"); return; }
-      var row = { code: code, name: name, type_code: document.getElementById("a-type").value, is_active: document.getElementById("a-active").value === "1", reconcilable: document.getElementById("a-recon").value === "1" };
+      var row = { code: code, name: name, type_code: document.getElementById("a-type").value, is_active: document.getElementById("a-active").value === "1", reconcilable: document.getElementById("a-recon").value === "1", aux_kind: document.getElementById("a-aux").value || null };
       var r;
       if (id === "new") { row.company_id = S.company.id; r = await sb.from("accounts").insert(row); }
       else r = await sb.from("accounts").update(row).eq("id", id);
@@ -14072,7 +14458,16 @@
   function nextRev(r) { r = String(r || "A"); if (/^[A-Za-z]$/.test(r)) return String.fromCharCode(r.toUpperCase().charCodeAt(0) + 1); var n = parseInt(r, 10); return isNaN(n) ? r + "'" : (n + 1) + ""; }
   async function nextDocNumber(table, prefix) {
     var cfg = await seqCfg(prefix), py = seqPrefixYear(cfg);
-    var rows = (await sb.from(table).select("number").eq("company_id", S.company.id).like("number", py + "%")).data || [];
+    // Reading every number of the year stopped at the 1,000-row cap, and the number after
+    // the cap was issued a second time. The highest number is among the latest few either
+    // way round: by the number itself (numbers of one width sort in order), and by when
+    // they were made (which catches a width changed in Document Numbering, where a longer
+    // number sorts below a shorter one). A table without created_at answers the first.
+    var got = await Promise.all([
+      sb.from(table).select("number").eq("company_id", S.company.id).like("number", py + "%").order("number", { ascending: false }).limit(50),
+      sb.from(table).select("number").eq("company_id", S.company.id).like("number", py + "%").order("created_at", { ascending: false }).limit(50)
+    ]);
+    var rows = (got[0].data || []).concat(got[1].data || []);
     return py + seqPad(cfg, maxSeq(rows, py) + 1);
   }
   // Settings > Document Numbering (ORB-06): admin edits prefix / digits / year per document type
@@ -16769,6 +17164,50 @@
     var pr = await sb.rpc("post_entry", { p_entry: eid });
     if (pr.error) { toast("Stock saved; GL post failed: " + errMsg(pr.error)); return; }
     await sb.from("stock_valuation_layers").insert({ company_id: S.company.id, product_id: product.id, move_id: moveId || null, quantity: sQ, unit_cost: cost, value: sV, journal_entry_id: eid });
+  }
+  // ---- Receipts: every goods receipt and return, one numbered document each ----
+  function cfgReceipts() {
+    return {
+      title: "Receipts", pageSize: 80, newLabel: "Receive goods",
+      emptyHint: "Every goods receipt and every return to a supplier is listed here with its number. Receive goods from a confirmed purchase order, or press Receive goods here for goods that came without one.",
+      fetch: async function () {
+        var rows = await allRows(function () { return sb.from("stock_pickings").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).order("id"); });
+        function ids(k) { var o = {}; rows.forEach(function (r) { if (r[k]) o[r[k]] = 1; }); return Object.keys(o); }
+        async function names(tbl, col, list) {
+          var out = {};
+          for (var i = 0; i < list.length; i += 100) ((await sb.from(tbl).select("id," + col).in("id", list.slice(i, i + 100))).data || []).forEach(function (x) { out[x.id] = x[col]; });
+          return out;
+        }
+        var res = await Promise.all([
+          names("partners", "name", ids("partner_id")),
+          names("purchase_orders", "number", ids("po_id")),
+          allRows(function () { return sb.from("stock_moves").select("id,picking_id").eq("company_id", S.company.id).not("picking_id", "is", null).order("id"); })
+        ]);
+        var cnt = {}; res[2].forEach(function (m) { cnt[m.picking_id] = (cnt[m.picking_id] || 0) + 1; });
+        rows.forEach(function (r) { r._partner = res[0][r.partner_id] || ""; r._po = res[1][r.po_id] || ""; r._moves = cnt[r.id] || 0; });
+        return rows;
+      },
+      searchText: function (r) { return [r.number, r._partner, r._po, r.origin].join(" "); },
+      columns: [
+        { label: "Number", get: function (r) { return '<b>' + esc(r.number || "/") + '</b>'; } },
+        { label: "Date", get: function (r) { return '<span class="muted">' + esc((r.scheduled_date || r.created_at || "").slice(0, 10)) + '</span>'; } },
+        { label: "Type", get: function (r) { return r.type === "return" ? '<span class="badge warn">Return</span>' : '<span class="badge paid">' + (r.type === "internal" ? "Internal" : "Receipt") + '</span>'; } },
+        { label: "Supplier", get: function (r) { return esc(r._partner); } },
+        { label: "Purchase order", get: function (r) { return esc(r._po || r.origin || ""); } },
+        { label: "Stock lines", num: true, get: function (r) { return r._moves; } }
+      ],
+      filters: [
+        { label: "Receipts", test: function (r) { return r.type !== "return"; } },
+        { label: "Returns", test: function (r) { return r.type === "return"; } }
+      ],
+      groupBy: [
+        { label: "Type", get: function (r) { return r.type === "return" ? "Return" : (r.type === "internal" ? "Internal" : "Receipt"); } },
+        { label: "Supplier", get: function (r) { return r._partner || "None"; } },
+        { label: "Month", get: function (r) { return (r.scheduled_date || r.created_at || "").slice(0, 7); } }
+      ],
+      onOpen: function (r) { renderReceiptView(r.id); },
+      onNew: function () { renderReceiptForm({}); }
+    };
   }
   function cfgStockMoves() {
     return {
@@ -26551,47 +26990,94 @@
   function cashKind(k) { for (var i = 0; i < CASH_KINDS.length; i++) if (CASH_KINDS[i].k === k) return CASH_KINDS[i]; return CASH_KINDS[0]; }
   function cashKindLabel(k) { return cashKind(k).label; }
   var CASH_PARTY_LABEL = { customer: "Customer", vendor: "Vendor", employee: "Employee", owner: "Owner name", payee: "Paid to / from" };
-  async function cashLoadChart() { return (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).order("code"); })); }
+  async function cashLoadChart() { return (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code,parent_account_id,is_active,aux_kind").eq("company_id", S.company.id).order("code").order("id"); })); }
   function cashAcctByCode(list, code) { for (var i = 0; i < list.length; i++) if (list[i].code === code) return list[i]; return null; }
+  // An auxiliary is a dotted child of a main account (6011.02 under 6011), as in the journal voucher.
+  function cashIsAux(a) { return !!(a && a.parent_account_id && String(a.code).indexOf(".") > 0); }
+  function cashAcctLabel(a) { return a ? a.code + " " + a.name : ""; }
+  // Messages the Counter writes itself are already sentences; only database errors go through errMsg.
+  function cashErr(e) { return e && e.friendly ? e.message : errMsg(e); }
+  // The Counter account a type starts on, and the rule that chose it, in words shown
+  // under the field. Nothing is picked without a rule the cashier can read: a company
+  // account from Settings, Companies, or the type's standard code only where this
+  // company's chart really has that account. Otherwise the field starts empty.
+  var CASH_CO_ACCT = {
+    client_receipt: ["receivable_account_id", "receivable account"], supplier_payment: ["payable_account_id", "payable account"], supplier_refund: ["payable_account_id", "payable account"],
+    other_in: ["income_account_id", "income account"], service: ["expense_account_id", "expense account"], maintenance: ["expense_account_id", "expense account"], expense: ["expense_account_id", "expense account"]
+  };
+  function cashContraDefault(kind, co, byId, chart) {
+    var k = cashKind(kind), rule = CASH_CO_ACCT[k.k];
+    if (rule) {
+      var id = co && co[rule[0]], a = id ? byId[id] : null;
+      if (a && a.is_active !== false) return { id: a.id, rule: "Default from Settings, Companies: " + rule[1] };
+      return { id: "", rule: "Settings, Companies has no " + rule[1] + " set, so there is no default. Choose the account." };
+    }
+    var c = k.contra ? cashAcctByCode(chart, k.contra) : null;
+    if (c && c.is_active !== false) return { id: c.id, rule: "Default: account " + c.code + " from the standard chart" };
+    return { id: "", rule: "Your chart has no default account for this type. Choose the account." };
+  }
   async function cashLoadWallets(all) { var r = (await sb.from("cash_accounts").select("*").eq("company_id", S.company.id).order("sort").order("name")).data || []; return all ? r : r.filter(function (a) { return a.is_active !== false; }); }
+  // Page through a query and hand each row to fn without keeping the rows, so a sum can
+  // run over any number of movements. Returns the error, if a page failed.
+  async function cashEachRow(build, fn) {
+    var page = 1000, from = 0;
+    for (;;) {
+      var r = await build().range(from, from + page - 1);
+      if (r.error) { try { console.warn("cashEachRow", r.error); } catch (e) { } return r.error; }
+      var d = r.data || []; d.forEach(fn);
+      if (d.length < page) return null;
+      from += page;
+    }
+  }
   async function cashBalances() {
-    var accts = await cashLoadWallets();
-    var mv = (await sb.from("cash_movements").select("cash_account_id,direction,amount,currency_code,status").eq("company_id", S.company.id).eq("status", "posted")).data || [];
-    var ho = (await sb.from("cash_handovers").select("from_account_id,to_account_id,amount,currency_code,status").eq("company_id", S.company.id).eq("status", "confirmed")).data || [];
-    var fn = S.company.currency_code;
+    var fn = S.company.currency_code, cid = S.company.id, sums = {};
+    // The wallets and the two sums do not depend on each other, so they load side by
+    // side. The sums keep one figure per wallet and currency while the pages stream in:
+    // the list of every movement is never held, and nothing stops at the 1,000-row cap.
+    function keep(acct, cur, amt) { if (!acct) return; var k = acct + "|" + (cur || ""); sums[k] = (sums[k] || 0) + amt; }
+    var got = await Promise.all([
+      cashLoadWallets(),
+      cashEachRow(function () { return sb.from("cash_movements").select("id,cash_account_id,direction,amount,currency_code").eq("company_id", cid).eq("status", "posted").order("id"); }, function (m) { keep(m.cash_account_id, m.currency_code, (m.direction === "in" ? 1 : -1) * Number(m.amount || 0)); }),
+      cashEachRow(function () { return sb.from("cash_handovers").select("id,from_account_id,to_account_id,amount,currency_code").eq("company_id", cid).eq("status", "confirmed").order("id"); }, function (h) { keep(h.from_account_id, h.currency_code, -Number(h.amount || 0)); keep(h.to_account_id, h.currency_code, Number(h.amount || 0)); })
+    ]);
+    var accts = got[0], loadError = got[1] || got[2] || null;
     var wcur = {}; accts.forEach(function (a) { wcur[a.id] = a.currency_code || fn; });
     // Each wallet is single-currency. An amount recorded in a DIFFERENT currency than
     // its wallet is grouped and converted into the wallet's own currency before it is
     // added - never summed 1:1 (that was the multi-currency balance bug).
     var bal = {}, foreign = {}, warn = [], seenWarn = {};
     accts.forEach(function (a) { bal[a.id] = Number(a.opening_balance || 0); foreign[a.id] = {}; });
-    function add(acct, cur, amt) {
+    Object.keys(sums).forEach(function (key) {
+      var cut = key.indexOf("|"), acct = key.slice(0, cut), cur = key.slice(cut + 1);
       if (bal[acct] == null) return;
-      var wc = wcur[acct];
-      if (!cur || cur === wc) bal[acct] += amt;
-      else foreign[acct][cur] = (foreign[acct][cur] || 0) + amt;
-    }
+      if (!cur || cur === wcur[acct]) bal[acct] += sums[key];
+      else foreign[acct][cur] = (foreign[acct][cur] || 0) + sums[key];
+    });
     function flag(from, to) { var k = from + ">" + to; if (!seenWarn[k]) { seenWarn[k] = 1; warn.push({ from: from, to: to }); } }
-    mv.forEach(function (m) { add(m.cash_account_id, m.currency_code, (m.direction === "in" ? 1 : -1) * Number(m.amount || 0)); });
-    ho.forEach(function (h) { add(h.from_account_id, h.currency_code, -Number(h.amount || 0)); add(h.to_account_id, h.currency_code, Number(h.amount || 0)); });
+    // One rate per currency pair, all fetched at the same time, however many wallets use
+    // it. It used to be one call per wallet and currency, one after another. The rate is
+    // read off a million units so a small one (a lira in dollars) keeps its digits.
+    var pairs = {};
+    accts.forEach(function (a) { Object.keys(foreign[a.id]).forEach(function (c) { pairs[c + ">" + wcur[a.id]] = 1; }); if (wcur[a.id] !== fn) pairs[wcur[a.id] + ">" + fn] = 1; });
+    var pairKeys = Object.keys(pairs), rate = {};
+    var rates = await Promise.all(pairKeys.map(function (pk) { var p = pk.split(">"); return cashFx(1000000, p[0], p[1], today(), { precise: true }); }));
+    pairKeys.forEach(function (pk, i) { rate[pk] = rates[i].ok ? rates[i].value / 1000000 : null; });
+    function conv(amount, from, to) { if (from === to) return amount; var r = rate[from + ">" + to]; return r == null ? null : Math.round(amount * r * 10000) / 10000; }
     // fold each wallet's foreign-currency amounts into its native balance
-    for (var wi = 0; wi < accts.length; wi++) {
-      var id = accts[wi].id, wc = wcur[id], curs = Object.keys(foreign[id]);
-      for (var ci = 0; ci < curs.length; ci++) {
-        var r = await cashFx(foreign[id][curs[ci]], curs[ci], wc, today());
-        if (r.ok) bal[id] += r.value; else flag(curs[ci], wc);
-      }
-    }
+    accts.forEach(function (a) {
+      var id = a.id, wc = wcur[id];
+      Object.keys(foreign[id]).forEach(function (c) { var v = conv(foreign[id][c], c, wc); if (v == null) flag(c, wc); else bal[id] += v; });
+    });
     // grand total in the company (functional) currency - a USD till and an LBP till
     // must not be added as if the same unit; a wallet with no rate is EXCLUDED (not
     // added 1:1) and reported so the total is honest.
     var func = {}, total = 0, totalOk = true;
-    for (var i = 0; i < accts.length; i++) {
-      var a = accts[i], c = wcur[a.id];
+    accts.forEach(function (a) {
+      var c = wcur[a.id];
       if (c === fn) { func[a.id] = Math.round((bal[a.id] || 0) * 10000) / 10000; total += func[a.id]; }
-      else { var cv = await cashFx(bal[a.id] || 0, c, fn, today()); if (cv.ok) { func[a.id] = cv.value; total += cv.value; } else { func[a.id] = null; totalOk = false; flag(c, fn); } }
-    }
-    return { accts: accts, bal: bal, func: func, total: Math.round(total * 10000) / 10000, fn: fn, totalOk: totalOk, warn: warn };
+      else { var cv = conv(bal[a.id] || 0, c, fn); if (cv != null) { func[a.id] = cv; total += cv; } else { func[a.id] = null; totalOk = false; flag(c, fn); } }
+    });
+    return { accts: accts, bal: bal, func: func, total: Math.round(total * 10000) / 10000, fn: fn, totalOk: totalOk, warn: warn, loadError: loadError };
   }
 
   // ---- cash accounts (wallets) ----
@@ -26615,7 +27101,8 @@
     a = a || {};
     var chart = await cashLoadChart();
     var cashOnly = chart.filter(function (x) { return x.type_code === "asset_cash"; });
-    var glOpts = '<option value="">(auto: cash / bank)</option>' + cashOnly.map(function (x) { return '<option value="' + x.id + '"' + (a.gl_account_id === x.id ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join("");
+    // No fallback account: a cash account with none set is refused by Money in and Money out, which say where to set it.
+    var glOpts = '<option value="">(not set: Money in and Money out cannot post)</option>' + cashOnly.map(function (x) { return '<option value="' + x.id + '"' + (a.gl_account_id === x.id ? " selected" : "") + '>' + esc(x.code + " " + x.name) + '</option>'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "camodal";
     m.innerHTML = '<div class="sheet"><h3>' + (a.id ? "Edit" : "New") + ' cash account</h3><div class="form u-formpad">'
       + '<div><label>Name</label><input id="ca-name" value="' + esc(a.name || "") + '" placeholder="e.g. Main till, Ali (driver), Safe, Bank BLOM"></div>'
@@ -26653,14 +27140,19 @@
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Cash Desk") + '</div><div class="o-body" id="o-body">Loading...</div></div>';
     wireBc();
-    var d = await cashBalances();
+    // the balances and the recent list do not depend on each other, so they load together
+    var both = await Promise.all([
+      cashBalances(),
+      sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(15)
+    ]);
+    var d = both[0], recent = both[1].data || [];
     var body = document.getElementById("o-body");
+    if (!body) return; // moved to another screen while it loaded
     if (!d.accts.length) {
       body.innerHTML = '<div style="padding:30px;text-align:center"><p class="muted">No cash accounts yet. A cash account is a till, a driver pouch, a safe or a bank.</p><button class="btn pri u-app" id="cd-first">+ Add your first cash account</button></div>';
       document.getElementById("cd-first").onclick = function () { openCashAccountModal(null); };
       return;
     }
-    var recent = (await sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false }).limit(15)).data || [];
     var total = d.total || 0; // functional-currency grand total (wallets converted, so mixed currencies add up correctly)
     var cards = d.accts.map(function (a) {
       return '<div style="background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px">'
@@ -26671,15 +27163,17 @@
         + '</div>';
     }).join("");
     var warnBanner = (d.warn && d.warn.length) ? '<div style="display:flex;gap:9px;align-items:flex-start;background:var(--warn-s);border:1px solid var(--warn);border-radius:var(--r);padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn-t);font-weight:600">Some balances can\'t be converted to ' + esc(d.fn) + ' yet – add exchange rate(s): ' + d.warn.map(function (w) { return esc(w.from + " → " + w.to); }).join(", ") + '. The total excludes them until a rate exists.</div>' : '';
-    var rows = recent.map(function (m) {
+    // a recent line opens the movement, with its accounts and journal entry
+    var rows = recent.map(function (m, i) {
       var sign = m.direction === "in" ? "+" : "-";
-      return '<tr style="border-top:1px solid var(--line)"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
+      return '<tr data-mv="' + i + '" style="border-top:1px solid var(--line);cursor:pointer" title="Open this movement"><td style="padding:7px 8px">' + esc(m.move_date || "") + '</td><td style="padding:7px 8px">' + esc(m.number || "") + (m.status === "void" ? ' <span class="muted">(void)</span>' : '') + '</td><td style="padding:7px 8px">' + esc(cashKindLabel(m.kind)) + '</td><td style="padding:7px 8px"><b>' + esc(m.payee_name || "") + '</b></td><td style="padding:7px 8px;text-align:right;color:' + (m.direction === "in" ? "var(--good)" : "var(--bad)") + '">' + sign + money(m.amount) + '</td></tr>';
     }).join("");
     var canW = canManageApp(S.app);
+    var loadBanner = d.loadError ? '<div style="background:var(--warn-s);border:1px solid var(--warn);border-radius:var(--r);padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--warn-t);font-weight:600">Some movements could not be loaded, so a balance may be wrong. Reload the page to try again.</div>' : '';
     body.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:center">'
       + (canW ? '<button class="btn pri" id="cd-in" style="background:var(--good);border-color:var(--good-t)">+ Money in</button><button class="btn pri" id="cd-out" style="background:var(--bad);border-color:var(--bad-t)">- Money out</button><button class="btn" id="cd-ho">Handover</button>' : '')
       + '<div class="u-flex1"></div><div class="u-b">Total held: ' + moneyC(total, S.company.currency_code) + (d.totalOk ? '' : ' <span style="color:var(--warn-t);font-weight:600" title="Wallets without an exchange rate are excluded">(partial)</span>') + '</div></div>'
-      + warnBanner
+      + loadBanner + warnBanner
       + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:20px">' + cards + '</div>'
       + '<h3 style="margin:0 0 6px">Recent movements</h3><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr style="text-align:left"><th style="padding:6px 8px">Date</th><th style="padding:6px 8px">No.</th><th style="padding:6px 8px">Type</th><th style="padding:6px 8px">Party</th><th style="padding:6px 8px;text-align:right">Amount</th></tr></thead><tbody>' + (rows || '<tr><td colspan="5" class="muted" style="padding:10px 8px">Nothing yet.</td></tr>') + '</tbody></table></div>';
     if (canW) {
@@ -26687,37 +27181,66 @@
       document.getElementById("cd-out").onclick = function () { openCashMoveModal("out"); };
       document.getElementById("cd-ho").onclick = function () { openHandoverModal(null); };
     }
+    body.querySelectorAll("tr[data-mv]").forEach(function (tr) { tr.onclick = function () { openMovementReceipt(recent[+tr.getAttribute("data-mv")]); }; });
   }
 
   // ---- money in / money out ----
   async function cashLoadMethods() { var r = (await sb.from("payment_methods").select("*").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || []; return r.length ? r : [{ name: "Cash", kind: "cash" }, { name: "Bank transfer", kind: "bank" }, { name: "Cheque", kind: "cheque" }, { name: "Card", kind: "card" }]; }
   function cashOnBehalfLabel(k) { return k.party === "customer" ? "On behalf of (customer)" : k.party === "vendor" ? "On behalf of (supplier)" : k.party === "employee" ? "Employee" : k.party === "owner" ? "Owner" : "On behalf of / party"; }
-  async function openCashMoveModal(dir, presetKind) {
-    var wallets = await cashLoadWallets();
+  // Money in and Money out, and Edit on a posted movement (editMv). The two accounts the
+  // entry will use are on screen before anything posts: the cash account's ledger account
+  // under Cash account, and the Counter account with its auxiliary and the rule that set it.
+  async function openCashMoveModal(dir, presetKind, editMv) {
+    var ed = editMv || null;
+    if (ed) { dir = ed.direction; presetKind = ed.kind; }
+    // Everything the dialog needs loads at once. Contacts come from one query carrying
+    // is_customer and is_vendor (it used to be three overlapping ones), paged past the
+    // 1,000-row cap so no customer is missing from the list.
+    var got = await Promise.all([
+      cashLoadWallets(true),
+      cashLoadChart(),
+      allRows(function () { return sb.from("partners").select("id,name,is_customer,is_vendor").eq("company_id", S.company.id).order("name").order("id"); }),
+      sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name"),
+      cashLoadMethods(),
+      sb.from("companies").select("receivable_account_id,payable_account_id,income_account_id,expense_account_id").eq("id", S.company.id).maybeSingle()
+    ]);
+    // an edited movement keeps its cash account even if that account was switched off since
+    var wallets = got[0].filter(function (a) { return a.is_active !== false || (ed && a.id === ed.cash_account_id); });
     if (!wallets.length) { toast("Add a cash account first"); openCashAccountModal(null); return; }
-    var chart = await cashLoadChart();
-    var custs = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_customer", true).order("name")).data || [];
-    var vends = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
-    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
-    var contacts = (await sb.from("partners").select("id,name,contact_kind,company_type").eq("company_id", S.company.id).order("name")).data || [];
-    var methods = await cashLoadMethods();
+    var chart = got[1], contacts = got[2], emps = got[3].data || [], methods = got[4], co = got[5].data || S.company;
+    var custs = contacts.filter(function (c) { return c.is_customer; }), vends = contacts.filter(function (c) { return c.is_vendor; });
+    var byId = {}, kids = {};
+    chart.forEach(function (a) { byId[a.id] = a; });
+    chart.forEach(function (a) { if (cashIsAux(a) && a.is_active !== false) (kids[a.parent_account_id] = kids[a.parent_account_id] || []).push(a); });
+    var mains = chart.filter(function (a) { return !cashIsAux(a) && a.is_active !== false; });
+    if (ed) {
+      // a method the movement used stays selectable even if it was archived since
+      var mNames = methods.map(function (x) { return x.name; });
+      [ed.method].concat((Array.isArray(ed.tenders) ? ed.tenders : []).map(function (t) { return t.method; })).forEach(function (n) { if (n && mNames.indexOf(n) < 0) { mNames.push(n); methods = methods.concat([{ name: n, kind: "" }]); } });
+    }
     var kinds = CASH_KINDS.filter(function (k) { return k.dir === dir; });
     var kSel = presetKind || kinds[0].k;
     var openDocs = [];
-    var walletOpts = wallets.map(function (a) { return '<option value="' + a.id + '" data-cur="' + esc(a.currency_code || S.company.currency_code) + '" data-kind="' + esc(a.kind) + '">' + esc(a.name) + ' (' + esc(a.kind) + ')</option>'; }).join("");
+    var walletSel = ed ? ed.cash_account_id : wallets[0].id;
+    var w0 = wallets.filter(function (a) { return a.id === walletSel; })[0] || wallets[0];
+    // the currency starts on the cash account's own, or on the edited movement's
+    var curSel = ed ? (ed.currency_code || S.company.currency_code) : (w0.currency_code || S.company.currency_code);
+    var walletOpts = wallets.map(function (a) { return '<option value="' + a.id + '" data-cur="' + esc(a.currency_code || S.company.currency_code) + '" data-kind="' + esc(a.kind) + '"' + (a.id === w0.id ? " selected" : "") + '>' + esc(a.name) + ' (' + esc(a.kind) + ')' + (a.is_active === false ? " (off)" : "") + '</option>'; }).join("");
     var kindOpts = kinds.map(function (k) { return '<option value="' + k.k + '"' + (k.k === kSel ? " selected" : "") + '>' + esc(k.label) + '</option>'; }).join("");
-    var contraOpts = chart.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
-    var methodOpts = methods.map(function (mm) { return '<option value="' + esc(mm.name) + '" data-kind="' + esc(mm.kind || "") + '">' + esc(mm.name) + '</option>'; }).join("");
+    var methodOpts = methods.map(function (mm) { return '<option value="' + esc(mm.name) + '" data-kind="' + esc(mm.kind || "") + '" data-acct="' + esc(mm.account_id || "") + '">' + esc(mm.name) + '</option>'; }).join("");
     var contactData = contacts.map(function (c) { return '<option value="' + esc(c.name) + '">'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "cmmodal";
     var col = dir === "in" ? "var(--good)" : "var(--bad)";
-    m.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (dir === "in" ? "Money in (receipt)" : "Money out (payment)") + '</h3><div class="form u-formpad">'
+    var saveLabel = ed ? "Save changes" : "Post " + (dir === "in" ? "receipt" : "payment");
+    var hint = ' style="font-size:11.5px;color:var(--muted);margin-top:4px"';
+    m.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (ed ? "Edit " + (dir === "in" ? "receipt " : "payment ") + esc(ed.number || "") : (dir === "in" ? "Money in (receipt)" : "Money out (payment)")) + '</h3><div class="form u-formpad">'
+      + (ed ? '<div class="muted u-fs12">Saving reverses the entries this movement made and posts it again with the same number. The old version is kept in its history.</div>' : '')
       + '<div class="row2"><div><label>Type</label><select id="cm-kind">' + kindOpts + '</select></div>'
-      + '<div><label>Cash account</label><select id="cm-acct">' + walletOpts + '</select></div></div>'
+      + '<div><label>Cash account</label><select id="cm-acct">' + walletOpts + '</select><div id="cm-acct-gl"' + hint + '></div></div></div>'
       + '<div id="cm-party-wrap"></div>'
       + '<div><label>' + (dir === "in" ? "From (who is handing the money over)" : "To (who is receiving it)") + '</label><input id="cm-handler" list="cm-handler-list" placeholder="Person or company - the one physically paying"><datalist id="cm-handler-list">' + contactData + '</datalist></div>'
       + '<div class="row2"><div><label>Amount</label><input id="cm-amt" type="number" step="0.01"></div>'
-      + '<div><label>Currency</label>' + currencySelectHTML("cm-cur", S.company.currency_code) + '</div></div>'
+      + '<div><label>Currency</label>' + currencySelectHTML("cm-cur", curSel) + '</div></div>'
       + (dir === "in" ? '<div class="row2"><div><label>Cash tendered (optional)</label><input id="cm-tender" type="number" step="0.01" placeholder="If they hand over more"></div><div><label>Change to give back</label><input id="cm-change" type="number" step="0.01" readonly></div></div>' : '')
       + '<div class="row2"><div><label>Date</label><input id="cm-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Method</label><select id="cm-method">' + methodOpts + '</select></div></div>'
@@ -26728,49 +27251,126 @@
       + '<div style="display:flex;gap:7px"><select class="cm-tm u-flex1">' + methodOpts + '</select><input class="cm-ta" type="number" step="0.01" placeholder="amount" style="width:120px"></div>'
       + '</div><div id="cm-split-sum" class="muted" style="font-size:12px;margin-top:6px"></div><div class="muted" style="font-size:11.5px;margin-top:2px">A split payment is recorded on account; use a single method to settle a specific invoice.</div></details>'
       + '<div id="cm-doc-wrap" style="display:none"><label>Settle a document</label><select id="cm-doc"><option value="">(none - just record it)</option></select></div>'
-      + '<details id="cm-adv"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted)">Advanced: which account it books against</summary><div class="u-mt8"><label>Books the other side to</label><select id="cm-contra">' + contraOpts + '</select><div style="font-size:11.5px;color:var(--muted);margin-top:4px">Auto-set from the type. For a customer/supplier this is only used for the un-allocated (on account) part.</div></div></details>'
+      + '<div><div class="row2"><div><label>Counter account (Account No.)</label><input id="cm-contra" list="cm-contra-list" placeholder="Code or name" autocomplete="off"><datalist id="cm-contra-list">' + mains.map(function (a) { return '<option value="' + esc(cashAcctLabel(a)) + '"></option>'; }).join("") + '</datalist></div>'
+      + '<div><label>Auxiliary</label><select id="cm-contra-aux" disabled><option value=""></option></select></div></div>'
+      + '<div id="cm-contra-rule"' + hint + '></div><div id="cm-contra-alloc" style="display:none;font-size:11.5px;color:var(--muted);margin-top:4px"></div></div>'
       + '<div class="row2"><div><label>Reference</label><input id="cm-ref" placeholder="Cheque / transfer no. (optional)"></div><div><label>Memo</label><input id="cm-memo" placeholder="What is this for?"></div></div>'
-      + '</div><div class="foot"><button class="btn" id="cm-cancel">Cancel</button><button class="btn pri" id="cm-save" style="background:' + col + ';border-color:' + col + '">Post ' + (dir === "in" ? "receipt" : "payment") + '</button></div></div>';
+      + '</div><div class="foot"><button class="btn" id="cm-cancel">Cancel</button><button class="btn pri" id="cm-save" style="background:' + col + ';border-color:' + col + '">' + saveLabel + '</button></div></div>';
     document.body.appendChild(m);
     function curKind() { return cashKind(document.getElementById("cm-kind").value); }
-    function setContraDefault() { var acc = cashAcctByCode(chart, curKind().contra); if (acc) document.getElementById("cm-contra").value = acc.id; }
-    function renderParty() {
+    function curWallet() { var id = document.getElementById("cm-acct").value; return wallets.filter(function (a) { return a.id === id; })[0] || null; }
+    // the ledger account the chosen cash account posts to, or a plain warning when it has none
+    function paintWalletGl() {
+      var w = curWallet(), el = document.getElementById("cm-acct-gl"), g = w && w.gl_account_id ? byId[w.gl_account_id] : null;
+      if (g) { el.style.color = "var(--muted)"; el.innerHTML = (dir === "in" ? "Money goes into: " : "Money comes out of: ") + '<b>' + esc(cashAcctLabel(g)) + '</b>'; }
+      else { el.style.color = "var(--bad-t)"; el.textContent = "This cash account has no ledger account, so it cannot post. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts."; }
+    }
+    // ---- the Counter account: a main account from the chart, and optionally one of its auxiliaries ----
+    var contra = { acct: "", aux: "", partner: "", fromEd: false };
+    // the customer or supplier a movement is for, which an account kept per contact takes as its auxiliary
+    function partyContact() { var k = curKind(), pe = document.getElementById("cm-party"); return (pe && (k.party === "customer" || k.party === "vendor")) ? (pe.value || "") : ""; }
+    function setContra(id) { var a = id ? byId[id] : null; if (a && cashIsAux(a)) { contra.acct = a.parent_account_id; contra.aux = a.id; } else { contra.acct = a ? a.id : ""; contra.aux = ""; } }
+    function resolveAcct(v) {
+      v = String(v || "").trim(); if (!v) return null;
+      var hit = chart.filter(function (a) { return cashAcctLabel(a) === v; })[0]; if (hit) return hit;
+      var tok = v.split(/\s+/)[0];
+      hit = chart.filter(function (a) { return a.code === tok; })[0]; if (hit) return hit;
+      var lv = v.toLowerCase();
+      return mains.filter(function (a) { return String(a.name || "").toLowerCase() === lv; })[0] || null;
+    }
+    function contraRuleText() {
+      var d = cashContraDefault(curKind().k, co, byId, chart), id = contra.aux || contra.acct, dl = d.id ? cashAcctLabel(byId[d.id]) : "";
+      if (id && id === d.id) return d.rule;
+      if (!id) return d.id ? "Choose the account. The default for this type is " + dl + "." : d.rule;
+      return (contra.fromEd ? "As recorded on " + (ed.number || "this movement") + "." : "Chosen by you.") + (d.id ? " The default for this type is " + dl + "." : "");
+    }
+    function paintContra() {
+      var inp = document.getElementById("cm-contra"), sel = document.getElementById("cm-contra-aux"), ks = contra.acct ? (kids[contra.acct] || []).slice() : [];
+      if (contra.aux && byId[contra.aux] && ks.indexOf(byId[contra.aux]) < 0) ks.push(byId[contra.aux]);
+      inp.value = contra.acct ? cashAcctLabel(byId[contra.acct]) : "";
+      if (contra.acct && byId[contra.acct] && byId[contra.acct].aux_kind === "contacts") {
+        // an account kept per contact (4011 suppliers, 4111 clients, 4515 other partners) takes a contact as its auxiliary
+        contra.aux = "";
+        sel.innerHTML = '<option value="">None</option>' + contacts.map(function (c) { return '<option value="c:' + c.id + '"' + (contra.partner === c.id ? " selected" : "") + '>' + esc(c.name) + '</option>'; }).join("");
+        sel.disabled = false;
+      } else {
+        contra.partner = "";
+        sel.innerHTML = ks.length ? '<option value="">None</option>' + ks.map(function (x) { return '<option value="' + x.id + '"' + (contra.aux === x.id ? " selected" : "") + '>' + esc(x.code.split(".").pop() + " " + x.name) + '</option>'; }).join("") : '<option value="">' + (contra.acct ? "None" : "") + '</option>';
+        sel.disabled = !ks.length;
+      }
+      document.getElementById("cm-contra-rule").textContent = contraRuleText();
+    }
+    function applyContraDefault() { setContra(cashContraDefault(curKind().k, co, byId, chart).id); contra.partner = partyContact(); contra.fromEd = false; paintContra(); }
+    // say plainly which account the invoice settlements use, and what the Counter account is still for
+    function paintAllocNote() {
+      var k = curKind(), el = document.getElementById("cm-contra-alloc"), aw = document.getElementById("cm-alloc-wrap");
+      if (!openDocs.length || !(k.k === "client_receipt" || k.k === "supplier_payment") || aw.style.display === "none") { el.style.display = "none"; return; }
+      var inb = k.k === "client_receipt", ctl = co && co[inb ? "receivable_account_id" : "payable_account_id"], ca = ctl ? byId[ctl] : null;
+      el.textContent = "Amounts applied to " + (inb ? "invoices" : "bills") + " settle through the company " + (inb ? "receivable" : "payable") + " account on the " + (inb ? "invoice" : "bill") + (ca ? " (" + cashAcctLabel(ca) + ")" : "") + ". The Counter account applies only to any amount left over, recorded on account.";
+      el.style.display = "";
+    }
+    function renderParty(pre) {
       var k = curKind(), w = document.getElementById("cm-party-wrap");
       if (k.party === "customer" || k.party === "vendor" || k.party === "employee") {
-        var list = k.party === "customer" ? custs : (k.party === "vendor" ? vends : emps);
-        w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><select id="cm-party"><option value="">(select)</option>' + list.map(function (x) { return '<option value="' + x.id + '">' + esc(x.name) + '</option>'; }).join("") + '</select></div>';
-        document.getElementById("cm-party").onchange = onPartyChange;
-      } else { w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><input id="cm-payee" placeholder="Name"></div>'; }
+        var list = k.party === "customer" ? custs : (k.party === "vendor" ? vends : emps), sel = pre && pre.party_id;
+        // an edited movement keeps its party even when the contact is no longer flagged as one
+        if (sel && !list.some(function (x) { return x.id === sel; })) list = list.concat([{ id: sel, name: pre.payee_name || "(this party)" }]);
+        w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><select id="cm-party"><option value="">(select)</option>' + list.map(function (x) { return '<option value="' + x.id + '"' + (x.id === sel ? " selected" : "") + '>' + esc(x.name) + '</option>'; }).join("") + '</select></div>';
+        document.getElementById("cm-party").onchange = function () { onPartyChange(null); };
+      } else { w.innerHTML = '<div><label>' + esc(cashOnBehalfLabel(k)) + '</label><input id="cm-payee" placeholder="Name"></div>'; if (pre) document.getElementById("cm-payee").value = pre.payee_name || ""; }
     }
-    async function onPartyChange() {
+    async function onPartyChange(pre) {
       var k = curKind(), pe = document.getElementById("cm-party"), pid = pe ? pe.value : "";
       var aw = document.getElementById("cm-alloc-wrap"), dw = document.getElementById("cm-doc-wrap");
       dw.style.display = "none";
-      if ((k.k === "client_receipt" || k.k === "supplier_payment") && pid) { await loadAlloc(k, pid); }
-      else if (k.doc === "payslip" && pid) { aw.style.display = "none"; var ps = (await sb.from("hr_payslips").select("id,net,state").eq("company_id", S.company.id).eq("employee_id", pid).eq("state", "confirmed").order("created_at", { ascending: false })).data || []; var docSel = document.getElementById("cm-doc"); docSel.innerHTML = '<option value="">(none - just record it)</option>' + ps.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.net || 0) + '" data-type="payslip">Payslip - net ' + money(x.net) + '</option>'; }).join(""); dw.style.display = ps.length ? "" : "none"; }
-      else { aw.style.display = "none"; aw.innerHTML = ""; }
+      // the contact chosen as the party becomes the auxiliary of an account kept per contact
+      if (!pre && byId[contra.acct] && byId[contra.acct].aux_kind === "contacts" && (k.party === "customer" || k.party === "vendor")) { contra.partner = pid; paintContra(); }
+      if ((k.k === "client_receipt" || k.k === "supplier_payment") && pid) { await loadAlloc(k, pid, pre); }
+      else if (k.doc === "payslip" && pid) {
+        aw.style.display = "none"; aw.innerHTML = ""; openDocs = [];
+        // when editing, the payslip this movement paid is offered again beside the confirmed ones
+        var slip = ed && ed.link_type === "payslip" && ed.party_id === pid ? ed.link_id : null;
+        var q = sb.from("hr_payslips").select("id,net,state").eq("company_id", S.company.id).eq("employee_id", pid);
+        q = slip ? q.or("state.eq.confirmed,id.eq." + slip) : q.eq("state", "confirmed");
+        var ps = (await q.order("created_at", { ascending: false })).data || [];
+        var docSel = document.getElementById("cm-doc");
+        docSel.innerHTML = '<option value="">(none - just record it)</option>' + ps.map(function (x) { return '<option value="' + x.id + '" data-res="' + Number(x.net || 0) + '" data-type="payslip"' + (pre && slip === x.id ? " selected" : "") + '>Payslip - net ' + money(x.net) + '</option>'; }).join("");
+        dw.style.display = ps.length ? "" : "none";
+      }
+      else { aw.style.display = "none"; aw.innerHTML = ""; openDocs = []; }
+      paintAllocNote();
     }
-    async function loadAlloc(k, pid) {
+    async function loadAlloc(k, pid, pre) {
       var mt = k.k === "client_receipt" ? "out_invoice" : "in_invoice";
-      openDocs = (await sb.from("invoices").select("id,number,amount_residual,currency_code,invoice_date").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", mt).eq("state", "posted").gt("amount_residual", 0.005).order("invoice_date", { ascending: true })).data || [];
+      // When editing, the documents this movement paid come back into the list with its
+      // own amount added to what is due, because saving undoes that payment first.
+      var mine = {};
+      if (ed && ed.party_id === pid) (Array.isArray(ed.allocations) ? ed.allocations : []).forEach(function (a) { if (a.invoice_id) mine[a.invoice_id] = (mine[a.invoice_id] || 0) + (Number(a.amount) || 0); });
+      var mineIds = Object.keys(mine);
+      var q = sb.from("invoices").select("id,number,amount_residual,currency_code,invoice_date").eq("company_id", S.company.id).eq("partner_id", pid).eq("move_type", mt).eq("state", "posted");
+      q = mineIds.length ? q.or("amount_residual.gt.0.005,id.in.(" + mineIds.join(",") + ")") : q.gt("amount_residual", 0.005);
+      openDocs = (await q.order("invoice_date", { ascending: true })).data || [];
       var aw = document.getElementById("cm-alloc-wrap");
-      if (!openDocs.length) { aw.innerHTML = '<div class="muted u-fs12">No open ' + (k.k === "client_receipt" ? "invoices" : "bills") + ' - this will be recorded on account (as a credit on their statement).</div>'; aw.style.display = ""; return; }
-      var rows = openDocs.map(function (x) { return '<div style="display:flex;gap:8px;align-items:center;margin-top:5px"><div style="flex:1;font-size:12.5px">' + esc(x.number || "") + ' <span class="muted">due ' + money(x.amount_residual) + '</span></div><input class="cm-al" data-inv="' + x.id + '" data-num="' + esc(x.number || "") + '" data-res="' + Number(x.amount_residual) + '" type="number" step="0.01" style="width:120px" placeholder="0"></div>'; }).join("");
+      if (!openDocs.length) { aw.innerHTML = '<div class="muted u-fs12">No open ' + (k.k === "client_receipt" ? "invoices" : "bills") + ' - this will be recorded on account (as a credit on their statement).</div>'; aw.style.display = ""; paintAllocNote(); return; }
+      var rows = openDocs.map(function (x) {
+        var due = Math.round(((Number(x.amount_residual) || 0) + (mine[x.id] || 0)) * 100) / 100, pv = pre && mine[x.id] ? mine[x.id] : "";
+        return '<div style="display:flex;gap:8px;align-items:center;margin-top:5px"><div style="flex:1;font-size:12.5px">' + esc(x.number || "") + ' <span class="muted">due ' + money(due) + '</span></div><input class="cm-al" data-inv="' + x.id + '" data-num="' + esc(x.number || "") + '" data-res="' + due + '" type="number" step="0.01" style="width:120px" placeholder="0" value="' + pv + '"></div>';
+      }).join("");
       aw.innerHTML = '<div style="display:flex;align-items:center;gap:8px"><label class="u-m0">Apply to ' + (k.k === "client_receipt" ? "invoices" : "bills") + '</label><button type="button" class="btn" id="cm-auto" style="padding:2px 9px;font-size:11.5px">Auto</button><div class="u-flex1"></div><div id="cm-alloc-sum" class="muted u-fs12"></div></div>' + rows;
       aw.style.display = "";
       aw.querySelectorAll(".cm-al").forEach(function (inp) { inp.oninput = recomputeAlloc; });
       document.getElementById("cm-auto").onclick = autoAlloc;
-      recomputeAlloc();
+      recomputeAlloc(); paintAllocNote();
     }
     function recomputeAlloc() {
       var amt = parseFloat(document.getElementById("cm-amt").value) || 0, alloc = 0;
-      document.querySelectorAll(".cm-al").forEach(function (inp) { alloc += parseFloat(inp.value) || 0; });
+      m.querySelectorAll(".cm-al").forEach(function (inp) { alloc += parseFloat(inp.value) || 0; });
       var rem = Math.round((amt - alloc) * 100) / 100, sum = document.getElementById("cm-alloc-sum");
       if (sum) sum.textContent = "Allocated " + money(alloc) + " · On account " + money(rem < 0 ? 0 : rem) + (rem < -0.005 ? " (over-allocated!)" : "");
     }
     function autoAlloc() {
       var left = parseFloat(document.getElementById("cm-amt").value) || 0;
-      document.querySelectorAll(".cm-al").forEach(function (inp) { var res = Number(inp.getAttribute("data-res")) || 0, take = Math.round(Math.min(res, Math.max(0, left)) * 100) / 100; inp.value = take > 0 ? take : ""; left = Math.round((left - take) * 100) / 100; });
+      m.querySelectorAll(".cm-al").forEach(function (inp) { var res = Number(inp.getAttribute("data-res")) || 0, take = Math.round(Math.min(res, Math.max(0, left)) * 100) / 100; inp.value = take > 0 ? take : ""; left = Math.round((left - take) * 100) / 100; });
       recomputeAlloc();
     }
     function cashCalcChange() { var t = document.getElementById("cm-tender"); if (!t) return; var tv = parseFloat(t.value) || 0, am = parseFloat(document.getElementById("cm-amt").value) || 0; var ch = Math.round((tv - am) * 100) / 100; document.getElementById("cm-change").value = ch > 0 ? ch : 0; }
@@ -26779,8 +27379,20 @@
     var tEl = document.getElementById("cm-tender"); if (tEl) tEl.oninput = cashCalcChange;
     document.getElementById("cm-amt").oninput = function () { recomputeAlloc(); cashCalcChange(); cashSplitSum(); };
     document.getElementById("cm-doc").onchange = function () { var o = this.options[this.selectedIndex]; if (o && o.value) { var res = o.getAttribute("data-res"); if (res) document.getElementById("cm-amt").value = res; } };
-    document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; };
-    document.getElementById("cm-kind").onchange = function () { setContraDefault(); renderParty(); document.getElementById("cm-alloc-wrap").style.display = "none"; document.getElementById("cm-doc-wrap").style.display = "none"; };
+    document.getElementById("cm-acct").onchange = function () { var o = this.options[this.selectedIndex]; var cur = o.getAttribute("data-cur"); if (cur) document.getElementById("cm-cur").value = cur; paintWalletGl(); };
+    document.getElementById("cm-kind").onchange = function () { applyContraDefault(); renderParty(null); var aw = document.getElementById("cm-alloc-wrap"); aw.style.display = "none"; aw.innerHTML = ""; openDocs = []; document.getElementById("cm-doc-wrap").style.display = "none"; paintAllocNote(); };
+    document.getElementById("cm-contra").onchange = function () {
+      var v = this.value.trim(), a = resolveAcct(v);
+      contra.fromEd = false;
+      if (!a) { if (v) toast("No account has the code or name " + v + "."); contra.acct = ""; contra.aux = ""; paintContra(); return; }
+      setContra(a.id); if (!contra.partner) contra.partner = partyContact(); paintContra();
+      if (!contra.aux && ((kids[contra.acct] || []).length || (byId[contra.acct] && byId[contra.acct].aux_kind === "contacts"))) document.getElementById("cm-contra-aux").focus();
+    };
+    document.getElementById("cm-contra-aux").onchange = function () {
+      var v = this.value || "";
+      if (v.indexOf("c:") === 0) { contra.partner = v.slice(2); contra.aux = ""; } else { contra.aux = v; contra.partner = ""; }
+      contra.fromEd = false; paintContra();
+    };
     document.getElementById("cm-cancel").onclick = function () { m.remove(); };
     document.getElementById("cm-save").onclick = async function () {
       var btn = this, amt = parseFloat(document.getElementById("cm-amt").value);
@@ -26790,17 +27402,39 @@
       if (pe && partyId) partyName = pe.options[pe.selectedIndex].textContent; else if (payeeEl) partyName = payeeEl.value.trim();
       var handlerName = gv("cm-handler"), handlerId = null;
       if (handlerName) { var hc = contacts.filter(function (c) { return c.name === handlerName; })[0]; if (hc) handlerId = hc.id; }
-      var allocations = [];
-      document.querySelectorAll(".cm-al").forEach(function (inp) { var v = parseFloat(inp.value) || 0; if (v > 0.005) allocations.push({ invoice_id: inp.getAttribute("data-inv"), number: inp.getAttribute("data-num"), amount: Math.round(v * 100) / 100 }); });
+      // both accounts the entry uses must be clear before anything posts
+      var w = curWallet();
+      if (!w || !w.gl_account_id || !byId[w.gl_account_id]) { toast("The cash account " + (w ? w.name : "") + " has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then post again."); return; }
+      var typed = String(document.getElementById("cm-contra").value || "").trim();
+      if (typed) {
+        var ta = resolveAcct(typed);
+        if (!ta) { toast("No account has the code or name " + typed + ". Pick the Counter account from the list."); return; }
+        if (cashIsAux(ta)) { contra.acct = ta.parent_account_id; contra.aux = ta.id; } else if (ta.id !== contra.acct) { contra.acct = ta.id; contra.aux = ""; }
+      } else { contra.acct = ""; contra.aux = ""; }
+      var contraAcct = contra.aux || contra.acct;
+      if (!contraAcct) { toast("Choose the Counter account: the account the other side of this entry posts to."); document.getElementById("cm-contra").focus(); return; }
+      if (contraAcct === w.gl_account_id) { toast("The Counter account cannot be the cash account's own ledger account. Choose the account the money comes from or goes to."); return; }
+      var contraPartner = (byId[contra.acct] && byId[contra.acct].aux_kind === "contacts") ? (contra.partner || null) : null;
+      var allocations = [], overDue = "";
+      if ((k.k === "client_receipt" || k.k === "supplier_payment") && partyId) m.querySelectorAll(".cm-al").forEach(function (inp) {
+        var v = parseFloat(inp.value) || 0; if (!(v > 0.005)) return;
+        var due = Number(inp.getAttribute("data-res")) || 0;
+        if (v - due > 0.005 && !overDue) overDue = (inp.getAttribute("data-num") || "This document") + " has " + money(due) + " due. Apply no more than that to it, and leave the rest on account.";
+        allocations.push({ invoice_id: inp.getAttribute("data-inv"), number: inp.getAttribute("data-num"), amount: Math.round(v * 100) / 100 });
+      });
+      if (overDue) { toast(overDue); return; }
       var allocTotal = allocations.reduce(function (s, a) { return s + a.amount; }, 0);
       if (allocTotal - amt > 0.005) { toast("You allocated more than the amount"); return; }
       var docEl = document.getElementById("cm-doc"), docWrap = document.getElementById("cm-doc-wrap");
       var docId = (docWrap.style.display !== "none" && docEl) ? docEl.value : "", docType = "";
       if (docId) { docType = "payslip"; }
       var tenders = [];
-      m.querySelectorAll("#cm-split .cm-tm").forEach(function (sel, idx) { var amtEl = m.querySelectorAll("#cm-split .cm-ta")[idx]; var v = parseFloat(amtEl.value) || 0; if (v > 0.005) { var o = sel.options[sel.selectedIndex]; tenders.push({ method: sel.value, kind: o.getAttribute("data-kind") || "cash", amount: Math.round(v * 100) / 100 }); } });
-      if (tenders.length > 1) { var ts = tenders.reduce(function (s, tt) { return s + tt.amount; }, 0); if (Math.abs(ts - amt) > 0.02) { toast("The split payment must add up to the amount"); return; } }
-      btn.disabled = true; btn.textContent = "Posting...";
+      m.querySelectorAll("#cm-split .cm-tm").forEach(function (sel, idx) { var amtEl = m.querySelectorAll("#cm-split .cm-ta")[idx]; var v = parseFloat(amtEl.value) || 0; if (v > 0.005) { var o = sel.options[sel.selectedIndex]; tenders.push({ method: sel.value, kind: (o && o.getAttribute("data-kind")) || "cash", account_id: (o && o.getAttribute("data-acct")) || null, amount: Math.round(v * 100) / 100 }); } });
+      if (tenders.length > 1) {
+        var ts = tenders.reduce(function (s, tt) { return s + tt.amount; }, 0); if (Math.abs(ts - amt) > 0.02) { toast("The split payment must add up to the amount"); return; }
+        if (allocations.length) { toast("A split payment is recorded on account and cannot settle invoices. Clear the amounts applied, or use a single method."); return; }
+      }
+      btn.disabled = true; btn.textContent = ed ? "Saving..." : "Posting...";
       var mv = {
         direction: dir, kind: k.k, method: document.getElementById("cm-method").value,
         cash_account_id: document.getElementById("cm-acct").value, amount: amt,
@@ -26810,14 +27444,35 @@
         allocations: allocations, link_type: docType || "none", link_id: docId || null,
         tendered: document.getElementById("cm-tender") ? (parseFloat(document.getElementById("cm-tender").value) || 0) : 0,
         change_given: document.getElementById("cm-change") ? (parseFloat(document.getElementById("cm-change").value) || 0) : 0,
-        contra_account_id: document.getElementById("cm-contra").value || null,
+        contra_account_id: contraAcct, contra_partner_id: contraPartner,
         tenders: tenders.length > 1 ? tenders : []
       };
-      var r = await postCashMovement(mv, chart, wallets);
-      if (r && r.error) { toast("Could not post: " + errMsg(r.error)); btn.disabled = false; btn.textContent = "Post " + (dir === "in" ? "receipt" : "payment"); return; }
-      m.remove(); toast("Posted " + k.label); renderView();
+      var r = ed ? await cashEditMovement(ed, mv, wallets) : await postCashMovement(mv, chart, wallets);
+      if (r && r.error) {
+        // an edit that ended void has already changed the books, so the message must not vanish with a toast
+        if (r.voided) { m.remove(); alert(cashErr(r.error)); renderView(); return; }
+        toast((ed ? "Could not save: " : "Could not post: ") + cashErr(r.error)); btn.disabled = false; btn.textContent = saveLabel; return;
+      }
+      m.remove(); toast(ed ? "Saved " + (ed.number || "") : "Posted " + k.label); renderView();
     };
-    setContraDefault(); renderParty();
+    if (ed) {
+      document.getElementById("cm-handler").value = ed.handler_name || "";
+      document.getElementById("cm-amt").value = Number(ed.amount) || "";
+      document.getElementById("cm-date").value = ed.move_date || today();
+      document.getElementById("cm-method").value = ed.method || "";
+      if (tEl && Number(ed.tendered) > 0) tEl.value = Number(ed.tendered);
+      document.getElementById("cm-ref").value = ed.reference || "";
+      document.getElementById("cm-memo").value = ed.memo || "";
+      if (Array.isArray(ed.tenders) && ed.tenders.length > 1) {
+        var tms = m.querySelectorAll("#cm-split .cm-tm"), tas = m.querySelectorAll("#cm-split .cm-ta");
+        ed.tenders.slice(0, tms.length).forEach(function (t, i) { tms[i].value = t.method; tas[i].value = t.amount; });
+        document.getElementById("cm-split").open = true;
+      }
+      setContra(ed.contra_account_id || ""); contra.partner = ed.contra_partner_id || "";
+      if (contra.acct) { contra.fromEd = true; paintContra(); } else applyContraDefault();
+      renderParty(ed); paintWalletGl(); cashCalcChange(); cashSplitSum();
+      if (ed.party_id) await onPartyChange(ed);
+    } else { applyContraDefault(); renderParty(null); paintWalletGl(); }
   }
 
   // FX helper: document amount -> company functional currency
@@ -26866,9 +27521,11 @@
       { entry_id: eid, company_id: S.company.id, account_id: drAcc, label: (narr || "").slice(0, 120), debit: famt, credit: 0, partner_id: drTag },
       { entry_id: eid, company_id: S.company.id, account_id: crAcc, label: (narr || "").slice(0, 120), debit: 0, credit: famt, partner_id: crTag }
     ]);
-    if (li.error) return { error: li.error };
+    // a draft that could not be completed is removed, so a failed post leaves no stray voucher
+    if (!drAcc || !crAcc) { await cashDropDraft(eid); return { error: { friendly: true, message: "An account is missing for one side of the entry. Choose it and post again." } }; }
+    if (li.error) { await cashDropDraft(eid); return { error: li.error }; }
     var post = await sb.rpc("post_entry", { p_entry: eid });
-    if (post.error) return { error: post.error };
+    if (post.error) { await cashDropDraft(eid); return { error: post.error }; }
     return { entry_id: eid, journal_id: jr ? jr.id : null };
   }
 
@@ -26882,46 +27539,70 @@
     }
     return r;
   }
-  async function postCashMovement(mv, chart, wallets) {
+  // The accounts a movement posts to, checked before anything is written. The cash
+  // side is the cash account's own ledger account and the other side is the Counter
+  // account chosen in the dialog. Nothing is looked up by code any more: a guessed
+  // 5300 or 4190 put money in accounts nobody had chosen or could see.
+  async function cashPreflight(mv, wallets) {
     var ca = null; for (var i = 0; i < wallets.length; i++) if (wallets[i].id === mv.cash_account_id) ca = wallets[i];
-    var jrnCode = (ca && ca.kind === "bank") ? "BNK" : "CSH";
-    var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
-    var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
-    var cashGl = (ca && ca.gl_account_id) || (function () { var a = cashAcctByCode(chart, ca && ca.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
-    var base = { company_id: S.company.id, number: num, move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, reference: mv.reference || null, tendered: mv.tendered || 0, change_given: mv.change_given || 0, status: "posted", posted_at: new Date().toISOString(), allocations: mv.allocations || [], advance_amount: 0 };
-
+    if (!ca) return { error: { friendly: true, message: "Choose the cash account the money moved through." } };
+    if (!ca.gl_account_id) return { error: { friendly: true, message: "The cash account " + (ca.name || "") + " has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then post again." } };
+    if (!mv.contra_account_id) return { error: { friendly: true, message: "Choose the Counter account: the account the other side of this entry posts to." } };
     // Multi-currency guard: a foreign-currency movement must have an FX rate, or the
     // journal amount used to fall back to 1:1 silently. Fail loudly instead.
     if (mv.currency_code && mv.currency_code !== S.company.currency_code) {
-      var _chk = await cashFx(1, mv.currency_code, S.company.currency_code, mv.move_date);
-      if (!_chk.ok) return { error: { message: "No exchange rate for " + mv.currency_code + " → " + S.company.currency_code + " on " + mv.move_date + ". Add it in Accounting first, then post." } };
+      var chk = await cashFx(1, mv.currency_code, S.company.currency_code, mv.move_date);
+      if (!chk.ok) return { error: { friendly: true, message: "No exchange rate for " + mv.currency_code + " → " + S.company.currency_code + " on " + mv.move_date + ". Add it in Accounting first, then post." } };
     }
+    return { ca: ca, cashGl: ca.gl_account_id, jrnCode: ca.kind === "bank" ? "BNK" : "CSH" };
+  }
+  // A draft entry whose lines or posting failed is removed, not left behind in the journal.
+  async function cashDropDraft(eid) {
+    if (!eid) return;
+    await sb.from("journal_lines").delete().eq("entry_id", eid);
+    await sb.from("journal_entries").delete().eq("id", eid).eq("state", "draft");
+  }
+  // Write a movement's journal entries and payments with exactly two accounts: pf.cashGl
+  // (the cash account's ledger account) and mv.contra_account_id (the Counter account,
+  // or its auxiliary). Returns what the movement row keeps, or the error together with
+  // everything that had already posted, so the caller can reverse it.
+  async function cashPostLedger(mv, pf, num) {
+    var cid = S.company.id, cashGl = pf.cashGl, jrnCode = pf.jrnCode, contraGl = mv.contra_account_id;
+    var isAR = (mv.party_type === "customer" || mv.party_type === "vendor") && mv.party_id;
+    var created = [], payIds = [], done = [];
+    function fail(err) { return { error: err, partial: { allocations: done, entry_ids: created, payment_ids: payIds } }; }
+    var out = { allocations: [], advance_amount: 0, tenders: [], contra_account_id: contraGl, contra_partner_id: mv.contra_partner_id || null, journal_id: null, entry_ids: created, payment_ids: payIds, link_type: "none", link_id: null };
 
     // ---- Split tender: paid via several methods, recorded on account (or as a plain expense) ----
     if (mv.tenders && mv.tenders.length > 1) {
-      var contraGlS = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
-      var bankGl = (function () { var b = cashAcctByCode(chart, "5100"); return b ? b.id : null; })();
-      if (!cashGl || !contraGlS) return { error: { message: "Missing cash or contra account in the chart" } };
-      var jrS = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", jrnCode).maybeSingle()).data;
+      var jrS = (await sb.from("journals").select("id").eq("company_id", cid).eq("code", jrnCode).maybeSingle()).data;
       var narrS = mv.memo || (cashKindLabel(mv.kind) + " (split)" + (mv.payee_name ? (" - " + mv.payee_name) : ""));
-      var eS = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, date: mv.move_date, ref: num, narration: narrS, currency_code: S.company.currency_code, state: "draft", source_type: "cash_movement" }).select("id").single();
-      if (eS.error) return { error: eS.error };
+      var eS = await sb.from("journal_entries").insert({ company_id: cid, journal_id: jrS ? jrS.id : null, date: mv.move_date, ref: num, narration: narrS, currency_code: S.company.currency_code, state: "draft", source_type: "cash_movement" }).select("id").single();
+      if (eS.error) return fail(eS.error);
       var eidS = eS.data.id, linesS = [], totalFunc = 0, labS = (mv.payee_name || cashKindLabel(mv.kind)).slice(0, 110);
       for (var ti = 0; ti < mv.tenders.length; ti++) {
         var tn = mv.tenders[ti], f = await cashToFunc(tn.amount, mv.currency_code, mv.move_date); totalFunc += f;
-        var gl = (tn.kind === "cash") ? cashGl : (bankGl || cashGl);
-        linesS.push({ entry_id: eidS, company_id: S.company.id, account_id: gl, label: labS + " (" + tn.method + ")", debit: mv.direction === "in" ? f : 0, credit: mv.direction === "in" ? 0 : f, partner_id: null });
+        // Every tender lands in the cash account's own ledger account, unless its payment
+        // method names an account of its own. Card and transfer lines used to go to 5100
+        // whatever the cash account was.
+        linesS.push({ entry_id: eidS, company_id: cid, account_id: tn.account_id || cashGl, label: labS + " (" + tn.method + ")", debit: mv.direction === "in" ? f : 0, credit: mv.direction === "in" ? 0 : f, partner_id: null });
       }
       totalFunc = Math.round(totalFunc * 10000) / 10000;
-      linesS.push({ entry_id: eidS, company_id: S.company.id, account_id: contraGlS, label: labS, debit: mv.direction === "in" ? 0 : totalFunc, credit: mv.direction === "in" ? totalFunc : 0, partner_id: isAR ? mv.party_id : null });
+      linesS.push({ entry_id: eidS, company_id: cid, account_id: contraGl, label: labS, debit: mv.direction === "in" ? 0 : totalFunc, credit: mv.direction === "in" ? totalFunc : 0, partner_id: mv.contra_partner_id || (isAR ? mv.party_id : null) });
       var liS = await sb.from("journal_lines").insert(linesS);
-      if (liS.error) return { error: liS.error };
+      if (liS.error) { await cashDropDraft(eidS); return fail(liS.error); }
       var peS = await sb.rpc("post_entry", { p_entry: eidS });
-      if (peS.error) return { error: peS.error };
-      if (isAR) { var prS = await sb.from("payments").insert({ company_id: S.company.id, journal_id: jrS ? jrS.id : null, partner_id: mv.party_id, entry_id: eidS, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: mv.amount, currency_code: mv.currency_code || S.company.currency_code, amount_company: totalFunc, memo: "On account " + num, reference: num, state: "posted" }); if (prS.error) return { error: prS.error }; }
-      base.tenders = mv.tenders; base.contra_account_id = contraGlS; base.journal_id = eidS; base.advance_amount = mv.amount;
-      base.allocations = []; // split tender records the full amount on-account (no per-invoice register_payment ran); clearing this stops a later void from wrongly inflating those invoices' residuals
-      return await cashInsert(base);
+      if (peS.error) { await cashDropDraft(eidS); return fail(peS.error); }
+      created.push(eidS); out.journal_id = eidS;
+      if (isAR) {
+        var prS = await sb.from("payments").insert({ company_id: cid, journal_id: jrS ? jrS.id : null, partner_id: mv.party_id, entry_id: eidS, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: mv.amount, currency_code: mv.currency_code || S.company.currency_code, amount_company: totalFunc, memo: "On account " + num, reference: num, state: "posted" }).select("id").single();
+        if (prS.error) return fail(prS.error);
+        payIds.push(prS.data.id);
+      }
+      // split tender records the full amount on account (no per-invoice register_payment
+      // ran), so it keeps no allocations for a later void to wrongly restore
+      out.tenders = mv.tenders; out.advance_amount = mv.amount;
+      return out;
     }
 
     // ---- Path 1: on behalf of a customer/supplier - allocate to invoices + on-account remainder ----
@@ -26929,37 +27610,111 @@
       var allocs = mv.allocations || [], allocated = 0;
       for (var j = 0; j < allocs.length; j++) {
         var a = allocs[j];
-        var rp = await sb.rpc("register_payment", { p_invoice: a.invoice_id, p_amount: a.amount, p_date: mv.move_date, p_journal_code: jrnCode, p_method: mv.method, p_ref: num });
-        if (rp.error) return { error: rp.error };
-        a.payment_id = rp.data || null; allocated += Number(a.amount) || 0;
+        // the cash side of each settlement is the cash account's own ledger account, not
+        // the Bank or Cash journal's default
+        var rp = await sb.rpc("register_payment", { p_invoice: a.invoice_id, p_amount: a.amount, p_date: mv.move_date, p_journal_code: jrnCode, p_method: mv.method, p_ref: num, p_cash_account: cashGl });
+        if (rp.error) return fail(rp.error);
+        a.payment_id = rp.data || null; allocated += Number(a.amount) || 0; done.push(a);
+        if (a.payment_id) payIds.push(a.payment_id);
+      }
+      if (payIds.length) {
+        var eBy = {};
+        ((await sb.from("payments").select("id,entry_id").in("id", payIds)).data || []).forEach(function (p) { eBy[p.id] = p.entry_id; });
+        payIds.forEach(function (id) { if (eBy[id] && created.indexOf(eBy[id]) < 0) created.push(eBy[id]); });
       }
       var remainder = Math.round((Number(mv.amount) - allocated) * 100) / 100;
       if (remainder > 0.005) {
-        // book the on-account part and create a payments row so it shows on the statement
-        var contraGl = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
-        if (!cashGl || !contraGl) return { error: { message: "Missing cash or advance account in the chart" } };
+        // book the on-account part to the Counter account and create a payments row so it shows on the statement
         var remFunc = await cashToFunc(remainder, mv.currency_code, mv.move_date);
         var narr = (mv.memo || cashKindLabel(mv.kind)) + " (on account) - " + (mv.payee_name || "");
-        var ge = await cashPostEntry(mv.direction, cashGl, contraGl, remFunc, jrnCode, mv.move_date, num, narr, mv.party_id, "cash_movement");
-        if (ge.error) return { error: ge.error };
-        var pr = await sb.from("payments").insert({ company_id: S.company.id, journal_id: ge.journal_id, partner_id: mv.party_id, entry_id: ge.entry_id, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: remainder, currency_code: mv.currency_code || S.company.currency_code, amount_company: remFunc, memo: "On account " + num, reference: num, state: "posted" });
-        if (pr.error) return { error: pr.error };
-        base.advance_amount = remainder;
+        var ge = await cashPostEntry(mv.direction, cashGl, contraGl, remFunc, jrnCode, mv.move_date, num, narr, mv.contra_partner_id || mv.party_id, "cash_movement");
+        if (ge.error) return fail(ge.error);
+        created.push(ge.entry_id); out.journal_id = ge.entry_id;
+        var pr = await sb.from("payments").insert({ company_id: cid, journal_id: ge.journal_id, partner_id: mv.party_id, entry_id: ge.entry_id, payment_type: mv.direction === "in" ? "inbound" : "outbound", date: mv.move_date, amount: remainder, currency_code: mv.currency_code || S.company.currency_code, amount_company: remFunc, memo: "On account " + num, reference: num, state: "posted" }).select("id").single();
+        if (pr.error) return fail(pr.error);
+        payIds.push(pr.data.id);
+        out.advance_amount = remainder;
       }
-      base.allocations = allocs;
-      return await cashInsert(base);
+      if (!out.journal_id && created.length) out.journal_id = created[0];
+      out.allocations = allocs;
+      return out;
     }
 
     // ---- Path 2: everything else (employee / owner / one-off payee, refunds, expenses) ----
-    var contraGl2 = mv.contra_account_id || (function () { var x = cashAcctByCode(chart, cashKind(mv.kind).contra); return x ? x.id : null; })();
-    if (!cashGl || !contraGl2) return { error: { message: "Missing cash or contra account in the chart" } };
     var famt = await cashToFunc(mv.amount, mv.currency_code, mv.move_date);
     var narr2 = mv.memo || (cashKindLabel(mv.kind) + (mv.payee_name ? (" - " + mv.payee_name) : ""));
-    var ge2 = await cashPostEntry(mv.direction, cashGl, contraGl2, famt, jrnCode, mv.move_date, num, narr2, null, "cash_movement");
-    if (ge2.error) return { error: ge2.error };
-    if (mv.link_type === "payslip" && mv.link_id) { await sb.from("hr_payslips").update({ state: "paid" }).eq("id", mv.link_id); base.link_type = "payslip"; base.link_id = mv.link_id; }
-    base.contra_account_id = contraGl2; base.journal_id = ge2.entry_id;
-    return await cashInsert(base);
+    var ge2 = await cashPostEntry(mv.direction, cashGl, contraGl, famt, jrnCode, mv.move_date, num, narr2, mv.contra_partner_id || null, "cash_movement");
+    if (ge2.error) return fail(ge2.error);
+    created.push(ge2.entry_id); out.journal_id = ge2.entry_id;
+    if (mv.link_type === "payslip" && mv.link_id) { await sb.from("hr_payslips").update({ state: "paid" }).eq("id", mv.link_id); out.link_type = "payslip"; out.link_id = mv.link_id; }
+    return out;
+  }
+  // Reverse what a posting that did not finish had already written, so an entry never
+  // survives without its movement. Only the payments it created are touched (by id, not
+  // by number), and a payslip it marked paid goes back to confirmed.
+  async function cashRollback(p, num) {
+    if (!p) return null;
+    var un = await cashUndoPostings({ number: num, payment_ids: p.payment_ids || [], allocations: p.allocations || [], entry_ids: p.entry_ids || [], journal_id: null }, "VOID/" + num, "Reversal of " + num + ", which could not be recorded");
+    if (p.link_type === "payslip" && p.link_id) await sb.from("hr_payslips").update({ state: "confirmed" }).eq("id", p.link_id).eq("state", "paid");
+    return un.error || null;
+  }
+  // The fields of a movement row that come from the dialog.
+  function cashMoveFields(mv) {
+    return { move_date: mv.move_date, direction: mv.direction, kind: mv.kind, method: mv.method, cash_account_id: mv.cash_account_id, amount: mv.amount, currency_code: mv.currency_code, party_type: mv.party_type, party_id: mv.party_id, payee_name: mv.payee_name, handler_name: mv.handler_name || "", handler_id: mv.handler_id || null, memo: mv.memo, reference: mv.reference || null, tendered: mv.tendered || 0, change_given: mv.change_given || 0 };
+  }
+  function cashLedgerFields(led) {
+    return { allocations: led.allocations, advance_amount: led.advance_amount, tenders: led.tenders, contra_account_id: led.contra_account_id, contra_partner_id: led.contra_partner_id || null, journal_id: led.journal_id, entry_ids: led.entry_ids, link_type: led.link_type, link_id: led.link_id };
+  }
+  async function postCashMovement(mv, chart, wallets) {
+    var pf = await cashPreflight(mv, wallets);
+    if (pf.error) return pf;
+    var num = await nextDocNumber("cash_movements", mv.direction === "in" ? "RCP" : "PAY");
+    var led = await cashPostLedger(mv, pf, num);
+    if (led.error) {
+      var rb = await cashRollback(led.partial, num);
+      if (rb) return { error: { friendly: true, message: cashErr(led.error) + " Part of it had already posted and could not be reversed (" + errMsg(rb) + "). Ask whoever keeps the books to check the entries with the reference " + num + "." } };
+      return { error: led.error };
+    }
+    var base = Object.assign({ company_id: S.company.id, number: num, status: "posted", posted_at: new Date().toISOString() }, cashMoveFields(mv), cashLedgerFields(led));
+    var ins = await cashInsert(base);
+    if (ins.error) {
+      var rb2 = await cashRollback(led, num);
+      if (rb2) return { error: { friendly: true, message: "The movement could not be saved (" + errMsg(ins.error) + ") and its entries could not all be reversed (" + errMsg(rb2) + "). Ask whoever keeps the books to check the entries with the reference " + num + "." } };
+    }
+    return ins;
+  }
+  // Edit a posted movement. The old entries are reversed exactly as Void reverses them,
+  // then the new values post on the same row, which keeps its id and number, and the
+  // old version is added to revisions. If the new version cannot post after the old one
+  // was reversed, the movement is made void, so the ledger and the Counter never tell
+  // two different stories.
+  async function cashEditMovement(old, mv, wallets) {
+    var cur = (await sb.from("cash_movements").select("*").eq("id", old.id).maybeSingle()).data;
+    if (!cur) return { error: { friendly: true, message: "This movement no longer exists. Close the dialog and refresh the list." } };
+    if (cur.status !== "posted" || cur.void_of) return { error: { friendly: true, message: "Only a posted movement that is not void can be edited. Close the dialog and refresh the list." } };
+    var pf = await cashPreflight(mv, wallets);
+    if (pf.error) return pf;
+    var num = cur.number;
+    var oldIds = (Array.isArray(cur.entry_ids) ? cur.entry_ids : []).slice();
+    if (!oldIds.length) {
+      if (cur.journal_id) oldIds.push(cur.journal_id);
+      ((await sb.from("payments").select("entry_id").eq("company_id", S.company.id).eq("reference", num)).data || []).forEach(function (p) { if (p.entry_id && oldIds.indexOf(p.entry_id) < 0) oldIds.push(p.entry_id); });
+    }
+    var enums = {};
+    if (oldIds.length) ((await sb.from("journal_entries").select("id,entry_number,ref").in("id", oldIds)).data || []).forEach(function (e) { enums[e.id] = e.entry_number || e.ref || ""; });
+    var before = { move_date: cur.move_date, kind: cur.kind, method: cur.method, cash_account_id: cur.cash_account_id, amount: cur.amount, currency_code: cur.currency_code, party_type: cur.party_type, party_id: cur.party_id, payee_name: cur.payee_name, handler_name: cur.handler_name, handler_id: cur.handler_id, memo: cur.memo, reference: cur.reference, tendered: cur.tendered, change_given: cur.change_given, allocations: cur.allocations, advance_amount: cur.advance_amount, tenders: cur.tenders, contra_account_id: cur.contra_account_id, contra_partner_id: cur.contra_partner_id, journal_id: cur.journal_id, link_type: cur.link_type, link_id: cur.link_id, entry_ids: oldIds, entries: oldIds.map(function (id) { return enums[id]; }).filter(Boolean) };
+    var revisions = (Array.isArray(cur.revisions) ? cur.revisions : []).concat([{ at: new Date().toISOString(), by: (S.user && S.user.email) || "", before: before }]);
+    var un = await cashUndoPostings(cur, "EDIT/" + num, "Reversal of " + num + " before it was edited");
+    if (un.error) return { error: { friendly: true, message: "Orbit could not reverse the old version: " + errMsg(un.error) + " Nothing new was posted. Try again: anything already reversed is skipped." } };
+    // the payslip the old version paid is unpaid again until the new version pays it
+    if (cur.link_type === "payslip" && cur.link_id) await sb.from("hr_payslips").update({ state: "confirmed" }).eq("id", cur.link_id).eq("state", "paid");
+    var led = await cashPostLedger(mv, pf, num), upd = null;
+    if (!led.error) upd = await sb.from("cash_movements").update(Object.assign({ status: "posted", revisions: revisions }, cashMoveFields(mv), cashLedgerFields(led))).eq("id", cur.id);
+    var failure = led.error || (upd && upd.error);
+    if (!failure) return { ok: true };
+    await cashRollback(led.error ? led.partial : led, num);
+    var vr = await sb.from("cash_movements").update({ status: "void", voided_at: new Date().toISOString(), voided_by: (S.user && S.user.id) || null, void_of: cur.id, revisions: revisions }).eq("id", cur.id);
+    return { voided: true, error: { friendly: true, message: "The old version was reversed but the new one could not be posted: " + String(cashErr(failure)).replace(/\.\s*$/, "") + ". The movement is now void; record it again." + (vr.error ? " Marking it void also failed (" + errMsg(vr.error) + "), so void it from Movements." : "") } };
   }
 
   // ---- payment methods (config) ----
@@ -27001,11 +27756,12 @@
   function cfgCashMoves() {
     return {
       title: "Movements", pageSize: 100,
-      fetch: function () { return sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("move_date", { ascending: false }).order("created_at", { ascending: false }).then(function (r) { return r.data || []; }); },
+      // paged, so a busy desk past 1,000 movements still lists every one
+      fetch: function () { return allRows(function () { return sb.from("cash_movements").select("*").eq("company_id", S.company.id).order("move_date", { ascending: false }).order("created_at", { ascending: false }).order("id"); }); },
       searchText: function (m) { return (m.number || "") + " " + (m.payee_name || "") + " " + cashKindLabel(m.kind) + " " + (m.memo || ""); },
       columns: [
         { label: "Date", get: function (m) { return '<span class="muted">' + esc(m.move_date || "") + '</span>'; } },
-        { label: "No.", get: function (m) { return esc(m.number || ""); } },
+        { label: "No.", get: function (m) { return esc(m.number || "") + (m.status === "void" ? ' <span class="muted">(void)</span>' : ''); } },
         { label: "Type", get: function (m) { return esc(cashKindLabel(m.kind)); } },
         { label: "Party", get: function (m) { return '<b>' + esc(m.payee_name || "") + '</b>'; } },
         { label: "In", num: true, get: function (m) { return m.direction === "in" ? '<span class="u-good">' + money(m.amount) + '</span>' : ''; } },
@@ -27019,20 +27775,112 @@
       onOpen: function (m) { openMovementReceipt(m); }
     };
   }
-  function openMovementReceipt(m) {
+  // Everything the detail view shows about where a movement posted: the row as it is
+  // now, its cash account, the journal entries with their lines, and any reversals.
+  async function cashMovementInfo(m) {
+    var cid = S.company.id, none = Promise.resolve({ data: [] });
+    var s1 = await Promise.all([
+      sb.from("cash_movements").select("*").eq("id", m.id).maybeSingle(),
+      m.number ? sb.from("payments").select("id,entry_id").eq("company_id", cid).eq("reference", m.number) : none,
+      m.number ? sb.from("journal_entries").select("id,entry_number,ref,date,source_id").eq("company_id", cid).eq("source_type", "cash_void").in("ref", ["VOID/" + m.number, "EDIT/" + m.number]).order("date") : none
+    ]);
+    var row = s1[0].data || m, pays = s1[1].data || [], revs = s1[2].data || [];
+    var ids = [];
+    function add(id) { if (id && ids.indexOf(String(id)) < 0) ids.push(String(id)); }
+    (Array.isArray(row.entry_ids) ? row.entry_ids : []).forEach(add);
+    if (!ids.length) {
+      // An older movement kept only journal_id, and its invoice settlements carry its
+      // number. Once it is voided those payments are gone, but each reversal still
+      // names the entry it cancelled.
+      add(row.journal_id);
+      pays.forEach(function (p) { add(p.entry_id); });
+      if (row.status === "void") revs.forEach(function (r) { if (String(r.ref || "").indexOf("VOID/") === 0) add(r.source_id); });
+    }
+    var s2 = await Promise.all([
+      row.cash_account_id ? sb.from("cash_accounts").select("id,name,gl_account_id").eq("id", row.cash_account_id).maybeSingle() : Promise.resolve({ data: null }),
+      ids.length ? sb.from("journal_entries").select("id,entry_number,ref,date,state").in("id", ids) : none,
+      ids.length ? sb.from("journal_lines").select("entry_id,account_id,label,debit,credit,accounts(code,name)").in("entry_id", ids).order("created_at") : none,
+      row.contra_partner_id ? sb.from("partners").select("name").eq("id", row.contra_partner_id).maybeSingle() : Promise.resolve({ data: null })
+    ]);
+    var wallet = s2[0].data, ents = s2[1].data || [], lines = s2[2].data || [], contraPartner = s2[3].data;
+    function pos(id) { return ids.indexOf(String(id)); }
+    ents.sort(function (a, b) { return pos(a.id) - pos(b.id); });
+    lines.sort(function (a, b) { return pos(a.entry_id) - pos(b.entry_id); });
+    var want = [], acc = {}, num = {};
+    if (row.contra_account_id) want.push(row.contra_account_id);
+    if (wallet && wallet.gl_account_id) want.push(wallet.gl_account_id);
+    if (want.length) ((await sb.from("accounts").select("id,code,name,parent_account_id").in("id", want)).data || []).forEach(function (a) { acc[a.id] = a; });
+    var ca = acc[row.contra_account_id];
+    if (ca && cashIsAux(ca) && !acc[ca.parent_account_id]) { var pa = (await sb.from("accounts").select("id,code,name,parent_account_id").eq("id", ca.parent_account_id).maybeSingle()).data; if (pa) acc[pa.id] = pa; }
+    ents.forEach(function (e) { num[e.id] = e.entry_number || e.ref || "Entry"; });
+    return { row: row, wallet: wallet, entries: ents, lines: lines, acc: acc, num: num, reversals: revs, contraPartner: contraPartner };
+  }
+  async function openMovementReceipt(m) {
     var mm = document.createElement("div"); mm.className = "modal on"; mm.id = "mrmodal";
-    var col = m.direction === "in" ? "var(--good)" : "var(--bad)";
-    var rows = [["No.", m.number], ["Date", m.move_date], ["Type", cashKindLabel(m.kind)], ["On behalf of", m.payee_name], [(m.direction === "in" ? "From" : "To"), m.handler_name], ["Method", m.method], ["Memo", m.memo]].filter(function (r) { return r[1]; }).map(function (r) { return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line)"><span class="muted">' + esc(r[0]) + '</span><span style="font-weight:600;text-align:right">' + esc(String(r[1])) + '</span></div>'; }).join("");
-    var tender = (m.direction === "in" && Number(m.tendered) > 0) ? '<div style="display:flex;justify-content:space-between;padding:7px 0"><span class="muted">Tendered / change</span><span class="u-sb">' + moneyC(m.tendered, m.currency_code) + ' / ' + moneyC(m.change_given, m.currency_code) + '</span></div>' : '';
-    mm.innerHTML = '<div class="sheet"><h3 style="color:' + col + '">' + (m.direction === "in" ? "Receipt " : "Payment ") + esc(m.number || "") + '</h3><div class="form" style="padding:16px 18px">'
-      + '<div style="font-size:26px;font-weight:800;color:' + col + ';font-variant-numeric:tabular-nums">' + (m.direction === "in" ? "+" : "-") + moneyC(m.amount, m.currency_code) + '</div>'
-      + '<div class="u-mt10">' + rows + tender + '</div>'
-      + (m.status === "void" ? '<div style="margin-top:10px;font-size:12.5px;color:var(--bad-t);font-weight:600">This movement was voided.</div>' : "")
-      + '</div><div class="foot"><button class="btn" id="mr-close">Close</button>' + (m.status !== "void" && !m.void_of ? '<button class="btn" id="mr-void" style="color:var(--bad-t);border-color:var(--bad-t)">Void</button>' : "") + '<button class="btn pri u-app" id="mr-print">Print receipt</button></div></div>';
+    var canEdit = canManageApp("counter") || canManageApp("accounting");
+    var cellL = 'style="padding:5px 6px"', cellR = 'style="padding:5px 6px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap"';
+    function line(label, html) { return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--line)"><span class="muted">' + esc(label) + '</span><span style="font-weight:600;text-align:right">' + html + '</span></div>'; }
+    function sec(title) { return '<div style="margin:16px 0 2px;font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">' + esc(title) + '</div>'; }
+    function when(s) { try { return new Date(s).toLocaleString(); } catch (e) { return String(s || ""); } }
+    function jvLinks(list) { return list.map(function (e) { return '<a href="#" data-je="' + esc(e.id) + '" title="Open the journal entry">' + esc(e.entry_number || e.ref || "Entry") + '</a>'; }).join(", "); }
+    function paint(x, info) {
+      var col = x.direction === "in" ? "var(--good)" : "var(--bad)";
+      var rows = [["No.", x.number], ["Date", x.move_date], ["Type", cashKindLabel(x.kind)], ["On behalf of", x.payee_name], [(x.direction === "in" ? "From" : "To"), x.handler_name], ["Method", x.method], ["Reference", x.reference], ["Memo", x.memo]].filter(function (r) { return r[1]; }).map(function (r) { return line(r[0], esc(String(r[1]))); }).join("");
+      var tender = (x.direction === "in" && Number(x.tendered) > 0) ? line("Tendered / change", esc(moneyC(x.tendered, x.currency_code) + " / " + moneyC(x.change_given, x.currency_code))) : "";
+      var books;
+      if (!info) books = sec("Accounting") + '<div class="muted u-fs12" style="padding:6px 0">Loading the accounting entry...</div>';
+      else {
+        var ac = info.acc, w = info.wallet, g = w && w.gl_account_id ? ac[w.gl_account_id] : null, ca = x.contra_account_id ? ac[x.contra_account_id] : null, contraTxt;
+        var cashTxt = (w ? esc(w.name) + ": " : "") + (g ? esc(g.code + " " + g.name) : '<span style="color:var(--bad-t)">no ledger account set</span>');
+        if (!ca) contraTxt = '<span class="muted" style="font-weight:500">' + (x.contra_account_id ? "account not found" : "not recorded on this older movement; see the entry below") + '</span>';
+        else if (cashIsAux(ca)) { var par = ac[ca.parent_account_id]; contraTxt = esc(par ? par.code + " " + par.name : ca.code.split(".")[0]) + '<br><span class="muted" style="font-weight:500">Auxiliary ' + esc(ca.code + " " + ca.name) + '</span>'; }
+        else contraTxt = esc(ca.code + " " + ca.name);
+        if (ca && info.contraPartner) contraTxt += '<br><span class="muted" style="font-weight:500">Auxiliary ' + esc(info.contraPartner.name || "") + '</span>';
+        var td = 0, tc = 0;
+        var body = info.lines.map(function (l) {
+          td += Number(l.debit) || 0; tc += Number(l.credit) || 0;
+          var a = l.accounts || {};
+          return '<tr style="border-top:1px solid var(--line)"><td ' + cellL + '>' + esc(info.num[l.entry_id] || "") + '</td><td ' + cellL + '>' + esc(((a.code || "") + " " + (a.name || "")).trim()) + '</td><td ' + cellL + '>' + esc(l.label || "") + '</td><td ' + cellR + '>' + (Number(l.debit) ? money(l.debit) : "") + '</td><td ' + cellR + '>' + (Number(l.credit) ? money(l.credit) : "") + '</td></tr>';
+        }).join("");
+        var table = info.lines.length
+          ? '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12.5px"><thead><tr style="text-align:left;color:var(--muted)"><th ' + cellL + '>JV</th><th ' + cellL + '>Account</th><th ' + cellL + '>Description</th><th ' + cellR + '>Debit</th><th ' + cellR + '>Credit</th></tr></thead><tbody>' + body
+            + '<tr style="border-top:2px solid var(--line);font-weight:700"><td colspan="3" ' + cellL + '>Total (' + esc(S.company.currency_code || "") + ')</td><td ' + cellR + '>' + money(td) + '</td><td ' + cellR + '>' + money(tc) + '</td></tr></tbody></table></div>'
+          : '<div class="muted u-fs12" style="padding:6px 0">No journal lines were found for this movement.</div>';
+        books = sec("Accounts")
+          + line(x.direction === "in" ? "Received into" : "Paid out of", cashTxt)
+          + line("Counter account", contraTxt)
+          + line(info.entries.length > 1 ? "JV numbers" : "JV number", info.entries.length ? jvLinks(info.entries) : '<span class="muted" style="font-weight:500">none found</span>')
+          + (info.reversals.length ? line("Reversals", jvLinks(info.reversals)) : "")
+          + sec("Accounting entry") + table;
+      }
+      var al = (Array.isArray(x.allocations) ? x.allocations : []).filter(function (a) { return Number(a.amount) > 0; });
+      var alloc = al.length ? sec(x.direction === "in" ? "Applied to invoices" : "Applied to bills") + al.map(function (a) { return line(a.number || "Invoice", esc(moneyC(a.amount, x.currency_code))); }).join("") + (Number(x.advance_amount) > 0.005 ? line("On account", esc(moneyC(x.advance_amount, x.currency_code))) : "") : "";
+      var hist = (Array.isArray(x.revisions) ? x.revisions : []).map(function (r) {
+        var b = r.before || {};
+        return '<div class="muted u-fs12" style="padding:3px 0">Edited on ' + esc(when(r.at)) + ' by ' + esc(r.by || "an unknown user") + (b.amount != null ? '. It was ' + esc(moneyC(b.amount, b.currency_code)) : '') + (b.entries && b.entries.length ? ', posted as ' + esc(b.entries.join(", ")) : '') + '.</div>';
+      }).join("");
+      var live = x.status === "posted" && !x.void_of;
+      mm.innerHTML = '<div class="sheet"><h3 style="color:' + col + ';display:flex;align-items:center;gap:8px">' + (x.direction === "in" ? "Receipt " : "Payment ") + esc(x.number || "") + recNavHTML(x.id) + '</h3><div class="form" style="padding:16px 18px">'
+        + '<div style="font-size:26px;font-weight:800;color:' + col + ';font-variant-numeric:tabular-nums">' + (x.direction === "in" ? "+" : "-") + moneyC(x.amount, x.currency_code) + '</div>'
+        + '<div class="u-mt10">' + rows + tender + '</div>'
+        + books + alloc + (hist ? sec("History") + hist : "")
+        + (x.status === "void" ? '<div style="margin-top:10px;font-size:12.5px;color:var(--bad-t);font-weight:600">This movement was voided' + (x.voided_at ? " on " + esc(when(x.voided_at)) : "") + '.</div>' : "")
+        + '</div><div class="foot"><button class="btn" id="mr-close">Close</button>'
+        + (canEdit && x.status !== "void" && !x.void_of ? '<button class="btn" id="mr-void" style="color:var(--bad-t);border-color:var(--bad-t)"' + (info ? "" : " disabled") + '>Void</button>' : "")
+        + (canEdit && live ? '<button class="btn" id="mr-edit"' + (info ? "" : " disabled") + '>Edit</button>' : "")
+        + '<button class="btn pri u-app" id="mr-print">Print receipt</button></div></div>';
+      document.getElementById("mr-close").onclick = function () { mm.remove(); };
+      wireRecNav(mm);
+      document.getElementById("mr-print").onclick = function () { mm.remove(); printCashReceipt(x); };
+      mm.querySelectorAll("[data-je]").forEach(function (a) { a.onclick = function (ev) { ev.preventDefault(); cashOpenEntry(a.getAttribute("data-je")); }; });
+      var eb = document.getElementById("mr-edit"); if (eb) eb.onclick = function () { mm.remove(); openCashMoveModal(x.direction, x.kind, x); };
+      var vb = document.getElementById("mr-void"); if (vb) vb.onclick = async function () { if (!confirm("Void " + (x.number || "this movement") + "? This reverses it in the books and on the customer statement, and restores any invoices it settled.")) return; vb.disabled = true; vb.textContent = "Voiding..."; var r = await voidCashMovement(x); if (r && r.error) { toast("Could not void: " + cashErr(r.error)); vb.disabled = false; vb.textContent = "Void"; return; } if (r && r.already) { vb.disabled = false; return; } mm.remove(); toast("Voided " + (x.number || "")); renderView(); };
+    }
     document.body.appendChild(mm);
-    document.getElementById("mr-close").onclick = function () { mm.remove(); };
-    document.getElementById("mr-print").onclick = function () { mm.remove(); printCashReceipt(m); };
-    var vb = document.getElementById("mr-void"); if (vb) vb.onclick = async function () { if (!confirm("Void " + (m.number || "this movement") + "? This reverses it in the books and on the customer statement, and restores any invoices it settled.")) return; vb.disabled = true; vb.textContent = "Voiding..."; var r = await voidCashMovement(m); if (r && r.error) { toast("Could not void: " + errMsg(r.error)); vb.disabled = false; vb.textContent = "Void"; return; } if (r && r.already) { vb.disabled = false; return; } mm.remove(); toast("Voided " + (m.number || "")); renderView(); };
+    paint(m, null);
+    var info = await cashMovementInfo(m);
+    if (!document.body.contains(mm)) return; // closed while it was loading
+    paint(info.row, info);
   }
   async function reverseEntry(entryId, refNo, narr) {
     // an entry is reversed once: the reversal names it, and a second press finds that and stops
@@ -27052,35 +27900,85 @@
     if (pe.error) return { error: pe.error };
     return { ok: true };
   }
-  async function voidCashMovement(m) {
-    if (m.status === "void" || m.void_of) { toast("Already voided"); return { already: true }; }
-    var refNo = "VOID/" + (m.number || "");
-    // reverse and remove every payment this movement created (register_payment legs + on-account), all share reference = the movement number
-    var pays = (await sb.from("payments").select("id,entry_id").eq("company_id", S.company.id).eq("reference", m.number)).data || [];
+  // Undo everything a movement posted, without touching the movement row itself.
+  // Every payment it created (the invoice settlements and the part on account, all
+  // carrying the movement number as their reference) is reversed and removed, the
+  // invoices it settled owe again, and every other entry it made is reversed. Void
+  // and Edit both run this, so the books end up the same either way. An entry that
+  // already has its reversal, from an earlier attempt that stopped half way, is
+  // skipped: running it again finishes the job instead of failing on the first entry.
+  async function cashUndoPostings(m, refNo, narr) {
+    // A posting that did not finish names exactly the payments it made (another movement
+    // could share a number issued at the same moment). A saved movement finds them by
+    // its number, which every settlement it made carries as its reference.
+    var pays = Array.isArray(m.payment_ids)
+      ? (m.payment_ids.length ? ((await sb.from("payments").select("id,entry_id").in("id", m.payment_ids)).data || []) : [])
+      : (m.number ? ((await sb.from("payments").select("id,entry_id").eq("company_id", S.company.id).eq("reference", m.number)).data || []) : []);
+    var ids = [];
+    function add(id) { if (id && ids.indexOf(String(id)) < 0) ids.push(String(id)); }
+    pays.forEach(function (p) { add(p.entry_id); });
+    (Array.isArray(m.entry_ids) ? m.entry_ids : []).forEach(add);
+    add(m.journal_id);
+    var already = {};
+    if (ids.length) ((await sb.from("journal_entries").select("source_id").eq("company_id", S.company.id).eq("source_type", "cash_void").in("source_id", ids)).data || []).forEach(function (r) { already[r.source_id] = 1; });
+    async function reverse(eid) {
+      if (already[eid]) return null;
+      var rv = await reverseEntry(eid, refNo, narr);
+      if (rv.error) return rv.error;
+      already[eid] = 1; return null;
+    }
+    var allocs = Array.isArray(m.allocations) ? m.allocations : [];
+    async function restore(a) {
+      var inv = (await sb.from("invoices").select("amount_total,amount_residual").eq("id", a.invoice_id).maybeSingle()).data;
+      if (!inv) return null;
+      var nr = Math.min(Number(inv.amount_total), Number(inv.amount_residual) + Number(a.amount));
+      var u = await sb.from("invoices").update({ amount_residual: nr, payment_state: (nr >= Number(inv.amount_total) - 0.005 ? "not_paid" : "partial") }).eq("id", a.invoice_id);
+      return u.error || null;
+    }
     for (var i = 0; i < pays.length; i++) {
       var p = pays[i];
       if (p.entry_id) {
         var plines = (await sb.from("journal_lines").select("id").eq("entry_id", p.entry_id)).data || [];
-        var ids = plines.map(function (x) { return x.id; });
-        if (ids.length) { await sb.from("partial_reconciles").delete().or("debit_line_id.in.(" + ids.join(",") + "),credit_line_id.in.(" + ids.join(",") + ")"); }
-        var rv = await reverseEntry(p.entry_id, refNo, "Reversal of " + (m.number || "")); if (rv.error) return { error: rv.error };
+        var lids = plines.map(function (x) { return x.id; });
+        if (lids.length) { await sb.from("partial_reconciles").delete().or("debit_line_id.in.(" + lids.join(",") + "),credit_line_id.in.(" + lids.join(",") + ")"); }
+        var e1 = await reverse(String(p.entry_id)); if (e1) return { error: e1 };
       }
-      await sb.from("payments").delete().eq("id", p.id);
+      // the invoice this payment settled owes again; its allocation names the payment,
+      // so a payment removed by an earlier attempt is never restored twice
+      for (var j = 0; j < allocs.length; j++) {
+        if (allocs[j].invoice_id && allocs[j].payment_id === p.id) { var e2 = await restore(allocs[j]); if (e2) return { error: e2 }; }
+      }
+      var dp = await sb.from("payments").delete().eq("id", p.id);
+      if (dp.error) return { error: dp.error };
     }
-    // restore the invoices this movement settled
-    var allocs = m.allocations || [];
-    for (var j = 0; j < allocs.length; j++) {
-      var a = allocs[j]; if (!a.invoice_id) continue;
-      var inv = (await sb.from("invoices").select("amount_total,amount_residual").eq("id", a.invoice_id).maybeSingle()).data;
-      if (inv) { var nr = Math.min(Number(inv.amount_total), Number(inv.amount_residual) + Number(a.amount)); await sb.from("invoices").update({ amount_residual: nr, payment_state: (nr >= Number(inv.amount_total) - 0.005 ? "not_paid" : "partial") }).eq("id", a.invoice_id); }
+    // an allocation saved without its payment id is restored as it always was
+    for (var k = 0; k < allocs.length; k++) {
+      if (allocs[k].invoice_id && !allocs[k].payment_id) { var e3 = await restore(allocs[k]); if (e3) return { error: e3 }; }
     }
-    // a plain (non-AR) movement has a single journal and no payments - reverse it
-    if (!pays.length && m.journal_id) { var rv2 = await reverseEntry(m.journal_id, refNo, "Reversal of " + (m.number || "")); if (rv2.error) return { error: rv2.error }; }
+    // every other entry: the split-tender entry, the plain entry, anything in entry_ids
+    for (var n = 0; n < ids.length; n++) { var e4 = await reverse(ids[n]); if (e4) return { error: e4 }; }
+    return { ok: true };
+  }
+  async function voidCashMovement(m) {
+    if (m.status === "void" || m.void_of) { toast("Already voided"); return { already: true }; }
+    var un = await cashUndoPostings(m, "VOID/" + (m.number || ""), "Reversal of " + (m.number || ""));
+    if (un.error) return { error: un.error };
     // Mark the original void. cashBalances only sums status='posted', so voiding it
     // already backs the amount out of the till - do NOT also insert a reversing
     // posted movement (that double-subtracted the amount from the drawer balance).
-    await sb.from("cash_movements").update({ status: "void", voided_at: new Date().toISOString() }).eq("id", m.id);
+    // void_of names the movement that was voided (here, itself), and voided_by who did it.
+    var up = await sb.from("cash_movements").update({ status: "void", voided_at: new Date().toISOString(), voided_by: (S.user && S.user.id) || null, void_of: m.id }).eq("id", m.id);
+    if (up.error) return { error: { friendly: true, message: "The entries were reversed, but the movement could not be marked void: " + errMsg(up.error) + " Open it and void it again: the reversed parts are skipped." } };
     return { ok: true };
+  }
+  // Open a journal entry from the Counter, in Accounting, so its menu and breadcrumb match.
+  function cashOpenEntry(eid) {
+    if (!canGo("moves")) { toast("Your role cannot open Accounting, so the journal entry cannot be shown here."); return; }
+    document.querySelectorAll(".modal").forEach(function (x) { x.remove(); });
+    S.action = "moves";
+    if (S.app !== "accounting") { S.app = "accounting"; applyAppColor(); renderShell(); }
+    highlightSide();
+    renderJournalEntryForm(eid);
   }
   function printCashReceipt(m) {
     var t = printTplData();
@@ -27103,7 +28001,15 @@
   function cfgHandovers() {
     return {
       title: "Handovers", pageSize: 100,
-      fetch: async function () { var d = await cashBalances(); var byId = {}; d.accts.forEach(function (a) { byId[a.id] = a.name; }); var rows = (await sb.from("cash_handovers").select("*").eq("company_id", S.company.id).order("hand_date", { ascending: false })).data || []; rows.forEach(function (h) { h._from = byId[h.from_account_id] || ""; h._to = byId[h.to_account_id] || ""; }); return rows; },
+      // The account names come from one light query, not the whole balance calculation.
+      fetch: async function () {
+        var got = await Promise.all([
+          sb.from("cash_accounts").select("id,name").eq("company_id", S.company.id),
+          allRows(function () { return sb.from("cash_handovers").select("*").eq("company_id", S.company.id).order("hand_date", { ascending: false }).order("id"); })
+        ]);
+        var byId = {}; (got[0].data || []).forEach(function (a) { byId[a.id] = a.name; });
+        var rows = got[1]; rows.forEach(function (h) { h._from = byId[h.from_account_id] || ""; h._to = byId[h.to_account_id] || ""; }); return rows;
+      },
       searchText: function (h) { return (h.number || "") + " " + (h._from || "") + " " + (h._to || "") + " " + (h.purpose || ""); },
       columns: [
         { label: "Date", get: function (h) { return '<span class="muted">' + esc(h.hand_date || "") + '</span>'; } },
@@ -27122,10 +28028,16 @@
     var accts = await cashLoadWallets();
     if (accts.length < 2) { toast("You need at least two cash accounts for a handover"); return; }
     var opts = function (sel) { return accts.map(function (a) { return '<option value="' + a.id + '"' + (sel === a.id ? " selected" : "") + '>' + esc(a.name) + '</option>'; }).join(""); };
+    // the two ledger accounts a confirmed handover posts to, shown before anyone confirms it
+    var glIds = accts.map(function (a) { return a.gl_account_id; }).filter(Boolean), glBy = {};
+    if (glIds.length) ((await sb.from("accounts").select("id,code,name").in("id", glIds)).data || []).forEach(function (a) { glBy[a.id] = a; });
+    function hoGl(id) { var w = accts.filter(function (a) { return a.id === id; })[0], g = w && w.gl_account_id ? glBy[w.gl_account_id] : null; return g ? "<b>" + esc(g.code + " " + g.name) + "</b>" : '<span style="color:var(--bad-t)">' + esc(w ? w.name : "this account") + ' has no ledger account set</span>'; }
+    function paintHoGl() { var el = document.getElementById("ho-gl"); if (el) el.innerHTML = "Confirming posts: debit " + hoGl(gv("ho-to")) + " (To), credit " + hoGl(gv("ho-from")) + " (From)."; }
     var view = !!h.id, m = document.createElement("div"); m.className = "modal on"; m.id = "homodal";
     m.innerHTML = '<div class="sheet"><h3>' + (view ? "Handover " + esc(h.number || "") : "New handover") + '</h3><div class="form u-formpad">'
       + '<div class="row2"><div><label>From</label><select id="ho-from"' + (view ? " disabled" : "") + '>' + opts(h.from_account_id) + '</select></div>'
       + '<div><label>To</label><select id="ho-to"' + (view ? " disabled" : "") + '>' + opts(h.to_account_id) + '</select></div></div>'
+      + '<div id="ho-gl" class="muted" style="font-size:12px;margin-top:-4px"></div>'
       + '<div class="row2"><div><label>Amount</label><input id="ho-amt" type="number" step="0.01" value="' + (Number(h.amount || 0) || "") + '"' + (view ? " disabled" : "") + '></div>'
       + '<div><label>Date</label><input id="ho-date" type="date" value="' + (h.hand_date || today()) + '"' + (view ? " disabled" : "") + '></div></div>'
       + '<div><label>Purpose</label><input id="ho-purpose" value="' + esc(h.purpose || "") + '" placeholder="e.g. supplier run, return, deposit"' + (view ? " disabled" : "") + '></div>'
@@ -27135,6 +28047,7 @@
       + '</div></div>';
     document.body.appendChild(m);
     document.getElementById("ho-cancel").onclick = function () { m.remove(); };
+    paintHoGl(); document.getElementById("ho-from").onchange = paintHoGl; document.getElementById("ho-to").onchange = paintHoGl;
     var sB = document.getElementById("ho-save"); if (sB) sB.onclick = async function () {
       var from = document.getElementById("ho-from").value, to = document.getElementById("ho-to").value, amt = parseFloat(document.getElementById("ho-amt").value);
       if (from === to) { toast("From and To must differ"); return; } if (!(amt > 0)) { toast("Enter an amount"); return; }
@@ -27156,13 +28069,15 @@
     };
   }
   async function confirmHandover(h) {
-    var chart = await cashLoadChart(), wallets = await cashLoadWallets();
+    var wallets = await cashLoadWallets(true);
     var fromW = null, toW = null, fnc = S.company.currency_code;
     wallets.forEach(function (a) { if (a.id === h.from_account_id) fromW = a; if (a.id === h.to_account_id) toW = a; });
     if (fromW && toW && (fromW.currency_code || fnc) !== (toW.currency_code || fnc)) { return { error: { message: "Cross-currency handovers aren't supported. Use Money out from \"" + fromW.name + "\" then Money in to \"" + toW.name + "\" so the exchange is recorded." } }; }
-    function glOf(id) { var ca = null; wallets.forEach(function (a) { if (a.id === id) ca = a; }); if (ca && ca.gl_account_id) return ca.gl_account_id; var a = cashAcctByCode(chart, (ca && ca.kind === "bank") ? "5100" : "5300"); return a ? a.id : null; }
-    var drGl = glOf(h.to_account_id), crGl = glOf(h.from_account_id);
-    if (!drGl || !crGl) return { error: { message: "Missing cash account mapping" } };
+    // each side posts to its cash account's own ledger account, set in Cash Accounts and
+    // shown in the dialog; nothing is looked up by a standard code
+    var noGl = [fromW, toW].filter(function (w) { return !w || !w.gl_account_id; });
+    if (noGl.length) return { error: { message: "The cash account " + noGl.map(function (w) { return w ? "\"" + w.name + "\"" : "(no longer there)"; }).join(" and ") + " has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then confirm again." } };
+    var drGl = toW.gl_account_id, crGl = fromW.gl_account_id;
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr ? jr.id : null, date: h.hand_date, ref: h.number, narration: "Cash handover " + (h.purpose || ""), currency_code: S.company.currency_code, state: "draft", source_type: "cash_handover" }).select("id").single();
     if (e.error) return { error: e.error };
@@ -27170,9 +28085,9 @@
       { entry_id: e.data.id, company_id: S.company.id, account_id: drGl, label: "Handover in", debit: Number(h.amount), credit: 0 },
       { entry_id: e.data.id, company_id: S.company.id, account_id: crGl, label: "Handover out", debit: 0, credit: Number(h.amount) }
     ]);
-    if (li.error) return { error: li.error };
+    if (li.error) { await cashDropDraft(e.data.id); return { error: li.error }; }
     var post = await sb.rpc("post_entry", { p_entry: e.data.id });
-    if (post.error) return { error: post.error };
+    if (post.error) { await cashDropDraft(e.data.id); return { error: post.error }; }
     return await sb.from("cash_handovers").update({ status: "confirmed", confirmed_at: new Date().toISOString(), journal_id: e.data.id }).eq("id", h.id);
   }
 
@@ -27180,7 +28095,16 @@
   function cfgCashCounts() {
     return {
       title: "Daily Close", pageSize: 100,
-      fetch: async function () { var d = await cashBalances(); var byId = {}; d.accts.forEach(function (a) { byId[a.id] = a.name; }); var rows = (await sb.from("cash_counts").select("*").eq("company_id", S.company.id).order("count_date", { ascending: false })).data || []; rows.forEach(function (c) { c._acct = byId[c.cash_account_id] || ""; }); return rows; },
+      // The account names come from one light query. This used to run the whole
+      // balance calculation just to learn the names, which made the list slow.
+      fetch: async function () {
+        var got = await Promise.all([
+          sb.from("cash_accounts").select("id,name").eq("company_id", S.company.id),
+          allRows(function () { return sb.from("cash_counts").select("*").eq("company_id", S.company.id).order("count_date", { ascending: false }).order("id"); })
+        ]);
+        var byId = {}; (got[0].data || []).forEach(function (a) { byId[a.id] = a.name; });
+        var rows = got[1]; rows.forEach(function (c) { c._acct = byId[c.cash_account_id] || ""; }); return rows;
+      },
       searchText: function (c) { return (c._acct || "") + " " + (c.count_date || ""); },
       columns: [
         { label: "Date", get: function (c) { return '<span class="muted">' + esc(c.count_date || "") + '</span>'; } },
@@ -27193,9 +28117,18 @@
     };
   }
   async function openCashCountModal() {
-    var d = await cashBalances();
+    var both = await Promise.all([cashBalances(), cashLoadChart()]), d = both[0], ccChart = both[1];
     if (!d.accts.length) { toast("Add a cash account first"); return; }
-    var ccChart = await cashLoadChart();
+    var ccById = {}; ccChart.forEach(function (a) { ccById[a.id] = a; });
+    // a difference posts against accounts the cashier can see: the cash account's own ledger
+    // account, and 6900 where the chart has it or whichever account is chosen instead
+    var os0 = cashAcctByCode(ccChart, "6900");
+    function ccOsAcct() { var v = gv("cc-os"); if (!v) return null; return ccChart.filter(function (a) { return cashAcctLabel(a) === v; })[0] || ccChart.filter(function (a) { return a.code === v.split(/\s+/)[0]; })[0] || null; }
+    function paintOs() {
+      var s = document.getElementById("cc-acct"), w = d.accts.filter(function (a) { return a.id === s.value; })[0], g = w && w.gl_account_id ? ccById[w.gl_account_id] : null, oa = ccOsAcct();
+      document.getElementById("cc-os-rule").innerHTML = (os0 && oa && oa.id === os0.id ? "Default: account 6900 from the standard chart. " : (os0 ? "" : "Your chart has no 6900 account, so there is no default. ")) +
+        "A difference posts between this account and " + (g ? "<b>" + esc(cashAcctLabel(g)) + "</b>, the cash account's ledger account." : '<span style="color:var(--bad-t)">the cash account, which has no ledger account set in Cash Accounts.</span>');
+    }
     var opts = d.accts.map(function (a) { return '<option value="' + a.id + '" data-bal="' + (d.bal[a.id] || 0) + '">' + esc(a.name) + '</option>'; }).join("");
     var m = document.createElement("div"); m.className = "modal on"; m.id = "ccmodal";
     m.innerHTML = '<div class="sheet"><h3>Count &amp; close</h3><div class="form u-formpad">'
@@ -27206,6 +28139,7 @@
       + '<details style="border:1px solid var(--line);border-radius:var(--r);padding:8px 10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">Count by denomination (optional)</summary>'
       + '<table style="width:100%;font-size:13px;margin-top:8px;border-collapse:collapse"><thead><tr><th style="text-align:left;font-weight:600;color:var(--ink2)">Note / coin</th><th style="font-weight:600;color:var(--ink2)">Qty</th><th style="text-align:right;font-weight:600;color:var(--ink2)">Total</th></tr></thead><tbody id="cc-denom"></tbody></table>'
       + '<button type="button" id="cc-denom-add" style="margin-top:6px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r-sm);padding:5px 10px;cursor:pointer;font:inherit">+ Add row</button></details>'
+      + '<div><label>Over/short account</label><input id="cc-os" list="cc-os-list" autocomplete="off" placeholder="Code or name" value="' + esc(os0 ? cashAcctLabel(os0) : "") + '"><datalist id="cc-os-list">' + ccChart.filter(function (a) { return a.is_active !== false; }).map(function (a) { return '<option value="' + esc(cashAcctLabel(a)) + '"></option>'; }).join("") + '</datalist><div id="cc-os-rule" class="muted" style="font-size:11.5px;margin-top:4px"></div></div>'
       + '<div><label>Date</label><input id="cc-date" type="date" value="' + today() + '"></div>'
       + '<div><label>Note</label><input id="cc-note" placeholder="Anything to explain a difference?"></div>'
       + '</div><div class="foot"><button class="btn" id="cc-cancel">Cancel</button><button class="btn pri u-app" id="cc-save">Close &amp; sign</button></div></div>';
@@ -27224,28 +28158,30 @@
     function refresh() { var s = document.getElementById("cc-acct"); var bal = Number(s.options[s.selectedIndex].getAttribute("data-bal") || 0); document.getElementById("cc-exp").value = bal.toFixed(2); var cnt = parseFloat(document.getElementById("cc-cnt").value); document.getElementById("cc-var").textContent = isNaN(cnt) ? "" : ("Variance: " + money(cnt - bal) + (Math.abs(cnt - bal) < 0.005 ? " (matches)" : (cnt - bal > 0 ? " (over)" : " (short)"))); }
     document.getElementById("cc-denom-add").onclick = function () { denoms.push({}); paintDenom(); };
     paintDenom();
-    document.getElementById("cc-acct").onchange = refresh; document.getElementById("cc-cnt").oninput = refresh; refresh();
+    document.getElementById("cc-acct").onchange = function () { refresh(); paintOs(); }; document.getElementById("cc-cnt").oninput = refresh; document.getElementById("cc-os").oninput = paintOs; refresh(); paintOs();
     document.getElementById("cc-cancel").onclick = function () { m.remove(); };
     document.getElementById("cc-save").onclick = async function () {
       var acct = document.getElementById("cc-acct").value, exp = parseFloat(document.getElementById("cc-exp").value) || 0, cnt = parseFloat(document.getElementById("cc-cnt").value);
       if (isNaN(cnt)) { toast("Enter the counted amount"); return; }
       var vr = Math.round((cnt - exp) * 100) / 100, cdate = document.getElementById("cc-date").value;
       var denomList = denoms.filter(function (r) { return (Number(r.v) || 0) > 0 && (Number(r.q) || 0) > 0; }).map(function (r) { return { value: Number(r.v), qty: Number(r.q) }; });
+      // a difference needs both accounts before anything is saved
+      var wallet = d.accts.filter(function (a) { return a.id === acct; })[0] || {}, osAcc = null;
+      if (Math.abs(vr) > 0.005) {
+        if (!wallet.gl_account_id) { toast("The cash account \"" + (wallet.name || "") + "\" has no ledger account, so the difference cannot post. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then close again."); return; }
+        osAcc = ccOsAcct();
+        if (!osAcc) { toast(gv("cc-os") ? "No account has the code or name " + gv("cc-os") + ". Pick the over/short account from the list." : "Choose the over/short account the difference posts to."); document.getElementById("cc-os").focus(); return; }
+        if (osAcc.id === wallet.gl_account_id) { toast("The over/short account cannot be the cash account's own ledger account."); return; }
+      }
       var r = await sb.from("cash_counts").insert({ company_id: S.company.id, cash_account_id: acct, count_date: cdate, expected_amount: exp, counted_amount: cnt, variance: vr, status: "closed", signed_at: new Date().toISOString(), note: gv("cc-note"), denominations: denomList });
       if (r.error) { toast("Could not save: " + errMsg(r.error)); return; }
       // post the over/short so the books match the physical count
-      if (Math.abs(vr) > 0.005) {
-        var wallet = d.accts.filter(function (a) { return a.id === acct; })[0] || {};
-        var cashGl = wallet.gl_account_id || (function () { var a = cashAcctByCode(ccChart, wallet.kind === "bank" ? "5100" : "5300"); return a ? a.id : null; })();
-        var osA = cashAcctByCode(ccChart, "6900"); var osGl = osA ? osA.id : null;
+      if (osAcc) {
         var jc = wallet.kind === "bank" ? "BNK" : "CSH";
-        if (cashGl && osGl) {
-          var ref = "CASHCOUNT/" + cdate;
-          var ge = await cashPostEntry(vr > 0 ? "in" : "out", cashGl, osGl, Math.abs(vr), jc, cdate, ref, "Cash over/short at close - " + (wallet.name || ""), null, "cash_count");
-          if (ge.error) { m.remove(); toast("Closed, but the over/short could not post: " + errMsg(ge.error)); renderView(); return; }
-        }
+        var ge = await cashPostEntry(vr > 0 ? "in" : "out", wallet.gl_account_id, osAcc.id, Math.abs(vr), jc, cdate, "CASHCOUNT/" + cdate, "Cash over/short at close - " + (wallet.name || ""), null, "cash_count");
+        if (ge.error) { m.remove(); toast("Closed, but the over/short could not post: " + cashErr(ge.error)); renderView(); return; }
       }
-      m.remove(); toast(Math.abs(vr) > 0.005 ? ("Closed - variance of " + money(vr) + " recorded; it posts to over/short when account 6900 exists") : "Counted and closed"); renderView();
+      m.remove(); toast(osAcc ? ("Closed - variance of " + money(vr) + " posted to " + cashAcctLabel(osAcc)) : "Counted and closed"); renderView();
     };
   }
 

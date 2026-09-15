@@ -202,6 +202,7 @@ orbitScreenHelp({
       ["Add Credit Note", "Shown on a posted invoice. Creates a draft credit note dated today for the same customer, currency and lines, and opens it. Change it to what is actually being credited, then post it."],
       ["Edit", "Shown on a posted invoice to people who can manage Accounting. After you confirm, the invoice goes back to draft and out of the accounts. It keeps its number, the posted version is kept in its history, and payments already made stay paid. Post it again when you are done."],
       ["Print", "Shown once the invoice is saved. Prints it with your company details and logo, or saves it as a PDF from the print window."],
+      ["&#8249; and &#8250;", "Beside the invoice number when you opened it from the list. Step to the previous or next invoice in the list's order, with its search and filters, without going back to it. Alt and the left or right arrow key do the same."],
       ["Email", "Shown once the invoice is saved. Opens the email dialog with a preview of exactly what the customer receives."],
       ["Send email", "In the email dialog. Sends the invoice, written into the body of the email, to the address in To."],
       ["Mirror in the other company", "Shown on a posted invoice when the customer is tagged as one of your own companies. Creates the matching vendor bill as a draft in that company, for the same lines and total, and marks this invoice's entry as intercompany."],
@@ -410,8 +411,8 @@ orbitScreenHelp({
       "Click <span class='man-key'>Register</span>. You should see <i>Payment registered</i>, a <b>Partial</b> ribbon on the invoice, and 1,150.00 in its Amount Due in the list.",
       "Open <b>Accounting &rsaquo; Customers &rsaquo; Payments</b>. The newest payment is at the top: the date, the agency, TRF-88213 and 2,000.00.",
       "Click the row. The payment opens with its Amount, Date, Partner, Type <i>Customer receipt</i>, Reference and Memo, which reads <i>Payment for</i> and the invoice number.",
-      "If it was wrong, click <span class='man-key'>Reverse payment</span> and confirm. You should see <i>Payment reversed</i>; the row disappears and the invoice is back to 3,150.00 due.",
-      "Register the correct payment from the invoice again.",
+      "If the amount, date or journal was wrong, click <span class='man-key'>Edit</span>, correct it, for example 2,100.00, and click <span class='man-key'>Save changes</span>. You should see <i>Payment updated</i> and the invoice at 1,050.00 due. The payment view now shows <b>Edited</b> with what it was before.",
+      "If it should not have been recorded at all, click <span class='man-key'>Reverse payment</span> and confirm. You should see <i>Payment reversed</i>; the row disappears and the invoice is back to 3,150.00 due.",
       "To see a month's receipts, click <span class='man-key'>Group By</span> and choose <i>Month</i>."
     ],
     fields: [
@@ -433,6 +434,8 @@ orbitScreenHelp({
       ["Search and Group By (list)", "Search looks in the reference, the memo and the customer's name. Group By puts payments under Partner or Month."],
       ["Select and Export (list)", "Export downloads the list as a CSV file that opens in Excel. Select lets you tick rows and export just those."],
       ["Close", "Closes the payment view."],
+      ["Edit", "Only for people who can manage Accounting. Opens the payment's Amount, Date, Journal, Reference and Memo. <b>Save changes</b> reverses the old payment and registers it again with the new figures against the same invoice, so the invoice's Amount Due stays right; the version before is shown under <b>Edited</b>. A payment recorded at the Cash Desk opens its Counter movement instead, where it is edited, and one matched to no invoice can only change its Reference and Memo."],
+      ["&#8249; and &#8250;", "Beside the payment's title when you opened it from the list. Step to the previous or next payment in the list's order. Alt and the left or right arrow key do the same."],
       ["Reverse payment", "Only for people who can manage Accounting. After you confirm, posts a reversing entry dated today, removes the match to the invoice, puts the amount back on the invoice's Amount Due (Partial or Not Paid), and removes the payment from this list."]
     ],
     after: "Registering a payment posts an entry in the Bank or Cash journal: the money into that journal's bank or cash account, and the same amount off Accounts Receivable against the customer, matched to the invoice. The invoice's Amount Due falls and it becomes Partial or Paid, which updates the Dashboard, Aged Receivable, Collections and the customer's Statement of Account. For an invoice in another currency, the money received is converted at the payment date's rate, and any difference from the rate the invoice was booked at is posted as an exchange gain or loss. Reversing posts the opposite entry and puts the amount back on the invoice.",
@@ -454,10 +457,12 @@ orbitScreenHelp({
       ["Could not register: Entry not balanced: (debits) &lt;&gt; (credits)", "A foreign-currency payment produced an exchange difference and the company has no exchange gain or loss account set to post it to. Ask whoever manages the company's accounts to set them, then try again."],
       ["Could not reverse: (reason)", "The reversal was refused. Read the reason; if it mentions permission, someone who can manage Accounting must reverse it."],
       ["Reverse payment is not shown", "Only people who can manage Accounting can reverse a payment."],
-      ["The amount recorded is less than what you typed", "Orbit records at most the invoice's Amount Due, so an overpayment is cut down to the amount owed."]
+      ["The amount recorded is less than what you typed", "Orbit records at most the invoice's Amount Due, so an overpayment is cut down to the amount owed."],
+      ["That is more than the 3,150.00 the invoice would owe. Enter up to that amount.", "In Edit, the new amount can be at most what the invoice would owe without this payment. Enter that amount or less."],
+      ["This payment was recorded in the Counter as CM/2026/0041. Change it there, with Edit on the movement.", "Not an error: the movement opens, and its Edit changes the payment and its entry together."]
     ],
     tips: [
-      "A payment cannot be edited. To correct one, reverse it and register it again from the invoice.",
+      "Edit keeps the correction in the month you choose: the old payment's reversal and the new payment are both posted with the date you enter.",
       "A reversal is dated today, even for an old payment.",
       "Use a clear Reference such as the bank transfer number: it is what you will search for later."
     ]
@@ -605,6 +610,7 @@ orbitScreenHelp({
       ["Add Refund", "Shown on a posted bill. Creates a draft vendor credit note with the same vendor, currency and lines, dated today, for when the supplier credits you. Change the lines to what was actually credited, then post it."],
       ["Edit", "Shown on a posted bill to people who can manage Accounting. Takes it back to draft so you can correct it. It keeps its number, the version posted before is kept in its history, and anything already paid stays paid. Confirm &amp; post again when you are done."],
       ["Print", "Shown once the bill is saved. Prints the bill, or saves it as a PDF from the print window."],
+      ["&#8249; and &#8250;", "Beside the bill number when you opened it from the list. Step to the previous or next bill in the list's order, with its search and filters, without going back to it. Alt and the left or right arrow key do the same."],
       ["Mirror in the other company", "Only on a posted bill whose vendor is tagged as one of your own companies. Creates the matching customer invoice in that company as a draft, so group reports can cancel the pair out."],
       ["Open the mirror", "Shown once a mirror exists. Switches to the other company and opens the matching invoice."],
       ["Journal Items", "The counter and tab on a posted bill. Shows exactly which accounts it posted to and how much."],
@@ -734,6 +740,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>Register</span>. You should see <i>Payment registered</i>, a <b>Paid</b> ribbon on the bill, and 0.00 in its Amount Due in the list.",
       "Open <b>Accounting &rsaquo; Vendors &rsaquo; Payments</b>. The payment is at the top: the date, the laundry service, TRF-5521 and 1,380.00.",
       "Click the row. The payment opens with its Amount, Date, Partner, Type <i>Vendor payment</i>, Reference and Memo, which reads <i>Payment for</i> and the bill number.",
+      "If the date or amount was typed wrong, click <span class='man-key'>Edit</span>, correct it and click <span class='man-key'>Save changes</span>. You should see <i>Payment updated</i>, and the payment view shows <b>Edited</b> with what it was before.",
       "If it was entered twice by mistake, open one of the two and click <span class='man-key'>Reverse payment</span>, then confirm. You should see <i>Payment reversed</i> and the row gone.",
       "To list everything paid to one supplier, click <span class='man-key'>Group By</span> and choose <i>Partner</i>."
     ],
@@ -756,6 +763,8 @@ orbitScreenHelp({
       ["Search and Group By (list)", "Search looks in the reference, the memo and the supplier's name. Group By puts payments under Partner or Month."],
       ["Select and Export (list)", "Export downloads the list as a CSV file that opens in Excel. Select lets you tick rows and export just those."],
       ["Close", "Closes the payment view."],
+      ["Edit", "Only for people who can manage Accounting. Opens the payment's Amount, Date, Journal, Reference and Memo. <b>Save changes</b> reverses the old payment and registers it again with the new figures against the same bill, so the bill's Amount Due stays right; the version before is shown under <b>Edited</b>. A payment made at the Cash Desk opens its Counter movement instead, where it is edited, and one matched to no bill can only change its Reference and Memo."],
+      ["&#8249; and &#8250;", "Beside the payment's title when you opened it from the list. Step to the previous or next payment in the list's order. Alt and the left or right arrow key do the same."],
       ["Reverse payment", "Only for people who can manage Accounting. After you confirm, posts a reversing entry dated today, removes the match to the bill, puts the amount back on the bill's Amount Due (Partial or Not Paid), and removes the payment from this list."]
     ],
     after: "Registering a payment posts an entry in the Bank or Cash journal: the amount off Accounts Payable against the supplier, matched to the bill, and the same amount out of that journal's bank or cash account. The bill's Amount Due falls and it becomes Partial or Paid, which updates the Dashboard, Aged Payable and the supplier's Statement of Account. For a bill in another currency, the money paid is converted at the payment date's rate, and any difference from the rate the bill was booked at is posted as an exchange gain or loss. Reversing posts the opposite entry and puts the amount back on the bill.",
@@ -775,10 +784,11 @@ orbitScreenHelp({
       ["Could not register: No FX rate for EUR on or before (date) (type spot)", "The bill is in another currency and there is no rate for the payment date. Add it in Exchange Rates and try again."],
       ["Could not register: Entry not balanced: (debits) &lt;&gt; (credits)", "A foreign-currency payment produced an exchange difference and the company has no exchange gain or loss account set to post it to. Ask whoever manages the company's accounts to set them, then try again."],
       ["Could not reverse: (reason)", "The reversal was refused. Read the reason; if it mentions permission, someone who can manage Accounting must reverse it."],
-      ["Reverse payment is not shown", "Only people who can manage Accounting can reverse a payment."]
+      ["Reverse payment is not shown", "Only people who can manage Accounting can reverse a payment."],
+      ["That is more than the 1,380.00 the invoice would owe. Enter up to that amount.", "In Edit, the new amount can be at most what the bill would owe without this payment. Enter that amount or less."]
     ],
     tips: [
-      "A payment cannot be edited. To correct one, reverse it and register it again from the bill.",
+      "Edit keeps the correction in the month you choose: the new payment is posted with the date you enter.",
       "A reversal is dated today, even for an old payment.",
       "To pay part of a bill, change the Amount; the bill shows Partial until the rest is paid."
     ]

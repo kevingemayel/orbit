@@ -693,6 +693,12 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-bc-min.on{color:var(--accent);background:var(--accent-soft)}
 .o-bc-help{width:22px;height:22px;margin-left:4px;border:1px solid var(--line);border-radius:50%;background:var(--panel);color:var(--ink2);cursor:pointer;display:grid;place-items:center;flex:none;padding:0;font-size:12px;font-weight:700;line-height:1}
 .o-bc-help:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+/* previous / next record, beside the title of a record opened from a list */
+.o-recnav{display:inline-flex;align-items:center;gap:4px;margin-left:8px;flex:none}
+.o-recnav-b{width:26px;height:26px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink2);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center;padding:0}
+.o-recnav-b:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.o-recnav-b:disabled{opacity:.35;cursor:default}
+.o-recnav-n{font-size:12px;font-weight:500;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums}
 .o-app.cp-mini .o-bc-min svg{transform:rotate(180deg)}
 /* a long page title shortens rather than wrapping the whole bar onto two rows */
 .o-bc{min-width:0}
@@ -2731,9 +2737,19 @@ body{background:transparent}
 .je-grid{min-width:1080px}
 .je-grid th:nth-child(1){width:22%}.je-grid th:nth-child(2){width:15%}.je-grid th:nth-child(4){width:84px}.je-grid th:nth-child(5){width:210px}
 .je-grid th:nth-child(6),.je-grid th:nth-child(7){width:118px}.je-grid th:nth-child(8){width:110px}.je-grid th:nth-child(9){width:34px}
-.je-grid td{padding:4px 5px;vertical-align:middle}
+.je-grid td{padding:2px 4px;vertical-align:middle}
+.je-grid th{padding:6px 5px;font-size:11.5px;letter-spacing:.02em}
+/* the accounting entries: one framed block, the working area of the voucher */
+.je-box{margin:14px 0 8px;border:1.5px solid var(--accent);border-radius:var(--r);background:var(--panel);box-shadow:0 0 0 4px var(--accent-soft);overflow:hidden}
+.je-box-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--accent-soft)}
+.je-box-h>b{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.je-box .je-wrap{margin-top:0}
+.je-box .je-tot{margin:0;font-size:13.5px}
+.je-box-f{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;padding:6px 10px 8px;border-top:1px solid var(--line)}
+.je-box-f .je-addline{margin-top:0}
+.je-box-f .je-hint{margin-left:0}
 .je-grid tbody tr:hover{background:transparent}
-.je-grid .je-in{width:100%;min-width:0;box-sizing:border-box;padding:6px 8px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px}
+.je-grid .je-in{width:100%;min-width:0;box-sizing:border-box;padding:4px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px}
 .je-grid .je-in:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring,0 0 0 3px var(--accent-soft))}
 .je-grid .je-in:disabled{background:transparent;border-color:transparent;color:var(--ink)}
 .je-rate{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink2);white-space:nowrap}

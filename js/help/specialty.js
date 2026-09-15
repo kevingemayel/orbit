@@ -34,33 +34,35 @@ orbitScreenHelp({
     how: [
       "Open <b>Counter &rsaquo; Cash Desk</b>. For this example, a hardware shop's customer comes to the counter to pay 300.00 in cash towards two open invoices: INV/2026/0012 with 180.00 due and INV/2026/0015 with 200.00 due. If you see <i>No cash accounts yet</i>, click <span class='man-key'>+ Add your first cash account</span>, name it <i>Main till</i>, choose Kind Cash and click Save.",
       "Click <span class='man-key'>+ Money in</span>. You should see a green dialog headed <b>Money in (receipt)</b>.",
-      "Leave <b>Type</b> on <i>Client receipt</i> and choose <i>Main till</i> in <b>Cash account</b>. Check that <b>Currency</b> shows the till's currency.",
+      "Leave <b>Type</b> on <i>Client receipt</i> and choose <i>Main till</i> in <b>Cash account</b>. Under it you should see <i>Money goes into:</i> and the ledger account the till posts to, for example 5300 Cash on hand. <b>Currency</b> shows the till's currency.",
       "Pick the customer in <b>On behalf of (customer)</b>. You should see a box headed <b>Apply to invoices</b> listing both open invoices with what is due on each.",
       "In <b>From (who is handing the money over)</b>, type the name of the person physically paying, for example the customer's driver.",
       "Type 300 in <b>Amount</b>. The customer hands over 320.00, so type 320 in <b>Cash tendered (optional)</b>. You should see 20 in <b>Change to give back</b>.",
       "Click <span class='man-key'>Auto</span> beside Apply to invoices. The oldest invoice takes 180.00 and the next takes 120.00, and the summary reads <i>Allocated 300.00 &middot; On account 0.00</i>.",
       "Leave <b>Method</b> on Cash, and type <i>Invoices 12 and 15</i> in <b>Memo</b>.",
-      "Click <span class='man-key'>Post receipt</span>. You should see <i>Posted Client receipt</i>, the Main till card up by 300.00, and a new line in Recent movements with a number such as <i>RCP/2026/0001</i> and +300.00 in green.",
+      "Look at <b>Counter account (Account No.)</b>. For a Client receipt it starts on the company receivable account, and the line under it reads <i>Default from Settings, Companies: receivable account</i>. The note below says the amounts applied to invoices settle through that receivable account, and the Counter account applies only to any amount left over. Nothing is left over here, so leave it as it is.",
+      "Click <span class='man-key'>Post receipt</span>. You should see <i>Posted Client receipt</i>, the Main till card up by 300.00, and a new line in Recent movements with a number such as <i>RCP/2026/0001</i> and +300.00 in green. Click that line to see the accounts it used, its JV numbers and every line of the accounting entry.",
       "Open Accounting and check the invoices: INV/2026/0012 is now Paid, and INV/2026/0015 is Partial with 80.00 still due.",
-      "Later the same day you buy cleaning supplies for 25.00. Click <span class='man-key'>- Money out</span>, choose Type <i>Petty expense</i>, type <i>Corner hardware shop</i> in <b>On behalf of / party</b>, 25 in Amount, and click <span class='man-key'>Post payment</span>. The till drops by 25.00 and the movement gets a number such as <i>PAY/2026/0001</i>."
+      "Later the same day you buy cleaning supplies for 25.00. Click <span class='man-key'>- Money out</span>, choose Type <i>Petty expense</i>, type <i>Corner hardware shop</i> in <b>On behalf of / party</b> and 25 in Amount. <b>Counter account</b> starts on the company expense account, and the line under it reads <i>Default from Settings, Companies: expense account</i>. To post it somewhere more precise, type that account's number and pick it from the list, then choose a line in <b>Auxiliary</b> if the account has any. Click <span class='man-key'>Post payment</span>. The till drops by 25.00 and the movement gets a number such as <i>PAY/2026/0001</i>."
     ],
     fields: [
       ["Type", "What kind of money this is. Money in offers Client receipt, Supplier refund, Owner capital in and Other income. Money out offers Supplier payment, Service provider, Maintenance, Salary, Salary advance, Owner drawing, Petty expense and Other payment. The type decides who you pick below and which account the other side of the entry goes to (see What it changes).", "required"],
-      ["Cash account", "The till, pouch, safe or bank the money goes into or comes out of. Only active cash accounts are listed. A bank account posts in the Bank journal, a cash account in the Cash journal. Changing it sets the Currency to that account's currency.", "required"],
+      ["Cash account", "The till, pouch, safe or bank the money goes into or comes out of. Only active cash accounts are listed. Under it, <i>Money goes into</i> (or <i>Money comes out of</i>) shows the ledger account it posts to, as set in Posts to (GL account) in Counter, Configuration, Cash Accounts. A cash account with no ledger account says so in red and cannot post. A bank account posts in the Bank journal, a cash account in the Cash journal. The Currency follows the cash account.", "required"],
       ["On behalf of (customer) or (supplier)", "Shown for Client receipt and Supplier refund (a customer or a supplier from Contacts) and for Supplier payment (a supplier). Picking one for a Client receipt or Supplier payment lists their open invoices or bills so you can apply the money. Left empty, the movement is still posted but tagged to nobody.", "optional"],
       ["Employee", "Shown for Salary and Salary advance. The employee being paid, from Employees. For Salary, picking one lists their confirmed payslips under Settle a document.", "optional"],
       ["Owner or On behalf of / party", "Shown for Owner capital in, Owner drawing and the other types. A free-text name that is kept on the movement and printed on the receipt.", "optional"],
       ["From (who is handing the money over) or To (who is receiving it)", "The person or company physically handing over or taking the cash, which can differ from the party it is for. Start typing to pick an existing contact, or type any name.", "optional"],
       ["Amount", "How much changed hands, in the Currency beside it. It must be more than zero.", "required"],
-      ["Currency", "The currency of the money. It starts at the company currency and follows the Cash account when you change the account. A foreign-currency movement is converted into the company currency at that date's rate from Exchange Rates.", "optional"],
+      ["Currency", "The currency of the money. It starts at the Cash account's currency and follows it when you change the account. A foreign-currency movement is converted into the company currency at that date's rate from Exchange Rates.", "optional"],
       ["Cash tendered (optional)", "Money in only. What the customer actually handed over, when it is more than the amount. Kept on the movement and printed on the receipt.", "optional"],
       ["Change to give back", "Money in only. Cash tendered minus the Amount, worked out as you type.", "auto"],
       ["Date", "The day the money moved. It decides the date of the ledger entry and the exchange rate, and cannot be on or before a locked period. Starts at today.", "required"],
       ["Method", "How it was paid, from your list in Payment Methods (or Cash, Bank transfer, Cheque and Card if that list is empty). Kept on the movement and printed on the receipt.", "optional"],
-      ["Apply to invoices or Apply to bills", "Shown for a Client receipt or Supplier payment once a customer or supplier is picked. Type how much goes to each open document, or click Auto to fill the oldest first. Whatever is not applied is recorded on account. If they have nothing open you see that the amount will be recorded on account.", "optional"],
-      ["Split across payment methods (part cash, part card...)", "Up to three method and amount pairs, for a customer paying part cash and part card. Two or more filled pairs must add up to the Amount. A split is always recorded on account: it does not settle invoices.", "optional"],
+      ["Apply to invoices or Apply to bills", "Shown for a Client receipt or Supplier payment once a customer or supplier is picked. Type how much goes to each open document, or click Auto to fill the oldest first. You cannot apply more to a document than is due on it. Whatever is not applied is recorded on account. If they have nothing open you see that the amount will be recorded on account.", "optional"],
+      ["Split across payment methods (part cash, part card...)", "Up to three method and amount pairs, for a customer paying part cash and part card. Two or more filled pairs must add up to the Amount. Every line posts to the cash account's ledger account. A split is always recorded on account: it cannot be combined with amounts applied to invoices.", "optional"],
       ["Settle a document", "Shown for Salary when the employee has confirmed payslips. Choosing one fills the Amount with its net pay and marks the payslip paid when you post.", "optional"],
-      ["Books the other side to", "Under Advanced. The account the non-cash side posts to, set from the Type (see What it changes). Change it only when your chart uses a different account. For a customer or supplier it is used only for the part recorded on account.", "auto"],
+      ["Counter account (Account No.)", "The account in your chart of accounts that the other side of the entry posts to: where the money came from or what it paid for. Type the account number or name and pick it from the list of active main accounts. It starts on a default, and the line under it says where that came from: Client receipt uses the receivable account, Supplier payment and Supplier refund the payable account, Other income the income account, and Service provider, Maintenance and Petty expense the expense account, all from Settings, Companies. Owner capital in, Owner drawing, Salary, Salary advance and Other payment start on the standard chart's account (1000, 1010, 4200, 4080 and 4700) only when your chart has it; otherwise the field is empty and you must choose. You can always change it. When money is applied to invoices or bills, those amounts settle through the company receivable or payable account on the document, and the Counter account applies only to the amount left over.", "required"],
+      ["Auxiliary", "Offered as soon as the Counter account is chosen, when that account has auxiliaries. For an account with sub-accounts, for example 6011.02 under 6011, it lists them: leave it on None to post to the main account, or choose one and the entry posts to the auxiliary instead. For an account whose auxiliaries are contacts, such as 4011 Suppliers, 4111 Clients or 4515 Other partners, it lists your contacts and starts on the customer or supplier picked above: the entry posts to the account and keeps that contact on its line, so the movement shows on the contact's statement. Which kind an account uses is set in Accounting, Chart of Accounts.", "optional"],
       ["Reference", "A cheque or transfer number. Printed on the receipt.", "optional"],
       ["Memo", "What the money is for. It becomes the description of the ledger entry and prints on the receipt.", "optional"],
       ["From, To, Amount, Date and Purpose (Handover dialog)", "The same dialog as Counter, Handovers, New. See the Handovers page.", "optional"]
@@ -74,7 +76,7 @@ orbitScreenHelp({
       ["Post receipt or Post payment", "Checks the figures, numbers the movement, posts it to the ledger and closes the dialog."],
       ["Cancel", "Closes the dialog without recording anything."]
     ],
-    after: "Posting numbers the movement (RCP for money in, PAY for money out, in the format set in Document Numbering), adds it to the cash account's balance and writes the ledger. The cash side is the account chosen in <b>Posts to (GL account)</b> on the cash account, or 5300 Cash on hand (5100 Bank for a bank account) when that is left on auto. The other side depends on the type, using the account codes of Orbit's standard chart:<br><b>Client receipt</b>: the part applied to invoices is paid exactly as Register Payment on the invoice would pay it, so each invoice becomes Partial or Paid. The rest is a balanced entry crediting 4190 Customers - advances received against the customer, with a payment record on account that shows on their statement.<br><b>Supplier refund</b>: a balanced entry crediting 4000 Suppliers (accounts payable) against the supplier, with a payment record on account. It does not match any bill.<br><b>Owner capital in</b>: credits 1000 Capital.<br><b>Other income</b>: credits 7400 Other operating income.<br><b>Supplier payment</b>: the part applied to bills is paid as Register Payment would pay it. The rest debits 4090 Suppliers - advances paid against the supplier, with a payment record on account.<br><b>Service provider</b>: debits 6100 Subcontracting &amp; external services.<br><b>Maintenance</b> and <b>Petty expense</b>: debit 6500 Other operating expenses.<br><b>Salary</b>: debits 4200 Personnel - salaries payable, and marks a chosen payslip paid.<br><b>Salary advance</b>: debits 4080 Employee advances.<br><b>Owner drawing</b>: debits 1010 Owner drawings.<br><b>Other payment</b>: debits 4700 Suspense / to allocate.<br>The entries go into the Cash journal for a cash account and the Bank journal for a bank account. A split payment debits (or credits) the cash account for the cash part and 5100 Bank for every other method, against the type's account for the whole amount.",
+    after: "Posting numbers the movement (RCP for money in, PAY for money out, in the format set in Document Numbering), adds it to the cash account's balance and writes the ledger with only the two accounts the dialog showed: the cash side is the cash account's <b>Posts to (GL account)</b>, shown under Cash account, and the other side is the <b>Counter account</b>, or its auxiliary when one is chosen. Orbit never picks an account on its own, and refuses to post while either one is missing.<br><b>Client receipt</b> and <b>Supplier payment</b>: each part applied to an invoice or bill is paid exactly as Register Payment on the document would pay it, with the cash side in the cash account's ledger account and the other side in the company receivable or payable account, so each document becomes Partial or Paid. Each settlement is its own journal entry. The rest is one balanced entry against the Counter account, tagged to the customer or supplier, with a payment record on account that shows on their statement.<br><b>Supplier refund</b>: a balanced entry against the Counter account, tagged to the supplier, with a payment record on account. It does not match any bill.<br><b>Every other type</b>: one balanced entry between the cash account and the Counter account. <b>Salary</b> also marks a chosen payslip paid.<br>The entries go into the Cash journal for a cash account and the Bank journal for a bank account. A split payment is one entry: a line for each method in the cash account's ledger account, against the Counter account for the whole amount. Open the movement in Movements to see every JV number and every line of the entry.",
     links: [
       { name: "Movements", how: "Every receipt and payment, where you reprint a receipt or void a mistake.", to: "cash.moves" },
       { name: "Handovers", how: "Cash moved between your own accounts, waiting to be confirmed.", to: "cash.handovers" },
@@ -96,47 +98,61 @@ orbitScreenHelp({
       ["You allocated more than the amount", "The figures typed against invoices or bills add up to more than the Amount. Lower them, or raise the Amount."],
       ["The split payment must add up to the amount", "Two or more split lines are filled and their total differs from the Amount. Correct a line or the Amount."],
       ["Could not post: No exchange rate for (currency) &rarr; (company currency) on (date). Add it in Accounting first, then post.", "The movement is in another currency and there is no rate for that date. Add the rate in Exchange Rates and post again."],
-      ["Could not post: Missing cash or contra account in the chart", "Orbit could not find the account for one side. Your chart probably does not use the standard codes (5300, 5100 or the type's code). Set Posts to (GL account) on the cash account in Cash Accounts, and choose the account under Advanced in the dialog."],
-      ["Could not post: Missing cash or advance account in the chart", "The same problem for the part of a customer or supplier payment recorded on account. Fix it the same way."],
+      ["The cash account (name) has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then post again.", "Orbit does not know which ledger account holds this till's money, and the dialog also says so in red under Cash account. Open Counter, Configuration, Cash Accounts, open the account, choose it in Posts to (GL account), Save, and post again."],
+      ["Choose the Counter account: the account the other side of this entry posts to.", "The Counter account is empty, usually because the type has no default: Settings, Companies has no account of that kind set, or your chart has no account with the standard code. Type the account number or name and pick it from the list."],
+      ["No account has the code or name (text). Pick the Counter account from the list.", "What was typed in Counter account matches no account in your chart. Pick a line from the list that appears as you type."],
+      ["The Counter account cannot be the cash account's own ledger account. Choose the account the money comes from or goes to.", "Both sides of the entry would be the same account, so nothing would be recorded. Choose the income, expense or partner account instead."],
+      ["(document) has (amount) due. Apply no more than that to it, and leave the rest on account.", "More was typed against one invoice or bill than it still owes. Lower that figure; whatever is not applied is recorded on account."],
+      ["A split payment is recorded on account and cannot settle invoices. Clear the amounts applied, or use a single method.", "Amounts are applied to invoices or bills and the split lines are filled too. Clear one or the other."],
       ["Could not post: Period locked on (date)", "The Date falls in a closed period. Use a later date, or ask whoever closed the period to reopen it in Period Lock."],
       ["Some balances can't be converted to (currency) yet", "A cash account in another currency has no rate for today, so its balance is left out of Total held, which then shows (partial). Add today's rate in Exchange Rates."],
       ["The Money in, Money out and Handover buttons are missing", "Your role can view Counter but not record in it. Ask an administrator for manage rights on Counter."]
     ],
     tips: [
-      "Check the Currency after choosing the Cash account: it follows the account only when you change the account, so the first account in the list starts on the company currency.",
-      "Never type more against one invoice than the due figure shown beside it. The invoice is paid only up to what is due, and the extra is not recorded on account. Leave the excess unapplied instead.",
-      "The part of a receipt applied to invoices posts to the Cash or Bank journal's own default account (or 5100 Bank when that journal has none), not to the Posts to account of the cash account. The part on account uses the cash account's own account.",
+      "The Currency starts on the cash account's currency. Change it only when the money handed over is in another currency; Orbit converts it at that day's rate.",
+      "Every part of a receipt or payment, including the parts applied to invoices or bills, posts its cash side to the ledger account shown under Cash account.",
+      "To check where a movement went in the books, open it from Recent movements or Movements: it shows the cash account, the Counter account, each JV number and every line of the entry.",
       "A cash account's balance here is its opening balance plus posted movements and confirmed handovers. A pending handover does not count yet."
     ]
   },
 
   "cash.moves": {
     title: "Movements",
-    what: "<b>Movements</b> is the full register of every receipt and payment recorded at the Cash Desk, newest first. Each line shows the date, number, type, party and the amount in or out. Opening one shows it as a receipt you can print, and lets you void a movement that was recorded by mistake.",
+    what: "<b>Movements</b> is the full register of every receipt and payment recorded at the Cash Desk, newest first. Each line shows the date, number, type, party and the amount in or out, and a voided one is marked (void). Opening one shows the receipt together with where it went in the books: the cash account and Counter account it used, its JV numbers and every line of the accounting entry. From there you can edit it, print it, or void a movement that should never have been recorded.",
     when: [
       "A customer asks for a copy of their receipt, or a supplier wants a payment voucher.",
-      "A movement was recorded against the wrong customer, amount or account and needs undoing.",
+      "You need to see which accounts a receipt or payment was posted to, and its JV number.",
+      "A movement was recorded with the wrong amount, date, customer or account and needs correcting.",
+      "A movement should never have been recorded at all and needs undoing.",
       "You want to see everything that came in or went out, by type or by month, or export it to a spreadsheet."
     ],
     how: [
-      "Open <b>Counter &rsaquo; Movements</b>. For this example, a shop recorded a Client receipt of 300.00 against the wrong customer and needs to undo it, then give the right customer a receipt.",
+      "Open <b>Counter &rsaquo; Movements</b>. For this example, a shop recorded a Client receipt of 300.00 against the wrong customer and needs to correct it.",
       "Type the number, for example <i>RCP/2026/0004</i>, or the customer's name in <b>Search</b>. Use <span class='man-key'>Filters</span> and choose Money in to see only receipts.",
       "Click the line. You should see a dialog headed <b>Receipt RCP/2026/0004</b> with +300.00 in green and the date, type, who it was on behalf of, who handed it over, the method and the memo.",
-      "Click <span class='man-key'>Void</span> and confirm the message, which warns that it reverses the movement in the books and on the customer statement and restores any invoices it settled.",
-      "You should see <i>Voided RCP/2026/0004</i>. Open the line again: it now says <i>This movement was voided</i> and the Void button has gone.",
-      "Check the Cash Desk: the till balance is 300.00 lower, and the invoices the receipt had paid show the money as owing again.",
-      "Record the receipt again from the Cash Desk against the right customer. It gets a new number, for example <i>RCP/2026/0005</i>.",
-      "Open the new line and click <span class='man-key'>Print receipt</span>. You should see a page headed RECEIPT with your company name, the number, the amount received, the cash tendered and change given, and signature lines for Received by and Cashier."
+      "Under <b>Accounts</b> you should see <b>Received into</b> (the till and its ledger account), <b>Counter account</b>, and <b>JV number</b>. Under <b>Accounting entry</b> you should see every line of the entry with its account, description, debit and credit. Click a JV number to open that entry in Accounting.",
+      "Back in Movements, open the line again and click <span class='man-key'>Edit</span>. You should see the dialog <b>Edit receipt RCP/2026/0004</b> filled in as the movement was.",
+      "Choose the right customer in <b>On behalf of (customer)</b>, click <span class='man-key'>Auto</span> to apply the 300.00 to their open invoices, check <b>Counter account</b>, and click <span class='man-key'>Save changes</span>.",
+      "You should see <i>Saved RCP/2026/0004</i>. Open the line again: the number is the same, the JV numbers are new, <b>Reversals</b> lists the entries that undid the old version, and <b>History</b> reads <i>Edited on</i> (date and time) <i>by</i> (your email) with the amount and JV numbers it had before.",
+      "The first customer's invoices show the money as owing again, and the right customer's are Partial or Paid.",
+      "If a movement should never have been recorded, open it, click <span class='man-key'>Void</span> and confirm instead. The dialog then says <i>This movement was voided</i>, the Edit and Void buttons are gone, and the till balance drops by the amount.",
+      "To give the customer a copy, open the line and click <span class='man-key'>Print receipt</span>. You should see a page headed RECEIPT with your company name, the number, the amount received, the cash tendered and change given, and signature lines for Received by and Cashier."
     ],
     fields: [
-      ["No.", "The movement number, RCP for money in and PAY for money out.", "auto"],
+      ["No.", "The movement number, RCP for money in and PAY for money out. An edit keeps the number.", "auto"],
       ["Date", "The date the money moved, as entered when it was posted.", "auto"],
       ["Type", "The kind chosen when it was posted, such as Client receipt or Petty expense.", "auto"],
       ["On behalf of", "The customer, supplier, employee or name the money was for.", "auto"],
       ["From or To", "The person who physically handed over or received the money.", "auto"],
-      ["Method", "How it was paid.", "auto"],
-      ["Memo", "What it was for.", "auto"],
-      ["Tendered / change", "Money in only, when cash tendered was recorded.", "auto"]
+      ["Method, Reference and Memo", "How it was paid, the cheque or transfer number, and what it was for.", "auto"],
+      ["Tendered / change", "Money in only, when cash tendered was recorded.", "auto"],
+      ["Received into or Paid out of", "The cash account and the ledger account it posts to, as set in Cash Accounts.", "auto"],
+      ["Counter account", "The account the other side of the entry was posted to, with its auxiliary underneath when one was chosen. A movement recorded before this field existed says it was not recorded; its entry below still shows every account used.", "auto"],
+      ["JV number or JV numbers", "The journal entries the movement made: one for a plain movement, one for each invoice or bill it settled, and one for any amount on account. Click a number to open that entry in Accounting.", "auto"],
+      ["Reversals", "Entries that reversed an earlier version when the movement was edited, or the whole movement when it was voided. Click one to open it.", "auto"],
+      ["Accounting entry", "Every line of the movement's entries: JV, account code and name, description, debit and credit, with the totals in the company currency.", "auto"],
+      ["Applied to invoices or Applied to bills", "The documents the movement settled and how much went to each, and any amount recorded on account.", "auto"],
+      ["History", "One line for each edit: when it was made, by whom, and the amount and JV numbers the movement had before.", "auto"]
     ],
     buttons: [
       ["Filters", "Money in or Money out."],
@@ -144,24 +160,35 @@ orbitScreenHelp({
       ["Columns", "Choose which columns show, add a field, or reset the layout."],
       ["Select", "Tick lines to export only those."],
       ["Export", "Downloads the list as a CSV file that opens in Excel."],
-      ["Void", "Shown on a movement that is not voided. Reverses it: see What it changes."],
+      ["A JV number", "Closes the dialog and opens that journal entry in Accounting."],
+      ["Edit", "Shown on a posted movement that is not void, to users who can manage Counter or Accounting. Opens it in the Money in or Money out dialog, filled in, so you can correct any field. See What it changes."],
+      ["Save changes", "In the Edit dialog. Reverses the old version and posts the new one on the same movement."],
+      ["Void", "Shown on a movement that is not voided, to users who can manage Counter or Accounting. Reverses it: see What it changes."],
       ["Print receipt", "Prints a RECEIPT (money in) or PAYMENT VOUCHER (money out), or saves it as a PDF from the print window."],
+      ["&#8249; and &#8250;", "Beside the movement number when you opened it from this list. Step to the previous or next movement in the list's order, with its search and filters, without closing the dialog. Alt and the left or right arrow key do the same."],
       ["Close", "Closes the receipt dialog."]
     ],
-    after: "Voiding posts a reversing entry for each ledger entry the movement made, dated today, with the reference VOID/ followed by the number. It removes the payment records the movement created and restores the amount still due on every invoice or bill it settled, which go back to Not paid or Partial. The movement is marked void, so it no longer counts in the cash account's balance, but it stays in this list.",
+    after: "Voiding posts a reversing entry for each ledger entry the movement made, dated today, with the reference VOID/ followed by the number. It removes the payment records the movement created and restores the amount still due on every invoice or bill it settled, which go back to Not paid or Partial. The movement is marked void, so it no longer counts in the cash account's balance, but it stays in this list.<br>Saving an edit first reverses everything the old version posted, exactly as Void does, with the reference EDIT/ followed by the number. It then posts the new values on the same movement, which keeps its number, and adds the old version to History. If the new version cannot post once the old one has been reversed, for example because its date is in a locked period, Orbit voids the movement and tells you, so the books and the movement never disagree: record it again from the Cash Desk.",
     links: [
       { name: "Cash Desk", how: "Where movements are recorded. This list has no New button.", to: "cash.desk" },
-      { name: "Customer Invoices", how: "A voided Client receipt makes the invoices it paid owing again.", to: "inv.out" },
-      { name: "Customer Payments", how: "The payment records a movement created are removed when it is voided.", to: "pay.in" },
+      { name: "Journal Entries", how: "Each JV number opens its entry there.", to: "moves" },
+      { name: "Customer Invoices", how: "A voided or edited Client receipt makes the invoices it paid owing again.", to: "inv.out" },
+      { name: "Customer Payments", how: "The payment records a movement created are removed when it is voided or edited.", to: "pay.in" },
       { name: "Statement of Account", how: "The reversal also shows on the customer's or supplier's statement.", to: "rep.stmt" }
     ],
     mistakes: [
       ["Could not void: Period locked on (date)", "The reversal is dated today and today is inside a locked period. Ask whoever set the lock to move it in Period Lock."],
       ["Already voided", "The movement was voided already, for example in another tab. Close the dialog and refresh the list."],
+      ["The old version was reversed but the new one could not be posted: (reason). The movement is now void; record it again.", "The edit reversed the old entries, then the new version failed, for example on a locked date or a missing exchange rate. The movement is void and the books hold neither version. Fix the cause and record it again with Money in or Money out."],
+      ["Could not save: Orbit could not reverse the old version: (reason) Nothing new was posted. Try again: anything already reversed is skipped.", "Undoing the old version stopped part way, often because today is in a locked period. Fix the cause and click Save changes again, or void the movement."],
+      ["Could not save: Only a posted movement that is not void can be edited. Close the dialog and refresh the list.", "Someone voided the movement while you were editing it. Refresh the list to see it as it is now."],
+      ["Your role cannot open Accounting, so the journal entry cannot be shown here.", "Clicking a JV number opens Accounting, which your role cannot view. The Accounting entry table in the dialog shows the same lines."],
+      ["The Edit and Void buttons are missing", "The movement is void, or your role cannot manage Counter or Accounting. Ask an administrator for manage rights."],
       ["There is no New button", "Movements are only recorded from the Cash Desk, with Money in or Money out."]
     ],
     tips: [
-      "Voiding a Salary movement does not set its payslip back to unpaid. Change the payslip yourself if needed.",
+      "Voiding a Salary movement does not set its payslip back to unpaid. Change the payslip yourself if needed. Editing one does: the payslip is unpaid again unless the new version still settles it.",
+      "Edit rather than void and re-record when only a detail is wrong: the movement keeps its number, and History shows what changed.",
       "A voided movement is never deleted, so the numbering has no gaps and the history shows what happened."
     ]
   },
@@ -199,7 +226,7 @@ orbitScreenHelp({
       ["Close", "Closes the dialog."],
       ["Search, Columns, Select and Export", "Find a handover, choose the columns, and download the list as a CSV file."]
     ],
-    after: "Confirming posts one balanced entry in the Miscellaneous journal, dated the handover date, with the handover number as its reference: the To account's ledger account is debited and the From account's is credited (each cash account's Posts to account, or 5300 Cash on hand, or 5100 Bank for a bank account). From then on the Cash Desk counts the handover in both balances. Creating and cancelling change nothing in the books.",
+    after: "Confirming posts one balanced entry in the Miscellaneous journal, dated the handover date, with the handover number as its reference: the To account's ledger account is debited and the From account's is credited (each cash account's Posts to account, which the dialog names under From and To before you confirm). From then on the Cash Desk counts the handover in both balances. Creating and cancelling change nothing in the books.",
     links: [
       { name: "Cash Desk", how: "Shows the balances a confirmed handover moves, and has its own Handover button.", to: "cash.desk" },
       { name: "Cash Accounts", how: "The accounts you hand money between, and the ledger account each posts to.", to: "cash.accounts" },
@@ -210,7 +237,7 @@ orbitScreenHelp({
       ["From and To must differ", "The same account is chosen on both sides. Change one of them."],
       ["Enter an amount", "The Amount is empty or zero."],
       ["Could not confirm: Cross-currency handovers aren't supported. Use Money out from &quot;(account)&quot; then Money in to &quot;(account)&quot; so the exchange is recorded.", "The two accounts hold different currencies. Cancel the handover and record a Money out from one and a Money in to the other on the Cash Desk."],
-      ["Could not confirm: Missing cash account mapping", "One of the accounts has no Posts to account and your chart has no 5300 or 5100 account. Set Posts to (GL account) on both cash accounts in Cash Accounts, then confirm again."],
+      ["Could not confirm: The cash account \"Driver pouch\" has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then confirm again.", "Orbit does not guess a ledger account for a till or pouch, and the dialog says so in red before you confirm. Open Cash Accounts, set Posts to (GL account) on that account, Save, and confirm the handover again."],
       ["Could not confirm: Period locked on (date)", "The handover date is inside a locked period. Cancel it and create it again with a later date, or ask for the period to be reopened in Period Lock."]
     ],
     tips: [
@@ -222,7 +249,7 @@ orbitScreenHelp({
 
   "cash.close": {
     title: "Daily Close",
-    what: "<b>Daily Close</b> is where you count the money physically in a till, pouch or safe and compare it with what Orbit expects to be there. Saving signs the count, keeps the notes and coins you counted, and posts any difference to the Cash over/short account so the ledger matches what is really in the drawer. The list keeps every count with its expected, counted and variance figures.",
+    what: "<b>Daily Close</b> is where you count the money physically in a till, pouch or safe and compare it with what Orbit expects to be there. Saving signs the count, keeps the notes and coins you counted, and posts any difference to the over/short account shown in the dialog (6900 Cash over/short by default) so the ledger matches what is really in the drawer. The list keeps every count with its expected, counted and variance figures.",
     when: [
       "At the end of a shift or a trading day, before the till is emptied.",
       "When a cashier hands over to the next one and both want to agree the figure.",
@@ -234,7 +261,7 @@ orbitScreenHelp({
       "Open <b>Count by denomination (optional)</b>. On the first row type 20 in Value and 50 in Qty; its Total shows 1,000.00. Then 10 and 20, 4 and 10, and 5 and 1. <b>Counted (physical)</b> fills itself with 1245.00.",
       "You should see <i>Variance: -0.50 (short)</i> under the figures.",
       "Leave <b>Date</b> on today and type <i>Coin short, counted twice</i> in <b>Note</b>.",
-      "Click <span class='man-key'>Close &amp; sign</span>. You should see <i>Closed - variance of -0.50 posted to over/short</i> and a new line showing Expected 1,245.50, Counted 1,245.00 and Variance -0.50 in red.",
+      "Click <span class='man-key'>Close &amp; sign</span>. You should see <i>Closed - variance of -0.50 posted to 6900 Cash over/short</i> and a new line showing Expected 1,245.50, Counted 1,245.00 and Variance -0.50 in red.",
       "On a day the count matches, the message is <i>Counted and closed</i> and the variance shows 0.00 in green."
     ],
     fields: [
@@ -242,6 +269,7 @@ orbitScreenHelp({
       ["Expected (system)", "The account's balance as the Cash Desk shows it now: opening balance plus posted movements and confirmed handovers. You cannot type in it.", "auto"],
       ["Counted (physical)", "What you actually counted. Filled from the denomination rows when you use them, and you can type over it.", "required"],
       ["Value and Qty (Count by denomination)", "One row per note or coin: its value and how many you have. Each row's Total is worked out, and the rows add up into Counted. Four rows are ready; click + Add row for more.", "optional"],
+      ["Over/short account", "The account a difference posts to. It starts on 6900 Cash over/short where your chart has that account, and says so under the field; otherwise it is empty and must be chosen when the count differs. The line under it also names the cash account's ledger account, the other side of the entry.", "optional"],
       ["Date", "The date of the count, and of the over/short entry. Starts at today.", "optional"],
       ["Note", "Anything that explains a difference.", "optional"],
       ["Variance", "Counted minus Expected. Shown as over, short or matches while you type, and stored with the count.", "auto"]
@@ -253,18 +281,19 @@ orbitScreenHelp({
       ["Cancel", "Closes the dialog without saving."],
       ["Search, Columns, Select and Export", "Find a count by account or date, choose the columns, and download the list as a CSV file."]
     ],
-    after: "The count is saved as closed with the time it was signed and the denominations. When there is a difference, Orbit posts one balanced entry in the Cash journal (the Bank journal for a bank account), dated the count date, with the reference CASHCOUNT/ and the date: money over debits the cash account's ledger account and credits 6900 Cash over/short; money short debits 6900 Cash over/short and credits the cash account. The over/short account then shows in your profit and loss.",
+    after: "The count is saved as closed with the time it was signed and the denominations. When there is a difference, Orbit posts one balanced entry in the Cash journal (the Bank journal for a bank account), dated the count date, with the reference CASHCOUNT/ and the date: money over debits the cash account's ledger account and credits the over/short account; money short debits the over/short account and credits the cash account. The over/short account then shows in your profit and loss.",
     links: [
       { name: "Cash Desk", how: "Expected is the balance the Cash Desk shows for that account.", to: "cash.desk" },
       { name: "Movements", how: "When a count is short, look through the day's movements for one recorded wrongly.", to: "cash.moves" },
       { name: "Cash Accounts", how: "The ledger account the over/short posts against.", to: "cash.accounts" },
-      { name: "Chart of Accounts", how: "Holds 6900 Cash over/short, which the variance is posted to.", to: "accounts" }
+      { name: "Chart of Accounts", how: "Holds 6900 Cash over/short, the default over/short account, and any account you choose instead.", to: "accounts" }
     ],
     mistakes: [
       ["Add a cash account first", "The company has no active cash account to count. Add one in Cash Accounts."],
       ["Enter the counted amount", "Counted (physical) is empty. Type the total or fill the denomination rows."],
       ["Closed, but the over/short could not post: (reason)", "The count is saved but the difference did not reach the ledger, for example because the date is in a locked period. This screen cannot post it again, so ask whoever keeps the books to record the difference."],
-      ["The message says the variance was posted, but there is no entry in the ledger", "The chart has no 6900 account, or the cash account has no Posts to account and the chart has no 5300 or 5100. Add the missing account or set Posts to (GL account) before the next close."]
+      ["The cash account \"Main till\" has no ledger account, so the difference cannot post.", "Nothing was saved. Set Posts to (GL account) on the cash account in Cash Accounts, then count and close again."],
+      ["Choose the over/short account the difference posts to.", "The count differs and Over/short account is empty, because your chart has no 6900 account. Pick the account from the list, then Close &amp; sign again."]
     ],
     tips: [
       "Expected is the balance right now, whatever Date you choose, so count before any of the next day's money is recorded.",
@@ -286,7 +315,7 @@ orbitScreenHelp({
       "Open <b>Counter &rsaquo; Configuration &rsaquo; Cash Accounts</b> and click <span class='man-key'>New</span>. For this example, a delivery business gives a new driver a pouch holding a 200.00 float. You should see the dialog <b>New cash account</b>.",
       "Type <i>Driver pouch</i> in <b>Name</b>.",
       "Leave <b>Kind</b> on Cash and <b>Currency</b> on the company currency.",
-      "Leave <b>Posts to (GL account)</b> on <i>(auto: cash / bank)</i> to use 5300 Cash on hand, or choose the cash account in your chart that this pouch should post to.",
+      "In <b>Posts to (GL account)</b>, choose the account in your chart that this pouch posts to, for example 5300 Cash on hand. Orbit does not pick one for you, and Money in and Money out refuse a cash account with none set.",
       "Type 200 in <b>Opening balance</b> and leave <b>Active</b> on Active.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the line in the list with Kind Cash and Opening 200.00.",
       "Open the Cash Desk. You should see a Driver pouch card showing 200.00.",
@@ -294,9 +323,9 @@ orbitScreenHelp({
     ],
     fields: [
       ["Name", "How the account appears on the Cash Desk and in every list, for example Main till, Safe or the bank's name.", "required"],
-      ["Kind", "Cash or Bank. Movements into a bank account post in the Bank journal, into a cash account in the Cash journal. It also chooses the default ledger account when Posts to is on auto.", "optional"],
+      ["Kind", "Cash or Bank. Movements into a bank account post in the Bank journal, into a cash account in the Cash journal.", "optional"],
       ["Currency", "The one currency this account holds. Balances are kept in it, and converted into the company currency for Total held.", "optional"],
-      ["Posts to (GL account)", "The ledger account that moves when money goes in or out. Only accounts of the cash and bank type are offered. Left on auto, Orbit uses 5300 Cash on hand for Cash and 5100 Bank for Bank.", "auto"],
+      ["Posts to (GL account)", "The ledger account that moves when money goes in or out, shown in Money in and Money out as Money goes into or Money comes out of. Only accounts of the cash and bank type are offered. Orbit does not choose one for you: until it is set, the account can be saved but Money in and Money out refuse to post through it.", "required"],
       ["Opening balance", "The money already in the account when you start using Counter. It starts the balance on the Cash Desk.", "optional"],
       ["Active", "Active, or Off to hide the account from the Cash Desk and the dialogs without losing its history.", "optional"]
     ],
@@ -317,8 +346,8 @@ orbitScreenHelp({
     mistakes: [
       ["Enter a name", "The Name is empty."],
       ["This account has (number) movement(s)/handover(s) and can't be deleted. Switch it to Off instead.", "The account has history, which must be kept. Set Active to Off and Save."],
-      ["Posts to (GL account) offers only (auto: cash / bank)", "Your chart has no account of the cash and bank type. Add one in the Chart of Accounts first."],
-      ["Money in says Missing cash or contra account in the chart", "Posts to is on auto and your chart does not use the codes 5300 or 5100. Choose the right account in Posts to (GL account)."]
+      ["Posts to (GL account) offers only (not set)", "Your chart has no account of the cash and bank type. Add one in the Chart of Accounts first."],
+      ["Money in or Money out says the cash account has no ledger account", "Posts to (GL account) is not set on this cash account. Open it here, choose the account and Save, then post again."]
     ],
     tips: [
       "If a float is not in your books yet and the owner put it in, record it on the Cash Desk with Money in, type Owner capital in, rather than as an opening balance, so the ledger and the desk agree.",
@@ -328,7 +357,7 @@ orbitScreenHelp({
 
   "cash.methods": {
     title: "Payment Methods",
-    what: "<b>Payment Methods</b> is the list of ways money changes hands that Counter offers in <b>Method</b> and in the split-payment lines: cash, a card terminal, a transfer, a mobile wallet, a cheque. Each method has a name and a kind. The name is printed on receipts; the kind matters when a customer splits a payment across methods.",
+    what: "<b>Payment Methods</b> is the list of ways money changes hands that Counter offers in <b>Method</b> and in the split-payment lines: cash, a card terminal, a transfer, a mobile wallet, a cheque. Each method has a name and a kind. The name is printed on receipts; the kind records how the money was paid.",
     when: [
       "You start using Counter and want the methods your customers really use.",
       "You add a card terminal or a mobile payment service.",
@@ -344,7 +373,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Name", "What the method is called in Method, on the movement and on the printed receipt.", "required"],
-      ["Kind", "cash, bank, cheque, card, online or other. On a split payment, a line whose method is of kind cash posts to the cash account, and every other kind posts to 5100 Bank.", "optional"],
+      ["Kind", "cash, bank, cheque, card, online or other. It describes how the money was paid. On a split payment every line, whatever its kind, posts to the ledger account of the cash account chosen in the dialog.", "optional"],
       ["Active", "Active, or Off to stop offering it without deleting it.", "optional"]
     ],
     buttons: [
@@ -366,7 +395,7 @@ orbitScreenHelp({
       ["Method still offers Cash, Bank transfer, Cheque and Card after I archived everything", "When no method is active, Counter offers those four so a movement can still be recorded. Add or reactivate at least one method."]
     ],
     tips: [
-      "Set the kind carefully for card and online methods: on a split payment they post to the bank account, not the till."
+      "On a split payment every method posts to the same cash account's ledger account. To keep card or transfer takings apart from the till, record them with Money in into a bank cash account instead."
     ]
   },
 

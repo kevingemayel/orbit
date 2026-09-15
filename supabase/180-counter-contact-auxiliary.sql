@@ -1,0 +1,11 @@
+-- ============================================================================
+-- 180-counter-contact-auxiliary.sql  -  a Counter movement keeps the contact
+-- chosen as the auxiliary of its Counter account.
+--
+-- Some accounts take their auxiliaries from the contact register instead of
+-- sub-accounts (accounts.aux_kind = 'contacts', migration 178): 4011 Suppliers,
+-- 4111 Clients, 4515 Other partners. When one of them is the Counter account of
+-- a Money in or Money out, the contact picked as its auxiliary is kept here and
+-- on the journal line, so the movement shows on that contact's statement.
+-- ============================================================================
+alter table public.cash_movements add column if not exists contra_partner_id uuid references public.partners(id) on delete set null;

@@ -33,10 +33,10 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Accounting &rsaquo; Accounting &rsaquo; Journal Entries</b> and click <span class='man-key'>New</span>. For this example, a guesthouse accrues 1,800.00 of August electricity that the utility has not billed yet. You should see <b>Journal voucher</b> <i>numbered when saved</i> and two empty lines.",
-      "Set the <b>Date</b> to 31 August 2026 and leave <b>Journal</b> on Miscellaneous.",
-      "Type <i>August electricity accrual</i> in <b>Narration</b> and the meter reading reference, for example <i>Meter 0831</i>, in <b>Reference</b>.",
-      "On the first line, type the code or the name of your electricity expense account in <b>Account No.</b> and choose it from the list. If that account has auxiliaries, pick one in <b>Auxiliary</b>. Leave <b>Description</b> empty: the narration is copied onto the line when you save.",
-      "Type 1,800.00 in <b>Debit</b>. The total under the grid should read Debit 1,800.00, Credit 0.00 and <b>Off by 1,800.00</b>.",
+      "Set the <b>Date</b> to 31 August 2026 and leave <b>Journal</b> on Journal Voucher.",
+      "Type <i>August electricity accrual</i> in <b>Description</b> and the meter reading reference, for example <i>Meter 0831</i>, in <b>Reference</b>.",
+      "In the framed <b>Accounting entries</b> block, type the code or the name of your electricity expense account in <b>Account No.</b> on the first line and choose it from the list. If that account has auxiliaries, pick one in <b>Auxiliary</b>: a sub-account, or a contact for an account such as 4011 Suppliers or 4515 Other partners, whose auxiliaries are your contacts. Leave <b>Line description</b> empty: the voucher's Description is copied onto the line when you save.",
+      "Type 1,800.00 in <b>Debit</b>. The totals at the top of the Accounting entries block should read Debit 1,800.00, Credit 0.00 and <b>Off by 1,800.00</b>.",
       "On the second line, choose your accrued expenses account. <b>Credit</b> fills with 1,800.00 by itself, because an empty line offers the amount that balances the voucher. The total now reads <b>Balanced</b>.",
       "Under <b>Related documents</b>, add the photo of the meter reading.",
       "Click <span class='man-key'>Save draft</span>. You should see <i>Draft saved</i> and a number such as <i>JV/2026/0012</i>.",
@@ -45,13 +45,13 @@ orbitScreenHelp({
     ],
     fields: [
       ["Date", "The date the movement belongs to. It decides the month the amounts fall in and, for a line in another currency, which rate is looked up. Starts as today. Posting is refused on or before the date set in Period Lock.", "auto"],
-      ["Journal", "Which journal the voucher is filed under. Starts on Miscellaneous. It is what the list's Journal column and Group By Journal show. A voucher typed here is numbered JV whatever journal you pick.", "auto"],
+      ["Journal", "Which journal the voucher is filed under. Starts on <b>Journal Voucher</b>, the journal for a general voucher that belongs in no other journal (Vendor Bills, Bank, Cash, Customer Invoices or Miscellaneous); a company without it starts on Miscellaneous. It is what the list's Journal column and Group By Journal show. A voucher typed here is numbered JV whatever journal you pick.", "auto"],
       ["Book", "Which book the voucher belongs to; starts on the book you are viewing. Reports on another book leave it out.", "optional"],
       ["Reference", "The number of the paper behind the voucher, such as the supplier's invoice or a receipt number.", "optional"],
-      ["Narration", "What the voucher is for. It is copied to every line whose Description you leave empty, and shows in the list's Reference column.", "optional"],
+      ["Description", "What the voucher is for. It is copied to every line whose Line description you leave empty, and shows in the list's Reference column.", "optional"],
       ["Account No. (on a line)", "The account the line posts to. Type its code or its name and pick it from the list. Typing the full code of an auxiliary also picks its main account. Archived auxiliaries are not offered.", "required"],
-      ["Auxiliary (on a line)", "Only open when the chosen account has auxiliaries (sub-accounts such as one per supplier). Picking one posts the line to it. If the auxiliary has its own currency, the line's currency follows it.", "optional"],
-      ["Description (on a line)", "The wording of the line in the ledger. Left empty, the Narration is used. A new line starts with the description of the line above it.", "optional"],
+      ["Auxiliary (on a line)", "Only open when the chosen account has auxiliaries, and it offers them as soon as the account is chosen. For an account whose auxiliaries are sub-accounts (such as 6011.02) it lists them; picking one posts the line to it, and if the auxiliary has its own currency the line's currency follows it. For an account whose auxiliaries are contacts (such as 4011 Suppliers, 4111 Clients or 4515 Other partners) it lists your contacts: type a name and pick it, and the line keeps that contact, so the voucher shows on the contact's statement. Which kind an account uses is set in Chart of Accounts.", "optional"],
+      ["Line description (on a line)", "The wording of the line in the ledger. Left empty, the voucher's Description is used. A new line starts with the line description of the line above it.", "optional"],
       ["Currency (on a line)", "The currency the amounts on this line are typed in. Starts on the account's own currency if it has one, otherwise the company currency.", "auto"],
       ["Rate (on a line)", "Only for a line in another currency. Filled from Exchange Rates with the spot rate on or before the voucher date, shown as 1 of one currency = so many of the other. Type over it with the rate from your bank. A foreign line cannot be saved without a rate.", "auto"],
       ["Debit and Credit (on a line)", "The amount, in the line's currency. A line is a debit or a credit, never both: typing in one clears the other.", "required"],
@@ -66,9 +66,10 @@ orbitScreenHelp({
       ["Save draft", "Checks the lines and saves the voucher as a draft. The first save gives it its number. A draft is not in the accounts."],
       ["Post", "Checks the period lock, saves, sends the voucher for approval if an approval rule covers journal entries of this amount, and otherwise posts it to the ledger."],
       ["Discard / Back", "Goes back to the list. Changes since the last save are not kept. On a posted voucher the button reads Back."],
-      ["Duplicate", "Starts a new voucher with the same lines, journal, book and narration, dated today, with an empty reference. Attachments are not copied."],
-      ["Edit", "Only on a posted voucher that was typed by hand. Takes it back to draft so you can change it. It keeps its number, and the version posted before is kept: the links under <i>Edited after posting</i> show it. It is out of the accounts until you post it again."],
-      ["Open (document number)", "Shown instead of Edit on an entry Orbit posted for an invoice or a bill. Opens that document, which is where the entry is changed."],
+      ["Duplicate", "Starts a new voucher with the same lines, journal, book and description, dated today, with an empty reference. Attachments are not copied."],
+      ["Edit", "On every posted entry, for people who can manage Accounting. A voucher typed here, or an entry Orbit posted for stock, payroll, depreciation, retention or a revaluation, goes back to draft so you can change it: it keeps its number, and the version posted before is kept under <i>Edited after posting</i>. It is out of the accounts until you post it again. An entry that belongs to a bill or invoice takes that document back to draft instead, one that records a payment opens the payment's Edit, and one the Counter posted opens its movement, so a document and its entry always agree."],
+      ["Open (document number)", "Shown on an entry Orbit posted for an invoice or a bill. Opens that document."],
+      ["&#8249; and &#8250;", "Beside the voucher number when you opened it from the list. Step to the previous or next entry in the list's order, with its search, filters and sorting, without going back to the list. <i>3 of 40</i> shows where you are. Alt and the left or right arrow key do the same."],
       ["Reverse", "On a posted entry that does not belong to an invoice or bill. Posts a mirror voucher in the Miscellaneous journal, dated today, with every debit and credit swapped and the reference REV/ plus the original number. The original stays posted."],
       ["Filters and Group By (list)", "Filter the list to Posted or Draft entries; group it by Journal or by Month."]
     ],
@@ -97,12 +98,14 @@ orbitScreenHelp({
       ["Could not edit: The books are closed up to 30 Jun 2026, and this entry is dated 15 Jun 2026. Reverse it with a later date instead.", "A posted voucher inside a locked period cannot go back to draft. Reverse it, which posts the correction today, then enter the right voucher."],
       ["Could not edit: Lines of this entry are matched to payments or invoices. Undo that match first, or reverse the entry.", "Part of the voucher settles a payment or an invoice. Undo that match, or reverse the voucher instead."],
       ["Could not edit: Only an owner, administrator or accountant of this company can edit a posted entry.", "Your role cannot reopen posted entries. Ask someone who can."],
-      ["There is no Edit button on a posted entry", "Orbit posted it for another record: a bill or invoice (use its Open button), a payment, a bank statement line, depreciation or a revaluation. Change the record it came from, or use Reverse."],
+      ["There is no Edit button on a posted entry", "Editing a posted entry needs permission to manage Accounting. Ask an administrator to change your role."],
+      ["Orbit created this entry for a stock movement. Changing it here changes the accounting only; that record keeps its own figures.", "Not an error: a reminder on an entry Orbit posted for another record, now back in draft. The stock movement, payslip or asset keeps its own quantities and amounts, so change the accounts or wording here, and correct the record itself on its own screen."],
+      ["No contact is called Acme. Pick one from the list.", "The name typed in Auxiliary matches no contact in this company. Pick it from the list as you type, or add the contact in Contacts first."],
       ["There is no New button", "Creating vouchers needs permission to manage Accounting. Ask an administrator to change your role."]
     ],
     tips: [
-      "Write the Narration once and leave every Description empty: each line then reads the same in the ledger.",
-      "Reverse always posts today. If the original month is still open and the voucher was typed by hand, Edit corrects it in its own month instead.",
+      "Write the Description once and leave every Line description empty: each line then reads the same in the ledger.",
+      "Reverse always posts today. If the original month is still open, Edit corrects the entry in its own month instead.",
       "Keyboard route: type an account code, press Tab to the amount, press Enter for the next line, which arrives already balanced."
     ]
   },
@@ -310,6 +313,7 @@ orbitScreenHelp({
       ["Type", "What kind of account it is: Receivable, Bank and Cash, Current Assets, Fixed Assets, Payable, Tax Payable, Equity, Income, Other Income, Expenses, Cost of Revenue, Depreciation and so on. Balance sheet types appear on the Balance Sheet, income and expense types on the Profit and Loss. A product's Income Account only offers income types, and its Expense Account only expense types.", "required"],
       ["Status", "Active, or Archived to hide it from the account pickers on vouchers, invoices, bills, products and the Companies panels. Posted history is untouched.", "optional"],
       ["Reconcilable", "Turn on for receivable, payable and bank accounts. FX Revaluation restates foreign balances on reconcilable accounts, as well as on bank and cash and liability accounts.", "optional"],
+      ["Auxiliaries", "What a journal voucher offers in its Auxiliary column for this account: <i>None</i>, <i>Sub-accounts</i> (the dotted accounts under it, such as 6011.02) or <i>Contacts</i> (your customers, suppliers and other partners, for accounts such as 4011 Suppliers, 4111 Clients and 4515 Other partners). With Contacts, the contact picked on a voucher line is kept on it, so the voucher shows on that contact's statement.", "optional"],
       ["Code and Name (in the list)", "Both can be changed by clicking the cell in the list.", "optional"]
     ],
     buttons: [
@@ -335,11 +339,12 @@ orbitScreenHelp({
       ["Could not save: A record with Code 6135 already exists. Use a different one.", "Another account in this company already has that code, possibly an archived one. Filter the list to Archived to find it, or choose another code."],
       ["Some of these are used in other records - use Archive instead.", "At least one selected account has been used, so it cannot be deleted. Archive it."],
       ["A new account is missing from a product's Income Account list", "Its Type is not an income type. Change the Type to Income or Other Income."],
-      ["Posting suddenly fails after recoding an account", "An automatic posting was relying on the standard code. Set the matching pointer in Companies, Accounting accounts or Stock accounting, then post again."]
+      ["Posting suddenly fails after recoding an account", "An automatic posting was relying on the standard code. Set the matching pointer in Companies, Accounting accounts or Stock accounting, then post again."],
+      ["The Auxiliary column on a voucher stays empty for an account that should have auxiliaries", "Open the account here and set <b>Auxiliaries</b>: Contacts for an account kept per customer, supplier or partner, Sub-accounts for one with dotted accounts under it. Sub-accounts also have to exist, with codes such as 4515.01."]
     ],
     tips: [
       "Before changing the code of 4100, 4000, 4457, 4456, 7000, 6000 or 3100, set the matching pointer in Companies.",
-      "This form does not set an account's own currency or its auxiliaries (sub-accounts). Where your chart has them, the journal voucher offers them."
+      "This form does not set an account's own currency. Where your chart has one, the journal voucher uses it."
     ]
   },
 
