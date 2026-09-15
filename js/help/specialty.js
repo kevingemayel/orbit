@@ -61,7 +61,7 @@ orbitScreenHelp({
       ["Apply to invoices or Apply to bills", "Shown for a Client receipt or Supplier payment once a customer or supplier is picked. Type how much goes to each open document, or click Auto to fill the oldest first. You cannot apply more to a document than is due on it. Whatever is not applied is recorded on account. If they have nothing open you see that the amount will be recorded on account.", "optional"],
       ["Split across payment methods (part cash, part card...)", "Up to three method and amount pairs, for a customer paying part cash and part card. Two or more filled pairs must add up to the Amount. Every line posts to the cash account's ledger account. A split is always recorded on account: it cannot be combined with amounts applied to invoices.", "optional"],
       ["Settle a document", "Shown for Salary when the employee has confirmed payslips. Choosing one fills the Amount with its net pay and marks the payslip paid when you post.", "optional"],
-      ["Counter account (Account No.)", "The account in your chart of accounts that the other side of the entry posts to: where the money came from or what it paid for. Type the account number or name and pick it from the list of active main accounts. It starts on a default, and the line under it says where that came from: Client receipt uses the receivable account, Supplier payment and Supplier refund the payable account, Other income the income account, and Service provider, Maintenance and Petty expense the expense account, all from Settings, Companies. Owner capital in, Owner drawing, Salary, Salary advance and Other payment start on the standard chart's account (1000, 1010, 4200, 4080 and 4700) only when your chart has it; otherwise the field is empty and you must choose. You can always change it. When money is applied to invoices or bills, those amounts settle through the company receivable or payable account on the document, and the Counter account applies only to the amount left over.", "required"],
+      ["Counter account (Account No.)", "The account in your chart of accounts that the other side of the entry posts to: where the money came from or what it paid for. Type the account number or name and pick it from the list of active main accounts. It starts on a default, and the line under it says where that came from: Client receipt uses the receivable account, Supplier payment and Supplier refund the payable account, Other income the income account, Service provider, Maintenance and Petty expense the expense account, and Salary the salaries payable account that payslips post net pay to, all from Settings, Companies. Owner capital in, Owner drawing, Salary advance and Other payment start on the standard chart's account (1000, 1010, 4080 and 4700) only when your chart has it; otherwise the field is empty and you must choose. You can always change it. When money is applied to invoices or bills, those amounts settle through the company receivable or payable account on the document, and the Counter account applies only to the amount left over.", "required"],
       ["Auxiliary", "Offered as soon as the Counter account is chosen, when that account has auxiliaries. For an account with sub-accounts, for example 6011.02 under 6011, it lists them: leave it on None to post to the main account, or choose one and the entry posts to the auxiliary instead. For an account whose auxiliaries are contacts, such as 4011 Suppliers, 4111 Clients or 4515 Other partners, it lists your contacts and starts on the customer or supplier picked above: the entry posts to the account and keeps that contact on its line, so the movement shows on the contact's statement. Which kind an account uses is set in Accounting, Chart of Accounts.", "optional"],
       ["Reference", "A cheque or transfer number. Printed on the receipt.", "optional"],
       ["Memo", "What the money is for. It becomes the description of the ledger entry and prints on the receipt.", "optional"],
@@ -112,7 +112,7 @@ orbitScreenHelp({
       "The Currency starts on the cash account's currency. Change it only when the money handed over is in another currency; Orbit converts it at that day's rate.",
       "Every part of a receipt or payment, including the parts applied to invoices or bills, posts its cash side to the ledger account shown under Cash account.",
       "To check where a movement went in the books, open it from Recent movements or Movements: it shows the cash account, the Counter account, each JV number and every line of the entry.",
-      "A cash account's balance here is its opening balance plus posted movements and confirmed handovers. A pending handover does not count yet."
+      "A cash account's balance here is its opening balance plus posted movements, confirmed handovers and the variance of every Daily Close, in the account's own currency. A pending handover does not count yet."
     ]
   },
 
@@ -187,7 +187,7 @@ orbitScreenHelp({
       ["There is no New button", "Movements are only recorded from the Cash Desk, with Money in or Money out."]
     ],
     tips: [
-      "Voiding a Salary movement does not set its payslip back to unpaid. Change the payslip yourself if needed. Editing one does: the payslip is unpaid again unless the new version still settles it.",
+      "Voiding a Salary movement sets the payslip it paid back to confirmed, so it can be paid again. Editing one does the same, and the new version marks it paid again when it still settles it.",
       "Edit rather than void and re-record when only a detail is wrong: the movement keeps its number, and History shows what changed.",
       "A voided movement is never deleted, so the numbering has no gaps and the history shows what happened."
     ]
@@ -213,7 +213,7 @@ orbitScreenHelp({
     fields: [
       ["From", "The cash account the money leaves. Only active cash accounts are listed. It must differ from To.", "required"],
       ["To", "The cash account that receives the money.", "required"],
-      ["Amount", "How much is handed over. It must be more than zero.", "required"],
+      ["Amount", "How much is handed over, in the currency the two accounts hold. It must be more than zero, and both accounts must hold the same currency.", "required"],
       ["Date", "The day of the handover, and the date of the ledger entry when it is confirmed. Starts at today.", "optional"],
       ["Purpose", "Why the money moved, for example supplier run, return or deposit. It is added to the ledger entry's description.", "optional"],
       ["No. and Status", "The number (HO) given when the handover is created, and Pending, Confirmed or Cancelled.", "auto"]
@@ -236,14 +236,16 @@ orbitScreenHelp({
       ["You need at least two cash accounts for a handover", "There is only one active cash account. Add the other one in Cash Accounts, or switch it back to Active."],
       ["From and To must differ", "The same account is chosen on both sides. Change one of them."],
       ["Enter an amount", "The Amount is empty or zero."],
-      ["Could not confirm: Cross-currency handovers aren't supported. Use Money out from &quot;(account)&quot; then Money in to &quot;(account)&quot; so the exchange is recorded.", "The two accounts hold different currencies. Cancel the handover and record a Money out from one and a Money in to the other on the Cash Desk."],
+      ["&quot;(account)&quot; holds (currency) and &quot;(account)&quot; holds (currency), so a handover cannot move money between them.", "The two accounts hold different currencies, so nothing was created. Record a Money out from one and a Money in to the other on the Cash Desk, which records the exchange."],
+      ["Could not confirm: Cross-currency handovers aren't supported. Use Money out from &quot;(account)&quot; then Money in to &quot;(account)&quot; so the exchange is recorded.", "An older pending handover is between accounts of different currencies, or one account's currency was changed since. Cancel it and record a Money out from one and a Money in to the other on the Cash Desk."],
+      ["Could not confirm: No exchange rate for (currency) to (company currency) on (date). Add the rate in Accounting, Exchange Rates, then confirm again.", "The two accounts hold a currency other than the company currency and there is no rate for the handover date. Add the rate and confirm again."],
       ["Could not confirm: The cash account \"Driver pouch\" has no ledger account. Set Posts to (GL account) on it in Counter, Configuration, Cash Accounts, then confirm again.", "Orbit does not guess a ledger account for a till or pouch, and the dialog says so in red before you confirm. Open Cash Accounts, set Posts to (GL account) on that account, Save, and confirm the handover again."],
       ["Could not confirm: Period locked on (date)", "The handover date is inside a locked period. Cancel it and create it again with a later date, or ask for the period to be reopened in Period Lock."]
     ],
     tips: [
       "A handover cannot be edited once created. To change it, cancel it and create a new one.",
       "Orbit does not check who clicks Confirm received, so agree as a team that only the person receiving the cash confirms it.",
-      "A handover is recorded in the company currency and posted without conversion, so use it only between accounts held in the company currency."
+      "A handover is recorded in the currency the two accounts hold. When that is not the company currency, the ledger entry is converted at the handover date's rate, and the Cash Desk moves both balances by the amount typed."
     ]
   },
 
@@ -261,12 +263,12 @@ orbitScreenHelp({
       "Open <b>Count by denomination (optional)</b>. On the first row type 20 in Value and 50 in Qty; its Total shows 1,000.00. Then 10 and 20, 4 and 10, and 5 and 1. <b>Counted (physical)</b> fills itself with 1245.00.",
       "You should see <i>Variance: -0.50 (short)</i> under the figures.",
       "Leave <b>Date</b> on today and type <i>Coin short, counted twice</i> in <b>Note</b>.",
-      "Click <span class='man-key'>Close &amp; sign</span>. You should see <i>Closed - variance of -0.50 posted to 6900 Cash over/short</i> and a new line showing Expected 1,245.50, Counted 1,245.00 and Variance -0.50 in red.",
+      "Click <span class='man-key'>Close &amp; sign</span>. You should see <i>Closed - variance of</i> (currency) <i>-0.50 posted to 6900 Cash over/short</i> and a new line showing Expected 1,245.50, Counted 1,245.00 and Variance -0.50 in red. The Main till card on the Cash Desk now shows 1,245.00, so the next count expects what you counted.",
       "On a day the count matches, the message is <i>Counted and closed</i> and the variance shows 0.00 in green."
     ],
     fields: [
       ["Cash account", "The till, pouch, safe or bank you are counting. Only active cash accounts are listed.", "required"],
-      ["Expected (system)", "The account's balance as the Cash Desk shows it now: opening balance plus posted movements and confirmed handovers. You cannot type in it.", "auto"],
+      ["Expected (system)", "The account's balance as the Cash Desk shows it now, in the account's own currency: opening balance plus posted movements, confirmed handovers and the variances of earlier counts. You cannot type in it.", "auto"],
       ["Counted (physical)", "What you actually counted. Filled from the denomination rows when you use them, and you can type over it.", "required"],
       ["Value and Qty (Count by denomination)", "One row per note or coin: its value and how many you have. Each row's Total is worked out, and the rows add up into Counted. Four rows are ready; click + Add row for more.", "optional"],
       ["Over/short account", "The account a difference posts to. It starts on 6900 Cash over/short where your chart has that account, and says so under the field; otherwise it is empty and must be chosen when the count differs. The line under it also names the cash account's ledger account, the other side of the entry.", "optional"],
@@ -281,7 +283,7 @@ orbitScreenHelp({
       ["Cancel", "Closes the dialog without saving."],
       ["Search, Columns, Select and Export", "Find a count by account or date, choose the columns, and download the list as a CSV file."]
     ],
-    after: "The count is saved as closed with the time it was signed and the denominations. When there is a difference, Orbit posts one balanced entry in the Cash journal (the Bank journal for a bank account), dated the count date, with the reference CASHCOUNT/ and the date: money over debits the cash account's ledger account and credits the over/short account; money short debits the over/short account and credits the cash account. The over/short account then shows in your profit and loss.",
+    after: "When there is a difference, Orbit first posts one balanced entry in the Cash journal (the Bank journal for a bank account), dated the count date, with the reference CASHCOUNT/ and the date: money over debits the cash account's ledger account and credits the over/short account; money short debits the over/short account and credits the cash account. For an account in another currency the difference is converted into the company currency at the count date's rate. The count is then saved as closed with the time it was signed and the denominations, and its variance is added to the cash account's balance on the Cash Desk, so the next Expected equals what you counted. The over/short account shows in your profit and loss.",
     links: [
       { name: "Cash Desk", how: "Expected is the balance the Cash Desk shows for that account.", to: "cash.desk" },
       { name: "Movements", how: "When a count is short, look through the day's movements for one recorded wrongly.", to: "cash.moves" },
@@ -291,15 +293,16 @@ orbitScreenHelp({
     mistakes: [
       ["Add a cash account first", "The company has no active cash account to count. Add one in Cash Accounts."],
       ["Enter the counted amount", "Counted (physical) is empty. Type the total or fill the denomination rows."],
-      ["Closed, but the over/short could not post: (reason)", "The count is saved but the difference did not reach the ledger, for example because the date is in a locked period. This screen cannot post it again, so ask whoever keeps the books to record the difference."],
+      ["The count was not saved because the over/short could not post: (reason). Fix that, then close again.", "The difference could not reach the ledger, for example because the date is in a locked period, so nothing was saved and the dialog stays open. Change the date or have the period reopened, then click Close &amp; sign again."],
+      ["No exchange rate for (currency) to (company currency) on (date), so the difference cannot post.", "The cash account holds another currency and there is no rate for the count date. Add it in Exchange Rates, then click Close &amp; sign again."],
       ["The cash account \"Main till\" has no ledger account, so the difference cannot post.", "Nothing was saved. Set Posts to (GL account) on the cash account in Cash Accounts, then count and close again."],
       ["Choose the over/short account the difference posts to.", "The count differs and Over/short account is empty, because your chart has no 6900 account. Pick the account from the list, then Close &amp; sign again."]
     ],
     tips: [
       "Expected is the balance right now, whatever Date you choose, so count before any of the next day's money is recorded.",
       "A count cannot be opened or changed after saving. Count carefully before clicking Close &amp; sign.",
-      "The over/short entry corrects the ledger only. The Cash Desk balance, and so the next Expected figure, still come from movements and handovers.",
-      "For an account in another currency, the variance is posted to the ledger as the same figure, without conversion into the company currency."
+      "The over/short entry corrects both the ledger and the Cash Desk balance, so the next Expected figure starts from what you counted.",
+      "Every figure in the dialog and the list is in the cash account's own currency; only the ledger entry is converted into the company currency."
     ]
   },
 
@@ -629,7 +632,7 @@ orbitScreenHelp({
     ],
     tips: [
       "There is no Delete here: set a service you no longer offer to Off.",
-      "Switching a service Off takes it out of the booking dialog, but the public booking page still lists it."
+      "Switching a service Off takes it out of the booking dialog and off the public booking page, and a client who still has the page open cannot book it."
     ]
   },
 
@@ -864,11 +867,11 @@ orbitScreenHelp({
       ["Enter an email", "Invite was clicked with no email."],
       ["Could not accept invite: This invitation was sent to a different email address. Sign in as (email) to accept it.", "The person opening the invite link is signed in with another email. Sign in with the invited address and open the link again."],
       ["Could not accept invite: Invite not found or already handled", "The link is wrong, the invite was removed, or it was declined."],
-      ["A guest is missing from Unassigned on Seating", "Seating only lists guests whose stage is Invited, Confirmed or Maybe (the standard stages, even if renamed). Guests on the Longlist, Shortlisted, Declined or a stage you added do not appear."]
+      ["A guest is missing from Unassigned on Seating", "Seating lists guests whose stage counts as Invited or Confirmed, including stages you added under Stages &amp; Priorities, plus Maybe, and anyone already on a table. A guest on a stage that counts as nothing yet or as Declined does not appear: change the guest's stage, or change what that stage counts as."]
     ],
     tips: [
       "Per-guest budget lines use the guest target, not the confirmed heads, so update the target as the list settles.",
-      "Invoices and bills raised from the event are made in the company currency with the same figure as the event row. If the event uses another currency, correct the amount on the draft before posting.",
+      "Invoices and bills raised from the event are made in the event's currency, with the same figure as the event row, so an event run in another currency than the company's gives drafts in that currency. Check the draft before posting.",
       "Deleting a table makes the guests seated at it unassigned.",
       "A collaborator can see and edit this event only; their other records and yours stay private."
     ]
@@ -945,7 +948,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["You don&rsquo;t have permission to do that.", "Your role cannot change Service records. Ask an administrator for manage rights on Service."],
-      ["The warranty badge appears before any item is chosen", "With no item and no serial typed, any warranty that has not expired matches. Choose the item and type the serial to see the warranty that really applies."],
+      ["The warranty badge does not appear", "A warranty only matches the item it names: its Product must be the ticket's Item / product, its Serial no. must match when it has one, and its Customer must match when both have one. A warranty with no product and no serial matches nothing. Check those fields on the warranty, and that Valid until has not passed."],
       ["A line disappeared after saving", "Lines with no quantity or hours and no description are not saved. Add the figures and save again."],
       ["The ticket is not on the Schedule", "Scheduled is empty, or falls in another week. Set it, or move the Schedule to that week."],
       ["Technician offers nobody", "Only Orbit users of your organisation are listed. Invite the technician in Settings, Users."]
@@ -967,8 +970,8 @@ orbitScreenHelp({
     how: [
       "Open <b>Service &rsaquo; Schedule</b>. For this example, an air-conditioning maintenance firm plans Monday morning. You should see <b>Technician schedule</b> and this week's dates.",
       "Look at the <b>Unassigned</b> row: two jobs are booked for today with no technician.",
-      "Drag the first card onto a technician's Tuesday cell. The cell highlights while you hover, and when you let go the card appears there. The ticket now has that technician, Tuesday's date and the status Assigned.",
-      "Drag a card back onto the Unassigned row to take the technician off it. Its status becomes New.",
+      "Drag the first card onto a technician's Tuesday cell. The cell highlights while you hover, and when you let go the card appears there. The ticket now has that technician and Tuesday's date at the same time of day, and a New ticket becomes Assigned.",
+      "Drag a card back onto the Unassigned row to take the technician off it. An Assigned ticket goes back to New; a ticket In progress, On hold or Done keeps its status.",
       "Click the right arrow to see next week, and <span class='man-key'>This week</span> to come back.",
       "Click a card to open its ticket, check the Scheduled time, and Save."
     ],
@@ -982,19 +985,19 @@ orbitScreenHelp({
       ["Drag a card", "Drop it on another technician or day to reassign and reschedule the ticket."],
       ["Click a card", "Opens the ticket."]
     ],
-    after: "Dropping a card saves the ticket at once: Technician becomes the row's user (or none for Unassigned), the date becomes the column's day at the card's time, and Status becomes Assigned, or New on the Unassigned row. Nothing reaches the books.",
+    after: "Dropping a card saves the ticket at once: Technician becomes the row's user (or none for Unassigned) and the date becomes the column's day at the card's own time of day. Status changes only between New and Assigned: a New ticket dropped on a technician becomes Assigned, and an Assigned ticket dropped on Unassigned becomes New. Any other status is kept. Nothing reaches the books.",
     links: [
       { name: "Tickets", how: "Where the Scheduled time, technician and status are set.", to: "svc.tickets" },
       { name: "Maintenance", how: "Generated tickets are scheduled on the plan's due date.", to: "svc.ppm" },
       { name: "Users", how: "Each user of the organisation gets a row.", to: "settings.users" }
     ],
     mistakes: [
-      ["A job I moved lost its In progress or Done status", "Dropping a card always sets Assigned, or New on the Unassigned row. Open the ticket and set the status back."],
+      ["A job I moved still says New", "It was dropped on the Unassigned row, which has no technician. Drop it on a technician's row and it becomes Assigned."],
       ["A ticket is missing from the week", "It has no Scheduled time, or it is scheduled in another week. Set the time on the ticket."],
       ["A technician has no row", "They are not a user of your organisation. Invite them in Settings, Users."]
     ],
     tips: [
-      "After moving a card, open the ticket and check the Scheduled time is still what the customer agreed.",
+      "Dragging moves the day and the technician but keeps the visit's time of day, as shown on the card.",
       "To change only the time of a visit, open the ticket rather than dragging."
     ]
   },
@@ -1029,7 +1032,7 @@ orbitScreenHelp({
     buttons: [
       ["Add plan", "Saves the new plan as active."],
       ["Generate (number) due ticket(s)", "Shown when active plans are due today or earlier. Creates one ticket per due plan and moves each plan's next due date on by its interval."],
-      ["&times; (on a plan)", "Deletes the plan straight away, without asking."]
+      ["&times; (on a plan)", "Deletes the plan after you confirm."]
     ],
     after: "Adding a plan changes nothing else. Generate creates a ticket for each active plan whose next due date is today or earlier, with the plan's title, customer, equipment and technician, priority Normal, status Assigned (New without a technician), scheduled on the due date at 09:00 and linked to the plan, then adds the plan's interval to its next due date once. Nothing posts to the books.",
     links: [
@@ -1091,8 +1094,8 @@ orbitScreenHelp({
       { name: "Products", how: "The list offered in Product.", to: "products" }
     ],
     mistakes: [
-      ["Every ticket shows Under (type) warranty", "A warranty was saved with neither a product nor a serial, so it matches every item. Open it and add the product and serial, or delete it."],
-      ["The badge does not show on a ticket for a covered item", "The ticket's product or serial differs from the warranty's, or Valid until has passed. Check both records."],
+      ["Choose the Product or type the Serial no., so Orbit knows which item this warranty covers.", "Both Product and Serial no. are empty. A warranty that names no item would cover nothing, so choose the product, type the serial, or both, and Save again."],
+      ["The badge does not show on a ticket for a covered item", "The ticket's product or serial differs from the warranty's, the warranty names another customer, or Valid until has passed. A warranty saved earlier with no product and no serial matches nothing: open it and add them. Check both records."],
       ["(expired) next to a date", "Valid until is before today. Extend it by clicking the date, if the cover really continues."]
     ],
     tips: [

@@ -446,8 +446,8 @@ orbitScreenHelp({
       "Open <b>Kitchen &rsaquo; Operations &rsaquo; Maintenance</b> and click <span class='man-key'>New</span>. In this example the bar espresso machine is backflushed once a week.",
       "Pick <i>Bar espresso machine</i> in <b>Equipment</b> and type <i>backflush</i> in <b>Task</b>.",
       "Type 7 in <b>Every N days</b> and set <b>Last done</b> to the day it was last backflushed.",
-      "Leave <b>Next due</b> empty and click <span class='man-key'>Save</span>. You should see <i>Saved</i>, and Orbit fills Next due about a week after Last done (in time zones ahead of UTC it can land one day early; type over it if so).",
-      "The next time the job is done, open the schedule, change <b>Last done</b>, <b>clear Next due</b>, and save. Next due only fills itself when it is empty.",
+      "Leave <b>Next due</b> empty and click <span class='man-key'>Save</span>. You should see <i>Saved</i>, and Next due is 7 days after Last done.",
+      "The next time the job is done, open the schedule, change <b>Last done</b> to that day and save. Next due moves to 7 days after it by itself.",
       "Use <span class='man-key'>Filters</span> &rsaquo; <b>Overdue</b> to see every job whose next due date has passed."
     ],
     fields: [
@@ -455,12 +455,12 @@ orbitScreenHelp({
       ["Task", "The job, for example backflush, descale or filter change.", "required"],
       ["Every N days", "How often the job is done, in days.", "optional"],
       ["Last done", "When the job was last done.", "optional"],
-      ["Next due", "When the job is next due. Left empty, Orbit works it out from Last done plus Every N days when you save. A date already here is kept as it is.", "auto"],
+      ["Next due", "When the job is next due. Orbit works it out as Last done plus Every N days when you save a new schedule, or when you change Last done or Every N days. A date you type here in the same save is kept.", "auto"],
       ["Active", "Yes by default. Kept on the schedule; the list shows active and inactive schedules alike.", "optional"]
     ],
     buttons: [
       ["New", "Opens a blank schedule. Only for people who can manage the Kitchen app."],
-      ["Save", "Fills Next due when it is empty and the other two dates allow it, then saves."],
+      ["Save", "Works out Next due from Last done and Every N days when either changed or Next due is empty, unless you typed Next due yourself, then saves."],
       ["Cancel", "Closes the form without saving."],
       ["Delete", "Removes the schedule after <i>Delete this record?</i>."],
       ["Filters", "<b>Overdue</b> shows schedules whose Next due is before today."],
@@ -473,7 +473,7 @@ orbitScreenHelp({
     mistakes: [
       ["Equipment is required", "No machine exists yet. Add it under Equipment first."],
       ["Task is required", "The job has no name. Type what is done."],
-      ["Next due did not move after I changed Last done", "Next due only fills itself when it is empty. Clear it and save again, or type the new date."]
+      ["Next due did not move after I changed Last done", "Every N days is empty, or Next due was changed in the same save, which keeps the date you typed. Fill Every N days, or put Next due back, and save again."]
     ],
     tips: [
       "Put the supplier's recommended interval in Every N days, then adjust it once you see how the machine behaves."
@@ -1551,7 +1551,7 @@ orbitScreenHelp({
       "Raise each franchisee's invoice for the Total due in <b>Invoices</b>."
     ],
     fields: [
-      ["Period", "This year, This quarter, This month, Last year, All time or Custom range. A report is included when its From and To both fall inside. <b>All time</b>, or a custom range with no From date, uses the last 30 days up to today.", "optional"],
+      ["Period", "This year, This quarter, This month, Last year, All time or Custom range. A report is included when its From and To both fall inside. <b>All time</b> includes every report, and a custom range with no From date includes every report up to its end date.", "optional"],
       ["From and To", "Only with Custom range: the first and last day of the run.", "optional"],
       ["Franchisee and Store", "From the sales report.", "auto"],
       ["Scheme", "The franchisee's active scheme, or an active scheme with no franchisee, or (no scheme).", "auto"],
@@ -1572,7 +1572,7 @@ orbitScreenHelp({
       { name: "Invoices", how: "Bill each franchisee the Total due.", to: "inv.out" }
     ],
     mistakes: [
-      ["No sales reported for this period yet.", "No sales report has both dates inside the period. Check the period box: All time only looks at the last 30 days, so pick This year or a Custom range instead."],
+      ["No sales reported for this period yet.", "No sales report has both dates inside the period. Pick a wider period, or All time to see every report."],
       ["(no scheme) and a royalty of 0.00", "The franchisee has no active scheme and there is no active scheme without a franchisee. Add or reactivate one under Royalty schemes."],
       ["A month's report is missing from the run", "Its dates run past the end of the period, for example a report to 2026-09-02 in an August run. Widen the range or correct the report's dates."],
       ["Nothing to export yet", "Export was pressed on an empty run."]

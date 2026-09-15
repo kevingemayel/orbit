@@ -90,7 +90,7 @@ orbitScreenHelp({
       ["Choose (group name) allows at most (number)", "More choices were ticked than the group allows. Untick some."],
       ["That does not cover the bill yet", "The tender lines add up to less than the total. Raise an amount or add another tender line."],
       ["No exchange rate for (currency) today - add one in Settings, Currencies", "A tender line uses a currency with no rate. Add the rate in Accounting &rsaquo; Configuration &rsaquo; Exchange Rates, or take that part in another currency."],
-      ["The order number shows as -", "Orbit could not fetch a number, usually because the connection was down when you pressed Save. The sale and its payments are still saved, but the order has no number, so it will not appear on the Collection screen. Call the customer by name or by the receipt."],
+      ["No connection, so this till gave the number itself.", "Shown under the order number when the connection was down as you pressed Save. The till carries on from the last number it gave today for this store, so the customer still gets a number, and the order reaches the kitchen and the Collection screen once the connection is back. Another till that was offline at the same time can give the same number, so call the name as well when two match."],
       ["Offline with a count of changes waiting", "The connection has dropped. Orders and payments are being kept on this device and send themselves, in order, when the connection returns. Keep the screen open; it cannot load the menu again with no connection."],
       ["A queued change was refused: (reason)", "A change saved while offline was rejected by the database when it was sent. Read the reason, then correct the order by hand."]
     ],
@@ -193,7 +193,7 @@ orbitScreenHelp({
       "The receipt prints with both tenders, the tip and PAID. You should see <i>Bill settled (tips 2.00) - table free to clear</i>, and T4 shows <b>Needs clearing</b> on the floor plan."
     ],
     fields: [
-      ["Store (top bar)", "Only shown with more than one active store. Decides which tables are drawn, which items are marked 86, and the store stamped on orders and payments.", "auto"],
+      ["Store (top bar)", "Only shown with more than one active store. Decides which tables are drawn (that store's tables, plus any table with no store set), which items are marked 86, and the store stamped on orders and payments.", "auto"],
       ["Search the menu and category strip", "Narrow the tiles on the pad by name or by category.", "optional"],
       ["Seat", "Who the next item is for: <b>Table</b> for something shared, or a seat number. Set it before tapping the item. The number of seat chips follows the covers, or the table's seats. By seat billing depends on it.", "optional"],
       ["Course", "Starters, Mains or Dessert: when the next item should reach the table. Set it before tapping the item. The kitchen only gets the course you send.", "optional"],
@@ -295,7 +295,8 @@ orbitScreenHelp({
       { name: "Items", how: "An item's station and prep time, where they are held, set its station filter and its target time.", to: "products" }
     ],
     mistakes: [
-      ["Nothing waiting. Tickets appear here the moment the floor sends them.", "Either nothing has been sent yet (items still held on the Floor pad), the Station filter hides the lines, the order belongs to another store, or the display lost its connection: with no connection the next refresh comes back empty. Check the filter, and the tickets return on the first refresh after the connection is back."],
+      ["Nothing waiting. Tickets appear here the moment the floor sends them.", "Nothing has been sent yet (items still held on the Floor pad), the Station filter hides the lines, or the order belongs to another store. Check the filter."],
+      ["Offline: showing the tickets as they were at (time). The board updates by itself when the connection is back.", "The display lost its connection. It keeps the tickets it last loaded, with their clocks still running, and tries again every 15 seconds. Tickets sent after that time are not on it yet. Marking items ready and bumping still work, and are sent when the connection returns."],
       ["A ticket turns red at the same time as every other", "None of its items has a prep time, so the station default is used: 3 minutes for Barista and Bar, 5 for Pastry, 8 for Kitchen, and 6 for a line with no station. The card uses the longest target of its lines."],
       ["A waiter says an order was sent but it is not on the board", "The waiter's device may be offline, holding the send in its queue. It appears once that device reconnects and sends it."],
       ["A counter number never moves to Ready to collect", "One of its items has not been tapped ready. Tap the remaining item, or bump the ticket."]
@@ -331,7 +332,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Nothing waiting", "No paid counter order is waiting. Orders rung on the Point of Sale Register or taken on the Floor have no call number and never appear here."],
-      ["A paid number is missing", "The order was paid while the connection was down, so it has no number; it is more than 6 hours old; or it belongs to another store than the one this browser last picked."],
+      ["A paid number is missing", "The order was paid on a till that is still offline and has not sent it yet (it appears once that till reconnects), it is more than 6 hours old, or it belongs to another store than the one this browser last picked."],
       ["A number stays under Being made", "At least one of its items is not marked ready on the Kitchen display."],
       ["The wrong number was tapped", "There is no undo on this screen: the order is marked collected and leaves the board."]
     ],
@@ -553,7 +554,7 @@ orbitScreenHelp({
       "Click <b>4.00</b> in the Delivery app column. The <b>Change price</b> box opens, reading <i>Latte on Delivery app, plate cost 1.52</i>, with the price history below.",
       "Type 4.50 in <b>New price</b>. You should see: <i>you make 2.98 a unit, a margin of 66.2%. After 20% channel commission you keep 2.08.</i>",
       "Set <b>Starts on</b> to the first of next month and type <i>supplier increase</i> in <b>Note</b>.",
-      "Press <span class='man-key'>Save</span>. The price is written from that date and the current price is closed the day before. If the box stays open, see <b>If something goes wrong</b> below.",
+      "Press <span class='man-key'>Save</span>. You should see <i>Price set from</i> and the date, and the box closes. The price is written from that date and the current price is closed the day before.",
       "Reopen <b>Price list</b>. The column still shows 4.00 until the start date; from then on it shows 4.50, and the history lists both.",
       "Press <span class='man-key'>Export</span> to take the whole grid into a spreadsheet."
     ],
@@ -577,7 +578,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Enter a price", "New price is empty or not a number."],
-      ["The Change price box stays open after Save, with no message", "The new price has been saved; the box does not close itself at present. Press Cancel and reopen Price list. Do not press Save again, or the same price is recorded twice."],
+      ["Could not close the current price: (reason) Nothing was changed; try again.", "The current price could not be given its end date, so the new price was not written either and the box stays open. Check the connection and press Save again."],
       ["The new price does not show in the grid", "The grid only shows prices already in force today. A price starting on a later date appears from that date."],
       ["No sellable items yet.", "There are no active items for sale. Add them in Items."],
       ["A plate cost of 0.00", "The item has no recipe and no Cost. Add a recipe, or a Cost on the item."]
@@ -972,7 +973,7 @@ orbitScreenHelp({
       { name: "Exchange Rates", how: "A currency can only be taken when it has a rate.", to: "rates" }
     ],
     mistakes: [
-      ["No active voucher with that code.", "The code is not typed exactly as issued (capital letters matter), the voucher was deleted, or two vouchers share the same code."],
+      ["No active voucher with that code.", "The code is not typed exactly as issued (capital letters matter), or the voucher was deleted."],
       ["That voucher was already used.", "Each voucher can be spent once."],
       ["That voucher has expired.", "Its expiry date is before today."],
       ["That does not cover the sale yet", "The tender lines add up to less than the total. Raise an amount or add a tender line."],
@@ -981,7 +982,8 @@ orbitScreenHelp({
       ["Items ring up at 0.00", "The product has no Sales Price. Set one on the item."],
       ["Redeem points does not appear", "No customer is picked, the customer has no points, or Loyalty value per point is 0 in Company Profile."],
       ["The sale fails with an error when the connection is down", "The Register does not keep sales offline: nothing is saved if the order cannot be written. Take the sale again once the connection is back, or use Kitchen &rsaquo; Counter, which keeps working offline."],
-      ["The expected cash at close looks too low or too high", "Only cash and change on sales linked to this session count. Counter and Floor sales are not included, and a refund made while the session is open counts as cash paid out."]
+      ["Could not save the sale lines: (reason) Nothing was recorded, so take the payment again.", "Part of the sale (its lines, its payment or its paid status) could not be written, so Orbit removed the unfinished sale. The payment box and the cart are still open: press Complete sale again. The same message names the payment or the sale when that was the part that failed."],
+      ["The expected cash at close looks too low or too high", "Only cash and change on sales linked to this session count. Counter and Floor sales are not included, and the cash part of a refund made while the session is open counts as cash paid out."]
     ],
     tips: [
       "There is one open session for the whole company: every device using the Register sells into it, and it stays open until someone closes it.",
@@ -1022,7 +1024,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Sales rung up on the register appear here.", "There are no till orders yet for this company."],
-      ["An order shows Void", "Anything not Paid or Refunded shows Void: a table still open, a counter order not yet paid or cleared, or a table merged into another."],
+      ["An order shows Open, Merged or Cancelled", "Open is a table or counter order not yet paid. Merged is a table whose items were moved onto another table's bill, so its own total is not a sale. Cancelled is a counter order cleared without payment. Only Paid and Refunded orders are finished sales."],
       ["A total is negative", "It is a refund, numbered from REF-."]
     ]
   },
@@ -1045,16 +1047,17 @@ orbitScreenHelp({
     buttons: [
       ["Refund", "After you confirm, records the refund of the whole sale."]
     ],
-    after: "A refund order numbered from <b>REF-</b> is saved with status refunded and a link to the original, with a negative copy of every line and one <b>cash</b> payment of minus the total. It is linked to the Register session open at that moment, if there is one, so that session's expected cash drops by the refund. The original sale is marked refunded, and the points it earned are taken off the customer. The refund does not give back points the customer redeemed, does not make a used voucher usable again, does not return stock and does not post to the accounts. The refund order records its VAT as 0.",
+    after: "A refund order numbered from <b>REF-</b> is saved with status refunded and a link to the original, with a negative copy of every line, minus the sale's VAT, and one negative payment for each way the sale was paid, in the same method and currency (a sale with no payment records is refunded as cash). It is linked to the Register session open at that moment, if there is one, so that session's expected cash drops only by the part refunded in cash. The original sale is marked refunded, and the points it earned are taken off the customer. If any part of the refund cannot be saved, the refund is removed and the sale stays as it was. The refund does not give back points the customer redeemed, does not make a used voucher usable again, does not return stock and does not post to the accounts.",
     links: [
       { name: "Sales", how: "Shows the original as Refunded and the refund as its own row.", to: "pos.orders" },
-      { name: "Sessions", how: "A refund made while a session is open lowers that session's expected cash and its Sales figure.", to: "pos.sessions" },
+      { name: "Sessions", how: "A refund made while a session is open lowers that session's Sales figure, and its expected cash by the part refunded in cash.", to: "pos.sessions" },
       { name: "Register", how: "Sales rung there can be refunded here.", to: "pos.terminal" }
     ],
     mistakes: [
       ["No sales to refund.", "There are no paid sales. A sale already refunded is no longer listed."],
       ["Only part of the sale is coming back", "This screen refunds the whole sale only."],
-      ["The customer paid by card", "The refund is still recorded as cash. Refund the card on your card terminal, and expect the drawer count of an open session to show that cash as paid out."],
+      ["The customer paid by card", "The refund is recorded as a card refund, like the sale, so the drawer's expected cash does not change. Refund the card on your card terminal as well."],
+      ["Could not record the refund payment: (reason) Nothing was refunded; try again.", "Part of the refund could not be saved, so Orbit removed it and the sale is still listed. Check the connection and press Refund again."],
       ["The sale is not in the list", "Only the latest 200 paid sales are listed, and refunded ones are left out."]
     ],
     tips: [
@@ -1111,14 +1114,14 @@ orbitScreenHelp({
       ["Name", "Shown next to the discount on the cart line.", "required"],
       ["Type", "Percent off, Quantity tier or Buy X get Y.", "optional"],
       ["All products / Category", "What the promotion covers.", "optional"],
-      ["Category", "Only for Category: which product category.", "optional"],
+      ["Category", "Only for Category: which product category. It must be chosen, or the promotion is not added.", "optional"],
       ["% off", "For Percent off and Quantity tier: the percentage taken off the line. Empty counts as 0.", "optional"],
       ["min qty", "For Quantity tier: the quantity of the item on the line from which the percentage applies.", "optional"],
       ["buy and get free", "For Buy X get Y: for every buy plus get free units on a line, get free units cost nothing.", "optional"]
     ],
     buttons: [
       ["Add", "Saves the promotion as active."],
-      ["&times; on a row", "Deletes the promotion straight away, without asking."]
+      ["&times; on a row", "Deletes the promotion after you confirm."]
     ],
     after: "The promotion is saved as active with no start or end date. The <b>Register</b> loads active promotions when it opens and works out each cart line's discount: when several promotions fit a line, only the largest discount is used. VAT is worked out after the discount. The Counter and the Floor do not apply promotions. Nothing is posted to the accounts.",
     links: [
@@ -1128,7 +1131,8 @@ orbitScreenHelp({
     mistakes: [
       ["Name the promotion", "Name is empty."],
       ["The promotion does not apply at the till", "The Register was already open when it was added (open it again), the item is not in the category, the line quantity is below min qty, or a Buy X get Y line does not yet hold buy plus get free units."],
-      ["A Category promotion discounts the wrong items", "The category list was left on Category..., so the promotion covers items with no category. Delete it and add it again with a category."],
+      ["Choose the category the promotion covers.", "Category is chosen in the second list but the category list is still on Category... Pick the category, then press Add."],
+      ["Applies to reads No category chosen, so it applies to nothing", "The promotion was saved without a category before Orbit refused that, so it discounts nothing. Delete it and add it again with a category."],
       ["A promotion needs changing", "Promotions cannot be edited here. Delete it and add it again."]
     ]
   },
@@ -1157,7 +1161,7 @@ orbitScreenHelp({
     ],
     buttons: [
       ["Add", "Saves the voucher as active."],
-      ["&times; on a row", "Deletes the voucher straight away, without asking."]
+      ["&times; on a row", "Deletes the voucher after you confirm."]
     ],
     after: "The voucher is saved as active. On the <b>Register</b>, Apply checks it, and completing the sale marks it used against that sale. A fixed voucher takes off at most the basket after promotions, before VAT; any value left over is not kept. A percentage voucher takes its percentage off the basket after promotions. Choosing Voucher as a payment method on the Counter or the Floor does not redeem a voucher. Nothing is posted to the accounts when a voucher is created or used.",
     links: [
@@ -1166,7 +1170,8 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Enter a code", "CODE is empty."],
-      ["No active voucher with that code.", "Shown at the Register: the code is typed differently, the voucher was deleted, or two vouchers were added with the same code."],
+      ["No active voucher with that code.", "Shown at the Register: the code is typed differently, or the voucher was deleted."],
+      ["A voucher with the code (code) already exists. Use a different code.", "Every voucher needs its own code, whatever its capital letters, so the Register can tell them apart. Type a different code and press Add."],
       ["That voucher was already used.", "Shown at the Register. A voucher cannot be used twice, and this screen cannot reset it."],
       ["That voucher has expired.", "Shown at the Register when the expiry date is before today. The voucher still works on its expiry date."]
     ],

@@ -331,7 +331,7 @@ orbitScreenHelp({
       ["Print", "Prints the chart."],
       ["An activity row", "Opens that activity to edit."],
       ["Save", "Saves the activity and redraws the chart."],
-      ["Delete", "Removes the activity straight away, without asking to confirm."],
+      ["Delete", "Removes the activity after you confirm."],
       ["Cancel", "Closes the dialog without saving."]
     ],
     after: "The programme is stored with the project and changes nothing else in Orbit. It is not linked to the Execution board's tasks, to timesheets or to any cost report. Deleting the project deletes its programme.",
@@ -543,7 +543,7 @@ orbitScreenHelp({
       ["Unit", "What is counted, for example panel or m2.", "optional"],
       ["Labour rate / hr", "The cost of one labour hour. Each log uses it unless you change the rate there.", "optional"],
       ["Due date", "When the installation should be finished.", "optional"],
-      ["Number", "Given on the first save, for example INS/2026/0001.", "auto"],
+      ["Number", "Given on the first save, for example INS/2026/0001, in the format of the Install job row in Settings, Document Numbering.", "auto"],
       ["Installed / planned, Progress, Labour cost", "The running totals from the daily logs.", "auto"],
       ["Date (Log installation)", "The day the work was done. It starts on today.", "optional"],
       ["Installed qty (Log installation)", "Units installed that day. Either this or Labour hours must be above zero.", "optional"],
@@ -618,7 +618,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank snag."],
       ["Save", "Saves the snag and stamps the time if it has just become Fixed, Verified or Closed."],
-      ["Delete", "Shown on an existing snag. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on an existing snag. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Filters", "Open (not Verified or Closed), Critical / high, or Overdue."],
       ["Group By", "Project, Severity, Status or Trade."],
@@ -641,7 +641,7 @@ orbitScreenHelp({
     ],
     tips: [
       "Group by Trade and export to send each subcontractor their own snag list.",
-      "Delete does not ask first. Closing a snag keeps the record, which is usually what you want."
+      "Closing a snag keeps the record, which is usually better than deleting it."
     ]
   },
 
@@ -684,7 +684,7 @@ orbitScreenHelp({
       ["+ Add item", "Adds a blank checklist row."],
       ["The cross on an item", "Removes the row."],
       ["Save", "Saves the inspection and its items, then offers to raise snags for any failed items."],
-      ["Delete", "Shown on an existing inspection. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on an existing inspection. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Filters and Group By", "Filter to Open or Safety inspections; group by Project or Type."],
       ["Select and Export", "Export the ticked rows, or the whole list, as a CSV file."]
@@ -732,7 +732,7 @@ orbitScreenHelp({
       ["+ Add item", "Adds a row."],
       ["The cross on a row", "Removes the row."],
       ["Save", "Saves the checklist and replaces its items with the rows on screen."],
-      ["Delete", "Shown on an existing checklist. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on an existing checklist. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Select and Export", "Export the ticked rows, or the whole list, as a CSV file."]
     ],
@@ -837,7 +837,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank incident."],
       ["Save", "Saves the incident."],
-      ["Delete", "Shown on an existing incident. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on an existing incident. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Filters", "Open (not Closed) or High / Critical."],
       ["Group By", "Type, Severity or Status."],
@@ -855,7 +855,7 @@ orbitScreenHelp({
     ],
     tips: [
       "Record near misses as well as injuries. They are the early warning.",
-      "Delete does not ask first. For a mistaken entry, correcting it is usually better than deleting the record."
+      "For a mistaken entry, correcting it is usually better than deleting the record."
     ]
   },
 
@@ -900,7 +900,7 @@ orbitScreenHelp({
       ["Save", "Saves the unit."],
       ["Log", "Records the movement or reading. A transfer updates Location, a meter reading updates Current meter, Rent out sets the status to On site and records rate times days as rental revenue, Return sets the status to Available."],
       ["Raise service ticket", "Shown on a saved unit. Creates a new service ticket for it and opens the ticket."],
-      ["Delete", "Shown on a saved unit. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on a saved unit. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Filters", "On site, Hired or Maintenance."],
       ["Group By", "Category, Status or Ownership."],
@@ -1245,7 +1245,7 @@ orbitScreenHelp({
       ["Date", "The date of issue. It starts on today.", "optional"],
       ["Notes", "A covering note, printed under the list.", "optional"],
       ["Document, Ref, Rev, Copies (each row)", "The document's name, its reference, its revision and how many copies. Copies starts at 1. A row with no Document is dropped when you save.", "optional"],
-      ["Number", "Given when the transmittal is first saved, for example TR/2026/0005.", "auto"]
+      ["Number", "Given when the transmittal is first saved, for example TR/2026/0005, in the format of the Transmittal row in Settings, Document Numbering.", "auto"]
     ],
     buttons: [
       ["New", "Opens a blank transmittal."],
@@ -1690,7 +1690,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank cost code."],
       ["Save", "Saves the code."],
-      ["Delete", "Shown on an existing code. Deletes it straight away, without asking to confirm."],
+      ["Delete", "Shown on an existing code. Deletes it after you confirm."],
       ["Cancel", "Closes the dialog without saving."],
       ["Code, Name and Category cells", "Click a cell in the list to change it in place."],
       ["Group By", "Groups the list by category."],

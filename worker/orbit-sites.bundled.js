@@ -107,7 +107,7 @@ img{max-width:100%;display:block}a{color:var(--pri)}
 <footer class="b-foot"><div class="b-wrap">&copy; ${new Date().getFullYear()} ${esc(site.name || "")}</div></footer>
 <script>(function(){var SUPA=${JSON.stringify(SUPA)},ANON=${JSON.stringify(ANON)},HOST=${JSON.stringify(host)};
 document.querySelectorAll('form.b-form').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v;});var msg=f.querySelector('.b-form-msg');
-fetch(SUPA+'/rest/v1/rpc/site_form_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':'Bearer '+ANON},body:JSON.stringify({p_host:HOST,p_form:f.getAttribute('data-form'),p_data:d})}).then(function(r){return r.json();}).then(function(){f.reset();if(msg){msg.hidden=false;msg.textContent='Thanks - your message was sent.';}}).catch(function(){if(msg){msg.hidden=false;msg.textContent='Sorry, that did not send. Please try again.';}});});});})();</script>
+fetch(SUPA+'/rest/v1/rpc/site_form_submit',{method:'POST',headers:{'Content-Type':'application/json','apikey':ANON,'Authorization':'Bearer '+ANON},body:JSON.stringify({p_host:HOST,p_form:f.getAttribute('data-form'),p_data:d})}).then(function(r){return r.json().then(function(j){if(!r.ok||!j||j.ok!==true)throw {refused:true};return j;},function(){throw {refused:!r.ok};});}).then(function(){f.reset();if(msg){msg.hidden=false;msg.textContent='Thanks - your message was sent.';}}).catch(function(e){if(msg){msg.hidden=false;msg.textContent=(e&&e.refused)?'Sorry, this form is not taking messages right now. Please contact us another way.':'Sorry, that did not send. Please try again.';}});});});})();</script>
 </body></html>`;
 }
 

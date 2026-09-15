@@ -159,7 +159,7 @@ orbitScreenHelp({
     how: [
       "Open <b>Sales &rsaquo; Configuration &rsaquo; Quotation Templates</b> and click <span class='man-key'>New</span>. For this example, an events caterer sets up its standard buffet for 50 guests.",
       "Type the name at the top, for example <i>Buffet for 50</i>, and a short <b>Note</b> such as <i>Includes staff and crockery</i>.",
-      "On the first line, pick <i>Buffet menu per guest</i> in <b>Product</b>. You should see the description and the unit price fill in from the product if they were empty. Set <b>Qty</b> to 50.",
+      "On the first line, pick <i>Buffet menu per guest</i> in <b>Product</b>. You should see the description and the unit price fill in from the product. Set <b>Qty</b> to 50.",
       "Add a line for a service with no product: leave Product on <i>(free text)</i>, type <i>Waiting staff, 4 hours</i> in <b>Description</b>, 1 in Qty and 240.00 in <b>Unit price</b>.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i>.",
       "When a customer asks for the buffet, open the template and click <span class='man-key'>Create quotation</span>. You should see <i>Quotation created</i> and a new draft quotation open with both lines.",
@@ -167,8 +167,8 @@ orbitScreenHelp({
     ],
     fields: [
       ["Template name", "What you call the template. Left blank, it saves as <i>Template</i>.", "optional"],
-      ["Note", "A free note kept on the template. It is not copied onto the quotation: the quotation's note reads <i>From template:</i> and the template name.", "optional"],
-      ["Product (on a line)", "An item from your products, or <i>(free text)</i> for a line with only a description. On lines that were there when the template opened, picking a product fills an empty description and a zero unit price from the product.", "optional"],
+      ["Note", "A note kept on the template. Create quotation copies it into the quotation's <b>Reference / Note</b>. When the template has no note, the quotation's note reads <i>From template:</i> and the template name.", "optional"],
+      ["Product (on a line)", "An item from your products, or <i>(free text)</i> for a line with only a description. Picking a product fills the description and unit price from it, on every line, including lines added with + Add line. A description or price you typed yourself is kept; one that came from the product picked before changes to the new product's.", "optional"],
       ["Description (on a line)", "What the line is for. A line with no description and no product is dropped when you save.", "optional"],
       ["Qty (on a line)", "How many. It starts at 1.", "optional"],
       ["Unit price (on a line)", "The price of one, before tax.", "optional"]
@@ -178,7 +178,7 @@ orbitScreenHelp({
       ["Save", "Saves the template and its lines."],
       ["Discard", "Goes back to the list without saving."],
       ["+ Add line", "Adds an empty line. The &times; at the end of a line removes it."],
-      ["Create quotation", "On a saved template. Saves it, then creates a draft quotation dated today, with the template's lines and prices and no tax, and opens it."],
+      ["Create quotation", "On a saved template. Saves it, then creates a draft quotation dated today, with the template's lines, prices and note and no tax, and opens it."],
       ["Delete", "On a saved template. Removes it for good after you confirm. Quotations already made from it are not touched."]
     ],
     after: "A template changes nothing in your accounts. Create quotation makes a new draft quotation in Sales; that too changes nothing until an invoice made from the confirmed order is posted.",
@@ -188,7 +188,6 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Save failed", "Saving changes to an existing template did not work, often because your role cannot manage Sales. Reload and try again."],
-      ["Picking a product on a new line fills nothing in", "Lines added with + Add line do not fill themselves from the product. Type the description and price, or save and reopen the template and pick the product again."],
       ["The quotation has no tax", "Template lines carry no tax. Set the Tax on each line of the quotation before you save it."],
       ["The quotation shows the wrong customer", "The quotation starts without a customer, and the list then shows the first name. Pick the right customer before you save."]
     ],
@@ -224,6 +223,7 @@ orbitScreenHelp({
       ["Cost Code", "The budget bucket for job costing, such as materials or subcontract. It is set once for the whole order, not per line.", "optional"],
       ["Currency", "Always the company currency on this screen.", "auto"],
       ["Order Date", "The date the order is placed. It starts as today.", "auto"],
+      ["Expected delivery", "The date the supplier promised the goods. Vendor Scorecards count an order as on time when it is fully received by this date, and as late while it is still open after it. On a blanket agreement (a BPO number) the same field is called <b>Valid until</b>.", "optional"],
       ["Reference / Note", "Any note on the order, for example the supplier's quote number. Orders made by other screens put their source here, such as <i>Awarded from RFQ/2026/0003</i> or <i>Release of BPO/2026/0001</i>.", "optional"],
       ["Product (on a line)", "Search your products by name or code. Picking one fills the description, unit, cost price and purchase tax, and shows the size boxes that fit the material.", "optional"],
       ["Description (on a line)", "What the line is for. A line with no product is a cost line: it can be billed but only received with Destination set to Site.", "optional"],
@@ -244,7 +244,7 @@ orbitScreenHelp({
       ["+ Add a line", "Adds an empty line. The &times; removes a line."],
       ["+size", "Adds another line for the same item right below, so you can order a second size of it."],
       ["Receive goods", "On a confirmed order not yet fully received. Opens the Goods Receipt page with every line that still has something to receive."],
-      ["Create Bill", "On a confirmed order not yet fully billed. Creates a draft vendor bill dated today, due in 30 days, with every line at its full ordered quantity and price, marks every line as billed, and opens the bill."],
+      ["Create Bill", "On a confirmed order not yet fully billed. Creates a draft vendor bill dated today, due in 30 days, and opens it. A stocked product line is billed for what was received and not billed yet; a service or description line for what was ordered and not billed yet. Each line's Billed quantity goes up by what the bill took. When goods are still to arrive you see <i>Bill created (draft) for what was received and not billed yet</i>, and Create Bill stays on the order for the rest."],
       ["Edit", "Shown on a confirmed order to people who can manage Purchase. Opens its lines and details for changes. A line already received or billed cannot go below that quantity, change product or be removed, and receipts and bills already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed with its received and billed quantities, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
       ["Receipts", "The counter at the top of an order that has been received. Opens its receipt, or lets you pick one when there are several. A receipt with the wrong quantity is corrected there, with Edit."],
       ["&#8249; and &#8250;", "Beside the title when you opened the order from the list. Step to the previous or next order in the list's order without going back to it. Alt and the left or right arrow key do the same."],
@@ -275,7 +275,7 @@ orbitScreenHelp({
       ["Add at least one product with a quantity", "Every line on the Goods Receipt has a zero quantity. Enter what arrived."],
       ["Stock saved, but no stock account is set for this company - Settings, Companies, Stock accounting", "The goods were received but their value was not posted. Set the stock accounts for the company; later receipts will post."],
       ["Someone else changed this purchase order while you had it open. Your changes were not saved - reload the page to get the latest version, then re-enter them.", "Another person saved the same order after you opened it. Reload, then make your change again."],
-      ["3-Way Match shows Billed &gt; received", "Create Bill bills every line in full, even if only part was received. Receive the rest first, or change the quantity on the draft bill to what arrived."]
+      ["Nothing to bill yet: everything received on this order is already billed. Receive the goods first, then create the bill.", "Every stocked line's received goods are already on a bill, and no service line is waiting. Receive the next delivery with Receive goods, then click Create Bill again."]
     ],
     tips: [
       "Receive before you bill. The bill is then easy to check against what actually arrived.",
@@ -294,7 +294,7 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Purchase &rsaquo; Orders &rsaquo; Blanket Orders</b> and click <span class='man-key'>+ New blanket agreement</span>. For this example, a restaurant group agrees a year of cooking oil with its supplier: 1,200 cans at 21.00.",
-      "You should see <i>Blanket agreement BPO/2026/0001 created</i> and the agreement open as a draft purchase order. Pick the <b>Vendor</b>.",
+      "You should see <i>Blanket agreement BPO/2026/0001 created, valid for a year</i> and the agreement open as a draft purchase order. Pick the <b>Vendor</b> and check <b>Valid until</b>, which starts a year from today.",
       "Add the line: the cooking oil product, <b>Qty</b> 1,200, <b>Price</b> 21.00, and its tax. Click <span class='man-key'>Save</span>, not Confirm.",
       "Go back to Blanket Orders. You should see the agreement with Agreed at its total, Released 0.00 and Status <b>Active</b>.",
       "When the first delivery is needed, click <span class='man-key'>Release</span> on its row. You should see <i>Release PO/2026/0031 drafted from BPO/2026/0001</i> and the new order open with the same line.",
@@ -304,7 +304,7 @@ orbitScreenHelp({
     fields: [
       ["Number", "The agreement number, BPO/ then the year and a sequence. It is what marks a purchase order as a blanket.", "auto"],
       ["Vendor", "The supplier on the agreement.", "auto"],
-      ["Valid until", "Read from the order's promised date. The purchase order form has no field for that date, so it normally shows a dash and the agreement never shows as Expired.", "auto"],
+      ["Valid until", "The agreement's <b>Valid until</b> date, set on the agreement itself. A new agreement starts a year from today. Once the date has passed, Status shows Expired.", "auto"],
       ["Agreed", "The agreement's total, from its lines.", "auto"],
       ["Released", "The total of every other purchase order, of any status except cancelled, whose Reference / Note contains this BPO number. The number of such orders is in brackets.", "auto"],
       ["Remaining", "Agreed less Released. It turns red when more has been released than agreed.", "auto"],
@@ -312,7 +312,7 @@ orbitScreenHelp({
       ["Status", "<b>Active</b>, <b>Fully drawn</b> when nothing remains, or <b>Expired</b> when the valid-until date has passed.", "auto"]
     ],
     buttons: [
-      ["+ New blanket agreement", "Creates a draft purchase order numbered BPO/..., with the note <i>Blanket agreement</i>, and opens it so you can add the vendor and the agreed lines."],
+      ["+ New blanket agreement", "Creates a draft purchase order numbered BPO/..., with the note <i>Blanket agreement</i> and Valid until a year from today, and opens it so you can add the vendor and the agreed lines."],
       ["Release", "Creates a draft purchase order for the same vendor with every agreed line at the agreed quantity and price, and the note <i>Release of</i> the BPO number, and opens it."],
       ["Open", "Opens the agreement itself in the purchase order form."]
     ],
@@ -371,7 +371,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["No confirmed purchase orders yet. Confirm a PO, receive goods, then bill it to see the match here.", "There are no confirmed orders. Draft orders are not checked."],
-      ["A line shows Billed &gt; received straight after Create Bill", "Create Bill bills every line in full. Receive the rest of the goods, or reduce the quantity on the draft bill."],
+      ["A line shows Billed &gt; received", "More was billed than arrived, usually on a bill whose quantity was typed or changed by hand. Create Bill bills stocked lines only for what was received. Correct the draft bill, or receive the rest of the goods."],
       ["A bill I typed by hand does not show as billed", "Only bills created from the order are linked to it. Use Create Bill on the order instead of starting a bill from scratch."]
     ],
     tips: [
@@ -421,7 +421,7 @@ orbitScreenHelp({
       ["Save", "Saves the items, suppliers and prices. A new RFQ gets its number and the status Sent."],
       ["+ Add item", "Adds an item to price. The &times; removes one; +size adds another size of the same item below it."],
       ["Award", "Saves, then creates a draft purchase order for that supplier with each item at their price turned into a price per item, the product's purchase tax, the project and cost code, and marks the RFQ Awarded. The cheapest supplier's button is emphasised."],
-      ["Reopen", "On an awarded RFQ. Sets it back to Sent and clears the winner. The purchase order already created is not removed."],
+      ["Reopen", "On an awarded RFQ. When the purchase order the award made is still a draft, Orbit asks to delete it, then sets the RFQ back to Sent and clears the winner, so awarding again never leaves two orders. When that order is no longer a draft, the RFQ is not reopened: cancel or change the order in Purchase Orders instead."],
       ["Print RFQ", "Prints the request to send suppliers, with a blank column for their price. Each row names its item (the product, with the line's description under it), and the header shows the project's code, never its name."],
       ["Print comparison", "Prints the comparison of every supplier's totals, with the lowest total named."]
     ],
@@ -436,8 +436,8 @@ orbitScreenHelp({
     mistakes: [
       ["Add vendor contacts first (Contacts).", "No contact is marked as a vendor. Add the suppliers in Vendors, then come back."],
       ["Compare quotes does not appear", "It needs at least one item and one invited supplier. Add both."],
-      ["The awarded order has a zero price on a line", "That supplier had no price on the line when you clicked Award. Type the price on the draft order, or Reopen, add the price and award again."],
-      ["Two purchase orders for one RFQ", "Reopen does not remove the order from the first award. Delete the unwanted draft order in Purchase Orders."]
+      ["The awarded order has a zero price on a line", "That supplier had no price on the line when you clicked Award. Type the price on the draft order, or Reopen (which deletes the draft order), add the price and award again."],
+      ["This RFQ cannot be reopened: (order) is no longer a draft. Cancel or change that order in Purchase Orders instead.", "The order made by the award has been sent or confirmed, so reopening would leave it behind. Work on that order instead, or cancel it and then reopen the RFQ."]
     ],
     tips: [
       "Set the Basis before typing prices. Prices are compared per item, so a price per m2 and a price per sheet line up correctly.",
@@ -774,8 +774,8 @@ orbitScreenHelp({
       "Under Landed cost buildup, type Freight 1,200.00, Insurance 80.00, Customs duty 640.00 and Clearing / handling 80.00.",
       "Read the totals. You should see Goods value 8,000.00, the extra costs 2,000.00 and Total landed cost 10,000.00 (x1.25). Each line's Landed value is its Goods value times 1.25.",
       "Click <span class='man-key'>Save</span>. You should see <i>Shipment saved</i>. Change <b>Status</b> as it moves, and save each time.",
-      "When the status is saved as Arrived or Customs cleared, click <span class='man-key'>Create goods receipt</span>. The Goods Receipt page opens with the products at their landed unit cost.",
-      "Check the quantities and click <span class='man-key'>Confirm receipt</span>."
+      "When the status is saved as Arrived or Customs cleared, click <span class='man-key'>Create goods receipt</span>. The Goods Receipt page opens with the products at their landed unit cost; lines imported from the purchase order show how much is still to receive on it.",
+      "Check the quantities and click <span class='man-key'>Confirm receipt</span>. You should see the receipt number and <i>Shipment marked Received</i>, the shipment opens again with the status Received, and the purchase order's Received column goes up."
     ],
     fields: [
       ["Shipment ref", "The name for the shipment, such as a container number. Left blank, Orbit numbers it SHP- and a sequence.", "auto"],
@@ -801,11 +801,11 @@ orbitScreenHelp({
       ["Discard", "Goes back to the list."],
       ["+ Import lines from a PO...", "Adds the lines of a draft, sent or confirmed purchase order as goods."],
       ["+ Add item", "Adds an empty goods line. The &times; removes one."],
-      ["Create goods receipt", "Shown when the saved status is Arrived or Customs cleared. Saves, marks the shipment Received, and opens a Goods Receipt with each product line at its landed unit cost, going to the warehouse."],
+      ["Create goods receipt", "Shown when the saved status is Arrived or Customs cleared. Saves, then opens a Goods Receipt with each product line at its landed unit cost, going to the warehouse. Lines imported from a purchase order stay linked to that order line: the receipt adds to the order's Received quantity, cannot take more than is still outstanding, and lines already fully received are left off. The shipment is marked Received only when you confirm the receipt; Discard takes you back to the shipment as it was."],
       ["Delete", "On a saved shipment. Removes it for good after you confirm."],
       ["Filters and Group By (list)", "Show In transit, At port / customs, Cleared or Received shipments, or gather them by status or supplier."]
     ],
-    after: "Saving a shipment posts nothing. Confirming the goods receipt puts the products into stock and posts their value at the landed unit cost: debit stock, credit the goods received account. The freight, duty and clearing costs are not posted by the shipment itself.",
+    after: "Saving a shipment posts nothing. Confirming the goods receipt puts the products into stock and posts their value at the landed unit cost: debit stock, credit the goods received account, and marks the shipment Received. A receipt whose lines were imported from one purchase order is filed under that order's Receipts. The freight, duty and clearing costs are not posted by the shipment itself.",
     links: [
       { name: "Shipments board", how: "The same shipments as columns by status.", to: "shp.board" },
       { name: "Purchase Orders", how: "Import an order's lines onto the shipment.", to: "po.list" },
@@ -816,8 +816,8 @@ orbitScreenHelp({
       ["Save failed", "Saving an existing shipment did not work, often because your role cannot manage Purchase. Reload and try again."],
       ["Items failed: (reason)", "The shipment was saved but its goods lines were not. Check the lines and save again."],
       ["Create goods receipt is not shown", "The status saved on the shipment is not Arrived or Customs cleared. Set the Status, click Save, and the button appears."],
-      ["The purchase order still shows nothing received", "A receipt made from a shipment is not linked to the order lines, so the order's Received quantity does not change. Do not also use Receive goods on the order for the same goods, or the stock is counted twice."],
-      ["The shipment says Received but nothing is in stock", "Create goods receipt marks the shipment Received as soon as it opens the receipt. If you discarded the receipt, click Create goods receipt again, or set the status back and save."]
+      ["Cannot receive more than ordered on (line): only (quantity) left on the PO.", "Part of that order line was already received, for example with Receive goods on the order. Lower the quantity to what is left."],
+      ["No line on this shipment has a product, so there is nothing to receive into stock.", "Pick a product on each goods line you stock, save the shipment, and click Create goods receipt again."]
     ],
     tips: [
       "Enter all the extra costs before receiving: the landed cost is fixed on the receipt at that moment.",
@@ -865,7 +865,7 @@ orbitScreenHelp({
 
   "crm.pipe": {
     title: "Pipeline",
-    what: "The Pipeline shows every open sales opportunity (a <b>lead</b>) as a card in a column for its stage, such as New, Qualified, Proposition and Won. Each column shows how many leads it holds and their expected revenue, and the top of the page shows the total open pipeline and a <b>weighted forecast</b>, where each deal counts at its probability. Click a card to work the lead.",
+    what: "The Pipeline shows every open sales opportunity (a <b>lead</b>) as a card in a column for its stage, such as New, Qualified, Proposition and Won. Each column shows how many leads it holds and their expected revenue, and the top of the page shows the total open pipeline, a <b>weighted forecast</b>, where each deal counts at its probability, and what is already won. Click a card to work the lead.",
     when: [
       "You want to see all the deals you are chasing, stage by stage.",
       "You need a realistic forecast of the sales likely to come in.",
@@ -881,8 +881,9 @@ orbitScreenHelp({
       "Go back to the Pipeline. You should see the card under Qualified and the column totals updated."
     ],
     fields: [
-      ["Open pipeline", "The expected revenue of every active lead, with the count in brackets.", "auto"],
-      ["Weighted forecast", "Each active lead's expected revenue times its probability, added up.", "auto"],
+      ["Open pipeline", "The expected revenue of every active lead that is not in a won stage, with the count in brackets.", "auto"],
+      ["Weighted forecast", "Each of those leads' expected revenue times its probability, added up.", "auto"],
+      ["Won", "The expected revenue of active leads in a stage marked as a won stage, with the count in brackets. They are left out of Open pipeline and the forecast.", "auto"],
       ["Stage columns", "One per stage in the order set in Stages, each with the count and total expected revenue.", "auto"],
       ["Card", "The opportunity name, the customer or contact name, and the expected revenue with its probability.", "auto"]
     ],
@@ -899,7 +900,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["An archived lead is not on the board", "The Pipeline shows only active leads. Find archived ones in Leads with the Lost filter."],
-      ["Won deals still count in Open pipeline", "Every active lead counts, whatever its stage. Archive a lead once it is won or lost to take it out of the figures."]
+      ["A won deal still counts in Open pipeline", "Its stage is not marked as a won stage. Open Stages, open the stage and set Won stage to Yes. Archive a lost lead to take it out of the figures."]
     ],
     tips: [
       "The first time the Pipeline opens with no stages, Orbit creates New, Qualified, Proposition and Won for you.",
@@ -942,7 +943,7 @@ orbitScreenHelp({
       ["Quoted", "The amount you quoted and the day you sent it.", "optional"],
       ["Against what specification", "What the quoted price was built on.", "optional"],
       ["Notes", "The running record of anything else.", "optional"],
-      ["Stage bar", "The stages across the top. A new lead starts in the first stage; clicking a stage on a saved lead changes it at once.", "auto"],
+      ["Stage bar", "The stages across the top. A new lead starts in the first stage; clicking a stage on a saved lead changes it at once. A stage marked as a won stage marks the lead won: its probability goes to 100% and you see <i>Marked won</i>. Choosing that stage in the list's Stage column does the same.", "auto"],
       ["People on this lead", "On a saved lead: each person's Name, Role, Phone and Email. The first is the primary contact.", "optional"],
       ["Photos &amp; files", "On a saved lead: site photos and documents. Images are compressed automatically.", "optional"],
       ["Log activity: Type, Follow-up date, Subject, Note, Already done", "Type is Call, Email, Meeting, Note or Task. Tick Already done to log it as completed.", "optional"]
@@ -986,7 +987,7 @@ orbitScreenHelp({
 
   "crm.stages": {
     title: "Stages",
-    what: "Stages are the steps a lead moves through, and the columns of the Pipeline. This screen lists them with their order and whether one is marked as the won stage. You add new stages here; the order number decides where each column sits.",
+    what: "Stages are the steps a lead moves through, and the columns of the Pipeline. This screen lists them with their order and whether one is marked as the won stage. You add stages here, and open one to rename it, move it, change whether it is the won stage, or delete it when no lead is in it. The order number decides where each column sits.",
     when: [
       "Your sales process has a step the default stages do not cover, such as Site visit or Negotiation.",
       "You want to check the order the pipeline columns appear in."
@@ -997,18 +998,21 @@ orbitScreenHelp({
       "Click <span class='man-key'>New</span>. The <b>New pipeline stage</b> box opens.",
       "Type <i>Design visit</i> in <b>Name</b> and 25 in <b>Order</b>, and leave <b>Won stage</b> on No.",
       "Click <span class='man-key'>Save</span>. You should see <i>Stage added</i> and the stage in the list.",
-      "Open the Pipeline. You should see a Design visit column between Qualified and Proposition."
+      "Open the Pipeline. You should see a Design visit column between Qualified and Proposition.",
+      "Later the step is renamed. Back in Stages, click the <i>Design visit</i> row, change the Name to <i>Showroom visit</i> and click <span class='man-key'>Save</span>. You should see <i>Stage saved</i>, and the Pipeline column is renamed."
     ],
     fields: [
       ["Name", "What the stage is called, as the pipeline column and the stage bar show it.", "required"],
       ["Order", "Where the stage sits: lower numbers come first. It starts at 50.", "optional"],
-      ["Won stage", "Marks the stage as the won stage in this list. Orbit does not act on it: moving a lead there creates nothing. Use the buttons on the lead to create the customer, quotation or tender.", "optional"]
+      ["Won stage", "Marks a stage as a won stage. Moving a lead into it, from the stage bar on the lead or the Stage column in Leads, marks the lead won: its probability goes to 100%, and the Pipeline counts it under Won instead of in the open pipeline. Creating the customer, quotation or tender is still done with the buttons on the lead.", "optional"]
     ],
     buttons: [
       ["New", "Opens the New pipeline stage box."],
-      ["Save and Cancel", "Add the stage, or close the box without adding it."]
+      ["A row", "Opens that stage to rename it, change its order or won flag, or delete it."],
+      ["Save and Cancel", "Save the stage, or close the box without saving."],
+      ["Delete", "In an opened stage. Deletes it after you confirm, but only when no lead is in that stage."]
     ],
-    after: "A new stage adds a column to the Pipeline and a step to every lead's stage bar. Nothing in your accounts changes.",
+    after: "A new stage adds a column to the Pipeline and a step to every lead's stage bar; renaming one renames both. Nothing in your accounts changes.",
     links: [
       { name: "Pipeline", how: "Each stage is a column there.", to: "crm.pipe" },
       { name: "Leads", how: "The Stage column and the stage bar use these stages.", to: "crm.leads" }
@@ -1016,7 +1020,7 @@ orbitScreenHelp({
     mistakes: [
       ["Name required", "The stage has no name. Type one."],
       ["Could not save: (reason)", "The stage could not be added, often because your role cannot manage the CRM."],
-      ["A stage cannot be renamed or removed", "This screen only adds stages; existing ones do not open for editing. Plan the names and order before adding them."]
+      ["(Stage) is used by (n) lead(s). Move them to another stage first, then delete it.", "Leads are still in that stage. Move them from the stage bar on each lead, or the Stage column in Leads, then delete the stage."]
     ],
     tips: [
       "Leave gaps in the order numbers, such as 10, 20, 30, so a new stage can slot in between."

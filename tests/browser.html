@@ -4,6 +4,7 @@
 <style>
   body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;background:#fbfbfa;color:#16171c}
   h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:16px;margin:28px 0 4px}
   .sum{font-size:13px;color:#555;margin:0 0 18px}
   .c{border:1px solid #e5e5e2;border-left:3px solid #ccc;border-radius:10px;padding:11px 14px;margin:8px 0;background:#fff}
   .c.ok{border-left-color:#16a34a}
@@ -17,6 +18,9 @@
 <h1>Orbit structural checks</h1>
 <p class="sum" id="sum">running...</p>
 <div id="out"></div>
+<h2>The checks catch their bug</h2>
+<p class="sum" id="sum2">running...</p>
+<div id="out2"></div>
 <script src="checks.js"></script>
 <script>
 (async function () {
@@ -28,15 +32,44 @@
   for (var i = 0; i < names.length; i++) {
     help[names[i]] = await fetch("../js/help/" + names[i] + ".js?cb=" + Math.random()).then(function (r) { return r.ok ? r.text() : ""; });
   }
+  function paint(sumId, outId, res, withWhy) {
+    var pass = res.filter(function (r) { return r.ok; }).length;
+    document.getElementById(sumId).textContent = pass + " of " + res.length + " passed";
+    document.getElementById(sumId).style.color = pass === res.length ? "#16a34a" : "#dc2626";
+    document.getElementById(outId).innerHTML = res.map(function (r) {
+      return '<div class="c ' + (r.ok ? "ok" : "no") + '"><span class="tag">' + (r.ok ? "PASS" : "FAIL") + '</span>' +
+        '<div class="n">' + r.name + '</div>' +
+        '<div class="d">' + String(r.detail || "").replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</div>' +
+        (withWhy ? '<div class="w">' + r.why + '</div>' : '') + '</div>';
+    }).join("");
+  }
   var res = ORBIT_CHECKS.run(src, css, help);
-  var pass = res.filter(function (r) { return r.ok; }).length;
-  document.getElementById("sum").textContent = pass + " of " + res.length + " passed";
-  document.getElementById("sum").style.color = pass === res.length ? "#16a34a" : "#dc2626";
-  document.getElementById("out").innerHTML = res.map(function (r) {
-    return '<div class="c ' + (r.ok ? "ok" : "no") + '"><span class="tag">' + (r.ok ? "PASS" : "FAIL") + '</span>' +
-      '<div class="n">' + r.name + '</div>' +
-      '<div class="d">' + (r.detail || "") + '</div>' +
-      '<div class="w">' + r.why + '</div></div>';
-  }).join("");
+  paint("sum", "out", res, true);
+
+  // The node runner (static.test.js) re-runs every check against deliberately
+  // broken source and requires it to FAIL. This machine may have no node, so the
+  // same mutations are read out of static.test.js and applied here too.
+  var runner = await fetch("static.test.js?cb=" + Math.random()).then(function (r) { return r.ok ? r.text() : ""; });
+  var mm = /const MUTATIONS = \{([\s\S]*?)\r?\n\};/.exec(runner), MUT = null;
+  try { MUT = mm ? new Function("return {" + mm[1] + "\n};")() : null; } catch (e) { MUT = null; }
+  var mres = ORBIT_CHECKS.checks.map(function (c) {
+    var mutate = MUT && MUT[c.name];
+    if (!mutate) return { name: c.name, ok: false, detail: MUT ? "no mutation defined in static.test.js" : "could not read MUTATIONS from static.test.js" };
+    try {
+      if (/own help page/.test(c.name)) {
+        var bh = {}, changed = false;
+        Object.keys(help).forEach(function (k) { bh[k] = mutate(help[k]); if (bh[k] !== help[k]) changed = true; });
+        if (!changed) return { name: c.name, ok: false, detail: "the mutation changed nothing, so the check was never exercised" };
+        var hr = c.run(src, css, bh);
+        return { name: c.name, ok: hr.ok === false, detail: hr.ok === false ? "fails on broken help: " + hr.detail : "still passes on deliberately broken help" };
+      }
+      var cssCheck = /status colours/.test(c.name), before = cssCheck ? css : src, after = mutate(before);
+      if (after === before) return { name: c.name, ok: false, detail: "the mutation changed nothing, so the check was never exercised" };
+      var r = cssCheck ? c.run(src, after, help) : c.run(after, css, help);
+      return { name: c.name, ok: r.ok === false, detail: r.ok === false ? "fails on broken source: " + r.detail : "still passes on deliberately broken source" };
+    } catch (e) { return { name: c.name, ok: false, detail: "threw: " + e.message }; }
+  });
+  paint("sum2", "out2", mres, false);
+  window.__checksReport = { checks: res, mutations: mres };
 })();
 </script>

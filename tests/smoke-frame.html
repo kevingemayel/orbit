@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<!-- No request may leave this server: the backend is tests/smoke-stub.js. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:">
+<!-- app.js loads help pages and images by paths relative to the site root -->
+<base href="../">
+<title>Orbit under smoke test</title>
+<div id="root"></div>
+<script>
+  // One stamp for every file, so an edit made a moment ago is the version under test.
+  (function () {
+    var t = Date.now();
+    document.write('<link rel="stylesheet" href="css/app.css?t=' + t + '">');
+    document.write('<script src="tests/smoke-stub.js?t=' + t + '"><\/script>');
+    document.write('<script>window.__ORBIT_SMOKE__ = true;<\/script>');
+    document.write('<script src="js/app.js?t=' + t + '"><\/script>');
+  })();
+</script>

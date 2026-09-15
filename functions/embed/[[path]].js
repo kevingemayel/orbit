@@ -20,7 +20,7 @@ const ERP_JS = `(function(){
    +'.swx-form textarea{flex-basis:100%}.swx-form .swx-btn{margin-left:0}.swx-portal{display:flex;gap:10px;flex-wrap:wrap}';
   function inject(){ if(document.getElementById('swx-css'))return; var s=document.createElement('style');s.id='swx-css';s.textContent=CSS;document.head.appendChild(s); }
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function rpc(n,b){return fetch(SUPA+'/rest/v1/rpc/'+n,{method:'POST',headers:{'Content-Type':'application/json',apikey:ANON,Authorization:'Bearer '+ANON},body:JSON.stringify(b)}).then(function(r){return r.json();});}
+  function rpc(n,b){return fetch(SUPA+'/rest/v1/rpc/'+n,{method:'POST',headers:{'Content-Type':'application/json',apikey:ANON,Authorization:'Bearer '+ANON},body:JSON.stringify(b)}).then(function(r){return r.json().then(function(j){if(!r.ok){var e=new Error((j&&j.message)||'refused');e.refused=true;throw e;}return j;});});}
   function pri(el){var c=el.getAttribute('data-color');if(!c){try{c=getComputedStyle(document.documentElement).getPropertyValue('--sw-pri').trim();}catch(e){}}if(c)el.style.setProperty('--swx-pri',c);}
   function targets(){
     var out=[];
@@ -42,7 +42,7 @@ const ERP_JS = `(function(){
         return '<div class=swx-job><h4>'+esc(j.title)+'</h4>'+(meta?'<div class=swx-meta>'+meta+'</div>':'')+apply+(j.description?'<div class=swx-desc>'+esc(j.description)+'</div>':'')+form+'</div>';
       }).join('');
       el.querySelectorAll('[data-apply]').forEach(function(b){b.onclick=function(){var f=el.querySelector('[data-jobform="'+b.getAttribute('data-apply')+'"]');if(f)f.classList.toggle('on');};});
-      el.querySelectorAll('[data-jobform]').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v;});var jid=f.getAttribute('data-jobform');var btn=f.querySelector('button[type=submit]');btn.disabled=true;rpc('job_apply',{p_company:t.company,p_job:jid,p_data:d}).then(function(r){f.innerHTML='<div class=swx-empty>Thanks \\u2014 your application was sent.</div>';}).catch(function(){btn.disabled=false;alert('Could not send. Please try again.');});});});
+      el.querySelectorAll('[data-jobform]').forEach(function(f){f.addEventListener('submit',function(e){e.preventDefault();var d={};new FormData(f).forEach(function(v,k){d[k]=v;});var jid=f.getAttribute('data-jobform');var btn=f.querySelector('button[type=submit]');btn.disabled=true;rpc('job_apply',{p_company:t.company,p_job:jid,p_data:d}).then(function(r){f.innerHTML='<div class=swx-empty>Thanks - your application was sent.</div>';}).catch(function(e){btn.disabled=false;alert(e&&e.refused?'Sorry, this position is no longer taking applications.':'Could not send. Please try again.');});});});
     }).catch(function(){el.innerHTML='<div class=swx-empty>Could not load positions.</div>';});
   }
   function portal(t){

@@ -62,7 +62,7 @@ orbitScreenHelp({
       ["Split (Special assessment)", "<b>By share (milliemes)</b> shares the total in proportion to each unit's shares; <b>Equally per unit</b> divides it by the number of units.", "optional"],
       ["Due date (Special assessment)", "When the levy is due. The last day of this month unless you change it.", "auto"],
       ["Only one block? (Special assessment)", "Shown only when units have a block. Pick a block to raise the levy from that block's units alone.", "optional"],
-      ["Owner (Owner statement)", "Any current owner in the company. The statement lists their charges and credit notes on this building.", "required"],
+      ["Owner (Owner statement)", "Any current owner of a unit in this building. The statement lists their posted charges and credit notes on this building and the payments they made for it.", "required"],
       ["Amount to give back (Give back to owners)", "Fills with the surplus Orbit works out: cash on hand, less the reserve to keep, less what has already been given back. It stays empty while the building still owes suppliers.", "auto"]
     ],
     buttons: [
@@ -71,14 +71,14 @@ orbitScreenHelp({
       ["Edit building", "Opens the chosen building's settings, the same form as the Buildings screen."],
       ["Generate this period's charges", "Opens the charge preview for this building: what each unit pays, which units have no owner, and a Save that creates one draft invoice per billed unit. See Billing runs for the detail."],
       ["Record a payment", "Records money received against one posted charge: posts it to the ledger through the Cash or Bank journal, matches it to that invoice so what is left goes down, and opens a receipt to print."],
-      ["Special assessment", "Raises a one-off levy outside the regular charges: one draft invoice per unit with an owner, grouped as a run in Billing runs."],
+      ["Special assessment", "Raises a one-off levy outside the regular charges: one draft invoice per unit with an owner, grouped as a run in Billing runs. A unit with no owner is not billed: Orbit asks before going ahead, and the levy then raises that much less."],
       ["Owner statement", "Pick an owner and click Save: a statement of account opens to print, with a running balance and the balance due."],
-      ["Give back to owners", "Shows cash on hand, reserve to keep, what was already given back and the surplus, then creates one draft credit note per unit with an owner, split by share."],
+      ["Give back to owners", "Shows cash on hand, reserve to keep, what was already given back and the surplus, then creates one draft credit note per unit with an owner, split by share. A unit with no owner gets nothing: Orbit asks before going ahead, and its share stays in the fund."],
       ["Units, Charges, Meetings", "Shortcuts to those screens."],
       ["Add unit and Add cost", "Add a row to the setup window. The small cross removes a row."],
       ["Save and Cancel", "In every window: Save does the job, Cancel closes without changing anything."]
     ],
-    after: "<b>Set up a building</b> creates the building, its units, a contact and an ownership for every owner name, and a monthly charge for every cost. The building's income account is set to the first income account in your chart of accounts. <b>Generating charges</b> and a <b>special assessment</b> create <b>draft</b> customer invoices tagged to the building and the unit; drafts are not money yet, which is why <b>Billed (posted)</b> ignores them until they are posted in Accounting. <b>Give back to owners</b> creates draft customer credit notes the same way. <b>Record a payment</b> posts the receipt to the ledger (cash or bank against what the owner owes), keeps the method and payer on the payment, and lowers the invoice's balance so it shows as partly paid or paid in Arrears, the portal and reports. The <b>Fund balance</b> card is the building's opening balance, plus incoming payments, less what has been paid on bills tagged to this building.",
+    after: "<b>Set up a building</b> creates the building, its units, a contact and an ownership for every owner name, and a monthly charge for every cost. The building's income account is set to the first income account in your chart of accounts. <b>Generating charges</b> and a <b>special assessment</b> create <b>draft</b> customer invoices tagged to the building and the unit; drafts are not money yet, which is why <b>Billed (posted)</b> ignores them until they are posted in Accounting. <b>Give back to owners</b> creates draft customer credit notes the same way. <b>Record a payment</b> posts the receipt to the ledger (cash or bank against what the owner owes), keeps the method and payer on the payment, and lowers the invoice's balance so it shows as partly paid or paid in Arrears, the portal and reports. The <b>Fund balance</b> card is the building's opening balance, plus the payments received for this building, less what has been paid on bills tagged to this building. A payment counts for the building when it paid one of the building's charge invoices or credit notes, or when it was taken on account from an owner whose units are all in this building; payments for other buildings or other business in the company are left out.",
     links: [
       { name: "Buildings", how: "Where a building's reserve, opening balance, income account and letter details are set.", to: "plot.buildings" },
       { name: "Units", how: "The shares entered there decide what each unit pays.", to: "plot.units" },
@@ -102,16 +102,17 @@ orbitScreenHelp({
       ["That is more than the (amount) outstanding on this charge. Record (amount) here, and any advance as a separate receipt.", "The amount typed is higher than what is left on the invoice. Record up to what is left, then apply the rest to the owner's other charges one at a time."],
       ["Say what the levy is for / Enter the total to raise", "The special assessment needs a purpose and a total above zero."],
       ["No units with an owner to bill", "No unit in the chosen scope has an owner link. Add owners in Owners first."],
-      ["No owners on file", "Owner statement lists current owners only. Link owners to units in Owners."],
+      ["No owners on file", "Owner statement lists the current owners of this building's units only. Link owners to units in Owners."],
       ["This building still owes suppliers (amount)", "Bills tagged to this building are not fully paid. Settle them first; you can still continue after the question, but the cash may be needed."],
       ["Units have no shares to split by / No owners to give back to", "A give-back is split by unit shares and addressed to unit owners. Enter shares in Units and owners in Owners."],
-      ["The Fund balance looks too high", "The card adds every incoming payment recorded in the company, including payments from other buildings or other customers, to this building's opening balance. Check it against Accounting when the company does more than run this building."]
+      ["(n) unit(s) have no owner on file (codes), so their share of (amount) is not billed and the levy raises (amount) instead of (amount)", "Seen when raising a special assessment; a give-back asks the same, saying the share is not given back and stays in the fund. Those units have no owner link, so nobody can be invoiced or credited for them. Click Cancel, add the owners in Owners and try again, or click OK to go ahead without them."],
+      ["An owner's advance is not in the Fund balance", "Money taken on account, not paid against a charge, counts for a building only when all of the owner's units are in that building, because otherwise Orbit cannot tell which building it is for. Record it against a charge with Record a payment instead."]
     ],
     tips: [
       "Record a payment puts the receipt in the books, the same as Register Payment on the invoice in Accounting. Use one or the other for each payment, never both.",
-      "In a special assessment or a give-back, the rounding difference goes onto the unit with the largest amount, so the invoices add up exactly to the total. A unit with no owner is skipped, and its part also lands on that largest amount, so link every owner before raising one.",
+      "In a special assessment or a give-back, the cents lost in rounding go onto the unit with the largest amount, so the documents add up exactly. A unit with no owner is left out entirely: Orbit asks before going ahead, and its share is neither billed nor given back to anyone else, so link every owner first.",
       "Already given back counts every credit note tagged to the building, drafts included.",
-      "The owner statement lists that owner's charges on this building, and every incoming payment recorded for that contact in the company."
+      "The owner statement lists that owner's charges on this building and the payments they made for it: payments against the building's charges, and money on account when all their units are in this building."
     ]
   },
 
@@ -129,7 +130,7 @@ orbitScreenHelp({
       "Type <i>Harbour House</i> in <b>Name</b>, <i>HH</i> in <b>Code</b>, and fill in <b>City</b>, <b>Country</b> and <b>Address</b>. Leave <b>Type</b> on Building.",
       "Leave <b>Shares total (milliemes)</b> at 1000 and <b>Reserve fund uplift %</b> at 0, since the owners have agreed no reserve for now.",
       "Type 2500.00 in <b>Opening balance</b>, the cash handed over by the previous agent, and 1000.00 in <b>Reserve to keep on hand</b>.",
-      "In <b>Charges income account</b>, pick the income account your service charges should post to, or leave <b>(default)</b> to use the company's default income account.",
+      "In <b>Charges income account</b>, pick the income account your service charges should post to, or leave <b>(default)</b> to use the company's default income account. A charge can name an income account of its own, which it then posts to instead.",
       "Under <b>Officers &amp; documents</b>, type the names of the committee head and the treasurer exactly as they should sign letters, and the <b>Property number</b>, <b>Cadastral zone</b> and <b>Bylaws reference</b>.",
       "In <b>How owners pay</b>, type the bank details owners should use. Leave <b>Notice language</b> on English.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and Harbour House in the list with Shares total 1000 and Reserve 0%. It is now the building the Overview shows, with the 2,500.00 opening balance counted in its Fund balance."
@@ -144,7 +145,7 @@ orbitScreenHelp({
       ["Opening balance", "Cash the building already held before Orbit. It is the starting point of the Fund balance, the give-back surplus and the Fund movement report.", "optional"],
       ["Reserve to keep on hand", "The cash the building should always keep. Give back to owners only offers what is above it.", "optional"],
       ["Manager (contact)", "The contact who manages the building. Kept on the building record.", "optional"],
-      ["Charges income account", "The income account put on the lines of generated charges, special assessments and give-back credit notes. Left on (default), the company's default income account is used when the invoice is posted.", "optional"],
+      ["Charges income account", "The income account for generated charge lines whose charge names no income account of its own, and for special assessments and give-back credit notes. Left on (default), the company's default income account is used when the invoice is posted.", "optional"],
       ["Committee head and Treasurer", "The names printed under the signature lines of arrears letters. The treasurer's name also appears at the foot of printed building reports.", "optional"],
       ["Property number, Cadastral zone, Bylaws reference", "The legal references an arrears letter quotes near its end.", "optional"],
       ["Also show amounts in and at this rate", "A second currency and its rate per company currency unit, for example LBP. When a rate is set, the charge preview adds a column in that currency. Invoices are still raised in the company currency.", "optional"],
@@ -159,9 +160,9 @@ orbitScreenHelp({
       ["Archive building", "On an existing building. Hides it from every Plot picker and screen but keeps all its records and invoices. The list still shows it, and the button then reads Restore building."],
       ["Restore building", "Brings an archived building back into the pickers."],
       ["Search, Columns, Export", "Find a building by name, city or code; choose columns; download the list as a CSV file."],
-      ["Select", "Tick buildings to Export selected, Archive them, or Delete them."]
+      ["Select", "Tick buildings to Export selected, Archive them, or Delete them. Delete is refused for a building that has units, charges, charge runs, invoices or payments, because deleting a building also deletes its units, owners, charges, meetings and budgets. Orbit offers to archive it instead."]
     ],
-    after: "A building's settings feed the rest of Plot: the reserve percentage goes into every charge and the Monthly charges figure, the opening balance and reserve to keep drive the Fund balance and the give-back, the income account goes onto every generated invoice line, and the officer names, references, payment instructions, language and footer go onto arrears letters. Archiving only sets the building inactive: its units, owners, invoices and history stay.",
+    after: "A building's settings feed the rest of Plot: the reserve percentage goes into every charge and the Monthly charges figure, the opening balance and reserve to keep drive the Fund balance and the give-back, the income account goes onto generated invoice lines whose charge names none, and the officer names, references, payment instructions, language and footer go onto arrears letters. Archiving only sets the building inactive: its units, owners, invoices and history stay.",
     links: [
       { name: "Overview", how: "Shows the building chosen here, with its fund balance and the money actions.", to: "plot.dash" },
       { name: "Units", how: "Each unit belongs to a building and carries its share.", to: "plot.units" },
@@ -172,7 +173,8 @@ orbitScreenHelp({
       ["Enter a name", "The building has no name. Type one in Name."],
       ["Could not save: (message)", "The database refused the change, for example because you only have read access to this company. Ask an administrator for write access."],
       ["The building has vanished from the Overview and other screens", "It is archived. Open it from this list and click Restore building."],
-      ["A formal notice prints without signatures or legal references", "Committee head, Treasurer, Property number, Cadastral zone and Bylaws reference are empty on the building. Fill them in and print the letter again."]
+      ["A formal notice prints without signatures or legal references", "Committee head, Treasurer, Property number, Cadastral zone and Bylaws reference are empty on the building. Fill them in and print the letter again."],
+      ["The building (name) has units, so it can't be deleted. Deleting a building also deletes its units, owners, charges, meetings and budgets.", "The building has history (units, charges, charge runs, invoices or payments). Click OK to archive it instead: it leaves the pickers and keeps everything."]
     ],
     tips: [
       "To retire a building, use Archive building. Select then Delete removes the building permanently together with its units, charges, meetings, budgets and other records.",
@@ -223,7 +225,7 @@ orbitScreenHelp({
       ["Save", "Saves the unit. The change counts from the next time charges are generated."],
       ["Delete", "On an existing unit. Moves it to the Archive, from where it can be restored."],
       ["Sell / transfer this unit", "Under the history of an existing unit. Opens the transfer window."],
-      ["Save (Transfer unit)", "Ends every current owner link of the unit on the sale date, starts the new owner at 100% as the billed owner, moves the unpaid invoices if the buyer carries them, and opens a certificate of clearance to print."],
+      ["Save (Transfer unit)", "Ends every current owner link of the unit on the sale date, starts the new owner at 100% as the billed owner, moves the unpaid invoices if the buyer carries them, and opens a certificate of clearance to print. When something is still unpaid on the unit it opens a statement of the balance at transfer instead, naming who carries it, because the unit is not clear."],
       ["Group By", "Group the list by Building, Block or Type."],
       ["Select", "Tick units to Export selected, Archive (the unit stops being billed and counted), or Delete permanently."],
       ["Search, Columns, Export", "Search by unit code, block or building; choose columns; download a CSV."]
@@ -241,7 +243,7 @@ orbitScreenHelp({
       ["Enter a unit code", "The unit has no code. Type one, for example A-12."],
       ["Pick the new owner", "The transfer window needs the contact taking over. Add them in Contacts first if they are not in the list."],
       ["A block charge is billed to nobody", "The block on the charge does not match the block on any unit, letter for letter. The Overview names such charges; correct the spelling on the unit or pick the block again on the charge."],
-      ["The certificate says everything is settled but the seller still owes money", "With The seller clears it, the certificate states that all charges are settled, whatever is unpaid on the day. Print it for the buyer only once the seller has paid, or choose It passes to the buyer."]
+      ["A statement of balance at transfer printed instead of a certificate of clearance", "Something is still unpaid on the unit's posted charge invoices. With The seller clears it, the document states the balance, says the outgoing owner is to settle it and that the unit is not clear; with It passes to the buyer, it says the balance passes to the new owner. A certificate of clearance is issued only when nothing is owed, so record the seller's payment before you save the transfer."]
     ],
     tips: [
       "Example of a block split: a lift charge of 400.00 a month scoped to block Flats, with block shares 1, 1, 2 and 2, costs flats 1A and 1B 66.67 each and flats 2A and 2B 133.33 each, before the reserve uplift. The shops pay none of it.",
@@ -371,7 +373,7 @@ orbitScreenHelp({
       ["Frequency", "monthly, quarterly or yearly. Charges are generated as one month's worth, so a quarterly amount is divided by 3 and a yearly one by 12.", "auto"],
       ["Supplier (optional)", "Who the building pays for this cost. Shown in the list for reference.", "optional"],
       ["Active", "<b>Active</b> charges are billed, counted in Monthly charges and shown on the resident portal. <b>Off</b> keeps the charge without billing it.", "auto"],
-      ["Income account for this charge", "Kept on the charge. Generated invoices take their income account from the building's <b>Charges income account</b>, so set the account there.", "optional"]
+      ["Income account for this charge", "The income account this charge's part of each unit's invoice posts to. Left on <i>(use the building's default)</i>, it posts to the building's <b>Charges income account</b>.", "optional"]
     ],
     buttons: [
       ["New", "Opens a blank charge."],
@@ -381,10 +383,10 @@ orbitScreenHelp({
       ["Select", "Tick charges to Export selected, Archive them (the same as setting Active to Off), or Delete them permanently."],
       ["Search, Columns, Export", "Search by name, category or building; choose columns; download a CSV."]
     ],
-    after: "Saving a charge posts nothing. The split happens when charges are generated, in this order: <b>1.</b> every active charge is turned into a monthly figure (quarterly divided by 3, yearly by 12). <b>2.</b> A whole-building charge is shared across all active units in proportion to their shares, out of the total of those shares; if no unit has a share, it is divided equally. <b>3.</b> A block charge is shared only by the units of that block: by their block shares when any unit of the block has block shares, otherwise by their ordinary shares within the block, and equally if neither is set. <b>4.</b> Each unit's amounts are added up and the building's reserve percentage is added on top. <b>5.</b> Each unit's invoice is rounded to the cent, and a unit whose total is nil is not billed. A charge scoped to a block that no unit has is billed to nobody: it is left out of every figure and named on the Overview. Active charges also show residents what the building spends per month in the portal, feed Fill from charges in the Annual budget, and make up the Charge schedule report.",
+    after: "Saving a charge posts nothing. The split happens when charges are generated, in this order: <b>1.</b> every active charge is turned into a monthly figure (quarterly divided by 3, yearly by 12). <b>2.</b> A whole-building charge is shared across all active units in proportion to their shares, out of the total of those shares; if no unit has a share, it is divided equally. <b>3.</b> A block charge is shared only by the units of that block: by their block shares when any unit of the block has block shares, otherwise by their ordinary shares within the block, and equally if neither is set. <b>4.</b> Each unit's amounts are added up and the building's reserve percentage is added on top. <b>5.</b> Each unit's invoice is rounded to the cent and has one line per income account: a charge with its own income account gets a line on that account, and the rest share a line on the building's Charges income account. A unit whose total is nil is not billed. A charge scoped to a block that no unit has is billed to nobody: it is left out of every figure and named on the Overview. Active charges also show residents what the building spends per month in the portal, feed Fill from charges in the Annual budget, and make up the Charge schedule report.",
     links: [
       { name: "Units", how: "Shares, block and block shares on the units decide each unit's part.", to: "plot.units" },
-      { name: "Buildings", how: "The reserve percentage and the Charges income account are set on the building.", to: "plot.buildings" },
+      { name: "Buildings", how: "The reserve percentage and the Charges income account, used by charges that name no income account of their own, are set on the building.", to: "plot.buildings" },
       { name: "Billing runs", how: "Turns the charges into one draft invoice per unit for a period.", to: "plot.runs" },
       { name: "Annual budget", how: "Fill from charges turns each active charge into a yearly budget line.", to: "plot.budget" },
       { name: "Bills", how: "The actual invoices from suppliers, tagged to the building, are the real expense.", to: "inv.in" }
@@ -417,7 +419,7 @@ orbitScreenHelp({
       "Read the note: <i>Splitting 1,260.00/period across 6 unit(s) by share, incl. 5% reserve.</i>",
       "Check the table: S1 100.80, S2 67.20, 1A and 1B 238.00, 2A and 2B 308.00. A unit marked <b>(no owner)</b> will be skipped.",
       "Click <span class='man-key'>Save</span>. The button reads <b>Generating...</b> while it works. You should see <i>6 draft invoice(s) created - review and post them in Accounting</i>, and the Invoices list opens.",
-      "Open one of the new invoices. It is addressed to the unit's billed owner, has the reference <i>Building charges 2026-10</i> and one line such as <i>Cedar Court - charges 2026-10 (1A)</i>, with no tax.",
+      "Open one of the new invoices. It is addressed to the unit's billed owner, has the reference <i>Building charges 2026-10</i> and one line such as <i>Cedar Court - charges 2026-10 (1A)</i>, with no tax. If a charge names its own income account, the invoice has one line per account instead, each ending with the names of its charges.",
       "Post the six invoices in Accounting. Only then are they amounts owed: they appear in Arrears once past their due date, and on the owners' portal.",
       "Back in Billing runs you should see a row <b>2026-10</b>, Cedar Court, Issued today, Units 6, Total 1,260.00."
     ],
@@ -433,7 +435,7 @@ orbitScreenHelp({
       ["Cancel", "Closes the preview without creating anything."],
       ["Invoices", "On each run row. Opens the Invoices list in Accounting (all customer invoices, not only this run's); search for the period to find them."]
     ],
-    after: "Saving writes the run record (building, period, issue date, due date, the reserve percentage at the time, units billed, total and currency) and, for each unit with an owner, a draft customer invoice: addressed to the billed owner, numbered in the normal invoice sequence, dated today, with the run's due date, no tax, and one line for the unit's fee rounded to the cent. The line carries the building's Charges income account, and the invoice is tagged to the building, the unit and the run. Drafts post nothing. Posting an invoice in Accounting records the owner's debt in receivables against that income account; from then on it counts in the Overview, Arrears, owner statements, building reports and the owner's portal.",
+    after: "Saving writes the run record (building, period, issue date, due date, the reserve percentage at the time, units billed, total and currency) and, for each unit with an owner, a draft customer invoice: addressed to the billed owner, numbered in the normal invoice sequence, dated today, with the run's due date, no tax, and the unit's fee rounded to the cent, on one line per income account: a charge that names its own income account gets a line on that account, and the rest share a line on the building's Charges income account. The invoice is tagged to the building, the unit and the run. Drafts post nothing. Posting an invoice in Accounting records the owner's debt in receivables against that income account; from then on it counts in the Overview, Arrears, owner statements, building reports and the owner's portal.",
     links: [
       { name: "Charges", how: "The running costs every run splits.", to: "plot.charges" },
       { name: "Invoices", how: "Where the run's drafts are reviewed and posted.", to: "inv.out" },
@@ -632,8 +634,8 @@ orbitScreenHelp({
       "Set <b>Show to residents in the portal</b> to Public and click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the project in the list with a <b>Public</b> badge.",
       "Open the project again. Under <b>Contractor bids</b>, pick the first painter in <b>(supplier)</b>, type 22500.00 in <b>Amount</b> and 45 in <b>Days</b>, and click <span class='man-key'>Add bid</span>. Add two more: 26000.00 in 30 days and 19800.00 in 60 days.",
       "The bids are listed from the cheapest up, each with the status <b>received</b>.",
-      "The committee chooses the 22,500.00 bid. Click <span class='man-key'>Award</span> on its row. You should see <i>Awarded</i>: that bid shows <b>awarded</b>, the other two <b>rejected</b>, and <b>Status</b> and <b>Awarded amount</b> in the form change to Awarded and 22500.",
-      "Before you press Save, check <b>Awarded to</b> shows the painter; pick them if it does not. Save.",
+      "The committee chooses the 22,500.00 bid. Click <span class='man-key'>Award</span> on its row. You should see <i>Awarded</i>: that bid shows <b>awarded</b>, the other two <b>rejected</b>, and <b>Status</b>, <b>Awarded to</b> and <b>Awarded amount</b> in the form change to Awarded, the painter and 22500.",
+      "Click <span class='man-key'>Save</span>. The project keeps the painter as Awarded to.",
       "When the painters start, set <b>Status</b> to In progress, fill in <b>Start</b> and <b>End</b>, and raise <b>Progress %</b> as the work goes on. Owners see the status, budget and progress bar under <b>Works in the building</b> on their portal."
     ],
     fields: [
@@ -671,8 +673,7 @@ orbitScreenHelp({
       ["Add a building first", "A project belongs to a building. Add one in Buildings."],
       ["Enter a title", "The project has no title."],
       ["Enter the bid amount", "A bid needs an amount above zero."],
-      ["The contractor is not in the Awarded to or supplier list", "Only vendor contacts are listed. Mark the contact as a vendor in Suppliers."],
-      ["After Award and Save, Awarded to is empty again", "Award saves the winner at once, but the form keeps the Awarded to it showed when it opened, and Save writes the form. Open the project, pick the contractor in Awarded to and save, or close the form with Cancel straight after Award."]
+      ["The contractor is not in the Awarded to or supplier list", "Only vendor contacts are listed. Mark the contact as a vendor in Suppliers."]
     ]
   },
 
@@ -840,7 +841,7 @@ orbitScreenHelp({
       ["Item", "Read only: the checklist job signed off.", "auto"],
       ["Building", "Read only: the building of the job.", "auto"],
       ["By", "Read only: the name typed in Who did it.", "auto"],
-      ["Photo", "Read only: a View link when a photo link is stored on the check-in, otherwise a dash.", "auto"]
+      ["Photo", "Read only: a small picture of the photo taken when the job was signed off. Click it to open the full photo in a new tab. A dash when no photo was taken.", "auto"]
     ],
     buttons: [
       ["Group By", "Group the lines by Day."],
@@ -856,7 +857,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Check-ins are a record; they are logged from the building, not edited here.", "Shown when you click a line. Lines cannot be changed; sign a job off again from Today's round if needed."],
-      ["The Photo column shows a dash although a photo was taken", "Photos taken in the sign-off window are stored with the check-in as an attachment, while this column only shows a stored photo link. The photo is not lost."]
+      ["The Photo column shows a dash although a photo was taken", "The photo did not finish uploading when the job was signed off, for example because the connection dropped. Sign the job off again from Today's round and add the photo."]
     ]
   },
 
@@ -888,7 +889,7 @@ orbitScreenHelp({
       ["Session", "First call or Second call. A second call is noted on the printed minutes.", "auto"],
       ["Attendees", "Who was present, printed under Present.", "optional"],
       ["Agenda", "The agenda as text, printed under Agenda.", "optional"],
-      ["Decisions / minutes", "What was decided. When the minutes are posted, each line longer than three characters becomes a task; a leading dash or star is removed.", "optional"],
+      ["Decisions / minutes", "What was decided. When the minutes are posted, each line longer than three characters becomes a task; a leading dash or star is removed. Posting again after Unlock adds a task only for a line that has none yet, so tasks are never doubled, and a task you deleted is not made again.", "optional"],
       ["Status", "Draft, or Posted (locked). Posting locks the meeting.", "auto"],
       ["Attachments / Signed minutes &amp; attachments", "Photos or PDFs of the notice, attendance sheet or signed minutes.", "optional"],
       ["Item type, Title and majority (Agenda &amp; motions)", "Shown once the meeting is saved. Agenda item, Motion (vote) or Action; its title; and for a motion the rule it needs: For information, Simple majority, Two thirds or Unanimous.", "required"]
@@ -901,7 +902,7 @@ orbitScreenHelp({
       ["Pull open suggestions", "Adds every new or reviewing suggestion of the building as a simple-majority motion, and sets those suggestions to reviewing."],
       ["Record as carried", "On an open motion. Marks it carried and records a passed resolution with its title and description."],
       ["Record as rejected", "On an open motion. Marks it rejected."],
-      ["Remove (the cross on an item)", "Deletes the item and its votes straight away, with no question asked. It cannot be restored."],
+      ["Remove (the cross on an item)", "Deletes the item and its votes after you confirm. It cannot be restored."],
       ["Print minutes", "On a posted meeting. Opens the minutes to print."],
       ["Unlock", "On a posted meeting. Takes it back to draft so it can be changed."]
     ],
@@ -1160,11 +1161,11 @@ orbitScreenHelp({
       ["Add", "Picks a photo or PDF to upload. The cross on a thumbnail removes it; on a saved file it asks first and cannot be undone."],
       ["Save", "Saves the document."],
       ["Delete", "On an existing document. Moves it to the Archive, from where it can be restored."],
-      ["Open", "In the File column. Opens the pasted link in a new tab."],
+      ["Open", "In the File column. Opens the pasted link in a new tab, or, when there is no link, the first file uploaded on the document. <i>+1 more</i> after it means more files are on the document; open the document to see them all."],
       ["Group By", "Group the list by Category."],
       ["Search, Select, Columns, Export", "Search by title or category; select rows to export or delete; choose columns; download a CSV."]
     ],
-    after: "A document posts nothing. Adding or changing one is written to the Activity log. A document set to Residents can see it is listed on the portal of the building's owners, with its pasted link.",
+    after: "A document posts nothing. Adding or changing one is written to the Activity log. A document set to Residents can see it is listed on the portal of the building's owners, with its pasted link, until it is deleted.",
     links: [
       { name: "Meetings", how: "Signed minutes can also be attached to the meeting itself.", to: "plot.meetings" },
       { name: "Resident portal access", how: "Owners need portal access to see shared documents.", to: "portal.admin" },
@@ -1174,7 +1175,6 @@ orbitScreenHelp({
       ["Add a building first", "A document belongs to a building. Add one in Buildings."],
       ["Enter a title", "The Title field is empty."],
       ["Upload failed: (message)", "The file could not be uploaded. Check the connection and add it again."],
-      ["The File column shows a dash although a file was uploaded", "The column shows the pasted link only. Open the document to see and open its uploaded files."],
       ["Owners see the document on the portal but cannot open it", "The portal opens the pasted link, not uploaded files. Paste a link to the file in Or paste a link as well."]
     ]
   },
@@ -1209,6 +1209,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank role."],
       ["Save", "Saves the role."],
+      ["Delete", "On an existing role. Moves it to the Archive, from where it can be restored."],
       ["Group By", "Group the list by Building or Role."],
       ["Select", "Tick roles to Export selected, Archive them (the Active column then shows Past), or Delete them permanently."],
       ["Search, Columns, Export", "Search by name or role; choose columns; download a CSV."]
@@ -1222,7 +1223,7 @@ orbitScreenHelp({
     mistakes: [
       ["Add a building first", "A role belongs to a building. Add one in Buildings."],
       ["Pick a contact or type a name", "The role has no person. Pick a contact or type a name."],
-      ["Could not delete: (message)", "The Delete button in the form could not remove the role. Use Select in the list, tick the role and choose Archive to mark it Past, or Delete to remove it."],
+      ["Archived - it is kept as inactive, and can be switched back on from Select in the list", "Shown by Delete while the database is waiting for its latest update: the role is marked Past instead of going to the Archive. Nothing is lost."],
       ["A person is missing from Who is doing it in Tasks", "They have no linked contact, or their role is archived. Pick their contact in Person (contact)."]
     ]
   },
@@ -1262,6 +1263,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank resident."],
       ["Save", "Saves the resident."],
+      ["Delete", "On an existing resident. Moves the record to the Archive, from where it can be restored."],
       ["Group By", "Group the list by Building or Type."],
       ["Select", "Tick residents to Export selected, Archive them, or Delete them permanently."],
       ["Search, Columns, Export", "Search by name, phone, plate or unit; choose columns; download a CSV."]
@@ -1276,7 +1278,7 @@ orbitScreenHelp({
     mistakes: [
       ["Add a building first", "A resident belongs to a building. Add one in Buildings."],
       ["Enter a name", "The Name field is empty."],
-      ["Could not delete: (message)", "The Delete button in the form could not remove the resident. Use Select in the list and choose Archive, or Delete to remove the record."]
+      ["Archived - it is kept as inactive, and can be switched back on from Select in the list", "Shown by Delete while the database is waiting for its latest update: the resident is archived instead of going to the Archive. Nothing is lost."]
     ],
     tips: [
       "Residents' phone numbers and emergency contacts are personal data: keep only what the concierge needs, and fill in Moved out when someone leaves."
@@ -1308,7 +1310,7 @@ orbitScreenHelp({
       ["Receivables ageing", "Every posted charge invoice with money owing: due date, outstanding, days overdue, and a bucket of Not due, 1-30, 31-60, 61-90 or 90+.", "auto"],
       ["Income &amp; expenditure", "Charges billed to owners and building expenses in the period, and the net.", "auto"],
       ["Expenses by category", "Posted bills of the building in the period, totalled by Building cost type.", "auto"],
-      ["Fund movement", "Opening balance, receipts in the period, amounts paid on the building's bills, and the closing balance.", "auto"],
+      ["Fund movement", "Opening balance, this building's receipts in the period, amounts paid on the building's bills, and the closing balance.", "auto"],
       ["Budget vs actual", "Spend in the period by cost type, to compare with the lines of the Annual budget.", "auto"],
       ["Units &amp; shares", "The share register, with the total against the building's Shares total.", "auto"],
       ["Charge schedule", "What each unit pays per period under the current charges, with the building's total including the reserve.", "auto"],
@@ -1320,7 +1322,7 @@ orbitScreenHelp({
       ["Open", "On each report. Opens it in a new window ready to print."],
       ["Export CSV", "On each report. Downloads the same rows as a CSV file."]
     ],
-    after: "Reports only read. They are worked out when you press the button, from posted invoices and bills tagged to the building, its units, owners and charges, and incoming payments.",
+    after: "Reports only read. They are worked out when you press the button, from posted invoices and bills tagged to the building, its units, owners and charges, and the payments received for the building: those against its charge invoices, and money on account from owners whose units are all in this building.",
     links: [
       { name: "Annual budget", how: "The budgeted lines to set against Budget vs actual.", to: "plot.budget" },
       { name: "Arrears", how: "Late balances with the notice stage reached and a Notice button.", to: "plot.arrears" },
@@ -1330,7 +1332,7 @@ orbitScreenHelp({
     mistakes: [
       ["Nothing to show for this period.", "No posted records fall in the report or the period. Check the dates, and that invoices and bills are posted and tagged to the building."],
       ["No buildings yet", "There is no active building. Add one in Buildings."],
-      ["Receipts in Fund movement are too high", "Receipts count every incoming payment recorded in the company in the period, including payments for other buildings or other business. Check it against Accounting when the company runs more than this building."],
+      ["An owner's advance is missing from Fund movement", "Money taken on account counts for a building only when all of the owner's units are in that building. Record it against a charge with Record a payment on the Overview instead."],
       ["The print window does not open", "The browser blocked the pop-up. Allow pop-ups for Orbit and click Open again."]
     ],
     tips: [
@@ -1355,8 +1357,8 @@ orbitScreenHelp({
     ],
     fields: [
       ["Building", "Which building to show.", "optional"],
-      ["Fund balance", "Read only: the building's opening balance plus incoming payments, less what has been paid on its posted bills.", "auto"],
-      ["Collected", "Read only: incoming payments recorded in the company.", "auto"],
+      ["Fund balance", "Read only: the building's opening balance plus the payments received for this building, less what has been paid on its posted bills.", "auto"],
+      ["Collected", "Read only: the payments received for this building, meaning those against its charge invoices, and money on account from owners whose units are all in this building.", "auto"],
       ["Still owed by owners", "Read only: what is left to pay on the building's posted charge invoices.", "auto"],
       ["Owed to suppliers", "Read only: what is left to pay on the building's posted bills.", "auto"],
       ["Collection rate", "Read only: the share of everything billed on posted charge invoices that has been paid.", "auto"],
@@ -1373,7 +1375,7 @@ orbitScreenHelp({
       { name: "Expenses", how: "The bills behind Where the money went.", to: "plot.expenses" }
     ],
     mistakes: [
-      ["Collected or Fund balance looks too high", "Both count every incoming payment recorded in the company, including payments for other buildings or other business. Check them against Accounting when the company runs more than this building."],
+      ["Collected looks lower than the money received", "A payment taken on account from an owner who also owns units in another building is not counted, because Orbit cannot tell which building it is for. Record such payments against a charge with Record a payment."],
       ["No expenses recorded yet.", "No posted bill is tagged to this building. Tag supplier bills with Building in Accounting."],
       ["No buildings yet", "There is no active building. Add one in Buildings."]
     ]

@@ -97,7 +97,7 @@ orbitScreenHelp({
       ["Sent for approval (USD 12,000.00)", "Not an error: an approval rule covers journal entries of this amount. The voucher stays a draft until the approver decides; then click Post again. Clicking again before a decision shows <i>Already awaiting approval</i>."],
       ["Could not edit: The books are closed up to 30 Jun 2026, and this entry is dated 15 Jun 2026. Reverse it with a later date instead.", "A posted voucher inside a locked period cannot go back to draft. Reverse it, which posts the correction today, then enter the right voucher."],
       ["Could not edit: Lines of this entry are matched to payments or invoices. Undo that match first, or reverse the entry.", "Part of the voucher settles a payment or an invoice. Undo that match, or reverse the voucher instead."],
-      ["Could not edit: Only an owner, administrator or accountant of this company can edit a posted entry.", "Your role cannot reopen posted entries. Ask someone who can."],
+      ["Could not edit: Editing a posted entry needs Work in Accounting on your role.", "Your role cannot reopen posted entries. Ask someone whose role has Work in Accounting, or ask an owner or admin to change your role."],
       ["There is no Edit button on a posted entry", "Editing a posted entry needs permission to manage Accounting. Ask an administrator to change your role."],
       ["Orbit created this entry for a stock movement. Changing it here changes the accounting only; that record keeps its own figures.", "Not an error: a reminder on an entry Orbit posted for another record, now back in draft. The stock movement, payslip or asset keeps its own quantities and amounts, so change the accounts or wording here, and correct the record itself on its own screen."],
       ["No contact is called Acme. Pick one from the list.", "The name typed in Auxiliary matches no contact in this company. Pick it from the list as you type, or add the contact in Contacts first."],
@@ -112,7 +112,7 @@ orbitScreenHelp({
 
   "bank": {
     title: "Bank Statements",
-    what: "A <b>bank statement</b> here is a copy of the statement your bank sends: a name, the bank or cash journal it belongs to, its date, its closing balance and one line per movement, money in as a plus and money out as a minus. <b>Reconciling</b> a line posts it to the ledger against the account you choose, with the bank on the other side, and marks the line Reconciled. This screen posts each line to an account; it does not match lines to open invoices or bills.",
+    what: "A <b>bank statement</b> here is a copy of the statement your bank sends: a name, the bank or cash journal it belongs to, its date, its start balance (filled from where the previous statement of that journal closed), its closing balance and one line per movement, money in as a plus and money out as a minus. <b>Reconciling</b> a line posts it to the ledger against the account you choose, with the bank on the other side, and marks the line Reconciled. This screen posts each line to an account; it does not match lines to open invoices or bills.",
     when: [
       "Month end, with the bank's statement in hand, to record the fees, interest, standing orders and transfers that nothing else has entered.",
       "Recording movements from a petty cash sheet, by choosing the Cash journal.",
@@ -120,11 +120,11 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Accounting &rsaquo; Accounting &rsaquo; Bank Statements</b> and click <span class='man-key'>New</span>. For this example, a retail shop enters three lines from its August statement.",
-      "Type <i>Bank - August 2026</i> in <b>Name</b>, leave <b>Journal</b> on Bank, set <b>Statement Date</b> to 31 August 2026 and type the closing balance printed on the statement, 14,320.50, in <b>End Balance</b>.",
+      "Type <i>Bank - August 2026</i> in <b>Name</b>, leave <b>Journal</b> on Bank, set <b>Statement Date</b> to 31 August 2026 and check that <b>Start Balance</b> shows where July's statement closed, 13,089.00. Type the closing balance printed on the statement, 14,320.50, in <b>End Balance</b>.",
       "On the first line set the date to 5 August, type <i>Card terminal settlement</i> in <b>Label</b> and 3,250.00 in <b>Amount (+in / -out)</b>.",
       "Click <span class='man-key'>+ Add a line</span> and enter 12 August, <i>Bank charges</i>, -18.50.",
       "Click <span class='man-key'>+ Add a line</span> again and enter 28 August, <i>Shop rent August</i>, -2,000.00.",
-      "Click <span class='man-key'>Save</span>. You should see <i>Statement saved</i>, the header turn read-only and <i>0 of 3 lines reconciled</i> above the lines.",
+      "Click <span class='man-key'>Save</span>. You should see <i>Statement saved</i>, the header turn read-only and <i>0 of 3 lines reconciled</i> above the lines, followed by <i>start 13,089.00 plus lines 1,231.50 = 14,320.50 (matches the end balance)</i>.",
       "On the bank charges line, choose your bank charges expense account in <b>Counterpart account...</b> and click <span class='man-key'>Reconcile</span>. You should see <i>Reconciled to the ledger</i> and a green Reconciled badge with the account code.",
       "Reconcile the rent line to your rent expense account, and the card settlement to the account where your card takings are held.",
       "You should now see <i>3 of 3 lines reconciled</i>. Each line has become a posted entry in the Bank journal, dated the line's date, which you can see in Journal Entries.",
@@ -134,7 +134,8 @@ orbitScreenHelp({
       ["Name", "What the statement is called in the list, for example the bank and the month.", "required"],
       ["Journal", "The bank or cash journal the statement belongs to. The list offers journals coded BNK or CSH, or with bank or cash in their name. The journal's own account is the bank side of every entry; a journal without one uses account 5100.", "auto"],
       ["Statement Date", "The date printed on the statement. Starts as today. It sorts the list; each line posts on its own date.", "auto"],
-      ["End Balance", "The closing balance printed on the statement, kept for reference and shown in the list. Orbit does not check the lines against it.", "optional"],
+      ["Start Balance", "The balance the statement opens with. A new statement fills it with the closing balance of the latest statement of the same journal dated on or before it, and follows the Journal and Statement Date you pick until you type over it. An older statement saved without one is filled the first time it is opened.", "auto"],
+      ["End Balance", "The closing balance printed on the statement. Above the lines, Orbit adds the start balance and the lines and says whether they come to this figure.", "optional"],
       ["Date (on a line)", "The day the money moved. The entry posts on this date, so it must be after any Period Lock date.", "auto"],
       ["Label (on a line)", "The wording from the statement. It becomes the description of the entry.", "optional"],
       ["Amount (+in / -out) (on a line)", "Positive for money received, negative for money paid out. A line with no amount and no label is not saved.", "required"],
@@ -145,7 +146,8 @@ orbitScreenHelp({
       ["New", "Starts a new statement."],
       ["+ Add a line", "On a new statement, adds an empty line dated today."],
       ["&times; (on a line)", "On a new statement, removes the line before it is saved."],
-      ["Save", "Saves the statement and its lines. After this the name, journal, date and balance cannot be changed."],
+      ["Save", "Saves the statement and its lines. After this the name, journal, date and balances cannot be changed."],
+      ["Edit (on a saved line)", "Shown on a line not yet reconciled. Change its date, label or amount and click Save, or click Delete line to remove it. A reconciled line cannot be edited, because it is in the ledger."],
       ["Discard", "Leaves a new statement without saving it."],
       ["Back", "Returns to the list from a saved statement."],
       ["Reconcile", "Posts the line against the counterpart account you chose and marks it Reconciled. It cannot be undone from this screen."],
@@ -165,8 +167,9 @@ orbitScreenHelp({
       ["Pick a counterpart account", "Reconcile was clicked with no account chosen on that line."],
       ["Enter a line", "Add line was clicked with no label and no amount."],
       ["Could not reconcile: Period locked on 2026-06-30", "The line's date is on or before the lock date. Reopen the period in Period Lock, or ask whoever closed it."],
-      ["Start Balance shows 0.00 in the list", "The statement form has no start balance field, so the column always shows zero. Use End Balance."],
-      ["A saved line has the wrong amount", "Saved lines cannot be changed or removed here. If it is already reconciled, reverse its entry in Journal Entries, then add the correct line and reconcile that."],
+      ["(amount) away from the end balance: a line is missing or wrong", "The start balance plus the lines does not come to the End Balance. Look for a line not entered, or typed with the wrong sign or amount, and correct it with Edit or Add line."],
+      ["A reconciled line has the wrong amount", "A reconciled line is in the ledger, so it cannot be edited. Reverse its entry in Journal Entries, then add the correct line and reconcile that."],
+      ["This line has been reconciled, so it can no longer be changed. Reverse its entry in Journal Entries first.", "Someone reconciled the line while you were editing it. Reverse its entry in Journal Entries if it is wrong, then add the correct line."],
       ["Money received shows twice in the bank account", "The receipt was registered as a payment on the invoice and also reconciled here. Reverse the entry made by the bank line in Journal Entries."]
     ],
     tips: [
@@ -368,11 +371,11 @@ orbitScreenHelp({
       "When the customer pays in October, the October month-end run posts the reversal of this 600.00 by itself, because the open balance is gone."
     ],
     fields: [
-      ["Revalue as of", "The date the balances and closing rates are taken at. Starts at the end of the current month; after a run it keeps the date you used.", "auto"],
+      ["Revalue as of", "The date the balances and closing rates are taken at. Starts at the end of the current month. Changing it redraws the table with the balances and rates on or before that date, and the date is kept after a run.", "auto"],
       ["Currency", "Each foreign currency with an open balance on a monetary account.", "auto"],
       ["Open balance", "What is still open in that currency, added up from posted lines.", "auto"],
       ["On books", "What those lines are recorded at in the company currency, including earlier revaluations.", "auto"],
-      ["At closing rate", "The open balance converted at the closing rate. Reads <i>no closing rate</i> when the currency has no rate at all.", "auto"],
+      ["At closing rate", "The open balance converted at the closing rate. Reads <i>no rate on or before this date</i> when the currency has no rate dated on or before the chosen date.", "auto"],
       ["Unrealized adj.", "At closing rate less On books: green for a gain, red for a loss. The total row shows the net gain or loss.", "auto"]
     ],
     buttons: [
@@ -392,8 +395,7 @@ orbitScreenHelp({
       ["Revaluation failed: No FX rate for EUR on or before 2026-09-30 (type closing)", "No rate of any type exists for that currency on or before the date. Add one in Exchange Rates."],
       ["Revaluation failed: Period locked on 2026-09-30", "The date is on or before the lock date. Choose a later date, or reopen the period."],
       ["Some currencies have no closing rate for this date - add one under Exchange Rates so they can be revalued.", "A currency in the table has no rate at all. Add one, then open the screen again."],
-      ["No open foreign-currency monetary balances as of this date. Nothing to revalue.", "No posted foreign-currency line sits on a reconcilable, bank and cash or liability account on or before the date. A foreign balance on another kind of account is never revalued."],
-      ["The figures did not change after I changed the date", "The table is worked out when the screen opens, using the most recent rates. Run the revaluation for your date; the table redraws for it."]
+      ["No open foreign-currency monetary balances as of this date. Nothing to revalue.", "No posted foreign-currency line sits on a reconcilable, bank and cash or liability account on or before the date. A foreign balance on another kind of account is never revalued."]
     ],
     tips: [
       "Enter closing rates on the last day of the month before you run it, so the entry uses the month-end rate.",
@@ -434,7 +436,7 @@ orbitScreenHelp({
       ["Select, then Archive or Delete (list)", "Tick rates to archive or delete them together."],
       ["Group By (list)", "Groups the rates by Scope."]
     ],
-    after: "A saved rate is offered on invoice, bill, quotation and purchase order lines and on products, according to its scope. When a document is posted, Orbit works out each line's tax from the rate at that moment and posts the total to the company's <b>VAT on sales</b> or <b>VAT on purchases</b> account, chosen in <b>Companies &rsaquo; Accounting accounts</b>; the tax record itself holds no account. The VAT / Tax Report adds those amounts up. Changing a rate does not change documents already posted, but a posted document taken back to draft with Edit uses the new rate when it is posted again.",
+    after: "A saved rate is offered on invoice, bill, quotation and purchase order lines and on products, according to its scope. When a document is posted, Orbit works out each line's tax from the rate at that moment and posts the total to the company's <b>VAT on sales</b> or <b>VAT on purchases</b> account, chosen in <b>Companies &rsaquo; Accounting accounts</b>; the tax record itself holds no account. The VAT / Tax Report adds those amounts up. Changing a rate does not change documents already posted, but a posted document taken back to draft with Edit uses the new rate when it is posted again. An archived rate is no longer offered on invoices, bills, orders, certificates, recurring invoices or products; one that already uses it keeps it.",
     links: [
       { name: "Products", how: "A product's Sales Tax and Purchase Tax fill the tax on document lines.", to: "products" },
       { name: "Invoices", how: "Each line can carry a Sale or Both rate.", to: "inv.out" },
@@ -447,7 +449,7 @@ orbitScreenHelp({
       ["Enter a rate %", "Rate % is empty or not a number. Type 0 for an exempt rate."],
       ["This tax is in use - it can't be deleted.", "The rate is on a product or a document. Rename it instead, for example by adding OLD in front."],
       ["This document carries VAT but no sales VAT account is set. Choose one in Settings, Companies, Accounting accounts.", "An invoice with tax cannot post because the company has no VAT on sales account. Set it in Companies, then post again."],
-      ["A rate I archived is still offered on invoices and products", "The invoice, bill and product pickers do not hide archived rates. Rename the rate so nobody picks it by mistake."],
+      ["A rate I archived still shows on an old invoice or product", "Archiving stops a rate being offered on new lines. A document or product that already uses it keeps it, so its figures do not change. Pick the new rate on it if it should change."],
       ["No tax is offered on a line, or every tax is", "When no rate matches the document's scope, every rate is offered. Check each rate's Scope."]
     ],
     tips: [
@@ -491,7 +493,7 @@ orbitScreenHelp({
       ["Generate e-invoice", "On a posted customer invoice with no file yet. Builds the XML file, keeps a copy marked generated and downloads it."],
       ["XML", "On an invoice already generated. Downloads the saved file again."]
     ],
-    after: "The setup is stored on the company. A generated file holds the invoice number, date and currency, your details, the customer's name, tax number and address from their contact record, each line's quantity, amount and name, and the VAT total. A copy is kept against the invoice, and from then on <span class='man-key'>Edit</span> on that invoice is refused, so what was issued cannot change. Nothing is posted to the ledger.",
+    after: "The setup is stored on the company. A generated file holds the invoice number, date and currency, your details, the customer's name, tax number and address from their contact record, each line's quantity, amount, name and the VAT rate of its own tax, and the VAT total broken down by rate. A copy is kept against the invoice, and from then on <span class='man-key'>Edit</span> on that invoice is refused, so what was issued cannot change. Nothing is posted to the ledger.",
     links: [
       { name: "Invoices", how: "Only posted customer invoices appear here; the 50 most recent are listed.", to: "inv.out" },
       { name: "Company Profile", how: "Holds the legal name, tax ID, country and address the setup starts from.", to: "settings.profile" },
@@ -501,8 +503,7 @@ orbitScreenHelp({
       ["Could not edit: This invoice has been sent as an e-invoice, so it cannot change. Issue a credit note instead.", "Its e-invoice file was generated, so the invoice is locked. Add a credit note from the invoice and issue a new one."],
       ["No posted customer invoices yet.", "Drafts, credit notes and bills are not listed. Post the invoice first."],
       ["The invoice is not in the list", "Only the 50 most recent posted customer invoices are shown."],
-      ["Download failed", "The browser refused the download. Allow downloads for Orbit, then click XML."],
-      ["The VAT percentage in the file is wrong for an invoice with mixed rates", "The file carries one VAT percentage for the whole invoice, worked out from its total tax and untaxed amount. Keep lines at different rates on separate invoices."]
+      ["Download failed", "The browser refused the download. Allow downloads for Orbit, then click XML."]
     ],
     tips: [
       "Fill in each customer's tax number and address before generating: the file takes them from the contact."
@@ -680,7 +681,7 @@ orbitScreenHelp({
       ["New", "Opens a new follow-up level."],
       ["Save", "Saves the level and closes the window."],
       ["Cancel", "Closes the window without saving."],
-      ["Delete", "In the window of a saved level. Deletes it straight away."]
+      ["Delete", "In the window of a saved level. Deletes it after you confirm."]
     ],
     after: "Nothing is sent or posted. Collections looks at every posted customer invoice past its due date with money still owed, and suggests the level with the highest Days overdue that the invoice has reached. An invoice not yet late enough for your first level shows no suggestion.",
     links: [
@@ -766,7 +767,7 @@ orbitScreenHelp({
       ["Use", "Copies that supplier's price into Cost. Click Save to keep it."],
       ["Add (Extra barcodes)", "Saves the barcode straight away."],
       ["Add (Kit components)", "Adds the component and quantity straight away."],
-      ["&times; (in a panel)", "Removes that supplier price, barcode, component or axis straight away."],
+      ["&times; (in a panel)", "Removes that supplier price, barcode, component or axis after you confirm."],
       ["Add axis", "Saves a variant axis and its values."],
       ["Generate variants", "Creates one product for each combination of the axes, named with the combination, copying the type, unit, category, prices, taxes, accounts and classification. Combinations that already exist are skipped."],
       ["Link as variant", "Makes an existing product a variant of this one."],
@@ -839,6 +840,7 @@ orbitScreenHelp({
       ["VAT on purchases", "Accounting accounts. Where the VAT on bills posts. Empty means the account coded 4456.", "optional"],
       ["Default income", "Accounting accounts. Used by an invoice line with no account of its own. Empty means the account coded 7000.", "optional"],
       ["Default expense", "Accounting accounts. Used by a bill line with no account of its own. Empty means the account coded 6000.", "optional"],
+      ["Salaries payable", "Accounting accounts. Net pay owed to staff: a posted payslip credits it, and a Salary payment in Counter starts on it, so paying the salary clears what the payslip owes. There is no code to fall back on: while it is empty, payslips refuse to post and Counter asks you to choose the account.", "optional"],
       ["Stock on hand", "Stock accounting. What the warehouse is worth: a receipt debits it, a delivery credits it. Empty means the account coded 3100.", "optional"],
       ["Cost of sales", "Stock accounting. What goods cost you, charged when they leave. Empty means the account coded 6000.", "optional"],
       ["Received not invoiced", "Stock accounting. Holds the value of goods received until the supplier's bill arrives. Empty means the account coded 4700.", "optional"],

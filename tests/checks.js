@@ -39,6 +39,22 @@
   function missing(needles, haystack) { return uniq(needles).filter(function (n) { return haystack.indexOf(n) < 0; }); }
   function ok(detail) { return { ok: true, detail: detail || "" }; }
   function bad(detail) { return { ok: false, detail: detail }; }
+  // The source of one function, found at any depth: from its declaration down to
+  // the closing brace at the same indentation. Orbit's indentation is consistent
+  // enough for that to be exact, and it keeps a check inside the function it is
+  // about instead of matching the same words somewhere else in the file.
+  // Call it on its own result to reach a function nested inside another.
+  function fnBody(src, name) {
+    var m = new RegExp("^([ \\t]*)(?:async )?function " + name + "\\s*\\(", "m").exec(src || "");
+    if (!m) return "";
+    var lines = src.slice(m.index).split("\n"), out = [];
+    for (var i = 0; i < lines.length; i++) {
+      out.push(lines[i]);
+      if (i === 0 && /\}\s*$/.test(lines[0]) && lines[0].split("{").length === lines[0].split("}").length) return out.join("\n");
+      if (i > 0 && lines[i].replace(/\s+$/, "") === m[1] + "}") return out.join("\n");
+    }
+    return "";
+  }
 
   // Actions the router resolves by prefix or suffix rather than a case label.
   var DYNAMIC = [/^help\./, /\.help$/, /^act\./, /^platform\./];
@@ -134,6 +150,33 @@
         });
         missing(all(src, /data-tut=\\?"([a-z_]+)\\?"/g), tutorialKeys(src)).forEach(function (t) { problems.push("button starts missing tutorial '" + t + "'"); });
         return problems.length ? bad(uniq(problems).join("; ")) : ok(tutorialKeys(src).length + " tutorial(s) wired");
+      } },
+
+    { name: "every walkthrough opens a routed screen and points at a real control",
+      why: "A walkthrough lights up a control by its id, class or attribute and waits for it. Rename the id on the screen and the walk stops at that step saying it cannot find the control, while the page itself still loads and works, so nothing else would catch it.",
+      run: function (src) {
+        var b = block(src, "HELP_WALKS"), cl = block(src, "WK_CHECKLISTS");
+        if (!b) return bad("HELP_WALKS is missing");
+        if (!cl) return bad("WK_CHECKLISTS is missing");
+        // the walks name the controls, so the controls must exist somewhere else in the file
+        var rest = src.split(b).join(""), routed = routedActions(src), problems = [];
+        all(b + "\n" + cl, /\bgo:\s*"([a-zA-Z0-9_.]+)"/g).forEach(function (a) {
+          if (routed.indexOf(a) < 0 && !isDynamic(a)) problems.push("opens dead action '" + a + "'");
+        });
+        var sels = uniq(all(b, /(?:\bsel:\s*|wkHas\()"([^"]+)"/g));
+        sels.forEach(function (s) {
+          all(s, /#([A-Za-z][\w-]*)/g).forEach(function (id) {
+            if (!new RegExp("id\\s*=\\s*\\\\?[\"']" + id + "\\\\?[\"']").test(rest)) problems.push("no element has the id " + id);
+          });
+          all(s, /\.([A-Za-z][\w-]*)/g).forEach(function (c) {
+            if (!new RegExp("class=\\\\?\"[^\"]*\\b" + c + "\\b").test(rest)) problems.push("no element has the class " + c);
+          });
+          all(s, /\[([a-z][\w-]*)\]/g).forEach(function (at) { if (rest.indexOf(at + "=\"") < 0) problems.push("no element has the attribute " + at); });
+        });
+        var keys = all(b, /^    ([a-z_]+):\s*\{/gm), ids = all(b, /\bid:\s*"([a-z_]+)"/g);
+        all(cl, /\bwalk:\s*"([a-z_]+)"/g).forEach(function (k) { if (keys.indexOf(k) < 0) problems.push("checklist starts missing walk '" + k + "'"); });
+        all(cl, /\bat:\s*"([a-z_]+)"/g).forEach(function (k) { if (ids.indexOf(k) < 0) problems.push("checklist starts at missing step '" + k + "'"); });
+        return problems.length ? bad(uniq(problems).join("; ")) : ok(keys.length + " walkthroughs and " + sels.length + " controls, every one real");
       } },
 
     { name: "every image has alt text",
@@ -333,6 +376,66 @@
         if (direct.length) return bad(direct.length + " direct update(s) set a posted document back to draft: " + direct.join(", "));
         var missing = ["reopen_journal_entry", "reopen_invoice"].filter(function (f) { return src.indexOf('sb.rpc("' + f + '"') < 0; });
         return missing.length ? bad("Edit no longer calls " + missing.join(" and ")) : ok("both Edit buttons reopen through the database");
+      } },
+
+    { name: "a confirmed order is amended in place",
+      why: "Editing a confirmed purchase or sales order must keep its lines, because the lines carry what was already received and billed. Deleting them by order_id and inserting fresh rows resets those quantities to zero, so a half-received PO could be received and billed a second time. Only a draft may replace its lines wholesale; an amend updates, adds and removes lines one by one.",
+      run: function (src) {
+        var save = fnBody(fnBody(src, "renderOrderForm"), "save");
+        if (!save) return bad("could not find save() inside renderOrderForm");
+        if (!/\bif \(amend\)/.test(save)) return bad("save() no longer has an amend branch");
+        if (!/sb\.from\([\w$]+\)\.update\(rows\[/.test(save)) return bad("an amend no longer updates the existing lines in place");
+        // every delete of an order's lines must sit right behind the not-amending guard
+        var re = /sb\.from\([^)]*\)\.delete\(\)\s*\.(?:eq|in)\(\s*"order_id"/g, m, n = 0, loose = [];
+        while ((m = re.exec(save)) !== null) {
+          n++;
+          var before = save.slice(Math.max(0, m.index - 80), m.index);
+          if (!/if \(!amend\)\s*\{?\s*(?:(?:var\s+[\w$]+\s*=\s*)?await\s+)?$/.test(before)) loose.push(save.slice(m.index, m.index + 60).split(/\r?\n/)[0]);
+        }
+        if (loose.length) return bad(loose.length + " delete(s) of an order's lines also run when amending: " + loose.join(" | "));
+        return ok(n ? n + " delete of an order's lines, only when not amending; an amend updates lines in place" : "save() deletes no lines by order; an amend updates lines in place");
+      } },
+
+    { name: "suppliers never see a project's name",
+      why: "A purchase order or an RFQ goes to a supplier, and a supplier who can read the project's name can go round the contractor to its client. Both prints show the project's short code instead. The name is one small edit away from coming back, because the order form already holds every project's name for its picker.",
+      run: function (src) {
+        var problems = [], LEAKS = [
+          [/\bprojects?\.name\b/, "a joined project's .name"],
+          [/\bprojects\s*\([^)]*\bname\b/, "projects(name) in a select"],
+          [/\bprojLabel\(/, "projLabel(), which includes the name"],
+          [/\bproject_name\b/, "project_name"],
+          [/\b(?:projRec|rp|proj|prj)\.name\b/, "a project record's .name"]
+        ];
+        [["renderOrderForm", "printOrder", "the purchase order print"], ["renderRFQForm", "printRfq", "the RFQ print"]].forEach(function (t) {
+          var fn = fnBody(fnBody(src, t[0]), t[1]);
+          if (!fn) { problems.push(t[1] + " not found inside " + t[0]); return; }
+          if (!/Project code/.test(fn) || !/\.code\b/.test(fn)) problems.push(t[2] + " no longer prints the project code");
+          var hits = [];
+          // whatever a record taken from a project list is called in this print, its .name is off limits
+          all(fn, /\b([A-Za-z_$][\w$]*)\s*=\s*[\w$.]*[Pp]roj[\w$]*\.filter\(/g).forEach(function (v) {
+            if (new RegExp("\\b" + v.replace(/\$/g, "\\$") + "\\s*\\.\\s*name\\b").test(fn)) hits.push(v + ".name");
+          });
+          LEAKS.forEach(function (p) { if (p[0].test(fn)) hits.push(p[1]); });
+          if (hits.length) problems.push(t[2] + " prints a project's name: " + uniq(hits).join(", "));
+        });
+        return problems.length ? bad(problems.join("; ")) : ok("the PO and RFQ prints show the project code and never the name");
+      } },
+
+    { name: "the Counter never picks an account by a fixed code",
+      why: "Counter postings used to look accounts up by standard codes: card and transfer lines went to 5100 whatever the cash account was, and a guessed 5300 or 4190 put money in accounts nobody had chosen or could see, or that the chart did not have. Every side now posts to an account the cashier can see: the cash account's own ledger account and the Counter account chosen in the dialog. The one default left is 6900 for a daily-close difference, shown in the field and changeable.",
+      run: function (src) {
+        var names = ["cashPreflight", "cashPostLedger", "confirmHandover", "openCashCountModal"], body = {}, problems = [];
+        names.forEach(function (n) { body[n] = fnBody(src, n); if (!body[n]) problems.push(n + " not found"); });
+        if (problems.length) return bad(problems.join("; "));
+        // the visible over/short default is allowed once, in exactly this shape
+        var allowed = /\bos0\s*=\s*cashAcctByCode\(ccChart,\s*"6900"\)/, hasDefault = allowed.test(body.openCashCountModal);
+        body.openCashCountModal = body.openCashCountModal.replace(allowed, "os0 = null");
+        names.forEach(function (n) {
+          all(body[n], /(cashAcctByCode\([^)]*\))/g).forEach(function (c) { problems.push(n + " calls " + c); });
+          all(body[n], /((?:\.code\s*===?\s*|\.eq\(\s*"code"\s*,\s*)"(?:5100|5300|4190|6900)")/g).forEach(function (c) { problems.push(n + " matches " + c); });
+        });
+        return problems.length ? bad(uniq(problems).join("; "))
+                               : ok(names.length + " posting functions use chosen accounts" + (hasDefault ? "; 6900 only as the visible close-difference default" : ""));
       } },
 
     { name: "no em dash",

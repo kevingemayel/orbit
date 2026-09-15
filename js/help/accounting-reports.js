@@ -234,7 +234,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>Export</span> for a CSV file, or <span class='man-key'>Print</span>."
     ],
     fields: [
-      ["Book", "The report reads the book you are currently in. Changing the picker on this screen does not redraw it: see the problems below.", "optional"]
+      ["Book", "Which set of entries is listed. Changing it switches the book for the whole app and redraws the report.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the table as a CSV file."],
@@ -252,8 +252,7 @@ orbitScreenHelp({
     mistakes: [
       ["No receivable or payable entries with a partner yet.", "Nothing posted to a receivable or payable account carries a contact. Post an invoice or bill first; drafts do not count."],
       ["A customer's balance does not match Aged Receivable", "This report adds the ledger at the value each entry was booked at. Aged Receivable reads the open amount on each invoice and converts a foreign-currency one at the latest rate. Manual journal entries with the contact also count here but not there."],
-      ["A payment is missing from a customer's lines", "Only payments registered against one of their invoices, or entries that name them on a receivable or payable line, appear. Register the payment on the invoice."],
-      ["Changing the book picker does nothing", "On this screen the picker is not connected. Switch the book on a report that has a period, such as General Ledger, then open Partner Ledger again."]
+      ["A payment is missing from a customer's lines", "Only payments registered against one of their invoices, or entries that name them on a receivable or payable line, appear. Register the payment on the invoice."]
     ],
     tips: [
       "The report has no dates, so it shows every posted line, including any dated in the future."
@@ -280,7 +279,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>Export</span> for a CSV file, or <span class='man-key'>Print</span>."
     ],
     fields: [
-      ["Book", "This report reads open invoices, not the ledger, so it counts documents from every book whichever is chosen.", "optional"]
+      ["Book", "Only invoices and credit notes that post into the chosen book are counted; a document with no book of its own counts in the default book. Changing the picker redraws the report.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the table as a CSV file."],
@@ -328,7 +327,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>Export</span> for a CSV file, or <span class='man-key'>Print</span>."
     ],
     fields: [
-      ["Book", "This report reads open bills, not the ledger, so it counts documents from every book whichever is chosen.", "optional"]
+      ["Book", "Only bills and refunds that post into the chosen book are counted; a document with no book of its own counts in the default book. Changing the picker redraws the report.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the table as a CSV file."],
@@ -368,7 +367,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>+ Add line</span> and do the same for software subscriptions (6,000.00) and travel (4,000.00). A new line starts on the first account in the list, so always pick its account.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i>, and the <span class='man-key'>Budget vs actual</span> button appears.",
       "Click <span class='man-key'>Budget vs actual</span>. It saves again and opens the comparison, headed <i>2026 Operating &middot; budget vs actual</i>.",
-      "Read the columns: <b>Planned</b>, <b>Actual</b> (posted between From and To), <b>Variance</b> (planned minus actual, red when negative), <b>Used</b> (actual as a percentage of planned) and <b>Status</b>.",
+      "Read the columns: <b>Planned</b>, <b>Actual</b> (posted between From and To), <b>Variance</b> (for a cost, planned minus actual; for income, actual minus planned; red when negative), <b>Used</b> (actual as a percentage of planned) and <b>Status</b>.",
       "In mid-September you should see rent 27,000.00 at 75% marked <i>ok</i>, software 5,700.00 at 95% marked <i>near</i> (90% or more), and travel 4,650.00 at 116% marked <i>over</i> on a red row with a Variance of -650.00.",
       "The <b>Total</b> row shows 46,000.00 planned, 37,350.00 actual, 8,650.00 left and 81% used. Act on the red and amber lines first.",
       "Click <span class='man-key'>Export</span> for a CSV file or <span class='man-key'>Print</span> to share it."
@@ -381,7 +380,7 @@ orbitScreenHelp({
       ["Account (on a line)", "The account the plan is for. Its posted lines in the period become the Actual.", "required"],
       ["Note (on a line)", "A short description shown beside the account on the comparison.", "optional"],
       ["Planned (on a line)", "The amount you expect for the whole period.", "required"],
-      ["Book (comparison)", "The comparison reads the book you are currently in; the picker on that screen does not switch it.", "optional"]
+      ["Book (comparison)", "The comparison reads the chosen book; changing the picker redraws it.", "optional"]
     ],
     buttons: [
       ["New", "Starts a blank budget. Only shown if you can manage the Accounting app."],
@@ -404,7 +403,7 @@ orbitScreenHelp({
     mistakes: [
       ["No budget lines.", "The budget was saved without any lines. Open it, add lines with an account and a planned figure, and save."],
       ["Every Actual is 0.00", "Nothing was posted to those accounts between From and To in this book. Check both dates are filled in and that your documents are posted, not drafts."],
-      ["An income line is red and marked over", "The comparison marks any line where actual passes planned. On an income account that means you earned more than planned, which is good news."],
+      ["An income line reads below plan", "Less has been earned so far than planned, so Variance shows the shortfall in red. Earning more than planned reads ahead and is never red; only a cost past its plan turns the row red."],
       ["A line appeared on an account you did not choose", "A line added with + Add line starts on the first account in the list. Pick the right account, or remove the line with &times;, then save."],
       ["The same account's Actual is counted twice", "Two lines on the same account each show the account's full actual. Keep one line per account."],
       ["Save failed", "The budget could not be saved. Try again; if it keeps failing, check you still have access to this company."],
@@ -438,7 +437,7 @@ orbitScreenHelp({
     fields: [
       ["Horizon", "How far ahead to look: 6, 13 or 26 weeks shown week by week, or 6, 12 or 18 months shown month by month. 13 weeks is the default.", "auto"],
       ["Chart / Table", "Switches between the picture and the numbers. Both show the same forecast.", "auto"],
-      ["Book", "The opening cash comes from the book you are currently in; the picker on this screen does not switch it.", "optional"]
+      ["Book", "The opening cash and the open invoices and bills come from the chosen book; changing the picker redraws the forecast.", "optional"]
     ],
     buttons: [
       ["Chart", "Shows running cash as a line with net inflow and outflow bars."],
@@ -470,7 +469,7 @@ orbitScreenHelp({
 
   "rep.collections": {
     title: "Collections",
-    what: "<b>Collections</b> is your chase list: every <b>posted</b> customer invoice whose due date has passed and that still has money owing. Customers with the most overdue come first, and inside each one the invoice that is most days late comes first. Next to each invoice it suggests a step from your <b>Follow-up Levels</b> and shows the last contact you logged, so you can work down the list and record every call, email or promise to pay.",
+    what: "<b>Collections</b> is your chase list: every <b>posted</b> customer invoice whose due date has passed (or, when it has no due date, whose invoice date has) and that still has money owing. Customers with the most overdue come first, and inside each one the invoice that is most days late comes first. Next to each invoice it suggests a step from your <b>Follow-up Levels</b> and shows the last contact you logged, so you can work down the list and record every call, email or promise to pay.",
     when: [
       "Once or twice a week, to decide who to call today.",
       "After a customer promises to pay, to record the date so you know when to chase again.",
@@ -495,7 +494,7 @@ orbitScreenHelp({
       ["Promised amount (Log follow-up)", "How much they promised.", "optional"],
       ["Next action date (Log follow-up)", "When to chase again. Shown on the customer's heading.", "optional"],
       ["Status (Log follow-up)", "Open, Promised to pay, Escalated or Paid. It describes the conversation only; it does not change the invoice.", "auto"],
-      ["Book", "This list reads open invoices, so it shows documents from every book.", "optional"]
+      ["Book", "Only invoices that post into the chosen book are listed; changing the picker redraws the list.", "optional"]
     ],
     buttons: [
       ["Log follow-up", "Opens a small form to record a contact about that invoice."],
@@ -515,7 +514,7 @@ orbitScreenHelp({
     mistakes: [
       ["No overdue receivables. Nicely done.", "No posted customer invoice with money owing is past its due date."],
       ["Suggested shows -", "You have no follow-up levels, or the invoice is fewer days late than your first level. Add levels in Follow-up Levels."],
-      ["An overdue invoice is not on the list", "It has no due date, so it is never counted as overdue here. Give the invoice a due date."],
+      ["An invoice shows (no due date) in the Due column", "It has no due date, so it counts as late from its invoice date, the same as in Aged Receivable. Give it a due date if one was agreed."],
       ["The customer is still listed after I logged Paid", "A follow-up does not record money. Register the payment on the invoice."],
       ["The totals mix currencies", "Amounts are added as they are on each invoice, without converting a foreign currency."]
     ],
@@ -527,7 +526,7 @@ orbitScreenHelp({
 
   "rep.tax": {
     title: "VAT / Tax Report",
-    what: "The <b>VAT / Tax Report</b> works out the VAT for a period. <b>Output VAT</b> is the tax you charged on sales; <b>input VAT</b> is the tax you paid on purchases. It adds up the lines of every <b>posted</b> invoice, bill, credit note and refund whose document date is in the period, groups them by tax, and shows the difference as <b>VAT payable</b> (you owe the tax office) or <b>VAT credit (refundable)</b> (they owe you). Credit notes and refunds are taken off.",
+    what: "The <b>VAT / Tax Report</b> works out the VAT for a period. <b>Output VAT</b> is the tax you charged on sales; <b>input VAT</b> is the tax you paid on purchases. It adds up what every <b>posted</b> invoice, bill, credit note and refund dated in the period actually posted to the ledger, in the company currency, groups it by the tax on each line, and shows the difference as <b>VAT payable</b> (you owe the tax office) or <b>VAT credit (refundable)</b> (they owe you). Credit notes and refunds are taken off.",
     when: [
       "At the end of each VAT period, before filing your return.",
       "To check how much VAT to set aside.",
@@ -540,14 +539,14 @@ orbitScreenHelp({
       "You should see <b>Total Sales (output VAT)</b> with 41,500.00 and 4,400.00.",
       "Read <b>Purchases (input VAT)</b>: <i>VAT 11%</i> with 12,000.00 and 1,320.00. You should see <b>Total Purchases (input VAT)</b> 12,000.00 and 1,320.00.",
       "Read the last line: <b>VAT payable</b> 3,080.00, which is 4,400.00 minus 1,320.00. If purchases had more VAT than sales, it would read <b>VAT credit (refundable)</b> instead.",
-      "Check it against the VAT accounts: open General Ledger for the same period and look at the sales and purchase VAT accounts. They should show the same tax, unless a rate has changed or a document is in a foreign currency (see the problems below).",
+      "Check it against the VAT accounts: open General Ledger for the same period and look at the sales and purchase VAT accounts. They should show the same tax, unless a manual journal was posted to a VAT account.",
       "Click <span class='man-key'>Print</span> or <span class='man-key'>Export</span> and keep the copy with your return.",
       "Once the return is filed, lock the period in Period Lock so nobody can post into it by mistake."
     ],
     fields: [
       ["Period", "Which document dates to include: This year, This quarter, This month, Last year, All time or Custom range. Shared with the other reports.", "auto"],
       ["From and To (Custom range only)", "The first and last invoice or bill date of your VAT period. Leave To empty for today.", "optional"],
-      ["Book", "This report reads document lines, so it counts documents from every book whichever is chosen.", "optional"]
+      ["Book", "Only documents that post into the chosen book are counted; changing the picker redraws the report.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the table as a CSV file."],
@@ -564,12 +563,14 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["None.", "Shown under Sales or Purchases when no posted document of that kind is dated in the period. Check the dates and post any drafts."],
-      ["The tax differs from the VAT accounts in the General Ledger", "This report works the tax out again from each line's net amount and the tax's rate as it is set today, and it does not convert foreign currencies. A rate changed since posting, a document in another currency, or a manual journal on a VAT account will each make the two differ."],
-      ["Last quarter's VAT changed after I edited a tax rate", "Because the rate is read as it is today, editing a tax changes past periods on this report. Create a new tax for a new rate instead of editing the old one."],
+      ["The tax differs from the VAT accounts in the General Ledger", "The report adds the VAT each document posted to the VAT on sales and VAT on purchases accounts chosen in Companies, in the company currency. A manual journal on a VAT account, or a VAT account changed since the documents were posted, makes the two differ."],
+      ["(n) posted document(s) have no journal entry, so their figures are worked out from their lines at the latest exchange rate.", "Those documents are marked posted but have no entry in the ledger. Data Health Check lists them; pass the numbers to whoever looks after your books."],
+      ["A row reads VAT not matched to a tax", "A document posted VAT, but none of its lines names a tax any more. Open the document and check the tax on its lines."],
       ["A sale is missing", "The invoice is still a draft, or its invoice date is outside the period."]
     ],
     tips: [
       "Give every sale and purchase line a tax, even a zero-rated one, so the report shows it on the right row.",
+      "When one document has lines at different rates, the VAT it posted is shared between those rates in proportion to each line's tax.",
       "The note under the table sums it up: payable is output minus input, credit notes are netted out, posted documents only."
     ]
   },
@@ -646,7 +647,7 @@ orbitScreenHelp({
       "Read the <b>Entities</b> table: each company with its currency, method (the cafe reads <i>Equity 30%</i>), the closing and average rates used to translate it into USD, and its assets and result.",
       "The laundry invoices the hotel 12,000.00 a year, and each company's contact for the other is tagged with <b>Intercompany entity</b>. You should see <b>Intercompany eliminations</b> with <i>Intercompany revenue / cost eliminated</i> 12,000.00 / 12,000.00.",
       "Read <b>Group Profit &amp; Loss</b>: the income and expense accounts of the fully counted companies added together by account code, then <i>less: intercompany revenue</i> and <i>less: intercompany costs</i>, then <i>Share of result of equity-accounted entities</i> for the cafe, then <b>Group Net Profit (after eliminations)</b>.",
-      "Read <b>Group Balance Sheet</b>: assets, less intercompany receivables, liabilities, less intercompany payables, <i>Investments in equity-accounted entities</i>, equity, <i>Current Year Earnings</i> and <i>Currency translation adjustment</i>.",
+      "Read <b>Group Balance Sheet</b>: assets, less intercompany receivables, liabilities, less intercompany payables, <i>Investments in equity-accounted entities</i>, equity, <i>Current Year Earnings</i> and <i>Currency translation adjustment</i>. When a company is counted in Full but owned less than 100%, equity is followed by <i>less: non-controlling interests' share of equity</i>, <i>Current Year Earnings (owners of the parent)</i> and <i>Non-controlling interests</i>, so the outside owners' share is counted once.",
       "The last line, <b>Total Liabilities + Equity</b>, always equals Total Assets less intercompany receivables plus Investments in equity-accounted entities, because the currency translation adjustment is the amount that makes the two sides agree.",
       "Click <span class='man-key'>Print</span> and save as PDF to share it."
     ],
@@ -657,7 +658,7 @@ orbitScreenHelp({
       ["Name (Groups dialog)", "What the group is called in the picker.", "required"],
       ["Companies (Groups dialog)", "Tick every company that belongs to the group. At least one is needed.", "required"],
       ["Method (per company)", "<b>Full</b>: every line in full, with the outside owners' share shown as non-controlling interests. <b>Proportional</b>: every line at the ownership percentage. <b>Equity</b>: no lines, only one line for the group's share of net assets and one for its share of the result.", "auto"],
-      ["Ownership % (per company)", "How much of the company the group owns, 100 unless you change it. An empty box or 0 is saved as 100.", "auto"],
+      ["Ownership % (per company)", "How much of the company the group owns, from 0 to 100. An empty box counts as 100; a typed 0 is kept as 0.", "auto"],
       ["Use this group by default", "Makes this the group the report opens on. Only one group can be the default.", "optional"]
     ],
     buttons: [
@@ -683,7 +684,8 @@ orbitScreenHelp({
       ["No exchange rate set for (currency) - those entities are shown 1:1 until you add a rate.", "A company's currency has no rate, so its figures are added as if one unit were one unit of the group currency. Click Add a rate and enter a closing rate, and an average rate if you have one."],
       ["(number) member(s) you cannot open are left out", "The group holds companies you do not have access to, so their figures are missing. Ask for access or read the report with someone who has it."],
       ["Give the group a name", "The Name box in the dialog is empty. Type a name and save again."],
-      ["Put at least one company in the group", "No company is ticked. Tick the companies before saving. Saving an existing group with none ticked leaves it empty, so tick its companies again and save."],
+      ["Put at least one company in the group", "No company is ticked. Tick the companies and save again. Nothing is saved while none is ticked, so an existing group keeps its companies."],
+      ["Ownership must be a number from 0 to 100 for every ticked company. Correct it and save again.", "An ownership box of a ticked company holds a number below 0 or above 100, or something that is not a number. Correct it; nothing was saved."],
       ["There are no intercompany eliminations", "Eliminations need posted invoices or bills whose contact has Intercompany entity set to another company in the same group. A company counted with the Equity method is not eliminated line by line."],
       ["The same account appears twice", "Accounts are added together by account code. Two companies using different codes for the same thing show as separate lines."],
       ["The Average rate is the same as the Closing rate", "No average rate is entered for that currency, so the closing rate is used for both."]
@@ -696,7 +698,7 @@ orbitScreenHelp({
 
   "rep.health": {
     title: "Data Health Check",
-    what: "The <b>Data Health Check</b> runs thirteen automatic checks on this company's books and marks each one <b>PASS</b>, <b>REVIEW</b> or <b>FAIL</b>, so a problem is found here instead of in a report later. It checks that the ledger balances, that what customers and suppliers owe agrees with open invoices and bills, that every posted document and payment has its journal entry, that stock and cash are not below zero, and that nothing has been forgotten in draft. It reads posted entries up to today in the book you are in, and every invoice, bill, payment and stock move of the company.",
+    what: "The <b>Data Health Check</b> runs thirteen automatic checks on this company's books and marks each one <b>PASS</b>, <b>REVIEW</b> or <b>FAIL</b>, so a problem is found here instead of in a report later. It checks that the ledger balances, that what customers and suppliers owe agrees with open invoices and bills, that every posted document and payment has its journal entry, that stock and cash are not below zero, and that nothing has been forgotten in draft. It reads posted entries up to today in the chosen book, the invoices and bills of that book, and every payment and stock move of the company. The receivable, payable and suspense checks use the accounts chosen for the company in Settings, Companies.",
     when: [
       "At every month end, before you read the reports.",
       "After importing data, such as opening balances or a list of old invoices.",
@@ -706,7 +708,7 @@ orbitScreenHelp({
       "Open <b>Accounting &rsaquo; Reporting &rsaquo; Data Health Check</b>. For this example, a builders' merchant runs it after importing its opening balances. You should see <i>Running checks...</i> for a moment.",
       "Read the coloured banner. Green says <i>All checks passed - the books are internally consistent.</i>, or <i>No integrity problems</i> with a number of items to review. Red says how many checks need attention and to <i>see the red rows below</i>.",
       "Read the table: <b>Check</b>, <b>Result</b> and <b>Detail</b>. Here most rows are PASS, one is FAIL and one is REVIEW.",
-      "The FAIL row is <i>Receivables (4100) tie to open invoices</i> with the detail <i>Ledger 12,400.00 vs open invoices 11,900.00</i>. The ledger has 500.00 more than the open invoices explain.",
+      "The FAIL row is <i>Receivables (4100) tie to open invoices</i> with the detail <i>Ledger 12,400.00 vs open invoices less open credit notes 11,900.00</i>; 4100 is this company's receivable account. The ledger has 500.00 more than the open invoices explain.",
       "Find the difference: open Statement of Account, choose For an account, type 4100 and look for a line that is not an invoice or payment, such as an imported opening balance or a manual journal entry of 500.00.",
       "The REVIEW row is <i>No forgotten draft invoices / bills</i> with <i>3 still in draft (not in the ledger or on statements)</i>. Open Invoices and Bills, then post the ones that are real and delete the rest.",
       "Fix what you found, then open Data Health Check again from the menu to run the checks afresh. There is no refresh button.",
@@ -714,7 +716,7 @@ orbitScreenHelp({
       "Click <span class='man-key'>Export</span> to keep the results as a CSV file, or <span class='man-key'>Print</span>."
     ],
     fields: [
-      ["Book", "The ledger checks read the book you are in; the picker on this screen does not switch it. The invoice, payment and stock checks read the whole company.", "optional"]
+      ["Book", "The ledger checks, and the invoices and bills they are compared with, read the chosen book; changing the picker runs the checks again. The payment and stock checks read the whole company.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the checks table as a CSV file."],
@@ -723,7 +725,7 @@ orbitScreenHelp({
     links: [
       { name: "Trial Balance", how: "The totals behind <b>Trial balance balances</b>.", to: "rep.tb" },
       { name: "Balance Sheet", how: "The report that <b>Balance Sheet balances</b> checks.", to: "rep.bs" },
-      { name: "Statement of Account", how: "Read account 4100, 4000 or 4700 line by line to find a difference.", to: "rep.stmt" },
+      { name: "Statement of Account", how: "Read the account named in a failing check line by line to find a difference.", to: "rep.stmt" },
       { name: "Invoices", how: "Where forgotten drafts and duplicate numbers are fixed.", to: "inv.out" },
       { name: "Bills", how: "The same for supplier bills.", to: "inv.in" },
       { name: "Journal Entries", how: "Where draft entries are posted and correcting entries are made.", to: "moves" },
@@ -732,20 +734,21 @@ orbitScreenHelp({
     mistakes: [
       ["Trial balance balances: FAIL", "Total debits and total credits in the ledger differ. Orbit does not post unbalanced entries, so pass the Detail line to whoever looks after your books."],
       ["Balance Sheet balances: FAIL", "Assets do not equal liabilities plus equity plus the result, by more than 0.50. The Detail line shows the four figures."],
-      ["Receivables (4100) tie to open invoices: FAIL", "The receivable account and the open posted customer invoices differ by more than 0.50. Common causes: a manual journal or imported balance on 4100, an open credit note (not counted in the invoice side), or a foreign-currency invoice (its open amount is in its own currency). Read account 4100 in Statement of Account."],
-      ["Payables (4000) tie to open bills: FAIL", "The same check for suppliers and open posted bills. Look for manual journals on 4000, open refunds or foreign-currency bills."],
+      ["Receivables (code) tie to open invoices: FAIL", "The receivable account (the one chosen in Settings, Companies, Accounting accounts, or 4100 when none is) and the open posted customer invoices less open credit notes differ by more than 0.50. Common causes: a manual journal or imported balance on that account, a payment taken on account and not matched to an invoice, or a foreign-currency invoice (its open amount is in its own currency). Read the account in Statement of Account."],
+      ["Payables (code) tie to open bills: FAIL", "The same check for the payable account (or 4000 when none is chosen) and the open posted bills less open refunds. Look for manual journals on that account, supplier payments made on account, or foreign-currency bills."],
       ["Every posted document has a journal entry: FAIL", "The Detail lists up to five document numbers that are marked posted but have no entry, so they are missing from the ledger. Pass the numbers to whoever looks after your books."],
       ["No negative stock on hand: FAIL", "More has left your stock locations than arrived for the number of products shown. Usually a receipt was never recorded. Check the product's Stock Moves."],
-      ["Suspense (4700) is cleared: FAIL", "Value is parked in Suspense / to allocate, for example from stock received directly. Allocate the receipt or payment, or clear it with a journal entry."],
+      ["Suspense (code) is cleared: FAIL", "Value is parked in the Received not invoiced account (chosen in Settings, Companies, Stock accounting, or 4700 when none is), for example from stock received directly. Allocate the receipt or payment, or clear it with a journal entry."],
       ["No negative cash / bank balances: FAIL", "The Detail names the cash or bank account and its minus balance. Look for a missing receipt or a payment posted twice."],
       ["Every payment has a journal entry: FAIL", "A payment exists with no entry behind it, so it is not in the ledger."],
+      ["Every posted journal entry is numbered: FAIL", "Posted entries in this book have no voucher number. Set document numbering in Settings so entries get real numbers."],
       ["No duplicate document numbers: FAIL", "Two documents of the same kind share a number; the Detail lists up to six. Correct the duplicates."],
       ["No stranded draft journal entries: REVIEW", "Journal entries saved but never posted, so not in the ledger. Post or delete them in Journal Entries."],
       ["No forgotten draft invoices / bills: REVIEW", "Invoices or bills still in draft. Post the real ones and delete the rest."]
     ],
     tips: [
       "REVIEW rows are amber: they are not errors, only drafts worth a look.",
-      "The account checks use the standard codes 4100 (customers), 4000 (suppliers) and 4700 (suspense)."
+      "The account checks use the company's own receivable, payable and Received not invoiced accounts from Settings, Companies. The codes 4100 (customers), 4000 (suppliers) and 4700 (suspense) are used only when none is chosen."
     ]
   },
 

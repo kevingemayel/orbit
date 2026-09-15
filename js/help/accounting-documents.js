@@ -50,10 +50,10 @@ orbitScreenHelp({
       ["Customer Invoices card", "Repeats the receivable figure as <i>Outstanding receivable</i>.", "auto"],
       ["Vendor Bills card", "Repeats the payable figure as <i>Outstanding payable</i>.", "auto"],
       ["Bank card", "Repeats the cash figure as <i>Cash &amp; bank balance</i>.", "auto"],
-      ["Revenue - last 6 months", "The total of posted customer invoices dated in each of the last six months, tax included. Credit notes are not taken off, and invoices in other currencies are added at face value, without conversion.", "auto"],
-      ["Receivables aging", "What is still owed on posted customer invoices, split by how far past the due date it is: Not due, 1-30 days, 31-60 days and 60+ days.", "auto"],
-      ["Top customers", "The six customers with the highest total of posted invoices, over all dates.", "auto"],
-      ["Overdue invoices", "Only shown when something is late. Posted customer invoices past their due date with money still owing, oldest first. The eight oldest are listed; the heading totals them all.", "auto"]
+      ["Revenue - last 6 months", "The total of posted customer invoices dated in each of the last six months, tax included, in the company currency: an invoice in another currency is converted at the latest exchange rate. Credit notes are not taken off.", "auto"],
+      ["Receivables aging", "What is still owed on posted customer invoices, converted into the company currency and split by how far past the due date it is: Not due, 1-30 days, 31-60 days and 60+ days.", "auto"],
+      ["Top customers", "The six customers with the highest total of posted invoices, over all dates, converted into the company currency.", "auto"],
+      ["Overdue invoices", "Only shown when something is late. Posted customer invoices past their due date with money still owing, oldest first. The eight oldest are listed, each in its own currency; the heading totals them all in the company currency.", "auto"]
     ],
     buttons: [
       ["New Invoice", "On the Customer Invoices card. Opens a blank customer invoice."],
@@ -77,7 +77,8 @@ orbitScreenHelp({
       ["No posted invoices yet.", "Shown in the revenue chart until the company has at least one posted customer invoice."],
       ["An invoice you know is late is not in Overdue invoices", "Only posted invoices with money still owing and a due date before today are listed, and only the eight oldest appear. Open Aged Receivable to see every one."],
       ["Cash &amp; Bank or Receivable looks wrong", "Each figure adds accounts by their type. An account given the wrong type in the Chart of Accounts is counted in the wrong figure: open the account and correct its Type."],
-      ["The aging chart and the Receivable figure disagree", "The chart only uses what is left to pay on customer invoices. The Receivable figure is the ledger balance, which also takes off posted credit notes and any other entry on the receivable account."]
+      ["The aging chart and the Receivable figure disagree", "The chart only uses what is left to pay on customer invoices. The Receivable figure is the ledger balance, which also takes off posted credit notes and any other entry on the receivable account."],
+      ["A foreign-currency invoice looks far too large in the charts", "There is no exchange rate for its currency, so it is added unconverted. Add a rate in Exchange Rates."]
     ],
     tips: [
       "The revenue and top customers charts include tax. Use Profit and Loss for income before tax.",
@@ -155,7 +156,7 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Accounting &rsaquo; Customers &rsaquo; Invoices</b> and click <span class='man-key'>New</span>. For this example an office cleaning company is billing a client for four weekly cleans at 150.00 each and one deep clean at 250.00, plus 5% VAT.",
-      "Choose the <b>Customer</b>. The first customer in the list is already selected when the form opens, so change it to the right one. If the client is new, choose <i>+ Add a new customer...</i> at the bottom of the list, type the name and click <span class='man-key'>Create &amp; select</span>.",
+      "Choose the <b>Customer</b>. The first customer in the list is already selected when the form opens, with their payment terms applied, so change it to the right one. If the client is new, choose <i>+ Add a new customer...</i> at the bottom of the list, type the name and click <span class='man-key'>Create &amp; select</span>.",
       "Set the <b>Invoice Date</b> and pick <b>Payment terms</b>, for example <i>Within 30 days</i>. The <b>Due Date</b> fills itself. If the customer has a credit limit and this invoice takes them over it, a warning appears above the form.",
       "On the first line type <i>Weekly office clean</i> in <b>Description</b>, 4 in <b>Qty</b>, 150.00 in <b>Unit Price</b> and choose the 5% tax in <b>Tax</b>. The Subtotal shows 600.00.",
       "Click <span class='man-key'>+ Add a line</span> and enter <i>Deep clean</i>, 1 and 250.00 with the same tax.",
@@ -166,7 +167,7 @@ orbitScreenHelp({
       "When the client pays, click <span class='man-key'>Register Payment</span>. A payment of the full 892.50 marks the invoice <b>Paid</b>."
     ],
     fields: [
-      ["Customer", "Who you are billing. Only contacts marked as customers appear, and the first one is selected when a new invoice opens. <i>+ Add a new customer...</i> opens a small New customer form (Name, Email, Phone) without leaving the invoice. Choosing a customer sets Payment terms from their payment days when those days match one of the options, and checks their credit limit.", "required"],
+      ["Customer", "Who you are billing. Only contacts marked as customers appear, and the first one is selected when a new invoice opens. <i>+ Add a new customer...</i> opens a small New customer form (Name, Email, Phone) without leaving the invoice. The customer's payment days set Payment terms, both for the customer selected when the form opens and whenever you choose another; a number of days that is not in the list is added as its own choice. Their credit limit is checked too.", "required"],
       ["Reference", "Your own note, such as the customer's order number. It stays on the invoice form: it is not printed, not in the email, and the list search does not look at it.", "optional"],
       ["Currency", "The currency you bill in. Leave the company currency for a local invoice. In another currency, Orbit converts the amounts into your books at the rate for the invoice date from Exchange Rates, and shows the converted total under the totals.", "optional"],
       ["Book", "Which book the invoice posts into.", "optional"],
@@ -179,7 +180,7 @@ orbitScreenHelp({
       ["Description (on a line)", "What you are charging for, as it prints on the invoice. A line left blank is saved as <i>Service</i>.", "optional"],
       ["Revenue Account (on a line)", "Hidden until you click Show accounting detail. The income account the line posts to. It starts on the first income account in your chart (the lowest code), or on the product's income account when you pick a product, so check it when the line is unusual.", "optional"],
       ["Qty and Unit Price (on a line)", "How many, and the price of one before tax. The line's Subtotal is the two multiplied. An invoice cannot be posted with a zero total.", "required"],
-      ["Tax (on a line)", "The VAT on the line, from your taxes marked for sales or for both. It is added under Taxes and posted to the sales VAT account.", "optional"],
+      ["Tax (on a line)", "The VAT on the line, from your taxes marked for sales or for both. Archived taxes are not offered, unless the line already has one. It is added under Taxes and posted to the sales VAT account.", "optional"],
       ["Narration (Other Info tab)", "A free note kept on the invoice. It can be changed until the invoice is posted.", "optional"],
       ["Source (Other Info tab)", "Where the invoice came from: <i>manual</i> when it was typed here.", "auto"],
       ["To (Email dialog)", "Where the email goes. Filled from the customer's Email; you can type another address.", "required"],
@@ -233,7 +234,7 @@ orbitScreenHelp({
       ["Saved draft, posting failed: This document carries VAT but no sales VAT account is set. Choose one in Settings, Companies, Accounting accounts.", "Set the sales VAT account in the same place, then post again."],
       ["Saved draft, posting failed: This company has no sales journal. Add one in Accounting, Journals.", "The company has no journal of the sales type to post invoices into. Add one, then post again."],
       ["Saved draft, posting failed: No FX rate for EUR on or before (date) (type spot)", "The invoice is in another currency with no rate on or before its date. The totals area warns you in red before you post. Add the rate in Exchange Rates, then post again."],
-      ["! Over credit limit &middot; (customer) would owe (amount) against a limit of (amount) ((amount) over). You can still post it.", "Not an error. The customer's unpaid posted invoices plus this invoice's lines before tax are above the credit limit on their record. Decide whether to go ahead."],
+      ["! Over credit limit &middot; (customer) would owe (amount) against a limit of (amount) ((amount) over). You can still post it.", "Not an error. What the customer owes on posted invoices, less their open credit notes, plus this invoice with its tax, all converted into the company currency, is above the credit limit on their record. Decide whether to go ahead."],
       ["Sent for approval (amount)", "Not an error: an approval rule covers this amount. The invoice stays a draft until the approver decides; then click Confirm &amp; post again."],
       ["Already awaiting approval", "Confirm &amp; post was clicked again before the approver decided. Wait for the decision."],
       ["No valid recipient email. Add one on the customer, or type one in the box.", "The To box is empty or not an email address. Type the address, or add it to the customer's record for next time."],
@@ -242,7 +243,7 @@ orbitScreenHelp({
     ],
     tips: [
       "A draft changes nothing in your accounts. Drafts cannot be deleted from this screen, so check the customer before you save.",
-      "Give customers payment days of 0, 15, 30, 45, 60 or 90 and choosing them on an invoice sets the terms for you. Other lengths leave the terms as they are.",
+      "Set payment days on each customer and every invoice for them gets the right terms and due date: 0, 15, 30, 45, 60 and 90 match the ready-made choices, and any other number is added as a choice of its own.",
       "Email sends the invoice in the body of the message, not as an attachment. For a PDF, click Print and save it as PDF from the print window."
     ]
   },
@@ -368,7 +369,7 @@ orbitScreenHelp({
       ["Edit", "Shown on a posted credit note to people who can manage Accounting. Takes it back to draft, keeping its number and a copy of the posted version."],
       ["Print", "Prints the credit note with your company details, or saves it as a PDF from the print window."],
       ["Email", "Opens the email dialog: To, Subject (<i>Credit Note</i>, the number and your company name), a message, and a preview. <span class='man-key'>Send email</span> sends it."],
-      ["Mirror in the other company", "Shown on a posted credit note when the customer is tagged as one of your own companies. Creates a draft document in that company with the same lines. Check its type there before posting: see Mistakes."],
+      ["Mirror in the other company", "Shown on a posted credit note when the customer is tagged as one of your own companies. Creates the matching vendor credit note (a refund) as a draft in that company, with the same lines and total, and marks this credit note's entry as intercompany."],
       ["Journal Items", "The counter and tab on a posted credit note. Shows which accounts it posted to."]
     ],
     after: "Posting writes one entry in the sales journal, the reverse of an invoice: each line's amount debited to its income account, the VAT debited to the sales VAT account, and the total credited to Accounts Receivable against the customer. The customer's balance falls in the Receivable figure on the Dashboard, in Aged Receivable and in their Statement of Account, and the VAT / Tax Report takes it off the VAT you collected. The credit note is not matched to the original invoice: the invoice keeps its own Amount Due, and the credit note's status stays <i>Not Paid</i>, because Orbit does not register payments against credit notes.",
@@ -386,7 +387,6 @@ orbitScreenHelp({
       ["Period locked on/before (date) - choose a later date", "The credit note is dated on or before the lock date. Use a later date."],
       ["Saved draft, posting failed: No receivable account is set for this company. Choose one in Settings, Companies, Accounting accounts.", "The credit note was kept as a draft. Choose the receivable account there, then post again."],
       ["The original invoice still shows its full Amount Due", "Expected: a credit note is not matched to an invoice. What the customer owes overall is correct in Aged Receivable and their Statement of Account."],
-      ["Mirror in the other company created a vendor bill, not a vendor credit note", "The mirror button creates a bill even from a credit note. Do not post that draft; enter the credit in the other company through Accounting &rsaquo; Vendors &rsaquo; Refunds instead."],
       ["Discard went to Invoices, not Credit Notes", "Discard on a credit note returns to the customer Invoices list. Open Credit Notes again from the menu."]
     ],
     tips: [
@@ -501,7 +501,7 @@ orbitScreenHelp({
       ["Phone and Mobile", "Each in three boxes: the dialling code, the area code and the number.", "optional"],
       ["Tax / VAT no.", "Their tax registration number.", "optional"],
       ["Website", "Their website address.", "optional"],
-      ["Street, Building and Floor", "The address lines.", "optional"],
+      ["Street, Building and Floor", "The address lines. Printed under the contact's name, with City and Country, on invoices, bills, quotations and purchase orders.", "optional"],
       ["City", "The town or city. Towns typed before are offered as you type.", "optional"],
       ["Country", "Picked from the list.", "optional"],
       ["Payment terms", "<i>(none)</i> or one of the terms in Accounting &rsaquo; Configuration &rsaquo; Payment Terms (the standard 0 to 90 days when you have not set any). Choosing the customer on an invoice sets its terms when the days match one of the invoice's options.", "optional"],
@@ -548,7 +548,7 @@ orbitScreenHelp({
       ["This customer is used in other records - it can't be deleted. Archive it instead.", "The customer is on an invoice or another document. Use Archive."],
       ["Someone else changed this customer while you had it open. Your changes were not saved - reload the page to get the latest version, then re-enter them.", "Two people edited the record at once. Reload, then make your changes again."],
       ["The customer disappeared from the list after saving", "Contact type or Company type moved it: Supplier, Subcontractor or Freelancer make it a vendor, and Employee of a company takes it off both lists. Find it in Contacts and set Company type back to Client."],
-      ["No Over credit limit warning on an invoice", "The warning only appears once the customer's unpaid posted invoices plus the new invoice's lines before tax go above the limit. Credit notes and drafts are not counted."],
+      ["No Over credit limit warning on an invoice", "The warning only appears once what the customer owes on posted invoices, less their open credit notes, plus the new invoice with its tax, all in the company currency, goes above the limit. Drafts are not counted, and a credit note never shows the warning."],
       ["Payment terms did not change on the invoice", "The invoice offers 0, 15, 30, 45, 60 and 90 days. Terms of another length, such as 21 days, are not applied: set the Due Date by hand."]
     ],
     tips: [
@@ -578,7 +578,7 @@ orbitScreenHelp({
       "When you pay the supplier, open the bill again and click <span class='man-key'>Register Payment</span>."
     ],
     fields: [
-      ["Vendor", "The supplier who sent the bill. Only contacts marked as vendors appear, and the first is selected when a new bill opens. <i>+ Add a new supplier...</i> opens a small New supplier form (Name, Email, Phone) without leaving the bill. Choosing a vendor sets Payment terms from their payment days when those days match one of the options.", "required"],
+      ["Vendor", "The supplier who sent the bill. Only contacts marked as vendors appear, and the first is selected when a new bill opens. <i>+ Add a new supplier...</i> opens a small New supplier form (Name, Email, Phone) without leaving the bill. The vendor's payment days set Payment terms, both for the vendor selected when the form opens and whenever you choose another; a number of days that is not in the list is added as its own choice.", "required"],
       ["Reference", "The number printed on the supplier's invoice. It stays on the bill form for matching to the paper: it is not printed, and the list search does not look at it (search finds the bill number and the vendor's name).", "optional"],
       ["Currency", "The currency the supplier billed in. Leave the company currency for a local bill. With another currency, Orbit converts the amounts into your books at that date's rate from Exchange Rates and shows both figures under the totals.", "optional"],
       ["Book", "Which book the bill posts into, normally Statutory.", "optional"],
@@ -697,7 +697,7 @@ orbitScreenHelp({
       ["Show accounting detail", "Shows the Expense Account column on the lines."],
       ["Edit", "Shown on a posted credit note to people who can manage Accounting. Takes it back to draft, keeping its number and a copy of the posted version."],
       ["Print", "Prints it, headed Vendor Credit Note, or saves it as a PDF from the print window."],
-      ["Mirror in the other company", "Shown when posted and the vendor is tagged as one of your own companies. Creates a draft document in that company with the same lines. Check its type there before posting: see Mistakes."],
+      ["Mirror in the other company", "Shown when posted and the vendor is tagged as one of your own companies. Creates the matching customer credit note as a draft in that company, with the same lines and total, and marks this credit note's entry as intercompany."],
       ["Journal Items", "The counter and tab on a posted credit note. Shows which accounts it posted to."]
     ],
     after: "Posting writes one entry in the purchase journal, the reverse of a bill: the total debited to Accounts Payable against the vendor, each line credited to its expense account, and the VAT credited to the purchase VAT account. What you owe the supplier falls in the Payable figure on the Dashboard, in Aged Payable and in their Statement of Account; your expenses fall in the Profit and Loss; and the VAT / Tax Report takes it off the VAT you can reclaim. It is not matched to the bill it came from, and no payment can be registered against it, so its status stays <i>Not Paid</i>.",
@@ -716,7 +716,6 @@ orbitScreenHelp({
       ["Saved draft, posting failed: No payable account is set for this company. Choose one in Settings, Companies, Accounting accounts.", "The credit note was kept as a draft. Choose the payable account there, then post again."],
       ["Saved draft, posting failed: This document carries VAT but no purchase VAT account is set. Choose one in Settings, Companies, Accounting accounts.", "Set the purchase VAT account in the same place, then post again."],
       ["The original bill still shows its full Amount Due", "Expected: a vendor credit note is not matched to a bill. What you owe the supplier overall is correct in Aged Payable and their Statement of Account."],
-      ["Mirror in the other company created a customer invoice, not a credit note", "The mirror button creates an invoice even from a credit note. Do not post that draft; enter the credit in the other company through Accounting &rsaquo; Customers &rsaquo; Credit Notes instead."],
       ["Discard went to Bills, not Refunds", "Discard on a vendor credit note returns to the Bills list. Open Refunds again from the menu."]
     ],
     tips: [
@@ -827,7 +826,7 @@ orbitScreenHelp({
       ["Phone and Mobile", "Each in three boxes: the dialling code, the area code and the number.", "optional"],
       ["Tax / VAT no.", "Their tax registration number.", "optional"],
       ["Website", "Their website address.", "optional"],
-      ["Street, Building and Floor", "The address lines.", "optional"],
+      ["Street, Building and Floor", "The address lines. Printed under the contact's name, with City and Country, on invoices, bills, quotations and purchase orders.", "optional"],
       ["City", "The town or city. Towns typed before are offered as you type.", "optional"],
       ["Country", "Picked from the list.", "optional"],
       ["Payment terms", "<i>(none)</i> or one of the terms in Accounting &rsaquo; Configuration &rsaquo; Payment Terms. Choosing the vendor on a bill sets its terms when the days match one of the bill's options (0, 15, 30, 45, 60 or 90 days).", "optional"],

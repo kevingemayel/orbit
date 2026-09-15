@@ -275,7 +275,7 @@ orbitScreenHelp({
       "Move the stock separately, for example with Issue to Project or Deliver on the Overview."
     ],
     fields: [
-      ["Number (title)", "Leave blank on a new note and Orbit fills in DN- plus the next number. You can type your own instead.", "auto"],
+      ["Number (title)", "Leave blank on a new note and Orbit fills in DN- plus the next free number, one above the highest already used, so a number is never given twice. You can type your own instead, as long as no other note in the company uses it.", "auto"],
       ["Deliver to (customer)", "The customer receiving the goods. Only contacts marked as customers are listed.", "optional"],
       ["Project", "The job the delivery is for. The list shows it and can be searched by it.", "optional"],
       ["Ship to address", "Where the goods go. When no customer is chosen the list's To column shows this address.", "optional"],
@@ -308,7 +308,7 @@ orbitScreenHelp({
       ["Could not save: (reason)", "The note itself was not saved. Read the reason, correct it and save again."],
       ["Saved, but lines failed: (reason)", "The note was saved without its lines. Open it again, re-enter the lines and save."],
       ["Stock did not go down after marking Delivered", "That is by design: the note is paperwork. Post the stock movement on the Overview."],
-      ["Two notes have the same number", "The automatic number is the count of notes plus one, so after a note is deleted the next one can repeat an existing number. Type a unique number over it."]
+      ["Delivery note number (number) is already used by another note. Type a different number, or leave the number empty on a new note to get the next free one.", "The number typed at the top belongs to another note in this company. Change it, or clear it on a new note and Orbit gives the next free number."]
     ],
     tips: [
       "A line with no item, no description and no quantity is dropped when you save.",
@@ -422,7 +422,7 @@ orbitScreenHelp({
 
   "inv.planning": {
     title: "Planning",
-    what: "<b>Planning</b> nets what you need against what you have and what is already on order, then suggests exactly what to buy. <b>Demand</b> is confirmed sales orders, material take-offs not yet ordered, the components of open work orders and your reorder minimums. <b>Supply</b> is on-hand plus the undelivered quantity on open purchase orders. One click turns the shortfall into a draft purchase order.",
+    what: "<b>Planning</b> nets what you need against what you have and what is already on order, then suggests exactly what to buy. <b>Demand</b> is what confirmed sales orders still have to deliver (the part of each line not yet invoiced), material take-offs not yet ordered, the components of open work orders (through the bill of materials chosen on each order) and your reorder minimums. <b>Supply</b> is on-hand plus the undelivered quantity on open purchase orders. One click turns the shortfall into a draft purchase order.",
     when: [
       "Before placing the week's purchase orders, so you buy for real demand and not by guesswork.",
       "After confirming a large sales order or raising work orders, to see what the components will cost you in purchases.",
@@ -442,17 +442,17 @@ orbitScreenHelp({
     ],
     after: "Reading the plan changes nothing. <b>Create draft PO</b> adds a draft purchase order with no vendor, noted <i>Auto-generated from Planning (demand netting)</i>. Once that order is sent or confirmed, its lines count as Incoming the next time you open Planning.",
     links: [
-      { name: "Quotations",how: "Confirmed orders add their product lines to Demand.", to: "so.list" },
+      { name: "Quotations",how: "Confirmed orders add the part of each product line not yet invoiced to Demand.", to: "so.list" },
       { name: "Material Take-off", how: "Take-offs not yet ordered add their lines to Demand.", to: "pur.req" },
-      { name: "Work Orders", how: "Open orders add the components of the product's bill of materials for the quantity still to make.", to: "mfg.wo" },
+      { name: "Work Orders", how: "Open orders add the components of the bill of materials chosen on the order (the product's first one when the order names none) for the quantity still to make.", to: "mfg.wo" },
       { name: "Replenishment", how: "Each product's Min is added on top of Demand.", to: "inv.reorder" },
       { name: "Purchase Orders", how: "Sent and confirmed orders count as Incoming; the draft order is created there.", to: "po.list" },
       { name: "Overview", how: "On hand here is the same total, across all locations.", to: "inv.onhand" }
     ],
     mistakes: [
       ["Nothing to plan yet. Confirm a sales order, add a take-off, open a work order, or set a reorder minimum, and this nets the demand against your stock and open POs.", "There is no demand and no Min set. Add one of those and open Planning again."],
-      ["Demand looks too high for an order already partly delivered", "A confirmed sales order counts its full ordered quantity, whatever has already gone out. Treat the Suggested figure as a ceiling for such items."],
-      ["A work order's components are missing", "Only open work orders for a product that has a bill of materials are exploded, and a line with no product is ignored. Check the BOM's lines point at products."],
+      ["Demand looks too high for an order already partly delivered", "A sales order line counts only what is not yet invoiced, because an order is invoiced as it is delivered. Create the invoice for the delivered part from the order and it leaves Demand."],
+      ["A work order's components are missing", "Only open work orders with a bill of materials, chosen on the order or found through its product, are exploded, and a line with no product is ignored. Check the BOM's lines point at products."],
       ["The draft order has no vendor", "Planning does not choose a supplier. Pick one on the order before confirming."]
     ],
     tips: [
@@ -480,7 +480,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Location", "The internal location being counted. Expected is what Orbit holds at this location only.", "required"],
-      ["Category", "Limits the list to one group. It uses the product's <b>family</b> value from its classification, not its Product Category.", "optional"],
+      ["Category", "Limits the list to the products in one Product Category, including its sub-categories, as set in Category on the product form.", "optional"],
       ["Filter products...", "Limits the list by product name or reference as you type.", "optional"],
       ["Counted (on a row)", "What is physically there. Blank means not counted and nothing is posted for that item.", "optional"],
       ["Variance (on a row)", "Counted minus Expected, worked out as you type.", "auto"]
@@ -493,7 +493,7 @@ orbitScreenHelp({
       { name: "Overview", how: "On-hand and value there change as soon as the count is posted.", to: "inv.onhand" },
       { name: "Stock Moves", how: "One adjustment row per variance.", to: "inv.moves" },
       { name: "Locations", how: "Add a location per aisle or room to count them separately.", to: "loc" },
-      { name: "Classification", how: "The Category filter lists the families products carry.", to: "settings.classification" },
+      { name: "Product Categories", how: "The Category filter lists these categories.", to: "inv.cats" },
       { name: "Journal Entries", how: "The adjustment entries, one per variance.", to: "moves" }
     ],
     mistakes: [
@@ -573,7 +573,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Rate per kilogram", "The metal price per kg in the company currency. Pre-filled with the rate most weight-costed items currently carry.", "required"],
-      ["Apply to", "Every weight-costed item, or only the items in one family. Each choice shows how many items it covers.", "optional"]
+      ["Apply to", "Every weight-costed item, only the items in one family, or <i>(no family)</i> for the items that have none. Each choice shows how many items it covers.", "optional"]
     ],
     buttons: [
       ["Show me what changes", "Previews the new cost of each item (the first 200 are listed) without saving anything."],
@@ -590,7 +590,7 @@ orbitScreenHelp({
       ["Put in a rate per kilogram first", "The rate box is empty or zero. Type a rate above zero."],
       ["No item here is priced by weight yet.", "No active product has a weight per metre above zero. Fill in Weight per metre and Stock length on the product form."],
       ["A profile I expected was not recosted", "Its cost came from a supplier price or was typed in, so it is protected. The note at the top counts how many items are left alone for that reason."],
-      ["0 item(s) recosted with Apply to set to (no family)", "Items without a family cannot be recosted by that choice. Use <i>Every item costed by weight</i> instead, or give the items a family."]
+      ["(number) item(s) recosted. (number) could not be saved. Apply the rate again to retry them.", "Shown with Apply to set to (no family) when some items did not save, for example because the connection dropped. Click Apply the new rate again: items already recosted simply get the same cost."]
     ],
     tips: [
       "Always preview first: a rate typed per tonne instead of per kilogram shows up immediately as costs a thousand times too high.",
@@ -657,7 +657,7 @@ orbitScreenHelp({
       ["New", "Opens the New warehouse dialog."],
       ["Save / Cancel", "In the dialog: add the warehouse, or close without saving."],
       ["Name or Code cell", "Click to edit it in place. Enter or Tab saves, Escape cancels."],
-      ["Select", "Tick warehouses to <span class='man-key'>Export selected</span>, <span class='man-key'>Archive</span> or <span class='man-key'>Delete</span> them."],
+      ["Select", "Tick warehouses to <span class='man-key'>Export selected</span>, <span class='man-key'>Archive</span> or <span class='man-key'>Delete</span> them. Delete is refused for a warehouse whose locations hold stock or have stock moves, and Orbit offers to archive it instead."],
       ["Search / Columns / Export", "Search by name or code, choose columns, and download the list as CSV."]
     ],
     after: "No accounting. The first time an inventory screen loads after you add a warehouse, Orbit gives it an internal location named <i>(warehouse) / Stock</i>. Receipts marked Warehouse on the Goods Receipt form go to Orbit's main stock location, not to a warehouse you choose, so move stock into the new site with Transfer on the Overview.",
@@ -669,7 +669,7 @@ orbitScreenHelp({
     mistakes: [
       ["Name required", "The Name box is empty."],
       ["Could not save: (reason)", "The warehouse was not added. Read the reason and try again."],
-      ["Stock disappeared from the Overview after deleting a warehouse", "Deleting a warehouse also deletes its locations, and the stock moves in and out of them lose their location, so that stock no longer counts. Do not delete a warehouse that has ever held stock; transfer the stock out and keep the warehouse."],
+      ["The warehouse (name) has locations that hold stock or have stock moves, so it can't be deleted. Deleting it would delete those locations too, and the stock in them would stop counting.", "The warehouse has stock history, and deleting it would take its locations and that history with it. Click OK to archive it instead. Only a warehouse that has never held stock can be deleted."],
       ["An archived warehouse still appears", "Archive marks it archived, but this list and the stock screens still show and use it."]
     ],
     tips: [
@@ -705,7 +705,7 @@ orbitScreenHelp({
       ["Save / Cancel", "In the dialog: add the location, or close without saving."],
       ["Name or Usage cell", "Click to edit it in place."],
       ["Group By", "Groups by <i>Usage</i> or <i>Warehouse</i>."],
-      ["Select", "Tick locations to export, archive or delete them."],
+      ["Select", "Tick locations to export, archive or delete them. Delete is refused for a location that holds stock or has stock moves, and Orbit offers to archive it instead."],
       ["Search / Columns / Export", "Search by name or usage, choose columns, and download the list as CSV."]
     ],
     after: "No accounting. An internal location starts appearing in the Overview's location filter, the Location boxes of the stock dialogs, Cycle Count and Transfer.",
@@ -719,7 +719,7 @@ orbitScreenHelp({
       ["Name required", "The Name box is empty."],
       ["Create a warehouse first (Configuration > Warehouses)", "There is no warehouse to put the location in. Opening the Overview creates Main Warehouse, or add one in Warehouses."],
       ["Stock vanished after changing a location's Usage", "Only internal locations count. Set the usage back to internal and the stock reappears."],
-      ["Stock vanished after deleting a location", "The movements in and out of it lose their location and stop counting. Transfer stock out before removing a location, and never delete Orbit's own locations."]
+      ["The location (name) holds stock or has stock moves, so it can't be deleted. Deleting it would cut those moves loose, and the stock would stop counting.", "The location has stock history. Click OK to archive it instead. Orbit's own locations always have moves, so they are never deleted."]
     ],
     tips: [
       "Do not change the usage of Vendors, Customers, Inventory Adjustment, Factory (WIP) or a warehouse's Stock location: receipts, deliveries, adjustments and fabrication rely on them. Inventory Adjustment's own usage is not one of the choices in the list.",
@@ -850,7 +850,7 @@ orbitScreenHelp({
       ["New", "Opens a blank storage category."],
       ["Click a row", "Opens it to edit."],
       ["Save / Cancel", "Save, or close without saving."],
-      ["Delete", "On an existing category. Deletes it straight away, with no question asked."],
+      ["Delete", "On an existing category. Deletes it after you confirm."],
       ["Search / Export", "Search by name and download the list as CSV."]
     ],
     after: "Nothing else changes. No accounting, and no stock rule is applied.",
@@ -889,7 +889,7 @@ orbitScreenHelp({
       ["New", "Opens a blank rule."],
       ["Click a row", "Opens the rule to edit."],
       ["Save / Cancel", "Save the rule, or close without saving."],
-      ["Delete", "On an existing rule. Deletes it straight away, with no question asked."],
+      ["Delete", "On an existing rule. Deletes it after you confirm."],
       ["Search / Export", "Search by product or category name and download the list as CSV."]
     ],
     after: "Nothing else changes. No stock moves and nothing is posted; receipts do not read the rules.",
@@ -934,7 +934,7 @@ orbitScreenHelp({
       ["New", "Opens a blank delivery method."],
       ["Click a row", "Opens it to edit."],
       ["Save / Cancel", "Save, or close without saving."],
-      ["Delete", "On an existing method. Deletes it straight away, with no question asked."],
+      ["Delete", "On an existing method. Deletes it after you confirm."],
       ["Select", "Tick rows to export, archive or delete several at once. Archive sets them to Off."],
       ["Search / Export", "Search by name or carrier and download the list as CSV."]
     ],
@@ -976,7 +976,7 @@ orbitScreenHelp({
       ["New", "Opens a blank package type."],
       ["Click a row", "Opens it to edit."],
       ["Save / Cancel", "Save, or close without saving."],
-      ["Delete", "On an existing package type. Deletes it straight away, with no question asked."],
+      ["Delete", "On an existing package type. Deletes it after you confirm."],
       ["Search / Export", "Search by name and download the list as CSV."]
     ],
     after: "Nothing else changes. No stock, weights or charges are worked out from package types.",
@@ -1029,7 +1029,7 @@ orbitScreenHelp({
       ["Click a row", "Opens the die to edit or log shots."],
       ["Add shots &amp; mark used today", "Adds the shots to the total and records today as the last-used date, saved immediately."],
       ["Save / Cancel", "Save the die, or close without saving the other fields."],
-      ["Delete", "On an existing die. Deletes it straight away, with no question asked."],
+      ["Delete", "On an existing die. Deletes it after you confirm."],
       ["Filters", "<i>Active</i> or <i>In repair</i>."],
       ["Search / Columns / Export", "Search by die number, name, profile or supplier, and download the list as CSV."]
     ],
@@ -1125,7 +1125,7 @@ orbitScreenHelp({
       ["Project / site", "The job the batch is for, used to find and group orders. Only active projects are listed.", "optional"],
       ["Quantity", "How many to make. Each component is multiplied by Quantity divided by the BOM's Output qty.", "optional"],
       ["Planned date", "When the batch is due, today unless you change it.", "optional"],
-      ["Number", "WO/year/0001, counting up per company and year, given on the first save.", "auto"],
+      ["Number", "Given on the first save, for example WO/2026/0007, in the format of the Work order row in Settings, Document Numbering, counting up from the highest number already used.", "auto"],
       ["Estimated material cost", "The saved BOM and quantity times today's component cost prices. A forecast; nothing is posted.", "auto"],
       ["Operation (routing)", "The step, such as Cut, Weld, Glaze or QC. A row with no operation name is dropped when you save.", "optional"],
       ["Work centre (routing)", "The machine, bay or team, typed freely.", "optional"],
@@ -1164,7 +1164,7 @@ orbitScreenHelp({
     ],
     tips: [
       "There is no un-complete. Check the quantity before you click Complete &amp; consume.",
-      "Saving the order stamps the start and done time of routing rows again, so treat those times as the last save rather than the moment each step changed."
+      "Each routing row keeps the time it was first set to In progress and the time it was set to Done. Saving the order again keeps those times; only changing a row's State stamps a new one."
     ]
   },
 
@@ -1232,7 +1232,7 @@ orbitScreenHelp({
 
   "mfg.runs": {
     title: "Production Runs",
-    what: "A <b>production run</b> records a batch made without a bill of materials: you name it, say what came out and list what was consumed. Saving it with the status <b>Done</b> moves the stock: the materials leave, the output arrives carrying their cost, and the output product's cost price is updated. Use it for one-off batches, or to record something already made.",
+    what: "A <b>production run</b> records a batch made without a bill of materials: you name it, say what came out and list what was consumed. Saving it with the status <b>Done</b>, or dropping its card on Done in the board view, moves the stock: the materials leave, the output arrives carrying their cost, and the output product's cost price is updated. Use it for one-off batches, or to record something already made.",
     when: [
       "A batch has no fixed recipe worth writing as a bill of materials.",
       "You are recording production after the event.",
@@ -1268,7 +1268,7 @@ orbitScreenHelp({
       ["Save", "Saves the run and rewrites its lines; with status Done, also moves the stock the first time."],
       ["Discard", "Returns to the list without saving."],
       ["Select, then Delete", "In the list, tick runs and delete them. Stock already moved stays moved."],
-      ["Group By / Kanban view", "Group by Status or Project, or see the runs as a board by status."]
+      ["Group By / Kanban view", "Group by Status or Project, or see the runs as a board by status. Dropping a card on Done moves the stock exactly as saving the run as Done does, once."]
     ],
     after: "Nothing moves until the run is saved as Done. Then each stock product line with a quantity moves from the main stock location to Customers and posts <b>Work in progress</b> against <b>Stock on hand</b> at its cost price. The output moves into the main stock location and posts Stock on hand against Work in progress for the total absorbed, and the output product's cost price becomes that total divided by the output quantity. The journal entries are dated the day you save. The run is then flagged, so saving it again never moves the stock a second time. If the company has no work-in-progress account, the consumption is tagged to the project with no posting and the output moves quantity only.",
     links: [
@@ -1282,7 +1282,7 @@ orbitScreenHelp({
       ["Name is required", "The name at the top is empty."],
       ["Could not save: (reason)", "The run was not saved. Read the reason and try again."],
       ["Saved, but lines failed: (reason)", "The run saved without its lines. Open it, re-enter the materials and save."],
-      ["Status is Done but no stock moved", "The card was dragged to Done on the board, which changes only the status. Open the run and click Save to move the stock."],
+      ["The run is now Done, but its materials could not be read, so no stock moved. Open the run and click Save to move the stock.", "The card was dropped on Done but its material lines could not be loaded. Open the run and click Save: the stock moves then, and only once."],
       ["I changed the materials after it was Done, but stock did not change", "A run moves stock once. Correct the difference with Adjust on the Overview."],
       ["Stock saved, but no stock account is set for this company - Settings, Companies, Stock accounting", "The quantities moved but nothing was posted. Set the stock accounts in Settings, Companies."]
     ],
@@ -1318,7 +1318,8 @@ orbitScreenHelp({
       ["Component (on a line)", "The product consumed. Only lines with a product are consumed or costed. <i>+ Add a new product...</i> creates one.", "optional"],
       ["Description (on a line)", "Filled from the component. A line with neither a component nor a description is dropped.", "optional"],
       ["Qty (on a line)", "How much of the component one run uses, in the component's stock unit.", "optional"],
-      ["Unit (on a line)", "Filled from the component's unit. A label only; quantities are not converted.", "optional"]
+      ["Unit (on a line)", "Filled from the component's unit. A label only; quantities are not converted.", "optional"],
+      ["Waste % (on a line)", "The extra quantity lost in trimming, spillage or offcuts, as a percentage of Qty. The Kitchen's plate cost and cost variance add it on top of Qty; work orders and Planning use Qty as typed. 0 unless you change it, and kept every time you save.", "optional"]
     ],
     buttons: [
       ["New", "Starts a blank BOM."],
@@ -1328,7 +1329,7 @@ orbitScreenHelp({
       ["Delete", "After you confirm, deletes the BOM and its lines. Work orders that used it lose their BOM."],
       ["Select / Search / Export", "In the list: delete several, search by name or product, and download as CSV."]
     ],
-    after: "Saving moves no stock and posts nothing. The recipe is then used in four places: a <b>work order</b> consumes its components on completion; <b>Planning</b> explodes open work orders into component demand; the Kitchen <b>Price list</b> and <b>Menu engineering</b> read its <b>plate cost</b>; and <b>Cost variance</b> multiplies recipes by till sales to find what should have been used. Plate cost and cost variance take the first recipe found for a product, follow recipes inside recipes, and also apply a batch yield percentage and a waste percentage per line when those are stored on the recipe; neither is shown on this screen.",
+    after: "Saving moves no stock and posts nothing. The recipe is then used in four places: a <b>work order</b> consumes its components on completion; <b>Planning</b> explodes open work orders into component demand; the Kitchen <b>Price list</b> and <b>Menu engineering</b> read its <b>plate cost</b>; and <b>Cost variance</b> multiplies recipes by till sales to find what should have been used. Plate cost and cost variance take the first recipe found for a product, follow recipes inside recipes, and also apply each line's Waste % and a batch yield percentage when one is stored on the recipe; the yield is not shown on this screen.",
     links: [
       { name: "Work Orders", how: "Pick the BOM on an order; completing it consumes the components.", to: "mfg.wo" },
       { name: "Planning", how: "Open work orders are exploded through the product's BOM.", to: "inv.planning" },
@@ -1347,7 +1348,7 @@ orbitScreenHelp({
     ],
     tips: [
       "Keep one recipe per finished product: plate cost, cost variance and Planning use whichever they find first.",
-      "Saving rewrites every line, so any waste percentage stored on the lines goes back to 0. Kitchen users who rely on waste percentages should not re-save those recipes here.",
+      "Saving rewrites every line from the screen, Waste % included, so check the figures before you save.",
       "Write the recipe per natural batch (a tray, a mix, a sheet) and set Output qty to what it yields."
     ]
   }

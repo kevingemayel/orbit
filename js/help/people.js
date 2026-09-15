@@ -283,7 +283,7 @@ orbitScreenHelp({
       ["New", "Opens the New skill box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes the skill straight away, without asking, and removes it from every employee who had it."],
+      ["Delete", "Shown when editing. After you confirm, deletes the skill and removes it from every employee who had it."],
       ["Group By", "Group skills by Category."]
     ],
     after: "Nothing changes in the accounts. Saved skills appear in the Skill picker on Employee Skills.",
@@ -292,7 +292,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["A skill called Skill appears in the list", "It was saved with an empty Skill name. Open it and type the real name."],
-      ["An employee's skill vanished", "Deleting a skill removes it from every employee, with no confirmation. Recreate the skill and add it to them again."]
+      ["An employee's skill vanished", "The skill was deleted, which removes it from every employee who had it; the confirmation says so. Recreate the skill and add it to them again."]
     ],
     tips: [
       "Keep names short and consistent, so search on Employee Skills finds everyone with the skill."
@@ -323,7 +323,7 @@ orbitScreenHelp({
       ["New", "Opens the Add employee skill box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes the row straight away, without asking."],
+      ["Delete", "Shown when editing. Deletes the row after you confirm."],
       ["Group By", "Group by Employee or by Skill."]
     ],
     after: "Nothing changes in the accounts or in other apps. It is a record for finding and developing people.",
@@ -368,7 +368,7 @@ orbitScreenHelp({
       ["New", "Opens the New certification box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes straight away, without asking."],
+      ["Delete", "Shown when editing. Deletes it after you confirm."],
       ["Filters", "Expiring/expired: certificates past their expiry or within 60 days of it."],
       ["Group By", "Group by Employee."]
     ],
@@ -414,7 +414,7 @@ orbitScreenHelp({
       ["New", "Opens the New checklist item box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes straight away, without asking."],
+      ["Delete", "Shown when editing. Deletes it after you confirm."],
       ["Filters", "Open, Onboarding or Offboarding."],
       ["Group By", "Group by Employee or by Kind."]
     ],
@@ -513,7 +513,7 @@ orbitScreenHelp({
       ["New", "Opens the New shift box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes the shift straight away, without asking."],
+      ["Delete", "Shown when editing. Deletes the shift after you confirm."],
       ["Filters", "Open shifts, Published or Draft."],
       ["Group By", "Group by Assignee, Role or Project."]
     ],
@@ -559,7 +559,7 @@ orbitScreenHelp({
       ["New", "Opens the New shift template box."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
-      ["Delete", "Shown when editing. Deletes straight away, without asking. Shifts already planned from it are not changed."]
+      ["Delete", "Shown when editing. Deletes it after you confirm. Shifts already planned from it are not changed."]
     ],
     after: "Nothing changes anywhere until you use the template on Planning. A template is copied, not linked: editing it later does not change shifts already planned.",
     links: [
@@ -835,6 +835,7 @@ orbitScreenHelp({
       ["Save", "Saves the request. A new request is saved as To approve."],
       ["Cancel", "Closes without saving."],
       ["Approve", "Shown on a saved request not yet approved. Checks the balance for paid and sick leave, then checks approval rules for leave requests. If none applies, the request becomes Approved."],
+      ["Delete", "Shown on a request still waiting for approval, to people who can edit the Employees app. Deletes it after you confirm. An approved or refused request cannot be deleted."],
       ["Filters", "To approve, or Approved."],
       ["Group By", "Group by Employee or by Type."]
     ],
@@ -855,7 +856,7 @@ orbitScreenHelp({
       ["Could not approve: (reason)", "The database refused the change, for example because your role cannot edit the Employees app."]
     ],
     tips: [
-      "There is no Refuse or Delete button on a request. A turned-down request simply stays unapproved: unapproved requests never count against the balance or on payslips.",
+      "There is no Refuse button. Delete a request that was turned down or entered by mistake while it is still waiting; unapproved requests never count against the balance or on payslips.",
       "An approved request can still be edited and saved without the balance being checked again, so re-check the balance line if you change Days after approving."
     ]
   },
@@ -885,6 +886,7 @@ orbitScreenHelp({
     ],
     buttons: [
       ["New", "Opens the New allocation box."],
+      ["Delete", "On a saved allocation, to people with Manage rights on the Employees app. Deletes it after you confirm; the confirmation warns when leave is already taken that year, because the balance can then go below zero."],
       ["Save", "Saves and closes the box."],
       ["Cancel", "Closes without saving."],
       ["Group By", "Group by Employee."],
@@ -901,7 +903,7 @@ orbitScreenHelp({
       ["Could not save: (reason)", "The database refused the change, for example because your role cannot edit the Employees app."]
     ],
     tips: [
-      "An allocation cannot be deleted from this screen. To cancel one, open it and set Days allocated to 0.",
+      "To cancel an allocation, open it and click Delete, or set Days allocated to 0 to keep a record of it.",
       "Check the Year before saving: an allocation for the wrong year leaves this year's balance at zero."
     ]
   },
@@ -1040,9 +1042,10 @@ orbitScreenHelp({
       ["Post all", "Checks approval rules for payroll runs against the total net pay of the draft payslips, then posts each draft payslip to the ledger. The run is marked Done only when every payslip posted; otherwise it tells you how many are still drafts."],
       ["Bank file", "Downloads a CSV file with one line per payslip in the run: Employee, Bank Account, Email, Currency and Net Amount."],
       ["WPS SIF", "Downloads a .sif salary file for the Wage Protection System: a header with your employer WPS ID, bank code, the date and time, the salary month, the number of records, the total net pay and the currency, then one line per payslip with the WPS person ID, routing code, IBAN (or bank account), net pay and gross pay."],
-      ["A payslip row", "Opens that payslip."]
+      ["A payslip row", "Opens that payslip."],
+      ["Delete", "On a saved run, to people with Manage rights on the Employees app. Refused while any payslip in the run is posted, because that pay is in the ledger. Otherwise, after you confirm, deletes the run and its draft payslips."]
     ],
-    after: "Post all writes one journal entry per payslip in the journal with the code MISC, dated Period To: the gross pay is debited to a salary expense account, net pay credited to a salaries payable account, and deductions credited to a payable account. Employer costs, when a structure has them, are debited to the same expense account and credited to that payable account. Orbit chooses the accounts by name, not from Settings, Companies: an active expense account whose name contains salary, payroll, personnel, wage or staff (otherwise code 6000, otherwise the first expense account), and a liability account whose name contains salary, payroll or personnel for net pay (otherwise code 4000, otherwise the first liability). Each payslip becomes <b>Confirmed</b>. It becomes <b>Paid</b> when the salary is paid from Counter against it. Posted payslips count in Payroll Consolidation. Payroll data is personal: the payroll screens can be switched off for a role in Settings, Roles &amp; Permissions.",
+    after: "Post all writes one journal entry per payslip in the journal with the code MISC, dated Period To: the gross pay is debited to a salary expense account, net pay credited to a salaries payable account, and deductions credited to a payable account. Employer costs, when a structure has them, are debited to the same expense account and credited to that payable account. Net pay goes to the <b>Salaries payable</b> account chosen in Settings, Companies, the same account a Salary payment in Counter starts on, so paying the salary clears it. The expense account is chosen by name: an active expense account whose name contains salary, payroll, personnel, wage or staff (otherwise code 6000, otherwise the first expense account); deductions and employer costs go to account code 4000 (otherwise the first liability). A payslip that fails to post leaves nothing behind in the journal. Each payslip becomes <b>Confirmed</b>. It becomes <b>Paid</b> when the salary is paid from Counter against it. Posted payslips count in Payroll Consolidation. Payroll data is personal: the payroll screens can be switched off for a role in Settings, Roles &amp; Permissions.",
     links: [
       { name: "Contracts", how: "Only running contracts with a structure and a wage are paid.", to: "hr.contracts" },
       { name: "Salary Heads", how: "The lines each payslip is built from.", to: "hr.heads" },
@@ -1063,6 +1066,7 @@ orbitScreenHelp({
       ["Already awaiting approval", "The run was already sent and the approver has not decided yet."],
       ["No MISC journal to post to", "The company has no journal with the code MISC. Add one in Accounting before posting."],
       ["Need a salary/expense account and a payable account in the chart", "The chart of accounts has no active expense account or no active liability account. Add them in the Chart of Accounts."],
+      ["Settings, Companies has no salaries payable account set, or that account is archived. Choose it under Accounting accounts, then post again.", "Open Settings, Companies, open this company, choose the account net pay is owed on in Salaries payable, Save, and click Post all again."],
       ["Post failed: Period locked on (date)", "Period To falls on or before the locked date. Ask whoever locked the period to reopen it, or use a later period."],
       ["WPS SIF exported - set the employer WPS ID + bank code in Company Profile", "The file downloaded, but its header is incomplete. Fill in both fields in Settings, Company Profile and export again."],
       ["WPS SIF exported - (number) employee(s) missing WPS ID/IBAN", "Some employees have no WPS person ID or IBAN. Fill them in on each employee record and export again before sending it to the bank."],
@@ -1114,9 +1118,10 @@ orbitScreenHelp({
       ["Confirm &amp; Post", "Shown on a draft. Computes, saves and posts the payslip to the ledger, making it Confirmed and locked. It does not check approval rules for payroll runs."],
       ["Print", "Shown on a saved payslip. Prints a branded payslip with earnings, deductions, employer costs, gross, deductions, net pay and cost to company, as last saved."],
       ["Filters", "Draft, Confirmed or Paid."],
-      ["Group By", "Group by Status."]
+      ["Group By", "Group by Status."],
+      ["Delete", "On a draft payslip, to people with Manage rights on the Employees app. Deletes it after you confirm. A confirmed or paid payslip cannot be deleted, because its pay is in the ledger."]
     ],
-    after: "Confirm &amp; Post writes the same journal entry as a payslip run: gross pay debited to a salary expense account, net pay credited to a salaries payable account, deductions and any employer costs credited to a payable account, in the journal with the code MISC. There is no Edit or reverse on a posted payslip. A Salary payment in Counter that settles the payslip marks it Paid. Confirmed and Paid payslips count in Payroll Consolidation, and a privacy export of the employee includes all their payslips. Any member of the company can read payslips at database level; in the app, the payroll screens follow the Employees (HR) module and its Payroll part in each role.",
+    after: "Confirm &amp; Post writes the same journal entry as a payslip run: gross pay debited to a salary expense account, net pay credited to a salaries payable account, deductions and any employer costs credited to a payable account, in the journal with the code MISC. There is no Edit or reverse on a posted payslip, and only a draft can be deleted. A Salary payment in Counter that settles the payslip marks it Paid. Confirmed and Paid payslips count in Payroll Consolidation, and a privacy export of the employee includes all their payslips. Any member of the company can read payslips at database level; in the app, the payroll screens follow the Employees (HR) module and its Payroll part in each role.",
     links: [
       { name: "Payslip Runs", how: "Makes and posts payslips for everyone at once.", to: "hr.runs" },
       { name: "Contracts", how: "The wage, structure, days and hours behind every payslip.", to: "hr.contracts" },
@@ -1131,13 +1136,14 @@ orbitScreenHelp({
       ["The contract's salary structure has no heads.", "The contract's structure is empty, or the contract has no structure. Add heads on Salary Heads, or choose a structure on the contract."],
       ["Basic salary shows 0.00", "Worked Days is 0. Type the days worked and compute again."],
       ["Need a salary/expense account and a payable account in the chart", "The chart has no active expense or liability account. Add them in the Chart of Accounts."],
+      ["Settings, Companies has no salaries payable account set, or that account is archived. Choose it under Accounting accounts, then post again.", "Open Settings, Companies, open this company, choose the account net pay is owed on in Salaries payable, Save, and click Confirm &amp; Post again."],
       ["No MISC journal to post to", "The company has no journal with the code MISC. Add one before posting."],
       ["Post failed: Period locked on (date)", "Period To is on or before the locked date. Reopen the period, or use a later date."],
       ["Save failed", "The change to an existing payslip was refused, for example because your role cannot edit the Employees app."],
       ["A payslip you edited has disappeared", "Its run was generated again, which deletes and remakes every payslip in the run. Make changes after the last generate, or on the contract and heads."]
     ],
     tips: [
-      "Check the payslip in Journal Items before paying: Counter's Salary payment debits account code 4200 by default, while the payslip credits net pay to a payable account chosen by name. Make sure they are the same account so the amount owed clears.",
+      "Set Salaries payable in Settings, Companies once: payslips credit net pay to it and a Salary payment in Counter starts on it, so the amount owed clears when the salary is paid.",
       "A posted payslip cannot be changed. If it was wrong, correct the books with a journal entry and pay the difference on the next payslip."
     ]
   },
@@ -1255,7 +1261,7 @@ orbitScreenHelp({
       ["Employee", "Who paid and is owed. Only active employees are listed.", "required"],
       ["Amount", "The total spent, in the company currency. A claim of 0 cannot be posted.", "optional"],
       ["Date", "When the expense was incurred. It is the date of the journal entry. Starts as today.", "optional"],
-      ["Status", "In the list only: Draft or Approved.", "auto"]
+      ["Status", "In the list only: Draft, Approved or Posted.", "auto"]
     ],
     buttons: [
       ["New", "Opens the New expense box."],
@@ -1263,7 +1269,7 @@ orbitScreenHelp({
       ["Cancel", "Closes without saving."],
       ["Approve", "Shown on a saved claim that is not yet approved. Checks approval rules for expenses against the amount as last saved, then marks the claim Approved."],
       ["Post to accounts", "Shown on an approved claim not yet posted. Posts it to the ledger and marks it Posted."],
-      ["Filters", "To submit (drafts), or Approved."],
+      ["Filters", "To submit (drafts), Approved, or Posted."],
       ["Group By", "Group by Employee or by Month."],
       ["Select", "Tick rows to export or delete several claims."]
     ],
@@ -1282,8 +1288,8 @@ orbitScreenHelp({
       ["The expense amount is zero.", "The claim was saved with an amount of 0. Enter the amount, save, and post again."],
       ["Need an expense account and a payable (4000) in the chart of accounts.", "The chart has no active expense account or no liability account. Add them in the Chart of Accounts."],
       ["No MISC journal to post to.", "The company has no journal with the code MISC. Add one before posting."],
-      ["Post failed: Period locked on (date)", "The expense date is on or before the locked date. Use a later date, or ask for the period to be reopened."],
-      ["A posted claim shows Draft in the list", "The list has no Posted badge, so posted claims show as Draft. Open the claim: the box shows Posted and there is no Approve button."]
+      ["Post failed: Period locked on (date)", "The expense date is on or before the locked date. Nothing is left in the journal. Use a later date, or ask for the period to be reopened, then post again."],
+      ["The expense is in the ledger, but it could not be marked Posted: (reason). Do not post it again.", "The journal entry was posted but the claim kept its old status. Check Journal Entries for Staff expense: (description) and do not click Post to accounts again."]
     ],
     tips: [
       "Save before clicking Approve if you changed the amount: the approval check uses the amount last saved.",
@@ -1306,16 +1312,16 @@ orbitScreenHelp({
       "Choose <i>Sous chef</i> in <b>Job position</b> and type <i>Referral</i> in <b>Source</b>.",
       "Paste the address of their CV in <b>CV link</b>. <b>Applied date</b> already shows today.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the stage bar at the top on <b>New</b>.",
-      "After the interview, change <b>Stage</b> to <i>Interview</i>, set <b>Rating (1-5)</b> to 4, write your notes, and click <span class='man-key'>Save</span>. The stage bar now shows Interview, with the stages before it marked as passed.",
+      "After the interview, set <b>Rating (1-5)</b> to 4, write your notes, and click <span class='man-key'>Move to Interview</span>. You should see <i>Moved to Interview</i>. The stage bar now shows Interview, with the stages before it marked as passed.",
       "On the list, switch to the kanban view to see everyone by stage.",
-      "When you hire them, set Stage to <i>Hired</i> and save, then add them as an employee in Employees. Hiring does not create the employee for you."
+      "When you hire them, click <span class='man-key'>Hire</span>, then add them as an employee in Employees. Hiring does not create the employee for you."
     ],
     fields: [
       ["Applicant name", "The box at the top of the form.", "required"],
       ["Email", "Their email address. Searchable from the list.", "optional"],
       ["Phone", "Their phone number.", "optional"],
       ["Job position", "The role they applied for, from Job Positions.", "optional"],
-      ["Stage", "New, Screening, Interview, Offer, Hired or Rejected. A new applicant starts on New. Change stages here: there are no stage buttons.", "optional"],
+      ["Stage", "New, Screening, Interview, Offer, Hired or Rejected. A new applicant starts on New. Change it here and Save, or use the stage buttons at the top.", "optional"],
       ["Source", "Where they came from, for example LinkedIn or a referral. Used by the Source grouping.", "optional"],
       ["Rating (1-5)", "Your overall score, shown as stars. 0 means not rated; anything above 5 is saved as 5.", "optional"],
       ["Applied date", "When they applied. Starts as today.", "optional"],
@@ -1326,6 +1332,7 @@ orbitScreenHelp({
       ["New", "Opens a blank applicant."],
       ["Save", "Saves and keeps the applicant open."],
       ["Discard", "Returns to the list without saving."],
+      ["Move to (stage), Hire, Reject", "Shown on a saved applicant, one button for every stage except the current one. Saves what is on screen and moves the applicant to that stage in one click."],
       ["Delete", "Shown on a saved applicant to people who can manage the Recruitment app. Asks you to confirm, then deletes the record."],
       ["Filters", "One filter per stage."],
       ["Group By", "Group by Stage or by Source."],

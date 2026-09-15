@@ -1,0 +1,212 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Orbit screen smoke test</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;background:#fbfbfa;color:#16171c}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:15px;margin:22px 0 6px}
+  .sum{font-size:13px;margin:0 0 6px;font-weight:700}
+  .note{font-size:12.5px;color:#555;margin:0 0 14px;max-width:920px}
+  .wrap{overflow-x:auto}
+  table{border-collapse:collapse;width:100%;font-size:12.5px;background:#fff}
+  th,td{border-bottom:1px solid #eee;padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:#f3f3f1;font-weight:600}
+  tr.no td{background:#fef4f4}
+  .ok{color:#16a34a;font-weight:700} .bad{color:#dc2626;font-weight:700}
+  .muted{color:#777}
+  code{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+  #uniq li{margin:3px 0}
+  #frame-box{position:fixed;right:8px;bottom:8px;width:1280px;height:800px;transform:scale(.25);transform-origin:bottom right;border:1px solid #ccc;background:#fff}
+  #frame-box iframe{width:100%;height:100%;border:0}
+</style>
+<h1>Orbit screen smoke test</h1>
+<p class="sum" id="sum">starting...</p>
+<p class="note">Loads the real <code>js/app.js</code> against a fake backend (<code>tests/smoke-stub.js</code>), signs in a fake owner, then opens every menu route of every app and every "New" form it finds, and fails a step on any exception, unhandled promise rejection or console.error. Options: <code>?only=inv.out,po.list</code> runs some routes, <code>?new=0</code> skips New forms, <code>?quiet=150&amp;cap=3000</code> tune how long a screen may keep changing.</p>
+<div id="uniqbox" hidden><h2>Distinct crashes</h2><ol id="uniq"></ol></div>
+<h2>Every step</h2>
+<div class="wrap"><table>
+  <thead><tr><th>#</th><th>Route</th><th>App</th><th>Result</th><th>Opened</th><th>First error</th><th>Where</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table></div>
+<div id="frame-box"><iframe id="app" title="Orbit under test"></iframe></div>
+<script>
+(async function () {
+  "use strict";
+  var P = new URLSearchParams(location.search);
+  var ONLY = P.get("only") ? P.get("only").split(",").map(function (s) { return s.trim(); }).filter(Boolean) : null;
+  var DO_NEW = P.get("new") !== "0";
+  var QUIET = Number(P.get("quiet")) || 150, CAP = Number(P.get("cap")) || 3000;
+  var frame = document.getElementById("app"), sumEl = document.getElementById("sum"), tbody = document.getElementById("rows");
+  var rows = [], TOKEN = "", report = window.__smokeReport = { done: false, total: 0, passed: 0, failed: 0, rows: [] };
+
+  function now() { return performance.now(); }
+  function esc(s) { return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function squash(s, n) { return String(s || "").trim().replace(/\s+/g, " ").slice(0, n || 60); }
+  // A background tab slows setTimeout to once a second or worse, which turns a
+  // few minutes into an hour. MessageChannel messages are not throttled.
+  function sleep(ms) {
+    return new Promise(function (res) {
+      if (!document.hidden) { setTimeout(res, ms); return; }
+      var ch = new MessageChannel(), t0 = now();
+      ch.port1.onmessage = function () { if (now() - t0 >= ms) { ch.port1.close(); res(); } else ch.port2.postMessage(0); };
+      ch.port2.postMessage(0);
+    });
+  }
+  // Wait until the screen has stopped changing: no query answered and no DOM
+  // change for QUIET ms, or CAP ms have passed.
+  async function settle(w) {
+    var t0 = now(), seen = -1, since = now();
+    while (now() - t0 < CAP) {
+      await sleep(30);
+      var a = w.__smoke ? w.__smoke.activity : 0;
+      if (a !== seen) { seen = a; since = now(); }
+      else if (now() - since >= QUIET) return true;
+    }
+    return false;
+  }
+  // The most useful stack line: the first frame inside the app or a help page.
+  function where(stack) {
+    var lines = String(stack || "").split("\n"), re = /(?:at\s+(?:async\s+)?([^\s(]+)\s+\()?[^()\s]*\/(js\/app\.js|js\/help\/[\w.-]+\.js)(?:\?[^:)]*)?:(\d+):(\d+)/;
+    for (var i = 0; i < lines.length; i++) { var m = re.exec(lines[i]); if (m) return (m[1] ? m[1] + " " : "") + m[2] + ":" + m[3]; }
+    return (lines[1] || lines[0] || "").trim().slice(0, 140);
+  }
+  // What is on screen now: the open dialog, else the breadcrumb title, else the
+  // first heading. "(empty)" after a route is worth a look even when nothing threw.
+  function opened(w) {
+    var d = w.document, hs = d.querySelectorAll(".modal .sheet h3"), last = hs[hs.length - 1];
+    if (last && squash(last.textContent)) return "dialog: " + squash(last.textContent);
+    var bc = d.getElementById("bc-title"); if (bc && squash(bc.textContent)) return squash(bc.textContent);
+    var main = d.getElementById("o-main"); if (!main) return "(no app shell)";
+    var hd = main.querySelector("h1, h2, h3, .o-bc");
+    if (hd && squash(hd.textContent)) return squash(hd.textContent);
+    return squash(main.textContent) || "(empty)";
+  }
+
+  function loadFrame() {
+    return new Promise(function (res) {
+      frame.onload = function () { frame.onload = null; res(frame.contentWindow); };
+      frame.src = "smoke-frame.html?t=" + Date.now();
+    });
+  }
+  async function bootFrame() {
+    var w = await loadFrame(), t0 = now();
+    TOKEN = String(Math.random());
+    w.__smokeToken = TOKEN;
+    while (now() - t0 < 15000) {
+      var h = w.__orbitSmoke;
+      if (h && h.S && h.S.company && w.document.querySelector(".o-tile")) break;
+      await sleep(50);
+    }
+    await settle(w);
+    return w;
+  }
+  function alive() { var w = frame.contentWindow; return !!(w && w.__smokeToken === TOKEN && w.__orbitSmoke); }
+
+  // Run one step and collect what went wrong while it ran.
+  async function step(w, fn) {
+    var box = w.__smoke, mark = box.errors.length, note = "";
+    try { fn(); } catch (e) { box.errors.push({ kind: "exception", message: e && e.message, stack: e && e.stack }); }
+    if (!(await settle(w))) note = "still changing after " + CAP + " ms";
+    if (!alive()) return { errors: box.errors.slice(mark), note: "the page reloaded or navigated away", opened: "", reloaded: true };
+    return { errors: box.errors.slice(mark), note: note, opened: opened(w) };
+  }
+  function addRow(r) {
+    r.n = rows.length + 1; rows.push(r);
+    var e = r.errors[0], tr = document.createElement("tr");
+    if (e) tr.className = "no";
+    tr.innerHTML = '<td>' + r.n + '</td><td><code>' + esc(r.route) + '</code></td><td>' + esc(r.app) + '</td>' +
+      '<td class="' + (e ? "bad" : "ok") + '">' + (e ? "FAIL" : "PASS") + '</td>' +
+      '<td>' + esc(r.opened || "") + '</td>' +
+      '<td>' + (e ? esc((e.kind + ": " + e.message).slice(0, 300)) + (r.errors.length > 1 ? ' <span class="muted">(+' + (r.errors.length - 1) + ' more)</span>' : '') : (r.note ? '<span class="muted">' + esc(r.note) + '</span>' : '')) + '</td>' +
+      '<td><code>' + (e ? esc(where(e.stack)) : '') + '</code></td>';
+    tbody.appendChild(tr);
+  }
+  function findNew(w) {
+    var d = w.document, b = d.getElementById("o-new");
+    if (b && b.offsetParent !== null) return b;
+    var main = d.getElementById("o-main"); if (!main) return null;
+    return [].filter.call(main.querySelectorAll("button, [role=button]"), function (x) {
+      return /^(\+\s*)?New(\s|$)/.test((x.textContent || "").trim()) && x.offsetParent !== null && !x.disabled;
+    })[0] || null;
+  }
+
+  // ---- boot ----
+  sumEl.textContent = "loading the app...";
+  var w = await bootFrame(), h = w.__orbitSmoke;
+  if (!h) {
+    sumEl.textContent = "FAIL: app.js exposed no test hook. It sets window.__orbitSmoke only when window.__ORBIT_SMOKE__ is true before it loads.";
+    sumEl.className = "sum bad"; report.done = true; return;
+  }
+  addRow({ route: "(boot)", app: "", errors: w.__smoke.errors.slice(), opened: opened(w) });
+  if (!h.S.company) rows[0].errors.push({ kind: "harness", message: "boot never reached a signed-in home screen", stack: "" });
+
+  // The harness has to be able to fail. Make the frame throw, reject and
+  // console.error once each, and require all three to be caught.
+  var probe = await step(w, function () {
+    var b = w.document.createElement("button");
+    b.addEventListener("click", w.Function("throw new Error('smoke self-check: thrown')"));
+    b.click();
+    w.Promise.reject(new w.Error("smoke self-check: rejected"));
+    w.console.error("smoke self-check: console.error");
+  });
+  var caught = probe.errors.map(function (e) { return e.kind; });
+  var missed = ["exception", "unhandled rejection", "console.error"].filter(function (k) { return caught.indexOf(k) < 0; });
+  addRow({ route: "(harness self-check)", app: "", opened: "caught: " + caught.join(", "),
+           errors: missed.length ? [{ kind: "harness", message: "a deliberate fault was not caught: " + missed.join(", "), stack: "" }] : [] });
+  if (missed.length) { sumEl.textContent = "FAIL: the harness cannot see " + missed.join(", ") + ", so a pass would mean nothing."; sumEl.className = "sum bad"; report.done = true; return; }
+
+  // every action in every app menu, the first app that lists it opening it
+  var routes = [], seen = {};
+  Object.keys(h.apps).forEach(function (appKey) {
+    (h.apps[appKey].menus || []).forEach(function (m) {
+      (m.items ? m.items.map(function (it) { return it[1]; }) : [m.action]).forEach(function (a) {
+        if (!a || seen[a]) return; seen[a] = 1;
+        if (!ONLY || ONLY.indexOf(a) >= 0) routes.push({ app: appKey, action: a });
+      });
+    });
+  });
+
+  for (var i = 0; i < routes.length; i++) {
+    var r = routes[i];
+    sumEl.textContent = "running " + (i + 1) + " of " + routes.length + ": " + r.action;
+    if (!alive()) {
+      w = await bootFrame(); h = w.__orbitSmoke;
+      if (w.__smoke.errors.length) addRow({ route: "(reload before " + r.action + ")", app: "", errors: w.__smoke.errors.slice() });
+      if (!h) break;
+    }
+    var res = await step(w, function () { h.home(); h.S.app = r.app; h.go(r.action); });
+    addRow({ route: r.action, app: r.app, errors: res.errors, note: res.note, opened: res.opened });
+    if (!DO_NEW || res.reloaded) continue;
+    var btn = findNew(w);
+    if (!btn) continue;
+    var label = squash(btn.textContent, 40);
+    var res2 = await step(w, function () { btn.click(); });
+    addRow({ route: r.action + " > " + label, app: r.app, errors: res2.errors, note: res2.note, opened: res2.opened });
+  }
+
+  // ---- summary ----
+  var fails = rows.filter(function (x) { return x.errors.length; });
+  sumEl.textContent = (rows.length - fails.length) + " of " + rows.length + " passed" + (fails.length ? ", " + fails.length + " failed" : "");
+  sumEl.className = "sum " + (fails.length ? "bad" : "ok");
+  var groups = {}, order = [];
+  fails.forEach(function (x) {
+    var e = x.errors[0], k = e.message + " @ " + where(e.stack);
+    if (!groups[k]) { groups[k] = []; order.push(k); }
+    groups[k].push(x.route);
+  });
+  if (order.length) {
+    document.getElementById("uniqbox").hidden = false;
+    document.getElementById("uniq").innerHTML = order.map(function (k) {
+      return '<li><code>' + esc(k) + '</code> <span class="muted">in ' + esc(groups[k].join(", ")) + '</span></li>';
+    }).join("");
+  }
+  report.total = rows.length; report.passed = rows.length - fails.length; report.failed = fails.length;
+  report.rows = rows.map(function (x) {
+    var e = x.errors[0] || null;
+    return { route: x.route, app: x.app, ok: !e, opened: x.opened || "", kind: e && e.kind, error: e && e.message, where: e ? where(e.stack) : "", stack: e ? String(e.stack || "").split("\n").slice(0, 6).join("\n") : "", more: Math.max(0, x.errors.length - 1), note: x.note || "" };
+  });
+  report.blocked = (w.__smoke && w.__smoke.blocked) || [];
+  report.missing = (w.__smoke && w.__smoke.missing) || [];
+  report.done = true;
+})();
+</script>

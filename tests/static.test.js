@@ -42,6 +42,7 @@ const MUTATIONS = {
   "no manual chapter is orphaned from its app": s => s.replace('plot: ["property"]', ""),
   "every screen grid belongs to a real chapter": s => s.replace(/^    property: \{$/m, "    ghostapp: {"),
   "every tutorial has a chapter and routed steps": s => s.replace('go: "mfg.boms"', 'go: "mfg.nowhere"'),
+  "every walkthrough opens a routed screen and points at a real control": s => s.replace('sel: "#f-pay"', 'sel: "#f-nosuchbutton"'),
   "every image has alt text": s => s.replace('<img alt="" src=', "<img src="),
   "the accessibility layer is wired": s => s.replace("function a11yPromote", "function a11yRemoved"),
   "every ledger report honours the selected book": s => s.replace('bookFilter(sb.from("journal_lines").select("account_id', 'noFilter(sb.from("journal_lines").select("account_id'),
@@ -64,6 +65,12 @@ const MUTATIONS = {
   "a posted document is reopened by the database, never set back to draft by the app":
     s => s + '\n sb.from("invoices").update({ state: "draft" }).eq("id", x);',
   "no function is declared twice": s => s + "\n  function bcTitle() {}\n",
+  "a confirmed order is amended in place":
+    s => s.replace('if (!amend) await sb.from(ltbl).delete().eq("order_id", id);', 'await sb.from(ltbl).delete().eq("order_id", id);'),
+  "suppliers never see a project's name":
+    s => s.replace("esc(projCode) + '</div>'", "esc(projCode) + ' ' + esc(projRec.name) + '</div>'"),
+  "the Counter never picks an account by a fixed code":
+    s => s.replace("var cid = S.company.id, cashGl = pf.cashGl", 'var guess = cashAcctByCode(chart, "5300"); var cid = S.company.id, cashGl = pf.cashGl'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

@@ -66,6 +66,7 @@ function money(n,cur){return (cur?cur+" ":"")+Number(n||0).toLocaleString("en-US
 var slug=new URLSearchParams(location.search).get("s")||"";
 var INFO=null, state={service:null, date:"", slot:""};
 
+function ymdLocal(d){return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2);}
 function fmtMin(m){var h=Math.floor(m/60),mm=m%60;var ap=h>=12?"PM":"AM",h12=h%12||12;return h12+":"+(mm<10?"0":"")+mm+" "+ap;}
 function build(){
   var el=document.getElementById("card");
@@ -84,7 +85,7 @@ function build(){
   el.innerHTML='<div class="head"><div class="biz">'+esc(INFO.business)+'</div><div class="sub">Book your '+esc((INFO.term_appointment||"appointment").toLowerCase())+' below.</div></div>'
     +'<div class="body">'
     +'<div><div class="step-l">1 &middot; Choose a service</div><div class="svcs">'+svcHtml+'</div></div>'
-    +(svcSel?'<div><div class="step-l">2 &middot; Pick a date</div><input type="date" id="f-date" min="'+new Date().toISOString().slice(0,10)+'" value="'+esc(state.date)+'"></div>':'')
+    +(svcSel?'<div><div class="step-l">2 &middot; Pick a date</div><input type="date" id="f-date" min="'+ymdLocal(new Date())+'" value="'+esc(state.date)+'"></div>':'')
     +(svcSel&&state.date?'<div><div class="step-l">3 &middot; Pick a time</div><div class="slots">'+slotsHtml+'</div></div>':'')
     +(state.slot?'<div><div class="step-l">4 &middot; Your details</div><div style="display:flex;flex-direction:column;gap:12px"><div><label>Full name</label><input id="f-name" placeholder="Your name"></div><div class="row2"><div><label>Email</label><input id="f-email" type="email" placeholder="you@email.com"></div><div><label>Phone</label><input id="f-phone" placeholder="Mobile"></div></div></div></div>':'')
     +'<div id="msg"></div>'

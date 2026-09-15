@@ -34,6 +34,8 @@ EA=orbit-audit-a@example.com; EB=orbit-audit-b@example.com
 CA2=aaaa0000-0000-4000-8000-00000000000c; CA3=aaaa0000-0000-4000-8000-00000000000d
 PA2=aaaa0000-0000-4000-8000-0000000000a2; MA2=aaaa0000-0000-4000-8000-0000000000a3
 EC=orbit-audit-c@example.com; FA2="$OA/partner/$PA2/audit.jpg"
+# a fourth person: a sales representative in company A, on the real job template
+ED=orbit-audit-d@example.com
 # a posted invoice in company A, in the sibling A2 and in tenant B, for Edit
 INVA=aaaa0000-0000-4000-8000-0000000000e1; INVA2=aaaa0000-0000-4000-8000-0000000000e2
 INVB=bbbb0000-0000-4000-8000-0000000000e3
@@ -66,11 +68,11 @@ teardown() {
   sql "delete from public.privacy_requests where company_id in ('$CA','$CB','$CA2')" >/dev/null
   sql "delete from public.companies where id in ('$CA','$CB','$CA2','$CA3')" >/dev/null
   sql "delete from public.orgs where id in ('$OA','$OB')" >/dev/null
-  for e in "$EA" "$EB" "$EC"; do
+  for e in "$EA" "$EB" "$EC" "$ED"; do
     uid=$(sql "select id from auth.users where email='$e'" | sed -n 's/.*"id":"\([0-9a-f-]*\)".*/\1/p')
     [ -n "$uid" ] && curl -s -X DELETE "$API/auth/v1/admin/users/$uid" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" >/dev/null
   done
-  left=$(sql "select (select count(*) from public.orgs where id in ('$OA','$OB')) + (select count(*) from auth.users where email in ('$EA','$EB','$EC')) as n" | sed -n 's/.*"n":\([0-9]*\).*/\1/p')
+  left=$(sql "select (select count(*) from public.orgs where id in ('$OA','$OB')) + (select count(*) from auth.users where email in ('$EA','$EB','$EC','$ED')) as n" | sed -n 's/.*"n":\([0-9]*\).*/\1/p')
   echo "leftover fixtures: ${left:-unknown}"
 }
 trap teardown EXIT
@@ -115,6 +117,19 @@ HTC=$(curl -s -X POST "$API/auth/v1/admin/generate_link" -H "apikey: $SRV" -H "A
 JWTC=$(curl -s -X POST "$API/auth/v1/verify" -H "apikey: $ANON" -H "Content-Type: application/json" \
       -d "{\"type\":\"magiclink\",\"token_hash\":\"$HTC\"}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
 [ -z "$JWTC" ] && { echo "could not mint a session for the limited member"; exit 1; }
+
+# the sales representative: a member of org A on the sales_representative template, not an admin
+UD=$(mkuser "$ED")
+[ -z "$UD" ] && { echo "could not create the sales representative"; exit 1; }
+sql "insert into public.org_members (org_id,user_id,role,status) values ('$OA','$UD','sales_representative','active')" >/dev/null
+# contacts are read through the person's active company, as the app sets it on sign-in
+sql "insert into public.profiles (id, active_company_id) values ('$UD','$CA') on conflict (id) do update set active_company_id = excluded.active_company_id" >/dev/null
+HTD=$(curl -s -X POST "$API/auth/v1/admin/generate_link" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" \
+     -H "Content-Type: application/json" -d "{\"type\":\"magiclink\",\"email\":\"$ED\"}" \
+     | sed -n 's/.*"hashed_token":"\([^"]*\)".*/\1/p')
+JWTD=$(curl -s -X POST "$API/auth/v1/verify" -H "apikey: $ANON" -H "Content-Type: application/json" \
+      -d "{\"type\":\"magiclink\",\"token_hash\":\"$HTD\"}" | sed -n 's/.*"access_token":"\([^"]*\)".*/\1/p')
+[ -z "$JWTD" ] && { echo "could not mint a session for the sales representative"; exit 1; }
 # can this session get a link to a file? (the storage rule, not the REST one)
 sign() { curl -s -X POST "$API/storage/v1/object/sign/attachments/$1" -H "apikey: $ANON" -H "Authorization: Bearer $2" \
          -H "Content-Type: application/json" -d '{"expiresIn":60}' | grep -c '"signedURL"'; }
@@ -185,6 +200,24 @@ if [ "$(sign "$FA2" "$JWTA")" = "1" ]; then printf '  PASS  %s\n' "the org owner
 JWT=$JWTA
 
 echo
+echo "a sales representative in company A (a job role, not an admin)"
+JWT=$JWTD
+probe "reads company A"                              allow GET  "companies?id=eq.$CA&select=id,name"
+probe "adds a customer, which the role allows"       allow POST "partners" "{\"org_id\":\"$OA\",\"company_id\":\"$CA\",\"name\":\"ORBITAUDIT Rep customer\",\"is_customer\":true}"
+probe "changes document numbering"                   deny  POST "number_sequences" "{\"company_id\":\"$CA\",\"doc_type\":\"AUDIT\",\"prefix\":\"AUD\"}"
+probe "takes the company's whole backup"             deny  POST "rpc/backup_build" "{\"p_company\":\"$CA\"}"
+# a list that is allowed can come back empty, which probe() reads as refused, so these check the status
+rpc_code() { curl -s -o /dev/null -w '%{http_code}' -X POST "$API/rest/v1/rpc/$1" -H "apikey: $ANON" -H "Authorization: Bearer $JWT" -H "Content-Type: application/json" -d "$2"; }
+code_is() { # label actual-http-code expected-first-digit
+  case "$2" in "$3"*) printf '  PASS  %s\n' "$1"; pass=$((pass+1)) ;; *) printf '  FAIL  %s (http %s)\n' "$1" "$2"; fail=$((fail+1)) ;; esac; }
+code_is "lists the API keys"                   "$(rpc_code api_key_list "{\"p_company\":\"$CA\"}")" 4
+code_is "lists the webhooks and their secrets" "$(rpc_code webhook_list "{\"p_company\":\"$CA\"}")" 4
+probe "exports a person's data"                      deny  POST "rpc/gdpr_export" "{\"p_company\":\"$CA\",\"p_kind\":\"partner\",\"p_id\":\"$PAE\"}"
+JWT=$JWTA
+code_is "the owner still lists the API keys"   "$(rpc_code api_key_list "{\"p_company\":\"$CA\"}")" 2
+code_is "the owner still lists the webhooks"   "$(rpc_code webhook_list "{\"p_company\":\"$CA\"}")" 2
+
+echo
 echo "structural invariants (read-only, whole database)"
 inv() { # label  sql-returning-a-count-named-n  expected
   local n; n=$(sql "$2" | sed -n 's/.*"n":\([0-9]*\).*/\1/p')
@@ -203,6 +236,10 @@ inv "no RLS policy is unconditionally true" \
     "select count(*) as n from pg_policy p join pg_class c on c.oid=p.polrelid join pg_namespace ns on ns.oid=c.relnamespace where ns.nspname='public' and c.relname not in ('site_content') and pg_get_expr(p.polqual,p.polrelid)='true'" 0
 inv "platform_admins is not writable through the API" \
     "select count(*) as n from pg_policy p join pg_class c on c.oid=p.polrelid where c.relname='platform_admins' and p.polcmd <> 'r'" 0
+inv "no company-wide admin function lets in any member who can write" \
+    "select count(*) as n from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace where ns.nspname='public' and p.prosecdef and p.proname in ('backup_build','backup_log','backup_discard_restored','backup_fix_media_path','api_key_create','api_key_list','api_key_revoke','webhook_create','webhook_list','webhook_delete','gdpr_export','gdpr_erase','delete_company_empty','setup_company','reopen_journal_entry','fx_revalue','reconcile_bank_line','apply_catalog_markup','reopen_invoice') and position('can_write_company(' in pg_get_functiondef(p.oid)) > 0" 0
+inv "a calendar feed carries only its owner's appointments" \
+    "select count(*) as n from pg_proc p join pg_namespace ns on ns.oid=p.pronamespace where ns.nspname='public' and p.proname='calendar_feed_events' and pg_get_functiondef(p.oid) ~ 'staff_id'" 1
 inv "every journal entry belongs to a book" \
     "select count(*) as n from public.journal_entries where book_id is null" 0
 inv "every company has a primary book" \

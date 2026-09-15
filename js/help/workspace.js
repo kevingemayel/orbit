@@ -38,7 +38,7 @@ orbitScreenHelp({
       "Open <b>Settings &rsaquo; Users &amp; Roles</b>. For this example, a bakery group runs two companies, the shop and a wholesale arm, and its new bookkeeper should work only in the wholesale company. You should see the <b>Team</b> table with you at the top, marked <i>you</i>.",
       "Click <span class='man-key'>+ Invite teammate</span>. The <b>Invite a teammate</b> window opens.",
       "Type <i>finance@example.com</i> in <b>Email address</b>. Use the address the person will sign in with, because the invitation is matched to it.",
-      "Choose <i>Administrative Manager</i> in <b>Role</b>. Only roles ranked below your own are offered.",
+      "Choose <i>Accountant</i> in <b>Role</b>. Roles are grouped by job family (Leadership, Finance, Sales, Procurement, Operations, People and By industry), and only roles ranked below your own are offered. Leave <b>Access ends</b> empty: a bookkeeper on staff has no end date.",
       "Under <b>Company access</b>, untick <b>All companies</b>, then tick only the wholesale company. This part only appears when you have more than one company.",
       "Click <span class='man-key'>Send invitation</span>. You should see <i>Invitation emailed to finance@example.com</i> and a <b>Pending invitations</b> card showing the email, the role and the company.",
       "The bookkeeper signs in, or signs up, with finance@example.com and presses <span class='man-key'>Join</span> on the invitation. Open Users &amp; Roles again: they have moved from Pending invitations into the Team table.",
@@ -48,7 +48,8 @@ orbitScreenHelp({
     ],
     fields: [
       ["Email address (Invite a teammate)", "The address the person signs in with. The invitation only appears for someone signed in with this exact address (capitals do not matter). Inviting an address that already has a pending invitation replaces that invitation's role and companies.", "required"],
-      ["Role (Invite a teammate)", "What they will be able to see and do, from the roles in Roles &amp; Permissions. Only roles ranked below yours are listed, and the list starts on Junior Engineer.", "required"],
+      ["Role (Invite a teammate)", "What they will be able to see and do, from the roles in Roles &amp; Permissions, grouped by job family. Only roles ranked below yours are listed, and the list starts on Employee.", "required"],
+      ["Access ends (Invite a teammate)", "The last day the person can sign in to this organisation. Leave it empty for no end date. An External Auditor must have one, and access stops at the end of that day without anyone having to remember to remove them.", "optional"],
       ["Company access (Invite a teammate)", "Only shown when your organisation has more than one company. <b>All companies</b> means every company, including ones added later. Untick it and tick the companies they may work in. Ticking none also means all companies.", "optional"],
       ["Role (on a person's row)", "Changes that person's role at once, with no Save button. It is a list only for people ranked below you, and roles at or above your rank are greyed out unless your role has full access. For anyone else the role shows as plain text.", "optional"],
       ["Company access (Companies button)", "The same tick list, for someone already on the team. A member limited to some companies only sees and works in those companies.", "optional"]
@@ -60,13 +61,14 @@ orbitScreenHelp({
       ["Cancel", "Closes the window without inviting anyone."],
       ["Companies", "On the row of someone ranked below you, when you have more than one company. Opens the Company access window for that person."],
       ["Save (Company access)", "Saves which companies the person can see and work in."],
+      ["Access ends", "On the row of someone ranked below you. Sets or clears the last day of their access. Their row then shows <i>Until</i> and the date, or <i>Access ended</i> once it has passed. Choosing External Auditor as a role asks for this date first."],
       ["Suspend", "Switches the person's access off without removing them. While suspended they see none of the organisation's companies and cannot change anything. Their role and companies are kept."],
       ["Reactivate", "Shown on a suspended person. Gives their access back with the same role and companies."],
       ["Remove", "Asks you to confirm, then takes the person off the team straight away. Their work stays in Orbit, and you can invite them again later."],
       ["Resend email", "On a pending invitation. Sends the invitation email again."],
       ["Revoke", "On a pending invitation. Cancels it at once, with no confirmation, so the person no longer sees it."]
     ],
-    after: "An invitation does nothing until the person accepts it. Someone new to Orbit sees a <b>You&rsquo;re invited</b> page after signing in with the invited address; someone who already uses Orbit sees a banner on their home page. Either way they press <span class='man-key'>Join</span>, and they join the team with the role and companies on the invitation. From then on the database only shows them the companies they were given, and none at all while they are suspended. Managing the team is also checked by the database: only members whose role has full access or can manage roles, and who are not limited to some companies, can invite, change roles, set company access, suspend or remove, and only for people ranked below them. The role's app and screen settings are applied by Orbit when it next loads for that person.",
+    after: "An invitation does nothing until the person accepts it. Someone new to Orbit sees a <b>You&rsquo;re invited</b> page after signing in with the invited address; someone who already uses Orbit sees a banner on their home page. Either way they press <span class='man-key'>Join</span>, and they join the team with the role and companies on the invitation. From then on the database only shows them the companies they were given, none at all while they are suspended, and none after their access end date. Managing the team is also checked by the database: only members whose role has full access or can manage roles, and who are not limited to some companies, can invite, change roles, set company access and end dates, suspend or remove, and only for people ranked below them. Nobody can change their own role, companies or end date. The role itself is enforced by the database too: what the person may save, delete and approve in each app, and whether they see costs, salaries or bank figures.",
     links: [
       { name: "Roles &amp; Permissions", how: "Defines each role in the Role list: what it can see and do, and its rank.", to: "settings.roles" },
       { name: "Companies", how: "The companies in the Company access list are the companies of your organisation.", to: "companies" },
@@ -87,7 +89,9 @@ orbitScreenHelp({
       ["You do not have permission to remove this member.", "The person is ranked at or above you, or you cannot manage the team."],
       ["You cannot remove the last owner.", "The only active Owner cannot be removed. Make someone else an Owner first."],
       ["Invited (email) - email not sent (reason)", "The invitation was saved but the email failed. Press Resend email on it later, or tell the person to sign in with that address: the invitation waits for them either way."],
-      ["The Team table shows only you", "The full team and the pending invitations are only listed for active members whose role key is owner, admin or accountant and who are not limited to some companies."],
+      ["The Team table shows only you", "The full team and the pending invitations are only listed for active members who are an owner or administrator, or whose role has full access or can manage roles, and who are not limited to some companies."],
+      ["An auditor's account needs an end date. Set when their access ends, then give them the role.", "External Auditor accounts always end. Choose the last day of access when inviting them, or with Access ends on their row, then give the role."],
+      ["Nobody changes their own role or access. Ask another administrator.", "Your own row cannot be changed, even by you as an administrator. Ask another administrator, or an owner."],
       ["The person says they have no invitation", "They signed in with a different address. Revoke the invitation and invite the address they actually use."]
     ],
     tips: [
@@ -100,7 +104,7 @@ orbitScreenHelp({
 
   "settings.roles": {
     title: "Roles &amp; Permissions",
-    what: "A <b>role</b> is a named set of permissions you give to people on the team. For every app it says whether the person can open it (<b>View</b>), create and change things in it (<b>Manage</b>), and which parts of it are switched off. A role also has a <b>rank</b>, which decides who may manage whom, and it can hide amounts. Orbit comes with ready-made <b>Template</b> roles; you customise a copy for your organisation or build your own.",
+    what: "A <b>role</b> is what you give a person on the team, and it is four settings, all enforced by the database as well as the screens. <b>Apps</b>: for every app, how deep they go: <i>None</i>, <i>Own records</i>, <i>View</i>, <i>Work</i> or <i>Manage</i>. <b>Money</b>: whether they see costs and margins, salaries, and bank and cash. <b>Approvals</b>: what they may sign off and up to what amount. <b>Rank</b>: who may manage whom. Orbit comes with thirty-three <b>Template</b> roles covering the usual jobs in a company, grouped by job family; you customise a copy for your organisation or build your own.",
     when: [
       "A job in your business needs its own role, for example a front desk role at a clinic that works with contacts and the calendar but never sees the accounts.",
       "A ready-made role gives too much or too little and you want to adjust it for your organisation.",
@@ -112,21 +116,24 @@ orbitScreenHelp({
       "Click <span class='man-key'>+ New role</span>. The <b>New role</b> window opens with every app unticked.",
       "Type <i>Paralegal</i> in <b>Role name</b> and <i>Prepares files and keeps the diary</i> in <b>Description</b>.",
       "Set <b>Rank</b> to 25, between Junior Engineer (20) and Junior Administrator (30). Only people ranked above 25 can give this role to someone.",
-      "Set <b>Can see money</b> to <i>No - hide all amounts</i>, and leave <b>Can manage roles</b> on <i>No</i>.",
-      "In the table, tick <b>Manage</b> for Contacts, Documents and Calendar. <b>View</b> ticks itself.",
-      "Tick only <b>View</b> for Projects, and under <b>Parts of it</b> untick <i>Costs &amp; P&amp;L</i> so project costs stay out of sight.",
-      "Click <span class='man-key'>Save role</span>. You should see <i>Role saved</i> and a new <b>Paralegal</b> card marked Custom and No money, with Rank 25.",
-      "Open <b>Users &amp; Roles</b> and give the role to a person, when you invite them or from the Role list on their row.",
-      "When Orbit next loads for that person, the apps you left unticked are hidden from them and amounts show as dots."
+      "Under <b>Apps</b>, set <b>Access</b> to <i>Work</i> for Contacts, Documents and Calendar, so they can create and change records there but not delete what others depend on.",
+      "Set Projects to <i>View</i>, and under <b>Parts of it</b> untick <i>Costs &amp; P&amp;L</i> so project costs stay out of sight. Leave every other app on <i>None</i>.",
+      "Under <b>Money</b>, set <b>Costs and margins</b>, <b>Salaries</b> and <b>Bank and cash</b> to <i>No</i>, and leave <b>Can manage roles and users</b> on <i>No</i>.",
+      "Under <b>Approvals</b>, leave <b>Approve by limit</b> ticked and every document on <i>Cannot approve</i>: a paralegal signs nothing off.",
+      "Click <span class='man-key'>Save role</span>. You should see <i>Role saved</i> and a new <b>Paralegal</b> card under <b>Your roles</b>, marked Custom, <i>0 manage, 3 work, 1 view</i> and No money, with Rank 25.",
+      "Open <b>Users &amp; Roles</b> and give the role to a person, when you invite them or from the Role list on their row. When Orbit next loads for them, the other apps are hidden, amounts show as dots, and the database refuses anything outside the role."
     ],
     fields: [
       ["Role name", "What the role is called in every role list. A new role also gets a key made from this name, so two roles in your organisation cannot share a name.", "required"],
       ["Rank (higher = more senior)", "Decides who can manage whom. People can only invite others to, or give them, a role ranked below their own, and can only edit roles ranked below theirs unless their role has full access. The templates run from Junior Engineer at 20 to Owner at 100. A new role starts at 10.", "optional"],
       ["Description", "A short note on what the role is for, shown on its card.", "optional"],
-      ["Can see money", "<i>No - hide all amounts</i> makes Orbit show amounts as dots instead of figures for everyone on this role. It changes what is displayed on screen.", "optional"],
-      ["Can manage roles", "<i>Yes</i> lets people on this role open this screen, and manage the team in Users &amp; Roles (invite, change roles, set company access, suspend and remove people ranked below them), as long as they are not limited to some companies.", "optional"],
-      ["View (per app)", "Lets people open the app. With View off, the app is hidden from their home page and menus, and Orbit refuses to open its screens.", "optional"],
-      ["Manage (per app)", "Lets people create and change things in the app: for example the <span class='man-key'>New</span> button on its lists and the bulk Archive and Delete actions only appear with Manage on. Ticking Manage also ticks View.", "optional"],
+      ["Access (per app)", "<i>None</i> hides the app. <i>Own records</i> shows only the records assigned to the person, or raised by them, and lets them work on those. <i>View</i> reads everything and changes nothing. <i>Work</i> creates and changes records. <i>Manage</i> also deletes and archives records that others depend on (accounts, contacts, products, projects, warehouses and the like) and adds things in the app's Configuration menu. The database checks the same level on every save and delete. Levels above your own role's are greyed out: nobody gives a role more than they hold.", "required"],
+      ["Costs and margins", "<i>No</i> shows cost prices, margins and amounts as dots on lists, forms and reports.", "optional"],
+      ["Salaries", "<i>No</i> hides payroll screens, and the database does not return contracts, payslips or payroll runs, apart from the person's own payslips.", "optional"],
+      ["Bank and cash", "Whether the role sees bank statements, reconciliation and cash balances.", "optional"],
+      ["Can manage roles and users", "<i>Yes</i> lets people on this role open this screen and manage the team in Users &amp; Roles (invite, change roles, set company access and end dates, suspend and remove people ranked below them), as long as they are not limited to some companies. Only someone whose own role can manage roles can give this.", "optional"],
+      ["Approve by limit", "Ticked, people on this role sign off a request only when their limit for that document covers it, and never a request they raised themselves once the company has two people who can write. A rule that names an approver goes to that person instead, and a line manager may always sign their own team's expenses, leave and timesheets. Unticked is how roles made before limits worked: anyone on the role who can write may sign off a rule that names nobody.", "optional"],
+      ["May approve and Limit (per document)", "<i>Cannot approve</i>, <i>Up to</i> an amount in your company currency (days for leave, hours for timesheets), or <i>Any amount</i>.", "optional"],
       ["Parts of it (per app)", "Switches off pieces of an app while keeping the rest. Accounting: <i>Financial reports</i> (financial statements, ledgers, aged balances, the tax report, statements, consolidation, cash forecast, collections, budgets and dashboards). Projects: <i>Delivery view</i> (projects list, certificates, variations, WIP, schedule and timesheets), <i>Execution board</i> (board, My Work and tasks) and <i>Costs &amp; P&amp;L</i> (subcontracts, project P&amp;L, retention, job cost and cost codes). Employees (HR): <i>Payroll</i>. Other apps show <i>whole module</i>.", "optional"]
     ],
     buttons: [
@@ -138,24 +145,27 @@ orbitScreenHelp({
       ["Save role", "Saves the role. A role saved here never has full access, whatever it was customised from."],
       ["Cancel", "Closes the window without saving."]
     ],
-    after: "Roles are checked in two places. <b>In Orbit's screens</b>, View, Manage, Parts of it and Can see money decide which apps, menus, screens and buttons a person gets, from the next time Orbit loads for them. <b>In the database</b>, those ticks are not checked. What the database does check is: the companies a member was given and whether they are suspended; the rank, when someone is invited or given a role; full access or Can manage roles, for managing the team; the role key, for changing company records such as approval rules and portal access, which is accepted only from members whose role key is owner, admin or accountant; and saving roles themselves, which is accepted only from members whose role key is owner, developer or super_admin. A customised template keeps the template's key; a role made with <span class='man-key'>+ New role</span> gets a key of its own.",
+    after: "A saved role applies from the next time Orbit loads for the people on it, in the screens and in the database alike. <b>In the screens</b>, the access levels, parts and money switches decide which apps, menus, screens and buttons a person gets. <b>In the database</b>, every table checks the person's level in the apps that record it: saving needs Own records, Work or Manage, and deleting what other records depend on needs Manage. Salaries are not returned to a role that does not see them. Approvals are checked against the role's limits. The database also holds rules no role can break: nobody approves what they raised; whoever changed a supplier's bank details does not pay that supplier; whoever records payments through a bank account does not reconcile it; payroll is approved by someone other than the person posting it; only a role that manages Accounting closes or reopens a period; nobody changes their own role or gives a role more than they hold; and an External Auditor's access ends on its date. The rules about two people apply once a company has two or more people who can write. A customised template keeps the template's key; a role made with <span class='man-key'>+ New role</span> gets a key of its own.",
     links: [
       { name: "Users &amp; Roles", how: "Where you give a role to a person, when inviting them or from their row.", to: "settings.users" },
-      { name: "Approvals", how: "The Approvals inbox belongs to the Settings app, so a role without View on Settings cannot open it.", to: "approvals.inbox" },
+      { name: "Approvals", how: "Everyone can open the inbox; what a person may sign off comes from their role's approval limits.", to: "approvals.inbox" },
       { name: "Portal Access", how: "Outside contacts sign in to the portal instead and never need a role.", to: "portal.admin" }
     ],
     mistakes: [
       ["Only owners and super admins can manage roles", "Your role has neither full access nor Can manage roles, so the screen will not open. Ask an Owner."],
       ["Name the role", "Role name is empty. Type a name, then click Save role again."],
       ["A role with that name already exists. Pick another name.", "Another role in your organisation already uses the key this name makes. Choose a different name, or edit the existing role."],
-      ["new row violates row-level security policy for table &quot;roles&quot;", "The database only accepts new roles from members whose role key is owner, developer or super_admin. A role with Can manage roles opens the editor but cannot save. Ask an Owner to make the change."],
-      ["Role saved appears, but the change is gone when you open the role again", "The same database rule, on an existing custom role: the change is not kept. Ask an Owner, Developer or Super Admin to make it."],
+      ["You cannot give a role more access to purchase than your own role has.", "Nobody grants more than they hold. Choose a lower level for that app, or ask someone whose role has it to make the change."],
+      ["A role you create or change must rank below your own.", "Set Rank below yours, or ask someone ranked higher."],
+      ["You cannot let a role see salaries, because your own role does not.", "The same rule for the money switches. Set it to No, or ask an owner."],
+      ["new row violates row-level security policy for table &quot;roles&quot;", "Only members whose role has full access or can manage roles, and who are not limited to some companies, can save roles. Ask an owner or a system administrator."],
+      ["Someone on the role sees a New button but their save is refused", "Their level in that app, or in the app the record belongs to, is View or None. Raise it to Work on the role, or save from the app the record belongs to."],
       ["Locked on a role you need to change", "Owner, Developer and Super Admin are protected, and roles at or above your rank are locked unless your role has full access. Ask someone ranked higher."],
-      ["After customising a role, its people lose an app that is not in the table, such as Plot", "Templates such as Administrator switch every app on with one catch-all setting. Saving from this window records each app in the table separately and drops the catch-all, so apps missing from the table are off for that role."],
-      ["You do not have access to that", "Someone tried to open a screen of an app their role cannot View, for example the Approvals inbox without View on Settings. Tick View for that app on their role."]
+      ["You do not have access to that", "Someone tried to open a screen of an app their role has on None. Set that app to View or higher on their role."]
     ],
     tips: [
-      "The templates are Owner (100), Developer (95), Super Admin (90), Administrator (70), Administrative Manager (60), Manager (50), Junior Administrator (30) and Junior Engineer (20, never sees money).",
+      "The templates are grouped by job family: Leadership and administration (Owner, General Manager, System Administrator, External Auditor), Finance, Sales and customers, Procurement and stock, Operations, People, and By industry. The roles Orbit had before (Administrator, Administrative Manager, Manager, Junior Administrator, Junior Engineer, Developer, Super Admin) are kept under Earlier roles, and everyone on them keeps exactly the access they had.",
+      "The approval limits on the templates are starting amounts in your company currency (1,000, 10,000 and 50,000). Customize a template to set your own before giving it to people.",
       "Customise a template when one is close: people already on it pick up your copy without being moved.",
       "Before deleting a role you made with + New role, move everyone on it to another role in Users &amp; Roles.",
       "A screen a person can open is not proof they can save there: the database's own checks above still apply."
@@ -187,11 +197,12 @@ orbitScreenHelp({
     buttons: [
       ["Approval rules", "Top right. Opens Approval Rules, where you set what needs sign-off."],
       ["View doc", "Opens the screen the document belongs to, such as the Purchase Orders or Expenses list. Not shown for invoices, bills, journal entries or payslip runs."],
-      ["Approve", "Only on requests that are yours to decide. Records your approval. It does not confirm or post the document: the requester repeats their action and it then goes through."],
+      ["Approve", "Only on requests that are yours to decide: the rule names you, or it names nobody and your role's approval limit covers the amount, or you are the line manager of whoever raised an expense, leave request or timesheet, or you manage the organisation. Never on a request you raised yourself, once the company has two people who can write. Records your approval. It does not confirm or post the document: the requester repeats their action and it then goes through."],
       ["Reject", "Only on requests that are yours to decide. Asks for an optional reason and records the rejection. The document stays as it was; trying again sends a new request."],
       ["Email approver", "Emails a link to a page where the approver confirms Approve or Reject and can add a note, without signing in. It goes to the work email of the employee the rule names, or, when the rule names nobody or that employee has no work email, to an owner of the company. The link works once and expires after 14 days. Once sent, the button reads <span class='man-key'>Email again</span>, and sending again replaces the earlier link."],
       ["Set up approval rules", "Shown when there are no approvals yet. Opens Approval Rules."],
-      ["Not yours to decide", "Not a button. The rule names another approver, so the card shows who it is waiting on and offers no Approve or Reject."]
+      ["Not yours to decide", "Not a button. The rule names another approver, or the amount is beyond your role's approval limit, so the card offers no Approve or Reject."],
+      ["You raised this, so someone else signs it off", "Not a button. Nobody approves what they raised. It waits for someone else who may decide."]
     ],
     after: "Deciding only records the decision: nothing is confirmed, posted or paid by it. After approval the requester repeats what they were doing (Confirm on an order, Confirm &amp; post on an invoice or bill, Post on a journal entry, Post all on a payslip run, Approve on leave, expenses, variations and submittals, approving hours on a timesheet, saving a subcontract as Active, or Create Purchase Order on a material take-off) and Orbit lets it through, as long as the amount has not grown beyond the amount approved. A larger amount goes back for approval. Every decision stays in History with who requested it, who decided and when, and the Approved or Rejected notification appears in the bell.",
     links: [
@@ -201,20 +212,20 @@ orbitScreenHelp({
       { name: "Invoices", how: "Customer invoices covered by a rule wait here before they post.", to: "inv.out" },
       { name: "Journal Entries", how: "Post on a journal entry covered by a rule waits here, measured on its total debits.", to: "moves" },
       { name: "Employees", how: "The approver named on a rule is an employee; the approval email goes to their work email.", to: "hr.emp" },
-      { name: "Roles &amp; Permissions", how: "Opening this inbox needs View on the Settings app.", to: "settings.roles" }
+      { name: "Roles &amp; Permissions", how: "Each role's approval limits decide what its people may sign off here.", to: "settings.roles" }
     ],
     mistakes: [
       ["Sent for approval (currency and amount)", "Not an error. A rule covers the document, so it waits here. Once it is approved, repeat the same action."],
       ["Already awaiting approval", "You tried again while the request is still pending. Wait for the decision, or press Email approver to chase it."],
-      ["Only the approver named on the rule can sign this off", "The rule names someone else. If you are that person and still see <i>Not yours to decide</i>, Orbit has not matched your sign-in to that employee record: decide from the approval email instead, which Email approver sends."],
+      ["This is not yours to sign off: the rule names someone else, the amount is beyond your role's approval limit, or you raised it yourself.", "Someone else decides it. If you are the approver the rule names and still see this, Orbit has not matched your sign-in to that employee record: decide from the approval email instead, which Email approver sends."],
       ["This was already approved", "Someone decided it first, perhaps from the email link. The inbox refreshes to show the decision. The same applies to <i>This was already rejected</i>."],
       ["This approval has no approver email. Set an approver on the rule in Settings, or add a work email to that employee.", "Orbit found no address to email. Add a work email on the named employee, or name an approver who has one."],
-      ["You do not have access to that", "Your role cannot View the Settings app, which the Approvals inbox belongs to. Ask an Owner to tick View for Settings on your role, or decide from the approval email."],
       ["A document went through without asking for approval", "Rules only apply to the action listed for each document type, when the rule is Active and the amount is at or above its threshold. Credit notes are not covered, and on a submittal <span class='man-key'>Approve w/ comments</span> is not checked. Review the rule in Approval Rules."]
     ],
     tips: [
       "Approving is not posting. The requester still has to press their button again.",
-      "On a rule that names nobody, any member who can open this inbox can decide, including the person who raised the document. Name an approver when a second pair of eyes matters.",
+      "On a rule that names nobody, the request goes to whoever's role limit covers it, and never to the person who raised it once the company has two people who can write. Name an approver when one particular person must decide.",
+      "Payroll always needs a second person once the company has two people who can write: Post all on a run and Confirm &amp; Post on a payslip send it here even with no Payroll run rule, and the database refuses to post payroll the same person approved.",
       "The inbox shows the company's 120 most recent requests."
     ]
   },
@@ -242,13 +253,13 @@ orbitScreenHelp({
       ["Rule name", "A name you will recognise in the list and in the approval email. Left blank, it saves as <i>Rule</i>.", "optional"],
       ["Applies to", "The document the rule covers: Purchase order, Sales order, Vendor bill, Customer invoice, Subcontract, Variation, Expense, Journal entry, Payroll run, Leave request, Submittal, Timesheet or Purchase requisition. The next section lists the action each one stops.", "required"],
       ["Needs approval at or above", "The threshold. For most documents it is an amount in your company currency; for a Leave request it is days and for a Timesheet hours. A document at or above it needs approval, so 0 means every one. A new rule starts at 1000. For a Submittal the box is switched off and the rule applies to every one.", "optional"],
-      ["Approver", "The employee who must sign off, from your employees, or <i>Anyone can approve</i>. The approval email goes to that employee's work email. With Anyone can approve, any member who can open Approvals may decide, and the email goes to an owner of the company.", "optional"],
+      ["Approver", "The employee who must sign off, from your employees, or <i>Anyone can approve</i>. The approval email goes to that employee's work email. With Anyone can approve, anyone whose role's approval limit covers the amount may decide (and on roles made before limits, anyone who can write), never the person who raised it, and the email goes to an owner of the company.", "optional"],
       ["Status", "<i>Active</i> rules are checked. <i>Off</i> keeps the rule without applying it.", "optional"]
     ],
     buttons: [
       ["New", "Opens a blank rule. Shown only when your role has Manage on the Settings app."],
       ["Save", "Saves the rule. It applies from the next time someone confirms, posts or approves a matching document."],
-      ["Delete", "On an existing rule. Deletes it at once, with no confirmation. Requests already raised under it stay in Approvals."],
+      ["Delete", "On an existing rule. Deletes it after you confirm. Requests already raised under it stay in Approvals."],
       ["Cancel", "Closes the window without saving."]
     ],
     after: "Orbit checks the active rules at the moment a document would commit, and only there:<br><b>Purchase order</b> and <b>Sales order</b>: <span class='man-key'>Confirm</span>, on the order total.<br><b>Vendor bill</b> and <b>Customer invoice</b>: <span class='man-key'>Confirm &amp; post</span>, on the total including tax. Credit notes are not checked.<br><b>Journal entry</b>: <span class='man-key'>Post</span>, on the total debits.<br><b>Payroll run</b>: <span class='man-key'>Post all</span> on a payslip run, on the net pay of its draft payslips.<br><b>Expense</b>, <b>Variation</b> and <b>Leave request</b>: <span class='man-key'>Approve</span>, on the amount, or the days for leave.<br><b>Timesheet</b>: approving the hours, on the hours.<br><b>Subcontract</b>: saving it with Status Active, on its amount. If approval is needed it is put back to Draft.<br><b>Submittal</b>: <span class='man-key'>Approve</span>, every time.<br><b>Purchase requisition</b>: <span class='man-key'>Create Purchase Order</span> on a material take-off, on its estimated value from the last purchase price or the product cost.<br>When several rules match, the one with the highest threshold is used. Orbit adds a request to Approvals, an <b>Approval needed</b> alert to the bell, and emails the approver. After approval the same action goes through, unless the amount has grown beyond what was approved.",
@@ -267,7 +278,7 @@ orbitScreenHelp({
       { name: "Material Take-off", how: "Covered by Purchase requisition rules, at Create Purchase Order.", to: "pur.req" }
     ],
     mistakes: [
-      ["You don&rsquo;t have permission to do that.", "The database accepts approval rules only from members whose role key is owner, admin or accountant, in companies they were given. Ask one of them to save the rule."],
+      ["You don&rsquo;t have permission to do that.", "The database accepts approval rules only from roles with Manage on Settings or Accounting, in companies they were given. Ask someone with that role to save the rule."],
       ["There is no New button", "Your role does not have Manage on the Settings app. Ask an Owner to add the rule or to change your role."],
       ["The rule is Active but a document went through without approval", "The amount was below the threshold, the rule is for another document type, or the action was not the one this rule stops (a credit note, for example, or Approve w/ comments on a submittal). Check Applies to and the threshold."],
       ["The named approver sees <i>Not yours to decide</i>", "Orbit has not matched their sign-in to the employee record, or they cannot open Approvals at all. They can always decide from the approval email: press Email approver on the request to send it again."],
@@ -310,7 +321,7 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens the Invite to portal window. Shown only when your role has Manage on the app you opened the screen from."],
       ["Save", "Saves the access. It sends no email, so give the person the portal address yourself."],
-      ["Remove", "On an existing row. Deletes the access at once, with no confirmation. To pause access instead, set Status to Off."],
+      ["Remove", "On an existing row. Deletes the access after you confirm. To pause access instead, set Status to Off."],
       ["Cancel", "Closes the window without saving."]
     ],
     after: "Nothing in your books changes. The person can sign in straight away at your Orbit address followed by <i>/portal.html</i>: they type the sign-in email, receive a one-time link, and see only this contact's records in this company. <b>Your projects</b> lists projects where the contact is the customer, with contract value, the amount certified on certificates that are not draft, and the target completion date. <b>Invoices &amp; certificates</b> lists the contact's invoices and bills that are not draft, with total, outstanding and Paid, Open or Overdue. <b>Purchase orders</b> lists orders to the contact that are not draft. When the contact owns a unit in a Plot building, the portal adds that building: their units, charges and balance, announcements, open motions they can vote on, and the suggestions they have raised. Draft documents never appear.",
@@ -324,7 +335,7 @@ orbitScreenHelp({
     mistakes: [
       ["Pick a contact", "No contact is chosen. Pick one, or add the person as a contact first."],
       ["Enter a valid email", "Sign-in email is empty or has no @. Type the full address."],
-      ["You don&rsquo;t have permission to do that.", "The database accepts portal access only from members whose role key is owner, admin or accountant. Ask one of them to save it."],
+      ["You don&rsquo;t have permission to do that.", "Saving portal access needs Work in Property, Sales, CRM or Settings on your role. Ask someone whose role has it, or ask an owner or admin to change your role."],
       ["No portal access", "Shown in the portal when the signed-in address has no active row. Check that Sign-in email matches the address they used (capitals do not matter) and that Status is Active."],
       ["Nothing has been shared with you yet.", "They signed in, but the contact has no projects, documents that are not draft, or units. Check that you picked the right contact."],
       ["A tenant sees no building", "The building section only appears for a contact recorded as owning a unit. Choosing Property tenant does not add it."],
@@ -433,7 +444,7 @@ orbitScreenHelp({
       ["WPS employer ID", "Your Ministry of Labour or establishment number, for the WPS salary file exported from a payslip run (GCC countries).", "optional"],
       ["WPS employer bank code", "The routing code of the bank that pays your salaries, written into the WPS file header.", "optional"],
       ["Address line 1", "Street and building. Printed on documents and reports.", "optional"],
-      ["Address line 2", "Unit or floor. Saved on the profile and shown in the live preview.", "optional"],
+      ["Address line 2", "Unit or floor. Printed on its own line under Address line 1 on documents and reports.", "optional"],
       ["City", "The town or city. Printed after the address, with the country. The profile cannot be saved without it.", "required"],
       ["State / Region", "Saved on the profile.", "optional"],
       ["Postal code", "Saved on the profile.", "optional"],
@@ -469,11 +480,11 @@ orbitScreenHelp({
       ["Enter the city", "The City box is empty. Type the town or city, then Save again."],
       ["Could not read that image", "The browser could not open the file chosen as the logo. Save the logo as a PNG or JPG and upload it again."],
       ["Could not seed taxes", "Orbit could not add the pack's tax rates, so the pack was not applied. Try again; if it keeps failing, add the rates yourself in Taxes."],
-      ["Could not apply: Not authorized for this company", "Repricing products needs write access to this company: an active owner, admin or accountant who has this company in scope. Ask one of them to click Apply to product prices."],
+      ["Could not apply: Not authorized for this company", "Repricing every product needs Manage in Inventory, Sales or Purchase on your role, with this company in scope. Ask someone whose role has it to click Apply to product prices."],
       ["Enter a markup %", "The markup is below 0. Type a figure of 0 or more, such as 30."],
       ["No built-in pack for (country) yet - set the currency and taxes manually.", "Orbit has no pack for that country. Choose the Currency yourself and add your tax rates in Taxes."],
-      ["Company profile saved, but the changes are gone after reloading", "Only an active owner, admin or accountant who has this company in scope can change the profile. For anyone else the database quietly ignores the change. Ask one of them to make it."],
-      ["Address line 2, State / Region or Postal code missing from a printout", "Printed headers take Address line 1, City and Country only. Put anything that must print, such as the postcode, into Address line 1."]
+      ["Company profile saved, but the changes are gone after reloading", "Changing the profile needs Work in Settings or Accounting on your role, with this company in scope. For anyone else the database quietly ignores the change. Ask someone whose role has it to make it."],
+      ["State / Region or Postal code missing from a printout", "Printed headers take Address line 1, Address line 2, City and Country. Put anything else that must print, such as the postcode, into one of the address lines."]
     ],
     tips: [
       "Fill in the Legal / registered name even if it matches the company name: printouts use it and Getting started looks for it.",
@@ -529,7 +540,7 @@ orbitScreenHelp({
       ["Give the book a name", "The Name box is empty. Type a name, then Save."],
       ["A record with Code (code) already exists. Use a different one.", "Another book in this company already uses that code, often because the code was made from a name that is already taken. Type a different Code."],
       ["Some of these are used in other records and can't be deleted.", "The book already holds journal entries, so it cannot be removed. Set Active to No instead."],
-      ["You don&rsquo;t have permission to do that.", "Adding or changing a book needs write access to this company: an active owner, admin or accountant who has this company in scope."],
+      ["You don&rsquo;t have permission to do that.", "Adding or changing a book needs Work in Accounting on your role, with this company in scope; deleting one needs Manage."],
       ["A new invoice or journal entry went into the wrong book", "On a new invoice, bill or journal entry the Book field starts on the book you are currently viewing, not on the default book. Check for the chip in the top bar before you start, or choose the book on the document."],
       ["The Book field and book picker have disappeared", "They only appear while the company has at least two active books. Set a second book back to Active Yes."]
     ],
@@ -560,14 +571,14 @@ orbitScreenHelp({
     ],
     fields: [
       ["Prefix", "The letters at the start of the number, for example INV or PO. Left blank, Orbit saves the document's standard code, the one shown in the row before you changed it.", "optional"],
-      ["Digits", "How many digits the running number is padded to, from 1 to 8: 4 gives 0001. A blank or 0 is saved as 4, and other figures are brought within 1 to 8.", "optional"],
+      ["Digits", "How many digits the running number is padded to, from 1 to 8: 4 gives 0001. A number that needs more digits keeps them all. A blank or 0 is saved as 4, and other figures are brought within 1 to 8.", "optional"],
       ["Year", "Ticked, the number includes the year, as in INV/2026/0001, and counting starts again at 1 each year. Unticked, the number reads INV/0001 and counting carries on across years.", "optional"],
       ["Next looks like", "A preview of the pattern for this year with running number 1. It changes as you type. The real running number continues from the highest one already used.", "auto"]
     ],
     buttons: [
       ["Save", "Saves every row at once for this company. The first save also completes the Document numbering step in Getting started."]
     ],
-    after: "When a document is numbered, Orbit takes the prefix, the current year if Year is ticked, and the highest running number already used with that same prefix and year, plus one, padded to your digits. So a new prefix, or a new year, starts at 1, and existing documents keep their numbers. Settings are kept per company. The rows apply as follows: Customer invoice, Customer credit note, Vendor bill and Vendor refund number those documents; Sales order / quotation and Purchase order number orders; Tender / estimate numbers tenders; Submittal, RFI, Snag / punch item, Inspection and Signature request number those records. Journal voucher numbers the journal entries you type by hand, using the year of the entry's date. Entries Orbit posts for you are numbered with their journal's code, and when a row has the same code, such as INV or BILL, its prefix, digits and year apply to those entries too.",
+    after: "When a document is numbered, Orbit takes the prefix, the current year if Year is ticked, and the highest running number already used with that same prefix and year, plus one, padded to your digits. So a new prefix, or a new year, starts at 1, and existing documents keep their numbers. Settings are kept per company. The rows apply as follows: Customer invoice, Customer credit note, Vendor bill and Vendor refund number those documents; Sales order / quotation and Purchase order number orders; Tender / estimate numbers tenders; Submittal, RFI, Transmittal, Snag / punch item, Inspection, Install job, Signature request and Work order number those records. A running number that outgrows its digits keeps all of them, so 9999 is followed by 10000. Journal voucher numbers the journal entries you type by hand, using the year of the entry's date. Entries Orbit posts for you are numbered with their journal's code, and when a row has the same code, such as INV or BILL, its prefix, digits and year apply to those entries too.",
     links: [
       { name: "Invoices", how: "Customer invoices and credit notes take their numbers from the Customer invoice and Customer credit note rows.", to: "inv.out" },
       { name: "Bills", how: "Vendor bills and refunds use the Vendor bill and Vendor refund rows.", to: "inv.in" },
@@ -576,17 +587,20 @@ orbitScreenHelp({
       { name: "Journal Entries", how: "Hand-typed vouchers use the Journal voucher row; posted entries use the row that matches their journal's code.", to: "moves" },
       { name: "Submittals", how: "Numbered by the Submittal row.", to: "doc.subs" },
       { name: "RFIs", how: "Numbered by the RFI row.", to: "doc.rfis" },
+      { name: "Transmittals", how: "Numbered by the Transmittal row.", to: "doc.trans" },
+      { name: "Work Orders", how: "Numbered by the Work order row.", to: "mfg.wo" },
+      { name: "Install Jobs", how: "Numbered by the Install job row.", to: "inst.jobs" },
       { name: "Getting started", how: "The Document numbering step is ticked after the first save.", to: "settings.setup" }
     ],
     mistakes: [
-      ["Save failed: You don&rsquo;t have permission to do that.", "Changing numbering needs write access to this company: an active owner, admin or accountant who has this company in scope."],
+      ["Save failed: You don&rsquo;t have permission to do that.", "Changing numbering needs Work in Settings on your role, with this company in scope."],
       ["An existing document kept its old number after you changed the prefix", "Numbering only applies to documents numbered after you save. Numbers already given never change."],
       ["The new prefix started again at 0001", "This is expected. Counting follows the prefix and the year, so a prefix with no documents yet starts at 1."],
-      ["Changing the Work order, Install job or Transmittal row has no effect", "Those three are currently numbered with fixed patterns, WO/year/0001, INS/year/0001 and TR/year/0001, whatever this screen says."]
+      ["A work order, install job or transmittal kept its old style after you changed its row", "Only documents numbered after you save follow the new row. Numbers already given never change."]
     ],
     tips: [
       "Decide your numbering before issuing real documents. Changing a prefix part way through the year starts a second sequence alongside the first.",
-      "Choose enough digits for a year of documents: 4 digits runs to 9999.",
+      "Choose enough digits for a year of documents so numbers line up: with 4 digits, 10000 still follows 9999, one digit wider.",
       "If your group invoices from several companies, give each company its own prefix so a number alone shows which company issued it."
     ]
   },
@@ -709,10 +723,10 @@ orbitScreenHelp({
       ["Email, Phone, City, Country (Customers, Vendors / Suppliers)", "Copied onto the contact exactly as typed.", "optional"],
       ["Tax / VAT no. (Customers, Vendors / Suppliers)", "The contact's tax or VAT registration number.", "optional"],
       ["Code (Products / Items)", "Your item code for the product.", "optional"],
-      ["Sale price and Cost price (Products / Items)", "Plain numbers such as 1200.50. A value that is not a plain number, such as 1,200.50 or one with a currency sign, is saved as 0.", "optional"],
+      ["Sale price and Cost price (Products / Items)", "Numbers as a spreadsheet writes them: 1200.50, 1,200.50, 1 200 and 1.200,50 are all read correctly, and a currency sign is ignored. A cell with no number in it is saved as 0.", "optional"],
       ["Code (Cost Codes)", "The cost code itself, for example <i>03-200</i>. A row without it is skipped. Each code can exist only once in a company, whatever its capitals.", "required"],
       ["Name and Category (Cost Codes)", "A description of the code, and a grouping such as Labour or Materials.", "optional"],
-      ["Contract value (Projects)", "The project's contract value as a plain number. Anything that is not a plain number is saved as 0.", "optional"],
+      ["Contract value (Projects)", "The project's contract value. Thousands separators such as 1,200,000 or 1 200 000 are read correctly. A cell with no number in it is saved as 0.", "optional"],
       ["Company", "Every row goes into the company you are working in when you click Import. Imported customers and vendors are saved as companies rather than individuals.", "auto"],
       ["Active", "Imported products, cost codes and projects are saved as active.", "auto"]
     ],
@@ -737,8 +751,8 @@ orbitScreenHelp({
       ["(number) missing a required field (skipped)", "Those rows have an empty required cell, shown in red as <i>missing</i>. Fill them in and choose the file again, or import the ready rows now and add the others by hand."],
       ["Every row shows missing under Name", "Orbit could not find the Name column. Either the header was renamed (headers are matched by their name, such as Name or Tax / VAT no., ignoring capitals and the *), or the file was saved with semicolons or tabs between cells. Save it again as CSV (comma separated) with the template's header row."],
       ["Import failed: That already exists - a record with the same code or number is already saved.", "A cost code in the file already exists in this company, or appears twice in the file. Nothing was imported. Change or remove the duplicate and import again."],
-      ["Import failed: You don&rsquo;t have permission to do that.", "Your role in this company cannot add records. Ask an owner, admin or accountant to run the import."],
-      ["Prices or contract values came in as 0", "The cells held something other than a plain number, such as 1,200.00 or a currency sign. Remove separators and symbols in the file before importing; correct records already imported on the record itself."],
+      ["Import failed: You don&rsquo;t have permission to do that.", "Your role cannot add these records. Importing needs Work in the app they belong to, for example Contacts for contacts or Inventory for products. Ask someone whose role has it to run the import."],
+      ["Prices or contract values came in as 0", "Those cells held no number at all, for example a dash or the word TBC. Put the figure in the file and import those rows again, or correct the records already imported on the record itself."],
       ["Choosing the same file again does nothing", "After you change What are you importing?, the file picker may ignore the same file picked a second time. Reload the page, or save the file under a new name, and choose it again."],
       ["Everything appears twice", "The same file was imported twice. Import never checks for records you already have, so check the list before importing a file again."]
     ],
@@ -834,7 +848,7 @@ orbitScreenHelp({
       { name: "Roles &amp; Permissions", how: "Whether someone can change the words depends on whether their role manages Settings.", to: "settings.roles" }
     ],
     mistakes: [
-      ["Save failed: You don&rsquo;t have permission to do that.", "Your role in this company cannot change company data. Ask an owner, admin or accountant to save the words."],
+      ["Save failed: You don&rsquo;t have permission to do that.", "Changing terminology needs Work in Settings on your role. Ask someone whose role has it to save the words."],
       ["The boxes are greyed out and there is no Save button", "Your role cannot manage Settings. Ask someone whose role can."],
       ["A word did not change somewhere", "Only labels that are exactly the default word change, and only in app names, menus, screen titles and the help list. A longer label that contains the word, and the words inside a screen, stay as they are."],
       ["The word I want to rename is not in the list", "Only a fixed list of common words can be renamed. Other labels keep their standard wording."]
@@ -890,7 +904,7 @@ orbitScreenHelp({
     ],
     mistakes: [
       ["Nothing needs attention right now", "Not always an error. It also shows when today's alerts were already raised, when you changed a rule without saving it, or when your role cannot view Accounting, because the check only runs for people who can."],
-      ["You don&rsquo;t have permission to do that.", "Shown on Save when your role in this company cannot change company data. Ask an owner, admin or accountant to save the rules."],
+      ["You don&rsquo;t have permission to do that.", "Shown on Save when your role does not have Work in Settings. Ask someone whose role has it to save the rules."],
       ["No Save or Run now button, and the boxes are greyed out", "Your role cannot manage Settings. Ask someone whose role can."],
       ["No alert, although an invoice is clearly overdue", "Check the rule is ticked On and saved, and that the invoice is posted, has money owing and was due at least the set number of days ago. Alerts are only added when the person whose Orbit runs the check has a role that can change company data. Click Run now to check again."],
       ["Low stock alert never fires", "The rule only checks items with a reorder minimum above 0. Set the minimum for the item first."]
@@ -932,7 +946,7 @@ orbitScreenHelp({
       ["URL (New webhook endpoint)", "The web address Orbit sends events to, for example <i>https://hooks.example.com/orbit</i>. It must start with https:// (http:// is also accepted, but https keeps the data encrypted on the way).", "required"],
       ["Events", "Which events are sent to this address: <i>invoice.created</i>, <i>bill.created</i>, <i>purchase_order.created</i>, <i>purchase_order.confirmed</i> and <i>payment.recorded</i>. All five start ticked; keep at least one.", "required"],
       ["Signing secret", "Shown once when the endpoint is created, starting <i>whsec_</i>. Your server works out HMAC-SHA256 of the raw message body with this secret and compares it with the <i>X-Orbit-Signature</i> header, after <i>sha256=</i>.", "auto"],
-      ["Status and Last (webhooks table)", "Status shows <i>active</i>; there is no switch to pause an endpoint, so delete it to stop deliveries. Last shows a dash, because delivery results are not recorded on the endpoint: check your own server's logs to confirm messages arrive.", "auto"]
+      ["Status and Last (webhooks table)", "Status shows <i>active</i>; there is no switch to pause an endpoint, so delete it to stop deliveries. Last shows when Orbit last sent this endpoint a message and whether it went out: <i>sent</i> when it was handed over for delivery, <i>not sent</i> when it could not be. Orbit does not wait for your server's reply, so check your own server's logs to confirm messages arrive. A dash means nothing has been sent yet.", "auto"]
     ],
     buttons: [
       ["+ New key", "Opens the New API key window."],
@@ -961,7 +975,7 @@ orbitScreenHelp({
     mistakes: [
       ["Enter a valid https URL", "The URL does not start with https:// (or http://). Paste the full address, including https://."],
       ["Pick at least one event", "Every event is unticked. Tick the events this address should receive."],
-      ["You don&rsquo;t have permission to do that.", "Creating, revoking and deleting need a role that can change company data: owner, admin or accountant. For other roles both tables also show as empty."],
+      ["You don&rsquo;t have permission to do that.", "Creating, revoking and deleting need Manage in Settings on your role. For other roles both tables also show as empty."],
       ["The API back-end is not installed yet.", "The database part of the API has not been set up on this installation. Whoever administers Orbit runs supabase/api-and-webhooks.sql once; then reload the page."],
       ["I closed the window before copying the key", "A key or secret is shown only once and cannot be recovered. Revoke the key, or delete the endpoint, and create a new one."],
       ["Invalid or revoked API key.", "The API replied 401: the key was revoked or copied incompletely. Check it, or create a new key and update the integration."],
@@ -1015,11 +1029,11 @@ orbitScreenHelp({
       ["Save (restore dialog)", "Starts the restore. The records go into a new company with new identifiers, then each attachment in the zip is uploaded again and linked to its restored record. A message box reports how many rows and attachments came back."],
       ["Cancel (restore dialog)", "Closes the dialog without restoring anything."]
     ],
-    after: "Taking a backup changes none of your data. Once the file has been saved, Orbit logs it (when, who, tables, rows, files, size, file name and a checksum), records the time of the last backup, which removes the red warning card and restarts the reminder interval, and keeps the latest 60 log lines. The zip itself exists only where your browser saved it. The backup covers every table that belongs to the company; the audit log is not included, and neither is anything kept for the organisation as a whole, such as the team of people who can sign in. A restore creates a new company in the organisation the backup came from or, if that organisation no longer exists in this database, in one where you are an owner, admin or accountant with access to every company. Every row gets a new identifier, so nothing in the original company is touched. The copy takes only its name, legal name, currency and country from the file: other settings kept on the company itself, such as the Company Profile details, are not carried across. It shows in the company picker after you reload the page, and can be thrown away with <span class='man-key'>Discard this restored copy</span> in Settings, Companies.",
+    after: "Taking a backup changes none of your data. Once the file has been saved, Orbit logs it (when, who, tables, rows, files, size, file name and a checksum), records the time of the last backup, which removes the red warning card and restarts the reminder interval, and keeps the latest 60 log lines. The zip itself exists only where your browser saved it. The backup covers every table that belongs to the company; the audit log is not included, and neither is anything kept for the organisation as a whole, such as the team of people who can sign in. A restore creates a new company in the organisation the backup came from or, if that organisation no longer exists in this database, in one where you are an owner or admin with access to every company. Every row gets a new identifier, so nothing in the original company is touched. The copy takes its name from the dialog, and from the file its legal name, currency, country, Company Profile details, print settings, tax number and the accounts chosen in Settings, Companies, each account pointed at its restored copy. It shows in the company picker after you reload the page, and can be thrown away with <span class='man-key'>Discard this restored copy</span> in Settings, Companies.",
     links: [
       { name: "Companies", how: "A restored copy is listed there. Open it and use <span class='man-key'>Discard this restored copy</span> to remove it; only a company created by a restore can be discarded that way.", to: "companies" },
       { name: "Import Data", how: "Take a backup first, so that if an import goes wrong you still have the records as they were, ready to restore as a copy.", to: "settings.import" },
-      { name: "Company Profile", how: "Its details are not carried into a restored copy. Fill them in on the copy if you plan to work in it.", to: "settings.profile" },
+      { name: "Company Profile", how: "Its details come back with a restored copy, together with the print settings and the company's accounts.", to: "settings.profile" },
       { name: "Users &amp; Roles", how: "The team belongs to the organisation, not the company, so it is not in a backup. After rebuilding from nothing, invite people again.", to: "settings.users" },
       { name: "Audit Log", how: "The history of who changed what is not part of a backup and does not come back with a restore.", to: "settings.audit" },
       { name: "Privacy &amp; data requests", how: "A person erased there is still inside any backup taken before the erasure.", to: "settings.privacy" }
@@ -1031,13 +1045,13 @@ orbitScreenHelp({
       ["There is no data.json inside that zip.", "The zip was not made by this screen, or it was repacked without data.json. Choose the original backup zip."],
       ["That file is not an Orbit backup", "The .json file does not contain the company section every backup has. Choose the data.json from a backup zip, or the zip itself."],
       ["Give it a name", "The Name for the restored copy is empty or shorter than two characters. Type a name and click Save again."],
-      ["You cannot write to that organisation", "A restore goes into the organisation the backup came from, and only an owner, admin or accountant of that organisation who is not limited to some companies can restore into it. Ask such a person to run the restore."],
-      ["You do not belong to an organisation this can be restored into", "The organisation named in the file no longer exists in this database, and you are not an owner, admin or accountant with access to every company in any organisation. Sign in as the owner of the new organisation and restore again."],
+      ["You cannot write to that organisation", "A restore goes into the organisation the backup came from, and only an owner or admin of that organisation who is not limited to some companies can restore into it. Ask such a person to run the restore."],
+      ["You do not belong to an organisation this can be restored into", "The organisation named in the file no longer exists in this database, and you are not an owner or admin with access to every company in any organisation. Sign in as the owner of the new organisation and restore again."],
       ["Restored with failures. Check failures.", "Some rows could not be put back. The message lists how many per table and why. Everything else is in the copy; check the listed tables before relying on it."],
       ["(number) attachment(s) put back, (number) could not be", "Some files in the zip could not be matched to a restored record or could not be uploaded. The records are there; those attachments are missing from the copy."],
       ["Switch to another company first, then discard this copy.", "You are working inside the restored copy. Pick your real company in the company picker, then discard the copy from Settings, Companies."],
       ["The restored copy is not in the company picker", "The picker is loaded when the page opens. Reload the page and the copy appears."],
-      ["What you have taken says Nothing yet, although backups were taken", "The log is shown only to an owner, admin or accountant of the company, and only their backups are logged. Ask one of them to check."]
+      ["What you have taken says Nothing yet, although backups were taken", "The log is shown only to people whose role has Manage in Settings, and only their backups are logged. Ask one of them to check."]
     ],
     tips: [
       "Keep at least one backup somewhere other than the computer that made it. A copy that sits beside the thing it protects is lost with it.",
@@ -1073,8 +1087,8 @@ orbitScreenHelp({
       ["Search by name or email", "At least two letters of the person's name or email address. Contacts match on name or email, employees on name or work email, and leads on the opportunity name, the contact name or the email. Up to 20 matches are shown.", "required"]
     ],
     buttons: [
-      ["Export their data", "Gathers what Orbit holds about the person and downloads it as one JSON file named after them. The file holds who they are and, under records, every row carrying their email address in Orbit's personal-data tables (contacts, leads and lead contacts, employees, applicants and job applications, event guests and event suppliers, building residents and members, portal access and invitations). For a contact it adds their invoices and payments; for an employee, their payslips and timesheets. Nothing is changed, and the export is logged."],
-      ["Erase them", "After two confirmations, anonymises the person. On their own record the name (for a lead, the contact name) becomes <i>Erased</i> and the date, and the details are cleared: for a contact the email, phone, mobile, street, city, website and notes; for an employee the first and last name, work and personal email, address and notes; for a lead the email, phone, notes, map link and location. Wherever else that email address appears in the personal-data tables, the email is cleared. Invoices, payments and ledger entries are not deleted. It cannot be undone, and the erasure is logged."]
+      ["Export their data", "Gathers what Orbit holds about the person and downloads it as one JSON file named after them. The file holds who they are and, under records, every row carrying their email address in Orbit's personal-data tables (contacts, leads and lead contacts, employees, applicants and job applications, event guests and event suppliers, building residents and members, portal access and invitations), and every website form submission in this company whose answers contain that email. For a contact it adds their invoices and payments; for an employee, their payslips and timesheets. Nothing is changed, and the export is logged."],
+      ["Erase them", "After two confirmations, anonymises the person. On their own record the name (for a lead, the contact name) becomes <i>Erased</i> and the date, and the details are cleared: for a contact the email, phone, mobile, street, city, website and notes; for an employee the first and last name, work and personal email, address and notes; for a lead the email, phone, notes, map link and location. Wherever else that email address appears in the personal-data tables, the email is cleared, and a website form submission whose answers contain it has its answers replaced with <i>Erased</i> and the date. Invoices, payments and ledger entries are not deleted. It cannot be undone, and the erasure is logged."]
     ],
     after: "An export changes nothing except adding an <b>Export</b> line to the log. An erasure changes the person's record in Contacts, Employees or CRM straight away; documents linked to them, such as invoices, payments and payslips, stay in the books and stay linked to the anonymised record. Both actions add a line to <b>What has been asked, and answered</b> with the date, the kind of request, the person's name and email as they were at the time, and the result. Those lines cannot be edited or deleted from the app, and the 50 most recent are shown. Backups downloaded before an erasure still contain the person, because they are files kept outside Orbit.",
     links: [
@@ -1086,8 +1100,8 @@ orbitScreenHelp({
     mistakes: [
       ["Type at least two letters.", "The search waits for two or more characters. Keep typing."],
       ["Nobody matches that.", "No record of the kind chosen in Who is this matches. Check the kind (a supplier is a contact, not a lead), try part of the email instead of the name, and leave out commas and brackets. An employee is found by name or work email only."],
-      ["Only a company administrator can export a person's data", "Exporting needs an active owner, admin or accountant of this company. Ask one of them to do it."],
-      ["Only a company administrator can erase a person's data", "Erasing needs an active owner, admin or accountant of this company. Ask one of them to do it."],
+      ["Only a company administrator can export a person's data", "Exporting needs Manage in Settings on your role. Ask someone whose role has it, usually an owner or admin."],
+      ["Only a company administrator can erase a person's data", "Erasing needs Manage in Settings on your role. Ask someone whose role has it, usually an owner or admin."],
       ["No such person in this company", "The record no longer exists in this company, for example it was deleted after you searched. Search again and use the buttons on the new results."],
       ["The export holds only invoices and payments, not the contact itself", "The export finds rows by email address. When the person has no email on file, only the documents linked to their record are included (invoices and payments for a contact, payslips and timesheets for an employee). Add what else you hold about them yourself."],
       ["Another contact lost its email address too", "Erasure clears that email address wherever it appears, so a second record using the same address, such as a shared office inbox, loses it as well. Check before erasing someone whose address is shared."]
@@ -1232,7 +1246,7 @@ orbitScreenHelp({
       ["Edit", "On each tile. Opens the tile's settings so you can change them."],
       ["Save", "Saves the tile and redraws the Dashboard with it."],
       ["Cancel", "Closes the window without saving."],
-      ["Delete", "In the Edit report window. Removes the tile straight away, without asking first. Any schedule that emails this tile is removed with it."],
+      ["Delete", "In the Edit report window. Removes the tile after you confirm. Any schedule that emails this tile is removed with it."],
       ["A number, a bar or a table row", "Opens a window listing the records behind that figure (the first 300). Click one to open it: the invoice, the purchase order, the project or the task. Line charts cannot be clicked."],
       ["Close", "Closes the list of records."]
     ],
@@ -1248,7 +1262,7 @@ orbitScreenHelp({
       ["Could not load", "Shown on a tile whose figures could not be worked out, for example after a connection problem. Refresh the page to try again."],
       ["No data yet", "The tile is grouped, but there are no records of that kind in this company yet. It fills in once there are."],
       ["Open the dashboard again to drill into this", "The figure was clicked before the tile had finished loading. Open the Dashboard again and click once the numbers show."],
-      ["You don&rsquo;t have permission to do that.", "Saving a tile was refused for your role. Only an owner, admin or accountant of the company can add or change tiles."],
+      ["You don&rsquo;t have permission to do that.", "Saving a tile was refused for your role. Adding, changing or deleting tiles needs Work in Insights or Accounting."],
       ["A total is bigger than you expected", "Customer invoice and purchase order tiles count every record, drafts included. Set Group by to Status to see drafts separately, or click the figure to see what is inside it."],
       ["Nothing happens when you click a line chart", "Line tiles cannot be clicked. Switch the tile to Bar chart or Table to drill into the records."]
     ],
@@ -1339,7 +1353,7 @@ orbitScreenHelp({
       ["Enter at least one email address", "The address box is empty or has no @ in it. Type at least one full address."],
       ["Create a report tile on the Dashboard first, then you can schedule it.", "The company has no Dashboard tiles yet. Build one in Insights, Dashboard, then come back."],
       ["Run supabase/114-report-scheduler.sql once to enable scheduled reports.", "Scheduled reports have not been set up in this database yet. Whoever looks after your Orbit set-up needs to run that step once."],
-      ["You don&rsquo;t have permission to do that.", "Adding a schedule was refused for your role. Only an owner, admin or accountant of the company can add one."],
+      ["You don&rsquo;t have permission to do that.", "Adding a schedule was refused for your role. It needs Work in Insights or Accounting; deleting one needs Manage."],
       ["The email arrives at the wrong time", "The hour is UTC, not your local time. Work out how far your office is from UTC and set the hour to match."],
       ["The emailed figures differ from the tile", "The email works its figures out in the database: it does not convert other currencies into your company currency, lists at most 12 groups, and shows statuses by their stored names. The Dashboard converts currencies first, so for a tile that mixes currencies, trust the Dashboard."]
     ],
@@ -1457,7 +1471,7 @@ orbitScreenHelp({
       ["An empty part of a day", "Opens New event with that date."],
       ["A chip", "An event added here opens for editing. A date from the Events app opens that event. Other collected dates open their screen: Submittals, RFIs, Certifications, Collections, Planning or Install jobs. A busy time from your own calendar does nothing."],
       ["Save", "Saves the event, shows <i>Saved</i> and redraws the month."],
-      ["Delete", "Only on an existing event. Deletes it at once, without asking, and shows <i>Deleted</i>."],
+      ["Delete", "Only on an existing event. Deletes it after you confirm, and shows <i>Deleted</i>."],
       ["Cancel", "Closes the window without saving."],
       ["Copy (Sync)", "Copies your address and shows <i>Address copied</i>."],
       ["Create a new address (Sync)", "After you confirm, replaces your address. Any calendar app using the old one stops updating until you give it the new address."],
@@ -1475,13 +1489,13 @@ orbitScreenHelp({
       { name: "Planning", how: "Every planned shift shows on its date.", to: "hr.planning" },
       { name: "Install jobs", how: "An install job that is not done shows on its due date.", to: "inst.jobs" },
       { name: "Events", how: "Event dates, open event tasks and unpaid event payments show on their dates and open the event.", to: "events.list" },
-      { name: "Appointments", how: "Appointments that are not cancelled are included in the Sync address, although they are not drawn on this grid.", to: "appt.cal" }
+      { name: "Appointments", how: "Appointments booked with you, or with nobody, are included in your Sync address unless cancelled, although they are not drawn on this grid.", to: "appt.cal" }
     ],
     mistakes: [
       ["Give the event a title", "The Title box is empty. Type what the event is."],
-      ["End time can't be before the start time", "The end time comes before the start. Times are compared as text, so 9:00 counts as later than 10:00: type hours with two digits, such as 09:00."],
-      ["You don&rsquo;t have permission to do that.", "Adding an event was refused for your role. Only an owner, admin or accountant of the company can add, change or delete events."],
-      ["It says Saved but the change is not there", "When someone whose role cannot write edits an existing event, the change is not stored even though the window closes. Ask an owner, admin or accountant to make it."],
+      ["End time can't be before the start time", "The end time is earlier in the day than the start. Orbit compares the times as hours and minutes, so 9:00 and 09:00 are the same. Change one of the two times."],
+      ["You don&rsquo;t have permission to do that.", "Adding an event was refused for your role. Adding, changing and deleting events needs <i>Work</i> or <i>Manage</i> in Calendar on your role; an owner or admin can change it in <b>Settings &rsaquo; Roles &amp; Permissions</b>."],
+      ["It says Saved but the change is not there", "When someone whose role only views the Calendar edits an existing event, the change is not stored even though the window closes. Ask someone with <i>Work</i> in Calendar to make it, or have your role changed."],
       ["Paste the full address, starting with https://", "In Sync, the address does not start with https:// or webcal://. Copy the whole secret address from your calendar's settings."],
       ["The calendar address returned (a number)", "Shown beside a synced calendar that Orbit could not read at its last attempt; <i>That address did not return a calendar</i> means the same. Copy the secret iCalendar address again, Remove the old one and Add the new one."],
       ["Not every item on a day shows", "A day shows four chips and then +N more. Open Agenda to see every item."]
@@ -1489,7 +1503,7 @@ orbitScreenHelp({
     tips: [
       "Events you add are seen by the whole company, so keep private appointments in your own calendar and let Sync bring in the busy times.",
       "From your own calendar Orbit keeps each entry's start, end and title, but not attendees, descriptions or locations.",
-      "The Sync address carries the company's calendar events and appointments from 60 days ago onwards; collected dates such as invoices falling due are not in it."
+      "Your Sync address carries, from 60 days ago onwards, the calendar events assigned to you or to nobody and the appointments booked with you or with nobody. A colleague's appointments stay out of it, and it stops answering once your access to the company ends. Collected dates such as invoices falling due are not in it."
     ]
   },
 
@@ -1512,13 +1526,13 @@ orbitScreenHelp({
     ],
     fields: [
       ["Title (Edit event)", "What the event is. It cannot be saved empty.", "required"],
-      ["Date, Type, Start time, End time, Project, Location, Notes (Edit event)", "The same as on the Calendar: the day, the kind of event, free-text times with two-digit hours, an active project, the place and any notes.", "optional"]
+      ["Date, Type, Start time, End time, Project, Location, Notes (Edit event)", "The same as on the Calendar: the day, the kind of event, free-text times such as 9:00 or 09:00, an active project, the place and any notes.", "optional"]
     ],
     buttons: [
       ["Month view", "Opens the month grid."],
       ["An item", "An event added in the Calendar opens for editing. A date from the Events app opens that event. Other collected dates open their screen: Submittals, RFIs, Certifications, Collections, Planning or Install jobs. A busy time does nothing."],
       ["Save", "In the Edit event window. Stores the change, shows <i>Saved</i> and opens the month view."],
-      ["Delete", "In the Edit event window. Deletes the event at once, without asking, shows <i>Deleted</i> and opens the month view."],
+      ["Delete", "In the Edit event window. Deletes the event after you confirm, shows <i>Deleted</i> and opens the month view."],
       ["Cancel", "Closes the Edit event window without saving."]
     ],
     after: "Agenda only reads, apart from editing an event, which works exactly as on the Calendar. It is worked out afresh each time it opens, from today to the same day three months ahead, so dates in the past are not listed. New events are added on the month view.",
@@ -1531,7 +1545,7 @@ orbitScreenHelp({
       ["Nothing scheduled. Add events in the Calendar.", "Nothing with a date falls between today and three months from now. Add an event on the month view, or check the dates on the records you expected to see."],
       ["An item from last week is missing", "Agenda starts at today. Use the Calendar and its back arrow for past dates."],
       ["Give the event a title", "The Title box in the Edit event window is empty. Type what the event is."],
-      ["End time can't be before the start time", "The end time comes before the start. Times are compared as text, so type hours with two digits, such as 09:00."]
+      ["End time can't be before the start time", "The end time is earlier in the day than the start. Orbit compares the times as hours and minutes, so 9:00 and 09:00 are the same. Change one of the two times."]
     ],
     tips: [
       "The kind on the right tells you where an item came from: meeting, site visit, milestone, reminder, deadline and other are events added in the Calendar; submittal, rfi, cert, invoice, planning, install and event come from other apps; busy is your own synced calendar.",
@@ -1566,7 +1580,7 @@ orbitScreenHelp({
       ["Project", "An active project the document belongs to; it shows in the list. Locked after sending.", "optional"],
       ["Notes", "Anything the signers or your team should know. It can still be changed while the request is awaiting signatures.", "optional"],
       ["Number", "Given on the first save, such as <i>SIGN/2026/0001</i>. The prefix, digits and year are set in Settings, Document Numbering.", "auto"],
-      ["Name (Signers)", "The person who has to sign. A row with no name is dropped when you save. Can only be changed in Draft.", "optional"],
+      ["Name (Signers)", "The person who has to sign. An empty row is dropped when you save; a row with a Role but no Name is refused, so nobody is lost without a word. Can only be changed in Draft.", "optional"],
       ["Role (Signers)", "Their role, for example <i>Client</i> or <i>Site manager</i>.", "optional"],
       ["Your name (Sign window)", "The signer types their full name. It replaces the name on that signer's row.", "required"],
       ["Draw your signature (Sign window)", "The signer draws with a mouse, finger or pen. If nothing is drawn, the typed name is kept as the signature and shown in italics.", "optional"],
@@ -1580,7 +1594,7 @@ orbitScreenHelp({
       ["Save", "Saves the request. In Draft it also saves the signer rows, replacing the previous list. Hidden once the request is signed."],
       ["Discard", "Goes back to the list without saving."],
       ["Delete", "Only on a saved request, for people who can manage the Sign app. Asks first, then deletes the request with its signers and signatures."],
-      ["Send for signature", "Only on a saved request in Draft. Saves first, then moves it to Awaiting signatures and locks Type, Reference, Project and the signers. It sends no email or link."],
+      ["Send for signature", "Only on a saved request in Draft. Refused until at least one signer has a name. Saves first, then moves it to Awaiting signatures and locks Type, Reference, Project and the signers. It sends no email or link."],
       ["+ Add signer", "Adds a signer row. Draft only."],
       ["&times; (on a signer row)", "Removes that row; it is gone once you save. Draft only."],
       ["Sign", "On each unsigned row while the request is awaiting signatures. Opens the Sign window."],
@@ -1597,11 +1611,12 @@ orbitScreenHelp({
       { name: "Approval Rules", how: "When a document should wait for someone's decision before it can go ahead, an approval rule does that; a signature request only records a sign-off.", to: "approvals.rules" }
     ],
     mistakes: [
-      ["Add at least one signer", "Send for signature was clicked with no signer rows. Click + Add signer, type a name and send again."],
+      ["Add at least one signer with a name before sending.", "Send for signature was clicked with no signer, or only empty rows. Type a name on a signer row, or click + Add signer, then send again."],
+      ["A signer has a role but no name. Type the signer's name, or remove that row with the cross.", "A signer row has a Role filled in and no Name. Type the name, or remove the row, then save or send again."],
       ["Type your name", "In the Sign window, Your name is empty. The signer types their full name before confirming."],
       ["Save failed", "Changes to a saved request could not be stored. Check your connection and try again."],
-      ["You don&rsquo;t have permission to do that.", "Creating a request was refused for your role. Only an owner, admin or accountant of the company can create, change or sign requests."],
-      ["It says Signed but the row still shows the Sign button", "The person signed in to Orbit cannot write in this company, so the signature was not stored. Sign again while an owner, admin or accountant is signed in."],
+      ["You don&rsquo;t have permission to do that.", "Creating a request was refused for your role. Creating, changing or signing requests needs Work in Sign, Documents, Sales, Employees or Projects."],
+      ["It says Signed but the row still shows the Sign button", "The person signed in to Orbit has no Work level in Sign or in the apps that send requests, so the signature was not stored. Sign again while someone whose role has it is signed in."],
       ["There is no Mark fully signed button", "It only appears when every signer row has been signed. Look for the row that still shows Sign."],
       ["A request is Awaiting but has no signers", "It was sent with only an empty signer row, which is not saved. Signers cannot be added after sending, so delete the request and create it again with named signers."]
     ],
@@ -1712,7 +1727,7 @@ orbitScreenHelp({
       "Company type holds one value, so this form saves a company either as a customer or as a vendor, not both.",
       "The list search looks in the name, email, city, country, industry, specialty, role and supplies.",
       "In the list, people are tucked under the company they work at. Click the arrow beside a company to show or hide them.",
-      "Saving contacts is limited to members whose role is owner, admin or accountant with access to this company.",
+      "Saving contacts needs Work in Contacts, or in an app that works with contacts such as Sales, Purchase or CRM, with access to this company. Deleting one needs Manage.",
       "Before creating a contact, search the list for it. If one has been entered twice, merge the pair in Find Duplicates rather than deleting one."
     ]
   },
@@ -1893,7 +1908,7 @@ orbitScreenHelp({
     fields: [
       ["Site name", "The name at the top of the site form. It shows in the site's menu bar and footer, and in the browser tab of any page without its own title. Left blank, it saves as <i>My site</i>.", "optional"],
       ["Subdomain", "Your free address: what you type here followed by <i>.sites.spacework.ai</i>. Orbit lowercases it, turns spaces and other characters into dashes and keeps the first 40 characters. No two Orbit sites can share one. Left blank, the list shows <i>no subdomain</i>, the site can only be reached on a custom domain, and Preview and Open live have nothing to open.", "optional"],
-      ["Published", "<i>Draft (only you)</i> or <i>Published (public)</i>. Nothing on a draft site is served, and that includes Preview and Open live, which show a 404 page. A published site still shows only the pages that are published themselves.", "optional"],
+      ["Published", "<i>Draft (only you)</i> or <i>Published (public)</i>. Nothing on a draft site is served to visitors, so Open live shows a 404 page; Preview in the builder still shows you the page. A published site still shows only the pages that are published themselves.", "optional"],
       ["Brand colour", "The colour of buttons, links, icons and highlights on every page of the site.", "optional"],
       ["Background", "The page background colour for the whole site.", "optional"],
       ["Font", "The typeface for the whole site: Inter, Onest, Poppins, Roboto, Montserrat, Playfair Display, Lora or Space Grotesk.", "optional"],
@@ -1919,7 +1934,8 @@ orbitScreenHelp({
     buttons: [
       ["New", "Starts a new site. Shown to people who can manage the Website app."],
       ["Clicking a row", "Click the Address or Status of a row to open the site. Clicking the site's name renames it in place instead; press Enter to save."],
-      ["Select", "Ticks sites for <span class='man-key'>Export selected</span> or <span class='man-key'>Delete</span>."],
+      ["Select", "Ticks sites for <span class='man-key'>Export selected</span>, <span class='man-key'>Archive</span> or <span class='man-key'>Delete</span>. Archive is offered once the database has its latest update."],
+      ["Archive and Restore", "On a saved site, once the database has its latest update. Archive stops the site being served at its address and its forms taking messages, and the site shows as Archived; Restore brings it back as it was."],
       ["Export", "Downloads the list as a CSV file."],
       ["Save", "Saves the name, subdomain, published setting and design, and stays on the site. The first save of a new site opens the Pages and Custom domain areas."],
       ["Discard", "Back to the list. Changes since the last save are not kept."],
@@ -1929,17 +1945,17 @@ orbitScreenHelp({
       ["&times; on a page row", "Deletes that page after you confirm <i>Delete this page?</i>"],
       ["Add domain", "Saves the domain typed in the box, registers it for a security certificate, and tells you the DNS record to add."],
       ["Verify", "Checks the domain again. It turns <b>Live</b> once the record is found and the certificate is issued, or the message says what is still missing."],
-      ["&times; on a domain row", "Removes the domain straight away, with no confirmation."],
+      ["&times; on a domain row", "Removes the domain after you confirm."],
       ["&larr; Site (builder)", "Back to the site form. With unsaved changes it asks first."],
       ["Desktop and Mobile icons (builder)", "Show the page at full width or at phone width while you edit."],
-      ["Preview (builder)", "Saves the page, then opens it in a new tab. A page or site that is not published shows a 404 page there."],
+      ["Preview (builder)", "Saves the page, then opens it in a new tab. A published page on a published site opens at its live address. A draft page, or a page of a draft or archived site, is drawn from what you saved, under a dark bar saying why visitors cannot see it yet; links to other pages do not work in that preview."],
       ["Save (builder)", "Saves the page and the site's design. It reads <b>Save *</b> while there are unsaved changes."],
       ["Publish (builder)", "Marks the page and the whole site Published, and saves both."],
       ["+ between sections (builder)", "Opens <b>Add a section</b>, grouped as Headers, Text, Content, Media, Forms, ERP and Basic. The section you pick is added with starter text to replace."],
       ["Section toolbar (builder)", "Hover over a section for Move up, Move down, Duplicate, Settings and Delete. Click a section to open its settings on the right; click its headline to type straight on the page."],
       ["Done, Up, Down, Duplicate, Delete (settings panel)", "Close the section's settings, or move, copy or remove the section. Inside a list such as cards, plans or questions, the small arrows and cross move or remove one item and <span class='man-key'>+ Add</span> adds another."]
     ],
-    after: "Nothing is public until both the site and the page are published. From then on every published page is served on the site's free address and on each custom domain marked Live, with the site name and a menu of all published pages at the top and a footer at the bottom. Contact and Form sections send what visitors type to <b>Form Submissions</b>, and a Careers section lists the roles published in <b>Careers</b> and sends applications to <b>Applications</b>. Only company members with the owner, admin or accountant role can save sites, pages and domains.",
+    after: "Nothing is public until both the site and the page are published. From then on every published page is served on the site's free address and on each custom domain marked Live, with the site name and a menu of all published pages at the top and a footer at the bottom. Contact and Form sections send what visitors type to <b>Form Submissions</b>, and a Careers section lists the roles published in <b>Careers</b> and sends applications to <b>Applications</b>. Saving sites, pages and domains needs Work in Website on your role; deleting a site or a domain needs Manage.",
     links: [
       { name: "Form Submissions", how: "What visitors send through a Contact or Form section lands there, tagged with the form's name.", to: "web.subs" },
       { name: "Careers", how: "The roles a Careers section lists. Only published roles show.", to: "web.jobs" },
@@ -1949,16 +1965,15 @@ orbitScreenHelp({
     mistakes: [
       ["A record with Slug (subdomain) already exists. Use a different one.", "Another Orbit site already uses that subdomain; no two sites can share one. Choose a different subdomain and Save."],
       ["A record with Path (path) already exists. Use a different one.", "Another page of this site already has that path, often a second page left on /. Change the Path in the builder's Page &amp; design panel, then Save."],
-      ["A page reading 404, No published page here for (address)", "There is nothing public at that address: the site is still a draft, the page is not published, no published page has that path (the plain address needs a published page at /), the site has no subdomain, or the custom domain is not Live yet. Publish the site and page, or check the path."],
+      ["A page reading 404, No published page here for (address)", "There is nothing public at that address: the site is still a draft or archived, the page is not published, no published page has that path (the plain address needs a published page at /), the site has no subdomain, or the custom domain is not Live yet. Publish or restore the site and page, or check the path. Use Preview in the builder to see a page before it is public."],
       ["Domain added. At your registrar add a CNAME:  (domain)  &rarr;  sites.spacework.ai , then click Verify.", "Not an error: the next step. At your domain provider, add a CNAME record for that domain pointing at sites.spacework.ai, then click Verify."],
       ["Add this DNS TXT to verify:  (name) = (value)", "The domain's ownership has to be proved before it can go live. Add a TXT record with that name and value at your domain provider, then click Verify again."],
       ["Still pending - point the CNAME at sites.spacework.ai and Verify again.", "The domain is not confirmed yet. Check the CNAME record at your domain provider, give the change time to take effect, and click Verify again later."],
       ["Domain saved. Custom-domain SSL is not switched on yet - set the Cloudflare token to activate it (see setup).", "The domain was saved, but custom domains are not switched on for this Orbit service, so it stays Pending DNS. The site still works on its free subdomain. Verify says <i>Custom-domain SSL is not configured yet.</i> for the same reason."],
       ["Domain saved, but registration failed: (reason)", "The domain was saved but could not be registered for a certificate; the reason follows the colon. Fix what it names, remove the domain with &times; and add it again."],
       ["That already exists - a record with the same code or number is already saved.", "Shown on Add domain: that domain is already attached to a site, in this company or another. A domain can serve only one site."],
-      ["You don&rsquo;t have permission to do that.", "Only members with the owner, admin or accountant role in this company can save sites, pages and domains. Ask one of them to make the change."],
+      ["You don&rsquo;t have permission to do that.", "Saving sites, pages and domains needs Work in Website on your role. Ask someone whose role has it to make the change."],
       ["Leave the builder? Unsaved changes will be lost.", "You clicked &larr; Site with changes not yet saved. Cancel and click Save first, unless you mean to throw them away."],
-      ["The menu bar went back to Light", "Navbar is set only in the builder, and saving the site form rewrites the design without it. Set Navbar again in the builder's Page &amp; design panel and save the page."],
       ["Could not load the site engine.", "The builder could not load the part that draws the page. Reload Orbit and open the page again."]
     ],
     tips: [
@@ -1994,7 +2009,7 @@ orbitScreenHelp({
       ["Location", "Where the job is, such as a town or <i>Remote</i>. Shown under the title.", "optional"],
       ["Employment type", "Free text such as Full-time, Part-time or Contract. Shown under the title.", "optional"],
       ["Department", "The team the role sits in. Shown under the title.", "optional"],
-      ["Published", "Draft or Published. Only published roles appear on the website; a draft stays here only.", "optional"],
+      ["Published", "Draft or Published. Only published roles appear on the website; a draft stays here only. Publishing an archived role makes it active again.", "optional"],
       ["External apply link", "A web address where people should apply instead. When it is set, the Apply button opens that address in a new tab and no application is recorded in Orbit.", "optional"],
       ["Description", "The full advert. It shows as plain text under the listing with your line breaks kept; any HTML tags show as typed.", "optional"]
     ],
@@ -2004,7 +2019,7 @@ orbitScreenHelp({
       ["Discard", "Back to the list without saving."],
       ["Filters &rsaquo; Published", "Shows only the roles that are live on the website."],
       ["Clicking a cell", "Position, Location and Type can be changed straight in the list: click the cell, type and press Enter. Click the Status cell to open the role."],
-      ["Select", "Ticks roles for <span class='man-key'>Export selected</span>, <span class='man-key'>Archive</span> or <span class='man-key'>Delete</span>. Archive does not take a published role off the website. Deleting a role keeps its applications, with the For column left empty."],
+      ["Select", "Ticks roles for <span class='man-key'>Export selected</span>, <span class='man-key'>Archive</span> or <span class='man-key'>Delete</span>. Archive also sets the role to Draft, so it leaves the website straight away and shows as Archived; publishing it again brings it back. Deleting a role keeps its applications, with the For column left empty."],
       ["Export", "Downloads the list as a CSV file."]
     ],
     after: "A published role is on every careers list for this company from the next page load: the Careers section of your Orbit sites and any website using the careers snippet. The list shows each role's title, location, type, department and description, newest first. An application sent through the Apply form is stored in <b>Applications</b> against the role. Nothing is created in Recruitment or HR.",
@@ -2016,8 +2031,7 @@ orbitScreenHelp({
       { name: "Job Positions", how: "The positions kept in HR are a separate list from the roles you advertise here.", to: "hr.jobs" }
     ],
     mistakes: [
-      ["You don&rsquo;t have permission to do that.", "Only members with the owner, admin or accountant role in this company can save roles. Ask one of them."],
-      ["The role still shows on the website after archiving it", "Archive does not unpublish. Open the role, set Published to Draft and Save."],
+      ["You don&rsquo;t have permission to do that.", "Saving a role here needs Work in Recruitment or Website on your role, and deleting one needs Manage. Ask someone whose role has it."],
       ["No open positions right now.", "What the careers list shows when the company has no published roles, or when the snippet was copied in a different company. Publish a role, or copy the snippet again from the right company."],
       ["Untitled role on the website", "The role was saved without a job title. Open it, type the title and Save."],
       ["Applications for a role never arrive", "The role has an External apply link, so Apply sends people there. Clear the link to use Orbit's form."]
@@ -2068,7 +2082,7 @@ orbitScreenHelp({
       { name: "Privacy &amp; data requests", how: "It finds contacts, employees and leads, not applications. Exporting one of those people includes applications with the same email; erasing them clears the Email on those applications, while the name, CV link and message stay.", to: "settings.privacy" }
     ],
     mistakes: [
-      ["A candidate says they applied but there is no row", "Check the role in Careers. If it has an External apply link, they applied there. If the role was set to Draft or deleted after they opened the page, Orbit refused the application but the form still thanked them. Ask them to apply again, or add them in Applicants yourself."],
+      ["A candidate says they applied but there is no row", "Check the role in Careers. If it has an External apply link, they applied there. If the role was set to Draft, archived or deleted after they opened the page, Orbit refused the application and told them <i>Sorry, this position is no longer taking applications.</i> Publish the role again and ask them to reapply, or add them in Applicants yourself."],
       ["The For column is empty", "The role was deleted after the application arrived. The application itself is kept."],
       ["Nothing happens when you click a row", "Applications have no detail page. Everything shown is in the columns."],
       ["There is no way to delete an application", "This screen has no delete. See Privacy &amp; data requests under Links for what can be cleared when a person asks."]
@@ -2113,10 +2127,11 @@ orbitScreenHelp({
     links: [
       { name: "Sites", how: "Add a Contact or Form section to a page, and give the Form section the name that tags its answers here.", to: "web.sites" },
       { name: "Leads", how: "Submissions do not become leads automatically. Add the enquiries you want to follow up there.", to: "crm.leads" },
-      { name: "Privacy &amp; data requests", how: "Its export and erase do not look in form submissions.", to: "settings.privacy" }
+      { name: "Privacy &amp; data requests", how: "Exporting a person includes the submissions whose answers contain their email; erasing them replaces those answers with an Erased marker.", to: "settings.privacy" }
     ],
     mistakes: [
       ["Sorry, that did not send. Please try again.", "What the visitor sees when their browser could not reach Orbit, for example with no connection. Nothing was stored; they need to send it again."],
+      ["Sorry, this form is not taking messages right now. Please contact us another way.", "What the visitor sees when Orbit refused the message, because the site is a draft or archived, or the address is not a site Orbit knows. Nothing was stored. Publish or restore the site, then send yourself a test."],
       ["Every row says contact", "Contact sections always tag their answers <i>contact</i>, and so does a Form section with no Form name. Give each Form section its own name in the builder."],
       ["A page reading 404 instead of the form", "The site or the page is not published. Publish it from the builder: forms only work on published pages."],
       ["Junk messages in the list", "These forms have no captcha or spam filter, so automated messages can get through. Submissions cannot be deleted here; use Search to find the real ones."]
