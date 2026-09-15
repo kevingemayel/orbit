@@ -39,10 +39,10 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Projects &rsaquo; Projects</b> and click <span class='man-key'>New</span>. For this example, a design agency is rebuilding a retailer's website and bills its time.",
-      "Type <i>Retailer website rebuild</i> in <b>Project name</b> at the top of the form.",
+      "Type <i>Retailer website rebuild</i> in <b>Project name</b> at the top of the form. <b>Project Code</b> fills with <i>RWR</i>, the initials of the name. Type your own short abbreviation over it if you prefer, for example <i>RETWEB</i>. Suppliers see this code on RFQs and purchase orders instead of the project name.",
       "Pick the <b>Customer</b>. If the retailer is not in the list, choose <i>+ Add a new customer...</i> at the bottom, type the name and click <span class='man-key'>Create &amp; select</span>.",
       "Set <b>Billing</b> to <i>Time &amp; material</i>, <b>Start date</b> to 1 September and <b>Deadline</b> to 30 November. Leave <b>Status</b> on Active and <b>Stage</b> on Active.",
-      "Type <i>PRJ-014</i> in <b>Project Code</b> and 18,000.00 in <b>Contract Value</b>. Leave <b>Retention %</b> and <b>Advance Payment</b> at 0; they are for contracts where the client holds money back.",
+      "Type 18,000.00 in <b>Contract Value</b>. Leave <b>Retention %</b> and <b>Advance Payment</b> at 0; they are for contracts where the client holds money back.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the project in the list with 0.00 hours.",
       "Open the project again. You should see four buttons across the top of the sheet: <b>Contract</b>, <b>Certified</b>, <b>Cost budget</b> and <b>Hours</b>, and a <b>Tasks</b> tab at the bottom.",
       "Click <b>Cost budget</b>, type <i>Labour</i> in <b>Category</b> and 11,000.00 in <b>Budgeted cost</b>. The totals under the table should read Estimated margin 7,000.00 (38.9%). Click <span class='man-key'>Save</span>; you should see <i>Budget saved</i> and the project form again.",
@@ -58,7 +58,7 @@ orbitScreenHelp({
       ["Deadline", "The target finish date. It shows in the list, can be changed straight in the list, and the bell reminds you as it approaches.", "optional"],
       ["Status", "Active or Closed. Only active projects are offered when you log time, add tasks, raise snags, inspections, diaries and document records, and only active projects appear in Project P&amp;L and the WIP Schedule. Archiving a project from the list sets it to Closed.", "optional"],
       ["Stage", "Planning, Active, On hold, Completed or Cancelled. It is the column the project sits in on the list's kanban board; dragging a card to another column changes it.", "optional"],
-      ["Project Code", "Your own reference for the job, for example PRJ-014.", "optional"],
+      ["Project Code", "A short abbreviation of the project, for example BTW for Beirut Tower. It is the first field on the form and fills with the initials of the name until you type your own. It is saved in capitals and no two projects in the company can share it. RFQs and purchase orders print this code, never the project name, so a supplier can follow up by code without learning the real project. The project pickers on RFQs and orders show the code before the name.", "required"],
       ["Contract Value", "The agreed price. Job Cost, Project P&amp;L and the WIP Schedule use it. When the project has a Schedule of Values the box is read-only and equals the schedule's total.", "optional"],
       ["Retention %", "The percentage the client holds back on each progress certificate, for example 5. Every certificate for this project uses it.", "optional"],
       ["Advance Payment", "The advance or mobilisation payment received up front. The part recovered each period is typed on each progress certificate.", "optional"],
@@ -96,9 +96,13 @@ orbitScreenHelp({
       { name: "Variations", how: "Approving a variation adds its amount to the project's Contract Value.", to: "var.list" },
       { name: "Job Cost", how: "Budget against committed and actual cost for the project, by cost code.", to: "proj.jobcost" },
       { name: "Project P&amp;L", how: "Certified revenue against actual cost for every active project.", to: "proj.pnl" },
-      { name: "Customer invoices", how: "The Bill button and a certificate's Create client invoice both make draft invoices tagged to the project.", to: "inv.out" }
+      { name: "Customer invoices", how: "The Bill button and a certificate's Create client invoice both make draft invoices tagged to the project.", to: "inv.out" },
+      { name: "Purchase Orders", how: "A purchase order tagged to the project prints the project's code, never its name.", to: "po.list" },
+      { name: "RFQ / Compare Quotes", how: "A printed RFQ shows the project's code, never its name.", to: "rfq.list" }
     ],
     mistakes: [
+      ["Enter a project code: a short abbreviation printed on RFQs and purchase orders instead of the project name.", "Project Code is empty. Type a short abbreviation, or keep the one suggested from the name, and save again."],
+      ["The project Beirut Tower already uses the code BTW. Choose another code.", "Codes are unique within the company. Add a letter or a number, for example BTW2, and save again."],
       ["Name required", "The project name at the top is empty. Type a name, then Save."],
       ["Set a Customer on the project first, then Save.", "You clicked Bill on a project with no customer. Choose the Customer, Save, reopen the project and click Bill again."],
       ["Enter a rate per hour", "The Rate / hour in the Bill time dialog is zero. Enter your hourly rate."],
@@ -1745,7 +1749,7 @@ orbitScreenHelp({
       ["Type, Subtype, Sub-subtype", "What it is, picked from your classification tree.", "optional"],
       ["Material", "The substance it is made of. It sets the density used to work out weight.", "optional"],
       ["Colour and Supplier", "The finish, for example RAL 9016, and who supplies it. Earlier entries are suggested.", "optional"],
-      ["Material form", "General item, Bar / profile, Sheet / plate, Glass unit (IGU / laminated), Liquid (paint, sealant) or Roll / coil. It decides which size and price boxes appear.", "optional"],
+      ["Material form", "General item, Bar / profile, Sheet / plate, Liquid (paint, sealant) or Roll / coil. It decides which size and price boxes appear.", "optional"],
       ["Size and price boxes", "Depend on the form: length and weight per metre for a bar; width, height, thickness and density for a sheet; unit size, panes, cavities and Ug for a glass unit; container size and batch for a liquid; roll length and weight for a roll; with Priced by and the price value.", "optional"],
       ["Notes", "Anything else about the item.", "optional"]
     ],

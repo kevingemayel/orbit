@@ -747,7 +747,7 @@ orbitScreenHelp({
       ["Colour", "For example RAL 9016. Earlier entries are suggested.", "optional"],
       ["Supplier (Material and attributes)", "A supplier name kept with the item's description. Earlier entries are suggested.", "optional"],
       ["Country of origin", "Where the item is made, for customs and tenders that ask for origin.", "optional"],
-      ["Material form", "General item, Bar / profile, Sheet / plate, Glass unit (IGU / laminated), Liquid (paint, sealant) or Roll / coil. The choice shows the measurements for that shape and the note on how stock is counted.", "optional"],
+      ["Material form", "General item, Bar / profile, Sheet / plate, Liquid (paint, sealant) or Roll / coil. The choice shows the measurements for that shape and the note on how stock is counted.", "optional"],
       ["Measurements for the form", "Bar: Length per bar (m) and Weight (kg/m). Sheet: Width, Height, Thickness (mm) and Density. Glass: Configuration, Unit width and height, up to three panes and two cavities, and Ug. Liquid: Container size, Unit and Batch size. Roll: Roll length (m) and Roll weight (kg).", "optional"],
       ["Suppliers &amp; prices: supplier, price, basis, unit, MOQ, lead days, date", "On a saved product. One row per supplier's price; supplier and price are needed to add a row.", "optional"],
       ["Extra barcodes: barcode, label", "On a saved product. Other barcodes that also scan to this item; the barcode is needed.", "optional"],

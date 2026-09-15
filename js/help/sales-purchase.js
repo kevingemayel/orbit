@@ -43,7 +43,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Customer", "Who the offer is for. Only contacts marked as a customer appear. <i>+ Add a new customer...</i> creates one without leaving the form. The list has no empty choice, so check it shows the right name before saving. If the customer has a pricelist on their contact card, it prices the lines you add.", "required"],
-      ["Project", "The job this sale belongs to, if any. It is copied onto the invoice you create from the order. <span class='man-key'>+ New</span> opens a small <b>New project</b> box so you can start one on the spot.", "optional"],
+      ["Project", "The job this sale belongs to, if any, listed as its code and name. It is copied onto the invoice you create from the order. <span class='man-key'>+ New</span> opens a small <b>New project</b> box with the project's name and its code, so you can start one on the spot.", "optional"],
       ["Currency", "Always the company currency on this screen. It cannot be changed here.", "auto"],
       ["Order Date", "The date of the offer or the order. It starts as today.", "auto"],
       ["Reference / Note", "Any note you want on the document, for example the customer's enquiry number. It prints under Reference.", "optional"],
@@ -220,7 +220,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Vendor", "The supplier you are ordering from. Only contacts marked as a vendor appear. The list has no empty choice, so an order started from a take-off or a blanket shows the first supplier until you change it.", "required"],
-      ["Project", "The job the purchase is for, so the order counts as committed cost for that project. <span class='man-key'>+ New</span> opens a <b>New project</b> box to start one on the spot. The project is copied onto the bill.", "optional"],
+      ["Project", "The job the purchase is for, so the order counts as committed cost for that project. It is listed as its code and name, for example <i>BTW · Beirut Tower</i>, but the printed order shows only the code, so the supplier can follow up by code without seeing the project's real name. <span class='man-key'>+ New</span> opens a <b>New project</b> box for its name and code, suggested from the name. The project is copied onto the bill.", "optional"],
       ["Cost Code", "The budget bucket for job costing, such as materials or subcontract. It is set once for the whole order, not per line.", "optional"],
       ["Currency", "Always the company currency on this screen.", "auto"],
       ["Order Date", "The date the order is placed. It starts as today.", "auto"],
@@ -248,7 +248,7 @@ orbitScreenHelp({
       ["Edit", "Shown on a confirmed order to people who can manage Purchase. Opens its lines and details for changes. A line already received or billed cannot go below that quantity, change product or be removed, and receipts and bills already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed with its received and billed quantities, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
       ["Receipts", "The counter at the top of an order that has been received. Opens its receipt, or lets you pick one when there are several. A receipt with the wrong quantity is corrected there, with Edit."],
       ["&#8249; and &#8250;", "Beside the title when you opened the order from the list. Step to the previous or next order in the list's order without going back to it. Alt and the left or right arrow key do the same."],
-      ["Print", "Prints the order with sizes and areas, or saves it as a PDF."],
+      ["Print", "Prints the order for the supplier, or saves it as a PDF. Each row names its item (the product, with the line's description, such as a position mark, under it), with sizes and areas. When the order has a project, only the project's code is printed, never its name."],
       ["Bills", "The counter at the top of an order that has a bill. Opens the first bill made from it."],
       ["Confirm receipt (Goods Receipt page)", "Records what arrived, moves stock items into inventory and adds to each line's Received quantity."],
       ["+ Add a product and Scan barcode (Goods Receipt page)", "Add an extra line, typed or read from a barcode or QR label with the device camera."]
@@ -401,7 +401,7 @@ orbitScreenHelp({
     ],
     fields: [
       ["Title", "What the RFQ is for. It prints as the subject.", "optional"],
-      ["Project", "The job the purchase is for. It is copied onto the purchase order you award.", "optional"],
+      ["Project", "The job the purchase is for, listed as its code and name. It is copied onto the purchase order you award. The printed RFQ shows only the project's code, never its name.", "optional"],
       ["Cost Code", "The budget bucket for job costing. It is copied onto the awarded order and its lines.", "optional"],
       ["Deadline", "The date you need replies by. It prints as <i>Reply by</i>.", "optional"],
       ["Note", "A note added to the printed request after the standard wording.", "optional"],
@@ -422,7 +422,7 @@ orbitScreenHelp({
       ["+ Add item", "Adds an item to price. The &times; removes one; +size adds another size of the same item below it."],
       ["Award", "Saves, then creates a draft purchase order for that supplier with each item at their price turned into a price per item, the product's purchase tax, the project and cost code, and marks the RFQ Awarded. The cheapest supplier's button is emphasised."],
       ["Reopen", "On an awarded RFQ. Sets it back to Sent and clears the winner. The purchase order already created is not removed."],
-      ["Print RFQ", "Prints the request to send suppliers, with a blank column for their price."],
+      ["Print RFQ", "Prints the request to send suppliers, with a blank column for their price. Each row names its item (the product, with the line's description under it), and the header shows the project's code, never its name."],
       ["Print comparison", "Prints the comparison of every supplier's totals, with the lowest total named."]
     ],
     after: "An RFQ posts nothing. Award creates a draft purchase order, which also posts nothing until it is confirmed, received and billed. Prices you typed are kept, and Vendor Scorecards count how often each supplier's price was the lowest.",

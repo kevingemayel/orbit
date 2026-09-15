@@ -7052,6 +7052,29 @@
     var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
     return '<div class="pfoot">' + (t.footer ? esc(t.footer) + "<br>" : "") + co + '</div>';
   }
+  // The item a printed order or RFQ line is for: the product's name, with the line's
+  // own description under it when it says something more (a position mark such as GL01)
+  // and the supplier's code when there is one. Every row names its item.
+  function pdocItemHTML(prod, desc) {
+    desc = String(desc || "").trim(); if (desc === "Item" && prod) desc = "";
+    if (!prod || !prod.name) return esc(desc || "Item");
+    return '<b>' + esc(prod.name) + '</b>' +
+      (desc && desc !== prod.name ? '<div style="font-size:11px;color:#444;margin-top:2px">' + esc(desc) + '</div>' : '') +
+      (prod.supplier_code ? '<div style="font-size:10.5px;color:#666;margin-top:1px">Supplier code: ' + esc(prod.supplier_code) + '</div>' : '');
+  }
+  // A project code is the short abbreviation suppliers see on RFQs and purchase orders
+  // instead of the project's name. It is upper case and unique within the company.
+  function normProjCode(v) { return String(v || "").trim().toUpperCase().replace(/\s+/g, "-").slice(0, 20); }
+  function projCodeSuggest(name) {
+    var words = String(name || "").toUpperCase().replace(/[^A-Z0-9 ]+/g, " ").split(/\s+/).filter(Boolean);
+    if (!words.length) return "";
+    return (words.length === 1 ? words[0].slice(0, 4) : words.map(function (w) { return w.charAt(0); }).join("")).slice(0, 6);
+  }
+  async function projCodeTaken(code, exceptId) {
+    var hit = (((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("code", code).limit(2)).data) || []).filter(function (x) { return x.id !== exceptId; })[0];
+    return hit ? "The project " + hit.name + " already uses the code " + code + ". Choose another code." : "";
+  }
+  function projLabel(p) { return p ? ((p.code ? p.code + " · " : "") + (p.name || "")) : ""; }
   function pdocPrint(html) {
     document.documentElement.style.setProperty("--print-accent", printTplData().accent || "#2f6bff");
     var wrap = document.createElement("div"); wrap.className = "o-print"; wrap.innerHTML = html;
@@ -7324,7 +7347,8 @@
       if (item.percent_off) return list * (1 - Number(item.percent_off) / 100);
       return null;
     }
-    var orderProjects = ((await sb.from("projects").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
+    // active projects, and the order's own project even if it has closed since
+    var orderProjects = ((await sb.from("projects").select("id,name,code").eq("company_id", S.company.id).or("is_active.eq.true" + (order && order.project_id ? ",id.eq." + order.project_id : "")).order("name")).data) || [];
     var orderCosts = isSale ? [] : (((await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data) || []);
     var taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id).order("amount", { ascending: false })).data || []).filter(function (t) { var s = (t.scope || "").toLowerCase(); return !s || s === "both" || s === (isSale ? "sale" : "purchase"); });
     if (!taxes.length) taxes = ((await sb.from("taxes").select("id,name,amount,scope").eq("company_id", S.company.id)).data) || [];
@@ -7360,7 +7384,7 @@
     var partnerField = editable ? '<select id="o-partner">' + partners.map(function (p) { return '<option value="' + p.id + '"' + ((order && order.partner_id === p.id) ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(order && order.partners ? order.partners.name : "") + '</span>';
     var groups = '<div class="o-groups"><div>' +
       fld(isSale ? "Customer" : "Vendor", partnerField) +
-      fld("Project", editable ? '<div class="o-projrow"><select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(pr.name) + '</option>'; }).join("") + '</select><button type="button" id="o-newproj" class="o-newbtn" title="Start a new project for this order">+ New</button></div>' : '<span class="v">' + esc((orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0] || {}).name || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L. Use <b>+ New</b> to open a project on the spot without leaving this order.") +
+      fld("Project", editable ? '<div class="o-projrow"><select id="o-proj"><option value="">(none)</option>' + orderProjects.map(function (pr) { return '<option value="' + pr.id + '"' + ((order && order.project_id === pr.id) ? " selected" : "") + '>' + esc(projLabel(pr)) + '</option>'; }).join("") + '</select><button type="button" id="o-newproj" class="o-newbtn" title="Start a new project for this order">+ New</button></div>' : '<span class="v">' + esc(projLabel(orderProjects.filter(function (pr) { return order && pr.id === order.project_id; })[0]) || "-") + '</span>', "Tag this order to a project/site so open POs show as committed cost in the Project P&L. Use <b>+ New</b> to open a project on the spot without leaving this order.") +
       (isSale ? "" : fld("Cost Code", editable ? '<select id="o-costcode"><option value="">(none)</option>' + orderCosts.map(function (c) { return '<option value="' + c.id + '"' + ((order && order.cost_code_id === c.id) ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc((orderCosts.filter(function (c) { return order && c.id === order.cost_code_id; })[0] || {}).code || "-") + '</span>', "Cost bucket for job costing - this PO rolls up under this code in the Job Cost report.")) +
       fld("Currency", '<input readonly value="' + esc(S.company.currency_code) + '">') +
       '</div><div>' +
@@ -7595,18 +7619,23 @@
         var vname = ps2 && ps2.value ? ((partners.filter(function (p) { return p.id === ps2.value; })[0] || {}).name || "") : "";
         var suggest = (vname ? vname + " - " : "") + (order && order.number ? order.number : today());
         var m = document.createElement("div"); m.className = "modal on"; m.setAttribute("data-noi18n", "");
-        m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New project</h3><div class="form u-formpad"><label class="fl">Project name<input id="np-name" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px" value="' + esc(suggest) + '"></label><div class="sub">Creates the project and tags this order to it. You can fill in the rest later from the Projects app.</div></div><div class="foot"><button class="btn" id="np-cancel">Cancel</button><button class="btn pri u-accent" id="np-save">Create &amp; link</button></div></div>';
+        m.innerHTML = '<div class="sheet" style="max-width:440px"><h3>New project</h3><div class="form u-formpad"><label class="fl">Project name<input id="np-name" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px" value="' + esc(suggest) + '"></label><label class="fl u-mt10">Project code<input id="np-code" style="width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:14px;text-transform:uppercase" value="' + esc(projCodeSuggest(suggest)) + '" placeholder="e.g. BTW"></label><div class="sub">The code is a short abbreviation printed on RFQs and purchase orders instead of the project name, so suppliers follow up by code and never see the real name. Creates the project and tags this order to it; fill in the rest later from the Projects app.</div></div><div class="foot"><button class="btn" id="np-cancel">Cancel</button><button class="btn pri u-accent" id="np-save">Create &amp; link</button></div></div>';
         document.body.appendChild(m);
-        var nm = document.getElementById("np-name"); if (nm) { nm.focus(); nm.select(); }
+        var nm = document.getElementById("np-name"), npc = document.getElementById("np-code"), npcTouched = false;
+        if (nm) { nm.focus(); nm.select(); nm.oninput = function () { if (!npcTouched) npc.value = projCodeSuggest(nm.value); }; }
+        if (npc) npc.oninput = function () { npcTouched = true; };
         document.getElementById("np-cancel").onclick = function () { m.remove(); };
         document.getElementById("np-save").onclick = async function () {
           var name = (document.getElementById("np-name").value || "").trim(); if (!name) { toast("Give the project a name"); return; }
+          var pcode = normProjCode(npc ? npc.value : "");
+          if (!pcode) { toast("Enter a project code: a short abbreviation printed on RFQs and purchase orders instead of the project name."); if (npc) npc.focus(); return; }
+          var pcTaken = await projCodeTaken(pcode, null); if (pcTaken) { toast(pcTaken); return; }
           var partnerId = ps2 ? (ps2.value || null) : null;
-          var r = await sb.from("projects").insert({ company_id: S.company.id, name: name, partner_id: partnerId, is_active: true }).select("id,name").single();
+          var r = await sb.from("projects").insert({ company_id: S.company.id, name: name, code: pcode, partner_id: partnerId, is_active: true }).select("id,name,code").single();
           if (r.error) { toast("Could not create project: " + errMsg(r.error)); return; }
           var sel = document.getElementById("o-proj");
-          if (sel) { var opt = document.createElement("option"); opt.value = r.data.id; opt.textContent = r.data.name; sel.appendChild(opt); sel.value = r.data.id; }
-          orderProjects.push({ id: r.data.id, name: r.data.name });
+          if (sel) { var opt = document.createElement("option"); opt.value = r.data.id; opt.textContent = projLabel(r.data); sel.appendChild(opt); sel.value = r.data.id; }
+          orderProjects.push({ id: r.data.id, name: r.data.name, code: r.data.code });
           m.remove(); toast("Project created and linked");
         };
       };
@@ -7636,6 +7665,11 @@
       var dateV = (document.getElementById("o-date") || {}).value || (order && order.date_order) || "";
       var refV = (document.getElementById("o-ref") || {}).value || (order && order.note) || "";
       var sub = 0, tax = 0, isPO = !isSale;
+      // a supplier sees the project's code, never its name
+      var projSel = (document.getElementById("o-proj") || {}).value || (order && order.project_id) || "";
+      var projRec = orderProjects.filter(function (pr) { return pr.id === projSel; })[0];
+      var projCode = (isPO && projRec) ? (projRec.code || "") : "";
+      if (isPO && projRec && !projRec.code) toast("This order's project has no project code, so none is printed. Add one on the project.");
       function dimOf(l) {
         var w = (l.sw != null ? l.sw : ((l.width && l.height) ? l.width : null));
         var h = (l.sh != null ? l.sh : ((l.width && l.height) ? l.height : null));
@@ -7644,21 +7678,19 @@
         var area = (l.area != null ? l.area : ((l.width && l.height) ? Number(l.width) * Number(l.height) / 1e6 : null));
         return { w: w, h: h, len: len, thk: thk, area: area };
       }
-      var _prevName = null;   // print: repeat a description only when it changes (grouped dimension rows read cleaner)
       var body = lns.map(function (l, _pi) {
         var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
         var ls = Number(l.quantity || 0) * Number(l.unit_price || 0); sub += ls; tax += ls * amt / 100;
         var d = dimOf(l);
         var third = (d.len != null ? d.len : (d.thk != null ? d.thk : ""));
         var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
-        var nm = l.name || "";
-        var showName = (nm !== _prevName); _prevName = nm;
-        return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + (showName ? esc(nm) : "") + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+        // every row names its item: the product, with the line's description (a mark such as GL01) under it
+        return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
       }).join("");
-      var head = '<th class="r">Pos</th><th>Description</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
+      var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div></div>' +
-        '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + '</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
         '<table class="ptab ptab-grid"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div><div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(sub + tax) + '</span></div></div>' +
         pdocFoot() + '</div>';
@@ -8410,7 +8442,8 @@
     nodes = nodes || [];
     var sp = (p && p.spec) || {}, form = p.material_form || "generic";
     var matOpts = '<option value="">(none)</option>' + Object.keys(MATERIAL_DENSITY).map(function (m) { return '<option' + (sp.material === m ? " selected" : "") + '>' + m + '</option>'; }).join("");
-    var formSel = '<select id="ms-form">' + MATERIAL_FORMS.map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
+    // the glass unit form is no longer offered; a product already set to it keeps it
+    var formSel = '<select id="ms-form">' + MATERIAL_FORMS.filter(function (f) { return f[0] !== "glass" || form === "glass"; }).map(function (f) { return '<option value="' + f[0] + '"' + (form === f[0] ? " selected" : "") + '>' + f[1] + '</option>'; }).join("") + '</select>';
     var noTree = !nodes.length ? '<div class="sub" style="margin:2px 0 10px">No classification tree yet. Build it in <b>Inventory &rsaquo; Configuration &rsaquo; Classification</b>, then choose from it here.</div>' : "";
     return '<div class="o-matspec"><div class="o-cf-head">Classification</div>' + noTree +
       '<div class="sub" style="margin:2px 0 8px"><b>Family</b> is who makes it (brand &rsaquo; series &rsaquo; model). <b>Type</b> is what it is (material &rsaquo; group &rsaquo; part).</div>' +
@@ -15514,7 +15547,7 @@
     wireBc();
     var isNew = id === "new";
     var rfq = isNew ? { status: "draft", title: "Request for Quotation" } : ((await sb.from("rfqs").select("*").eq("id", id).maybeSingle()).data || {});
-    var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var projects = (await sb.from("projects").select("id,name,code").eq("company_id", S.company.id).order("name")).data || [];
     var ccs = (await sb.from("cost_codes").select("id,code,name").eq("company_id", S.company.id).eq("is_active", true).order("sort")).data || [];
     var vendorParts = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
     var products = ((await sb.from("products").select("id,name,default_code,supplier_code,family,spec,material_form,uom,cost_price,purchase_tax_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data) || [];
@@ -15596,7 +15629,7 @@
     function draw() {
       var header = '<div class="o-groups"><div>' +
         fld("Title", '<input id="rfq-title" value="' + esc(rfq.title || "") + '">') +
-        fld("Project", '<select id="rfq-proj"><option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (rfq.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>') +
+        fld("Project", '<select id="rfq-proj"><option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (rfq.project_id === p.id ? " selected" : "") + '>' + esc(projLabel(p)) + '</option>'; }).join("") + '</select>', "Printed on the RFQ as the project's code only; suppliers never see the project name.") +
         fld("Cost Code", '<select id="rfq-cc"><option value="">(none)</option>' + ccs.map(function (c) { return '<option value="' + c.id + '"' + (rfq.cost_code_id === c.id ? " selected" : "") + '>' + esc(c.code) + (c.name ? " - " + esc(c.name) : "") + '</option>'; }).join("") + '</select>') +
         '</div><div>' +
         fld("Deadline", '<input id="rfq-deadline" type="date" value="' + esc(rfq.deadline || "") + '">') +
@@ -15604,7 +15637,7 @@
         fld("Status", rfqBadge(rfq.status)) +
         '</div></div>';
       var lineRows = L.map(function (l, i) { var sel = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null; return '<tr data-k="' + l.k + '"><td class="num muted">' + (i + 1) + '</td><td>' + prodComboHTML("rl-prod", sel) + '</td><td><input class="rl-desc" value="' + esc(l.description || "") + '" placeholder="Item to quote"></td><td class="rl-meas-cell" style="min-width:150px"></td><td class="rl-area-cell num" style="min-width:64px;white-space:nowrap"></td><td style="min-width:72px">' + unitSelectHTML("rl-unit", l.unit, uoms) + '</td><td><input class="rl-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:76px"></td><td><select class="rl-dest">' + destOptsHTML(l.destination) + '</select></td><td class="l-acts"><button class="rl-addsize" type="button" title="Add another size of this item">+size</button><button class="del rl-del" data-i="' + i + '" aria-label="Remove line">&times;</button></td></tr>'; }).join("");
-      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th class="num" style="width:70px">Area</th><th>Unit</th><th class="u-r">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new u-mt6" id="rl-add">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (glass W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
+      var linesTbl = '<h3 style="margin:16px 0 6px">Items to quote</h3><div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:180px">Product</th><th>Description</th><th style="min-width:150px">Measure</th><th class="num" style="width:70px">Area</th><th>Unit</th><th class="u-r">Qty</th><th style="width:112px">Destination</th><th style="width:56px"></th></tr></thead><tbody id="rl-body">' + lineRows + '</tbody></table></div><button class="o-new u-mt6" id="rl-add">+ Add item</button><span class="sub" style="margin-left:12px">Search your catalog by name, code, family or material; the right measure (sheet W&times;H, bar length, container, roll) appears per item. Set the <b>destination</b> (warehouse / factory / site). +size adds another size.</span>';
       var chips = V.map(function (v, i) { return '<span class="rfq-vchip">' + esc(vname(v.partner_id)) + ' <button class="rfq-vdel" data-i="' + i + '" aria-label="Remove supplier">&times;</button></span>'; }).join("");
       var addOpts = vendorParts.filter(function (p) { return !V.some(function (v) { return v.partner_id === p.id; }); }).map(function (p) { return '<option value="' + p.id + '">' + esc(p.name) + '</option>'; }).join("");
       var vendorsSec = '<h3 style="margin:18px 0 6px">Suppliers invited</h3><div class="rfq-vchips">' + (chips || '<span class="muted">None yet.</span>') + '</div>' + (vendorParts.length ? '<div class="u-mt8"><select id="rfq-addv" style="max-width:280px"><option value="">+ Add a supplier...</option>' + addOpts + '</select></div>' : '<div class="sub">Add vendor contacts first (Contacts).</div>');
@@ -15659,15 +15692,17 @@
       var ro = document.getElementById("rfq-reopen"); if (ro) ro.onclick = async function () { await sb.from("rfqs").update({ status: "sent", awarded_partner_id: null }).eq("id", id); renderRFQForm(id); };
       function printRfq() {
         syncFromDom();
-        var _rprev = null;
+        // a supplier sees the project's code, never its name
+        var rp = projects.filter(function (x) { return x.id === rfq.project_id; })[0], rfqCode = rp ? (rp.code || "") : "";
+        if (rp && !rp.code) toast("This RFQ's project has no project code, so none is printed. Add one on the project.");
         var body = L.filter(function (l) { return l.description || l.product_id; }).map(function (l, _pi) {
           var _a = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6;
           var dim = (l.width && l.height) ? (l.width + "x" + l.height + (_a ? " (" + msFmt(_a, 3) + " m2)" : "")) : (l.size || "");
-          var nm = l.description || "", showN = (nm !== _rprev); _rprev = nm;
-          return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + (showN ? esc(nm) : "") + '</td><td>' + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td><td>' + esc(l.unit || "") + '</td><td></td></tr>';
+          var prodL = l.product_id ? products.filter(function (x) { return x.id === l.product_id; })[0] : null;
+          return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + pdocItemHTML(prodL, l.description) + '</td><td>' + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td><td>' + esc(l.unit || "") + '</td><td></td></tr>';
         }).join("");
         var html = '<div class="pinv">' + pdocHead("Request for Quotation", rfq.number || "RFQ") +
-          '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div></div><div><div class="pl">Reply by</div><div class="pv">' + esc(rfq.deadline || "-") + '</div></div></div>' +
+          '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div>' + (rfqCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(rfqCode) + '</div>' : '') + '</div><div><div class="pl">Reply by</div><div class="pv">' + esc(rfq.deadline || "-") + '</div></div></div>' +
           '<div style="margin:2px 0 12px;color:#444;font-size:12px">Please quote your best price for each item below' + (rfq.note ? '. ' + esc(rfq.note) : '') + '.</div>' +
           '<table class="ptab"><thead><tr><th class="r">Pos</th><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
           pdocFoot() + '</div>';
@@ -15685,7 +15720,7 @@
           var valid = tots.filter(function (x) { return x != null; }), best = valid.length ? Math.min.apply(null, valid) : null;
           var cells = V.map(function (v, ci) { var t = tots[ci]; if (t != null) vt[v.partner_id] += t; return '<td class="r"' + (best != null && t === best && valid.length > 1 ? ' style="font-weight:700"' : '') + '>' + (t != null ? money(t) : "-") + '</td>'; }).join("");
           var dim = (l.width && l.height) ? " (" + (l.width + "x" + l.height) + ")" : "";
-          return '<tr><td>' + esc(l.description || "") + esc(dim) + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
+          return '<tr><td>' + pdocItemHTML(prod, l.description) + (dim ? '<div style="font-size:11px;color:#444">' + esc(dim.trim()) + '</div>' : '') + '</td><td class="r">' + (Number(l.quantity) || 0) + '</td>' + cells + '</tr>';
         }).join("");
         var cheapest = null, cmin = null; V.forEach(function (v) { var t = vt[v.partner_id]; if (t > 0 && (cmin === null || t < cmin)) { cmin = t; cheapest = v.partner_id; } });
         var totCells = V.map(function (v) { return '<td class="r"' + (v.partner_id === cheapest ? ' style="font-weight:800"' : '') + '>' + money(vt[v.partner_id]) + '</td>'; }).join("");
@@ -17731,9 +17766,10 @@
           sb.from("timesheets").select("project_id,hours").eq("company_id", S.company.id)
         ]).then(async function (res) { var h = {}; (res[1].data || []).forEach(function (t) { h[t.project_id] = (h[t.project_id] || 0) + Number(t.hours || 0); }); var rows = (res[0].data || []).map(function (p) { p._hours = h[p.id] || 0; return p; }); await attachThumbs(rows, "project"); return rows; });
       },
-      searchText: function (p) { return (p.name || "") + " " + (p.partners ? p.partners.name : ""); },
+      searchText: function (p) { return (p.code || "") + " " + (p.name || "") + " " + (p.partners ? p.partners.name : ""); },
       columns: [
         { label: "", cls: "thumbcol", get: function (p) { return thumbCell(p); } },
+        { label: "Code", get: function (p) { return p.code ? '<b>' + esc(p.code) + '</b>' : '<span class="muted">none</span>'; } },
         { label: "Project", edit: { field: "name", type: "text" }, get: function (p) { return '<b>' + esc(p.name) + '</b>'; } },
         { label: "Customer", get: function (p) { return esc(p.partners ? p.partners.name : ""); } },
         { label: "Deadline", edit: { field: "date_deadline", type: "date" }, get: function (p) { return '<span class="muted">' + esc(p.date_deadline || "") + '</span>'; } },
@@ -17787,6 +17823,7 @@
       '<div class="o-sheet">' + smart + titleRowHTML('<input id="pf-name" value="' + esc(p.name || "") + '" placeholder="Project name">', "project", id) +
       (srcTender ? '<div class="sub" style="margin:-2px 0 8px"><b>From tender:</b> <button class="lnk" id="pf-fromtender">' + esc(srcTender.number || srcTender.name || "tender") + '</button> &middot; budget &amp; BOQ carried from the estimate</div>' : '') +
       '<div class="o-groups"><div>' +
+      fld("Project Code", '<input id="pf-code" value="' + esc(p.code || "") + '" placeholder="e.g. BTW" style="text-transform:uppercase">', "Required. A short abbreviation of the project, unique in the company. RFQs and purchase orders print this code instead of the project name, so suppliers can follow up by code without seeing the real name.") +
       fld("Customer", '<select id="pf-cust">' + custOpts + '</select>', "The client this project is delivered for.") +
       fld("Billing", '<select id="pf-bill">' + billOpts + '</select>', "How the project is billed: non-billable, fixed price, time & material, or milestones.") +
       '</div><div>' +
@@ -17796,7 +17833,6 @@
       fld("Stage", '<select id="pf-status">' + PROJECT_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + (((p.status || "active") === s[0]) ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "The lifecycle stage, used for the drag-and-drop board view.") +
       '</div></div>' +
       '<div class="o-groups"><div>' +
-      fld("Project Code", '<input id="pf-code" value="' + esc(p.code || "") + '" placeholder="e.g. PRJ-001">', "Your internal reference for this contract.") +
       fld("Contract Value", '<input id="pf-cval" type="number" step="0.01" value="' + (boqTot > 0 ? boqTot : (p.contract_value || 0)) + '"' + (boqTot > 0 ? ' readonly' : '') + '>', boqTot > 0 ? "Set automatically from the Bill of Quantities. Edit the BOQ to change it." : "The awarded contract sum (grows with approved variations).") +
       '</div><div>' +
       fld("Retention %", '<input id="pf-ret" type="number" step="0.1" value="' + (p.retention_pct || 0) + '">', "Percent held back on each progress certificate, e.g. 10.") +
@@ -17806,12 +17842,20 @@
       (id !== "new" ? '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Tasks</div></div><div class="o-nb-pg">' + tasksTab + '</div></div>' : "") +
       '</div>';
     document.getElementById("pf-discard").onclick = function () { go("proj.list"); };
+    // the code follows the name until someone types their own; a project without one gets a suggestion
+    var pfCode = document.getElementById("pf-code"), pfName = document.getElementById("pf-name"), pfCodeTouched = !!p.code;
+    if (!p.code && p.name) pfCode.value = projCodeSuggest(p.name);
+    pfCode.addEventListener("input", function () { pfCodeTouched = true; });
+    if (pfName) pfName.addEventListener("input", function () { if (!pfCodeTouched) pfCode.value = projCodeSuggest(pfName.value); });
     wireAttach("project");
     custPickerAdd("pf-cust");
     var pft = document.getElementById("pf-fromtender"); if (pft) pft.onclick = function () { renderTenderForm(srcTender.id); };
     document.getElementById("pf-save").onclick = async function () {
       var name = gv("pf-name"); if (!name) { toast("Name required"); return; }
-      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", status: document.getElementById("pf-status").value, code: gv("pf-code"), contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
+      var pcode = normProjCode(gv("pf-code"));
+      if (!pcode) { toast("Enter a project code: a short abbreviation printed on RFQs and purchase orders instead of the project name."); document.getElementById("pf-code").focus(); return; }
+      var pcTaken = await projCodeTaken(pcode, id === "new" ? null : id); if (pcTaken) { toast(pcTaken); document.getElementById("pf-code").focus(); return; }
+      var row = { name: name, partner_id: document.getElementById("pf-cust").value || null, billing_type: document.getElementById("pf-bill").value, date_start: gv("pf-start") || null, date_deadline: gv("pf-deadline") || null, is_active: document.getElementById("pf-active").value === "1", status: document.getElementById("pf-status").value, code: pcode, contract_value: (boqTot > 0 ? boqTot : (parseFloat(gv("pf-cval")) || 0)), retention_pct: parseFloat(gv("pf-ret")) || 0, advance_amount: parseFloat(gv("pf-adv")) || 0 };
       var cerrPj = customError("project"); if (cerrPj) { toast(cerrPj); return; }
       row.custom = collectCustom("project");
       if (id === "new") { row.company_id = S.company.id; var r = await sb.from("projects").insert(row).select("id").single(); if (r.error) { toast("Could not save: " + errMsg(r.error)); return; } await mediaFlush("project", r.data.id); }
@@ -25777,7 +25821,7 @@
     var t = (await sb.from("tenders").select("*").eq("id", tenderId).maybeSingle()).data;
     if (!t) { toast("Tender not found"); return; }
     if (!t.partner_id) { toast("Set a customer on the tender before marking it Won - the project needs a client to bill against."); return; }
-    var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: t.number || "", partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
+    var proj = await sb.from("projects").insert({ company_id: S.company.id, name: t.name || "Project", code: normProjCode(t.number) || null, partner_id: t.partner_id || null, contract_value: Number(t.total_sell || 0), source_tender_id: tenderId, is_active: true }).select("id").single();
     if (proj.error) { toast("Could not create project: " + errMsg(proj.error)); return; }
     var pid = proj.data.id;
     var boq = [], buds = [];
