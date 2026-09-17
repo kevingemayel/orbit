@@ -39,17 +39,20 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const invId = body.invoice_id;
     if (!invId) return json({ error: "Missing invoice id." }, 400);
+    // an id goes into a query string, so it is checked and encoded rather than trusted
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(invId))) return json({ error: "That invoice id is not valid." }, 400);
+    const invQ = encodeURIComponent(String(invId));
     if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 200);
 
     stage = "fetch-invoice";
-    const iRes = await tfetch(supaUrl + "/rest/v1/invoices?id=eq." + invId + "&select=*,partners(name,email),companies(name,legal_name,country,currency_code)", { headers: authHdr }, 8000);
+    const iRes = await tfetch(supaUrl + "/rest/v1/invoices?id=eq." + invQ + "&select=*,partners(name,email),companies(name,legal_name,country,currency_code)", { headers: authHdr }, 8000);
     const iBody = await iRes.json().catch(() => null);
     if (!Array.isArray(iBody)) return json({ error: "Could not load the invoice.", stage, detail: iBody }, 200);
     const inv = iBody[0];
     if (!inv) return json({ error: "Invoice not found." }, 404);
 
     stage = "fetch-lines";
-    const lRes = await tfetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invId + "&select=name,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr }, 8000);
+    const lRes = await tfetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invQ + "&select=name,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr }, 8000);
     const lines = await lRes.json().catch(() => []);
 
     const recipient = (body.to || (inv.partners && inv.partners.email) || "").trim();
@@ -62,6 +65,22 @@ export async function onRequestPost(context) {
     const from = (env.INVOICE_FROM || "invoices@spacework.ai").trim();
     const note = typeof body.note === "string" ? body.note.slice(0, 2000) : "";
     const subject = (body.subject ? String(body.subject).replace(/[\r\n]+/g, " ").trim().slice(0, 200) : "") || (docName + " " + (inv.number || "") + " from " + (co.name || "Space Work"));
+
+    // The database decides whether this may be sent at all: the company must be the
+    // caller's, the address must be one the company already holds, and there are hourly
+    // limits per company and per person. It writes every attempt down either way.
+    stage = "check-send";
+    let sendOk = { ok: false, reason: "The send could not be checked." };
+    try {
+      const ck = await tfetch(supaUrl + "/rest/v1/rpc/email_send_check", {
+        method: "POST",
+        headers: Object.assign({ "Content-Type": "application/json" }, authHdr),
+        body: JSON.stringify({ p_company: inv.company_id, p_kind: isSale ? "invoice" : "bill", p_to: recipient, p_doc: invId, p_subject: subject })
+      }, 8000);
+      const cj = await ck.json().catch(function () { return null; });
+      if (cj && typeof cj.ok === "boolean") sendOk = cj;
+    } catch (e) { sendOk = { ok: false, reason: "The send could not be checked. Try again." }; }
+    if (!sendOk.ok) return json({ error: sendOk.reason || "That email may not be sent." }, 403);
 
     if (body.dry_run) return json({ ok: true, dry: true, version: VERSION, recipient, from, lineCount: (Array.isArray(lines) ? lines.length : 0), keyPresent: !!env.RESEND_API_KEY, number: inv.number });
 

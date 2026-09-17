@@ -42,6 +42,8 @@ export async function onRequestPost(context) {
     const body = await request.json().catch(() => ({}));
     const apprId = body.approval_id;
     if (!apprId) return json({ error: "Missing approval id." }, 400);
+    // an id goes into a query string, so it is checked and encoded rather than trusted
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(apprId))) return json({ error: "That approval id is not valid." }, 400);
     if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 200);
 
     // 1) Mint (or reuse) the decision token. The RPC runs as the caller, so RLS
@@ -75,7 +77,7 @@ export async function onRequestPost(context) {
     if (!send.ok) return json({ error: (sj && (sj.message || (sj.error && sj.error.message))) || ("Resend returned " + send.status) }, 200);
 
     stage = "mark";
-    await tfetch(supaUrl + "/rest/v1/approvals?id=eq." + apprId,
+    await tfetch(supaUrl + "/rest/v1/approvals?id=eq." + encodeURIComponent(String(apprId)),
       { method: "PATCH", headers: Object.assign({ Prefer: "return=minimal" }, authHdr), body: JSON.stringify({ notified_at: new Date().toISOString() }) }, 9000);
 
     return json({ ok: true, to });

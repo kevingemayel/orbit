@@ -417,7 +417,7 @@ orbitScreenHelp({
 
   "rep.cashfwd": {
     title: "Cash Flow Forecast",
-    what: "The <b>Cash Flow Forecast</b> projects how much cash you will have over the coming weeks or months. It starts from your bank and cash balances today, adds money expected in (open customer invoices by due date, expected event revenue, retention due back on projects) and takes away money expected out (open bills by due date, purchase orders not yet billed, scheduled event payments, and your monthly payroll). It warns you if cash is heading below zero.",
+    what: "The <b>Cash Flow Forecast</b> projects how much cash you will have over the coming weeks or months. It starts from your bank and cash balances today, adds money expected in (open customer invoices by due date, expected event revenue, retention due back on projects) and takes away money expected out (open bills by due date, purchase orders not yet billed, scheduled event payments, and your monthly payroll). Everything is converted into your company currency at the latest exchange rate first, so the whole forecast is one currency. It warns you if cash is heading below zero.",
     when: [
       "Every week or two, to spot a cash gap before it arrives.",
       "Before committing to a large purchase order or hiring.",
@@ -459,7 +459,7 @@ orbitScreenHelp({
       ["The first week has a huge outflow or inflow", "Anything overdue, or dated before this week, or with no date, is placed in the first period. Pay or collect the overdue items, or correct their due dates."],
       ["A payment I know is coming is missing", "It is further out than the horizon, or it is still a draft invoice or bill. Choose a longer horizon, or post the document."],
       ["Payroll looks wrong", "The forecast adds the wage of every running contract once per month end. Update or close contracts that have changed."],
-      ["A foreign-currency invoice looks too large", "Open amounts are added as they are on the document, without converting the currency."]
+      ["A foreign-currency invoice looks smaller or larger than the document", "Open amounts are converted into the company currency at the latest exchange rate before they are bucketed, so the forecast is one currency throughout. If a currency has no rate under Exchange Rates its amount is left as it is; add the rate."]
     ],
     tips: [
       "Keep purchase orders' planned dates realistic: they decide which week the money leaves.",
@@ -469,7 +469,7 @@ orbitScreenHelp({
 
   "rep.collections": {
     title: "Collections",
-    what: "<b>Collections</b> is your chase list: every <b>posted</b> customer invoice whose due date has passed (or, when it has no due date, whose invoice date has) and that still has money owing. Customers with the most overdue come first, and inside each one the invoice that is most days late comes first. Next to each invoice it suggests a step from your <b>Follow-up Levels</b> and shows the last contact you logged, so you can work down the list and record every call, email or promise to pay.",
+    what: "<b>Collections</b> is your chase list: every <b>posted</b> customer invoice whose due date has passed (or, when it has no due date, whose invoice date has) and that still has money owing. Customers with the most overdue come first, and inside each one the invoice that is most days late comes first. Next to each invoice it suggests a step from your <b>Follow-up Levels</b> and shows the last contact you logged, so you can work down the list and record every call, email or promise to pay. Totals are in your company currency, converted at the latest exchange rate; an invoice raised in another currency shows that original amount under the converted one.",
     when: [
       "Once or twice a week, to decide who to call today.",
       "After a customer promises to pay, to record the date so you know when to chase again.",
@@ -516,7 +516,7 @@ orbitScreenHelp({
       ["Suggested shows -", "You have no follow-up levels, or the invoice is fewer days late than your first level. Add levels in Follow-up Levels."],
       ["An invoice shows (no due date) in the Due column", "It has no due date, so it counts as late from its invoice date, the same as in Aged Receivable. Give it a due date if one was agreed."],
       ["The customer is still listed after I logged Paid", "A follow-up does not record money. Register the payment on the invoice."],
-      ["The totals mix currencies", "Amounts are added as they are on each invoice, without converting a foreign currency."]
+      ["An amount has a second, smaller line under it", "That invoice was raised in another currency. The big figure is what it is worth in your company currency, which is what every total on the screen adds up; the small one is what the customer actually owes. A currency with no rate under Exchange Rates is left as it is, so add the rate."]
     ],
     tips: [
       "Always set a Next action date: it is the reminder of when to call again.",
@@ -566,11 +566,12 @@ orbitScreenHelp({
       ["The tax differs from the VAT accounts in the General Ledger", "The report adds the VAT each document posted to the VAT on sales and VAT on purchases accounts chosen in Companies, in the company currency. A manual journal on a VAT account, or a VAT account changed since the documents were posted, makes the two differ."],
       ["(n) posted document(s) have no journal entry, so their figures are worked out from their lines at the latest exchange rate.", "Those documents are marked posted but have no entry in the ledger. Data Health Check lists them; pass the numbers to whoever looks after your books."],
       ["A row reads VAT not matched to a tax", "A document posted VAT, but none of its lines names a tax any more. Open the document and check the tax on its lines."],
+      ["A row reads Tax at 11% (tax deleted)", "Those lines were taxed at that rate when they posted, but the tax itself has since been deleted. The figures are right; recreate the tax if you want the row to carry its name again."],
       ["A sale is missing", "The invoice is still a draft, or its invoice date is outside the period."]
     ],
     tips: [
       "Give every sale and purchase line a tax, even a zero-rated one, so the report shows it on the right row.",
-      "When one document has lines at different rates, the VAT it posted is shared between those rates in proportion to each line's tax.",
+      "When one document has lines at different rates, the VAT it posted is shared between those rates using the rate each line was taxed at when the document posted. Changing a rate today does not move VAT between the rows of a return you already filed.",
       "The note under the table sums it up: payable is output minus input, credit notes are netted out, posted documents only."
     ]
   },

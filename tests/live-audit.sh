@@ -36,6 +36,9 @@ PA2=aaaa0000-0000-4000-8000-0000000000a2; MA2=aaaa0000-0000-4000-8000-0000000000
 EC=orbit-audit-c@example.com; FA2="$OA/partner/$PA2/audit.jpg"
 # a fourth person: a sales representative in company A, on the real job template
 ED=orbit-audit-d@example.com
+# a ledger to try to write into, and two orders: one theirs, one a colleague's
+JA=aaaa0000-0000-4000-8000-0000000000f1; BA=aaaa0000-0000-4000-8000-0000000000f2
+SOD=aaaa0000-0000-4000-8000-0000000000f3; SOA=aaaa0000-0000-4000-8000-0000000000f4
 # a posted invoice in company A, in the sibling A2 and in tenant B, for Edit
 INVA=aaaa0000-0000-4000-8000-0000000000e1; INVA2=aaaa0000-0000-4000-8000-0000000000e2
 INVB=bbbb0000-0000-4000-8000-0000000000e3
@@ -66,6 +69,9 @@ teardown() {
   sql "delete from public.event_guests where id = '$EGB'" >/dev/null
   sql "delete from public.event_events where id = '$EVB'" >/dev/null
   sql "delete from public.privacy_requests where company_id in ('$CA','$CB','$CA2')" >/dev/null
+  sql "delete from public.journal_lines where company_id in ('$CA','$CB','$CA2')" >/dev/null
+  sql "delete from public.journal_entries where company_id in ('$CA','$CB','$CA2')" >/dev/null
+  sql "delete from public.sale_orders where company_id in ('$CA','$CB','$CA2')" >/dev/null
   sql "delete from public.companies where id in ('$CA','$CB','$CA2','$CA3')" >/dev/null
   sql "delete from public.orgs where id in ('$OA','$OB')" >/dev/null
   for e in "$EA" "$EB" "$EC" "$ED"; do
@@ -124,6 +130,11 @@ UD=$(mkuser "$ED")
 sql "insert into public.org_members (org_id,user_id,role,status) values ('$OA','$UD','sales_representative','active')" >/dev/null
 # contacts are read through the person's active company, as the app sets it on sign-in
 sql "insert into public.profiles (id, active_company_id) values ('$UD','$CA') on conflict (id) do update set active_company_id = excluded.active_company_id" >/dev/null
+# a journal, a book and two sales orders, so "an entry belongs to an app" and "own
+# records" can be probed by trying them rather than asserted from the schema
+sql "insert into public.journals (id,company_id,code,name) values ('$JA','$CA','MISC','ORBITAUDIT Misc') on conflict (id) do nothing" >/dev/null
+sql "insert into public.books (id,company_id,name,is_default,is_primary) values ('$BA','$CA','ORBITAUDIT Book',true,true) on conflict (id) do nothing" >/dev/null
+sql "insert into public.sale_orders (id,company_id,number,state,date_order,user_id) values ('$SOD','$CA','AUDIT/SO/D','draft',current_date,'$UD'),('$SOA','$CA','AUDIT/SO/A','draft',current_date,'$UA') on conflict (id) do nothing" >/dev/null
 HTD=$(curl -s -X POST "$API/auth/v1/admin/generate_link" -H "apikey: $SRV" -H "Authorization: Bearer $SRV" \
      -H "Content-Type: application/json" -d "{\"type\":\"magiclink\",\"email\":\"$ED\"}" \
      | sed -n 's/.*"hashed_token":"\([^"]*\)".*/\1/p')
@@ -213,6 +224,10 @@ code_is() { # label actual-http-code expected-first-digit
 code_is "lists the API keys"                   "$(rpc_code api_key_list "{\"p_company\":\"$CA\"}")" 4
 code_is "lists the webhooks and their secrets" "$(rpc_code webhook_list "{\"p_company\":\"$CA\"}")" 4
 probe "exports a person's data"                      deny  POST "rpc/gdpr_export" "{\"p_company\":\"$CA\",\"p_kind\":\"partner\",\"p_id\":\"$PAE\"}"
+probe "writes a manual journal voucher"              deny  POST "journal_entries" "{\"company_id\":\"$CA\",\"journal_id\":\"$JA\",\"book_id\":\"$BA\",\"date\":\"$(date +%F)\",\"currency_code\":\"USD\",\"state\":\"draft\",\"narration\":\"ORBITAUDIT manual\"}"
+probe "writes a payroll entry"                       deny  POST "journal_entries" "{\"company_id\":\"$CA\",\"journal_id\":\"$JA\",\"book_id\":\"$BA\",\"date\":\"$(date +%F)\",\"currency_code\":\"USD\",\"state\":\"draft\",\"source_type\":\"payslip\",\"narration\":\"ORBITAUDIT payslip\"}"
+probe "reads the order that is theirs"               allow GET  "sale_orders?id=eq.$SOD&select=id,number"
+probe "reads a colleague's order"                    deny  GET  "sale_orders?id=eq.$SOA&select=id,number"
 JWT=$JWTA
 code_is "the owner still lists the API keys"   "$(rpc_code api_key_list "{\"p_company\":\"$CA\"}")" 2
 code_is "the owner still lists the webhooks"   "$(rpc_code webhook_list "{\"p_company\":\"$CA\"}")" 2

@@ -73,6 +73,10 @@ const MUTATIONS = {
     s => s.replace("var cid = S.company.id, cashGl = pf.cashGl", 'var guess = cashAcctByCode(chart, "5300"); var cid = S.company.id, cashGl = pf.cashGl'),
   "keyboard data entry runs from one engine":
     s => s.replace('document.addEventListener("keydown", keyflowKey, true)', 'document.addEventListener("keydown", keyflowGone, true)'),
+  "the allowed-networks rule belongs to the database, and the app only explains it":
+    s => s.replace("S.ipStatus = await ipStatus();", "S.ipStatus = null;"),
+  "the access review reads the app map instead of a list of its own":
+    s => s.replace('to: "inv.receipts"', 'to: "inv.nowhere"'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

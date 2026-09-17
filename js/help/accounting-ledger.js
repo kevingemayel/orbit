@@ -843,6 +843,7 @@ orbitScreenHelp({
       ["Default income", "Accounting accounts. Used by an invoice line with no account of its own. Empty means the account coded 7000.", "optional"],
       ["Default expense", "Accounting accounts. Used by a bill line with no account of its own. Empty means the account coded 6000.", "optional"],
       ["Salaries payable", "Accounting accounts. Net pay owed to staff: a posted payslip credits it, and a Salary payment in Counter starts on it, so paying the salary clears what the payslip owes. There is no code to fall back on: while it is empty, payslips refuse to post and Counter asks you to choose the account.", "optional"],
+      ["Payroll deductions", "Accounting accounts. Tax withheld, social security and anything else kept back from pay, plus the employer's own share, until it is paid over: a posted payslip credits it. There is no code to fall back on, so while it is empty a payslip that keeps money back refuses to post and says so.", "optional"],
       ["Stock on hand", "Stock accounting. What the warehouse is worth: a receipt debits it, a delivery credits it. Empty means the account coded 3100.", "optional"],
       ["Cost of sales", "Stock accounting. What goods cost you, charged when they leave. Empty means the account coded 6000.", "optional"],
       ["Received not invoiced", "Stock accounting. Holds the value of goods received until the supplier's bill arrives. Empty means the account coded 4700.", "optional"],

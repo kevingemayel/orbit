@@ -51,17 +51,18 @@ orbitScreenHelp({
       ["Role (Invite a teammate)", "What they will be able to see and do, from the roles in Roles &amp; Permissions, grouped by job family. Only roles ranked below yours are listed, and the list starts on Employee.", "required"],
       ["Access ends (Invite a teammate)", "The last day the person can sign in to this organisation. Leave it empty for no end date. An External Auditor must have one, and access stops at the end of that day without anyone having to remember to remove them.", "optional"],
       ["Company access (Invite a teammate)", "Only shown when your organisation has more than one company. <b>All companies</b> means every company, including ones added later. Untick it and tick the companies they may work in. Ticking none also means all companies.", "optional"],
-      ["Role (on a person's row)", "Changes that person's role at once, with no Save button. It is a list only for people ranked below you, and roles at or above your rank are greyed out unless your role has full access. For anyone else the role shows as plain text.", "optional"],
+      ["Role (on a person's row)", "Changes that person's role at once, with no Save button. It is a list only for people ranked below you, and roles at or above your own rank are greyed out, because the database refuses those whatever your role holds. For anyone ranked at or above you the role shows as plain text and their row reads <i>Ranked at or above you</i>.", "optional"],
       ["Company access (Companies button)", "The same tick list, for someone already on the team. A member limited to some companies only sees and works in those companies.", "optional"]
     ],
     buttons: [
+      ["Access review", "Opens the Access review: one printable page showing what every person on this team can actually open, the money they see, what they may approve, and the questions worth asking about each of them. Shown when you can manage the team."],
       ["Manage roles &amp; permissions", "Opens Roles &amp; Permissions. Shown only when your role has full access or can manage roles."],
       ["+ Invite teammate", "Opens the Invite a teammate window. Shown only when you can manage the team: your role has full access or can manage roles, and you are not limited to some companies."],
       ["Send invitation", "Saves the pending invitation and emails it to the address. If the email fails, the message says so and the invitation still stands."],
       ["Cancel", "Closes the window without inviting anyone."],
       ["Companies", "On the row of someone ranked below you, when you have more than one company. Opens the Company access window for that person."],
       ["Save (Company access)", "Saves which companies the person can see and work in."],
-      ["Access ends", "On the row of someone ranked below you. Sets or clears the last day of their access. Their row then shows <i>Until</i> and the date, or <i>Access ended</i> once it has passed. Choosing External Auditor as a role asks for this date first."],
+      ["Access ends", "On the row of someone ranked below you. Sets or clears the last day of their access. Their row then shows <i>Until</i> and the date, or <i>Access ended</i> once it has passed. Choosing External Auditor as a role asks for this date first, and on an External Auditor the date cannot be cleared afterwards, only moved."],
       ["Suspend", "Switches the person's access off without removing them. While suspended they see none of the organisation's companies and cannot change anything. Their role and companies are kept."],
       ["Reactivate", "Shown on a suspended person. Gives their access back with the same role and companies."],
       ["Remove", "Asks you to confirm, then takes the person off the team straight away. Their work stays in Orbit, and you can invite them again later."],
@@ -71,6 +72,7 @@ orbitScreenHelp({
     after: "An invitation does nothing until the person accepts it. Someone new to Orbit sees a <b>You&rsquo;re invited</b> page after signing in with the invited address; someone who already uses Orbit sees a banner on their home page. Either way they press <span class='man-key'>Join</span>, and they join the team with the role and companies on the invitation. From then on the database only shows them the companies they were given, none at all while they are suspended, and none after their access end date. Managing the team is also checked by the database: only members whose role has full access or can manage roles, and who are not limited to some companies, can invite, change roles, set company access and end dates, suspend or remove, and only for people ranked below them. Nobody can change their own role, companies or end date. The role itself is enforced by the database too: what the person may save, delete and approve in each app, and whether they see costs, salaries or bank figures.",
     links: [
       { name: "Roles &amp; Permissions", how: "Defines each role in the Role list: what it can see and do, and its rank.", to: "settings.roles" },
+      { name: "Access review", how: "Turns this table into one printable page: what each person can actually open, the money they see, and what looks wrong.", to: "settings.access" },
       { name: "Companies", how: "The companies in the Company access list are the companies of your organisation.", to: "companies" },
       { name: "Employees", how: "Approval rules name an employee, not a team member, as the approver, and the approval email goes to that employee's work email.", to: "hr.emp" },
       { name: "Portal Access", how: "Customers, suppliers and residents get their own portal sign-in there instead. They are never team members.", to: "portal.admin" }
@@ -81,7 +83,7 @@ orbitScreenHelp({
       ["You can only invite people to a role below your own.", "The role you picked is ranked at or above yours. Pick a lower role, or ask someone ranked higher to invite them."],
       ["That person is already on this team.", "The address already belongs to a team member. Find them in the Team table and change their role or companies there."],
       ["That role does not exist.", "The role was deleted after the window opened. Close the window, open it again and pick a role from the fresh list."],
-      ["You can only change the role of people below your own rank.", "The person is ranked at or above you. With full access the list still opens for them, but the database refuses the change. Ask someone ranked higher."],
+      ["You can only change the role of people below your own rank.", "The person is ranked at or above you, so Orbit shows their row as <i>Ranked at or above you</i> with no buttons. Two Owners cannot manage each other; ask someone ranked higher, or a platform operator."],
       ["You can only assign a role below your own.", "The new role is ranked at or above yours. Pick a lower one."],
       ["You cannot change the role of the last owner. Make someone else an owner first.", "The organisation must keep an active Owner. Give another person the Owner role first, then change this one."],
       ["You do not have permission to change this member.", "Shown by Companies, Suspend or Reactivate when the person is ranked at or above you, or you cannot manage the team."],
@@ -98,7 +100,67 @@ orbitScreenHelp({
       "Suspend rather than remove when someone may come back: their role and company access are kept.",
       "Unticking every company does not lock anyone out. No companies ticked means all companies; use Suspend to stop access.",
       "You cannot change your own role or access here. Your row says <i>This is you</i>; ask someone ranked above you.",
+      "Once or twice a year press <span class='man-key'>Access review</span> and read the page it opens. It lists what every person can really do and the questions worth asking, and it prints as one document you can hand to an auditor.",
       "Invite each person with their own address rather than sharing one sign-in, so approval requests and decisions show who acted."
+    ]
+  },
+
+  "settings.access": {
+    title: "Access review",
+    what: "Users &amp; Roles tells you which <b>role</b> each person holds. Access review tells you what that role actually lets them do, for the company you are in, on one page you can read from top to bottom and print. For every person it shows the apps their role opens and how deep, whether they see costs, salaries and bank figures, what they may sign off and up to what amount, which companies they are limited to, when their access ends and when they last changed a record. Under each person it lists the <b>questions</b> worth asking about them: access that looks wider than the job needs, and access that is too narrow for the job. Nothing on the page is typed in by hand, so it follows your roles as you change them.",
+    when: [
+      "Once or twice a year, as your own check that the right people have the right access.",
+      "An auditor, a bank or a customer asks who can approve payments, see salaries or change the books.",
+      "Somebody says they cannot finish a job in Orbit and you want to see what their role actually blocks.",
+      "After a round of hiring, leaving or promotions, to catch the access that nobody thought to take away.",
+      "Before you give anyone a wider role, to see what they already have."
+    ],
+    how: [
+      "Open <b>Settings &rsaquo; Users &amp; Roles</b> and click <span class='man-key'>Access review</span>, or pick <b>Access review</b> straight from the Settings menu. For this example a fabrication company has six people and has just lost its buyer. You should see a white sheet with your company letterhead at the top and <b>Access review</b> as the document title.",
+      "Read the box near the top. It says how many questions the page raised, split three ways: <i>more access than the job looks like it needs</i>, <i>the role blocks part of the job</i>, and <i>worth knowing</i>. For this company it says 9.",
+      "Look at <b>Everyone, at a glance</b>. One row per person: role, whether they are active, which companies, when their access ends, the last record they changed, and how many questions they raised. The estimator's last change was fourteen months ago and shows as a dash, which is the first thing to ask about.",
+      "Scroll to <b>Person by person</b>. Each person gets a block with four columns: <b>Apps this role opens</b> (every app with a level beside it), <b>Money they see</b> (the three switches), <b>May approve</b> (each document and its limit) and <b>Companies, dates</b>.",
+      "Under the site engineer you see a question headed <i>They can raise a purchase order but cannot record what arrives against it</i>. Read the sentence under it: the order stays open until somebody else receives the goods. Read <b>What to do</b>: give the role Work in Inventory, or confirm that a storekeeper receives everything.",
+      "Under the old buyer you see <i>Manage in 2 apps they have not used</i>, naming Purchase and Inventory. That one is a question, not a finding: it means the activity log for this company has nothing they created or changed there in the last twelve months.",
+      "Decide what to change, then open <b>Roles &amp; Permissions</b> or <b>Users &amp; Roles</b> in another step and change it. This page never changes anything itself, which is what makes it safe to hand to somebody else.",
+      "Click <span class='man-key'>Print</span>. The page you were reading is the page that prints, letterhead and all, one person per block and no block split across two sheets. Sign it and file it as your access review for the period.",
+      "Click <span class='man-key'>Export</span> instead if you want the glance table as a spreadsheet, for example to send a list of who can approve payments."
+    ],
+    fields: [
+      ["Apps this role opens", "Every app the person's role does not switch off, with the level beside it: <i>None</i> (not listed), <i>Own records</i>, <i>View</i>, <i>Work</i> or <i>Manage</i>. These are the levels the database checks on every save, delete and approval, not what a screen happens to show, so this is what the person can really do.", "auto"],
+      ["Money they see", "The three switches on their role: <i>Costs and margins</i>, <i>Salaries</i>, <i>Bank and cash</i>. <i>No</i> means the figures are hidden on screen and, for salaries, not returned by the database at all.", "auto"],
+      ["May approve", "Each document their role may sign off and the limit, in your company currency (days for leave, hours for timesheets). <i>No limits set</i> means the role was made before limits existed: anyone on it who can write may sign off a rule that names nobody.", "auto"],
+      ["Companies, dates", "Which companies they may work in (<i>All companies</i> includes every company you add later), the day they joined, the day their access ends, and the last change they recorded.", "auto"],
+      ["Last change", "The last record this person created or changed in this company, from the activity log, looking back twelve months. Orbit does not record sign-ins anywhere it can read back, so this is the closest honest answer to <i>are they still using this</i>. It covers the main record types only, so somebody can work all day in an app that keeps no log.", "auto"],
+      ["Questions", "How many things this page raises about that person. <i>none</i> is a good answer.", "auto"]
+    ],
+    buttons: [
+      ["Print", "Prints the sheet exactly as you see it, through the same pipeline as an invoice or a statement, so your letterhead and footer come with it."],
+      ["Export", "Saves the glance table as a spreadsheet file. The person-by-person blocks are not in it; print for those."]
+    ],
+    after: "Nothing. This page only reads. Every change it suggests is made in <b>Roles &amp; Permissions</b> (the role itself: apps, money, approvals) or in <b>Users &amp; Roles</b> (who holds which role, which companies, when access ends, suspend and remove). Change a role there and open this page again: it is worked out fresh each time, so the question disappears when you have dealt with it.",
+    links: [
+      { name: "Users &amp; Roles", how: "Where you change who holds which role, their companies and their end date.", to: "settings.users" },
+      { name: "Roles &amp; Permissions", how: "Where you change what a role opens, the money it sees and what it may approve.", to: "settings.roles" },
+      { name: "Audit Log", how: "The activity behind the Last change column, record by record.", to: "settings.audit" },
+      { name: "Approvals", how: "The inbox the approval limits on this page feed.", to: "approvals.inbox" },
+      { name: "Companies", how: "The companies a person can be limited to.", to: "companies" }
+    ],
+    mistakes: [
+      ["The access review is for whoever manages the team", "Your role has neither full access nor Can manage roles, or you are limited to some companies. The page reads everybody's access, so it is kept to the people who manage the team. Ask an Owner to run it."],
+      ["The page shows only me", "The team list is only returned in full to an active, unlimited member who is an owner or administrator, or whose role has full access or can manage roles."],
+      ["Every Last change says a dash", "Either nobody has recorded anything in this company in the last twelve months, or the work people do here is in apps that keep no activity log (the till, the cash desk, bookings, the property app, the website). Treat the column as missing rather than as proof that nobody works."],
+      ["A question says Manage in an app they have not used and they insist they use it daily", "They are probably right. The activity log covers the main record types only, and reading, printing and exporting leave no trace at all. Ask, then leave the role alone."],
+      ["A question says they cannot finish a job, but that is how we work on purpose", "Several of these are deliberate splits, for example whoever certifies work should not invoice for it. The What to do line offers both answers: change the role, or confirm the split and leave it."],
+      ["Someone has no role", "Their membership names a role that no longer exists, usually a custom role that was deleted. Orbit gives them nothing until you pick a role for them on their row in Users &amp; Roles."],
+      ["Print comes out with the app menu around it", "Use the Print button on the page rather than the browser's own print. The button hands the printer the document; the browser would print the screen."]
+    ],
+    tips: [
+      "Read the <i>more access than the job looks like it needs</i> questions first. They are the ones an auditor asks about.",
+      "A question is a thing to check, not a verdict. Each one says why it matters and what to do, and quite often the right answer is that your business works that way on purpose.",
+      "Print the page before you change anything, and again afterwards. The two sheets together are your evidence that the review happened.",
+      "Run it once per company. Roles are set for the whole organisation, but what matters is what people did in this company, so the questions and the Last change column are about the company you are in.",
+      "If a question keeps coming back for a role rather than a person, fix the role in Roles &amp; Permissions and it disappears for everyone on it at once."
     ]
   },
 
@@ -148,6 +210,7 @@ orbitScreenHelp({
     after: "A saved role applies from the next time Orbit loads for the people on it, in the screens and in the database alike. <b>In the screens</b>, the access levels, parts and money switches decide which apps, menus, screens and buttons a person gets. <b>In the database</b>, every table checks the person's level in the apps that record it: saving needs Own records, Work or Manage, and deleting what other records depend on needs Manage. Salaries are not returned to a role that does not see them. Approvals are checked against the role's limits. The database also holds rules no role can break: nobody approves what they raised; whoever changed a supplier's bank details does not pay that supplier; whoever records payments through a bank account does not reconcile it; payroll is approved by someone other than the person posting it; only a role that manages Accounting closes or reopens a period; nobody changes their own role or gives a role more than they hold; and an External Auditor's access ends on its date. The rules about two people apply once a company has two or more people who can write. A customised template keeps the template's key; a role made with <span class='man-key'>+ New role</span> gets a key of its own.",
     links: [
       { name: "Users &amp; Roles", how: "Where you give a role to a person, when inviting them or from their row.", to: "settings.users" },
+      { name: "Access review", how: "Shows what each role actually gives the people on it, and what looks too wide or too narrow.", to: "settings.access" },
       { name: "Approvals", how: "Everyone can open the inbox; what a person may sign off comes from their role's approval limits.", to: "approvals.inbox" },
       { name: "Portal Access", how: "Outside contacts sign in to the portal instead and never need a role.", to: "portal.admin" }
     ],
@@ -404,7 +467,7 @@ orbitScreenHelp({
     tips: [
       "The checklist counts records, it does not judge them: one test customer ticks First customer. If you delete your test records before going live, the step shows To do again.",
       "Each company in your organisation has its own checklist, so switch company before starting on the next one.",
-      "Before your team starts typing real work: you never need the mouse to fill a form. <b>Tab</b> moves to the next box and <b>Shift+Tab</b> back, and <b>Enter</b> now does the same thing, so you can keep both hands on the keyboard. On a table of lines (an order, an invoice, a bill, a goods receipt), Enter moves along the line, and on the last box of the last line it adds a fresh line and puts you in its first box, ready for the next item. In a small pop-up window, Enter on the last box moves to the blue button, so one more Enter confirms it; a pop-up with a single box still takes your answer on the first Enter."
+      "Before your team starts typing real work: you never need the mouse to fill a form. <b>Tab</b> moves to the next box and <b>Shift+Tab</b> back, and <b>Enter</b> now does the same thing, so you can keep both hands on the keyboard. On a table of lines (an order, an invoice, a bill, a goods receipt), Enter moves along the line, and on the last box of the last line it adds a fresh line and puts you in its first box, ready for the next item. In a small pop-up window, Enter on the last box presses the blue button, so a pop-up is filled in and confirmed without the mouse."
     ]
   },
 
@@ -1113,6 +1176,76 @@ orbitScreenHelp({
       "The log keeps the name and email the person had at the time, because it is your record that the request was answered.",
       "Erasure works in the company you are in. If the same person appears in another of your companies, switch to it and repeat.",
       "The screen does not record when a request arrived or when it is due, so note that date yourself."
+    ]
+  },
+
+  "settings.networks": {
+    title: "Allowed networks",
+    what: "This screen answers one question: <b>can this company be opened only from the office?</b> You list the internet connections the company may be opened from, such as your office broadband line, and switch the rule on. Anybody else on the team is then refused, wherever they have signed in from, and sees a plain message instead of the app. You can also set a rule for <b>one person</b>, so a colleague who works from home keeps working while everyone else is office-only. The check is made by the database itself, not by the screen, so it holds however the data is reached. The rule is off until somebody turns it on, and the organisation's owner is never refused, so a mistake can always be undone.",
+    when: [
+      "You do not want staff opening customer lists, prices or payroll on a home computer.",
+      "An auditor, a temporary bookkeeper or a contractor should only work while they are on your premises.",
+      "One person genuinely works from home and needs to be let through while the rest are office-only.",
+      "You want to see, without blocking anyone yet, who opens the company from outside the office.",
+      "Somebody says they are locked out and you need to see the address they are coming from."
+    ],
+    how: [
+      "Open <b>Settings &rsaquo; Allowed networks</b>. For this example, a Beirut architecture practice wants its drawings and fees kept to the studio, except for one colleague on maternity leave who works from home.",
+      "Read the grey line at the top. It should say <b>You are connecting from 203.0.113.41</b>. That is the address the database sees, and the only address the rule will ever compare. If instead it says in red that the database cannot see your address, stop: the rule cannot be enforced on this installation, and switching it on will be refused. Nothing else on this screen will work as described.",
+      "Under <b>Where this company may be opened from</b>, the three choices are <b>Off</b>, <b>Watch only</b> and <b>On</b>. Leave it on <b>Off</b> for now.",
+      "Click <span class='man-key'>+ Add the address I am on now</span>. A line appears with <b>This office</b> and <i>203.0.113.41</i> already filled in, and <b>Use it</b> ticked.",
+      "Change <b>What it is</b> to <i>Studio, Gemmayzeh</i>. Ask whoever looks after your internet whether the studio has a fixed address or a whole range. If it is a range, replace the address with it, for example <i>203.0.113.0/24</i>, which means every address from 203.0.113.0 to 203.0.113.255.",
+      "Choose <b>Watch only</b> and click <span class='man-key'>Save</span>. You should see <b>Saved</b>. Nobody is refused yet.",
+      "Leave it that way for a week, then come back and read <b>Refused recently</b>. Every line is somebody who opened the company from an address you have not listed, with the date, the person and the address. If a colleague you expected to be in the studio shows up there, add their address before you go further. This step is what stops the phone call on Monday morning.",
+      "Now set the exception. In the <b>People</b> table find the colleague on leave, set her <b>Rule</b> to <i>The office, or their own addresses</i>, and in <b>Their own addresses</b> type <i>198.51.100.7 Home</i>. The address comes first, the name after a space.",
+      "Click the <span class='man-key'>Save</span> in the People card. You should see <b>People saved</b>.",
+      "Back in the first card, choose <b>On</b> and click <span class='man-key'>Save</span>. You should see <b>Saved. Only the addresses listed can open this company now.</b>",
+      "Test it before you trust it. Turn the wifi off on your phone so it is on mobile data, open Orbit on it and sign in as somebody who is not the owner. You should get a screen headed <b>Not from this connection</b> naming the company and the address you are on.",
+      "If you ever need to undo it, come back and choose <b>Off</b>. The addresses you typed stay on the screen, ready for next time."
+    ],
+    fields: [
+      ["Off / Watch only / On", "What the rule does. <b>Off</b>: anybody on the team opens the company from anywhere, which is how every company starts. <b>Watch only</b>: nobody is refused, but every sign-in from an address you have not listed is written into Refused recently, so you can see what a rule would do before it does it. <b>On</b>: only the addresses listed below, and everybody else in this company is refused.", "required"],
+      ["What it is", "Your own name for a connection, so the list still makes sense in a year: <i>Studio, Gemmayzeh</i>, <i>Warehouse</i>, <i>Site office</i>. It is a label only and changes nothing.", "optional"],
+      ["Address or range", "One public address, or a range written with a slash. <i>203.0.113.41</i> is a single address. <i>203.0.113.0/24</i> is 256 addresses, the usual shape of a small business line. IPv6 is accepted in the same two forms, for example <i>2001:db8:abcd::/48</i>. Get the value from whoever supplies your internet, or read it from the grey line at the top of this screen while you are in the office.", "required"],
+      ["Use it (company table)", "Ticked, the address counts. Unticked, it is kept on the list but ignored, which is how you park an old office without losing the note of it.", "optional"],
+      ["Rule (People table)", "What this one person follows. <i>Follow the company rule</i> is the default and means nothing special applies to them. <i>The office, or their own addresses</i> lets them in from the company list or from their own, which is the setting for somebody who works from home some days. <i>Only their own addresses</i> ignores the company list for them, which is how you tie a contractor to one place. <i>Anywhere, no restriction</i> takes them out of the rule entirely.", "required"],
+      ["Their own addresses (People table)", "This person's own addresses, separated by commas, each one optionally followed by a space and a name: <i>198.51.100.7 Home, 2001:db8:abcd::/64 Site office</i>. Leave it empty when their Rule is <i>Follow the company rule</i> or <i>Anywhere</i>.", "optional"]
+    ],
+    buttons: [
+      ["+ Add an address or range", "Adds an empty line to the company table. Nothing is saved until you press Save."],
+      ["+ Add the address I am on now", "Adds a line already filled in with the address you are connecting from, named <i>This office</i>. It only appears when the database can see your address. The quickest safe way to set this up is to press it while you are sitting in the office."],
+      ["&times; (on a line)", "Removes that line from the table. It is deleted from the database when you press Save."],
+      ["Save (company card)", "Saves the addresses first and the Off / Watch only / On choice second, so adding your address and switching the rule on is one press, not two. If none of the addresses you listed looks like the one you are on, it asks you to confirm before saving."],
+      ["Save (People card)", "Saves the Rule and the addresses for every person in the table at once, replacing what each of them had before."]
+    ],
+    after: "Saving changes what the database does on every single request, straight away, for everyone. There is no waiting and no sign-out: a person who is refused loses the company from their picker on their next page, and a person who is allowed again gets it back. The order the check is made in, exactly: <b>1</b> a Space Work operator helping you is never refused; <b>2</b> the organisation's <b>owner</b> is never refused, in any of their companies, which is what guarantees you can always undo this; <b>3</b> then the person's own Rule, if they have one other than <i>Follow the company rule</i>; <b>4</b> then the company's choice, where <b>Off</b> and <b>Watch only</b> allow everybody; <b>5</b> and an address the database cannot read at all is allowed, never refused. Two more safety rules: a company set to <b>On</b> with no ticked addresses is open, so emptying the list cannot shut a company, and a person set to <i>Only their own addresses</i> with no addresses typed falls back to the company rule instead of being locked out by an empty box. Being refused is written into <b>Refused recently</b> for 90 days, at most one line an hour per person and address.",
+    links: [
+      { name: "Users &amp; Roles", how: "The People table lists the same team. Somebody suspended or removed there does not get in whatever this screen says.", to: "settings.users" },
+      { name: "Roles &amp; Permissions", how: "Reading and changing this screen needs Manage in Settings. A role is about what a person may do; this screen is about where they may do it from.", to: "settings.roles" },
+      { name: "Audit Log", how: "This screen records who was refused and from where. The audit log records what people who did get in then changed.", to: "settings.audit" },
+      { name: "Developers (API)", how: "An API key is not a person and is not covered by this rule, on purpose: an integration runs on a server somewhere else. Revoke any key you do not want used from outside.", to: "settings.api" },
+      { name: "Companies", how: "The rule is set per company. If you run more than one, switch company and set it again for each.", to: "companies" }
+    ],
+    mistakes: [
+      ["The database cannot see the address you are connecting from", "The red line at the top. The rule can only work if the database is told the address of whoever is calling it, and on this installation it is not. Off and Watch only still save; On is refused. Ask your Orbit contact to check it before you plan anything around this screen."],
+      ["Add the address you are on now (203.0.113.41) to the allowed list before switching this on, or you would lock yourself out.", "You chose On while the address you are connecting from is not on the list and not inside any range on it. The database refuses the change rather than letting you shut the door with the key inside. Press + Add the address I am on now, then save again."],
+      ["Not an address or range: 192.168.1.10", "A private address, the kind your own router hands out indoors. Every computer in every office has one and they are invisible from outside, so they can never match. You need the address your office shows to the internet, which is the one in the grey line at the top of this screen."],
+      ["Not an address or range: orbit.spacework.ai", "Only addresses and ranges are accepted, not names of websites and not the name of your internet supplier."],
+      ["Everyone in the office was refused the next morning", "Most business broadband lines are given a new address from time to time, so yesterday's address is not today's. Ask your internet supplier for a fixed address, or list the whole range they give you. Until then, Watch only is the honest setting."],
+      ["Not from this connection (the screen a refused person sees)", "That person's address is not allowed for that company. Read the address on their screen, and either add it to the company list or give that person their own Rule and address in the People table."],
+      ["One person still gets in from home after being refused", "Check their Rule in the People table. <i>Anywhere</i> takes them out of the rule completely, and <i>The office, or their own addresses</i> lets them in from anything in their own list. Also check whether they are the organisation's owner, who is never refused."],
+      ["Changing this needs Manage in Settings on your role", "You can open the screen but not change it, and the lists are empty even when a rule is set, because the addresses are shown only to Manage. That is deliberate: the list is a map of where your business works from. Ask an owner or an administrator."],
+      ["The People table only shows me", "The list of everybody on the team is shown to administrators of the organisation. A role with Manage in Settings but no organisation-wide access sees only their own line. Ask an owner or admin to set the people rules."],
+      ["I set this and now I cannot open Settings at all", "You are not the owner and you refused your own address. Ask the organisation's owner to open the screen and choose Off. Failing that, whoever runs your database can undo it with one statement: <span class='man-key'>update public.company_ip_policy set mode = 'off';</span>"],
+      ["Refused recently is empty although people are working from home", "In Off nothing is recorded at all. Choose Watch only to start collecting, and note that a line is written when a person's Orbit starts, not on every click."]
+    ],
+    tips: [
+      "Spend a week in Watch only before you switch anything on. It costs nothing and it shows you exactly who is about to be cut off.",
+      "Set it up while you are sitting in the office, using + Add the address I am on now. Setting it up from home is how people lock themselves out.",
+      "This says where a connection comes from, not who is using it. Somebody on a VPN into your office, on an office computer reached by remote desktop, or with a laptop at home tethered through a phone that is on an allowed connection, is not stopped. Nor is a photograph of the screen, or a report emailed to a private address.",
+      "A phone on mobile data is a different connection from the office wifi, so a staff phone stops working outside the building. That is usually the point, but tell people first.",
+      "Ask your internet supplier for a <i>static IP</i> if you do not already have one. Without it this rule needs re-checking whenever the line is reset.",
+      "It is worth doing even so: it turns leaking a whole customer list into something that has to happen in the building, in front of everybody, rather than quietly on a sofa."
     ]
   },
 
@@ -1941,12 +2074,12 @@ orbitScreenHelp({
       ["Save", "Saves the name, subdomain, published setting and design, and stays on the site. The first save of a new site opens the Pages and Custom domain areas."],
       ["Discard", "Back to the list. Changes since the last save are not kept."],
       ["Open live", "Opens the site's home page in a new tab. It shows a 404 page until the site and a page at / are both published."],
-      ["Delete", "Deletes the site after you confirm, together with its pages and its custom domain entries. Form submissions from it are kept, with the Site column empty."],
+      ["Delete", "Deletes the site after you confirm, together with its pages and its custom domain entries. Each custom domain is unregistered from the certificate provider first, so no name is left live at the edge pointing at a site that no longer exists; if one of them cannot be unregistered the site is not deleted and the message names the domain. Form submissions from it are kept, with the Site column empty."],
       ["+ Add a page", "Opens the builder on a new empty page called Home at the path /. Change the path in Page &amp; design for any page other than the home page."],
       ["&times; on a page row", "Deletes that page after you confirm <i>Delete this page?</i>"],
       ["Add domain", "Saves the domain typed in the box, registers it for a security certificate, and tells you the DNS record to add."],
       ["Verify", "Checks the domain again. It turns <b>Live</b> once the record is found and the certificate is issued, or the message says what is still missing."],
-      ["&times; on a domain row", "Removes the domain after you confirm."],
+      ["&times; on a domain row", "Unregisters the domain from the certificate provider after you confirm, then takes it off the site. If it cannot be unregistered the domain stays on the site and the message says why, rather than leaving the name live with nothing behind it."],
       ["&larr; Site (builder)", "Back to the site form. With unsaved changes it asks first."],
       ["Desktop and Mobile icons (builder)", "Show the page at full width or at phone width while you edit."],
       ["Preview (builder)", "Saves the page, then opens it in a new tab. A published page on a published site opens at its live address. A draft page, or a page of a draft or archived site, is drawn from what you saved, under a dark bar saying why visitors cannot see it yet; links to other pages do not work in that preview."],
@@ -1975,7 +2108,9 @@ orbitScreenHelp({
       ["That already exists - a record with the same code or number is already saved.", "Shown on Add domain: that domain is already attached to a site, in this company or another. A domain can serve only one site."],
       ["You don&rsquo;t have permission to do that.", "Saving sites, pages and domains needs Work in Website on your role. Ask someone whose role has it to make the change."],
       ["Leave the builder? Unsaved changes will be lost.", "You clicked &larr; Site with changes not yet saved. Cancel and click Save first, unless you mean to throw them away."],
-      ["Could not load the site engine.", "The builder could not load the part that draws the page. Reload Orbit and open the page again."]
+      ["Could not load the site engine.", "The builder could not load the part that draws the page. Reload Orbit and open the page again."],
+      ["This site's custom domain (name) could not be unregistered at the certificate provider, so the site was not deleted.", "Deleting a site removes its custom domains from the edge first. One of them refused. Open the site, try &times; on that domain, and delete the site once it is gone."],
+      ["This site's custom domain (name) could not be unregistered, because custom domains are not configured on this deployment.", "This Orbit service has no certificate-provider token, so Orbit cannot remove the hostname for you. Remove it with your DNS and certificate provider, then delete the site."]
     ],
     tips: [
       "A page goes public only when both the page and its site are published, so set a page back to Draft to take it offline without deleting it.",

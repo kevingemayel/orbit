@@ -29,6 +29,7 @@ Every check exists because of a real bug:
 | every tutorial has a chapter and routed steps | Dead back-link, or a step that opens nothing. |
 | every image has alt text | An `<img>` with no `alt` is announced as its filename. |
 | the accessibility layer is wired | If the onclick interceptor is removed, 1,000 controls silently become mouse-only and nothing else fails. |
+| the allowed-networks rule belongs to the database | An address rule enforced in app.js is advice, and a screen showing an address fetched in the browser instead of the one the database sees lets somebody arm the rule against the wrong address. |
 | no em dash | House style. |
 
 **The suite also tests the tests.** Each check is re-run against deliberately

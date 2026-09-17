@@ -662,6 +662,12 @@
     if ((x = String(m).match(/invalid input syntax for type date: "([^"]*)"/i))) return "A date was expected but \"" + x[1] + "\" was entered.";
     if (/invalid input syntax for type uuid/i.test(m)) return "One of the choices is empty or invalid. Pick it again from the list.";
     if ((x = String(m).match(/value too long for type character varying\((\d+)\)/i))) return "One of the texts is longer than " + x[1] + " characters.";
+    // The database refuses anything a person's role does not cover. Postgres says
+    // "new row violates row-level security policy", which tells a person nothing;
+    // say what it actually means and who can change it.
+    if (/row-level security|row level security|permission denied for (table|relation|function)/i.test(m)) {
+      return "Your role does not allow this here. Ask an owner or an administrator to widen your role in Settings, Roles and Permissions, or ask someone whose role covers this to do it.";
+    }
     return errMsgBasic(e);
   }
   function errMsgBasic(e) {
@@ -671,7 +677,7 @@
     if (/duplicate key|already exists|unique constraint/.test(s)) return "That already exists - a record with the same code or number is already saved.";
     if (/foreign key/.test(s)) return "This record is linked to others, so it can’t be changed or removed that way.";
     if (/not-null|null value in column/.test(s)) return "A required field is missing.";
-    if (/permission denied|row-level security|row level security|not allowed/.test(s)) return "You don’t have permission to do that.";
+    if (/permission denied|row-level security|row level security|not allowed/.test(s)) return "Your role does not allow this here. Ask an owner or an administrator to widen your role in Settings, Roles and Permissions.";
     if (/check constraint|violates check/.test(s)) return "That value isn’t allowed here.";
     if (/jwt|token is expired|not authenticated/.test(s)) return "Your session expired - please sign in again.";
     if (/failed to fetch|networkerror|network request/.test(s)) return "Network problem - check your connection and try again.";
@@ -957,7 +963,7 @@
       { t: "Setting up your company (step by step)", h: "<p>Before you do real work, spend ten minutes on setup. Orbit gives you a checklist so you do not miss anything.</p><ol><li>Click the grid button, then open <b>Settings</b>.</li><li>Click <b>Getting started</b> in the left menu. You will see a checklist with a progress bar.</li><li>Work down it: your <b>company profile</b> (name, country, currency), <b>document numbering</b> (how your invoices are numbered), your <b>tax rates</b>, your <b>team</b>, a <b>first customer</b>, and a <b>first project</b>.</li><li>Each item has a button that takes you straight to the right screen. Fill it in, save, and the item ticks off.</li></ol><p><b>Good to know:</b> the very first time you open a new company, Orbit quietly sets up the money side for you - a ready-made list of accounts, the journals, and standard tax rates. You do not have to build any of that by hand.</p>" },
       { t: "Adding people to your team", h: "<p>A team means more than one person can sign in and help. You invite people by email.</p><ol><li>Open <b>Settings &rsaquo; Users &amp; Roles</b>.</li><li>Click <b>Invite teammate</b>.</li><li>Type their <b>email</b> address.</li><li>Choose their <b>role</b> - this decides what they are allowed to see and do (more on roles next).</li><li>If you run more than one company, tick which companies they are allowed into.</li><li>Click send. They get an invitation email. The next time they sign in with that exact email, Orbit shows the invitation and they press <b>Join</b> to come onto your team. There is no code to type.</li></ol><p>You are always in control. From the same screen you can change someone's role, limit which companies they see, <b>suspend</b> them (switch off their access for a while without deleting them), or <b>remove</b> them completely. The system will never let you remove the last owner, so a company can never be left with nobody in charge.</p>" },
       { t: "Roles: who is allowed to do what", h: "<p>A <b>role</b> is a job title that comes with a set of keys. It decides which rooms a person can enter and whether they can only look or also change things. This keeps sensitive things (like everyone's pay) away from people who should not see them.</p><p>Every role can do two things per app: <b>View</b> (open the app and look) and <b>Manage</b> (create and change things). A role can also have money <b>hidden</b> entirely - useful for junior staff who need to see projects but not the prices.</p><ol><li>Open <b>Settings &rsaquo; Roles &amp; Permissions</b>.</li><li>You will see ready-made roles (Owner, Manager, and so on). To make your own, pick one that is close and click <b>Customize</b>, or click <b>New role</b>.</li><li>Tick the apps and parts they can use, choose whether they see money, and save.</li></ol><p>Two safety rules: you can only manage roles that are junior to your own, and the top owner role is always protected so nobody can lock the boss out.</p>" },
-      { t: "Typing fast: Enter and Tab", h: "<p>You never have to reach for the mouse to fill in a form. Two keys do it all, and they work the same way on every screen.</p><p><b>Tab</b> moves to the next box. <b>Shift+Tab</b> moves back. That is the browser's own behaviour and it has always worked.</p><p><b>Enter</b> now does the same thing as Tab: it moves you to the next box. That matters most on a <b>table of lines</b> - a purchase order, a quotation, an invoice, a bill, a goods receipt. Type the product, press Enter, type the description, press Enter, type the quantity, press Enter, and so on along the line. When you reach the <b>last box of the last line and press Enter</b>, Orbit adds a fresh line for you and puts the cursor straight in its first box (on an order, that is Product), so you can type the next item without stopping. Twenty items is twenty lines and never a single click.</p><p>Two small things worth knowing. In a <b>pop-up window</b>, Enter walks the boxes in the same way, and on the <b>last</b> box it moves to the blue button, so one more Enter confirms it. A pop-up with a single box takes your answer and closes on the first Enter, as it always did. Money is never posted by the same keystroke that finished the last box. In a big <b>notes box</b> (the tall ones for a description or a memo), Enter still starts a new paragraph, because that is what you want there.</p><p>A few screens use Enter for something of their own and keep it: the spreadsheet-style cost sheet moves down a column, the last line of a list saves the record you just typed, and a journal voucher jumps to the next line. Each of those tells you what it does on the screen itself.</p>" },
+      { t: "Typing fast: Enter and Tab", h: "<p>You never have to reach for the mouse to fill in a form. Two keys do it all, and they work the same way on every screen.</p><p><b>Tab</b> moves to the next box. <b>Shift+Tab</b> moves back. That is the browser's own behaviour and it has always worked.</p><p><b>Enter</b> now does the same thing as Tab: it moves you to the next box. That matters most on a <b>table of lines</b> - a purchase order, a quotation, an invoice, a bill, a goods receipt. Type the product, press Enter, type the description, press Enter, type the quantity, press Enter, and so on along the line. When you reach the <b>last box of the last line and press Enter</b>, Orbit adds a fresh line for you and puts the cursor straight in its first box (on an order, that is Product), so you can type the next item without stopping. Twenty items is twenty lines and never a single click.</p><p>Two small things worth knowing. In a <b>pop-up window</b>, Enter walks the boxes in the same way, and on the <b>last</b> box it presses the blue button, so a pop-up is filled in and confirmed without touching the mouse. A red button is never pressed this way. In a big <b>notes box</b> (the tall ones for a description or a memo), Enter still starts a new paragraph, because that is what you want there.</p><p>A few screens use Enter for something of their own and keep it: the spreadsheet-style cost sheet moves down a column, the last line of a list saves the record you just typed, and a journal voucher jumps to the next line. Each of those tells you what it does on the screen itself.</p>" },
       { t: "Deleting and archiving", h: "<p>Getting rid of something works the same way on every screen in Orbit, and there are two different actions on purpose.</p><div class=\"man-cmp\"><div><b>Delete</b><p>Removes the record for good. Use it for genuine mistakes - a duplicate, a test entry, something created by accident.</p></div><div><b>Archive</b><p>Hides it from lists and most pickers but keeps the history. Use it for things you have finished with - an old customer, a product you no longer sell.</p></div></div><p><b>From a list:</b> press <b>Select</b>, tick the rows, then <b>Delete</b> or <b>Archive</b>. <b>From a record:</b> open it and use the <b>Delete</b> button in the top bar.</p><div class=\"man-cal key\"><b>Orbit will stop you deleting something that is in use.</b> If a product appears on an invoice, or a customer has orders, deleting would tear a hole in your history - so Orbit refuses and tells you to archive it instead. That is the right answer: archive keeps the old documents intact while taking the item out of your way.</div><div class=\"man-cal warn\"><b>Financial documents are different.</b> Posted invoices, journal entries, payslips and certificates are never deleted, because your accounts must stay auditable. You <b>void, reverse or cancel</b> them instead, which leaves a visible trail of what happened.</div>" }
     ] },
     { key: "sales", title: "Selling & getting paid", articles: [
@@ -1055,7 +1061,7 @@
     ] },
     { key: "kitchen", title: "Kitchen (food and drink)", articles: [
       { t: "What this app is for", h: "<p><b>Kitchen</b> is the whole food and drink operation in one place: the menu and what it really costs, the stock behind it, the stores it is served in, the guests who buy it, the platforms that deliver it, and the franchisees who run it under your name.</p><p>It is one app with ten sections rather than ten apps, because nobody running a coffee shop thinks of the roastery and the loyalty scheme as separate products. They are rooms in the same building.</p><div class=\"man-glance\"><span class=\"man-chip\">{{ico:list}} Menu</span><span class=\"man-chip\">{{ico:scale}} Stock control</span><span class=\"man-chip\">{{ico:building}} Estate</span><span class=\"man-chip\">{{ico:clipboardCheck}} Operations</span><span class=\"man-chip\">{{ico:shield}} Loss prevention</span><span class=\"man-chip\">{{ico:box}} Roastery</span><span class=\"man-chip\">{{ico:heart}} Guests</span><span class=\"man-chip\">{{ico:truck}} Delivery</span><span class=\"man-chip\">{{ico:people}} Franchise</span><span class=\"man-chip\">{{ico:clock}} Planning</span></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:layers}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Nothing here is a separate system</div><p>Items, recipes, suppliers, stock, staff, customers and the ledger are the same records the rest of Orbit uses. A coffee bean is one product whether you buy it green, roast it, sell it by the bag or brew it, which is why the cost follows it all the way through.</p></div></div><p>A single site will use the first two sections and ignore the rest. Turn to Estate when you open a second shop, to Franchise when someone else opens one for you.</p>" },
-      { t: "No tables: the counter", h: "<p>A coffee shop, a bakery counter, a takeaway hatch. There is no table to tap, no bill left open and no waiter carrying it: the customer orders, pays, is handed a <b>number</b>, and waits for it to be called.</p><p><b>Service &rsaquo; Counter</b> is that shop on one screen.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Tap along the <b>category</b> strip, or type in the search box. Every item is a tile with its picture and its price.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Choose <b>Takeaway</b> or <b>Eat in</b>. That is the only thing resembling a table.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\"><span class=\"man-key\">Name / note</span> if they gave a name or an allergy.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Take payment</span>. Type what they hand over and the change works itself out. One press then takes the money, sends the whole order to the kitchen, prints the receipt and shows the number in letters big enough to read across the counter.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:hash}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Numbers start again every morning</div><p>Each shop counts its own, from 1, and rolls back round after 999 so the board never shows a four-digit number. Two tills ringing at the same second cannot be handed the same number.</p></div></div><p>The screen clears itself for the next customer as soon as the number has been shown. There are no courses at a counter, so everything fires at once.</p>" },
+      { t: "No tables: the counter", h: "<p>A coffee shop, a bakery counter, a takeaway hatch. There is no table to tap, no bill left open and no waiter carrying it: the customer orders, pays, is handed a <b>number</b>, and waits for it to be called.</p><p><b>Service &rsaquo; Counter</b> is that shop on one screen.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">Tap along the <b>category</b> strip, or type in the search box. Every item is a tile with its picture and its price.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Choose <b>Takeaway</b> or <b>Eat in</b>. That is the only thing resembling a table.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\"><span class=\"man-key\">Name / note</span> if they gave a name or an allergy.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Take payment</span>. Type what they hand over and the change works itself out. One press then takes the money, sends the whole order to the kitchen, prints the receipt and shows the number in letters big enough to read across the counter.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:hash}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Numbers start again every morning</div><p>Each shop counts its own, from 1, and rolls back round after 999 so the board never shows a four-digit number. Two tills ringing at the same second cannot be handed the same number. If the connection drops, the till gives the number itself and adds its own letter (42 B), so two offline tills still cannot collide.</p></div></div><p>The screen clears itself for the next customer as soon as the number has been shown. There are no courses at a counter, so everything fires at once.</p>" },
       { t: "Order numbers and the collection screen", h: "<p><b>Service &rsaquo; Collection screen</b> is the customer-facing half of the number system. Put it on a monitor people can see while they wait.</p><div class=\"man-cmp\"><div class=\"man-cmp-c\"><div class=\"man-cmp-h\">{{ico:clock}} Being made</div><p>Every number that has been paid for and is still with the kitchen.</p></div><div class=\"man-cmp-c alt\"><div class=\"man-cmp-h\">{{ico:check}} Ready to collect</div><p>A number moves here on its own the moment the kitchen has marked every item ready. Nobody has to retype it.</p></div></div><p>Tap a ready number when it is handed over and it leaves the board. If a name was taken it shows under the number, for shops that call the name instead.</p><p>The <b>kitchen display</b> knows about counter orders too: a ticket from the till shows its number, so the pass calls &ldquo;forty-two&rdquo; rather than hunting for a table that does not exist.</p>" },
       { t: "Finding an item fast", h: "<p>During a rush nobody reads a list. Both the counter and the waiter's pad show the menu as <b>tiles with pictures</b>, grouped by <b>category</b>.</p><ul><li>Categories come from <b>Menu &rsaquo; Items</b>, where each item has one. Set the <b>order</b> on a category so the strip reads the way your menu reads rather than alphabetically.</li><li>An ingredient category is hidden from both screens, because a cashier never taps flour.</li><li>Pictures come from the item itself: open an item under <b>Menu &rsaquo; Items</b> and attach a photo. An item with no photo shows its initial instead, so the layout never breaks while you are still taking pictures.</li></ul><div class=\"man-cal tip\"><span class=\"man-ci\">{{ico:star}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Photograph the top twenty first</div><p>A handful of items are most of your covers. Photograph those and the screen is already faster to use; the long tail can wait, and search still finds everything by name.</p></div></div>" },
       { t: "Before service: the book", h: "<p><b>Service &rsaquo; The book</b> is the host's screen. It is tonight's service read in time order, not a list of records: who is due, how many covers are committed, and one move to sit a party down.</p><div class=\"man-steps\"><div class=\"man-step\"><div class=\"man-step-n\">1</div><div class=\"man-step-b\">The strip along the top is the service in one glance: <b>covers booked</b>, how many bookings, how many already seated, and how many are waiting.</div></div><div class=\"man-step\"><div class=\"man-step-n\">2</div><div class=\"man-step-b\">Each line shows the time, the guest, the party size, the table if one is assigned, and any note. An <b>occasion</b> (a birthday, an anniversary) is shown as a chip, because it is the thing the floor most wants to know and most often misses.</div></div><div class=\"man-step\"><div class=\"man-step-n\">3</div><div class=\"man-step-b\">A booking due within ten minutes is outlined. One more than ten minutes late goes <b>red</b>. That is the whole reason to have the book open on a screen rather than on paper.</div></div><div class=\"man-step\"><div class=\"man-step-n\">4</div><div class=\"man-step-b\"><span class=\"man-key\">Seat</span> offers the free tables that are big enough for the party first, marks the table seated and opens the order pad.</div></div></div><div class=\"man-cal key\"><span class=\"man-ci\">{{ico:person}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Seating carries the guest across</div><p>The party's name, the number of covers and the allergy note are already on the order when the pad opens. Nobody retypes them, so nobody mistypes them, and the allergy reaches the kitchen ticket on the first fire.</p></div></div><div class=\"man-cal tip\"><span class=\"man-ci\">{{ico:plus}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">Put walk-ins in the book too</div><p>Use <span class=\"man-key\">New booking</span> with the source set to <b>Walk-in</b>. It takes five seconds and it means the covers count is the truth, which is what tomorrow's rota and prep list are built on.</p></div></div><p>Move between days with the arrows, and use <b>All bookings</b> under Delivery for the searchable history.</p>" },
@@ -1719,6 +1725,7 @@
       { i: "history", n: "Audit Log", l: "Settings", d: "A record of who did what and when." },
       { i: "building", n: "Companies", l: "Settings", d: "Add or switch the legal entities you run." },
       { i: "people", n: "Users & Roles", l: "Settings", d: "Invite teammates and set what they can reach." },
+      { i: "check", n: "Access review", l: "Settings", d: "One printable page: what every person can open, the money they see, what they may approve, and the questions worth asking about each of them." },
       { i: "shield", n: "Roles & Permissions", l: "Settings", d: "Design the permission sets behind each role." },
       { i: "check", n: "Approvals", l: "Settings", d: "Your inbox of things waiting for sign-off." },
       { i: "shield", n: "Approval Rules", l: "Settings", d: "Set what needs approval, and by whom, above a threshold." },
@@ -1727,6 +1734,7 @@
       { i: "upload", n: "Import Data", l: "Settings", d: "Bring customers, products and more in from a spreadsheet." },
       { i: "shield", n: "Backups", l: "Settings", d: "Download the whole company as one zip, records and attachments, and put it back." },
       { i: "shield", n: "Privacy & data requests", l: "Settings", d: "Answer a subject access request, erase a person, and see what you hold about whom." },
+      { i: "globe", n: "Allowed networks", l: "Settings", d: "Limit this company to the internet connections you name, and allow one person to work from home." },
       { i: "plus", n: "Custom Fields", l: "Settings", d: "Add your own boxes to Contacts, Projects or Products." },
       { i: "text", n: "Terminology", l: "Settings", d: "Rename words to match your business." },
       { i: "robot", n: "Automations", l: "Settings", d: "Reminders that watch your data and nudge you." },
@@ -1994,6 +2002,7 @@
         { label: "Companies", action: "companies" },
         { label: "Accounting books", action: "settings.books" },
         { label: "Users & Roles", action: "settings.users" },
+        { label: "Access review", action: "settings.access" },
         { label: "Roles & Permissions", action: "settings.roles" },
         { label: "Approvals", action: "approvals.inbox" },
         { label: "Approval Rules", action: "approvals.rules" },
@@ -2005,6 +2014,7 @@
         { label: "Automations", action: "settings.automations" },
         { label: "Backups", action: "settings.backups" },
         { label: "Privacy & data requests", action: "settings.privacy" },
+        { label: "Allowed networks", action: "settings.networks" },
         { label: "Developers (API)", action: "settings.api" },
         { label: "Appearance", action: "appearance" }
       ]
@@ -2068,7 +2078,7 @@
     "pay.out": "accounting", cust: "accounting", vend: "accounting", moves: "accounting",
     accounts: "accounting", "rep.pl": "accounting", "rep.bs": "accounting", "rep.tb": "accounting",
     "rep.gl": "accounting", "rep.partner": "accounting", "rep.aged.recv": "accounting", "rep.aged.pay": "accounting", "rep.tax": "accounting", "rep.stmt": "accounting",
-    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.backups": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
+    "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.backups": "settings", "settings.networks": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "site", "doc.subs": "site", "doc.rfis": "site", "doc.trans": "site",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
     "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
@@ -2079,7 +2089,7 @@
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
     "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
-    contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
+    contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.access": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "desk": "desk", "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
@@ -2472,6 +2482,12 @@
       S.homeOrgIds = S.isPlatformAdmin ? ((await sb.rpc("my_home_orgs")).data || []) : null;
     } catch (e) { S.isPlatformAdmin = false; S.homeOrgIds = null; }
     try { S.pendingInvites = ((await sb.rpc("my_pending_invites")).data) || []; } catch (e) { S.pendingInvites = []; }
+    // An allowed-networks rule makes the database refuse this person's membership, and
+    // then every list is simply empty with nothing to explain it. Ask once, here, so a
+    // blocked person gets a sentence rather than a blank app.
+    S.ipStatus = await ipStatus();
+    var ipGone = ipBlockedNames(S.ipStatus);
+    if (ipGone.length && !S.companies.length) { renderIpBlocked(S.ipStatus); return; }
     if (!S.companies.length) { if (S.pendingInvites.length) { renderInvites(); } else { renderNoCompany(); } return; }
     S.company = S.companies.filter(function (c) { return c.id === S.profile.active_company_id; })[0];
     // an operator with no active company set should land in one of their OWN orgs, not a tenant
@@ -2485,6 +2501,8 @@
     S.types = (await sb.from("account_types").select("*")).data || [];
     maybeLogSupport();
     renderHome();
+    // some companies open here and some do not: say which, or the picker just looks short
+    if (ipGone.length) toast("Not open from this connection: " + ipGone.join(", ") + ". Ask whoever looks after Settings.");
     maybeWelcome();
     runAutomations();   // best-effort, once/day/company; drops alerts into the bell
     refreshFxRatesDaily();   // best-effort, once/day/org; pulls live FX rates from the market feed
@@ -2581,6 +2599,30 @@
       if (res.error || !res.data) { err.textContent = "Could not submit: " + ((res.error && res.error.message) || "unexpected error") + "."; create.disabled = false; create.textContent = "Submit application"; return; }
       boot(); // -> pending gate -> renderPendingApproval
     };
+  }
+  // ---- Allowed networks: being refused, in words -------------------------------
+  // ip_status() answers for every company this person belongs to, ignoring the rule for
+  // the membership itself, so it can still name the company that refused them and the
+  // address it refused. Without it a blocked person sees an app with nothing in it.
+  async function ipStatus() {
+    try { var r = await sb.rpc("ip_status"); return (r && !r.error) ? (r.data || null) : null; } catch (e) { return null; }
+  }
+  function ipBlockedNames(st) {
+    return ((st && st.companies) || []).filter(function (c) { return !c.allowed; }).map(function (c) { return c.name; });
+  }
+  function renderIpBlocked(st) {
+    var names = ipBlockedNames(st), ip = (st && st.ip) || "";
+    root.innerHTML = '<div class="login"><div class="card u-c">' +
+      '<div class="brandrow" style="justify-content:center"><div class="lockup">' + orbitLockup() + '</div></div>' +
+      '<div style="font-size:38px;margin:6px 0">&#128274;</div>' +
+      '<h1 style="font-size:20px">Not from this connection</h1>' +
+      '<p class="sub">You are signed in as ' + esc(S.user.email) + ', but ' + esc(names.join(", ")) + ' can only be opened from the internet connections your company has allowed, and this is not one of them.' +
+      (ip ? ' You are connecting from <b>' + esc(ip) + '</b>.' : "") +
+      '</p><p class="sub">Open it from the office, or ask whoever looks after <b>Settings &rsaquo; Allowed networks</b> to allow this address for you.</p>' +
+      '<div style="display:flex;gap:8px;justify-content:center;margin-top:14px"><button class="btn" id="ipb-retry">Try again</button><button class="btn" id="ipb-out">Sign out</button></div>' +
+      '</div></div>';
+    document.getElementById("ipb-retry").onclick = function () { location.reload(); };
+    document.getElementById("ipb-out").onclick = signOut;
   }
   function renderPendingApproval(status) {
     var rejected = status === "rejected";
@@ -3294,7 +3336,9 @@
     if (S.sideCollapsed === undefined) { var _ss = localStorage.getItem("orbit_side"); S.sideCollapsed = _ss === null ? (window.innerWidth <= 760) : _ss === "1"; }
     if (window.innerWidth <= 760) S.sideCollapsed = true;   // a phone always arrives with the menu closed; the quick bar opens it
     var initials = (S.user.email || "?").slice(0, 2).toUpperCase();
-    function menuItemVisible(action) { return action === "settings.roles" ? canManageRoles() : canGo(action); }
+    // the two team screens answer to the team rules, not to the Settings app level:
+    // the access review reads everybody's role, so only someone who manages the team sees it
+    function menuItemVisible(action) { return action === "settings.roles" ? canManageRoles() : (action === "settings.access" ? canManageTeam() : canGo(action)); }
     var vmenus = a.menus.map(function (m) {
       if (m.items) { var its = m.items.filter(function (it) { return menuItemVisible(it[1]); }); return its.length ? { label: m.label, items: its } : null; }
       return menuItemVisible(m.action) ? m : null;
@@ -3465,7 +3509,13 @@
   // Anything that moves you between companies must go through here.
   async function setCompany(id, opts) {
     var next = S.companies.filter(function (c) { return c.id === id; })[0];
-    if (!next) { toast("You do not have access to that company"); return false; }
+    if (!next) {
+      // it may be a company they DO belong to, refused by an allowed-networks rule.
+      // "No access" would send them to the wrong person for the wrong reason.
+      var refused = ((S.ipStatus && S.ipStatus.companies) || []).filter(function (c) { return c.company_id === id && !c.allowed; })[0];
+      toast(refused ? refused.name + " can only be opened from a connection your company has allowed, and this is not one." : "You do not have access to that company");
+      return false;
+    }
     S.company = next;
     resetSeqCache();
     if (S.company.org_id) S.org = (await sb.from("orgs").select("*").eq("id", S.company.org_id).maybeSingle()).data;
@@ -4250,6 +4300,9 @@
       if (!tbl || !id) return;
       if (!confirm("Delete this " + label + "? This cannot be undone. If it is used in other records it can't be deleted - archive it instead.")) return;
       b.disabled = true;
+      // a site's custom domains live at the edge as well as in our tables, so they are
+      // unregistered before the rows go; no silent orphans at the certificate provider
+      if (tbl === "sites") { var pre = await webSiteDeleteDomains(id); if (!pre.ok) { b.disabled = false; toast(pre.msg); return; } }
       var r = await sb.from(tbl).delete().eq("id", id);
       b.disabled = false;
       if (r.error) { var msg = (r.error.message || "") + " " + (r.error.details || "") + " " + (r.error.code || ""); if (/23503|foreign key|still referenced|violates/i.test(msg)) toast("This " + label + " is used in other records - it can't be deleted. Archive it instead."); else toast(errMsg(r.error)); return; }
@@ -4386,13 +4439,11 @@
     // it always did. A field inside a table row is a LINE, not the end of the
     // dialog (Receive goods is a dialog full of quantities), so it never submits.
     var pri = (scope.closest(".modal") && !t.closest("tr")) ? scope.querySelector(".foot button.pri:not(.u-bad)") : null;
-    if (pri && !pri.disabled && keyflowVisible(pri)) {
-      // A dialog with one field is "type it and press Enter", and still submits on the
-      // spot. A dialog with several fields moves to its button instead: posting money
-      // or saving a record deserves a deliberate second press, not the same keystroke
-      // that finished the last field.
-      if (fields.length === 1) pri.click(); else pri.focus();
-    }
+    // The last field of a dialog presses its blue button, which is what every other
+    // program does and what a person typing fast expects. A red button is never
+    // pressed this way, and a field inside a table row is a line rather than the end
+    // of the dialog, so a dialog full of quantities walks its rows instead.
+    if (pri && !pri.disabled && keyflowVisible(pri)) pri.click();
   }
   if (!window.__keyflow) {
     window.__keyflow = true;
@@ -4403,6 +4454,7 @@
   function formDelBtn(table, id, back, label) { if (!canAdminApp(S.app)) return ""; return '<button class="o-del u-bad" data-del-table="' + esc(table) + '" data-del-id="' + esc(id) + '" data-del-back="' + esc(back || "") + '" data-del-label="' + esc(label || "record") + '">Delete</button>'; }
   function go(action) {
     if (action === "settings.roles" && !canManageRoles()) { toast("Only owners and super admins can manage roles"); if (!S.app) renderHome(); return; }
+    if (action === "settings.access" && !canManageTeam()) { toast("The access review is for whoever manages the team"); if (!S.app) renderHome(); return; }
     if (!canGo(action)) { toast("You do not have access to that"); if (!S.app) renderHome(); return; }
     if ((__dirty || __modalDirty) && action !== S.action) { if (!confirm("You have unsaved changes. Leave without saving?")) return; }
     __dirty = false; __modalDirty = false;
@@ -4573,6 +4625,7 @@
       case "rec.applicants": return renderList(cfgApplicants());
       case "kb.articles": return renderList(cfgArticles());
       case "settings.users": return renderUsers();
+      case "settings.access": return renderAccessReview();
       case "settings.roles": return renderRoles();
       case "settings.setup": return renderSetup();
       case "settings.import": return renderImport();
@@ -4581,6 +4634,7 @@
       case "settings.terminology": return renderTerminologyAdmin();
       case "settings.automations": return renderAutomations();
       case "settings.privacy": return renderPrivacy();
+      case "settings.networks": return renderIpRules();
       case "settings.backups": return renderBackups();
       case "platform.pending": return renderPendingSignups();
       case "platform.tenants": return renderTenants();
@@ -7413,6 +7467,45 @@
     // the counterparty needs a partner record pointing back at THIS company
     var back = (await sb.from("partners").select("id,name")
       .eq("company_id", other.id).eq("intercompany_company_id", S.company.id).limit(1)).data || [];
+    // A mirrored line has to name a tax and an account that exist in the OTHER company.
+    // It used to copy neither, so posting the mirror recomputed its tax as zero and put
+    // every line on that company's default account: the copy posted a different total
+    // from the original, quietly. Taxes match by name, then by the same rate, inside the
+    // scope the mirror needs (a sale tax here is a purchase tax there). Accounts match by
+    // code, then by name, and a profit-and-loss account only crosses when its side suits
+    // the mirror, because a revenue account is not an expense account. Whatever cannot be
+    // matched is named in the dialog below before anything is created.
+    var mirSale = mirrorType.indexOf("out_") === 0;
+    var srcTaxIds = [], srcAccIds = [], taxMap = {}, accMap = {}, missTax = [], missAcc = [];
+    (lines || []).forEach(function (l) {
+      if (l.tax_id && srcTaxIds.indexOf(l.tax_id) < 0) srcTaxIds.push(l.tax_id);
+      if (l.account_id && srcAccIds.indexOf(l.account_id) < 0) srcAccIds.push(l.account_id);
+    });
+    if (srcTaxIds.length) {
+      var srcTax = (await sb.from("taxes").select("id,name,amount,amount_type,scope").in("id", srcTaxIds)).data || [];
+      var dstTax = ((await sb.from("taxes").select("id,name,amount,amount_type,scope,is_active").eq("company_id", other.id)).data || []).filter(function (x) { return x.is_active !== false && (x.scope || "sale") === (mirSale ? "sale" : "purchase"); });
+      srcTax.forEach(function (t) {
+        var hit = dstTax.filter(function (x) { return String(x.name || "").toLowerCase() === String(t.name || "").toLowerCase(); })[0]
+          || dstTax.filter(function (x) { return Number(x.amount) === Number(t.amount) && (x.amount_type || "percent") === (t.amount_type || "percent"); })[0];
+        if (hit) taxMap[t.id] = hit.id; else missTax.push(t.name || "a tax");
+      });
+    }
+    if (srcAccIds.length) {
+      var srcAcc = (await sb.from("accounts").select("id,code,name,type_code").in("id", srcAccIds)).data || [];
+      // the other company's chart can run past the 1,000-row cap, so it is paged
+      var dstAcc = (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code,is_active").eq("company_id", other.id).order("code"); })).filter(function (x) { return x.is_active !== false; });
+      srcAcc.forEach(function (a) {
+        var hit = dstAcc.filter(function (x) { return String(x.code || "") === String(a.code || ""); })[0]
+          || dstAcc.filter(function (x) { return String(x.name || "").toLowerCase() === String(a.name || "").toLowerCase(); })[0];
+        var tc = hit ? String(hit.type_code || "") : "", isPl = tc.indexOf("income") === 0 || tc.indexOf("expense") === 0;
+        var sideOk = !isPl || (mirSale ? tc.indexOf("income") === 0 : tc.indexOf("expense") === 0);
+        if (hit && sideOk) accMap[a.id] = hit.id; else missAcc.push((a.code ? a.code + " " : "") + (a.name || "an account"));
+      });
+    }
+    var missBits = [];
+    if (missTax.length) missBits.push("tax to match " + missTax.join(", "));
+    if (missAcc.length) missBits.push("account to match " + missAcc.join(", "));
+    var docCcy = inv.currency_code || S.company.currency_code;
     var inner =
       '<div class="o-note">This creates a <b>' + esc(kind) + '</b> in <b>' + esc(other.name) + '</b> for the same lines and the same total, and stamps both journal entries as intercompany so the group report can eliminate the pair.</div>' +
       '<div class="row2"><div><label>In company</label><span class="v">' + esc(other.name) + " (" + esc(other.currency_code || "") + ')</span></div>' +
@@ -7422,6 +7515,11 @@
         : '<div class="o-note warn">' + esc(other.name) + ' has no contact tagged as <b>' + esc(S.company.name) + '</b>. One will be created for you, tagged intercompany, so the pair can be eliminated.</div>') +
       (other.currency_code && other.currency_code !== (inv.currency_code || S.company.currency_code)
         ? '<div class="o-note warn">The two companies keep different currencies. The mirror is written in <b>' + esc(inv.currency_code || S.company.currency_code) + '</b>, the currency of this document, and translates on that company&rsquo;s own reports.</div>' : "") +
+      (missBits.length
+        ? '<div class="o-note warn"><b>' + esc(other.name) + '</b> has no ' + esc(missBits.join(", and no ")) + '. ' +
+          (missTax.length ? 'A line copied without its tax posts no tax there, so the mirror would total ' + esc(moneyC(Number(inv.amount_untaxed || 0), docCcy)) + ' against ' + esc(moneyC(Number(inv.amount_total || 0), docCcy)) + ' here. ' : '') +
+          (missAcc.length ? 'A line copied without its account posts to that company&rsquo;s own default ' + (mirSale ? 'income' : 'expense') + ' account. ' : '') +
+          'Create what is missing there first if the two documents have to agree line for line.</div>' : "") +
       '<div><label>Reference</label><input id="mi-ref" value="' + esc("Intercompany: " + (S.company.name || "") + " " + (inv.number || "")) + '"></div>';
     var m = plotModal("Mirror in " + other.name, inner, async function () {
       var ref = gv("mi-ref") || null;
@@ -7453,7 +7551,11 @@
           return {
             company_id: other.id, invoice_id: ins.data.id, name: l.name, sequence: (i + 1) * 10,
             quantity: l.quantity, unit_price: l.unit_price, discount: l.discount || 0,
-            price_subtotal: l.price_subtotal, price_total: l.price_total
+            price_subtotal: l.price_subtotal, price_total: l.price_total,
+            // the target company's own tax and account, matched above; null falls back
+            // to that company's default account when it posts
+            tax_id: (l.tax_id && taxMap[l.tax_id]) || null,
+            account_id: (l.account_id && accMap[l.account_id]) || null
           };
         });
         if (rows.length) {
@@ -7467,7 +7569,7 @@
             .eq("id", inv.journal_entry_id);
         }
         m.remove();
-        toast("Draft " + kind + " " + num + " created in " + other.name + ". Review it, then post it.");
+        toast("Draft " + kind + " " + num + " created in " + other.name + "." + (missBits.length ? " Check its lines first: this company has no " + missBits.join(", and no ") + ", so those lines came across without it." : " Review it, then post it."));
         renderInvoiceForm(ins.data.id, ins.data.move_type);
       } catch (e) {
         await setCompany(here.id, { quiet: true });
@@ -10215,8 +10317,9 @@
     ["purchase_tax_account_id", "VAT on purchases", "The VAT a vendor bill lets you deduct."],
     ["income_account_id", "Default income", "Used for an invoice line that names no account of its own."],
     ["expense_account_id", "Default expense", "Used for a bill line that names no account of its own."],
-    // the fourth item marks a pointer added later (migration 187): shown only once the column exists
-    ["salary_payable_account_id", "Salaries payable", "Net pay owed to staff. A posted payslip credits it, and a Salary payment in Counter starts on it and debits it.", true]
+    // the fourth item marks a pointer added later (migrations 187 and 199): shown only once the column exists
+    ["salary_payable_account_id", "Salaries payable", "Net pay owed to staff. A posted payslip credits it, and a Salary payment in Counter starts on it and debits it.", true],
+    ["payroll_deductions_account_id", "Payroll deductions", "Tax withheld, social security and anything else kept back from pay, plus the employer's own share, until it is paid over. A posted payslip credits it.", true]
   ];
   function stockGlHTML(c, accs) {
     if (!accs.length) return "";
@@ -11789,7 +11892,8 @@
     // document's own currency, so a changed rate or a foreign invoice gave a
     // figure that was never in the books. Now each document's base and VAT come
     // from its journal entry (the VAT line on the company's VAT account, and the
-    // rest of the entry), split across its tax rows by the tax on each line.
+    // rest of the entry), split across its tax rows by the rate each line was
+    // taxed at when it posted, which the line itself records.
     var docs = await allRows(function () {
       var q = sb.from("invoices").select("id,move_type,invoice_date,currency_code,journal_entry_id").eq("company_id", S.company.id).eq("state", "posted");
       if (pr.from) q = q.gte("invoice_date", pr.from);
@@ -11805,10 +11909,17 @@
       });
     }
     var taxById = {}; ((await sb.from("taxes").select("id,name,amount").eq("company_id", S.company.id)).data || []).forEach(function (t) { taxById[t.id] = t; });
+    // A document whose lines carry two different rates has its posted VAT shared out
+    // between them. That share used to be worked out from the tax rates AS THEY ARE
+    // TODAY, so raising a rate silently moved VAT between the rows of every past
+    // return. invoice_lines.tax_rate (migration 199) records the rate the line was
+    // actually taxed at, stamped when the document posted, and that is what is used.
+    var lineCols = "id,invoice_id,price_subtotal,tax_id,tax_rate";
+    try { var probe = await sb.from("invoice_lines").select("tax_rate").limit(1); if (probe.error) lineCols = "id,invoice_id,price_subtotal,tax_id"; } catch (e) { lineCols = "id,invoice_id,price_subtotal,tax_id"; }
     var linesBy = {}, postedBy = {}, dch = plotChunks(docs.map(function (d) { return d.id; }), 150);
     for (var di = 0; di < dch.length; di++) {
       var dPart = dch[di];
-      (await allRows(function () { return sb.from("invoice_lines").select("id,invoice_id,price_subtotal,tax_id").in("invoice_id", dPart).order("id"); })).forEach(function (l) { (linesBy[l.invoice_id] = linesBy[l.invoice_id] || []).push(l); });
+      (await allRows(function () { return sb.from("invoice_lines").select(lineCols).in("invoice_id", dPart).order("id"); })).forEach(function (l) { (linesBy[l.invoice_id] = linesBy[l.invoice_id] || []).push(l); });
     }
     var ech = plotChunks(docs.map(function (d) { return d.journal_entry_id; }).filter(Boolean), 150);
     for (var ej = 0; ej < ech.length; ej++) {
@@ -11827,9 +11938,15 @@
       var ls = linesBy[d.id] || []; if (!ls.length) return;
       var groups = {}, subT = 0, wT = 0;
       ls.forEach(function (l) {
-        var t = l.tax_id ? taxById[l.tax_id] : null, k = t ? t.name : "No tax / exempt";
-        var sub = Number(l.price_subtotal || 0), w = t ? sub * (Number(t.amount) || 0) / 100 : 0;
-        var g = groups[k] || (groups[k] = { base: 0, w: 0, taxed: !!t });
+        var t = l.tax_id ? taxById[l.tax_id] : null;
+        // the rate the line was taxed at. A line posted before migration 199, or one
+        // saved by an older build, has none, so it falls back to the tax as it is now.
+        var rate = (l.tax_rate === undefined || l.tax_rate === null || l.tax_rate === "") ? (t ? Number(t.amount) || 0 : 0) : Number(l.tax_rate) || 0;
+        var taxed = !!t || (!!l.tax_id && rate !== 0);
+        // a line whose tax has since been deleted still declared tax; it gets its own row
+        var k = t ? t.name : (taxed ? "Tax at " + (Math.round(rate * 100) / 100) + "% (tax deleted)" : "No tax / exempt");
+        var sub = Number(l.price_subtotal || 0), w = taxed ? sub * rate / 100 : 0;
+        var g = groups[k] || (groups[k] = { base: 0, w: 0, taxed: taxed });
         g.base += sub; g.w += w; subT += sub; wT += w;
       });
       var p = d.journal_entry_id ? postedBy[d.journal_entry_id] : null, baseF, vatF;
@@ -11859,7 +11976,7 @@
       s.html + p.html +
       '<tr class="tot"><td>' + (net >= 0 ? 'VAT payable' : 'VAT credit (refundable)') + '</td><td class="num"></td><td class="num">' + money(Math.abs(net)) + '</td></tr>' +
       '</tbody></table>' +
-      '<div class="sub u-mt14">Output VAT is tax you collected on sales; input VAT is tax you paid on purchases. Payable = output minus input. Credit notes are netted out. Posted documents only, at the amounts posted to the ledger in ' + esc(cc) + '.</div>' +
+      '<div class="sub u-mt14">Output VAT is tax you collected on sales; input VAT is tax you paid on purchases. Payable = output minus input. Credit notes are netted out. Posted documents only, at the amounts posted to the ledger in ' + esc(cc) + '. Where one document mixes rates, its posted VAT is split between them using the rate each line was taxed at when it posted, so changing a rate today never moves VAT between the rows of a past return.</div>' +
       (unposted ? '<div class="sub u-mt8">' + unposted + ' posted document(s) have no journal entry, so their figures are worked out from their lines at the latest exchange rate. Data Health Check lists them.</div>' : '');
   }
 
@@ -12432,19 +12549,23 @@
     function idxFor(dateStr) { var d = parseD(dateStr); if (!d) return 0; if (d < firstStart) return 0; for (var i = 0; i < buckets.length; i++) { if (d < buckets[i].end) return i; } return -1; }
     function addIn(dateStr, amt) { var i = idxFor(dateStr); if (i < 0 || !(amt > 0.005)) return; buckets[i].inflow += amt; }
     function addOut(dateStr, amt) { var i = idxFor(dateStr); if (i < 0 || !(amt > 0.005)) return; buckets[i].outflow += amt; }
+    // Every figure below is converted into the company currency before it is bucketed,
+    // the same way the dashboard does it. A EUR bill added straight to a USD invoice
+    // gave a running-cash line that was never a real amount of money in any currency.
+    await loadFxRates();
     // AR / AP open documents by due date
-    var docs = await allRows(function () { return bookDocFilter(sb.from("invoices").select("move_type,due_date,amount_residual").eq("company_id", S.company.id).eq("state", "posted").gt("amount_residual", 0.005)).order("id"); });
+    var docs = await allRows(function () { return bookDocFilter(sb.from("invoices").select("move_type,due_date,amount_residual,currency_code").eq("company_id", S.company.id).eq("state", "posted").gt("amount_residual", 0.005)).order("id"); });
     docs.forEach(function (d) {
-      var amt = Number(d.amount_residual || 0);
+      var amt = fxHomeConvert(Number(d.amount_residual || 0), d.currency_code);
       if (d.move_type === "out_invoice") addIn(d.due_date, amt);
       else if (d.move_type === "out_refund") addOut(d.due_date, amt);
       else if (d.move_type === "in_invoice") addOut(d.due_date, amt);
       else if (d.move_type === "in_refund") addIn(d.due_date, amt);
     });
     // committed POs (unbilled) by planned date
-    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,date_planned,state,company_id)").eq("purchase_orders.company_id", S.company.id).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
+    var poLines = (await sb.from("purchase_order_lines").select("price_subtotal,quantity,qty_billed, purchase_orders!inner(id,date_planned,state,company_id,currency_code)").eq("purchase_orders.company_id", S.company.id).in("purchase_orders.state", ["draft", "sent", "purchase"])).data || [];
     var poByOrder = {};
-    poLines.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = Number(l.price_subtotal || 0) * frac; if (!poByOrder[po.id]) poByOrder[po.id] = { date: po.date_planned, amt: 0 }; poByOrder[po.id].amt += v; });
+    poLines.forEach(function (l) { var po = l.purchase_orders; var q = Number(l.quantity || 0), b = Number(l.qty_billed || 0), frac = q > 0 ? Math.max(0, (q - b) / q) : 1, v = fxHomeConvert(Number(l.price_subtotal || 0) * frac, po.currency_code); if (!poByOrder[po.id]) poByOrder[po.id] = { date: po.date_planned, amt: 0 }; poByOrder[po.id].amt += v; });
     Object.keys(poByOrder).forEach(function (k) { if (poByOrder[k].amt > 0.005) addOut(poByOrder[k].date, poByOrder[k].amt); });
     // scheduled EVENT payments (unpaid, not yet turned into a bill) as outflows by due date
     var evPays = (await sb.from("event_payments").select("amount,due_date,bill_id, event_events!inner(company_id)").eq("event_events.company_id", S.company.id).eq("paid", false).is("bill_id", null).not("due_date", "is", null)).data || [];
@@ -12453,8 +12574,8 @@
     var evRevs = (await sb.from("event_revenues").select("amount,expected_date,invoice_id,received, event_events!inner(company_id)").eq("event_events.company_id", S.company.id).eq("received", false).is("invoice_id", null).not("expected_date", "is", null)).data || [];
     evRevs.forEach(function (r) { addIn(r.expected_date, Number(r.amount || 0)); });
     // payroll estimate: running contracts monthly gross at each month-end within horizon
-    var contracts = (await sb.from("hr_contracts").select("wage,state").eq("company_id", S.company.id).eq("state", "running")).data || [];
-    var monthlyPayroll = contracts.reduce(function (s, c) { return s + Number(c.wage || 0); }, 0);
+    var contracts = (await sb.from("hr_contracts").select("wage,state,currency_code").eq("company_id", S.company.id).eq("state", "running")).data || [];
+    var monthlyPayroll = contracts.reduce(function (s, c) { return s + fxHomeConvert(Number(c.wage || 0), c.currency_code); }, 0);
     if (monthlyPayroll > 0) buckets.forEach(function (b) { var me = new Date(b.start.getFullYear(), b.start.getMonth() + 1, 0); if (me >= b.start && me < b.end) addOut(fmtD(me), monthlyPayroll); });
     // client retention expected release (projects with a retention_due_date)
     var projs = (await sb.from("projects").select("id,name,retention_due_date").eq("company_id", S.company.id).not("retention_due_date", "is", null)).data || [];
@@ -12507,7 +12628,7 @@
       (low < 0 ? '<div class="ob-banner">! Cash is projected to go negative within ' + P.label + ' (low ' + cc + ' ' + money(low) + '). Chase receivables or defer commitments.</div>' : '') +
       (view === "chart" ? cfChart() :
         '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Period</td><td class="num">Inflows</td><td class="num">Outflows</td><td class="num">Net</td><td class="num">Running cash</td></tr></thead><tbody>' + rows + '</tbody></table></div>') +
-      '<div class="sub u-mt8">Opening cash = bank + cash GL balances. Inflows = customer invoices due, expected event revenues, and retention releases. Outflows = vendor bills due, unbilled committed POs, scheduled event payments, and estimated monthly payroll. Overdue/past items sit in the first period; anything beyond the horizon is excluded. Pick a longer horizon to see payments further out.</div>';
+      '<div class="sub u-mt8">Opening cash = bank + cash GL balances. Inflows = customer invoices due, expected event revenues, and retention releases. Outflows = vendor bills due, unbilled committed POs, scheduled event payments, and estimated monthly payroll. Everything is converted into ' + esc(cc) + ' at the latest exchange rate before it is added up, so a foreign invoice or bill counts for what it is worth here. Overdue/past items sit in the first period; anything beyond the horizon is excluded. Pick a longer horizon to see payments further out.</div>';
     var ex = document.getElementById("rp-export"); if (ex) ex.onclick = cfExportCsv;
     document.getElementById("cf-h").onchange = function () { S._cfHorizon = this.value; renderCashForecast(); };
     document.getElementById("cf-vs").querySelectorAll("[data-v]").forEach(function (b) { b.onclick = function () { S._cfView = b.dataset.v; renderCashForecast(); }; });
@@ -12602,26 +12723,33 @@
     var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
     var today0 = new Date(); today0.setHours(0, 0, 0, 0);
     function daysLate(due) { var d = parseD(due); return d ? Math.floor((today0 - d) / 864e5) : 0; }
-    var docs = await allRows(function () { return bookDocFilter(sb.from("invoices").select("id,number,move_type,invoice_date,due_date,amount_residual,partner_id,partners(name,phone,email)").eq("company_id", S.company.id).eq("state", "posted").eq("move_type", "out_invoice").gt("amount_residual", 0.005)).order("id"); });
+    var docs = await allRows(function () { return bookDocFilter(sb.from("invoices").select("id,number,move_type,invoice_date,due_date,amount_residual,currency_code,partner_id,partners(name,phone,email)").eq("company_id", S.company.id).eq("state", "posted").eq("move_type", "out_invoice").gt("amount_residual", 0.005)).order("id"); });
+    await loadFxRates();
     // An invoice with no due date is late from its invoice date, as Aged Receivable
     // counts it. It used to be skipped, having no due date to be past.
-    docs.forEach(function (d) { d._due = d.due_date || d.invoice_date; });
+    // _home is what the invoice is worth in the company currency: every total on this
+    // screen is an addition, and adding a EUR invoice to a USD one gave a chase figure
+    // that was not money. The row still shows the amount the customer actually owes.
+    docs.forEach(function (d) { d._due = d.due_date || d.invoice_date; d._home = fxHomeConvert(Number(d.amount_residual || 0), d.currency_code); });
     var over = docs.filter(function (d) { return daysLate(d._due) > 0; });
     var fu = (await sb.from("ar_followups").select("*").eq("company_id", S.company.id).order("followup_date", { ascending: false })).data || [];
     var lastByInv = {}, lastByPartner = {}; fu.forEach(function (f) { if (f.invoice_id && !lastByInv[f.invoice_id]) lastByInv[f.invoice_id] = f; if (f.partner_id && !lastByPartner[f.partner_id]) lastByPartner[f.partner_id] = f; });
     var levels = (await sb.from("followup_levels").select("*").eq("company_id", S.company.id).order("days", { ascending: false })).data || [];
     function levelFor(dl) { for (var i = 0; i < levels.length; i++) { if (dl >= Number(levels[i].days || 0)) return levels[i]; } return null; }
-    var byP = {}; over.forEach(function (d) { var k = d.partner_id || "none"; (byP[k] = byP[k] || { name: d.partners ? d.partners.name : "(no customer)", phone: d.partners ? d.partners.phone : "", rows: [], total: 0 }).rows.push(d); byP[k].total += Number(d.amount_residual || 0); });
-    var totalOver = over.reduce(function (s, d) { return s + Number(d.amount_residual || 0); }, 0);
+    var byP = {}; over.forEach(function (d) { var k = d.partner_id || "none"; (byP[k] = byP[k] || { name: d.partners ? d.partners.name : "(no customer)", phone: d.partners ? d.partners.phone : "", rows: [], total: 0 }).rows.push(d); byP[k].total += d._home; });
+    var totalOver = over.reduce(function (s, d) { return s + d._home; }, 0);
     var bk = { "1-30": 0, "31-60": 0, "61-90": 0, "90+": 0 };
-    over.forEach(function (d) { var dl = daysLate(d._due); bk[dl <= 30 ? "1-30" : dl <= 60 ? "31-60" : dl <= 90 ? "61-90" : "90+"] += Number(d.amount_residual || 0); });
+    over.forEach(function (d) { var dl = daysLate(d._due); bk[dl <= 30 ? "1-30" : dl <= 60 ? "31-60" : dl <= 90 ? "61-90" : "90+"] += d._home; });
     var sections = Object.keys(byP).sort(function (a, b) { return byP[b].total - byP[a].total; }).map(function (k) {
       var p = byP[k], lp = lastByPartner[k];
       var invRows = p.rows.sort(function (a, b) { return daysLate(b._due) - daysLate(a._due); }).map(function (d) {
         var dl = daysLate(d._due), lf = lastByInv[d.id], lv = levelFor(dl);
         var stat = lf ? '<span class="muted">' + esc(lf.status) + (lf.promised_date ? ' &middot; promised ' + esc(lf.promised_date) : '') + '</span>' : '<span class="muted">-</span>';
         var sugg = lv ? '<span class="ob-flag" style="background:' + (lv.action === "legal" ? "var(--bad)" : lv.action === "letter" ? "var(--warn)" : "var(--accent)") + '" title="' + esc(lv.message || "") + '">' + esc(lv.name) + '</span>' : '<span class="muted">-</span>';
-        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + (d.due_date ? esc(d.due_date) : esc(d.invoice_date || "") + ' (no due date)') + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad-t)"' : '') + '>' + dl + '</td><td class="num">' + money(d.amount_residual) + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
+        // one row is one document, so it also names the currency the customer really owes in
+        // the space before the block keeps the two figures apart in the CSV export too
+        var amtCell = money(d._home) + (d.currency_code && d.currency_code !== cc ? ' <div class="muted u-fs11">' + esc(moneyC(d.amount_residual, d.currency_code)) + '</div>' : '');
+        return '<tr><td>' + esc(d.number || "") + '</td><td class="muted">' + (d.due_date ? esc(d.due_date) : esc(d.invoice_date || "") + ' (no due date)') + '</td><td class="num"' + (dl > 60 ? ' style="color:var(--bad-t)"' : '') + '>' + dl + '</td><td class="num">' + amtCell + '</td><td>' + sugg + '</td><td>' + stat + '</td><td><button class="fu-btn" data-inv="' + d.id + '" data-p="' + (d.partner_id || "") + '" style="padding:3px 10px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--accent);font:inherit;font-size:12px;cursor:pointer">Log follow-up</button></td></tr>';
       }).join("");
       return '<tr class="sec"><td colspan="7"><b>' + esc(p.name) + '</b> &middot; ' + cc + ' ' + money(p.total) + ' overdue' + (p.phone ? ' &middot; ' + esc(p.phone) : '') + (lp && lp.next_action_date ? ' &middot; next action ' + esc(lp.next_action_date) : '') + '</td></tr>' + invRows;
     }).join("");
@@ -12629,7 +12757,7 @@
     document.getElementById("rep").innerHTML = repHead("Collections - overdue receivables", cc) +
       '<div class="kpis" style="margin:14px 0 4px">' + kpi("Total overdue", totalOver) + kpi("1-30 days", bk["1-30"]) + kpi("31-60", bk["31-60"]) + kpi("61-90", bk["61-90"]) + kpi("90+ days", bk["90+"]) + '</div>' +
       '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Invoice</td><td>Due</td><td class="num">Days late</td><td class="num">Amount due</td><td>Suggested</td><td>Last follow-up</td><td></td></tr></thead><tbody>' + (sections || '<tr><td colspan="7" class="muted">No overdue receivables. Nicely done.</td></tr>') + '</tbody></table></div>' +
-      '<div class="sub u-mt8">Overdue = posted customer invoices past their due date (or past their invoice date when they have no due date) with a balance. <b>Suggested</b> comes from your follow-up levels (Accounting &rsaquo; Configuration &rsaquo; Follow-up Levels). Use Log follow-up to record a call/email, a promise-to-pay date, and the next chase date.</div>';
+      '<div class="sub u-mt8">Overdue = posted customer invoices past their due date (or past their invoice date when they have no due date) with a balance. Every total is in ' + esc(cc) + ', converted at the latest exchange rate; where an invoice was raised in another currency the row shows that amount under the ' + esc(cc) + ' one. <b>Suggested</b> comes from your follow-up levels (Accounting &rsaquo; Configuration &rsaquo; Follow-up Levels). Use Log follow-up to record a call/email, a promise-to-pay date, and the next chase date.</div>';
     document.querySelectorAll(".fu-btn").forEach(function (b) { b.onclick = function () { openFollowupModal(b.dataset.inv, b.dataset.p); }; });
   }
   async function openFollowupModal(invoiceId, partnerId) {
@@ -12924,16 +13052,21 @@
     var canMng = canManageTeam();
     var multiCompany = S.companies.length > 1;
     var body = document.getElementById("o-body");
-    function editableMember(mem) { return canMng && !mem.is_me && (S.role.full_access || (roleRank[mem.role] || 0) < myRank); }
+    // _can_admin_member in the database is strict: only someone RANKED BELOW you, and
+    // never yourself, whatever your own role holds. Full access does not lift the rank
+    // rule, so offering the buttons to an owner for another owner only ever produced a
+    // refusal. A platform operator is the one exception the database makes.
+    function editableMember(mem) { return canMng && !mem.is_me && (S.isPlatformAdmin || (roleRank[mem.role] || 0) < myRank); }
     function roleCell(mem) {
       if (!editableMember(mem)) return esc(roleLabel[mem.role] || mem.role);
       var known = roleList.some(function (r) { return r.slug === mem.role; });
-      var opts = roleOptionsHTML(roleList, mem.role, function (r) { return r.rank >= myRank && !S.role.full_access; }) + (known ? "" : '<option selected>' + esc(mem.role || "(none)") + '</option>');
+      // set_member_role refuses a role ranked at or above the caller's, full access included
+      var opts = roleOptionsHTML(roleList, mem.role, function (r) { return r.rank >= myRank && !S.isPlatformAdmin; }) + (known ? "" : '<option selected>' + esc(mem.role || "(none)") + '</option>');
       return '<select class="um-role" data-id="' + mem.member_id + '">' + opts + '</select>';
     }
     function memberActions(mem) {
       if (mem.is_me) return '<span class="muted" style="font-size:11.5px">This is you</span>';
-      if (!editableMember(mem)) return canMng ? '<span class="muted" style="font-size:11.5px">Higher rank</span>' : '';
+      if (!editableMember(mem)) return canMng ? '<span class="muted" style="font-size:11.5px">Ranked at or above you</span>' : '';
       var a = (multiCompany ? '<button class="o-filtbtn um-comp" data-id="' + mem.member_id + '">Companies</button>' : '');
       a += '<button class="o-filtbtn um-exp" data-id="' + mem.member_id + '">Access ends</button>';
       a += (mem.status === "suspended"
@@ -12959,14 +13092,16 @@
         '<td class="u-r"><div class="um-acts">' + (canMng ? '<button class="o-filtbtn inv-resend" data-id="' + iv.id + '">Resend email</button><button class="o-filtbtn inv-revoke u-bad" data-id="' + iv.id + '">Revoke</button>' : '') + '</div></td></tr>';
     }).join("");
     var manageBtn = canManageRoles() ? '<button class="o-filtbtn" id="ur-manage">Manage roles &amp; permissions</button>' : '';
+    var reviewBtn = canMng ? '<button class="o-filtbtn" id="ur-review">Access review</button>' : '';
     var inviteBtn = canMng ? '<button class="o-new" id="ur-invite">+ Invite teammate</button>' : '';
     var colspan = multiCompany ? 4 : 3;
     body.innerHTML = '<div class="u-p16">' +
-      '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px"><div><h3 class="u-m0">Team</h3><div class="sub" style="max-width:60ch">Invite people to ' + esc(S.org ? S.org.name : "your team") + ', set what each person can do, and ' + (multiCompany ? 'limit them to certain companies' : 'manage their access') + '.</div></div><div style="margin-left:auto;display:flex;gap:8px">' + manageBtn + inviteBtn + '</div></div>' +
+      '<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:12px"><div><h3 class="u-m0">Team</h3><div class="sub" style="max-width:60ch">Invite people to ' + esc(S.org ? S.org.name : "your team") + ', set what each person can do, and ' + (multiCompany ? 'limit them to certain companies' : 'manage their access') + '.</div></div><div style="margin-left:auto;display:flex;gap:8px">' + reviewBtn + manageBtn + inviteBtn + '</div></div>' +
       '<div class="card"><table><thead><tr><th>Person</th><th style="width:200px">Role</th>' + (multiCompany ? '<th>Companies</th>' : '') + '<th></th></tr></thead><tbody>' + (rows || '<tr><td colspan="' + colspan + '" class="muted">No members.</td></tr>') + '</tbody></table></div>' +
       (invites.length ? '<div class="card u-mt14"><h3 class="u-mb4">Pending invitations</h3><div class="sub u-mb8">Each person joins automatically the next time they sign in with this email. Until then they see the invitation on their home screen.</div><table><thead><tr><th>Email</th><th style="width:200px">Role</th>' + (multiCompany ? '<th>Companies</th>' : '') + '<th></th></tr></thead><tbody>' + inviteRows + '</tbody></table></div>' : '') +
       '</div>';
     var mb = document.getElementById("ur-manage"); if (mb) mb.onclick = function () { go("settings.roles"); };
+    var rvb = document.getElementById("ur-review"); if (rvb) rvb.onclick = function () { go("settings.access"); };
     var ib = document.getElementById("ur-invite"); if (ib) ib.onclick = function () { openInviteModal(roleList); };
     body.querySelectorAll(".um-role").forEach(function (s) {
       s.onchange = async function () {
@@ -12985,7 +13120,11 @@
     body.querySelectorAll(".um-exp").forEach(function (b) {
       b.onclick = async function () {
         var cur = expBy[b.dataset.id];
-        var d = await askEndDate("Access stops at the end of this day. Clear the date for no end date.", cur ? String(cur).slice(0, 10) : "", true);
+        // an auditor's account must keep an end date: set_member_expiry refuses a blank one,
+        // so the window must not invite one either
+        var who = team.filter(function (x) { return x.member_id === b.dataset.id; })[0] || {};
+        var mustEnd = who.role === "external_auditor";
+        var d = await askEndDate(mustEnd ? "An External Auditor's access always ends. Choose the last day." : "Access stops at the end of this day. Clear the date for no end date.", cur ? String(cur).slice(0, 10) : "", !mustEnd);
         if (d === null) return;
         var r = await sb.rpc("set_member_expiry", { p_member: b.dataset.id, p_expires: d ? d + "T23:59:59" : null });
         if (r.error) { toast(errMsg(r.error)); return; }
@@ -12997,6 +13136,320 @@
     body.querySelectorAll(".um-remove").forEach(function (b) { b.onclick = function () { var mem = team.filter(function (x) { return x.member_id === b.dataset.id; })[0]; confirmModal("Remove from team?", "They lose access to <b>" + esc(S.org ? S.org.name : "this team") + "</b> immediately. Their work stays. You can invite them again later.", "Remove", async function () { var r = await sb.rpc("remove_member", { p_member: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Removed from team"); renderUsers(); } }); }; });
     body.querySelectorAll(".inv-resend").forEach(function (b) { b.onclick = async function () { b.disabled = true; b.textContent = "Sending..."; var er = await sendInviteEmail(b.dataset.id); b.disabled = false; b.textContent = "Resend email"; toast(er && er.ok ? "Email sent" : ("Could not send: " + ((er && er.error) || "unknown"))); }; });
     body.querySelectorAll(".inv-revoke").forEach(function (b) { b.onclick = async function () { var r = await sb.rpc("revoke_invite", { p_invite: b.dataset.id }); if (r.error) { toast(errMsg(r.error)); } else { toast("Invitation revoked"); renderUsers(); } }; });
+  }
+
+  // ============================ SETTINGS: ACCESS REVIEW ============================
+  // One page the owner can read, and hand to an auditor, for the company they are in:
+  // everyone on the team, the apps their role opens and how deep, the three money
+  // switches, what they may sign off, which companies they are scoped to, when their
+  // access ends, and the questions worth asking about each of them.
+  //
+  // Nothing on it is typed in by hand. The levels are read out of the role rows exactly
+  // the way the database reads them (perm_level, migration 190), and every question is
+  // worked out from those rows, from the app map and from the activity log. A screen
+  // that moves to another app, a role that changes, a new module: the page follows.
+  var LEVEL_LABEL = {}; LEVELS.forEach(function (L) { LEVEL_LABEL[L[0]] = L[1]; });
+  var LEVEL_RANK = { "-": 0, V: 1, O: 2, W: 3, M: 4 };
+  // what a role gives in one module, for anybody's role rather than the signed-in one
+  function lvlIn(role, mod) {
+    if (!role) return "-";
+    if (role.full_access) return "M";
+    var p = role.permissions || {};
+    return lvlOf(p[mod] || p["*"]);
+  }
+  function lvlAtLeast(role, mod, want) { return LEVEL_RANK[lvlIn(role, mod)] >= LEVEL_RANK[want]; }
+  function roleSeesCol(role, col) { if (!role) return false; if (role.full_access) return true; return role[col] != null ? role[col] !== false : role.can_see_money !== false; }
+  // a part of an app is opt-out, the same reading featureAllowed uses on the screens
+  function rolePartOn(role, mod, feat) { if (!role) return false; if (role.full_access) return true; var mp = (role.permissions || {})[mod]; return !(mp && mp.f && mp.f[feat] === false); }
+  // the permission module behind a screen, from the same map the router uses. Null when
+  // the screen is unknown, so a renamed screen drops its rule instead of guessing.
+  function arMod(action) { return ACTION_MODULE[action] || (ACTION_APP[action] ? modKey(ACTION_APP[action]) : null); }
+  // Each money switch, and the apps that actually show what it unlocks. A switch left on
+  // for someone who can open none of them hands them nothing, and on a review it reads as
+  // access nobody meant to give.
+  var MONEY_SWITCHES = [
+    { col: "see_costs", label: "Costs and margins", mods: ["accounting", "sales", "purchase", "inventory", "estimation", "projects", "site", "manufacturing", "counter", "pos", "kitchen", "plot", "service", "events"] },
+    { col: "see_salaries", label: "Salaries", mods: ["employees"] },
+    { col: "see_bank", label: "Bank and cash", mods: ["accounting", "counter", "pos"] }
+  ];
+  // Work that crosses two screens. A role that can take the first step and not the second
+  // leaves the person stopped in the middle of their own job. Each step names a SCREEN and
+  // arMod turns it into a module at the moment of the review, so a screen that moves to
+  // another app keeps these honest instead of quietly going stale.
+  var ACCESS_CHAINS = [
+    { from: "po.list", to: "inv.receipts", need: "W", what: "can raise a purchase order but cannot record what arrives against it",
+      why: "The order stays open until somebody else receives the goods, so the stock figure, the supplier's bill and the three-way match all wait on another person.",
+      fix: "Give the role Work in Inventory, or confirm that a storekeeper receives everything and leave it as it is." },
+    { from: "rfq.list", to: "po.list", need: "W", what: "can send a request for quotation but cannot turn the answer into an order",
+      why: "They do the asking around and then hand the winning quote to someone else to key in again, which is slow and loses the trail from quote to order.",
+      fix: "Give the role Work in Purchase, or confirm that a buyer places every order." },
+    { from: "so.list", to: "inv.delivery", need: "W", what: "can take a sales order but cannot record the delivery",
+      why: "The order never closes and the customer's invoice has nothing to bill against until someone else ships it.",
+      fix: "Give the role Work in Inventory, or leave shipping with the warehouse." },
+    { from: "crm.leads", to: "so.list", need: "W", what: "works opportunities but cannot raise the quotation that wins one",
+      why: "Every quote goes through a second person, at the point in the job where speed matters most.",
+      fix: "Give the role Work in Sales." },
+    { from: "est.list", to: "so.list", need: "W", what: "can build an estimate but cannot turn it into a quotation",
+      why: "The tender is priced and then handed over to be entered again, which is where numbers get lost between the two.",
+      fix: "Give the role Work in Sales." },
+    { from: "mfg.wo", to: "inv.issues", need: "W", what: "can open a work order but cannot issue the material it consumes",
+      why: "The job cannot start without a storekeeper, and the work order's cost stays empty until someone issues to it.",
+      fix: "Give the role Work in Inventory." },
+    { from: "proj.list", to: "ts.list", need: "W", what: "runs projects but cannot record time against them",
+      why: "Labour never reaches the job cost, so the project's profit is wrong by whatever the team spent on it.",
+      fix: "Give the role Work in Projects, or confirm the site team keeps the timesheets." },
+    { from: "pc.list", to: "inv.out", need: "W", what: "can certify work done but cannot raise the invoice for it",
+      why: "A certificate is what triggers billing. Many businesses split this on purpose, because whoever certifies should not invoice, so the point is to confirm that somebody does.",
+      fix: "Confirm who invoices from certificates, or give the role Work in Accounting." },
+    { from: "plot.charges", to: "inv.out", need: "W", what: "sets a building's charges but cannot issue the owners' invoices",
+      why: "The charge run posts nothing until someone with Accounting finishes it, so the building's income sits waiting.",
+      fix: "Give the role Work in Accounting, or confirm the accountant runs the billing." },
+    { from: "svc.tickets", to: "inv.out", need: "W", what: "closes service tickets but cannot bill for them",
+      why: "Chargeable work is done and then queued for someone else to invoice, which is where billable hours go missing.",
+      fix: "Give the role Work in Accounting, or confirm the office bills every ticket." }
+  ];
+  // The money a job needs. A role that does the work and cannot see the numbers behind it
+  // is doing that work blind.
+  var MONEY_NEEDS = [
+    { col: "see_costs", at: ["po.list", "est.list"], need: "W", what: "buys or prices work with every amount hidden",
+      why: "Costs and margins is off for their role, so supplier prices, cost prices and margins show as dots. They would be agreeing to numbers they cannot read.",
+      fix: "Switch Costs and margins on for the role, or move the buying and pricing to someone who sees prices." },
+    { col: "see_bank", at: ["inv.in"], need: "W", what: "works in Accounting but cannot see bank or cash",
+      why: "Bank statements, reconciliation and cash balances are not returned to them, so they can post all day and never tie the books back to the bank.",
+      fix: "Switch Bank and cash on for the role, or confirm that reconciliation belongs to someone else." }
+  ];
+  // The screen each approvable document lives on, so an approval limit for an app the
+  // person cannot even open shows up as the dead end it is.
+  var APPR_DOC_ACTION = {
+    purchase_order: "po.list", sales_order: "so.list", vendor_bill: "inv.in", customer_invoice: "inv.out",
+    subcontract: "sc.list", variation: "var.list", expense: "hr.exp", journal_entry: "moves",
+    payroll: "hr.runs", leave: "hr.leaves", submittal: "doc.subs", timesheet: "ts.list", requisition: "pur.req"
+  };
+  var AR_DOC = "";
+  async function renderAccessReview() {
+    if (!canManageTeam()) { toast("The access review is for whoever manages the team"); go("settings.users"); return; }
+    document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Access review") + '<div class="gap"></div>' +
+      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
+      '<div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div>';
+    wireBc();
+    AR_DOC = "";
+    // the page on screen and the page on paper are the same string, the way the statement does it
+    document.getElementById("rp-print").onclick = function () { if (AR_DOC) pdocPrint(AR_DOC); else window.print(); };
+    document.getElementById("rp-export").onclick = exportRepCsv;
+    var oid = S.company.org_id;
+    var team = ((await sb.rpc("org_team", { p_org: oid })).data) || [];
+    var roleList = await rolesForOrg();
+    var roleBy = {}; roleList.forEach(function (r) { roleBy[r.slug] = r; });
+    var memBy = {}; ((await sb.from("org_members").select("id,expires_at").eq("org_id", oid)).data || []).forEach(function (x) { memBy[x.id] = x; });
+    // Orbit records no sign-ins anywhere it can read them back, so the nearest honest
+    // answer to "are they still using this" is the last record the person created or
+    // changed in THIS company. A year is the review window.
+    var since = new Date(); since.setFullYear(since.getFullYear() - 1);
+    var sinceISO = since.toISOString().slice(0, 10);
+    var audit = await allRows(function () { return sb.from("audit_log").select("actor,table_name,at").eq("company_id", S.company.id).gte("at", sinceISO).order("at", { ascending: false }); });
+    var wrote = {}, lastAt = {};
+    audit.forEach(function (a) {
+      if (!a.actor) return;
+      var app = auditApp(a); if (app) (wrote[a.actor] || (wrote[a.actor] = {}))[modKey(app)] = 1;
+      if (!lastAt[a.actor] || String(a.at) > lastAt[a.actor]) lastAt[a.actor] = String(a.at);
+    });
+    // the modules the activity log can speak for at all: a Manage level in any other app
+    // is never questioned here, because there would be no evidence either way
+    var auditMods = {}; Object.keys(AUDIT_TABLES).forEach(function (t) { auditMods[modKey(AUDIT_TABLES[t].app)] = 1; });
+    var owners = team.filter(function (m) { return m.role === "owner"; }).length;
+    var multiCompany = S.companies.length > 1;
+    var now = new Date();
+    var people = team.map(function (mem) {
+      var m = memBy[mem.member_id] || {};
+      return { mem: mem, role: roleBy[mem.role] || null, expires: m.expires_at || null, wrote: wrote[mem.user_id] || {}, last: lastAt[mem.user_id] || null };
+    });
+    // ---- the questions, one person at a time -------------------------------------
+    function q(kind, title, why, fix) { return { k: kind, t: title, w: why, f: fix }; }
+    function questionsFor(p) {
+      var out = [], role = p.role, mem = p.mem;
+      var expired = p.expires && new Date(p.expires) <= now;
+      if (!role) {
+        out.push(q("wide", "Their role does not exist",
+          "Their membership names the role " + (mem.role || "(none)") + ", and no role with that key is left in this organisation. Orbit gives them nothing at all, so they sign in to empty screens and nobody is told why.",
+          "Pick a role for them in the Role list on their row in Users and Roles."));
+      } else {
+        if (role.full_access && mem.role !== "owner") {
+          out.push(q("wide", "Holds a role with full access",
+            role.label + " sees and changes everything in every app, including bank details, salaries and the roles themselves, and the rules that need two different people cannot apply to it. That belongs to the business owner.",
+            "Move them to the role that matches their job. System Administrator covers users, backups and privacy requests without seeing any money."));
+        }
+        if (mem.role === "owner" && owners > 1) {
+          out.push(q("note", "One of " + owners + " people holding Owner",
+            "Owner is full access with nothing above it, so every extra owner is another account that can change anything and cannot be managed by anyone else.",
+            "Keep Owner for the people who really own the business and give everyone else the role for their job."));
+        }
+        if (!role.org_id && roleGroupOf(role) === "Earlier roles") {
+          out.push(q("wide", "On a role from before roles were enforced",
+            role.label + " comes from the old list, before each app had a level. It grants broadly and it is not offered in the grouped role picker any more, so nobody chose it for this job on purpose.",
+            "Replace it with the role for their job from the grouped list, then check this page again."));
+        }
+        if (role.can_manage_roles && !role.full_access) {
+          out.push(q("note", "Can manage the team",
+            "They can invite people, change roles, set company access and end dates, and suspend or remove anyone ranked below them.",
+            "Keep this to the people who actually run the team. It is the Can manage roles and users setting on the role."));
+        }
+        if ((mem.role === "external_auditor" || /auditor/i.test(role.label || "")) && !p.expires) {
+          out.push(q("wide", "An auditor with no end date",
+            "An auditor is given the books for a job and a period. With no end date the account stays live after the audit is signed off, and nobody is reminded to close it.",
+            "Press Access ends on their row and set the last day of the engagement."));
+        }
+        var never = [];
+        MODULE_CATALOG.forEach(function (mm) { if (lvlIn(role, mm.key) === "M" && auditMods[mm.key] && !p.wrote[mm.key]) never.push(mm.label); });
+        if (never.length && audit.length) {
+          out.push(q("wide", "Manage in " + never.length + " app" + (never.length === 1 ? "" : "s") + " they have not used",
+            "Their role can delete records other records depend on and change the setup in " + never.join(", ") + ", and the activity log for " + S.company.name + " shows nothing they created or changed there in the last twelve months. Treat that as a question, not a finding: the log covers the main record types only and only this company, and someone can use an app all day without creating a record in it.",
+            "Ask them whether they use " + (never.length === 1 ? "that app" : "those apps") + ". If not, drop the level to View or None on their role."));
+        }
+        MONEY_SWITCHES.forEach(function (sw) {
+          if (role.full_access || !roleSeesCol(role, sw.col)) return;
+          if (sw.mods.some(function (k) { return lvlIn(role, k) !== "-"; })) return;
+          out.push(q("wide", sw.label + " is on with no app that uses it",
+            "Their role sees " + sw.label.toLowerCase() + ", and it opens none of the apps that show those figures. It gives them nothing today and it quietly becomes real access the moment somebody adds an app to the role.",
+            "Switch " + sw.label + " to No on the role, unless you are about to give them one of those apps."));
+        });
+        var lim = role.approval_limits;
+        if (lim) Object.keys(lim).forEach(function (d) {
+          if (lim[d] === null || lim[d] === undefined || lim[d] === "") return;
+          var mod = arMod(APPR_DOC_ACTION[d]); if (!mod || lvlIn(role, mod) !== "-") return;
+          out.push(q("gap", "May approve a " + String(APPR_DOC_LABEL[d] || d).toLowerCase() + " in an app they cannot open",
+            "Their role carries an approval limit for " + String(APPR_DOC_LABEL[d] || d).toLowerCase() + ", and it gives them None in " + (MODULE_LABEL[mod] || mod) + ". They can sign off from the approvals inbox but never look at what they are signing.",
+            "Give the role at least View in " + (MODULE_LABEL[mod] || mod) + ", or set that document to Cannot approve."));
+        });
+        ACCESS_CHAINS.forEach(function (c) {
+          var a = arMod(c.from), b = arMod(c.to);
+          if (!a || !b || a === b) return;
+          if (!lvlAtLeast(role, a, "W") || lvlAtLeast(role, b, c.need)) return;
+          out.push(q("gap", "They " + c.what,
+            c.why + " Their role is " + LEVEL_LABEL[lvlIn(role, b)] + " in " + (MODULE_LABEL[b] || b) + ".",
+            c.fix));
+        });
+        MONEY_NEEDS.forEach(function (n) {
+          if (roleSeesCol(role, n.col)) return;
+          if (!n.at.some(function (a) { var mod = arMod(a); return mod && lvlAtLeast(role, mod, n.need); })) return;
+          out.push(q("gap", "They " + n.what, n.why, n.fix));
+        });
+        if (!roleSeesCol(role, "see_salaries") && lvlAtLeast(role, "employees", "W") && rolePartOn(role, "employees", "payroll")) {
+          out.push(q("gap", "Meant to run payroll with Salaries switched off",
+            "Their role works in Employees and its Payroll part is still on, but Salaries is No, so every payroll screen is hidden from them and the database returns no contracts or payslips. The role says two different things.",
+            "Switch Salaries to Yes if payroll is their job, or untick the Payroll part of Employees so the role says plainly that it is not."));
+        }
+        if (!role.full_access && !MODULE_CATALOG.some(function (mm) { return lvlAtLeast(role, mm.key, "O"); })) {
+          out.push(q("note", "Reads what they can see and saves nothing",
+            "No app on this role is set to Own records, Work or Manage, so every screen they reach is read only. That is right for an auditor or an observer and wrong for anybody doing a job.",
+            "If they are meant to work in Orbit, raise the apps they need to Work on their role."));
+        }
+      }
+      if (expired) {
+        out.push(q("wide", "Access ended on " + String(p.expires).slice(0, 10) + " and they are still on the team",
+          "The database already refuses them, so nothing is exposed. What is wrong is the list: anyone reading it thinks this person still works here, and the row would come back to life if somebody cleared the date.",
+          "Remove them from the team, or set a new end date if the engagement was extended."));
+      } else if (p.expires && (new Date(p.expires) - now) < 2592000000) {
+        out.push(q("note", "Access ends on " + String(p.expires).slice(0, 10),
+          "Within the next thirty days their sign-in stops working, mid job if nobody is expecting it.",
+          "Extend the date with Access ends, or tell them when it stops."));
+      }
+      if (multiCompany && !(p.mem.company_ids && p.mem.company_ids.length) && !(p.role && p.role.full_access)) {
+        out.push(q("note", "Works in every company",
+          "You run " + S.companies.length + " companies and this person is not limited to any of them, so they see all of them and every company you add later, automatically.",
+          "If their job is one company, press Companies on their row and tick only that one."));
+      }
+      if (p.mem.status === "suspended") {
+        out.push(q("note", "Suspended, with the role still attached",
+          "They cannot sign in while they are suspended, and they keep their role and their companies, so reactivating gives it all back in one click.",
+          "If they are not coming back, remove them instead."));
+      }
+      return out;
+    }
+    // ---- the page ----------------------------------------------------------------
+    function appsCell(p) {
+      if (!p.role) return '<span class="ar-off">None</span>';
+      if (p.role.full_access) return '<b>Every app, Manage</b>';
+      var got = MODULE_CATALOG.filter(function (mm) { return lvlIn(p.role, mm.key) !== "-"; });
+      if (!got.length) return '<span class="ar-off">No app at all</span>';
+      return got.map(function (mm) { return esc(mm.label) + ' <b>' + esc(LEVEL_LABEL[lvlIn(p.role, mm.key)]) + '</b>'; }).join("<br>");
+    }
+    function moneyCell(p) {
+      return MONEY_SWITCHES.map(function (sw) {
+        var on = roleSeesCol(p.role, sw.col);
+        return esc(sw.label) + ' <b' + (on ? '' : ' class="ar-off"') + '>' + (on ? "Yes" : "No") + '</b>';
+      }).join("<br>");
+    }
+    function apprCell(p) {
+      if (!p.role) return '<span class="ar-off">Nothing</span>';
+      if (p.role.full_access) return '<b>Anything, any amount</b>';
+      var lim = p.role.approval_limits;
+      if (!lim) return '<span class="ar-off">No limits set: anyone on this role who can write may sign off a rule that names nobody.</span>';
+      var keys = Object.keys(lim).filter(function (d) { return lim[d] !== null && lim[d] !== undefined && lim[d] !== ""; });
+      if (!keys.length) return '<span class="ar-off">Nothing</span>';
+      return keys.map(function (d) {
+        var u = apprUnit(d), v = lim[d] === "any" ? "any amount" : (String(lim[d]) + " " + (u === "money" ? S.company.currency_code : (u || "")));
+        return esc(APPR_DOC_LABEL[d] || d) + ' <b>' + esc(v.trim()) + '</b>';
+      }).join("<br>");
+    }
+    function whenCell(v) { return v ? esc(String(v).slice(0, 10)) : '<span class="ar-off">-</span>'; }
+    var totals = { wide: 0, gap: 0, note: 0 };
+    var blocks = people.map(function (p) {
+      var qs = questionsFor(p);
+      qs.forEach(function (x) { totals[x.k]++; });
+      p.qs = qs;
+      var tags = (p.mem.is_me ? '<span class="ar-tag">you</span> ' : "") +
+        (p.mem.status === "suspended" ? '<span class="ar-tag warn">suspended</span> ' : "") +
+        (p.expires && new Date(p.expires) <= now ? '<span class="ar-tag bad">access ended</span> ' : "");
+      var qhtml = qs.length
+        ? qs.map(function (x) { return '<div class="ar-q ' + x.k + '"><span class="ar-qt">' + esc(x.t) + '</span>' + esc(x.w) + '<span class="ar-qf">What to do: ' + esc(x.f) + '</span></div>'; }).join("")
+        : '<div class="ar-none">Nothing to question.</div>';
+      return '<div class="ar-p"><div class="ar-ph"><span class="ar-nm">' + esc(p.mem.full_name || (p.mem.email || "").split("@")[0] || "User") + '</span>' +
+        '<span class="ar-em">' + esc(p.mem.email || "") + '</span> ' + tags +
+        '<span class="ar-rl">' + esc(p.role ? (p.role.label || p.role.slug) : (p.mem.role || "no role")) + (p.role ? ", rank " + esc(String(p.role.rank)) : "") + '</span></div>' +
+        '<div class="ar-cols">' +
+        '<div class="ar-col"><div class="ar-ct">Apps this role opens</div><div class="ar-li">' + appsCell(p) + '</div></div>' +
+        '<div class="ar-col"><div class="ar-ct">Money they see</div><div class="ar-li">' + moneyCell(p) + '</div></div>' +
+        '<div class="ar-col"><div class="ar-ct">May approve</div><div class="ar-li">' + apprCell(p) + '</div></div>' +
+        '<div class="ar-col"><div class="ar-ct">Companies, dates</div><div class="ar-li">' + esc(companyAccessLabel(p.mem.company_ids)) +
+        '<br>Joined ' + whenCell(p.mem.joined_at) + '<br>Access ends ' + whenCell(p.expires) + '<br>Last change recorded ' + whenCell(p.last) + '</div></div>' +
+        '</div>' + qhtml + '</div>';
+    }).join("");
+    var rows = people.map(function (p) {
+      var n = p.qs.length;
+      return '<tr><td><b>' + esc(p.mem.full_name || (p.mem.email || "").split("@")[0] || "User") + '</b><span class="pstmt-sm">' + esc(p.mem.email || "") + '</span></td>' +
+        '<td>' + esc(p.role ? (p.role.label || p.role.slug) : (p.mem.role || "no role")) + '</td>' +
+        '<td>' + esc(p.mem.status === "suspended" ? "Suspended" : (p.expires && new Date(p.expires) <= now ? "Access ended" : "Active")) + '</td>' +
+        '<td>' + esc(companyAccessLabel(p.mem.company_ids)) + '</td>' +
+        '<td>' + whenCell(p.expires) + '</td>' +
+        '<td>' + whenCell(p.last) + '</td>' +
+        '<td>' + (n ? esc(String(n)) : "none") + '</td></tr>';
+    }).join("");
+    var tpl = printTplData();
+    var facts = '<table><tr><td class="k">Company</td><td class="v">' + esc(S.company.name) + '</td></tr>' +
+      '<tr><td class="k">Organisation</td><td class="v">' + esc(S.org ? S.org.name : "") + '</td></tr>' +
+      '<tr><td class="k">People</td><td class="v">' + people.length + '</td></tr>' +
+      '<tr><td class="k">Questions raised</td><td class="v">' + (totals.wide + totals.gap + totals.note) + '</td></tr>' +
+      '<tr><td class="k">Reviewed by</td><td class="v">' + esc(S.user.email || "") + '</td></tr></table>';
+    var docHTML = '<div class="pinv pstmt ar-sheet">' +
+      pdocHead('<h1 class="pdt-t">Access review</h1>', "As at " + today()) +
+      '<div class="pstmt-meta"><div class="pstmt-party"><div class="pstmt-lbl">What this page is</div>' +
+      '<div class="pstmt-name">Who can do what in ' + esc(S.company.name) + '</div>' +
+      '<div class="pstmt-addr">Every person who can sign in to this organisation and reach this company, the apps their role opens and how deep, the money they see, what they may sign off, and the questions worth asking about each of them. The levels are the ones the database itself checks on every save, delete and approval, so this is what they can really do, not what a screen suggests.</div></div>' +
+      '<div class="pstmt-facts">' + facts + '</div></div>' +
+      '<div class="pstmt-box"><div class="pstmt-box-l"><div class="k">Questions to answer</div>' +
+      '<div class="n">' + totals.wide + ' more access than the job looks like it needs &middot; ' + totals.gap + ' the role blocks part of the job &middot; ' + totals.note + ' worth knowing</div></div>' +
+      '<div class="v">' + (totals.wide + totals.gap + totals.note) + '</div></div>' +
+      '<div class="pstmt-h2">Everyone, at a glance</div>' +
+      '<div class="pstmt-tw"><table class="o-rt st-tb"><thead><tr><th>Person</th><th>Role</th><th>Status</th><th>Companies</th><th>Access ends</th><th>Last change</th><th>Questions</th></tr></thead><tbody>' +
+      (rows || '<tr class="none"><td colspan="7">Nobody on this team.</td></tr>') + '</tbody></table></div>' +
+      '<div class="pstmt-h2">Person by person</div>' + blocks +
+      '<div class="pstmt-note">How to read this. <b>Apps this role opens</b> is the level the database applies: None hides the app, Own records shows only what is assigned to or raised by the person, View reads and changes nothing, Work creates and changes, Manage also deletes what other records depend on and changes the app\'s setup. <b>Last change</b> is the last record this person created or changed in ' + esc(S.company.name) + ' in the last twelve months. Orbit does not record sign-ins, so it is the closest thing to "are they still using this", and it covers the main record types only: someone can work all day in an app that keeps no activity log. Questions are worked out from the roles themselves and from that log, so they follow the roles as you change them; a question is a thing to check, not proof of anything.</div>' +
+      pdocFoot() + '</div>';
+    AR_DOC = docHTML;
+    document.documentElement.style.setProperty("--print-accent", tpl.accent || "#2f6bff");
+    var rep = document.getElementById("rep");
+    rep.className = "o-report wide o-stmt-sheet";
+    rep.innerHTML = docHTML;
   }
 
   // ============================ SETTINGS: ROLES & PERMISSIONS ============================
@@ -13074,7 +13527,7 @@
     }).join("");
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet wide"><h3>' + (isNew ? "New role" : (role.org_id ? "Edit role" : "Customize role") + ": " + esc(t.label || t.slug)) + '</h3><div class="form">' +
-      '<div class="row2"><div><label>Role name</label><input id="rl-label" value="' + esc(t.label || "") + '" placeholder="e.g. Site Manager"></div><div><label>Rank (higher = more senior)</label><input id="rl-rank" type="number" value="' + (t.rank || 10) + '"></div></div>' +
+      '<div class="row2"><div><label>Role name</label><input id="rl-label" value="' + esc(t.label || "") + '" placeholder="e.g. Site Manager"></div><div><label>Rank (higher = more senior)</label><input id="rl-rank" type="number" value="' + (t.rank || 10) + '"' + (iAmFull ? '' : ' max="' + (myRoleRank() - 1) + '"') + '></div></div>' +
       '<div><label>Description</label><input id="rl-desc" value="' + esc(t.description || "") + '" placeholder="What this role is for"></div>' +
       '<div class="o-cf-head u-mt10">Apps</div>' +
       '<div class="rl-tablewrap"><table class="rl-table"><thead><tr><th>App</th><th>Access</th><th>Parts of it</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div>' +
@@ -13095,6 +13548,10 @@
     document.getElementById("rl-cancel").onclick = function () { m.remove(); };
     document.getElementById("rl-save").onclick = async function () {
       var label = gv("rl-label"); if (!label) { toast("Name the role"); return; }
+      // guard_role_grants refuses a role ranked at or above the person saving it, so say so
+      // here rather than letting the save come back with a database message
+      var wantRank = parseInt(gv("rl-rank"), 10) || 10;
+      if (!iAmFull && wantRank >= myRoleRank()) { toast("Set the rank below " + myRoleRank() + ". Nobody creates a role as senior as their own."); return; }
       var perms = {};
       MODULE_CATALOG.forEach(function (mm) {
         var l = m.querySelector('.rl-lvl[data-mod="' + mm.key + '"]').value;
@@ -13117,7 +13574,7 @@
         if (bad) { toast("Enter the limit for " + bad + ", or choose Cannot approve."); return; }
       }
       var seeCosts = document.getElementById("rl-costs").value === "1";
-      var payload = { label: label, description: gv("rl-desc"), rank: parseInt(gv("rl-rank"), 10) || 10, can_see_money: seeCosts, see_costs: seeCosts,
+      var payload = { label: label, description: gv("rl-desc"), rank: wantRank, can_see_money: seeCosts, see_costs: seeCosts,
         see_salaries: document.getElementById("rl-sal").value === "1", see_bank: document.getElementById("rl-bank").value === "1",
         can_manage_roles: document.getElementById("rl-cmr").value === "1", permissions: perms, approval_limits: lim,
         template_group: t.template_group || null, org_id: S.company.org_id, is_system: false, protected: false, full_access: false };
@@ -16780,6 +17237,213 @@
       document.getElementById("sec-close").onclick = function () { m.remove(); };
     }
   }
+  // ---- Allowed networks -------------------------------------------------------
+  // "Can this company only be opened on a certain IP?" The rule itself lives in the
+  // database (migration 196): my_member_in, my_role_in and my_company_ids all ask
+  // ip_allowed(), so a blocked person stops being a member for that request whatever
+  // tool they use. A check here in the browser would only be advice, because the
+  // browser talks to PostgREST directly and anyone can repeat the same request by hand.
+  // This screen sets the rule up, and shows the address the DATABASE sees rather than
+  // one looked up in the browser, because that is the address the rule compares.
+  var IP_MODES = [["off", "Off"], ["watch", "Watch only"], ["on", "On"]];
+  var IP_PERSON_MODES = [["inherit", "Follow the company rule"], ["office_or_own", "The office, or their own addresses"], ["own_only", "Only their own addresses"], ["anywhere", "Anywhere, no restriction"]];
+  // "203.0.113.4", "203.0.113.0/24", "2001:db8::", "2001:db8::/32". Checked here so a
+  // typo is caught in the form instead of coming back as a Postgres cast error.
+  function ipNetOk(t) {
+    var s = String(t || "").trim(), p, addr, bits, q, i;
+    if (!s || /\s/.test(s)) return false;
+    p = s.split("/"); if (p.length > 2) return false;
+    addr = p[0]; bits = p.length === 2 ? p[1] : null;
+    if (addr.indexOf(":") >= 0) {
+      if (!/^[0-9a-fA-F:.]+$/.test(addr)) return false;
+      if (addr.indexOf("::") !== addr.lastIndexOf("::")) return false;
+      if (addr.split(":").length < 3) return false;
+      return bits === null || (/^\d{1,3}$/.test(bits) && +bits <= 128);
+    }
+    q = addr.split("."); if (q.length !== 4) return false;
+    for (i = 0; i < 4; i++) { if (!/^\d{1,3}$/.test(q[i]) || +q[i] > 255) return false; }
+    return bits === null || (/^\d{1,2}$/.test(bits) && +bits <= 32);
+  }
+  // A person's own addresses are typed as one line: an address, an optional name after
+  // a space, entries separated by commas. One field beats an editable sub-table per
+  // person on a screen that may list thirty people.
+  function ipParsePersonList(text) {
+    var out = [], bad = [];
+    String(text || "").split(",").forEach(function (chunk) {
+      var s = chunk.trim(); if (!s) return;
+      var sp = s.indexOf(" ");
+      var net = sp < 0 ? s : s.slice(0, sp), label = sp < 0 ? "" : s.slice(sp + 1).trim();
+      if (!ipNetOk(net)) { bad.push(s); return; }
+      out.push({ network: net, label: label });
+    });
+    return { rows: out, bad: bad };
+  }
+  // Postgres keeps a single address as a /32 or /128, so what comes back is not what was
+  // typed. Show it the way it was typed, or somebody compares it to the address at the top
+  // of the screen, decides it is a different one, and adds it a second time.
+  function ipShow(n) { return String(n == null ? "" : n).replace(/\/(?:32|128)$/, ""); }
+  function ipFormatPersonList(rows) {
+    return rows.map(function (r) { return ipShow(r.network) + (r.label ? " " + r.label : ""); }).join(", ");
+  }
+  async function renderIpRules() {
+    var main = document.getElementById("o-main");
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Allowed networks") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
+    wireBc();
+    var body = document.getElementById("o-body"), cid = S.company.id;
+    var who = {}, pol = null, rules = [], team = [], ppol = [], prules = [], events = [], setupNeeded = false;
+    try {
+      var wr = await sb.rpc("ip_whoami");
+      if (wr.error) setupNeeded = true; else who = wr.data || {};
+      var pr = await sb.from("company_ip_policy").select("*").eq("company_id", cid).maybeSingle();
+      if (pr.error) setupNeeded = true; else pol = pr.data;
+      rules = (await sb.from("company_ip_rules").select("*").eq("company_id", cid).order("created_at")).data || [];
+      team = ((await sb.rpc("org_team", { p_org: S.company.org_id })).data) || [];
+      ppol = (await sb.from("member_ip_policy").select("*").eq("company_id", cid)).data || [];
+      prules = (await sb.from("member_ip_rules").select("*").eq("company_id", cid)).data || [];
+      events = (await sb.from("company_ip_events").select("*").eq("company_id", cid).order("at", { ascending: false }).limit(25)).data || [];
+    } catch (e) { setupNeeded = true; }
+    if (setupNeeded) {
+      body.innerHTML = '<div class="u-p16" style="max-width:760px"><div class="card"><h3 class="u-mb4">Allowed networks</h3><div class="sub">This is not installed yet. Run <span class="path">supabase/196-company-ip-rules.sql</span> once in the Supabase SQL editor, then reload this page. It adds the rule tables and the check the database makes on every request.</div></div></div>';
+      return;
+    }
+    var mayEdit = canAdminApp("settings");
+    var myIp = who.ip || "";
+    // Without a readable address nothing can be enforced, and the database refuses to
+    // arm the rule. Say that at the top instead of letting somebody set it and believe it.
+    var canEnforce = !!myIp;
+    var mode = (pol && pol.mode) || "off";
+    var polBy = {}; ppol.forEach(function (p) { polBy[p.user_id] = p.mode; });
+    var rulesBy = {}; prules.forEach(function (r) { (rulesBy[r.user_id] = rulesBy[r.user_id] || []).push(r); });
+    var nameBy = {}; team.forEach(function (m) { nameBy[m.user_id] = m.full_name || m.email || "Someone"; });
+
+    function coRow(r) {
+      return '<tr' + (r.id ? ' data-id="' + esc(r.id) + '"' : "") + '>' +
+        '<td><input class="ipr-label" value="' + esc(r.label || "") + '" placeholder="e.g. Head office"' + (mayEdit ? "" : " disabled") + '></td>' +
+        '<td><input class="ipr-net" value="' + esc(ipShow(r.network)) + '" placeholder="e.g. 203.0.113.0/24"' + (mayEdit ? "" : " disabled") + '></td>' +
+        '<td class="u-c"><input class="ipr-on" type="checkbox" aria-label="Use this address"' + (r.active === false ? "" : " checked") + (mayEdit ? "" : " disabled") + '></td>' +
+        '<td>' + (mayEdit ? '<button class="del" type="button" title="Remove">&times;</button>' : "") + '</td></tr>';
+    }
+    function personRow(m) {
+      var pm = polBy[m.user_id] || "inherit";
+      var opts = IP_PERSON_MODES.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === pm ? " selected" : "") + '>' + esc(o[1]) + '</option>'; }).join("");
+      return '<tr data-uid="' + esc(m.user_id) + '"><td><b>' + esc(m.full_name || (m.email ? m.email.split("@")[0] : "User")) + '</b>' + (m.email ? '<div class="muted" style="font-size:11.5px">' + esc(m.email) + '</div>' : "") + '</td>' +
+        '<td><select class="ipp-mode"' + (mayEdit ? "" : " disabled") + '>' + opts + '</select></td>' +
+        '<td><input class="ipp-list" value="' + esc(ipFormatPersonList(rulesBy[m.user_id] || [])) + '" placeholder="e.g. 198.51.100.7 Home"' + (mayEdit ? "" : " disabled") + '></td></tr>';
+    }
+    var evRows = events.map(function (e) {
+      return '<tr><td class="muted">' + esc(String(e.at || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(nameBy[e.user_id] || "Someone") + '</td><td><code>' + esc(e.ip || "not readable") + '</code></td><td>' + (e.outcome === "blocked" ? '<span class="badge unpaid">Refused</span>' : '<span class="badge partial">Would be refused</span>') + '</td></tr>';
+    }).join("");
+
+    body.innerHTML = '<div class="u-p16" style="max-width:980px">' +
+      '<div class="card"><div style="display:flex;align-items:center;gap:10px"><h3 class="u-m0">Where this company may be opened from</h3>' +
+      (mayEdit ? '<button class="pri" id="ipr-save" style="margin-left:auto">Save</button>' : '') + '</div>' +
+      '<div class="sub u-m6012">Name the internet connections this company may be opened from, for example your office broadband line. Anyone else in this company is refused, wherever they are signed in from, until you allow them. The organisation&rsquo;s owner is never refused, so a mistake here can always be undone.</div>' +
+      '<div class="ipr-now' + (canEnforce ? "" : " ipr-warn") + '">' + (canEnforce
+        ? 'You are connecting from <b><code>' + esc(myIp) + '</code></b>. This is the address the database sees' + (who.source ? ' (from <code>' + esc(who.source) + '</code>)' : "") + ', and the one the rule compares.'
+        : 'The database cannot see the address you are connecting from, so this rule cannot be enforced on this installation. Leave it <b>Off</b>, or use <b>Watch only</b>. Switching it <b>On</b> will be refused.') + '</div>' +
+      // the database shows the addresses themselves only to Settings Manage, so without
+      // it the tables come back empty and would otherwise read as "no rule is set"
+      (mayEdit ? "" : '<div class="sub u-mb8">Changing this needs <b>Manage</b> in Settings on your role, and so does seeing the addresses, so the lists below are empty for you even if a rule is set. Ask an owner or an administrator.</div>') +
+      '<div class="ipr-modes">' + IP_MODES.map(function (o) {
+        var note = o[0] === "off" ? "Anyone on the team can open this company from anywhere."
+          : (o[0] === "watch" ? "Nobody is refused, but every sign-in from an address that is not listed is recorded below."
+            : "Only the addresses listed below. Everyone else in this company is refused.");
+        return '<label class="ipr-mode"><input type="radio" name="ipr-mode" value="' + o[0] + '"' + (o[0] === mode ? " checked" : "") + (mayEdit ? "" : " disabled") + '><span><b>' + esc(o[1]) + '</b><i>' + esc(note) + '</i></span></label>';
+      }).join("") + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="width:34%">What it is</th><th>Address or range</th><th style="width:60px" class="u-c">Use it</th><th style="width:40px"></th></tr></thead><tbody id="ipr-body">' + (rules.length ? rules.map(coRow).join("") : "") + '</tbody></table></div>' +
+      (mayEdit ? '<div style="display:flex;gap:14px;flex-wrap:wrap"><button class="o-addln" id="ipr-add">+ Add an address or range</button>' + (canEnforce ? '<button class="o-addln" id="ipr-addme">+ Add the address I am on now</button>' : "") + '</div>' : "") +
+      '</div>' +
+      '<div class="card u-mt14"><div style="display:flex;align-items:center;gap:10px"><h3 class="u-m0">People</h3>' +
+      (mayEdit ? '<button class="pri" id="ipp-save" style="margin-left:auto">Save</button>' : '') + '</div>' +
+      '<div class="sub u-m6012">Set one person apart from the company rule, so a colleague who works from home keeps working while everyone else is office-only. <b>Their own addresses</b> takes an address, optionally a name after a space, several separated by commas: <code>198.51.100.7 Home, 2001:db8:abcd::/64 Site office</code>.</div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th style="width:30%">Person</th><th style="width:26%">Rule</th><th>Their own addresses</th></tr></thead><tbody id="ipp-body">' + (team.map(personRow).join("") || '<tr><td colspan="3" class="muted" style="padding:12px">Nobody else on the team yet.</td></tr>') + '</tbody></table></div></div>' +
+      '<div class="card u-mt14"><h3 class="u-mb4">Refused recently</h3><div class="sub u-mb8">The last 25 times somebody was refused, or in Watch only would have been. Kept for 90 days.</div>' +
+      '<div class="o-rt-wrap"><table class="o-list"><thead><tr><th style="width:150px">When</th><th>Who</th><th style="width:180px">From</th><th style="width:150px">What happened</th></tr></thead><tbody>' + (evRows || '<tr><td colspan="4" class="muted" style="padding:12px">Nobody has been refused.</td></tr>') + '</tbody></table></div></div>' +
+      '<div class="card u-mt14"><h3 class="u-mb4">What this does not stop</h3><div class="sub">A rule on an address says where the connection comes from, not who is sitting at the keyboard. Somebody on a VPN into the office, on an office machine reached by remote desktop, or tethering a laptop at home through a phone on an allowed connection still gets in. A photograph of the screen is not stopped by anything here. It stops the ordinary case: opening the company on home broadband. A company API key is not a person and is not covered by this rule.</div></div>' +
+      '</div>';
+
+    if (!mayEdit) return;
+    var coBody = document.getElementById("ipr-body");
+    function wireDel() { coBody.querySelectorAll(".del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+    wireDel();
+    document.getElementById("ipr-add").onclick = function () { coBody.insertAdjacentHTML("beforeend", coRow({ active: true })); wireDel(); };
+    var addMe = document.getElementById("ipr-addme");
+    if (addMe) addMe.onclick = function () { coBody.insertAdjacentHTML("beforeend", coRow({ active: true, label: "This office", network: myIp })); wireDel(); };
+
+    document.getElementById("ipr-save").onclick = async function () {
+      var btn = this, keep = [], ups = [], bad = [];
+      Array.prototype.forEach.call(coBody.querySelectorAll("tr"), function (tr) {
+        var net = (tr.querySelector(".ipr-net").value || "").trim();
+        if (!net) return;
+        if (!ipNetOk(net)) { bad.push(net); return; }
+        var row = { id: tr.dataset.id || null, label: (tr.querySelector(".ipr-label").value || "").trim(), network: net, active: tr.querySelector(".ipr-on").checked };
+        if (row.id) keep.push(row.id);
+        ups.push(row);
+      });
+      if (bad.length) { toast("Not an address or range: " + bad.join(", ")); return; }
+      var want = (body.querySelector('input[name="ipr-mode"]:checked') || {}).value || "off";
+      if (want === "on" && !ups.some(function (r) { return r.active && (r.network === myIp || r.network.indexOf("/") > 0); })) {
+        // A plain warning first. The database refuses it anyway, but a refusal that
+        // arrives as a red message after Save is a worse way to learn this.
+        if (!confirm("None of the addresses you listed is the one you are on now (" + (myIp || "not readable") + "). If it is inside one of the ranges you listed this is fine; otherwise you will be refused. Carry on?")) return;
+      }
+      btn.disabled = true; btn.textContent = "Saving...";
+      try {
+        var gone = rules.filter(function (r) { return keep.indexOf(r.id) < 0; }).map(function (r) { return r.id; });
+        if (gone.length) { var dr = await sb.from("company_ip_rules").delete().in("id", gone); if (dr.error) throw dr.error; }
+        var i, r2;
+        for (i = 0; i < ups.length; i++) {
+          if (ups[i].id) r2 = await sb.from("company_ip_rules").update({ label: ups[i].label, network: ups[i].network, active: ups[i].active, updated_at: new Date().toISOString() }).eq("id", ups[i].id);
+          else r2 = await sb.from("company_ip_rules").insert({ company_id: cid, label: ups[i].label, network: ups[i].network, active: ups[i].active });
+          if (r2.error) throw r2.error;
+        }
+        // the addresses go in before the switch, so "add this address, then turn it on"
+        // is one Save and not two
+        var pr2 = await sb.from("company_ip_policy").upsert({ company_id: cid, mode: want }, { onConflict: "company_id" });
+        if (pr2.error) throw pr2.error;
+        toast(want === "on" ? "Saved. Only the addresses listed can open this company now." : "Saved");
+      } catch (e) { toast(errMsg(e)); }
+      btn.disabled = false; btn.textContent = "Save";
+      renderIpRules();
+    };
+
+    document.getElementById("ipp-save").onclick = async function () {
+      var btn = this, work = [], bad = [];
+      Array.prototype.forEach.call(document.getElementById("ipp-body").querySelectorAll("tr[data-uid]"), function (tr) {
+        var parsed = ipParsePersonList(tr.querySelector(".ipp-list").value);
+        if (parsed.bad.length) bad = bad.concat(parsed.bad);
+        work.push({ uid: tr.dataset.uid, mode: tr.querySelector(".ipp-mode").value, rows: parsed.rows });
+      });
+      if (bad.length) { toast("Not an address or range: " + bad.join(", ")); return; }
+      btn.disabled = true; btn.textContent = "Saving...";
+      try {
+        var i, j, w, r3;
+        for (i = 0; i < work.length; i++) {
+          w = work[i];
+          // somebody who follows the company rule and has no address of their own keeps
+          // no rows at all, so this table stays a list of the exceptions people asked for
+          if (w.mode === "inherit" && !w.rows.length) {
+            r3 = await sb.from("member_ip_policy").delete().eq("company_id", cid).eq("user_id", w.uid);
+            if (r3.error) throw r3.error;
+            r3 = await sb.from("member_ip_rules").delete().eq("company_id", cid).eq("user_id", w.uid);
+            if (r3.error) throw r3.error;
+            continue;
+          }
+          r3 = await sb.from("member_ip_policy").upsert({ company_id: cid, user_id: w.uid, mode: w.mode }, { onConflict: "company_id,user_id" });
+          if (r3.error) throw r3.error;
+          r3 = await sb.from("member_ip_rules").delete().eq("company_id", cid).eq("user_id", w.uid);
+          if (r3.error) throw r3.error;
+          for (j = 0; j < w.rows.length; j++) {
+            r3 = await sb.from("member_ip_rules").insert({ company_id: cid, user_id: w.uid, label: w.rows[j].label, network: w.rows[j].network });
+            if (r3.error) throw r3.error;
+          }
+        }
+        toast("People saved");
+      } catch (e) { toast(errMsg(e)); }
+      btn.disabled = false; btn.textContent = "Save";
+      renderIpRules();
+    };
+  }
   async function renderNumbering() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Document Numbering") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
@@ -19895,7 +20559,21 @@
   var HEAD_CATS = [["earning", "Earning"], ["deduction", "Deduction"], ["benefit", "Benefit"], ["employer_cost", "Employer cost (EOS / employer SSF)"], ["total", "Total"]];
   function calcLabel(c) { for (var i = 0; i < CALC_TYPES.length; i++) if (CALC_TYPES[i][0] === c) return CALC_TYPES[i][1]; return c; }
   // Safe-ish formula eval: owner-configured expressions over payroll variables + Math.
+  // A payroll or costing formula is arithmetic, not a program. Everything outside
+  // arithmetic is refused before the expression is ever evaluated, because a stored
+  // formula runs in the browser of whoever opens the record next, with their session.
+  function formulaSafe(expr) {
+    var s = String(expr == null ? "" : expr);
+    if (s.length > 400) return false;
+    if (!/^[-+*/%().,<>=!?:&| \t0-9A-Za-z_]*$/.test(s)) return false;
+    return !/(constructor|prototype|__proto__|import|eval|Function|window|document|globalThis|self|top|parent|fetch|XMLHttpRequest|localStorage|sessionStorage|cookie|alert|require|process|setTimeout|setInterval)/i.test(s);
+  }
   function evalFormula(expr, vars) {
+    // A formula is typed by a person, stored, and then evaluated in whoever opens the
+    // record next. That makes it code running in their session, so it is held to
+    // arithmetic: the characters are whitelisted and the words that reach outside
+    // arithmetic are refused, the same way the spreadsheet grid does it.
+    if (!formulaSafe(expr)) { toast("That formula uses something that is not allowed. Use numbers, the field names and + - * / ( ) only."); return 0; }
     try { var keys = Object.keys(vars); return Number(new Function(keys.join(","), "with(Math){return (" + (expr || "0") + ");}").apply(null, keys.map(function (k) { return vars[k]; }))) || 0; }
     catch (e) { return 0; }
   }
@@ -19954,13 +20632,25 @@
       if (!spa) { toast("Settings, Companies has no salaries payable account set, or that account is archived. Choose it under Accounting accounts, then post again."); return false; }
       netAcc = spa.id;
     } else netAcc = (payAccs.filter(function (a) { return /salar|payroll|personnel/i.test(a.name); })[0] || payAccs.filter(function (a) { return a.code === "4000"; })[0] || payAccs[0] || {}).id;
-    var dedAcc = (payAccs.filter(function (a) { return a.code === "4000"; })[0] || payAccs[0] || {}).id;
+    // Deductions (tax withheld, social security, loan repayments) and the employer's own
+    // share are owed to a third party until they are paid over, so they have their own
+    // account. They used to be posted to whatever happened to be numbered 4000, which on
+    // the French chart is the suppliers control and not a payroll account at all. Like
+    // every other posting, the account comes from the company setting first (migration
+    // 199); the old code is only used until that column exists.
+    var dedAcc;
+    if (Object.prototype.hasOwnProperty.call(coAcc, "payroll_deductions_account_id")) {
+      var pda = coAcc.payroll_deductions_account_id ? accs.filter(function (a) { return a.id === coAcc.payroll_deductions_account_id; })[0] : null;
+      dedAcc = pda ? pda.id : null;
+    } else dedAcc = (payAccs.filter(function (a) { return a.code === "4000"; })[0] || payAccs[0] || {}).id;
     if (!exp || !netAcc) { toast("Need a salary/expense account and a payable account in the chart"); return false; }
     var jr = (await sb.from("journals").select("id").eq("company_id", S.company.id).eq("code", "MISC").maybeSingle()).data;
     if (!jr) { toast("No MISC journal to post to"); return false; }
     var gross = Number(slip.gross) || 0, ded = Number(slip.total_deductions) || 0, net = Number(slip.net) || 0;
     var elines = (await sb.from("hr_payslip_lines").select("amount,category").eq("payslip_id", slip.id)).data || [];
     var employer = elines.filter(function (l) { return l.category === "employer_cost"; }).reduce(function (s, l) { return s + Number(l.amount || 0); }, 0);
+    // say it before anything is written, rather than posting the money somewhere wrong
+    if ((ded > 0.005 || employer > 0.005) && !dedAcc) { toast("This payslip keeps money back, but Settings, Companies has no payroll deductions account set (or that account is archived). Choose it under Accounting accounts, then post again."); return false; }
     var e = await sb.from("journal_entries").insert({ company_id: S.company.id, journal_id: jr.id, date: slip.date_to || today(), ref: "Payslip", narration: "Payroll " + (slip.date_from || ""), currency_code: S.company.currency_code, state: "draft", source_type: "payslip", source_id: String(slip.id) }).select("id").single();
     if (e.error) { toast("Entry failed: " + errMsg(e.error)); return false; }
     var eid = e.data.id, jl = [{ entry_id: eid, company_id: S.company.id, account_id: exp, label: "Gross salary", debit: gross, credit: 0 }];
@@ -21495,6 +22185,33 @@
       return await r.json();
     } catch (e) { return { error: String(e) }; }
   }
+  // Deleting a site used to remove its rows and nothing else, which left every custom
+  // hostname registered at the certificate provider: the name stayed live at the edge,
+  // pointing at a site that no longer existed, and nobody could see it from Orbit. The
+  // hostnames are now unregistered first, and the delete is refused (with the names) when
+  // any of them cannot be, rather than leaving an orphan behind. Called from the shared
+  // delete handler, so it covers the Delete button wherever a site is opened.
+  async function webSiteDeleteDomains(siteId) {
+    var hs = (await sb.from("site_hostnames").select("id,hostname,cf_hostname_id").eq("site_id", siteId)).data || [];
+    var left = [], unconfigured = false;
+    for (var i = 0; i < hs.length; i++) {
+      var h = hs[i];
+      // a row that never reached the edge has nothing to unregister; it goes with the
+      // site, so it is left alone in case the site delete itself is refused
+      if (!h.cf_hostname_id) continue;
+      var r = await webDomainApi("remove", h.id);
+      if (r && r.ok) { await sb.from("site_hostnames").delete().eq("id", h.id); continue; }
+      if (r && r.not_configured) unconfigured = true;
+      left.push(h.hostname + (r && r.error && !r.not_configured ? " (" + r.error + ")" : ""));
+    }
+    if (!left.length) return { ok: true };
+    return {
+      ok: false,
+      msg: unconfigured
+        ? "This site's custom domain" + (left.length === 1 ? " " : "s ") + left.join(", ") + " could not be unregistered, because custom domains are not configured on this deployment. Remove the hostname with your DNS and certificate provider first, then delete the site."
+        : "This site's custom domain" + (left.length === 1 ? " " : "s ") + left.join(", ") + " could not be unregistered at the certificate provider, so the site was not deleted. Try Remove on the Custom domain tab, and delete the site once the domain is gone."
+    };
+  }
   function cfgSites() {
     var cfg = {
       title: "Sites", pageSize: 50, editTable: "sites", archiveField: "is_active",
@@ -21511,6 +22228,14 @@
         { label: "Status", get: function (s) { return s.is_active === false ? '<span class="badge">Archived</span>' : (s.is_published ? '<span class="badge paid">Published</span>' : '<span class="badge draft">Draft</span>'); } }
       ],
       filters: [{ label: "Active", test: function (s) { return s.is_active !== false; } }, { label: "Archived", test: function (s) { return s.is_active === false; } }],
+      // Deleting from the list goes through here first, so a site's custom domains are
+      // unregistered at the edge before its rows go, and the delete is refused with the
+      // names when any of them cannot be. Same guard as the Delete button on the form.
+      beforeDelete: async function (ids) {
+        var stop = [];
+        for (var i = 0; i < ids.length; i++) { var r = await webSiteDeleteDomains(ids[i]); if (!r.ok) stop.push(r.msg); }
+        return stop.length ? stop.join(" ") : null;
+      },
       onOpen: function (s) { renderSiteForm(s.id); }, onNew: function () { renderSiteForm("new"); }
     };
     return cfg;
@@ -23114,7 +23839,9 @@
   // stops updating is worse than one that is a few seconds behind, and polling
   // recovers by itself from a dropped connection.
   // ===========================================================================
-  var SERVICE = { store: null, stores: [], tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false, vat: null, seat: 0, course: 1 };
+  // till: this browser's own letter in the current store, claimed from the server, printed
+  // and called after a number the till had to give out itself with no connection
+  var SERVICE = { store: null, stores: [], tables: [], order: null, lines: [], products: [], modGroups: [], timer: null, station: "", full: false, vat: null, seat: 0, course: 1, till: "" };
   // Courses are the order food reaches the table in, not a category. A waiter
   // holds the mains until the starters clear, which is the whole point.
   var COURSE_NAME = { 1: "Starters", 2: "Mains", 3: "Dessert" };
@@ -24253,6 +24980,8 @@
     var sp = document.getElementById("ct-storepick");
     if (sp) sp.onchange = function () { SERVICE.store = this.value; renderCounter(); };
     document.getElementById("ct-collect").onclick = function () { go("kitchen.collect"); };
+    // claim this till's letter for this store, so an offline number can be told apart
+    await svcClaimTill();
 
     var menu = await svcLoadMenu(SERVICE.store);
     SERVICE.products = menu.products;
@@ -24417,24 +25146,34 @@
         taken_by: (S.user && S.user.email) || null, split_kind: "whole"
       });
       for (var pi = 0; pi < rows.length; pi++) { if (!(await svcWrite("pos_payments", "insert", rows[pi]))) return; }
+      // Coming back from offline: tell the server the highest number this till gave out
+      // by itself today, so it never hands that number to another till. Only runs on the
+      // first sale after a spell offline, and it is a no-op when the server is ahead.
+      var mine = counterLocalHigh();
+      if (mine > 0) { try { var rc = await sb.rpc("pos_reconcile_call_number", { p_company: S.company.id, p_store: SERVICE.store || null, p_last: mine }); if (rc && !rc.error) counterLocalHighClear(); } catch (e) { } }
       // With no connection the server cannot hand out a number, so this device carries on
       // from the last number it saw today for this store and the customer still gets one.
+      // A number given that way carries this till's own letter, because another till that
+      // is also offline can reach the same number.
       var numR; try { numR = await sb.rpc("pos_next_call_number", { p_company: S.company.id, p_store: SERVICE.store || null }); } catch (e) { numR = { error: e }; }
       var num = (numR && !numR.error && numR.data != null) ? numR.data : null, numLocal = false;
       if (num == null) { num = counterLocalNum(); numLocal = true; } else counterRememberNum(num);
+      var numSuffix = numLocal ? (SERVICE.till || "") : "";
       var now = new Date().toISOString();
       // everything goes to the kitchen at once: there are no courses at a counter
       for (var i = 0; i < SERVICE.lines.length; i++) {
         await svcWrite("pos_order_lines", "update", { kds_status: "fired", fired_at: now }, { match: { id: SERVICE.lines[i].id } });
       }
-      await svcWrite("pos_orders", "update", {
+      var patch = {
         status: "paid", amount_paid: T.tot, call_number: num || null,
         fired_at: now, served_at: null, closed_at: now
-      }, { match: { id: SERVICE.order.id } });
-      SERVICE.order.call_number = num;
+      };
+      if (await posHasSuffix()) patch.call_suffix = numSuffix || null;
+      await svcWrite("pos_orders", "update", patch, { match: { id: SERVICE.order.id } });
+      SERVICE.order.call_number = num; SERVICE.order.call_suffix = numSuffix || null;
       m.remove();
       svcPrintBill(null, { receipt: true, payments: rows });
-      counterCalled(num, menu, numLocal);
+      counterCalled(num, menu, numLocal, numSuffix);
     });
     loadFxRates().then(function () { pad = tenderPad("ct-pad", T.tot); });
   }
@@ -24442,13 +25181,66 @@
   // Call numbers given while offline: per company, store and day, kept in this browser.
   function counterNumKey() { return "orbit_callno_" + S.company.id + "_" + (SERVICE.store || "none") + "_" + today(); }
   function counterRememberNum(n) { try { localStorage.setItem(counterNumKey(), String(n)); } catch (e) { } }
-  function counterLocalNum() { var last = 0; try { last = parseInt(localStorage.getItem(counterNumKey()), 10) || 0; } catch (e) { } var n = last >= 999 ? 1 : last + 1; counterRememberNum(n); return n; }
-  function counterCalled(num, menu, local) {
+  // The highest number this till gave out ITSELF today. Kept apart from the last number
+  // seen, because it is the only thing the server has to be told about on reconnect.
+  function counterLocalHigh() { try { return parseInt(localStorage.getItem(counterNumKey() + "_local"), 10) || 0; } catch (e) { return 0; } }
+  function counterLocalHighClear() { try { localStorage.removeItem(counterNumKey() + "_local"); } catch (e) { } }
+  function counterLocalNum() {
+    var last = 0; try { last = parseInt(localStorage.getItem(counterNumKey()), 10) || 0; } catch (e) { }
+    var n = last >= 999 ? 1 : last + 1;
+    counterRememberNum(n);
+    try { localStorage.setItem(counterNumKey() + "_local", String(Math.max(n, counterLocalHigh()))); } catch (e) { }
+    return n;
+  }
+  // Two tills that both lose the connection each carry on from the last number they saw,
+  // so both can reach 42. The till's own tag, handed out by the server and unique inside
+  // the store, is what keeps "42 A" and "42 B" apart. A number the server gave needs no
+  // tag, because the server only ever gives each one out once.
+  function counterCallLabel(n, suffix) { return (n == null ? "-" : String(n)) + (suffix ? " " + suffix : ""); }
+  function svcTillDeviceId() {
+    var v = "";
+    try { v = localStorage.getItem("orbit_till_device") || ""; if (!v) { v = uuid(); localStorage.setItem("orbit_till_device", v); } } catch (e) { }
+    return v || (SERVICE._devFallback || (SERVICE._devFallback = uuid()));
+  }
+  // pos_orders.call_suffix and the till register arrive with migration 199. Until it is
+  // applied, asking for the column would fail the whole query, so the till checks once.
+  // A yes is remembered in this browser, because the moment the letter matters most is
+  // the moment there is no connection to ask with. A no is only remembered for the
+  // session, so the till picks the column up the first time it opens after the migration.
+  var _posSuffixCol = null;
+  try { if (localStorage.getItem("orbit_pos_suffix") === "1") _posSuffixCol = true; } catch (e) { }
+  async function posHasSuffix() {
+    if (_posSuffixCol !== null) return _posSuffixCol;
+    if (isOffline()) return false;                       // no answer yet; ask again when there is a line
+    try {
+      var r = await sb.from("pos_orders").select("call_suffix").limit(1);
+      if (r.error && looksOffline(r.error)) return false;
+      _posSuffixCol = !r.error;
+    } catch (e) { if (looksOffline(e)) return false; _posSuffixCol = false; }
+    if (_posSuffixCol) { try { localStorage.setItem("orbit_pos_suffix", "1"); } catch (e) { } }
+    return _posSuffixCol;
+  }
+  async function svcClaimTill() {
+    var key = "orbit_till_tag_" + S.company.id + "_" + (SERVICE.store || "none");
+    try { SERVICE.till = localStorage.getItem(key) || ""; } catch (e) { SERVICE.till = ""; }
+    try {
+      var r = await sb.rpc("pos_claim_till", { p_company: S.company.id, p_store: SERVICE.store || null, p_device: svcTillDeviceId() });
+      if (!r.error && r.data) { SERVICE.till = String(r.data); try { localStorage.setItem(key, SERVICE.till); } catch (e) { } }
+    } catch (e) { /* no connection: keep the tag this till was given last time it was online */ }
+    await posHasSuffix();
+    return SERVICE.till;
+  }
+  function counterCalled(num, menu, local, suffix) {
     var o = document.createElement("div");
     o.className = "ct-called";
-    o.innerHTML = '<div class="ct-called-b"><span>Order number</span><b>' + (num || "-") + '</b>' +
+    o.innerHTML = '<div class="ct-called-b"><span>Order number</span><b>' + esc(counterCallLabel(num, suffix)) + '</b>' +
       '<p>Tell them to listen for it. Tap anywhere for the next customer.</p>' +
-      (local ? '<p>No connection, so this till gave the number itself. Another till that is also offline can give the same number, so call the name as well if two match.</p>' : '') + '</div>';
+      (local
+        ? '<p>No connection, so this till gave the number itself. ' +
+          (suffix
+            ? 'The <b>' + esc(suffix) + '</b> is this till&rsquo;s own letter, so another till that is also offline cannot hand out the same thing. Call the letter with the number.'
+            : 'This till has never been online, so it has no letter of its own yet. Another till that is also offline can give the same number, so call the name as well.') + '</p>'
+        : '') + '</div>';
     document.body.appendChild(o);
     function next() {
       o.remove();
@@ -24486,7 +25278,8 @@
   async function paintCollect() {
     var body = document.getElementById("o-body"); if (!body) return;
     var since = new Date(Date.now() - 6 * 3600 * 1000).toISOString();
-    var q = fnbCo("pos_orders", "id,call_number,guest_name,status,collected_at,created_at, pos_order_lines(kds_status)")
+    // the till letter comes with the number when a till gave the number itself
+    var q = fnbCo("pos_orders", "id,call_number,guest_name,status,collected_at,created_at" + ((await posHasSuffix()) ? ",call_suffix" : "") + ", pos_order_lines(kds_status)")
       .not("call_number", "is", null).is("collected_at", null).gte("created_at", since);
     if (SERVICE.store) q = q.eq("store_id", SERVICE.store);
     var rows = (await q.order("call_number")).data || [];
@@ -24498,7 +25291,7 @@
     });
     function cell(o, isReady) {
       return '<button class="cb-n' + (isReady ? " rdy" : "") + '" data-id="' + o.id + '">' +
-        (o.call_number || "-") + (o.guest_name ? '<span>' + esc(o.guest_name) + '</span>' : "") + '</button>';
+        esc(counterCallLabel(o.call_number, o.call_suffix)) + (o.guest_name ? '<span>' + esc(o.guest_name) + '</span>' : "") + '</button>';
     }
     body.innerHTML = '<div class="cb" id="cb">' +
       '<section><h2>Being made</h2><div class="cb-grid">' +
@@ -24552,7 +25345,7 @@
   }
   async function paintKDS(quiet) {
     var body = document.getElementById("o-body"); if (!body) return;
-    var lq = sb.from("pos_order_lines").select("*, products(prep_minutes), pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status,call_number)")
+    var lq = sb.from("pos_order_lines").select("*, products(prep_minutes), pos_orders!inner(id,number,table_id,order_type,guest_name,allergy_note,fired_at,store_id,company_id,status,call_number" + ((await posHasSuffix()) ? ",call_suffix" : "") + ")")
       .eq("company_id", S.company.id).in("kds_status", ["fired", "ready"]);
     if (SERVICE.station) lq = lq.eq("station", SERVICE.station);
     var lr;
@@ -24598,7 +25391,7 @@
         var target = Math.max.apply(null, tk.lines.map(svcTarget));
         var mins = svcMins(tk.o.fired_at);
         // a counter order is called by its number, so that is what the pass sees
-        var where = tk.o.call_number ? "#" + tk.o.call_number
+        var where = tk.o.call_number ? "#" + counterCallLabel(tk.o.call_number, tk.o.call_suffix)
           : tk.o.table_id ? (tabs[tk.o.table_id] || "Table") : fnbTitle(tk.o.order_type || "Order");
         return '<div class="kds-card ' + svcHeat(mins, target) + '">' +
           '<div class="kds-h"><span class="kds-where">' + esc(where) + '</span>' +
@@ -24886,7 +25679,10 @@
     document.getElementById("rp-print").onclick = function () { window.print(); };
     document.getElementById("rp-export").onclick = exportRepCsv;
     var pr = periodRange(REP_PERIOD), cc = S.company.currency_code, rep = document.getElementById("rep");
-    var from = pr.from || isoShift(-30), to = pr.to || today();
+    // theoretical_usage has to be given two dates. All time leaves both empty, and the
+    // report used to fill them with the last 30 days, so "all time" quietly meant a
+    // month. A range wide enough to hold every sale is passed instead.
+    var from = pr.from || "1900-01-01", to = pr.to || "2999-12-31";
     var th = await sb.rpc("theoretical_usage", { p_company: S.company.id, p_from: from, p_to: to });
     if (th.error) { rep.innerHTML = repHead("Cost variance", cc) + '<div class="o-note warn">Could not work out theoretical usage: ' + esc(errMsg(th.error)) + '</div>'; return; }
     var theo = th.data || [];
@@ -25560,7 +26356,9 @@
         renderSiteForm(id);
       };
       document.querySelectorAll(".wh-verify").forEach(function (b) { b.onclick = async function () { b.textContent = "..."; var s = await webDomainApi("status", b.dataset.id); if (s.status === "active") toast("Live - SSL issued for this domain."); else if (s.not_configured) toast("Custom-domain SSL is not configured yet."); else if (s.ownership && s.ownership.name) toast("Add this DNS TXT to verify:  " + s.ownership.name + " = " + s.ownership.value); else toast("Still pending - point the CNAME at " + WEB_SUB_BASE + " and Verify again."); renderSiteForm(id); }; });
-      document.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this domain from the site? Visitors to it will no longer reach the site.")) return; await webDomainApi("remove", b.dataset.id); await sb.from("site_hostnames").delete().eq("id", b.dataset.id); renderSiteForm(id); }; });
+      // the row only goes once the hostname is gone from the certificate provider, so a
+      // failed removal is said out loud instead of leaving the name live at the edge
+      document.querySelectorAll(".wh-del").forEach(function (b) { b.onclick = async function () { if (!confirm("Remove this domain from the site? Visitors to it will no longer reach the site.")) return; b.disabled = true; var r = await webDomainApi("remove", b.dataset.id); if (!(r && r.ok)) { b.disabled = false; toast(r && r.not_configured ? "Custom domains are not configured on this deployment, so the domain cannot be unregistered from here. Remove it with your certificate provider, then try again." : "Could not unregister the domain: " + ((r && r.error) || "try again") + ". It was left on the site."); return; } await sb.from("site_hostnames").delete().eq("id", b.dataset.id); renderSiteForm(id); }; });
     }
   }
   // Preview shows the saved page whether or not it is published. A published page on a
@@ -32159,7 +32957,8 @@
       '<div><label>Title</label><input id="dc-title" value="' + esc(d.title || "") + '"></div>' +
       '<div><label>Or paste a link</label><input id="dc-url" value="' + esc(d.file_url || "") + '" placeholder="https://..."></div>' +
       '<div><label>Notes</label><textarea id="dc-notes" rows="2">' + esc(d.notes || "") + '</textarea></div>' +
-      '<div><label>Visible to residents</label><select id="dc-pub"><option value="0"' + (!d.is_public ? " selected" : "") + '>Committee only</option><option value="1"' + (d.is_public ? " selected" : "") + '>Residents can see it</option></select></div>' +
+      '<div><label>Visible to residents</label><select id="dc-pub"><option value="0"' + (!d.is_public ? " selected" : "") + '>Committee only</option><option value="1"' + (d.is_public ? " selected" : "") + '>Residents can see it</option></select>' +
+      '<div class="sub u-fs11">Residents can see the pasted link and open the files uploaded below. An uploaded file opens through a link that lasts five minutes and is made only for the owners of a unit in this building.</div></div>' +
       attachBlockHTML("propdoc", d.id, { label: "Upload the file" });
     mediaClearStage();
     var m = plotModal(d.id ? "Edit document" : "Add document", inner, async function () {

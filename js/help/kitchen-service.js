@@ -71,7 +71,7 @@ orbitScreenHelp({
       ["Save (in the payment box)", "Records every tender (change is recorded as a negative tender), gets the next call number, sends every line to the kitchen, marks the order paid, prints the receipt and shows the number."],
       ["Cancel (in the payment box)", "Closes the box without taking money. The order stays on the screen, unpaid."]
     ],
-    after: "The order is created as soon as the first item is tapped, with a number starting with <b>C</b>, and each line is saved as you go. Taking payment writes the tenders against the order, marks it <b>paid</b>, sends all its lines to the <b>Kitchen display</b> at once (a counter has no courses) and gives it a call number. Call numbers are counted per store per day, start at 1 each day and go back to 1 after 999. The order then counts in <b>Point of Sale &rsaquo; Sales</b>, <b>Menu engineering</b>, <b>Cost variance</b> and, once the kitchen bumps it, <b>Service times</b>. Counter sales are not tied to a register session, so they are not in the Register's drawer count or in Sessions. The sale itself does not post a journal entry and does not move stock.",
+    after: "The order is created as soon as the first item is tapped, with a number starting with <b>C</b>, and each line is saved as you go. Taking payment writes the tenders against the order, marks it <b>paid</b>, sends all its lines to the <b>Kitchen display</b> at once (a counter has no courses) and gives it a call number. Call numbers are counted per store per day, start at 1 each day and go back to 1 after 999. A number handed out while the till is offline carries that till's own letter after it, so two tills that are both offline cannot give the same thing. The order then counts in <b>Point of Sale &rsaquo; Sales</b>, <b>Menu engineering</b>, <b>Cost variance</b> and, once the kitchen bumps it, <b>Service times</b>. Counter sales are not tied to a register session, so they are not in the Register's drawer count or in Sessions. The sale itself does not post a journal entry and does not move stock.",
     links: [
       { name: "Kitchen display", how: "Every paid counter order appears there as a ticket headed with its number.", to: "kitchen.kds" },
       { name: "Collection screen", how: "Shows the number under Being made, then Ready to collect once the kitchen has marked every item ready.", to: "kitchen.collect" },
@@ -90,7 +90,8 @@ orbitScreenHelp({
       ["Choose (group name) allows at most (number)", "More choices were ticked than the group allows. Untick some."],
       ["That does not cover the bill yet", "The tender lines add up to less than the total. Raise an amount or add another tender line."],
       ["No exchange rate for (currency) today - add one in Settings, Currencies", "A tender line uses a currency with no rate. Add the rate in Accounting &rsaquo; Configuration &rsaquo; Exchange Rates, or take that part in another currency."],
-      ["No connection, so this till gave the number itself.", "Shown under the order number when the connection was down as you pressed Save. The till carries on from the last number it gave today for this store, so the customer still gets a number, and the order reaches the kitchen and the Collection screen once the connection is back. Another till that was offline at the same time can give the same number, so call the name as well when two match."],
+      ["No connection, so this till gave the number itself.", "Shown under the order number when the connection was down as you pressed Save. The till carries on from the last number it gave today for this store, so the customer still gets a number, and the order reaches the kitchen and the Collection screen once the connection is back. A number given this way carries the till's own letter, for example <b>42 B</b>, so a second till that was offline at the same moment cannot hand out the same thing. Call the letter with the number. As soon as the till is back online it tells the server the highest number it gave out, so the server never repeats it."],
+      ["The number has a letter after it and this till has never shown one before", "Each till is given its own letter (A, B, C...) the first time it opens the Counter while online, unique within the store. The letter is only shown on a number the till gave itself, offline. If a till has never been online it has no letter yet, and the screen says so and tells you to call the name as well."],
       ["Offline with a count of changes waiting", "The connection has dropped. Orders and payments are being kept on this device and send themselves, in order, when the connection returns. Keep the screen open; it cannot load the menu again with no connection."],
       ["A queued change was refused: (reason)", "A change saved while offline was rejected by the database when it was sent. Read the reason, then correct the order by hand."]
     ],
@@ -309,7 +310,7 @@ orbitScreenHelp({
 
   "kitchen.collect": {
     title: "Collection screen",
-    what: "The customer-facing board for counter service. <b>Being made</b> lists the call numbers that have been paid and are still with the kitchen; <b>Ready to collect</b> lists the ones whose items have all been marked ready. Put it on a monitor people can see while they wait. It reads itself again every 8 seconds.",
+    what: "The customer-facing board for counter service. <b>Being made</b> lists the call numbers that have been paid and are still with the kitchen; <b>Ready to collect</b> lists the ones whose items have all been marked ready. A number a till gave out while it was offline shows that till's letter after it, for example <b>42 B</b>. Put it on a monitor people can see while they wait. It reads itself again every 8 seconds.",
     when: [
       "You run counter service with call numbers, in a cafe, bakery or takeaway.",
       "Customers wait for their order away from the counter and need to see when it is ready."
@@ -646,7 +647,7 @@ orbitScreenHelp({
       "Press <span class='man-key'>Export</span> or <span class='man-key'>Print</span> to keep the result."
     ],
     fields: [
-      ["Period", "This year, This quarter, This month, Last year, All time or Custom range. All time, or a custom range with no From date, covers the last 30 days.", "optional"],
+      ["Period", "This year, This quarter, This month, Last year, All time or Custom range. All time really does cover everything; a custom range with no From date runs from the first sale you ever took, and one with no To date runs up to today.", "optional"],
       ["From and To", "Only with Custom range: the first and last day to include.", "optional"]
     ],
     buttons: [

@@ -78,8 +78,20 @@ export async function onRequest(context) {
     return J(s);
   }
   if (action === "remove") {
-    if (row.cf_hostname_id) await cf(env, "/" + row.cf_hostname_id, "DELETE");
-    return J({ ok: true });
+    // The caller deletes its row only when this says ok, so a failure has to be reported
+    // rather than swallowed: a hostname left registered here stays live at the edge,
+    // pointing at a site that no longer exists. A hostname Cloudflare no longer knows
+    // about counts as removed, so retrying is safe.
+    if (!row.cf_hostname_id) return J({ ok: true, removed: false });
+    const res = await cf(env, "/" + row.cf_hostname_id, "DELETE");
+    const failed = !res || res.success !== true;
+    const gone = failed && Array.isArray(res && res.errors)
+      && res.errors.some((e) => /not found|does not exist|could not be found/i.test(String((e && e.message) || "")));
+    if (failed && !gone) {
+      const why = (res && res.errors && res.errors[0] && res.errors[0].message) || "Cloudflare refused the request";
+      return J({ ok: false, error: why, host: row.hostname, errors: (res && res.errors) || null }, 502);
+    }
+    return J({ ok: true, removed: true, host: row.hostname });
   }
   return J({ error: "Unknown action. Use register / status / remove." }, 400);
 }

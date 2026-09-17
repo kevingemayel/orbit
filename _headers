@@ -1,13 +1,50 @@
 # Cloudflare Pages headers
-# Always revalidate the app shell and its assets so a new deploy is picked up
-# immediately (browser sends If-None-Match; server answers 200 or 304).
+#
+# Two jobs here. The first is caching: always revalidate the app shell and its assets
+# so a new deploy is picked up immediately (the browser sends If-None-Match and the
+# server answers 200 or 304). The second is the security headers an enterprise scanner
+# looks for. They are deliberately split: the app pages refuse to be framed at all,
+# while the pages a customer is meant to embed (a booking page, an embedded form) stay
+# frameable, because refusing there would break the feature.
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self), payment=(), interest-cohort=()
+  X-Robots-Tag: noindex
+
 /
   Cache-Control: no-cache
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
 /index.html
   Cache-Control: no-cache
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+/portal.html
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+/approve.html
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+/register.html
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
+/rsvp.html
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
+
 /js/*
   Cache-Control: no-cache
+
 /css/*
   Cache-Control: no-cache
+
 /config.js
   Cache-Control: no-cache

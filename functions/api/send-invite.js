@@ -40,10 +40,13 @@ export async function onRequestPost(context) {
     const reqBody = await request.json().catch(() => ({}));
     const inviteId = reqBody.invite_id;
     if (!inviteId) return json({ error: "Missing invite id." }, 400);
+    // an id goes into a query string, so it is checked and encoded rather than trusted
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(inviteId))) return json({ error: "That invitation id is not valid." }, 400);
+    const inviteQ = encodeURIComponent(String(inviteId));
     if (!env.RESEND_API_KEY) return json({ error: "Email is not configured: RESEND_API_KEY is not set on the site." }, 200);
 
     stage = "fetch-invite";
-    const iRes = await tfetch(supaUrl + "/rest/v1/org_invites?id=eq." + inviteId + "&select=id,email,role,status,orgs(name)", { headers: authHdr }, 8000);
+    const iRes = await tfetch(supaUrl + "/rest/v1/org_invites?id=eq." + inviteQ + "&select=id,email,role,status,orgs(name)", { headers: authHdr }, 8000);
     const iBody = await iRes.json().catch(() => null);
     if (!Array.isArray(iBody)) return json({ error: "Could not load the invitation.", stage, detail: iBody }, 200);
     const inv = iBody[0];

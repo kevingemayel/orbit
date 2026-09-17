@@ -1153,8 +1153,8 @@ orbitScreenHelp({
       ["Title", "The document's name.", "required"],
       ["Or paste a link", "The web address of the document. It is the Open link in this list and on the portal.", "optional"],
       ["Notes", "For example the renewal date of a policy.", "optional"],
-      ["Visible to residents", "Committee only, or Residents can see it on the portal.", "auto"],
-      ["Upload the file", "Photos or PDFs kept with the document. On a new document they upload when you save; on an existing one, as soon as you add them. Files are private to your company.", "optional"]
+      ["Visible to residents", "Committee only, or Residents can see it on the portal. Residents see the pasted link and can open the uploaded files.", "auto"],
+      ["Upload the file", "Photos or PDFs kept with the document. On a new document they upload when you save; on an existing one, as soon as you add them. Files are private: nobody outside your company can reach one by its address. On a document shared with residents, an owner of a unit in that building can ask the portal for it, and gets a link that works for five minutes and only for them.", "optional"]
     ],
     buttons: [
       ["New", "Opens a blank document."],
@@ -1165,7 +1165,7 @@ orbitScreenHelp({
       ["Group By", "Group the list by Category."],
       ["Search, Select, Columns, Export", "Search by title or category; select rows to export or delete; choose columns; download a CSV."]
     ],
-    after: "A document posts nothing. Adding or changing one is written to the Activity log. A document set to Residents can see it is listed on the portal of the building's owners, with its pasted link, until it is deleted.",
+    after: "A document posts nothing. Adding or changing one is written to the Activity log. A document set to Residents can see it is listed on the portal of the building's owners, with its pasted link and a <b>Show the file</b> button for anything uploaded on it, until it is deleted. The portal never hands out a file address: it asks the server, which checks that the person signing in owns a unit in that building and that the document is shared, and only then makes a link that works for five minutes.",
     links: [
       { name: "Meetings", how: "Signed minutes can also be attached to the meeting itself.", to: "plot.meetings" },
       { name: "Resident portal access", how: "Owners need portal access to see shared documents.", to: "portal.admin" },
@@ -1175,7 +1175,7 @@ orbitScreenHelp({
       ["Add a building first", "A document belongs to a building. Add one in Buildings."],
       ["Enter a title", "The Title field is empty."],
       ["Upload failed: (message)", "The file could not be uploaded. Check the connection and add it again."],
-      ["Owners see the document on the portal but cannot open it", "The portal opens the pasted link, not uploaded files. Paste a link to the file in Or paste a link as well."]
+      ["Owners see the document on the portal but cannot open it", "Check that Visible to residents is set to <i>Residents can see it</i> and that the owner's unit is in this building. A file that was deleted from the document has nothing left to open."]
     ]
   },
 

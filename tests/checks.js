@@ -457,6 +457,57 @@
         return ok("one capture listener, " + skip[1].split(",").length + " opted-out editors, lines tables grow through .o-addln");
       } },
 
+    { name: "the allowed-networks rule belongs to the database, and the app only explains it",
+      why: "The browser talks to PostgREST directly with the publishable key, so an address rule enforced in app.js is advice: the same request can be repeated by hand with the same token. The rule lives in migration 196, inside my_member_in, my_role_in and my_company_ids, and two jobs are left to the app that it must not lose. The Settings screen has to show the address the DATABASE reports (ip_whoami), because an address looked up from a service in the browser can be a different one, and somebody would then arm the rule against the wrong address and shut the office out. And start-up has to ask ip_status, because a refused person's membership simply stops existing: every list comes back empty and the company picker goes short, with nothing anywhere on screen saying why.",
+      run: function (src) {
+        var problems = [];
+        var scr = fnBody(src, "renderIpRules");
+        if (!scr) return bad("renderIpRules is gone, so there is nowhere to set an address rule up");
+        if (scr.indexOf('sb.rpc("ip_whoami")') < 0) problems.push("the screen no longer asks the database which address it sees (ip_whoami)");
+        if (/fetch\s*\(/.test(scr)) problems.push("the screen reads an address from somewhere other than the database, which can differ from the one the rule compares");
+        var st = fnBody(src, "ipStatus");
+        if (!st || st.indexOf('sb.rpc("ip_status")') < 0) problems.push("ipStatus no longer asks the database who is refused");
+        if (!/function renderIpBlocked\(/.test(src)) problems.push("the screen that tells a refused person why is gone");
+        var bt = fnBody(src, "boot");
+        if (!bt) problems.push("boot not found");
+        else {
+          if (!/ipStatus\(\)/.test(bt)) problems.push("start-up no longer asks whether this connection is allowed, so a refused person gets an empty app and no reason");
+          if (!/renderIpBlocked\(/.test(bt)) problems.push("start-up no longer shows the refused screen");
+        }
+        return problems.length ? bad(problems.join("; ")) : ok("the rule is the database's; the screen reads ip_whoami and start-up reads ip_status");
+      } },
+
+    { name: "the access review reads the app map instead of a list of its own",
+      why: "The access review answers 'is anything missing from what this person can do' by following work across two screens: raise a purchase order, then receive against it. If those steps named permission modules directly they would rot the first time a screen moved, which in this codebase has already happened twice (the Contracting split, and the document registers). So every step names a SCREEN, and the review turns it into a module through ACTION_MODULE and ACTION_APP at the moment it runs. A step naming a screen that no longer exists resolves to nothing and its rule vanishes silently, which is worse than a wrong answer: the page looks complete and is not.",
+      run: function (src) {
+        var chains = block(src, "ACCESS_CHAINS"), needs = block(src, "MONEY_NEEDS"), appr = block(src, "APPR_DOC_ACTION");
+        if (!chains || !needs || !appr) return bad("ACCESS_CHAINS, MONEY_NEEDS or APPR_DOC_ACTION is gone, so the review no longer asks about missing access");
+        var steps = uniq(all(chains, /\b(?:from|to):\s*"([a-zA-Z0-9_.]+)"/g)
+          .concat(all(needs, /"([a-zA-Z0-9_.]+)"/g).filter(function (s) { return s.indexOf(".") > 0; }))
+          .concat(all(appr, /:\s*"([a-zA-Z0-9_.]+)"/g)));
+        if (steps.length < 10) return bad("only " + steps.length + " screen(s) named: the review's rules have been emptied out");
+        var routed = routedActions(src);
+        var dead = steps.filter(function (a) { return routed.indexOf(a) < 0 && !isDynamic(a); });
+        if (dead.length) return bad("the access review names screen(s) that no longer exist: " + dead.join(", "));
+        // ACTION_APP writes a key with a dot in quotes and one without a dot bare, so accept both
+        var mapped = block(src, "ACTION_APP") + "\n" + block(src, "ACTION_MODULE");
+        var lost = steps.filter(function (a) {
+          var e = a.replace(/\./g, "\\.");
+          return !new RegExp('(?:"' + e + '"|(?:^|[{,\\s])' + e + ')\\s*:', "m").test(mapped);
+        });
+        if (lost.length) return bad("screen(s) the review cannot turn into a permission module: " + lost.join(", "));
+        var mods = all(block(src, "MONEY_SWITCHES"), /"([a-z]+)"/g);
+        var ghost = missing(mods, all(block(src, "MODULE_CATALOG"), /key:\s*"([a-z]+)"/g));
+        if (ghost.length) return bad("money switch(es) naming app(s) that do not exist: " + ghost.join(", "));
+        var body = fnBody(src, "renderAccessReview");
+        if (!body) return bad("renderAccessReview is gone");
+        if (!/arMod\(/.test(body)) return bad("the review no longer resolves its screens through the app map, so its rules can no longer follow a screen that moves");
+        var kinds = uniq(all(body, /\bq\("([a-z]+)",/g));
+        var odd = kinds.filter(function (k) { return ["wide", "gap", "note"].indexOf(k) < 0; });
+        if (odd.length) return bad("question kind(s) the page cannot count or colour: " + odd.join(", "));
+        return ok(steps.length + " screens, " + kinds.length + " question kinds, all resolved through the app map");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {
