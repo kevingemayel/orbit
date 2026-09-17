@@ -120,7 +120,7 @@ orbitScreenHelp({
       "Click the receipt. It shows the supplier, the purchase order, the date and one line per product with its location, quantity, value and journal entry numbers.",
       "Press <span class='man-key'>Edit</span>. A <b>New quantity</b> box appears on each line. Enter <i>8</i> on the sheet line.",
       "Press <span class='man-key'>Save changes</span>. You should see the quantity at 8 and a second journal entry number on the line. The purchase order now shows 8 received, with 2 still to come.",
-      "Use the <span class='man-key'>&#8249;</span> and <span class='man-key'>&#8250;</span> arrows beside the title to step to the previous or next receipt in the list without going back to it."
+      "Use the four buttons beside the title, <span class='man-key'>&#171;</span> first, <span class='man-key'>&#8249;</span> previous, <span class='man-key'>&#8250;</span> next and <span class='man-key'>&#187;</span> last, to step through the receipts in the list's own order without going back to it."
     ],
     fields: [
       ["Received from", "The supplier the goods came from (<i>Returned to</i> on a return). Can be changed with Edit.", "optional"],

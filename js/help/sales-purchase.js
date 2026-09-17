@@ -54,17 +54,18 @@ orbitScreenHelp({
       ["Price (on a line)", "The price of one, before tax. The line Subtotal is Qty times Price.", "required"],
       ["Tax (on a line)", "The tax added to the line, from your list of taxes. Choose No tax for none.", "optional"],
       ["Pos (on a line)", "The line's position number, 1, 2, 3 and so on. It renumbers itself when you add or remove lines.", "auto"],
-      ["Untaxed Amount, Taxes, Total", "Worked out from the lines as you type.", "auto"]
+      ["Untaxed Amount, Taxes, Total", "Worked out from the lines as you type.", "auto"],
+      ["Ordered, Invoiced, Paid, Outstanding (the strip under the title)", "Shown once the quotation is confirmed, read from the invoices raised against it: what was ordered, what has been invoiced and paid, and what the customer still owes, in red while anything is left. Badges beside them say <i>Not invoiced</i>, <i>Partly invoiced</i> or <i>Invoiced</i>, and <i>Unpaid</i>, <i>Partly paid</i> or <i>Paid</i>. A credit note counts backwards and a draft invoice is left out, with a note saying so.", "auto"]
     ],
     buttons: [
       ["New", "Starts a blank quotation."],
       ["Save", "Saves the quotation. It gets its number the first time and stays a quotation you can change."],
       ["Confirm", "Saves the quotation and turns it into a sales order. If an approval rule covers sales orders of this amount, it goes to the approver first and stays a quotation; once approved, click Confirm again."],
       ["Discard", "Goes back to the list without saving what you changed."],
-      ["+ Add a line", "Adds an empty line. The &times; at the end of a line removes it."],
+      ["+ Add a line", "Adds an empty line. The &times; at the end of a line removes it. Quicker: <b>Enter</b> moves along a line box by box, and on the last box of the last line it adds the next line and drops the cursor straight into <b>Product</b>."],
       ["Create Invoice", "Shown on a confirmed sales order. Creates a draft customer invoice dated today, due in 30 days, with the order's lines, tax and project, and opens it."],
       ["Edit", "Shown on a confirmed sales order to people who can manage Sales. Opens its lines and details for changes: prices, quantities, new lines. A line already invoiced cannot go below the invoiced quantity, change product or be removed, and invoices already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
-      ["&#8249; and &#8250;", "Beside the title when you opened the document from the list. Step to the previous or next one in the list's order without going back to it. Alt and the left or right arrow key do the same."],
+      ["&#171; &#8249; &#8250; &#187;", "Four buttons beside the title when you opened the document from the list. Step to the first, previous, next or last one in the list's order without going back to it. Alt with the left or right arrow key steps one at a time, Alt+Home and Alt+End jump to the two ends, and <i>3 of 40</i> shows where you are."],
       ["Print", "Prints the document, or saves it as a PDF from the print window."],
       ["Invoices", "The counter at the top of an order that has been invoiced. Opens the first invoice made from it."],
       ["Select, Export, Filters, Group By, Columns", "On the list: Filters show only Quotations or only Sales Orders, Group By gathers them by customer or status, Columns picks what shows, Export downloads the list as a CSV file."]
@@ -215,7 +216,8 @@ orbitScreenHelp({
       "When the delivery arrives, click <span class='man-key'>Receive goods</span>. The <b>Goods Receipt</b> page opens with the 30 chargers still to receive.",
       "Pick who checked it in under <b>Received by</b>, change <b>Qty received</b> if only part came, and click <span class='man-key'>Confirm receipt</span>. You should see <i>Receipt saved - 1 item(s) added to inventory</i> and 30 in the Received column.",
       "When the supplier's invoice arrives, click <span class='man-key'>Create Bill</span>. You should see <i>Bill created (draft)</i> and the draft bill open with the same line and total.",
-      "Check the bill against the supplier's paper, then <span class='man-key'>Confirm &amp; post</span> it. Back on the order, you should see <i>Received &amp; billed &middot; closed</i>."
+      "Check the bill against the supplier's paper, then <span class='man-key'>Confirm &amp; post</span> it. Back on the order, you should see <i>Received &amp; billed &middot; closed</i>, and the strip under the title showing <b>Billed 216.45</b>, <b>Paid 0.00</b>, <b>Outstanding 216.45</b> with an <i>Unpaid</i> badge.",
+      "Pay the supplier, from the bill with <span class='man-key'>Register Payment</span> or from the cash desk. Come back to the order: the strip now reads <b>Paid 216.45</b>, <b>Outstanding 0.00</b>, the badge says <i>Paid</i> and the stage bar lights <b>Paid</b>. Nobody has to open the bill to answer whether the order was settled."
     ],
     fields: [
       ["Vendor", "The supplier you are ordering from. Only contacts marked as a vendor appear. The list has no empty choice, so an order started from a take-off or a blanket shows the first supplier until you change it.", "required"],
@@ -234,20 +236,21 @@ orbitScreenHelp({
       ["Basis (on a line)", "What the Price is per: each, or for materials per sheet, per m2, per kg, per bar, per metre, per container, per litre, per roll or per linear m. Orbit turns it into a price per item using the size, and the Subtotal uses that.", "optional"],
       ["Destination (on a line)", "Where the goods go when received. <b>Warehouse</b> puts them into stock, <b>Factory</b> into the factory location, <b>Site</b> straight to the job as a cost without entering stock.", "optional"],
       ["Tax (on a line)", "The purchase tax on the line.", "optional"],
-      ["Untaxed Amount, Taxes, Total", "Worked out from the lines.", "auto"]
+      ["Untaxed Amount, Taxes, Total", "Worked out from the lines.", "auto"],
+      ["Ordered, Billed, Paid, Outstanding (the strip under the title)", "Read from the bills raised against this order, so the order answers for itself. <b>Ordered</b> is the order total; <b>Billed</b> is what the posted bills come to; <b>Paid</b> is what has been settled on them; <b>Outstanding</b> is what is still owed, in red while anything is left. A vendor credit note counts backwards, and a bill still in draft is left out with a note saying so. Beside them, badges say whether the goods are <i>Not received</i>, <i>Partly received</i> or <i>Received</i>, whether the order is <i>Not billed</i>, <i>Partly billed</i> or <i>Billed</i>, and whether it is <i>Unpaid</i>, <i>Partly paid</i> or <i>Paid</i>. Once everything is received, billed and settled it also says <i>Closed</i>. The stage bar at the top follows the same story: RFQ, Purchase Order, Received, Billed, Paid.", "auto"]
     ],
     buttons: [
       ["New", "Starts a blank order."],
       ["Save", "Saves the order as a draft you can still change. It gets its number the first time."],
       ["Confirm", "Saves and confirms the order. If an approval rule covers purchase orders of this amount, it goes to the approver first and stays a draft; once approved, click Confirm again."],
       ["Discard", "Goes back to the list without saving."],
-      ["+ Add a line", "Adds an empty line. The &times; removes a line."],
+      ["+ Add a line", "Adds an empty line. The &times; removes a line. Quicker: <b>Enter</b> moves along a line box by box, and on the last box of the last line it adds the next line and drops the cursor straight into <b>Product</b>."],
       ["+size", "Adds another line for the same item right below, so you can order a second size of it."],
       ["Receive goods", "On a confirmed order not yet fully received. Opens the Goods Receipt page with every line that still has something to receive."],
       ["Create Bill", "On a confirmed order not yet fully billed. Creates a draft vendor bill dated today, due in 30 days, and opens it. A stocked product line is billed for what was received and not billed yet; a service or description line for what was ordered and not billed yet. Each line's Billed quantity goes up by what the bill took. When goods are still to arrive you see <i>Bill created (draft) for what was received and not billed yet</i>, and Create Bill stays on the order for the rest."],
       ["Edit", "Shown on a confirmed order to people who can manage Purchase. Opens its lines and details for changes. A line already received or billed cannot go below that quantity, change product or be removed, and receipts and bills already made are not changed. A higher total goes through the approval rules first. <b>Save changes</b> keeps the order confirmed with its received and billed quantities, and the version before is kept under <i>Edited after confirming</i>; <b>Cancel</b> leaves it as it was."],
       ["Receipts", "The counter at the top of an order that has been received. Opens its receipt, or lets you pick one when there are several. A receipt with the wrong quantity is corrected there, with Edit."],
-      ["&#8249; and &#8250;", "Beside the title when you opened the order from the list. Step to the previous or next order in the list's order without going back to it. Alt and the left or right arrow key do the same."],
+      ["&#171; &#8249; &#8250; &#187;", "Four buttons beside the title when you opened the order from the list. Step to the first, previous, next or last order in the list's order without going back to it. Alt with the left or right arrow key steps one at a time, Alt+Home and Alt+End jump to the two ends, and <i>3 of 40</i> shows where you are."],
       ["Print", "Prints the order for the supplier, or saves it as a PDF. Each row names its item (the product, with the line's description, such as a position mark, under it), with sizes and areas. When the order has a project, only the project's code is printed, never its name."],
       ["Bills", "The counter at the top of an order that has a bill. Opens the first bill made from it."],
       ["Confirm receipt (Goods Receipt page)", "Records what arrived, moves stock items into inventory and adds to each line's Received quantity."],

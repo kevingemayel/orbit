@@ -957,6 +957,7 @@
       { t: "Setting up your company (step by step)", h: "<p>Before you do real work, spend ten minutes on setup. Orbit gives you a checklist so you do not miss anything.</p><ol><li>Click the grid button, then open <b>Settings</b>.</li><li>Click <b>Getting started</b> in the left menu. You will see a checklist with a progress bar.</li><li>Work down it: your <b>company profile</b> (name, country, currency), <b>document numbering</b> (how your invoices are numbered), your <b>tax rates</b>, your <b>team</b>, a <b>first customer</b>, and a <b>first project</b>.</li><li>Each item has a button that takes you straight to the right screen. Fill it in, save, and the item ticks off.</li></ol><p><b>Good to know:</b> the very first time you open a new company, Orbit quietly sets up the money side for you - a ready-made list of accounts, the journals, and standard tax rates. You do not have to build any of that by hand.</p>" },
       { t: "Adding people to your team", h: "<p>A team means more than one person can sign in and help. You invite people by email.</p><ol><li>Open <b>Settings &rsaquo; Users &amp; Roles</b>.</li><li>Click <b>Invite teammate</b>.</li><li>Type their <b>email</b> address.</li><li>Choose their <b>role</b> - this decides what they are allowed to see and do (more on roles next).</li><li>If you run more than one company, tick which companies they are allowed into.</li><li>Click send. They get an invitation email. The next time they sign in with that exact email, Orbit shows the invitation and they press <b>Join</b> to come onto your team. There is no code to type.</li></ol><p>You are always in control. From the same screen you can change someone's role, limit which companies they see, <b>suspend</b> them (switch off their access for a while without deleting them), or <b>remove</b> them completely. The system will never let you remove the last owner, so a company can never be left with nobody in charge.</p>" },
       { t: "Roles: who is allowed to do what", h: "<p>A <b>role</b> is a job title that comes with a set of keys. It decides which rooms a person can enter and whether they can only look or also change things. This keeps sensitive things (like everyone's pay) away from people who should not see them.</p><p>Every role can do two things per app: <b>View</b> (open the app and look) and <b>Manage</b> (create and change things). A role can also have money <b>hidden</b> entirely - useful for junior staff who need to see projects but not the prices.</p><ol><li>Open <b>Settings &rsaquo; Roles &amp; Permissions</b>.</li><li>You will see ready-made roles (Owner, Manager, and so on). To make your own, pick one that is close and click <b>Customize</b>, or click <b>New role</b>.</li><li>Tick the apps and parts they can use, choose whether they see money, and save.</li></ol><p>Two safety rules: you can only manage roles that are junior to your own, and the top owner role is always protected so nobody can lock the boss out.</p>" },
+      { t: "Typing fast: Enter and Tab", h: "<p>You never have to reach for the mouse to fill in a form. Two keys do it all, and they work the same way on every screen.</p><p><b>Tab</b> moves to the next box. <b>Shift+Tab</b> moves back. That is the browser's own behaviour and it has always worked.</p><p><b>Enter</b> now does the same thing as Tab: it moves you to the next box. That matters most on a <b>table of lines</b> - a purchase order, a quotation, an invoice, a bill, a goods receipt. Type the product, press Enter, type the description, press Enter, type the quantity, press Enter, and so on along the line. When you reach the <b>last box of the last line and press Enter</b>, Orbit adds a fresh line for you and puts the cursor straight in its first box (on an order, that is Product), so you can type the next item without stopping. Twenty items is twenty lines and never a single click.</p><p>Two small things worth knowing. In a <b>pop-up window</b>, Enter walks the boxes in the same way, and on the <b>last</b> box it moves to the blue button, so one more Enter confirms it. A pop-up with a single box takes your answer and closes on the first Enter, as it always did. Money is never posted by the same keystroke that finished the last box. In a big <b>notes box</b> (the tall ones for a description or a memo), Enter still starts a new paragraph, because that is what you want there.</p><p>A few screens use Enter for something of their own and keep it: the spreadsheet-style cost sheet moves down a column, the last line of a list saves the record you just typed, and a journal voucher jumps to the next line. Each of those tells you what it does on the screen itself.</p>" },
       { t: "Deleting and archiving", h: "<p>Getting rid of something works the same way on every screen in Orbit, and there are two different actions on purpose.</p><div class=\"man-cmp\"><div><b>Delete</b><p>Removes the record for good. Use it for genuine mistakes - a duplicate, a test entry, something created by accident.</p></div><div><b>Archive</b><p>Hides it from lists and most pickers but keeps the history. Use it for things you have finished with - an old customer, a product you no longer sell.</p></div></div><p><b>From a list:</b> press <b>Select</b>, tick the rows, then <b>Delete</b> or <b>Archive</b>. <b>From a record:</b> open it and use the <b>Delete</b> button in the top bar.</p><div class=\"man-cal key\"><b>Orbit will stop you deleting something that is in use.</b> If a product appears on an invoice, or a customer has orders, deleting would tear a hole in your history - so Orbit refuses and tells you to archive it instead. That is the right answer: archive keeps the old documents intact while taking the item out of your way.</div><div class=\"man-cal warn\"><b>Financial documents are different.</b> Posted invoices, journal entries, payslips and certificates are never deleted, because your accounts must stay auditable. You <b>void, reverse or cancel</b> them instead, which leaves a visible trail of what happened.</div>" }
     ] },
     { key: "sales", title: "Selling & getting paid", articles: [
@@ -4255,6 +4256,149 @@
       __dirty = false; toast(label.charAt(0).toUpperCase() + label.slice(1) + " deleted"); if (back) go(back);
     }, false);
   }
+  // ===========================================================================
+  // KEYBOARD DATA ENTRY (keyflow): Enter walks the fields, and ends a line by
+  // starting the next one.
+  //
+  // Typing a twenty-line purchase order used to mean twenty trips to the mouse,
+  // because Enter did nothing anywhere in Orbit: there is not a single <form>
+  // element in the app, so the browser had nothing to submit. Every other
+  // accounting package lets Enter walk a line, so this does too - from ONE
+  // listener rather than a handler per screen, because the shapes are already
+  // shared. Every lines table is `table.o-lines` with its own `.o-addln` button
+  // under it, every record form is `.o-form`, every dialog is `.modal .sheet`.
+  // The engine reads the shape, so it knows nothing about the screen it is on
+  // and a new screen built the same way gets the behaviour for free.
+  //
+  //   in a lines table : Enter moves along the row; on the last field it moves
+  //                      to the first field of the next row, or presses that
+  //                      table's own Add button and lands in the new row's
+  //                      first field (on an order line, the Product)
+  //   in a record form : Enter moves to the next field, and stops at the last
+  //   in a dialog      : the same, and Enter on the LAST field moves to the
+  //                      dialog's primary button (a one-field dialog presses it), so still
+  //                      submits on Enter exactly the way it always did
+  //
+  // Tab is deliberately untouched: it is the browser's, it already walks the
+  // same controls in the same order, and the modal focus trap already keeps it
+  // inside an open dialog.
+  //
+  // Four editors answer Enter themselves and are skipped by name below (the
+  // spreadsheet grid moves down a column, the quick-add line saves the record,
+  // an in-place list cell saves the cell, the journal voucher jumps whole
+  // lines). Anything else that wants Enter for itself opts out with
+  // data-enter="own" on the control or on any wrapper around it.
+  // ===========================================================================
+  // What Enter walks between: values only. Buttons stay on Tab, so Enter can
+  // never land on Delete, and a field nobody can type into is skipped.
+  var KEYFLOW_IN = 'input:not([type=hidden]):not([type=button]):not([type=submit]):not([type=reset]):not([type=file]):not([disabled]):not([readonly]),select:not([disabled]),textarea:not([disabled]):not([readonly])';
+  var KEYFLOW_SKIP = '.sg-in,.o-qa,.o-qa-in,td.o-ecell,.je-wrap,.je-grid,#je-grid,[data-enter="own"]';
+  // Where one section of a form ends, so a table with no Add button of its own
+  // never reaches forward and presses a different table's button.
+  var KEYFLOW_STOP = ".o-nb-pg,.o-sheet,.sheet,.form,.o-form,.o-view";
+
+  function keyflowVisible(el) { return !!(el && (el.offsetWidth || el.offsetHeight || el.getClientRects().length)); }
+  function keyflowFields(scope) {
+    if (!scope || !scope.querySelectorAll) return [];
+    return Array.prototype.filter.call(scope.querySelectorAll(KEYFLOW_IN), function (el) {
+      return keyflowVisible(el) && !el.closest(KEYFLOW_SKIP);
+    });
+  }
+  function keyflowLand(el) {
+    if (!el) return;
+    try { el.focus(); } catch (e) { }
+    // land with the old value selected, so the next keystroke replaces it
+    try { if (el.tagName === "INPUT" && el.select && !/^(date|time|datetime-local|month|week|checkbox|radio|color|range)$/.test(el.type)) el.select(); } catch (e) { }
+  }
+  // A picker with its list open is already telling you what Enter means. Take
+  // the first match before moving on, or the line moves off an empty product.
+  function keyflowCommit(el) {
+    if (!el.classList || !el.classList.contains("o-combo-in")) return;
+    var box = el.closest(".o-combo"); if (!box) return;
+    var hid = box.querySelector("input[type=hidden]"), menu = box.querySelector(".o-combo-menu");
+    if (!menu || menu.hidden || (hid && hid.value)) return;
+    var opt = menu.querySelector(".o-combo-opt:not(.o-combo-add)"); if (!opt) return;
+    try { opt.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true })); } catch (e) { }
+  }
+  // The Add button a lines table owns: the first .o-addln after the table (or
+  // after the wrapper it sits in), with no other lines table in between.
+  function keyflowAddBtn(tbl) {
+    var node = tbl;
+    while (node && node !== document.body) {
+      if (node.matches && node.matches(KEYFLOW_STOP)) return null;
+      for (var sib = node.nextElementSibling; sib; sib = sib.nextElementSibling) {
+        if (!sib.matches) continue;
+        if (sib.matches("table.o-lines") || sib.querySelector("table.o-lines")) return null;
+        if (sib.matches(".o-addln")) return sib;
+        var inner = sib.querySelector(".o-addln");
+        if (inner) return inner;
+      }
+      node = node.parentElement;
+    }
+    return null;
+  }
+  // Press that button and land in the row it built. Most Add buttons build the
+  // row there and then; a couple repaint the whole body, so try again on the
+  // next tick, and only move if a row really did appear.
+  function keyflowAddRow(tbl) {
+    var btn = keyflowAddBtn(tbl);
+    if (!btn || btn.disabled || !keyflowVisible(btn)) return false;
+    function lastRow() { var b = tbl.tBodies && tbl.tBodies[0]; return (b && b.rows.length) ? b.rows[b.rows.length - 1] : null; }
+    var was = lastRow();
+    function land() {
+      var last = lastRow(); if (!last || last === was) return false;
+      var f = keyflowFields(last)[0]; if (!f) return false;
+      keyflowLand(f); return true;
+    }
+    btn.click();
+    if (!land()) setTimeout(land, 0);
+    return true;
+  }
+  function keyflowKey(e) {
+    if (e.key !== "Enter" || e.shiftKey || e.altKey || e.ctrlKey || e.metaKey || e.isComposing || e.keyCode === 229) return;
+    var t = e.target;
+    if (!t || !t.matches || !t.closest || t.tagName === "TEXTAREA") return;   // Enter is a new paragraph in a textarea
+    if (!t.matches(KEYFLOW_IN) || t.closest(KEYFLOW_SKIP)) return;
+    var tbl = t.closest("table.o-lines");
+    var scope = t.closest(".o-form") || t.closest(".modal .sheet") || t.closest(".modal") || tbl;
+    if (!scope) return;                                                      // not a data-entry screen: leave Enter alone
+    keyflowCommit(t);
+    var tr = tbl ? t.closest("tr") : null;
+    if (tr && tbl.contains(tr)) {
+      var cells = keyflowFields(tr), at = cells.indexOf(t);
+      if (at >= 0 && at < cells.length - 1) { e.preventDefault(); e.stopPropagation(); keyflowLand(cells[at + 1]); return; }
+      if (at >= 0) {
+        e.preventDefault(); e.stopPropagation();
+        for (var nx = tr.nextElementSibling; nx; nx = nx.nextElementSibling) {
+          var nf = keyflowFields(nx)[0];
+          if (nf) { keyflowLand(nf); return; }
+        }
+        if (keyflowAddRow(tbl)) return;
+        // a table that cannot grow simply carries on into the rest of the form
+      }
+    }
+    var fields = keyflowFields(scope), i = fields.indexOf(t);
+    if (i < 0) return;
+    e.preventDefault(); e.stopPropagation();
+    if (i < fields.length - 1) { keyflowLand(fields[i + 1]); return; }
+    // The last field of a dialog presses its primary button, never a destructive
+    // one, so "type it, press Enter" still submits a one-field dialog exactly as
+    // it always did. A field inside a table row is a LINE, not the end of the
+    // dialog (Receive goods is a dialog full of quantities), so it never submits.
+    var pri = (scope.closest(".modal") && !t.closest("tr")) ? scope.querySelector(".foot button.pri:not(.u-bad)") : null;
+    if (pri && !pri.disabled && keyflowVisible(pri)) {
+      // A dialog with one field is "type it and press Enter", and still submits on the
+      // spot. A dialog with several fields moves to its button instead: posting money
+      // or saving a record deserves a deliberate second press, not the same keystroke
+      // that finished the last field.
+      if (fields.length === 1) pri.click(); else pri.focus();
+    }
+  }
+  if (!window.__keyflow) {
+    window.__keyflow = true;
+    // capture, so the engine sees Enter before a field's own handler can
+    document.addEventListener("keydown", keyflowKey, true);
+  }
   // Delete button for a form status bar; the global handler above does the work.
   function formDelBtn(table, id, back, label) { if (!canAdminApp(S.app)) return ""; return '<button class="o-del u-bad" data-del-table="' + esc(table) + '" data-del-id="' + esc(id) + '" data-del-back="' + esc(back || "") + '" data-del-label="' + esc(label || "record") + '">Delete</button>'; }
   function go(action) {
@@ -4599,13 +4743,22 @@
     n.armed = false;
     var i = n.ids.indexOf(id); if (i < 0 || n.ids.length < 2) return "";
     n.cur = id;
-    return '<span class="o-recnav"><button type="button" class="o-recnav-b" data-recnav="-1" aria-label="Previous record" title="Previous record (Alt+Left)"' + (i === 0 ? " disabled" : "") + '>&#8249;</button>' +
+    // four buttons, not two: a long list is walked from either end without
+    // going back to it, and the ends are disabled so you can see where you are
+    var atFirst = i === 0 ? " disabled" : "", atLast = i === n.ids.length - 1 ? " disabled" : "";
+    return '<span class="o-recnav">' +
+      '<button type="button" class="o-recnav-b" data-recnav="first" aria-label="First record" title="Go to the first record (Alt+Home)"' + atFirst + '>&#171;</button>' +
+      '<button type="button" class="o-recnav-b" data-recnav="-1" aria-label="Previous record" title="Previous record (Alt+Left)"' + atFirst + '>&#8249;</button>' +
       '<span class="o-recnav-n">' + (i + 1) + ' of ' + n.ids.length + '</span>' +
-      '<button type="button" class="o-recnav-b" data-recnav="1" aria-label="Next record" title="Next record (Alt+Right)"' + (i === n.ids.length - 1 ? " disabled" : "") + '>&#8250;</button></span>';
+      '<button type="button" class="o-recnav-b" data-recnav="1" aria-label="Next record" title="Next record (Alt+Right)"' + atLast + '>&#8250;</button>' +
+      '<button type="button" class="o-recnav-b" data-recnav="last" aria-label="Last record" title="Go to the last record (Alt+End)"' + atLast + '>&#187;</button></span>';
   }
+  // step is a number of records to move, or "first" / "last" for the two ends
   function recNavGo(step) {
     var n = S.recNav; if (!n) return;
-    var i = n.ids.indexOf(n.cur) + step; if (i < 0 || i >= n.ids.length) return;
+    var at = n.ids.indexOf(n.cur);
+    var i = step === "first" ? 0 : step === "last" ? n.ids.length - 1 : at + (+step || 0);
+    if (i < 0 || i >= n.ids.length || i === at) return;
     if ((__dirty || __modalDirty) && !confirm("You have unsaved changes. Leave without saving?")) return;
     __dirty = false; __modalDirty = false;
     var next = n.ids[i], r = (n.rows || []).filter(function (x) { return x.id === next; })[0];
@@ -4615,13 +4768,15 @@
   }
   function wireRecNav(root) {
     if (!root) return;
-    root.querySelectorAll("[data-recnav]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); recNavGo(+b.getAttribute("data-recnav")); }; });
+    root.querySelectorAll("[data-recnav]").forEach(function (b) { b.onclick = function (e) { e.stopPropagation(); recNavGo(b.getAttribute("data-recnav")); }; });
     if (!window.__recNavKeys) {
       window.__recNavKeys = true;
+      // Alt and an arrow steps, Alt+Home and Alt+End jump to the two ends
+      var KEYS = { ArrowLeft: "-1", ArrowRight: "1", Home: "first", End: "last" };
       document.addEventListener("keydown", function (e) {
-        if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
+        if (!e.altKey || !KEYS[e.key]) return;
         var scope = document.querySelector(".modal.on [data-recnav]") ? document.querySelector(".modal.on") : document.querySelector("#o-main .o-bc");
-        var b = scope && scope.querySelector('[data-recnav="' + (e.key === "ArrowLeft" ? "-1" : "1") + '"]');
+        var b = scope && scope.querySelector('[data-recnav="' + KEYS[e.key] + '"]');
         if (b && !b.disabled) { e.preventDefault(); b.click(); }
       });
     }
@@ -5957,6 +6112,87 @@
       cash_void: "a reversal", cash_handover: "a Counter handover", expense: "an expense claim", invoice: "an invoice or bill", payment: "a payment",
       cash_movement: "a Counter movement" })[st] || "another record";
   }
+  // ---- Excel-style column widths for a grid inside a form ----
+  // The list engine keeps its widths with the rest of a list's column prefs. A
+  // grid on a form has no list behind it, so it carries its own: one <colgroup>
+  // the header row and every data row share (with table-layout:fixed nothing can
+  // drift out of line), a drag handle on each header edge, and the sizes kept in
+  // this browser per screen. Storage can throw (private window, site data
+  // blocked), and a grid has to work anyway, so every touch of it is guarded.
+  //
+  // cols is [{ key, label, w, num }] in table order. w is the default width in
+  // pixels; w of 0 means "take whatever width is left over", for the one column
+  // that should soak up a wide screen.
+  function gridColsRead(key) {
+    try { var o = JSON.parse(localStorage.getItem("orbit_gridw_" + key) || "{}"); return (o && typeof o === "object") ? o : {}; } catch (e) { return {}; }
+  }
+  function gridColsWrite(key, w) {
+    try {
+      if (w && Object.keys(w).length) localStorage.setItem("orbit_gridw_" + key, JSON.stringify(w));
+      else localStorage.removeItem("orbit_gridw_" + key);
+    } catch (e) { }
+  }
+  // the <colgroup> and the header cells, so the two can never disagree
+  function gridColsHTML(cols) {
+    return '<colgroup>' + cols.map(function () { return '<col>'; }).join("") + '</colgroup><thead><tr>' +
+      cols.map(function (c, i) {
+        var last = i === cols.length - 1;
+        // The handle sits on a column's right edge. It takes focus on a click or
+        // at the end of a drag, and then the left and right arrow keys nudge the
+        // width, but it is out of the tab order: eight extra tab stops in front
+        // of the first line would cost the typing flow more than they are worth.
+        var grip = last ? "" : '<span class="je-rs" data-ci="' + i + '" tabindex="-1" role="separator" aria-orientation="vertical" title="Drag to make ' + esc(c.label || "this column") + ' wider or narrower, or click it and use the left and right arrow keys" aria-label="Resize the ' + esc(c.label || "last") + ' column with the left and right arrow keys"></span>';
+        return '<th class="' + (c.num ? "num" : "") + '" data-ck="' + esc(c.key) + '" scope="col">' + esc(c.label || "") + grip + '</th>';
+      }).join("") + '</tr></thead>';
+  }
+  function wireGridCols(table, key, cols, resetBtn) {
+    if (!table) return;
+    var saved = gridColsRead(key);
+    function apply() {
+      var cg = table.querySelector("colgroup"); if (!cg) return;
+      var total = 0, elastic = false;
+      cols.forEach(function (c, i) {
+        var el = cg.children[i]; if (!el) return;
+        var w = saved[c.key] > 0 ? saved[c.key] : c.w;
+        if (w > 0) { el.style.width = w + "px"; total += w; }
+        else { el.style.width = "auto"; elastic = true; total += 140; }
+      });
+      // with an elastic column the grid fills its box; once every column has a
+      // width of its own it is exactly as wide as those add up to, so a column
+      // stays where it was dropped instead of being stretched back
+      table.style.width = elastic ? "100%" : total + "px";
+      table.style.minWidth = total + "px";
+      if (resetBtn) resetBtn.hidden = !Object.keys(saved).length;
+    }
+    function setW(ci, w) {
+      var c = cols[ci]; if (!c) return;
+      saved[c.key] = Math.max(44, Math.round(w));
+      apply(); gridColsWrite(key, saved);
+    }
+    apply();
+    table.querySelectorAll(".je-rs").forEach(function (gr) {
+      gr.onpointerdown = function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var th = gr.parentNode, ci = +gr.dataset.ci, startX = e.clientX, startW = th.getBoundingClientRect().width, w = startW;
+        gr.classList.add("drag"); document.body.style.cursor = "col-resize";
+        function mm(ev) { w = Math.max(44, Math.round(startW + (ev.clientX - startX))); saved[cols[ci].key] = w; apply(); }
+        function mu() {
+          document.removeEventListener("pointermove", mm); document.removeEventListener("pointerup", mu);
+          document.body.style.cursor = ""; gr.classList.remove("drag");
+          // a click that moved nothing is not a width to remember
+          if (Math.round(w) !== Math.round(startW)) setW(ci, w);
+          // keep the handle: the arrow keys can carry on from where the drag left off
+          try { gr.focus(); } catch (x) { }
+        }
+        document.addEventListener("pointermove", mm); document.addEventListener("pointerup", mu);
+      };
+      gr.onkeydown = function (e) {
+        var d = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0; if (!d) return;
+        e.preventDefault(); setW(+gr.dataset.ci, gr.parentNode.getBoundingClientRect().width + d);
+      };
+    });
+    if (resetBtn) resetBtn.onclick = function () { saved = {}; gridColsWrite(key, saved); apply(); toast("Column widths back to the default"); };
+  }
   // ---- the journal voucher ----
   // A line is the account, its auxiliary when it has them, the description,
   // the currency, the rate when that currency is not the company's, and the
@@ -6063,8 +6299,10 @@
           ? '<div class="je-rate"><span>1 ' + esc(l.inv ? base : l.ccy) + ' =</span><input class="je-in" type="number" step="any" min="0" data-i="' + i + '" data-f="rate" value="' + rateShown(l) + '"' + dis + '><span>' + esc(l.inv ? l.ccy : base) + '</span>' +
             (posted ? '' : '<button type="button" class="je-flip" data-flip="' + i + '" title="Type the rate the other way round" aria-label="Type the rate the other way round">&#8646;</button>') + '</div>'
           : '<span class="muted">1</span>') + '</td>' +
-        '<td><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="dr" value="' + (l.dr === "" || l.dr == null ? "" : l.dr) + '"' + dis + '></td>' +
-        '<td><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="cr" value="' + (l.cr === "" || l.cr == null ? "" : l.cr) + '"' + dis + '></td>' +
+        // num on the cell, not only on the input: the header, the figure and the
+        // total below it then share one right-aligned column of tabular digits
+        '<td class="num"><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="dr" value="' + (l.dr === "" || l.dr == null ? "" : l.dr) + '"' + dis + '></td>' +
+        '<td class="num"><input class="je-in u-r" type="number" step="0.01" min="0" data-i="' + i + '" data-f="cr" value="' + (l.cr === "" || l.cr == null ? "" : l.cr) + '"' + dis + '></td>' +
         '<td class="num muted je-base" id="je-base-' + i + '">' + (foreign && (b.d || b.c) ? money(b.d || b.c) : "") + '</td>' +
         '<td class="u-c">' + (posted ? "" : '<button type="button" data-del="' + i + '" class="u-xbtn" aria-label="Remove line">&times;</button>') + '</td></tr>';
     }
@@ -6138,6 +6376,30 @@
       if (focus) focusCell(focus.row, focus.f);
     }
 
+    // Date, Journal, Reference and Description are the one line at the top of a
+    // paper voucher, so they sit on one row here too, each field only as wide as
+    // what goes in it. The fuller wording stays on the label's tooltip and its
+    // "?" rather than taking a line of its own under every field.
+    function jeHead(label, valueHtml, cls, desc) {
+      var m = /\bid="([^"]+)"/.exec(valueHtml || "");
+      var full = FIELD_HELP[label] || desc || FIELD_DESC[label] || "";
+      return '<div class="je-hf ' + cls + '"><span class="lbl-row"><label' + (m ? ' for="' + m[1] + '"' : "") +
+        (full ? ' title="' + esc(full) + '"' : "") + '>' + esc(label) + '</label>' + helpQ(full, label) + '</span>' + valueHtml + '</div>';
+    }
+    // one list drives the colgroup, the header row and the resize handles, so a
+    // header and the cells under it cannot drift apart. Line description is the
+    // elastic one (w 0): it takes whatever a wide screen leaves over.
+    var jeCols = [
+      { key: "acct", label: "Account No.", w: 200 },
+      { key: "aux", label: "Auxiliary", w: 150 },
+      { key: "label", label: "Line description", w: 0 },
+      { key: "ccy", label: "Currency", w: 80 },
+      { key: "rate", label: "Rate", w: 130 },
+      { key: "dr", label: "Debit", w: 110, num: true },
+      { key: "cr", label: "Credit", w: 110, num: true },
+      { key: "base", label: "In " + base, w: 100, num: true },
+      { key: "del", label: "", w: 34 }
+    ];
     var number = ent.entry_number || "";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' +
@@ -6153,18 +6415,19 @@
       revisionNoteHTML(revs, !isPosted, "voucher") +
       (!manual && !owner && !isPosted && id !== "new" ? '<div class="ob-banner" style="margin:0 0 12px">Orbit created this entry for ' + esc(jeSourceLabel(ent.source_type)) + '. Changing it here changes the accounting only; that record keeps its own figures.</div>' : '') +
       '<div class="o-title">Journal voucher ' + (number ? '<b>' + esc(number) + '</b>' : '<span class="muted">' + (copyFrom ? "copied, numbered when saved" : "numbered when saved") + '</span>') + '</div>' +
-      '<div class="o-groups"><div>' +
-      fld("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + dis + '>') +
-      fld("Journal", '<select id="je-journal"' + dis + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>') +
-      (S.books && S.books.length > 1 ? fld("Book", '<select id="je-book"' + dis + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "Which set of books this voucher belongs to.") : '') +
-      '</div><div>' +
-      fld("Reference", '<input id="je-ref" value="' + esc(ent.ref || "") + '" placeholder="The supplier invoice or receipt number"' + dis + '>', "The number of the paper behind this voucher.") +
-      fld("Description", '<input id="je-narr" value="' + esc(ent.narration || "") + '" placeholder="What this voucher is for"' + dis + '>', "Copied to every line whose line description you leave blank.") +
-      '</div></div>' +
+      '<div class="je-head">' +
+      jeHead("Date", '<input id="je-date" type="date" value="' + esc(ent.date || today()) + '"' + dis + '>', "je-hf-date") +
+      jeHead("Journal", '<select id="je-journal"' + dis + '>' + jrns.map(function (j) { return '<option value="' + j.id + '"' + (ent.journal_id === j.id ? " selected" : "") + '>' + esc(j.name) + '</option>'; }).join("") + '</select>', "je-hf-jrn") +
+      (S.books && S.books.length > 1 ? jeHead("Book", '<select id="je-book"' + dis + '>' + S.books.map(function (b) { return '<option value="' + b.id + '"' + ((ent.book_id || (S.book && S.book.id)) === b.id ? " selected" : "") + '>' + esc(b.name) + '</option>'; }).join("") + '</select>', "je-hf-book", "Which set of books this voucher belongs to.") : '') +
+      jeHead("Reference", '<input id="je-ref" value="' + esc(ent.ref || "") + '" placeholder="Invoice or receipt number"' + dis + '>', "je-hf-ref", "The number of the paper behind this voucher.") +
+      jeHead("Description", '<input id="je-narr" value="' + esc(ent.narration || "") + '" placeholder="What this voucher is for"' + dis + '>', "je-hf-narr", "Copied to every line whose line description you leave blank.") +
+      '</div>' +
       // the entries are the working area of a voucher: one framed, compact block with
       // its debit, credit and balance in the header, so they are the first thing read
-      '<section class="je-box" aria-label="Accounting entries"><div class="je-box-h"><b>Accounting entries</b><div id="je-tot" class="je-tot"></div></div>' +
-      '<div class="je-wrap"><table class="o-list je-grid"><thead><tr><th>Account No.</th><th>Auxiliary</th><th>Line description</th><th>Currency</th><th>Rate</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">In ' + esc(base) + '</th><th></th></tr></thead><tbody id="je-grid"></tbody></table></div>' +
+      '<section class="je-box" aria-label="Accounting entries"><div class="je-box-h"><b>Accounting entries</b>' +
+      '<button type="button" id="je-wreset" class="je-wreset" hidden title="Put every column back to its default width">Reset widths</button>' +
+      '<div id="je-tot" class="je-tot"></div></div>' +
+      '<div class="je-wrap"><table class="o-list je-grid" data-enter="own">' + gridColsHTML(jeCols) + '<tbody id="je-grid"></tbody></table></div>' +
       '<datalist id="je-accts">' + mains.map(function (a) { return '<option value="' + esc(acctLabel(a)) + '"></option>'; }).join("") + '</datalist>' +
       (parts.length ? '<datalist id="je-parts">' + parts.map(function (p) { return '<option value="' + esc(p.name) + '"></option>'; }).join("") + '</datalist>' : '') +
       (posted ? '' : '<div class="je-box-f"><button type="button" id="je-add" class="je-addline">+ Add line</button><span class="muted je-hint">Enter moves to the next line. A new line copies the line description above it and offers the amount that balances.</span></div>') +
@@ -6172,6 +6435,8 @@
       attachBlockHTML("journal_entry", id === "new" ? "" : id, { label: "Related documents: the scanned invoice, receipt or contract behind this voucher", accept: "image/*,application/pdf" }) +
       '</div>';
     paint();
+    // drag a header edge to set a column's width; this browser remembers it
+    wireGridCols(document.querySelector(".je-box table.je-grid"), "moves.lines", jeCols, document.getElementById("je-wreset"));
     wireAttach("journal_entry");
     document.getElementById("je-date").addEventListener("change", function () { rateCache = {}; });
     wireRevisions(revs, "journal_entry");
@@ -6436,26 +6701,70 @@
     if (s === "cancel") return '<span class="badge unpaid">Cancelled</span>';
     return '<span class="badge">' + esc(s) + '</span>';
   }
+  // ---- what an order has been billed and paid ----
+  // An order is never paid in its own right: it is paid through the bills or invoices
+  // raised against it. So the order reads those documents and reports one set of
+  // figures. A credit note counts backwards. A draft is counted apart, because a draft
+  // bill is not money owed yet. Amounts in another currency are converted, so an order
+  // billed in two currencies still reads as one number.
+  function orderBillSummary(invs, ordered) {
+    var s = { ordered: Number(ordered) || 0, billed: 0, paid: 0, due: 0, posted: 0, drafts: 0 };
+    (invs || []).forEach(function (v) {
+      if (v.state === "cancel") return;
+      if (v.state !== "posted") { s.drafts++; return; }
+      s.posted++;
+      var sign = (v.move_type === "out_refund" || v.move_type === "in_refund") ? -1 : 1;
+      var tot = fxHomeConvert(Number(v.amount_total || 0), v.currency_code);
+      var res = fxHomeConvert(Number(v.amount_residual == null ? v.amount_total : v.amount_residual) || 0, v.currency_code);
+      s.billed += sign * tot; s.due += sign * res; s.paid += sign * (tot - res);
+    });
+    function cents(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+    s.billed = cents(s.billed); s.paid = cents(s.paid); s.due = cents(s.due);
+    s.state = !s.posted ? (s.drafts ? "draft" : "none") : (s.due <= 0.005 ? "paid" : (s.paid > 0.005 ? "partial" : "unpaid"));
+    return s;
+  }
+  function ordIsConfirmed(o) { return !!o && (o.state === "sale" || o.state === "purchase" || o.state === "done"); }
+  function orderPayBadge(s, isSale) {
+    var doc = isSale ? "invoice" : "bill";
+    if (s.state === "none") return '<span class="badge" title="No ' + doc + ' has been raised against this order yet.">Not ' + (isSale ? "invoiced" : "billed") + '</span>';
+    if (s.state === "draft") return '<span class="badge draft" title="A ' + doc + ' exists but is still a draft, so nothing is owed yet.">' + (isSale ? "Invoice" : "Bill") + ' in draft</span>';
+    if (s.state === "paid") return '<span class="badge paid" title="Every posted ' + doc + ' against this order is settled.">Paid</span>';
+    if (s.state === "partial") return '<span class="badge partial" title="Part of what is billed has been paid. ' + moneyC(s.due, S.company.currency_code) + ' is still outstanding.">Partly paid</span>';
+    return '<span class="badge unpaid" title="Nothing has been paid against what is billed. ' + moneyC(s.due, S.company.currency_code) + ' is outstanding.">Unpaid</span>';
+  }
   function cfgOrders(kind) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders";
     return {
       title: isSale ? "Quotations" : "Purchase Orders", pageSize: 80,
       emptyHint: isSale ? "Use a quotation for a straightforward product or service sale. For a priced construction bid with a cost breakdown and margin, use Estimation → Tenders instead, then turn the won tender into a project." : "Raise a purchase order to buy materials or subcontract work from a vendor.",
-      fetch: function () { return sb.from(tbl).select("*, partners(name)").eq("company_id", S.company.id).order("date_order", { ascending: false }).then(function (r) { return r.data || []; }); },
+      // the list says whether each confirmed order is paid, which means reading the
+      // documents raised against them: one extra request for the whole list, never one
+      // request per row
+      fetch: async function () {
+        var rows = (await sb.from(tbl).select("*, partners(name)").eq("company_id", S.company.id).order("date_order", { ascending: false })).data || [];
+        var fk = isSale ? "sale_order_id" : "purchase_order_id";
+        var bills = await allRows(function () { return sb.from("invoices").select("id,state,move_type,amount_total,amount_residual,currency_code," + fk).eq("company_id", S.company.id).not(fk, "is", null).order("id"); });
+        var by = {}; bills.forEach(function (b) { var k = b[fk]; if (!k) return; (by[k] || (by[k] = [])).push(b); });
+        rows.forEach(function (o) { o._bills = by[o.id] || []; });
+        return rows;
+      },
       searchText: function (o) { return (o.number || "") + " " + (o.partners ? o.partners.name : ""); },
       columns: [
         { label: "Number", get: function (o) { return '<b>' + esc(o.number || "Draft") + '</b>'; } },
         { label: isSale ? "Customer" : "Vendor", get: function (o) { return esc(o.partners ? o.partners.name : ""); } },
         { label: "Order Date", get: function (o) { return '<span class="muted">' + esc(o.date_order || "") + '</span>'; } },
         { label: "Total", num: true, get: function (o) { return moneyC(o.amount_total, o.currency_code); } },
-        { label: "Status", get: function (o) { return soBadge(o, isSale); } }
+        { label: "Status", get: function (o) { return soBadge(o, isSale); } },
+        { label: "Payment", get: function (o) { return ordIsConfirmed(o) ? orderPayBadge(orderBillSummary(o._bills, o.amount_total), isSale) : ""; } }
       ],
       filters: [
         { label: "Quotations", test: function (o) { return o.state === "draft" || o.state === "sent"; } },
-        { label: isSale ? "Sales Orders" : "Purchase Orders", test: function (o) { return o.state === "sale" || o.state === "purchase"; } }
+        { label: isSale ? "Sales Orders" : "Purchase Orders", test: function (o) { return o.state === "sale" || o.state === "purchase"; } },
+        { label: "Unpaid", test: function (o) { var s = orderBillSummary(o._bills, o.amount_total); return ordIsConfirmed(o) && s.due > 0.005; } },
+        { label: "Paid", test: function (o) { var s = orderBillSummary(o._bills, o.amount_total); return ordIsConfirmed(o) && s.posted > 0 && s.due <= 0.005; } }
       ],
       groupBy: [{ label: isSale ? "Customer" : "Vendor", get: function (o) { return o.partners ? o.partners.name : "None"; } }, { label: "Status", get: function (o) { return o.state; } }],
-      kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + moneyC(o.amount_total, o.currency_code) + '</b></div>'; },
+      kanbanCard: function (o) { return '<div class="t">' + esc(o.number || "Draft") + '</div><div class="muted">' + esc(o.partners ? o.partners.name : "") + '</div><div class="r"><span>' + esc(o.date_order || "") + '</span>' + soBadge(o, isSale) + '</div><div class="r"><span class="k">Total</span><b>' + moneyC(o.amount_total, o.currency_code) + '</b></div>' + (ordIsConfirmed(o) ? '<div class="r"><span class="k">Payment</span>' + orderPayBadge(orderBillSummary(o._bills, o.amount_total), isSale) + '</div>' : ""); },
       emptyHint: "Orders you place with suppliers and receive from customers. Raise one from a requisition or quotation, or start it here; receiving and billing follow.",
       onOpen: function (o) { renderOrderForm(o.id, kind); },
       onNew: function () { renderOrderForm("new", kind); }
@@ -7503,8 +7812,10 @@
     if (!taxes.length) taxes = liveTaxes(ordTaxAll, ordTaxKeep);
     var ordUoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     bcTitle(order ? (order.number || "Draft") : "New");
-    var invCount = 0, firstInvId = null;
-    if (order) { var _ic = (await sb.from("invoices").select("id").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id)).data || []; invCount = _ic.length; firstInvId = _ic[0] ? _ic[0].id : null; }
+    var invCount = 0, firstInvId = null, ordBills = [];
+    // the bills or invoices raised against this order, with what is still owed on each,
+    // so the order itself can say whether it is paid without opening another screen
+    if (order) { ordBills = (await sb.from("invoices").select("id,number,state,move_type,amount_total,amount_residual,currency_code,invoice_date").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id).order("invoice_date")).data || []; invCount = ordBills.length; firstInvId = ordBills[0] ? ordBills[0].id : null; }
     // receipts made from this purchase order, and the versions kept by each edit
     var rcpts = (order && !isSale) ? ((await sb.from("stock_pickings").select("id,number,type,scheduled_date").eq("po_id", order.id).order("created_at")).data || []) : [];
     var orevs = order ? ((await sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", isSale ? "sale_order" : "purchase_order").eq("doc_id", order.id).order("created_at", { ascending: false })).data || []) : [];
@@ -7528,7 +7839,29 @@
     }
     if (order) btns += '<button id="o-print">Print</button>';
     var st = order ? order.state : "draft", atFirst = (st === "draft" || st === "sent");
-    var stages = '<div class="o-stages"><span class="st ' + (atFirst ? "on" : "done") + '">' + (isSale ? "Quotation" : "RFQ") + '</span><span class="st ' + (!atFirst ? "on" : "") + '">' + (isSale ? "Sales Order" : "Purchase Order") + '</span></div>';
+    // What has actually happened to this order: received, billed, paid. The stage strip
+    // runs left to right so it is read at a glance, and the payment stage lights up on
+    // its own as the bills behind the order are settled. Nobody should have to open the
+    // bills to find out whether a purchase order has been paid.
+    var bsum = orderBillSummary(ordBills, order ? order.amount_total : 0);
+    var anyReceived = _prodLines.some(function (l) { return Number(l.qty_received || 0) > 0.0001; });
+    var anyBilled = (lines || []).some(function (l) { return Number((isSale ? l.qty_invoiced : l.qty_billed) || 0) > 0.0001; });
+    var stg = [[isSale ? "Quotation" : "RFQ", atFirst ? "on" : "done"], [isSale ? "Sales Order" : "Purchase Order", atFirst ? "" : ((anyBilled || anyReceived) ? "done" : "on")]];
+    if (!isSale) stg.push(["Received", !confirmed ? "" : (fullyReceived ? "done" : (anyReceived ? "on" : ""))]);
+    stg.push([isSale ? "Invoiced" : "Billed", !confirmed ? "" : (fullyBilled ? "done" : (anyBilled ? "on" : ""))]);
+    stg.push(["Paid", !confirmed ? "" : (bsum.posted && bsum.state === "paid" ? "done" : (bsum.state === "partial" ? "on" : ""))]);
+    var stages = '<div class="o-stages">' + stg.map(function (x) { return '<span class="st ' + x[1] + '">' + esc(x[0]) + '</span>'; }).join("") + '</div>';
+    var ordCcy = (order && order.currency_code) || S.company.currency_code, homeCcy = S.company.currency_code;
+    var recvBadge = isSale ? "" : (fullyReceived ? '<span class="badge paid">Received</span>' : (anyReceived ? '<span class="badge partial">Partly received</span>' : '<span class="badge">Not received</span>'));
+    var billBadge = fullyBilled ? '<span class="badge paid">' + (isSale ? "Invoiced" : "Billed") + '</span>' : (anyBilled ? '<span class="badge partial">Partly ' + (isSale ? "invoiced" : "billed") + '</span>' : '<span class="badge">Not ' + (isSale ? "invoiced" : "billed") + '</span>');
+    var closedBadge = (isSale || fullyReceived) && fullyBilled && bsum.posted && bsum.state === "paid" ? '<span class="badge paid">Closed</span>' : "";
+    var moneyStrip = (order && confirmed) ? '<div class="o-money" aria-label="' + (isSale ? "Invoicing" : "Billing") + ' and payment">' +
+      '<div class="om"><span class="k">Ordered</span><span class="v">' + moneyC(order.amount_total, ordCcy) + '</span></div>' +
+      '<div class="om"><span class="k">' + (isSale ? "Invoiced" : "Billed") + '</span><span class="v">' + moneyC(bsum.billed, homeCcy) + '</span></div>' +
+      '<div class="om"><span class="k">Paid</span><span class="v">' + moneyC(bsum.paid, homeCcy) + '</span></div>' +
+      '<div class="om' + (bsum.due > 0.005 ? " due" : "") + '"><span class="k">Outstanding</span><span class="v">' + moneyC(bsum.due, homeCcy) + '</span></div>' +
+      '<div class="om-b">' + recvBadge + billBadge + orderPayBadge(bsum, isSale) + closedBadge + '</div>' +
+      (bsum.drafts ? '<div class="om-note">' + bsum.drafts + ' draft ' + (isSale ? "invoice" : "bill") + (bsum.drafts === 1 ? " is" : "s are") + ' not posted yet, so ' + (bsum.drafts === 1 ? "it is" : "they are") + ' not counted here.</div>' : "") + '</div>' : "";
 
     var partnerField = editable ? '<select id="o-partner">' + partners.map(function (p) { return '<option value="' + p.id + '"' + ((order && order.partner_id === p.id) ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select>' : '<span class="v">' + esc(order && order.partners ? order.partners.name : "") + '</span>';
     var groups = '<div class="o-groups"><div>' +
@@ -7545,7 +7878,7 @@
     var title = order ? (order.number || (isSale ? "Draft Quotation" : "Request for Quotation")) : "New";
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
-      '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' +
+      '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' + moneyStrip +
       (amend ? '<div class="ob-banner warn" style="margin:0 0 12px">You are editing a confirmed order. A line already ' + (isSale ? "invoiced" : "received or billed") + ' cannot go below that quantity or be removed, and the ' + (isSale ? "invoices" : "receipts and bills") + ' already made are not changed. The version before your changes is kept in this order\'s history.</div>' : '') +
       revisionNoteHTML(orevs, false, "order") + groups +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
@@ -8377,7 +8710,7 @@
     function capBox(c, checked) { return '<label class="cap-box"><input type="checkbox" class="p-cap" value="' + esc(c) + '"' + (checked ? " checked" : "") + '> ' + esc(c) + '</label>'; }
     function capsBlock() {
       var boxes = capNames.map(function (c) { return capBox(c, pcaps.indexOf(c) >= 0); }).join("");
-      return '<div class="o-matspec u-mt14"><div class="o-cf-head">What they can supply</div><div class="sub" style="margin:-2px 0 9px">Tick the products or services this supplier offers. Not listed? Add it and it is saved for next time.</div><div class="cap-list" id="cap-list">' + boxes + '</div><div class="cap-add"><input id="cap-new" placeholder="Add a type, e.g. Insulation"><button type="button" class="o-filtbtn" id="cap-addbtn">Add</button></div></div>';
+      return '<div class="o-matspec u-mt14"><div class="o-cf-head">What they can supply</div><div class="sub" style="margin:-2px 0 9px">Tick the products or services this supplier offers. Not listed? Add it and it is saved for next time.</div><div class="cap-list" id="cap-list">' + boxes + '</div><div class="cap-add"><input id="cap-new" data-enter="own" placeholder="Add a type, e.g. Insulation"><button type="button" class="o-filtbtn" id="cap-addbtn">Add</button></div></div>';
     }
     function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del u-xbtn">&times;</button></td></tr>'; }
     var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
@@ -11538,12 +11871,16 @@
   // supplier is read when the chart keeps them as auxiliaries; read that way it
   // also shows a trial balance by auxiliary.
   var STMT_MODE = "contact", STMT_PID = "", STMT_ACCT = "", STMT_AUX = true;
+  // The statement is built once as a document and kept here, so Print hands the printer
+  // the very same markup the screen shows: paper can never drift from the screen.
+  var STMT_DOC = "";
   async function renderStatement(pid, acctId) {
     if (!pid && STMT_PRESET_PARTNER) { pid = STMT_PRESET_PARTNER; STMT_PRESET_PARTNER = null; }
     if (pid) { STMT_MODE = "contact"; STMT_PID = pid; }
     if (acctId) { STMT_MODE = "account"; STMT_ACCT = acctId; }
     var cc = S.company.currency_code, pr = periodRange(REP_PERIOD);
-    var partners = await allRows(function () { return sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name"); });
+    // the statement is a document sent out, so the contact's own letterhead details come with it
+    var partners = await allRows(function () { return sb.from("partners").select("id,name,contact_person,email,phone,mobile,vat,street,building,floor,city,country,payment_days").eq("company_id", S.company.id).order("name"); });
     var accts = await allRows(function () { return sb.from("accounts").select("id,code,name,parent_account_id").eq("company_id", S.company.id).order("code"); });
     var accById = {}; accts.forEach(function (a) { accById[a.id] = a; });
     function accLabel(a) { return a ? a.code + " " + a.name : ""; }
@@ -11558,7 +11895,10 @@
       '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
       '<div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">' + (isContact ? "Choose a contact" : "Choose an account") + ' and a period above.</div></div></div></div>';
     wireBc();
-    document.getElementById("rp-print").onclick = function () { window.print(); };
+    STMT_DOC = "";
+    // Print the document that is on the screen, through the same pipeline invoices use,
+    // rather than letting the browser re-flow the app page.
+    document.getElementById("rp-print").onclick = function () { if (STMT_DOC) pdocPrint(STMT_DOC); else window.print(); };
     var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
     function again() { renderStatement(); }
     wirePeriod(again);
@@ -11585,13 +11925,21 @@
     }
     var rep = document.getElementById("rep");
     rep.innerHTML = '<div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div>';
-    var lines = await allRows(function () {
-      var q = sb.from("journal_lines").select("debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)")
-        .eq("company_id", S.company.id).eq("journal_entries.state", "posted");
-      q = isContact ? q.eq("partner_id", STMT_PID) : q.in("account_id", ids);
-      if (pr.to) q = q.lte("journal_entries.date", pr.to);
-      return bookFilter(q, "journal_entries.book_id").order("id");
-    });
+    // narration and the journal name give each row a readable document type and description
+    var SEL_RICH = "debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id,narration,source_type,journals(code,name)), partners(name)";
+    var SEL_PLAIN = "debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)";
+    function stmtLines(sel) {
+      return allRows(function () {
+        var q = sb.from("journal_lines").select(sel).eq("company_id", S.company.id).eq("journal_entries.state", "posted");
+        q = isContact ? q.eq("partner_id", STMT_PID) : q.in("account_id", ids);
+        if (pr.to) q = q.lte("journal_entries.date", pr.to);
+        return bookFilter(q, "journal_entries.book_id").order("id");
+      });
+    }
+    var lines = await stmtLines(SEL_RICH);
+    // an embed a database has not got comes back as no rows at all, so never show an empty
+    // statement without first asking again for the columns every schema is sure to have
+    if (!lines.length) lines = await stmtLines(SEL_PLAIN);
     if (!document.getElementById("rep")) return;
     function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
     var open = 0, inP = [], byAcc = {};
@@ -11605,21 +11953,39 @@
       var a = x.journal_entries || {}, b = y.journal_entries || {};
       return a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.entry_number || "").localeCompare(String(b.entry_number || ""));
     });
-    var showAcc = isContact || ids.length > 1, n = showAcc ? 9 : 8, bal = r2(open), td = 0, tc = 0, body = "";
-    var head = '<tr><td>Date</td><td>Voucher</td><td>Reference</td>' + (showAcc ? '<td>Account</td>' : '') + '<td>Description</td><td class="num">In currency</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Balance</td></tr>';
-    if (pr.from) body += '<tr class="sec"><td colspan="' + (n - 1) + '">Balance brought forward at ' + esc(pr.from) + '</td><td class="num">' + money(bal) + '</td></tr>';
+    // Six columns on a contact statement is what a customer or supplier expects to read:
+    // date, the document, what it was for, debit, credit, running balance. The account is a
+    // seventh column only when several auxiliaries are read together and they need telling apart.
+    var showAcc = !isContact && ids.length > 1, n = showAcc ? 7 : 6, bal = r2(open), td = 0, tc = 0, body = "";
+    var asAt = pr.to || today(), fromD = pr.from || "";
+    function stDocType(e) {
+      var j = e.journals || {}; if (j.name) return j.name;
+      var m = { invoice: "Invoice or bill", payment: "Payment", expense: "Expense claim", payslip: "Payroll", stock: "Stock movement",
+        material_issue: "Material issue", depreciation: "Depreciation", retention: "Retention", retention_release: "Retention release",
+        advance: "Advance recovery", fx_revaluation: "Currency revaluation", install_labour: "Installation labour",
+        cash_movement: "Counter movement", cash_handover: "Counter handover", cash_void: "Reversal" };
+      return m[e.source_type] || "Journal voucher";
+    }
+    // a second line inside a cell: the space keeps the words apart when the row is exported to CSV
+    function stSub(txt) { return txt ? '<span class="pstmt-sm"> ' + txt + '</span>' : ""; }
+    var cols = showAcc
+      ? '<colgroup><col style="width:10%"><col style="width:17%"><col style="width:17%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>'
+      : '<colgroup><col style="width:11%"><col style="width:20%"><col style="width:32%"><col style="width:12.3%"><col style="width:12.3%"><col style="width:12.4%"></colgroup>';
+    var head = '<tr><th>Date</th><th>Document</th>' + (showAcc ? '<th>Account</th>' : '') + '<th>Description</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr>';
+    body += '<tr class="bf"><td>' + esc(fromD) + '</td><td colspan="' + (n - 4) + '">Balance brought forward</td><td class="num"></td><td class="num"></td><td class="num">' + money(bal) + '</td></tr>';
     inP.forEach(function (l) {
       var e = l.journal_entries || {}, d = Number(l.debit) || 0, c = Number(l.credit) || 0, ac = l.accounts || {};
       bal = r2(bal + d - c); td += d; tc += c;
       var fx = l.currency_code && l.currency_code !== cc && Number(l.amount_currency) ? moneyC(Math.abs(Number(l.amount_currency)), l.currency_code) : "";
-      body += '<tr><td>' + esc(e.date || "") + '</td><td>' + esc(e.entry_number || "") + '</td><td>' + esc(e.ref || "") + '</td>' +
+      body += '<tr><td>' + esc(e.date || "") + '</td>' +
+        '<td><b>' + esc(e.entry_number || "") + '</b>' + stSub(esc(stDocType(e))) + stSub(esc(e.ref || "")) + '</td>' +
         (showAcc ? '<td>' + esc((ac.code || "") + " " + (ac.name || "")) + '</td>' : '') +
-        '<td>' + esc(l.label || (l.partners && l.partners.name) || "") + '</td><td class="num muted">' + fx + '</td>' +
+        '<td>' + esc(l.label || e.narration || (l.partners && l.partners.name) || "") + stSub(fx) + '</td>' +
         '<td class="num">' + (d ? money(d) : "") + '</td><td class="num">' + (c ? money(c) : "") + '</td><td class="num">' + money(bal) + '</td></tr>';
     });
-    if (!inP.length) body += '<tr><td colspan="' + n + '" class="muted">No posted movements in this period.</td></tr>';
-    body += '<tr class="tot"><td colspan="' + (n - 3) + '">Movements in the period</td><td class="num">' + money(r2(td)) + '</td><td class="num">' + money(r2(tc)) + '</td><td class="num">' + money(r2(td - tc)) + '</td></tr>';
-    body += '<tr class="tot"><td colspan="' + (n - 1) + '">Balance carried forward' + (pr.to ? ' at ' + esc(pr.to) : '') + '</td><td class="num">' + money(bal) + '</td></tr>';
+    if (!inP.length) body += '<tr class="none"><td colspan="' + n + '">No posted movements in this period.</td></tr>';
+    body += '<tr class="tot"><td></td><td colspan="' + (n - 4) + '">Movements in the period</td><td class="num">' + money(r2(td)) + '</td><td class="num">' + money(r2(tc)) + '</td><td class="num">' + money(r2(td - tc)) + '</td></tr>';
+    body += '<tr class="cf"><td>' + esc(asAt) + '</td><td colspan="' + (n - 4) + '">Balance carried forward</td><td class="num"></td><td class="num"></td><td class="num">' + money(bal) + '</td></tr>';
     var verdict = isContact
       ? (bal > 0.005 ? esc(subject) + " owes you " + moneyC(bal, cc) : bal < -0.005 ? "You owe " + esc(subject) + " " + moneyC(-bal, cc) : "Nothing is owed either way")
       : (bal > 0.005 ? "Debit balance of " + moneyC(bal, cc) : bal < -0.005 ? "Credit balance of " + moneyC(-bal, cc) : "The balance is zero");
@@ -11629,15 +11995,73 @@
         .filter(function (x) { return x.open || x.dr || x.cr; });
       if (rowsTb.length) {
         var so = 0, sd = 0, sc = 0, scl = 0;
-        tb = '<h2 class="st-h2">Trial balance by auxiliary</h2><div class="o-rt-wrap"><table class="o-rt st-tb"><thead><tr><td>Account</td><td class="num">Brought forward</td><td class="num">Debit</td><td class="num">Credit</td><td class="num">Carried forward</td></tr></thead><tbody>' +
+        tb = '<h2 class="pstmt-h2">Trial balance by auxiliary</h2><div class="pstmt-tw"><table class="o-rt st-tb"><thead><tr><th>Account</th><th class="num">Brought forward</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Carried forward</th></tr></thead><tbody>' +
           rowsTb.map(function (x) { so += x.open; sd += x.dr; sc += x.cr; scl += x.close; return '<tr><td>' + esc(accLabel(x.a)) + '</td><td class="num">' + money(x.open) + '</td><td class="num">' + (x.dr ? money(x.dr) : "") + '</td><td class="num">' + (x.cr ? money(x.cr) : "") + '</td><td class="num">' + money(x.close) + '</td></tr>'; }).join("") +
           '<tr class="tot"><td>Total</td><td class="num">' + money(r2(so)) + '</td><td class="num">' + money(r2(sd)) + '</td><td class="num">' + money(r2(sc)) + '</td><td class="num">' + money(r2(scl)) + '</td></tr></tbody></table></div>';
       }
     }
-    rep.innerHTML = repHead("Statement of Account - " + subject, cc) +
-      '<div class="sub">' + esc(pr.label) + (pr.from ? ", from " + esc(pr.from) : "") + (pr.to ? " to " + esc(pr.to) : "") + '. Posted entries only, in ' + esc(cc) + '; foreign amounts are shown beside them.</div>' +
-      '<div class="o-rt-wrap u-mt14"><table class="o-rt"><thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
-      '<div class="st-verdict">' + verdict + '</div>' + tb;
+    // A customer statement is normally read together with how late the open items are, so the
+    // ageing comes off the documents that are still open rather than off the ledger lines.
+    var ageHTML = "";
+    if (isContact) {
+      var openDocs = [];
+      try { openDocs = ((await sb.from("invoices").select("due_date,invoice_date,amount_residual,currency_code,move_type").eq("company_id", S.company.id).eq("partner_id", STMT_PID).eq("state", "posted")).data) || []; } catch (eAge) { openDocs = []; }
+      if (!document.getElementById("rep")) return;
+      var ageAt = today(), buckets = [0, 0, 0, 0, 0], agedTot = 0, anyAge = false;
+      openDocs.forEach(function (iv) {
+        var res = fxHomeConvert(Number(iv.amount_residual) || 0, iv.currency_code);
+        if (Math.abs(res) < 0.005) return;
+        var mt = iv.move_type || "";
+        // a bill sits on the other side of the balance from an invoice, and a credit note reverses it
+        var sgn = (mt.indexOf("in_") === 0 ? -1 : 1) * (mt.indexOf("refund") >= 0 ? -1 : 1), v = sgn * res;
+        var due = iv.due_date || iv.invoice_date || "";
+        var days = due ? Math.floor((Date.parse(ageAt) - Date.parse(due)) / 86400000) : 0;
+        buckets[days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 : days <= 90 ? 3 : 4] += v;
+        agedTot += v; anyAge = true;
+      });
+      if (anyAge) {
+        var ageNames = ["Not yet due", "1 to 30 days", "31 to 60 days", "61 to 90 days", "Over 90 days"];
+        ageHTML = '<h2 class="pstmt-h2">How the open balance ages, at ' + esc(ageAt) + '</h2>' +
+          '<div class="pstmt-tw"><table class="pstmt-age"><thead><tr>' + ageNames.map(function (nm) { return '<th>' + nm + '</th>'; }).join("") + '<th>Total open</th></tr></thead>' +
+          '<tbody><tr>' + buckets.map(function (v) { return '<td>' + money(r2(v)) + '</td>'; }).join("") + '<td class="t">' + money(r2(agedTot)) + '</td></tr></tbody></table></div>' +
+          '<div class="pstmt-note">Ageing reads the invoices, bills and credit notes still open today and sorts them by how long they are past their due date. It can differ from the balance above when a payment has not yet been matched to a document.</div>';
+      }
+    }
+    // ---- the document itself: letterhead, who it is for, the facts, the balance, the table ----
+    var tpl = printTplData();
+    var pt = isContact ? (partners.filter(function (p) { return p.id === STMT_PID; })[0] || {}) : null;
+    var partyAddr = pt ? [pt.street, [pt.building, pt.floor].filter(Boolean).join(", "), [pt.city, pt.country].filter(Boolean).join(", ")].filter(Boolean) : [];
+    var partyCt = [];
+    if (pt) {
+      if (pt.contact_person) partyCt.push("Attn: " + pt.contact_person);
+      if (pt.phone || pt.mobile) partyCt.push("Tel " + [pt.phone, pt.mobile].filter(Boolean).join(" / "));
+      if (pt.email) partyCt.push(pt.email);
+      if (pt.vat) partyCt.push((tpl.taxLabel || "VAT") + " " + pt.vat);
+    }
+    var partyBlk = '<div class="pstmt-lbl">' + (isContact ? "Statement for" : "Account") + '</div>' +
+      '<div class="pstmt-name">' + esc(isContact ? subject : accLabel(accById[STMT_ACCT])) + '</div>' +
+      (partyAddr.length ? '<div class="pstmt-addr">' + partyAddr.map(esc).join("<br>") + '</div>' : "") +
+      (partyCt.length ? '<div class="pstmt-addr">' + partyCt.map(esc).join("<br>") + '</div>' : "") +
+      (!isContact && ids.length > 1 ? '<div class="pstmt-addr">Read together with its auxiliaries.</div>' : "");
+    function factRow(k, v) { return v ? '<tr><td class="k">' + esc(k) + '</td><td class="v">' + esc(v) + '</td></tr>' : ""; }
+    var facts = '<table>' + factRow("Statement date", today()) +
+      factRow("Period", (fromD ? fromD + " to " : "Up to ") + asAt) +
+      factRow("Currency", cc) +
+      (S.book && S.books && S.books.length > 1 ? factRow("Book", S.book.name) : "") +
+      (pt && pt.payment_days != null && pt.payment_days !== "" ? factRow("Payment terms", Number(pt.payment_days) === 0 ? "Due on receipt" : Number(pt.payment_days) + " days") : "") +
+      '</table>';
+    var docHTML = '<div class="pinv pstmt">' +
+      pdocHead('<h1 class="pdt-t">Statement of Account</h1>', "As at " + asAt) +
+      '<div class="pstmt-meta"><div class="pstmt-party">' + partyBlk + '</div><div class="pstmt-facts">' + facts + '</div></div>' +
+      '<div class="pstmt-box"><div class="pstmt-box-l"><div class="k">Balance carried forward at ' + esc(asAt) + '</div><div class="n">' + verdict + '</div></div><div class="v">' + moneyC(bal, cc) + '</div></div>' +
+      '<div class="pstmt-tw"><table class="o-rt st-tbl">' + cols + '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
+      '<div class="pstmt-note">Posted entries only, shown in ' + esc(cc) + '. Every line names the document it comes from; a foreign-currency amount is printed under the description at the value posted to the ledger.</div>' +
+      ageHTML + tb + pdocFoot() + '</div>';
+    // one document, two destinations: the screen shows it and Print hands the printer this same string
+    STMT_DOC = docHTML;
+    document.documentElement.style.setProperty("--print-accent", tpl.accent || "#2f6bff");
+    rep.className = "o-report wide o-stmt-sheet";
+    rep.innerHTML = docHTML;
   }
 
   // ============================ CONSOLIDATION ============================
@@ -21233,7 +21657,7 @@
       '<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">' +
       '<select id="pos-cust" style="flex:1;min-width:150px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><option value="">Walk-in customer</option>' + POS.customers.map(function (c) { return '<option value="' + c.id + '">' + esc(c.name) + '</option>'; }).join("") + '</select>' +
       '<select id="pos-pl" style="min-width:140px;padding:8px 10px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><option value="">Standard price</option>' + POS.pricelists.map(function (l) { return '<option value="' + l.id + '">' + esc(l.name) + '</option>'; }).join("") + '</select></div>' +
-      '<input id="pos-search" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
+      '<input id="pos-search" data-enter="own" placeholder="Search products or scan barcode..." style="padding:10px 12px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit"><div class="pos-grid" id="pos-grid"></div></div>' +
       '<div class="pos-cart"><div style="padding:10px 12px;border-bottom:1px solid var(--line);font-weight:600;display:flex;justify-content:space-between"><span>Cart</span><span id="pos-loyalty" class="muted" style="font-size:11px;font-weight:400"></span></div><div class="pos-lines" id="pos-cartlines"></div>' +
       '<div class="pos-foot"><div class="pos-tot"><span>Subtotal</span><b id="pos-sub">0</b></div><div class="pos-tot" id="pos-discrow" hidden><span>Discount</span><b id="pos-disc" class="u-bad">0</b></div><div class="pos-tot"><span>VAT ' + POS.vat + '%</span><b id="pos-tax">0</b></div><div class="pos-tot big"><span>Total</span><b id="pos-total">0</b></div>' +
       '<button class="pos-charge" id="pos-charge" disabled>Charge</button></div></div></div>';
@@ -21245,6 +21669,17 @@
     }
     async function loadPl(id) { POS.plItems = {}; if (id) { var its = (await sb.from("pricelist_items").select("*").eq("pricelist_id", id)).data || []; its.forEach(function (it) { (POS.plItems[it.product_id] = POS.plItems[it.product_id] || []).push(it); }); } POS.cart.forEach(function (l) { l.price = posPrice(POS.products.filter(function (x) { return x.id === l.product_id; })[0], l.qty); }); paintGrid(gv("pos-search")); posPaintCart(); }
     document.getElementById("pos-search").oninput = function () { paintGrid(this.value); };
+    // A till has no "next field" to walk to, so Enter here means the one thing a
+    // cashier wants: put the item in the cart. A barcode scanner types the code
+    // and sends Enter, which is why the box already says "or scan barcode".
+    document.getElementById("pos-search").onkeydown = function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      var tile = document.querySelector("#pos-grid .pos-tile");
+      if (!tile) { toast("No product matches " + (this.value || "that")); return; }
+      posAdd(tile.dataset.pid);
+      this.value = ""; paintGrid(""); this.focus();
+    };
     document.getElementById("pos-cust").onchange = function () { POS.partner = this.value || null; var c = POS.customers.filter(function (x) { return x.id === POS.partner; })[0]; if (c && c.pricelist_id && POS.pricelists.filter(function (l) { return l.id === c.pricelist_id; })[0]) { document.getElementById("pos-pl").value = c.pricelist_id; POS.pricelist = c.pricelist_id; loadPl(c.pricelist_id); } posPaintCart(); };
     document.getElementById("pos-pl").onchange = function () { POS.pricelist = this.value; loadPl(this.value); };
     document.getElementById("pos-charge").onclick = function () { posCharge(); };
@@ -23833,7 +24268,7 @@
     var T = svcTotals();
     body.innerHTML = '<div class="ct">' +
       '<div class="ct-left">' +
-      '<div class="ct-search"><input id="ct-q" placeholder="Search the menu..." autocomplete="off" value="' + esc(COUNTER.q) + '"></div>' +
+      '<div class="ct-search"><input id="ct-q" data-enter="own" placeholder="Search the menu..." autocomplete="off" value="' + esc(COUNTER.q) + '"></div>' +
       svcCatBarHTML(menu.cats, COUNTER.cat) +
       '<div class="mt-grid" id="ct-grid"></div></div>' +
       '<div class="ct-right">' +
@@ -23866,6 +24301,18 @@
     }
     grid();
     document.getElementById("ct-q").oninput = function () { COUNTER.q = this.value; grid(); };
+    // Same as the till: Enter on the menu search adds the top match to the order,
+    // so a whole round can be rung up without touching the screen.
+    document.getElementById("ct-q").onkeydown = function (e) {
+      if (e.key !== "Enter") return;
+      e.preventDefault();
+      var tile = document.querySelector("#ct-grid .mt");
+      if (!tile) { toast("Nothing on the menu matches " + (this.value || "that")); return; }
+      counterAdd(tile.dataset.p, menu);
+      COUNTER.q = ""; this.value = ""; grid();
+      // adding an item repaints the Counter, so take the box back afterwards
+      setTimeout(function () { var q = document.getElementById("ct-q"); if (q) q.focus(); }, 60);
+    };
     body.querySelectorAll(".mt-cat").forEach(function (b) {
       b.onclick = function () { COUNTER.cat = b.dataset.c || null; paintCounter(menu); };
     });
@@ -27420,7 +27867,7 @@
       apps: ["accounting"], screens: ["moves"], manage: "accounting",
       steps: [
         { go: "moves", sel: "#o-new", label: "New", t: "Start a voucher", b: "Most entries post themselves from invoices, bills and payments. Use a voucher for the rest: accruals, corrections, opening balances. Click <b>New</b>.", until: function () { return wkHas("#je-narr") && wkHas("#je-post"); }, wait: "Click New to carry on." },
-        { sel: "#je-journal", label: "Journal", t: "The Journal Voucher journal", b: "A new voucher opens on the <b>Journal Voucher</b> journal. Leave it there for an everyday adjustment, and check the <b>Date</b> above it." },
+        { sel: "#je-journal", label: "Journal", t: "The Journal Voucher journal", b: "A new voucher opens on the <b>Journal Voucher</b> journal. Leave it there for an everyday adjustment, and check the <b>Date</b> beside it." },
         { sel: "#je-ref", label: "Reference", t: "The paper behind it", b: "Type the number of the receipt, contract or letter this voucher records, if there is one." },
         { sel: "#je-narr", label: "Description", t: "Say what it is for", b: "For example <i>Office rent, September</i>. The description is copied onto every line whose own description you leave blank.", need: function () { return wkVal("je-narr") !== ""; }, wait: "Type a description to carry on." },
         { sel: ".je-box", label: "Accounting entries", t: "The accounting entries", b: "One line per account: type the code or name in <b>Account No.</b>, then the amount in <b>Debit</b> or <b>Credit</b>. Press Enter for the next line; it offers the amount that balances. Example: rent expense Debit 1,500.00, bank Credit 1,500.00.", need: function () { return wkHas("#je-tot .u-good"); }, wait: "The header says Balanced when the debits equal the credits." },

@@ -438,6 +438,25 @@
                                : ok(names.length + " posting functions use chosen accounts" + (hasDefault ? "; 6900 only as the visible close-difference default" : ""));
       } },
 
+    { name: "keyboard data entry runs from one engine",
+      why: "Enter used to do nothing in any Orbit form, so every purchase order line cost a trip to the mouse. One capture-phase listener now walks the fields on every form, dialog and lines table, and at the end of the last row presses that table's own Add button so the cursor lands in the new line's first field. It has to stay one engine and stay wired: a copy per screen drifts apart, and losing the skip list makes Enter fire twice in the four editors that already answer it themselves (the spreadsheet grid, the quick-add line, an in-place list cell and the journal voucher), which saves a record and jumps a field on the same keystroke.",
+      run: function (src) {
+        var kf = fnBody(src, "keyflowKey");
+        if (!kf) return bad("the keyflow engine (keyflowKey) is gone");
+        if (!/document\.addEventListener\("keydown", keyflowKey, true\)/.test(src)) return bad("keyflowKey is no longer wired as a document-level capture listener, so Enter does nothing again");
+        var skip = /var KEYFLOW_SKIP = '([^']*)'/.exec(src);
+        if (!skip) return bad("KEYFLOW_SKIP is missing, so the editors that own Enter are no longer skipped");
+        var owns = [".sg-in", ".o-qa", "o-ecell", "je-grid", 'data-enter="own"'];
+        var lost = owns.filter(function (s) { return skip[1].indexOf(s) < 0; });
+        if (lost.length) return bad("KEYFLOW_SKIP no longer skips " + lost.join(", ") + ", so Enter fires twice there");
+        if (!/function keyflowAddRow\(/.test(src) || !/\.o-addln/.test(fnBody(src, "keyflowAddBtn")))
+          return bad("Enter at the end of a lines table no longer presses that table's own Add button");
+        if (!/tagName === "TEXTAREA"/.test(kf)) return bad("Enter no longer leaves a textarea alone, so it cannot start a new paragraph");
+        if (!/closest\("\.o-form"\)/.test(kf) || !/\.modal/.test(kf) || !/table\.o-lines/.test(kf))
+          return bad("the engine no longer recognises forms, dialogs and lines tables, so it either does nothing or acts on screens it should not");
+        return ok("one capture listener, " + skip[1].split(",").length + " opted-out editors, lines tables grow through .o-addln");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

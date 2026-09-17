@@ -33,7 +33,7 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Accounting &rsaquo; Accounting &rsaquo; Journal Entries</b> and click <span class='man-key'>New</span>. For this example, a guesthouse accrues 1,800.00 of August electricity that the utility has not billed yet. You should see <b>Journal voucher</b> <i>numbered when saved</i> and two empty lines.",
-      "Set the <b>Date</b> to 31 August 2026 and leave <b>Journal</b> on Journal Voucher.",
+      "The head of the voucher is one row: <b>Date</b>, <b>Journal</b>, <b>Reference</b> and <b>Description</b>, each box only as wide as what goes in it. Set the <b>Date</b> to 31 August 2026 and leave <b>Journal</b> on Journal Voucher.",
       "Type <i>August electricity accrual</i> in <b>Description</b> and the meter reading reference, for example <i>Meter 0831</i>, in <b>Reference</b>.",
       "In the framed <b>Accounting entries</b> block, type the code or the name of your electricity expense account in <b>Account No.</b> on the first line and choose it from the list. If that account has auxiliaries, pick one in <b>Auxiliary</b>: a sub-account, or a contact for an account such as 4011 Suppliers or 4515 Other partners, whose auxiliaries are your contacts. Leave <b>Line description</b> empty: the voucher's Description is copied onto the line when you save.",
       "Type 1,800.00 in <b>Debit</b>. The totals at the top of the Accounting entries block should read Debit 1,800.00, Credit 0.00 and <b>Off by 1,800.00</b>.",
@@ -69,7 +69,8 @@ orbitScreenHelp({
       ["Duplicate", "Starts a new voucher with the same lines, journal, book and description, dated today, with an empty reference. Attachments are not copied."],
       ["Edit", "On every posted entry, for people who can manage Accounting. A voucher typed here, or an entry Orbit posted for stock, payroll, depreciation, retention or a revaluation, goes back to draft so you can change it: it keeps its number, and the version posted before is kept under <i>Edited after posting</i>. It is out of the accounts until you post it again. An entry that belongs to a bill or invoice takes that document back to draft instead, one that records a payment opens the payment's Edit, and one the Counter posted opens its movement, so a document and its entry always agree."],
       ["Open (document number)", "Shown on an entry Orbit posted for an invoice or a bill. Opens that document."],
-      ["&#8249; and &#8250;", "Beside the voucher number when you opened it from the list. Step to the previous or next entry in the list's order, with its search, filters and sorting, without going back to the list. <i>3 of 40</i> shows where you are. Alt and the left or right arrow key do the same."],
+      ["&#171; &#8249; &#8250; &#187;", "Four buttons beside the voucher number when you opened it from the list. <b>&#171;</b> goes to the first entry, <b>&#8249;</b> to the one before this, <b>&#8250;</b> to the one after and <b>&#187;</b> to the most recent, all in the list's own order, with its search, filters and sorting, without going back to the list. <i>3 of 40</i> shows where you are, and a button is greyed out when there is nothing that way. Alt with the left or right arrow key steps; Alt+Home and Alt+End go to the two ends."],
+      ["Reset widths", "In the header of the <b>Accounting entries</b> block, once you have dragged a column wider or narrower. Puts every column back to the width it started with."],
       ["Reverse", "On a posted entry that does not belong to an invoice or bill. Posts a mirror voucher in the Miscellaneous journal, dated today, with every debit and credit swapped and the reference REV/ plus the original number. The original stays posted."],
       ["Filters and Group By (list)", "Filter the list to Posted or Draft entries; group it by Journal or by Month."]
     ],
@@ -104,6 +105,7 @@ orbitScreenHelp({
       ["There is no New button", "Creating vouchers needs permission to manage Accounting. Ask an administrator to change your role."]
     ],
     tips: [
+      "Every figure sits directly under its own heading, and a light rule separates the columns. To change a column's width, drag the line between two headings, as in a spreadsheet; click that line and the left and right arrow keys nudge it a step at a time. Orbit remembers your widths on this computer, and <span class='man-key'>Reset widths</span> in the block header puts them back.",
       "Write the Description once and leave every Line description empty: each line then reads the same in the ledger.",
       "Reverse always posts today. If the original month is still open, Edit corrects the entry in its own month instead.",
       "Keyboard route: type an account code, press Tab to the amount, press Enter for the next line, which arrives already balanced."

@@ -744,12 +744,18 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .rl-group{margin-bottom:18px}
 .rl-gh{margin:4px 0 8px;font-size:11.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--ink3)}
 .rl-table select.rl-lvl,.rl-table select.rl-apm{min-width:130px}
-/* previous / next record, beside the title of a record opened from a list */
-.o-recnav{display:inline-flex;align-items:center;gap:4px;margin-left:8px;flex:none}
-.o-recnav-b{width:26px;height:26px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink2);cursor:pointer;font-size:17px;line-height:1;display:grid;place-items:center;padding:0}
+/* first / previous / next / last record, beside the title of a record opened
+   from a list. It sits in a busy title bar, so it reads as one solid control in
+   the theme's own ink: the faint grey version was easy to miss altogether. */
+.o-recnav{display:inline-flex;align-items:center;gap:2px;margin-left:8px;flex:none;padding:2px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);box-shadow:var(--sh-sm)}
+.o-recnav-b{width:26px;height:24px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel);color:var(--ink);cursor:pointer;font-size:16px;font-weight:700;line-height:1;display:grid;place-items:center;padding:0}
 .o-recnav-b:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
-.o-recnav-b:disabled{opacity:.35;cursor:default}
-.o-recnav-n{font-size:12px;font-weight:500;color:var(--ink3);white-space:nowrap;font-variant-numeric:tabular-nums}
+.o-recnav-b:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.o-recnav-b:disabled{opacity:.4;color:var(--ink3);background:transparent;border-color:transparent;cursor:default}
+.o-recnav-n{font-size:12px;font-weight:600;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums;padding:0 5px}
+/* on a phone the title bar is already full, so the four buttons stay and the
+   "3 of 40" counter (which the buttons' tooltips repeat) gives up its space */
+@media(max-width:560px){.o-recnav{margin-left:4px}.o-recnav-n{display:none}}
 .o-app.cp-mini .o-bc-min svg{transform:rotate(180deg)}
 /* a long page title shortens rather than wrapping the whole bar onto two rows */
 .o-bc{min-width:0}
@@ -825,6 +831,16 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-stages .st.on{background:var(--accent-soft);color:var(--accent)}
 .o-stages .st.done{color:var(--ink2)}
 .o-sheet{padding:22px 26px}
+/* the money strip on a confirmed order: ordered, billed, paid, still outstanding, and
+   the badges that say where it stands. It wraps on a phone rather than scrolling. */
+.o-money{display:flex;flex-wrap:wrap;align-items:center;gap:8px 18px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);padding:10px 14px;margin:0 0 12px}
+.o-money .om{display:flex;flex-direction:column;min-width:92px}
+.o-money .om .k{font-size:11px;font-weight:600;color:var(--ink3)}
+.o-money .om .v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums}
+.o-money .om.due .v{color:var(--bad-t)}
+.o-money .om-b{display:flex;flex-wrap:wrap;gap:6px;margin-left:auto}
+.o-money .om-note{flex-basis:100%;font-size:12px;color:var(--ink3)}
+@media(max-width:640px){.o-money .om-b{margin-left:0;flex-basis:100%}}
 .o-smart{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-bottom:6px}
 .o-smart .sb{display:flex;flex-direction:column;align-items:flex-start;border:1px solid var(--line);border-radius:var(--r);padding:7px 14px;min-width:96px;cursor:pointer;background:var(--panel)}
 .o-smart .sb:hover{border-color:var(--accent)}
@@ -865,7 +881,9 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .o-lines td{padding:5px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
 .o-lines input,.o-lines select{width:100%;padding:6px 7px;border:1px solid transparent;border-radius:var(--r-sm);background:transparent;color:var(--ink);font:inherit;font-size:13px}
 .o-lines input:hover,.o-lines select:hover{border-color:var(--line)}
-.o-lines input:focus,.o-lines select:focus{outline:none;border-color:var(--accent);background:var(--panel2)}
+/* Enter walks a line field by field, so the cell you are in has to be obvious at
+   a glance; a border colour alone is too quiet to follow while typing fast. */
+.o-lines input:focus,.o-lines select:focus{outline:none;border-color:var(--accent);background:var(--panel2);box-shadow:0 0 0 2px var(--accent-soft)}
 .o-lines input.num{text-align:right;font-family:var(--mono)}
 .o-lines .del{color:var(--bad-t);cursor:pointer;border:none;background:none;font-size:16px;line-height:1}
 .o-addln{margin-top:8px;color:var(--accent);cursor:pointer;font-size:13px;font-weight:600;background:none;border:none;padding:6px 2px}
@@ -2784,12 +2802,55 @@ body{background:transparent}
 @media(max-width:760px){.ev-cfg{grid-template-columns:1fr}.ev-cfg-head,.ev-cfg-row{grid-template-columns:1fr 120px auto auto}.cfg-use{display:none}}
 
 /* ===== the journal voucher ===== */
+/* The head of the voucher: Date, Journal, Reference and Description on one row,
+   each field the width of what goes in it (a date is 10 characters, not half the
+   screen). It wraps field by field on a small screen and one field per row on a
+   phone, so nothing is ever cut off. */
+.je-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 14px;margin:0 0 14px;padding:0 0 14px;border-bottom:1px dashed var(--line)}
+.je-hf{display:flex;flex-direction:column;gap:3px;min-width:0}
+.je-hf label{font-size:12px;font-weight:600;color:var(--ink2);cursor:default}
+.je-hf .lbl-row{display:flex;align-items:center;gap:5px}
+.je-hf input,.je-hf select{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;font-size:13.5px}
+.je-hf input:focus,.je-hf select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.je-hf input:disabled,.je-hf select:disabled{background:transparent;border-color:var(--line);color:var(--ink)}
+.je-hf-date{flex:0 0 152px}
+.je-hf-jrn{flex:0 0 186px}
+.je-hf-book{flex:0 0 156px}
+.je-hf-ref{flex:0 0 200px}
+.je-hf-narr{flex:1 1 260px;min-width:180px}
+@media(max-width:720px){.je-head{gap:8px 10px;margin-bottom:10px;padding-bottom:10px}.je-hf-date,.je-hf-jrn,.je-hf-book,.je-hf-ref{flex:1 1 150px}.je-hf-narr{flex:1 1 100%}}
+@media(max-width:460px){.je-hf{flex:1 1 100%}}
+/* The lines. table-layout:fixed with a <colgroup> is what keeps a header and the
+   cells under it in one column: every width is decided once, by the colgroup,
+   and the widest account name can no longer push its column out of line. */
 .je-wrap{overflow-x:auto;margin-top:10px;-webkit-overflow-scrolling:touch}
-.je-grid{min-width:1080px}
-.je-grid th:nth-child(1){width:22%}.je-grid th:nth-child(2){width:15%}.je-grid th:nth-child(4){width:84px}.je-grid th:nth-child(5){width:210px}
-.je-grid th:nth-child(6),.je-grid th:nth-child(7){width:118px}.je-grid th:nth-child(8){width:110px}.je-grid th:nth-child(9){width:34px}
-.je-grid td{padding:2px 4px;vertical-align:middle}
-.je-grid th{padding:6px 5px;font-size:11.5px;letter-spacing:.02em}
+.je-grid{table-layout:fixed;min-width:1080px}
+/* a light rule between the columns, in the same line colour the rest of the app
+   uses, so it reads on paper-white and on the dark themes alike */
+.je-grid th,.je-grid td{border-right:1px solid var(--line)}
+.je-grid th:last-child,.je-grid td:last-child{border-right:none}
+.je-grid tbody td{border-top:1px solid var(--line)}
+.je-grid th{position:relative;text-align:left;color:var(--ink2);font-weight:700}
+.je-grid th.num{text-align:right}
+.je-grid td.num,.je-grid td.num .je-in{text-align:right;font-variant-numeric:tabular-nums}
+/* a number field's spinner would sit where the digits end and push them out of
+   line with the heading above; the step arrows are no loss on an amount */
+.je-grid input[type=number]{-moz-appearance:textfield}
+.je-grid input[type=number]::-webkit-outer-spin-button,.je-grid input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+/* drag a column's right edge, as in a spreadsheet. It is also a focus stop, so
+   the width can be nudged with the left and right arrow keys. */
+.je-rs{position:absolute;top:0;right:-3px;width:7px;height:100%;cursor:col-resize;user-select:none;touch-action:none;z-index:3}
+.je-rs:hover,.je-rs.drag,.je-rs:focus{background:var(--accent);opacity:.55;outline:none}
+/* a finger needs more than seven pixels to catch a column edge */
+@media(pointer:coarse){.je-rs{width:18px;right:-9px}}
+.je-wreset{margin-right:auto;border:1px solid var(--line);background:var(--panel);color:var(--ink2);border-radius:var(--r-sm);padding:3px 9px;font:inherit;font-size:11.5px;cursor:pointer}
+.je-wreset:hover{border-color:var(--accent);color:var(--accent)}
+.je-grid td{padding:3px 6px;vertical-align:middle}
+/* the two cells that hold plain text rather than a full-width box are the only
+   ones that could spill past their column, so they are the only ones clipped
+   (a cell with overflow:hidden would cut the focus ring off an input) */
+.je-grid td.je-base{overflow:hidden;text-overflow:ellipsis}
+.je-grid th{padding:6px 7px;font-size:11.5px;letter-spacing:.02em}
 /* the accounting entries: one framed block, the working area of the voucher */
 .je-box{margin:14px 0 8px;border:1.5px solid var(--accent);border-radius:var(--r);background:var(--panel);box-shadow:0 0 0 4px var(--accent-soft);overflow:hidden}
 .je-box-h{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:8px 12px;border-bottom:1px solid var(--line);background:var(--accent-soft)}
@@ -2803,14 +2864,80 @@ body{background:transparent}
 .je-grid .je-in{width:100%;min-width:0;box-sizing:border-box;padding:4px 7px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2);color:var(--ink);font:inherit;font-size:13px}
 .je-grid .je-in:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring,0 0 0 3px var(--accent-soft))}
 .je-grid .je-in:disabled{background:transparent;border-color:transparent;color:var(--ink)}
-.je-rate{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink2);white-space:nowrap}
-.je-rate .je-in{width:96px;flex:none}
+.je-rate{display:flex;align-items:center;gap:4px;font-size:11.5px;color:var(--ink2);white-space:nowrap;overflow:hidden}
+/* the rate reads "1 EUR = [1.0870] USD", and the box gives way first when the
+   column is narrowed, so the whole sentence stays inside the column */
+.je-rate .je-in{width:auto;min-width:48px;flex:1 1 68px}
 .je-flip{border:1px solid var(--line);background:var(--panel);border-radius:var(--r-sm);cursor:pointer;padding:3px 6px;color:var(--ink2);font-size:12px;line-height:1}
 .je-flip:hover{color:var(--accent);border-color:var(--accent)}
 .je-base{font-size:12px;white-space:nowrap}
 .je-addline{margin-top:8px;border:1px dashed var(--line);background:transparent;color:var(--ink2);border-radius:var(--r);padding:7px 12px;cursor:pointer;font:inherit}
 .je-hint{font-size:12px;margin-left:10px}
 .je-tot{margin:12px 0 16px;font-size:14px;text-align:right;font-variant-numeric:tabular-nums}
-/* ===== statement of account ===== */
-.st-verdict{margin:12px 0 4px;font-weight:700;font-size:15px}
-.st-h2{font-size:15px;font-weight:700;margin:24px 0 8px}
+/* ===== statement of account =====
+   The statement is one document. The very same markup is shown on screen inside #rep and
+   handed to pdocPrint, so paper cannot drift from the screen. Its colours are fixed rather
+   than theme variables, because it is a white sheet whichever theme the app is in. */
+.o-report.o-stmt-sheet{padding:0;background:#fff;border-color:#dcdcd6;color:#111}
+/* the shaded header, totals and carried-forward rows carry the reading order, so they have to
+   survive the printer's habit of dropping background colour */
+.pstmt{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pstmt .pdt-t{font:inherit;font-size:22px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#333;margin:0}
+.pstmt-meta{display:flex;gap:26px;align-items:flex-start;margin:18px 0 0}
+.pstmt-party{flex:1 1 auto;min-width:0}
+.pstmt-facts{flex:0 0 auto;min-width:220px}
+.pstmt-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#888;font-weight:700}
+.pstmt-name{font-size:15.5px;font-weight:700;margin-top:3px;line-height:1.25}
+.pstmt-addr{font-size:12px;color:#444;line-height:1.5;margin-top:4px}
+.pstmt-facts table{border-collapse:collapse;width:100%}
+.pstmt-facts td{padding:2px 0;font-size:12.5px;vertical-align:top;color:#111}
+.pstmt-facts td.k{color:#666;padding-right:16px;white-space:nowrap}
+.pstmt-facts td.v{font-weight:600;text-align:right}
+/* the closing balance is the one figure the reader looks for, so it gets its own box */
+.pstmt-box{display:flex;justify-content:space-between;align-items:center;gap:20px;border:2px solid var(--print-accent,#111);border-radius:4px;padding:11px 15px;margin:16px 0 4px}
+.pstmt-box-l{min-width:0}
+.pstmt-box .k{font-size:10.5px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;color:#555}
+.pstmt-box .n{font-size:13px;font-weight:600;margin-top:2px;color:#111}
+.pstmt-box .v{font-size:21px;font-weight:800;white-space:nowrap;font-variant-numeric:tabular-nums;color:#111}
+.pstmt-tw{margin-top:14px}
+.pstmt-h2 + .pstmt-tw{margin-top:0}
+.pstmt .o-rt{width:100%;border-collapse:collapse;table-layout:fixed;min-width:0}
+.pstmt .o-rt th,.pstmt .o-rt td{font-size:12.5px;line-height:1.4;padding:7px 9px;border-bottom:1px solid #e4e4de;color:#111;vertical-align:top;text-align:left;overflow-wrap:anywhere}
+.pstmt .o-rt thead th{background:#f3f3ef;border-bottom:1.5px solid #8b8b84;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#555;font-weight:700;white-space:nowrap}
+.pstmt .o-rt .num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+.pstmt .o-rt .pstmt-sm{display:block;font-size:10.5px;color:#666;margin-top:2px;font-weight:400}
+.pstmt .o-rt tr.bf td,.pstmt .o-rt tr.tot td{background:#f7f7f3;font-weight:700}
+.pstmt .o-rt tr.tot td{border-top:1px solid #8b8b84}
+.pstmt .o-rt tr.cf td{background:#eef1f8;font-weight:800;border-top:1.5px solid #333;border-bottom:1.5px solid #333}
+.pstmt .o-rt tr.none td{color:#777;font-style:italic}
+/* the auxiliary trial balance has no fixed column plan: let the account names size themselves */
+.pstmt .st-tb{table-layout:auto}
+.pstmt-note{font-size:11px;color:#666;line-height:1.5;margin-top:10px}
+.pstmt-h2{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#333;margin:22px 0 6px}
+.pstmt-age{width:100%;border-collapse:collapse;table-layout:fixed}
+.pstmt-age th,.pstmt-age td{border:1px solid #d7d7d1;padding:7px 9px;font-size:12.5px;text-align:right;color:#111;font-variant-numeric:tabular-nums}
+.pstmt-age th{background:#f3f3ef;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:#555;font-weight:700}
+.pstmt-age td{font-family:var(--mono)}
+.pstmt-age td.t{font-weight:800;background:#f7f7f3}
+/* a phone is narrower than the sheet, so let the table scroll there and nowhere else */
+@media (max-width:820px){
+  .o-stmt-sheet .pinv{padding:16px 14px}
+  .pstmt-meta{flex-direction:column;gap:12px}
+  .pstmt-box{flex-direction:column;align-items:flex-start;gap:6px}
+  .pstmt-tw{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .pstmt-tw table{min-width:620px}
+}
+@media print{
+  /* the sheet supplies its own letterhead, so the generic page frame must not add a second
+     one when the statement screen is printed straight from the browser with Ctrl+P */
+  body:has(.o-stmt-sheet) #print-header,body:has(.o-stmt-sheet) #print-footer{display:none !important}
+  .o-report.o-stmt-sheet{border:0 !important;box-shadow:none !important}
+  /* the page margin is the margin: the sheet fills the width it is given */
+  .pstmt{padding:0 !important}
+  .pstmt-tw{overflow:visible !important}
+  .pstmt-tw table{min-width:0 !important}
+  .pstmt thead{display:table-header-group}
+  .pstmt tr{break-inside:avoid;page-break-inside:avoid}
+  .pstmt-meta,.pstmt-box,.pstmt-age,.pstmt-h2{break-inside:avoid;page-break-inside:avoid}
+  .pstmt-h2{break-after:avoid;page-break-after:avoid}
+}

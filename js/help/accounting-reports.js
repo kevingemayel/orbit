@@ -577,7 +577,7 @@ orbitScreenHelp({
 
   "rep.stmt": {
     title: "Statement of Account",
-    what: "A <b>Statement of Account</b> shows one contact, or one account, over a period: the <b>balance brought forward</b> from before the period, every <b>posted</b> movement with a running balance, the totals for the period and the <b>balance carried forward</b>, ending with a plain sentence such as who owes whom. Figures are in the company currency, with the original foreign amount beside them. It is the page you print or save as PDF to send a customer or supplier.",
+    what: "A <b>Statement of Account</b> is a finished document, not a screen report: your letterhead at the top, the customer or supplier it is for under it, the period, the currency, the closing balance in its own box, then the table of movements. What you see on the screen is exactly what comes out of the printer, because Print sends the printer the very same sheet. It shows one contact, or one account, over a period: the <b>balance brought forward</b> from before the period, every <b>posted</b> movement with a running balance, the <b>movements in the period</b> totalled as debit and credit, and the <b>balance carried forward</b>. Figures are in the company currency, with the original foreign amount under the description. For a contact it also ages the open balance. It is the document you print or save as PDF and send a customer or supplier.",
     when: [
       "A customer asks what they owe, or you want to send them a reminder with the detail.",
       "A supplier sends their own statement and you want to compare it with yours.",
@@ -586,27 +586,29 @@ orbitScreenHelp({
     how: [
       "Open <b>Accounting &rsaquo; Reporting &rsaquo; Statement of Account</b>. You should see <i>Choose a contact and a period above.</i> For this example, a law firm sends a client its statement for April to June 2026.",
       "Leave the first list on <b>For a contact</b>. In the next list choose the client, <i>Meridian Shipping Ltd</i>.",
-      "Choose <b>Custom range&hellip;</b> and set From to 1 April 2026 and To to 30 June 2026. The statement appears, with the period and <i>Posted entries only</i> written under the heading.",
-      "The first row reads <b>Balance brought forward at 2026-04-01</b> 3,000.00: what the client owed before April.",
-      "Read the movements. The columns are <b>Date</b>, <b>Voucher</b> (entry number), <b>Reference</b> (for an invoice, its number), <b>Account</b>, <b>Description</b>, <b>In currency</b> (the foreign amount, if any), <b>Debit</b>, <b>Credit</b> and <b>Balance</b>.",
-      "On 12 April an invoice: Description <i>Receivable</i>, Debit 4,500.00, Balance 7,500.00. On 30 May a payment: Description <i>Receivable settled</i>, Credit 3,000.00, Balance 4,500.00.",
-      "You should see <b>Movements in the period</b> with Debit 4,500.00, Credit 3,000.00 and 1,500.00, then <b>Balance carried forward at 2026-06-30</b> 4,500.00.",
-      "Under the table the sentence reads <i>Meridian Shipping Ltd owes you</i> followed by 4,500.00.",
-      "Click <span class='man-key'>Print</span> and choose Save as PDF, then email it to the client.",
+      "Choose <b>Custom range&hellip;</b> and set From to 1 April 2026 and To to 30 June 2026. The sheet appears: your company name, address and tax number at the top left (from Company Profile, with your logo if you loaded one) and <b>STATEMENT OF ACCOUNT</b> at the top right with <i>As at 2026-06-30</i>.",
+      "Under the letterhead, on the left, <b>Statement for</b> and the client: name, street, city and country, who you deal with there, their phone, email and tax number. On the right a small panel of facts: <b>Statement date</b>, <b>Period</b>, <b>Currency</b>, and their <b>Payment terms</b> when the contact has any.",
+      "Below that, in a box with a coloured border, <b>Balance carried forward at 2026-06-30</b>, the sentence <i>Meridian Shipping Ltd owes you USD 4,500.00</i>, and the figure <b>USD 4,500.00</b> large on the right. That box is the first thing the client reads.",
+      "Now the table. Six columns: <b>Date</b>, <b>Document</b> (the entry number in bold, with its type such as <i>Customer invoices</i> and its reference under it), <b>Description</b>, then <b>Debit</b>, <b>Credit</b> and <b>Balance</b> right aligned, with the digits lined up so the columns can be read down.",
+      "The first row is <b>Balance brought forward</b> 3,000.00 dated 2026-04-01: what the client owed before April.",
+      "On 12 April an invoice: Document <i>INV/2026/0041</i>, Description <i>Receivable</i>, Debit 4,500.00, Balance 7,500.00. On 30 May a payment: Credit 3,000.00, Balance 4,500.00.",
+      "At the foot of the table, <b>Movements in the period</b> with Debit 4,500.00, Credit 3,000.00 and 1,500.00, then the shaded <b>Balance carried forward</b> row, 4,500.00 at 2026-06-30.",
+      "Under the table, <b>How the open balance ages</b>: the same balance split into <i>Not yet due</i>, <i>1 to 30 days</i>, <i>31 to 60 days</i>, <i>61 to 90 days</i> and <i>Over 90 days</i>, so the client can see what is late.",
+      "Click <span class='man-key'>Print</span>. The printer gets this same sheet, full page width, with the column headings repeated at the top of every page and no row cut in half. Choose Save as PDF, then email it to the client.",
       "To read an account instead, switch the first list to <b>For an account</b> and type its code or name. If it has sub-accounts, tick <b>With its auxiliaries</b> to include them; a <b>Trial balance by auxiliary</b> table then shows each one's brought forward, debit, credit and carried forward."
     ],
     fields: [
       ["For a contact / For an account", "Whether the statement is about a customer or supplier, or about an account in your chart.", "auto"],
       ["Contact", "The customer or supplier. Lists every contact of the company. The statement shows the posted lines that carry this contact: the customer or supplier line of each invoice, bill and credit note, and each registered payment.", "required"],
       ["Account", "Shown with For an account. Type the account's code or name and pick it from the suggestions.", "required"],
-      ["With its auxiliaries", "Shown only when the chosen account has sub-accounts. Ticked, the statement includes them and adds a table per sub-account. Ticked by default.", "optional"],
-      ["Period", "The dates of the statement. Anything before the start becomes the balance brought forward. All time has no brought forward line.", "auto"],
+      ["With its auxiliaries", "Shown only when the chosen account has sub-accounts. Ticked, the statement includes them, adds an Account column to the table so the lines can be told apart, and prints a Trial balance by auxiliary under it. Ticked by default.", "optional"],
+      ["Period", "The dates of the statement. Anything before the start becomes the balance brought forward. With All time there is nothing before the start, so the brought forward line reads 0.00.", "auto"],
       ["From and To (Custom range only)", "The first and last day of the statement. Leave To empty for today.", "optional"],
       ["Book", "Which set of entries is read.", "optional"]
     ],
     buttons: [
       ["Export", "Downloads the statement table as a CSV file."],
-      ["Print", "Opens your browser's print window, where you can save the statement as PDF to send."]
+      ["Print", "Sends the printer the same sheet you are looking at, so nothing moves or is cut off. Choose Save as PDF in the print window to get a file you can email."]
     ],
     links: [
       { name: "Customers", how: "Each customer's form has a <span class='man-key'>Statement</span> button that opens this screen for them.", to: "cust" },
@@ -621,12 +623,15 @@ orbitScreenHelp({
       ["Choose a contact and a period above.", "No contact is chosen yet. Pick one in the contact list. With For an account the message asks you to choose an account."],
       ["No account has the code or name (what you typed).", "The text does not match an account. Type the code, such as 5100, or pick from the suggestions."],
       ["No posted movements in this period.", "Nothing was posted for this contact or account in the period. The brought forward and carried forward lines still show the balance."],
-      ["There is no Balance brought forward line", "The period has no start date, for example All time. Choose a period with a start."],
+      ["The letterhead has no logo or address", "Company Profile has none. Fill in the address, tax number and logo there and every printed document, this one included, picks them up."],
+      ["The contact block has no address", "The contact's own form has none. Add the street, city and country on the customer or vendor, and they print here."],
+      ["The ageing total is not the same as the balance", "Ageing reads the open invoices, bills and credit notes today, while the balance is the ledger at the end of the period. A payment not yet matched to a document, or a period that ended in the past, makes them differ."],
       ["A contact's invoice is missing", "It is still a draft, or it is dated after the end of the period."],
       ["With its auxiliaries does not appear", "The account has no sub-accounts under it."]
     ],
     tips: [
-      "For a customer, a positive balance means they owe you; for a supplier, a minus balance means you owe them. The sentence under the table says it in words.",
+      "For a customer, a positive balance means they owe you; for a supplier, a minus balance means you owe them. The sentence in the balance box says it in words.",
+      "The letterhead comes from Company Profile. Set the logo, address and tax number there once and every statement you send is branded.",
       "Print or save a statement at each month end for your largest customers: it settles most disputes before they start."
     ]
   },

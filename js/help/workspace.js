@@ -403,7 +403,8 @@ orbitScreenHelp({
     ],
     tips: [
       "The checklist counts records, it does not judge them: one test customer ticks First customer. If you delete your test records before going live, the step shows To do again.",
-      "Each company in your organisation has its own checklist, so switch company before starting on the next one."
+      "Each company in your organisation has its own checklist, so switch company before starting on the next one.",
+      "Before your team starts typing real work: you never need the mouse to fill a form. <b>Tab</b> moves to the next box and <b>Shift+Tab</b> back, and <b>Enter</b> now does the same thing, so you can keep both hands on the keyboard. On a table of lines (an order, an invoice, a bill, a goods receipt), Enter moves along the line, and on the last box of the last line it adds a fresh line and puts you in its first box, ready for the next item. In a small pop-up window, Enter on the last box moves to the blue button, so one more Enter confirms it; a pop-up with a single box still takes your answer on the first Enter."
     ]
   },
 

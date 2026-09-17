@@ -71,6 +71,8 @@ const MUTATIONS = {
     s => s.replace("esc(projCode) + '</div>'", "esc(projCode) + ' ' + esc(projRec.name) + '</div>'"),
   "the Counter never picks an account by a fixed code":
     s => s.replace("var cid = S.company.id, cashGl = pf.cashGl", 'var guess = cashAcctByCode(chart, "5300"); var cid = S.company.id, cashGl = pf.cashGl'),
+  "keyboard data entry runs from one engine":
+    s => s.replace('document.addEventListener("keydown", keyflowKey, true)', 'document.addEventListener("keydown", keyflowGone, true)'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 
