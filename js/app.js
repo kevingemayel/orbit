@@ -16117,7 +16117,14 @@
   var IMPORT_SPECS = {
     customers: { label: "Customers", table: "partners", scope: "org", extra: { is_customer: true, is_company: true }, fields: [["name", "Name", true], ["email", "Email", false], ["phone", "Phone", false], ["city", "City", false], ["country", "Country", false], ["vat", "Tax / VAT no.", false]] },
     vendors: { label: "Vendors / Suppliers", table: "partners", scope: "org", extra: { is_vendor: true, is_company: true }, fields: [["name", "Name", true], ["email", "Email", false], ["phone", "Phone", false], ["city", "City", false], ["country", "Country", false], ["vat", "Tax / VAT no.", false]] },
-    products: { label: "Products / Items", table: "products", scope: "company", extra: { is_active: true }, fields: [["name", "Name", true], ["default_code", "Code", false], ["list_price", "Sale price", false, "num"], ["cost_price", "Cost price", false, "num"]] },
+    // Alt description and the two short forms have no column of their own, so they land in
+    // custom fields, which the import adds to the product form the first time it sees them.
+    products: { label: "Products / Items", table: "products", scope: "company", extra: { is_active: true }, resolve: "cls", cfEntity: "product", fields: [["name", "Name", true], ["default_code", "Code", false], ["list_price", "Sale price", false, "num"], ["cost_price", "Cost price", false, "num"], ["uom", "Unit", false], ["supplier_code", "Supplier code", false], ["type_code", "Type code", false], ["family_code", "Family code", false], ["barcode", "Barcode", false], ["kg_per_m", "Weight per metre (kg/m)", false, "num"], ["bar_length_mm", "Bar length (mm)", false, "num"], ["shelf_location", "Shelf location", false], ["alt_description", "Alt description", false, "custom"], ["short_description", "Short description", false, "custom"], ["short_alt_description", "Short alt description", false, "custom"]] },
+    // The two trees come in the same shape the classification screen shows them in: one
+    // row per node, the deepest filled column being the node itself, so a spreadsheet
+    // written by hand imports without being reshaped first.
+    cls_type: { label: "Classification: Type tree (what the item is)", custom: "cls", tree: "type", fields: [["level1", "Level 1", true], ["level2", "Level 2", false], ["level3", "Level 3", false], ["code", "Code", false]] },
+    cls_family: { label: "Classification: Family tree (brand, series, model)", custom: "cls", tree: "family", fields: [["brand", "Brand", true], ["series", "Series", false], ["model", "Model", false], ["code", "Code", false]] },
     cost_codes: { label: "Cost Codes", table: "cost_codes", scope: "company", extra: { is_active: true }, fields: [["code", "Code", true], ["name", "Name", false], ["category", "Category", false]] },
     projects: { label: "Projects", table: "projects", scope: "company", extra: { is_active: true }, fields: [["name", "Name", true], ["contract_value", "Contract value", false, "num"]] }
   };
@@ -16659,6 +16666,62 @@
     var n = Number(s);
     return isNaN(n) ? NaN : (neg ? -n : n);
   }
+  // ---- importing a classification tree ----
+  // The file has one row per node: the deepest filled column is the node, the columns
+  // before it say where it hangs. Rows are done shallowest first so a child always finds
+  // its parent, a node that already exists is left alone (its code is only filled in if
+  // it had none), and nothing is ever renamed or moved by an import.
+  async function clsImportRun(spec, data, btn, prev) {
+    btn.disabled = true; btn.textContent = "Importing...";
+    var keys = spec.fields.map(function (f) { return f[0]; });
+    function depthOf(r) { return r.names[2] ? 3 : (r.names[1] ? 2 : 1); }
+    var rows = data.filter(function (d) { return !d.__err.length; }).map(function (d) {
+      return { names: [(d[keys[0]] || "").trim(), (d[keys[1]] || "").trim(), (d[keys[2]] || "").trim()], code: (d[keys[3]] || "").trim() };
+    }).filter(function (r) { return r.names[0]; });
+    rows.sort(function (a, b) { return depthOf(a) - depthOf(b); });
+    var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,code,tree").eq("org_id", S.company.org_id)).data || [];
+    var byKey = {};
+    function keyOf(pid, name) { return (pid || "-") + "|" + String(name || "").toLowerCase(); }
+    nodes.forEach(function (n) { if (n.tree === spec.tree) byKey[keyOf(n.parent_id, n.name)] = n; });
+    var made = 0, kept = 0, coded = 0, failed = [];
+    var sort = Math.round(Date.now() / 1000) % 100000;
+    // One level at a time, each level in one request: a whole catalogue is three round
+    // trips per tree instead of one per node. A parent a deeper row implies but never
+    // lists on its own row is created on its level too, so a hand-written sheet works.
+    var toCode = [];
+    for (var depth = 1; depth <= 3 && !failed.length; depth++) {
+      var want = {}, order = [];
+      rows.forEach(function (r) {
+        var deep = depthOf(r); if (deep < depth) return;
+        var pid = null;
+        for (var lvl = 0; lvl < depth - 1; lvl++) { var up = byKey[keyOf(pid, r.names[lvl])]; if (!up) { pid = undefined; break; } pid = up.id; }
+        if (pid === undefined) return;
+        var nm = r.names[depth - 1], k = keyOf(pid, nm), ends = deep === depth, have = byKey[k];
+        if (have) { if (ends) { kept++; if (r.code && !have.code) toCode.push({ node: have, code: r.code }); } return; }
+        if (!want[k]) { want[k] = { org_id: S.company.org_id, tree: spec.tree, parent_id: pid || null, name: nm, code: ends && r.code ? r.code : null, sort: sort++ }; order.push(k); }
+        else if (ends && r.code && !want[k].code) want[k].code = r.code;
+      });
+      for (var at = 0; at < order.length && !failed.length; at += 400) {
+        var chunk = order.slice(at, at + 400).map(function (k) { return want[k]; });
+        var ins = await sb.from("classification_nodes").insert(chunk).select("id,parent_id,name,code,tree");
+        if (ins.error) { failed.push("level " + depth + ": " + errMsg(ins.error)); break; }
+        (ins.data || []).forEach(function (n) { byKey[keyOf(n.parent_id, n.name)] = n; });
+        made += (ins.data || []).length;
+      }
+    }
+    for (var ci = 0; ci < toCode.length; ci++) {
+      var cu = await sb.from("classification_nodes").update({ code: toCode[ci].code }).eq("id", toCode[ci].node.id);
+      if (!cu.error) { toCode[ci].node.code = toCode[ci].code; coded++; }
+    }
+    var word = spec.tree === "family" ? "family" : "type";
+    prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good-t);border:0">' +
+      '<b>' + made + '</b> new ' + word + ' node' + (made === 1 ? '' : 's') + ' added' +
+      (kept ? ', <b>' + kept + '</b> already there and left alone' : '') +
+      (coded ? ', <b>' + coded + '</b> given the code from the file' : '') + '.' +
+      (failed.length ? '<div class="u-mt6">Stopped on: ' + esc(failed.join("; ")) + '</div>' : '') +
+      '<div class="u-mt6">Open <b>Inventory &rsaquo; Configuration &rsaquo; Classification</b> to see the tree.</div></div>';
+    toast(made + " added, " + kept + " already there");
+  }
   async function renderImport() {
     var main = document.getElementById("o-main");
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Import Data") + '</div><div class="o-body" id="o-body"></div></div>';
@@ -16708,15 +16771,49 @@
         '<div class="o-rt-wrap"><table class="o-list"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table></div>' +
         '<button class="btn pri" id="im-go" style="margin-top:12px;background:var(--accent);border-color:var(--accent)"' + (okN ? '' : ' disabled') + '>Import ' + okN + ' row' + (okN === 1 ? '' : 's') + '</button>';
       var go = document.getElementById("im-go");
+      // a tree is not a flat list of rows: it has to go in parents first, and a node
+      // that is already there is left exactly as it is
+      if (go && spec.custom === "cls") { go.onclick = function () { clsImportRun(spec, data, go, prev); }; return; }
       if (go) go.onclick = async function () {
         go.disabled = true; go.textContent = "Importing...";
         var payload = data.filter(function (d) { return !d.__err.length; }).map(function (d) {
           var row = {}; for (var kk in spec.extra) row[kk] = spec.extra[kk];
           row[spec.scope === "org" ? "org_id" : "company_id"] = spec.scope === "org" ? S.company.org_id : S.company.id;
           if (spec.table === "partners") row.company_id = S.company.id;   // contacts are now company-scoped
-          spec.fields.forEach(function (f) { var v = d[f[0]]; if (v === "" || v == null) return; row[f[0]] = f[3] === "num" ? (parseLooseNumber(v) || 0) : v; });
+          spec.fields.forEach(function (f) {
+            var v = d[f[0]]; if (v === "" || v == null) return;
+            if (f[3] === "custom") { row.custom = row.custom || {}; row.custom[f[0]] = v; return; }
+            row[f[0]] = f[3] === "num" ? (parseLooseNumber(v) || 0) : v;
+          });
           return row;
         });
+        // a product row names its type and its family by code, the way the two trees
+        // were imported, so a spreadsheet never has to carry an internal id
+        if (spec.resolve === "cls") {
+          var clsRows = (await sb.from("classification_nodes").select("id,code,tree").eq("org_id", S.company.org_id)).data || [];
+          var byCode = {}; clsRows.forEach(function (n) { if (n.code) byCode[n.tree + "|" + String(n.code).trim().toUpperCase()] = n.id; });
+          var missing = {};
+          payload.forEach(function (row) {
+            ["type", "family"].forEach(function (t) {
+              var c = row[t + "_code"]; delete row[t + "_code"];
+              if (!c) return;
+              var hit = byCode[t + "|" + String(c).trim().toUpperCase()];
+              if (hit) row[t + "_node_id"] = hit; else missing[c] = true;
+            });
+          });
+          var missList = Object.keys(missing);
+          if (missList.length) toast("Not in the classification yet, so those rows come in without it: " + missList.slice(0, 6).join(", ") + (missList.length > 6 ? " and " + (missList.length - 6) + " more" : ""));
+        }
+        // a column that lands in a custom field gets that field on the form, once, so the
+        // value is visible the moment the import finishes rather than stored out of sight
+        if (spec.cfEntity) {
+          var cfUsed = spec.fields.filter(function (f) { return f[3] === "custom" && payload.some(function (r) { return r.custom && r.custom[f[0]] != null; }); });
+          if (cfUsed.length) {
+            var cfHave = ((await sb.from("custom_field_defs").select("field_key").eq("company_id", S.company.id).eq("entity", spec.cfEntity)).data || []).map(function (x) { return x.field_key; });
+            var cfAdd = cfUsed.filter(function (f) { return cfHave.indexOf(f[0]) < 0; }).map(function (f, i) { return { company_id: S.company.id, entity: spec.cfEntity, field_key: f[0], label: f[1], field_type: "text", required: false, is_active: true, sort: 900 + i }; });
+            if (cfAdd.length) { var cfRes = await sb.from("custom_field_defs").insert(cfAdd); if (cfRes.error) toast("The descriptions are saved on each item, but could not be added to the product form: " + errMsg(cfRes.error)); }
+          }
+        }
         var res = await sb.from(spec.table).insert(payload);
         if (res.error) { toast("Import failed: " + errMsg(res.error)); go.disabled = false; go.textContent = "Import " + okN + " rows"; return; }
         toast("Imported " + payload.length + " " + spec.label.toLowerCase()); prev.innerHTML = '<div class="ob-banner" style="background:var(--good-s);color:var(--good-t);border:0">Imported ' + payload.length + ' rows successfully.</div>';

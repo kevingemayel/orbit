@@ -763,7 +763,7 @@ orbitScreenHelp({
 
   "settings.import": {
     title: "Import Data",
-    what: "Import brings a list you already keep in a spreadsheet into Orbit in one go: <b>customers</b>, <b>vendors</b>, <b>products</b>, <b>cost codes</b> or <b>projects</b>. You fill in Orbit's template, save it as a CSV file, upload it, check the preview and import. It only ever <b>adds new records</b>: nothing already in Orbit is changed, and the rows are not compared with what you have, so importing the same file twice creates everything twice.",
+    what: "Import brings a list you already keep in a spreadsheet into Orbit in one go: <b>customers</b>, <b>vendors</b>, <b>products</b>, <b>cost codes</b>, <b>projects</b>, and the two <b>classification trees</b> (what an item is, and who makes it). You fill in Orbit's template, save it as a CSV file, upload it, check the preview and import. It only ever <b>adds new records</b>: nothing already in Orbit is changed, and the rows are not compared with what you have, so importing the same file twice creates everything twice.",
     when: [
       "You are setting up a new company and want to bring your customer and supplier lists across instead of typing them in.",
       "You have a price list of items with their codes, sale prices and cost prices.",
@@ -781,7 +781,7 @@ orbitScreenHelp({
       "Open <b>Contacts</b> or the <b>Vendors</b> list to check the suppliers are there, each marked as a vendor."
     ],
     fields: [
-      ["What are you importing?", "Customers, Vendors / Suppliers, Products / Items, Cost Codes or Projects. It decides which template you download, which columns are read and where the rows are saved. Changing it clears the preview.", "required"],
+      ["What are you importing?", "Customers, Vendors / Suppliers, Products / Items, Cost Codes, Projects, or one of the two classification trees. It decides which template you download, which columns are read and where the rows are saved. Changing it clears the preview.", "required"],
       ["CSV file (Choose CSV file)", "The filled-in template saved as a .csv file, with the header row first. Cells must be separated by commas; a file separated by semicolons or tabs is not read correctly. A cell holding a comma is fine when it is in quotes, which spreadsheet programs do for you when saving as CSV.", "required"],
       ["Name (Customers, Vendors / Suppliers, Products / Items, Projects)", "The name of each record. A row without it is skipped.", "required"],
       ["Email, Phone, City, Country (Customers, Vendors / Suppliers)", "Copied onto the contact exactly as typed.", "optional"],
@@ -791,7 +791,11 @@ orbitScreenHelp({
       ["Code (Cost Codes)", "The cost code itself, for example <i>03-200</i>. A row without it is skipped. Each code can exist only once in a company, whatever its capitals.", "required"],
       ["Name and Category (Cost Codes)", "A description of the code, and a grouping such as Labour or Materials.", "optional"],
       ["Contract value (Projects)", "The project's contract value. Thousands separators such as 1,200,000 or 1 200 000 are read correctly. A cell with no number in it is saved as 0.", "optional"],
-      ["Company", "Every row goes into the company you are working in when you click Import. Imported customers and vendors are saved as companies rather than individuals.", "auto"],
+      ["Level 1, Level 2, Level 3 and Code (Classification: Type tree)", "One row per node, not one row per product. The deepest column you fill in is the node itself, and the columns before it say where it hangs: <i>Aluminium</i> alone makes a top-level node, <i>Aluminium, Aluminium Profiles</i> makes its child, <i>Aluminium, Aluminium Profiles, Glazing Bead</i> the leaf. Three levels is the limit. <b>Code</b> is the short code that goes into item codes, for example <i>ALU-PRF-GB</i>.", "required"],
+      ["Brand, Series, Model and Code (Classification: Family tree)", "The same shape for who makes it: <i>Technal</i>, then <i>Technal, Soleal</i>, then <i>Technal, Soleal, Fy 55</i>. A part of a system (a frame, a mullion, a cover cap) is not a model: it belongs in the Type tree, because it says what the item is rather than who makes it.", "required"],
+      ["Type code and Family code (Products / Items)", "The codes from the two trees, so a product arrives already classified, for example <i>ALU-PRF-GB</i> and <i>TEC-SOL-FY55</i>. Import the trees first. A code Orbit does not recognise is reported and the product is still imported, without that classification.", "optional"],
+      ["Unit and Supplier code (Products / Items)", "The unit of measure the item is bought and counted in, and the supplier's own code for it.", "optional"],
+      ["Company", "Every row goes into the company you are working in when you click Import, except the two classification trees, which belong to the whole organisation and are shared by every company in it. Imported customers and vendors are saved as companies rather than individuals.", "auto"],
       ["Active", "Imported products, cost codes and projects are saved as active.", "auto"]
     ],
     buttons: [
@@ -823,7 +827,8 @@ orbitScreenHelp({
     tips: [
       "Column order does not matter and columns Orbit does not use are ignored, so you can keep your own notes in an extra column.",
       "An empty cell is simply left out, so the record keeps its usual default.",
-      "Check which company is selected in the top bar before you click Import."
+      "Check which company is selected in the top bar before you click Import.",
+      "The two classification trees are the exception to \"import adds, it does not compare\": a node that is already there, under the same parent with the same name, is left exactly as it is, so the same tree file can be imported again safely, and only what is new is added. Import the trees before the products that refer to them."
     ]
   },
 
