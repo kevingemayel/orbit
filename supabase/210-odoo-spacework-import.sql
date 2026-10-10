@@ -24,7 +24,7 @@ declare
   v_co uuid; v_org uuid;
   a_recv uuid; a_pay uuid; a_rev_svc uuid; a_rev_goods uuid; a_cash uuid; a_bank uuid;
   a_bank2 uuid; a_vat uuid; a_telecom uuid; a_partner uuid;
-  v_proj_internal uuid; v_proj_cn uuid; v_algeco uuid;
+  v_proj_internal uuid; v_proj_cn uuid; v_proj_s21 uuid; v_algeco uuid; v_task uuid; i int;
   v_inv uuid; v_entry uuid; r record; n_posted int := 0; n_paid int := 0; n_failed int := 0;
   v_msg text;
 begin
@@ -108,17 +108,30 @@ begin
     ('Supply. Manufacturing and Installation of A2 Aluminum Composite Panels','consumable','',              100,    0),
     ('Outer: 6mm Clear Tempered, 12mm AS, 4,4.2mm Laminated Annealed',       'consumable', '',                0,    0),
     ('Screw',                                                                'consumable', '',                1,    0),
-    ('Cutter',                                                               'consumable', '',                1,    0)
+    ('Cutter',                                                               'consumable', '',                1,    0),
+    -- added in Odoo after the August export
+    ('Event Registration',                                                   'service',    '',               30,   10),
+    -- the variants its warehouse actually moved
+    ('Glass (10mm clear tempered)',                                          'consumable', '',                1,    0),
+    ('Glass (6mm clear tempered, 12mm air space, 6mm clear tempered)',       'consumable', '',                1,    0),
+    ('Screw (Pan Heab, M3, Stainless Steel 304)',                            'consumable', '',                1,    0),
+    ('Screw (Pan Heab, M4, Stainless Steel 316)',                            'consumable', '',                1,    0),
+    ('Screw (Pan Heab, M5, Stainless Steel 316)',                            'consumable', '',                1,    0),
+    ('Screw (Pan Heab, M6, Stainless Steel 316)',                            'consumable', '',                1,    0)
   ) as x(name, type, code, list_price, cost_price)
   where not exists (select 1 from public.products p where p.company_id = v_co and lower(p.name) = lower(x.name));
 
   -- ---------------------------------------------------------------- projects
   -- Odoo had "Internal" three times over (one of them OdooBot's); one here.
   insert into public.projects(company_id, name, is_active)
-  select v_co, x.name, true from (values ('Internal'), ('Calculation Notes')) as x(name)
+  select v_co, x.name, true from (values ('Internal'), ('Calculation Notes'), ('S00021')) as x(name)
   where not exists (select 1 from public.projects p where p.company_id = v_co and lower(p.name) = lower(x.name));
   select id into v_proj_internal from public.projects where company_id = v_co and name = 'Internal' limit 1;
   select id into v_proj_cn       from public.projects where company_id = v_co and name = 'Calculation Notes' limit 1;
+  select id into v_proj_s21      from public.projects where company_id = v_co and name = 'S00021' limit 1;
+  -- S00021 is Francois Eid's job, opened in Odoo on 7 Oct 2026
+  update public.projects set partner_id = (select p.id from public.partners p where p.org_id = v_org and lower(p.name) = 'francois eid' limit 1)
+   where id = v_proj_s21 and partner_id is null;
 
   -- ------------------------------------------------------------------- tasks
   insert into public.project_tasks(company_id, project_id, name, date_deadline, priority)
@@ -131,6 +144,15 @@ begin
     ('CN','S00016 - CN_01')
   ) as x(proj, name)
   where not exists (select 1 from public.project_tasks t where t.company_id = v_co and lower(t.name) = lower(x.name));
+  -- S00021 carries seven tasks of the same name in Odoo, one per scope on the order.
+  -- They are created by count rather than by name, since the names do not tell them apart.
+  select count(*) into i from public.project_tasks where company_id = v_co and project_id = v_proj_s21
+     and name = 'Architectural Design Phase (Pre-Execution)';
+  while i < 7 loop
+    insert into public.project_tasks(company_id, project_id, name, priority)
+    values (v_co, v_proj_s21, 'Architectural Design Phase (Pre-Execution)', 0);
+    i := i + 1;
+  end loop;
 
   -- -------------------------------------------------------------- timesheets
   -- Odoo recorded them with no employee and 1 hour each. The calculation-note
@@ -150,6 +172,21 @@ begin
     ('2025-10-04','CN_01')
   ) as x(d, name)
   where not exists (select 1 from public.timesheets ts where ts.company_id = v_co and ts.work_date = x.d::date and ts.name = x.name);
+  -- the design-phase day on S00021, 7 Oct 2026: eight entries of an hour each, their
+  -- scope notes kept on one line (Odoo held them as free text with line breaks)
+  insert into public.timesheets(company_id, project_id, work_date, name, hours)
+  select v_co, v_proj_s21, '2026-10-07'::date, x.name, 1
+  from (values
+    ('Down Payment'),
+    ('Architectural Design Phase (Pre-Execution). Curtain wall: review system concept; typical interfaces; glass type, silicone and VEC logic; drainage and slab edge connection'),
+    ('Architectural Design Phase (Pre-Execution). External cladding scope: review cladding areas; panel joint logic; substructure principle; fire grade and coating; corners, parapets, soffits and fixing concept'),
+    ('Architectural Design Phase (Pre-Execution). Entrances: review main entrances; ground floor glazing; door systems and thresholds; waterproofing; accessibility; hardware'),
+    ('Architectural Design Phase (Pre-Execution). Vertical louvers and mezzanine parking facade: review vertical louver design; spacing and support frame; ventilation and free-area logic; fire and smoke concerns; coating and screening; maintenance access'),
+    ('Architectural Design Phase (Pre-Execution). Residential windows and balcony doors: review window and door systems; glass, sill, head and jamb interfaces; balcony thresholds; drainage and waterproofing; acoustic and thermal design'),
+    ('Architectural Design Phase (Pre-Execution). Balustrades and balcony edges: review glass and metal railing concept; fixing principle, safety glass and loads; waterproofing around fixing points; edge details'),
+    ('Architectural Design Phase (Pre-Execution). Facade technical specification summary for glass, aluminium, cladding, louvers, sealants, coating, fire proofing, burglary resistance, thermal, acoustics, corrosion, safety, testing requirements and waterproofing interfaces')
+  ) as x(name)
+  where not exists (select 1 from public.timesheets ts where ts.company_id = v_co and ts.work_date = '2026-10-07'::date and ts.name = x.name);
 
   -- ------------------------------------------------------------ sale orders
   insert into public.sale_orders(company_id, number, partner_id, date_order, state, currency_code, amount_untaxed, amount_tax, amount_total)
@@ -203,7 +240,10 @@ begin
       ('INV/2025/00007','out_invoice','European Industrial Traders','2025-08-12','posted',  2500,      0,  2500, 'Fixed and sliding louvers'),
       ('INV/2025/00008','out_invoice','Tony Karam',                 '2025-09-30','posted',  2500,      0,  2500, 'Calculation note'),
       ('INV/2025/00009','out_invoice','European Industrial Traders','2025-10-04','posted',  1500,      0,  1500, 'Calculation note'),
-      ('INV/2026/00001','out_invoice','Tony Karam',                 '2026-02-03','posted',  2000,      0,  2000, 'S00004')
+      ('INV/2026/00001','out_invoice','Tony Karam',                 '2026-02-03','posted',  2000,      0,  2000, 'S00004'),
+      -- the three documents raised in Odoo on 7 Oct 2026, after the August export
+      ('INV/2026/00002','out_receipt','Francois Eid',               '2026-10-07','posted',  1500,      0,  1500, 'Down payment (S00021)'),
+      ('INV/2026/00003','out_invoice','Francois Eid',               '2026-10-07','posted', 10000,      0, 10000, 'Architectural design phase (S00021)')
     ) as v(number, move_type, partner, d, state, untaxed, tax, total, line_name)
   loop
     if exists (select 1 from public.invoices i where i.company_id = v_co and i.number = r.number) then
@@ -258,7 +298,10 @@ begin
       ('INV/2025/00005',    1000,  '2025-07-25','BNK','PWSH1/2025/00003'),
       ('INV/2025/00008',    2000,  '2025-09-30','CSH','PCSH1/2025/00006'),
       ('INV/2025/00007',    2500,  '2025-10-04','CSH','PCSH1/2025/00007'),
-      ('INV/2025/00009',    1000,  '2026-03-24','BNK','PWSH1/2026/00001')
+      ('INV/2025/00009',    1000,  '2026-03-24','BNK','PWSH1/2026/00001'),
+      -- Odoo left this one in draft while marking the receipt paid; the receipt is
+      -- what the customer holds, so the money is recorded here
+      ('INV/2026/00002',    1500,  '2026-10-07','CSH','PCSH1/2026/00001')
     ) as v(inv_number, amount, d, journal, ref)
   loop
     select id into v_inv from public.invoices where company_id = v_co and number = r.inv_number limit 1;
@@ -306,6 +349,43 @@ begin
            (v_entry, v_co, a_cash, null, 'Cash (Odoo JV000002)', 0, 26.06);
     update public.journal_entries set entry_number = public.je_next_number(v_co, journal_id, 'import', date), state = 'posted', posted_at = now() where id = v_entry;
   end if;
+
+  -- ------------------------------------------- each invoice back to its order
+  update public.invoices i set sale_order_id = s.id
+  from (values
+    ('INV/2025/00001','S00004'), ('INV/2025/00002','S00006'), ('INV/2025/00003','S00009'),
+    ('INV/2025/00004','S00009'), ('INV/2025/00005','S00010'), ('INV/2025/00007','S00011'),
+    ('INV/2025/00008','S00004'), ('INV/2025/00009','S00012'), ('INV/2026/00001','S00004'),
+    ('INV/2026/00002','S00021'), ('INV/2026/00003','S00021')
+  ) as m(inv, so)
+  join public.sale_orders s on s.company_id = v_co and s.number = m.so
+  where i.company_id = v_co and i.number = m.inv and i.sale_order_id is null;
+
+  -- ---------------------------------------------------- the one stock balance
+  -- Odoo's Portside warehouse holds 38 Cutters; the rest of its movement history
+  -- runs through transit locations Orbit does not have, and one delivery is to a
+  -- partner called "For testing", so the position comes over and the history does
+  -- not. No value is posted: the item has no cost in Odoo either.
+  declare
+    v_loc_stock uuid; v_loc_adj uuid; v_cutter uuid;
+  begin
+    select id into v_loc_stock from public.stock_locations where company_id = v_co and usage = 'internal' order by name limit 1;
+    select id into v_loc_adj   from public.stock_locations where company_id = v_co and usage = 'inventory' order by name limit 1;
+    select id into v_cutter    from public.products where company_id = v_co and name = 'Cutter' limit 1;
+    if v_loc_stock is not null and v_loc_adj is not null and v_cutter is not null
+       and not exists (select 1 from public.stock_moves sm where sm.company_id = v_co and sm.product_id = v_cutter) then
+      insert into public.stock_moves(company_id, product_id, quantity, uom, location_id, location_dest_id, state, date)
+      values (v_co, v_cutter, 38, 'Unit', v_loc_adj, v_loc_stock, 'done', '2026-05-29');
+    elsif v_loc_stock is null then
+      raise notice 'no internal stock location on this company yet, so the 38 Cutters were not counted in: open Inventory once and run this again';
+    end if;
+  end;
+
+  -- ---------------------------------------------------------------- employees
+  -- Odoo holds Sarah Hasna twice; one record here.
+  insert into public.hr_employees(company_id, name, work_email, is_active)
+  select v_co, 'Sarah Hasna', 'jobs@algecoltd.com', true
+  where not exists (select 1 from public.hr_employees e where e.company_id = v_co and lower(e.name) = 'sarah hasna');
 
   raise notice 'Odoo import into % : % invoice(s) posted, % payment(s) registered, % problem(s)', v_co, n_posted, n_paid, n_failed;
 end $odoo$;
