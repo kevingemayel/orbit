@@ -77,6 +77,9 @@ const MUTATIONS = {
     s => s.replace("S.ipStatus = await ipStatus();", "S.ipStatus = null;"),
   "the access review reads the app map instead of a list of its own":
     s => s.replace('to: "inv.receipts"', 'to: "inv.nowhere"'),
+  "the inventory rules drive the stock paths":
+    s => s.replace(/var want = \(dst === "warehouse"\) \? await putawayLoc\(pr, rcpLocIds\) : null;/, "var want = null;")
+      .replace(/var want = await putawayLoc\(p, \(inv\.internal \|\| \[\]\)\.map\(function \(l\) \{ return l\.id; \}\)\);/, "var want = null;"),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

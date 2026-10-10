@@ -1046,8 +1046,8 @@
       { t: "Moving stock: receive, deliver, adjust, transfer", h: "<p>Stock changes when it moves. Use the buttons at the top of <b>Inventory &rsaquo; On Hand</b>:</p><ul><li><b>Receive</b> - stock coming in from a supplier. Numbers go up.</li><li><b>Deliver</b> - stock going out to a customer. Numbers go down.</li><li><b>Adjust</b> - you counted the shelf and it differs from the app; this corrects it.</li><li><b>Transfer</b> - moving stock from one location to another (say warehouse to van).</li></ul><p>Receiving, delivering and adjusting also post their value to accounting automatically, as long as the company has its stock accounts set, so your stock value and your books stay in step. A transfer only changes the location.</p>" },
       { t: "Seeing what you have", h: "<p>Open <b>Inventory &rsaquo; On Hand</b> to see, for every product, how many you have, in which location, and what it is worth, with totals at the top and flags for low stock and expiring items.</p><p>Two extras: if you track batches, <b>Lots / Serials</b> shows per-lot quantities and expiry dates. The Receive Goods screen has no lot field; a lot can be entered when you receive from <b>Replenishment</b>. And <b>Replenishment</b> lets you set a minimum and maximum for each product, then top up everything below its minimum in one click - so you never run out of the important things.</p>" },
       { t: "The setup behind stock (warehouses, locations, units)", h: "<p>Before the counts can be accurate, Orbit needs to know your physical world. It lives under <b>Inventory &rsaquo; Configuration</b>, set up once:</p><div class=\"man-map\"><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:warehouse}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Warehouses</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">The physical sites you hold stock at - a yard, a store, a factory.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:pin}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Locations</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Shelves, bins and zones inside a warehouse, so you know not just how many but where.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:ruler}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Units of Measure</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Metres, kilos, boxes - and how they convert, so buying in boxes and using in metres just works.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:folder}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Product Categories</span><span class=\"man-scr-loc\">Products</span><span class=\"man-scr-d\">Group products into categories, with parents and children.</span></div></div></div><div class=\"man-cal note\"><span class=\"man-ci\">{{ico:check}}</span><div class=\"man-cal-b\"><div class=\"man-cal-t\">You can start simple</div><p>A single warehouse with one location is enough to begin. Add more locations, units and rules only when your handling actually needs them.</p></div></div>" },
-      { t: "Getting stock out: delivery notes, methods and packages", h: "<p>When goods leave you, three things handle the paperwork and packing:</p><ul><li><b>Delivery Notes</b> (Operations) - the document that goes out with the goods, listing what was sent to a customer or site. It is the proof of what left the door.</li><li><b>Delivery Methods</b> (Configuration) - your carriers and shipping options, kept as a list. Delivery notes do not use it.</li><li><b>Package Types</b> (Configuration) - your standard box and pallet sizes, kept as a list. Nothing else in Orbit uses them.</li></ul><p>For material heading to your own <b>project</b> rather than a customer, use <b>Material Issues</b> instead - that turns stock into a project cost (see the Projects chapter).</p>" },
-      { t: "Corrections: scrap, putaway and storage rules", h: "<p>The last few screens keep stock honest and tidy:</p><div class=\"man-map\"><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:alert}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Scrap</span><span class=\"man-scr-loc\">Operations</span><span class=\"man-scr-d\">Write off stock that is damaged or lost, so the count and its value stay truthful.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:arrows}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Putaway Rules</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Note where received goods should go. Orbit keeps these rules as a list and does not apply them when goods arrive.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:grid}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Storage Categories</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Note what can be stored where. Orbit keeps these as a list and does not check them when stock moves.</span></div></div></div>" },
+      { t: "Getting stock out: delivery notes, methods and packages", h: "<p>When goods leave you, three things handle the paperwork and packing:</p><ul><li><b>Delivery Notes</b> (Operations) - the document that goes out with the goods, listing what was sent to a customer or site. It is the proof of what left the door.</li><li><b>Delivery Methods</b> (Configuration) - your carriers and shipping options. A delivery note picks one, and takes its standard charge.</li><li><b>Package Types</b> (Configuration) - your standard box and pallet sizes. A delivery note records which one a load went on and how many, and prints it.</li></ul><p>For material heading to your own <b>project</b> rather than a customer, use <b>Material Issues</b> instead - that turns stock into a project cost (see the Projects chapter).</p>" },
+      { t: "Corrections: scrap, putaway and storage rules", h: "<p>The last few screens keep stock honest and tidy:</p><div class=\"man-map\"><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:alert}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Scrap</span><span class=\"man-scr-loc\">Operations</span><span class=\"man-scr-d\">Write off stock that is damaged or lost, so the count and its value stay truthful.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:arrows}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Putaway Rules</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">Where received goods belong. A goods receipt fills the location in from the rule, and you can still change it.</span></div></div><div class=\"man-scr\"><div class=\"man-scr-ic\">{{ico:grid}}</div><div class=\"man-scr-b\"><span class=\"man-scr-n\">Storage Categories</span><span class=\"man-scr-loc\">Configuration</span><span class=\"man-scr-d\">How much a kind of location holds. A move that would take it past its capacity says so before it posts.</span></div></div></div>" },
       { t: "Variants, kits and consignment", h: "<p>Three ways a product can be more than a single simple item. All three live on the product form.</p><p><b>Variants</b> are the same thing in different sizes or colours. On the parent product open <b>Variants</b>, add an axis (say <i>Colour</i> with <i>Black, White</i>), then <b>Generate variants</b> and Orbit creates a product for each combination. You can also <b>link an existing product</b> in as a variant, or unlink one. In the product list variants sit <b>tucked under their parent</b> instead of cluttering the list.</p><p><b>Kits</b> are one sellable thing made of several others - a door set, a starter pack. Set <b>Kit / bundle</b> on the product and list its components; Orbit shows you the combined cost and list price of the parts.</p><p><b>Consignment</b> marks stock that sits in your store but is still <b>owned by the supplier</b> until you sell it, so you know what you do not actually owe for yet.</p><div class=\"man-cal tip\"><b>Extra barcodes.</b> A product can scan under more than one code - a supplier's pack barcode, an old code, inner versus outer. Add them under <b>Extra barcodes</b> on the product; the main barcode stays the primary one.</div>" },
       { t: "Classifying your catalogue", h: "<p>If two people type item names their own way, your catalogue stops being searchable within a month. Orbit fixes that with a <b>classification tree</b> everyone picks from instead of typing.</p><p>There are two trees, set up in <b>Inventory &rsaquo; Classification</b>, and each answers a different question:</p><ul><li><b>Family - who makes it.</b> Brand &rsaquo; series &rsaquo; model: <i>Technal &rsaquo; Soleal &rsaquo; Fy 55</i>, or <i>Technal &rsaquo; GX (sliding) &rsaquo; GXi (insulated)</i>.</li><li><b>Type - what it is.</b> Material &rsaquo; group &rsaquo; part: <i>Aluminium &rsaquo; Aluminium Profiles &rsaquo; Glazing Bead</i>.</li></ul><p>Both go three levels deep, so a new buyer picks from a menu rather than inventing a description, and the two answers stay independent: you can ask for every Technal item whatever it is made of, or every glazing bead whoever makes it. The choice also builds the item code automatically.</p><p>Two more fields finish the picture and are not part of either tree: <b>Material form</b> (bar, sheet, liquid) drives the measurements and price conversions, and <b>Country of origin</b> records where it is made, which customs and some tenders ask for.</p><div class=\"man-cal key\"><b>Where prices come from.</b> The material section describes the item; it does not price it. Prices live in <b>Suppliers &amp; prices</b> on the same form, one row per supplier, so you can compare them for the same item. The cheapest is flagged and sets the item's cost - press <b>Use</b> on any other row to pick that supplier instead.</div>" }
     ] },
@@ -1556,10 +1556,10 @@
       { i: "pin", n: "Locations", l: "Configuration", d: "Shelves, bins and zones inside a warehouse." },
       { i: "ruler", n: "Units of Measure", l: "Configuration", d: "Metres, kilos, boxes, and how they convert." },
       { i: "tag", n: "Classification", l: "Configuration", d: "Product classification codes." },
-      { i: "grid", n: "Storage Categories", l: "Configuration", d: "What can be stored where, kept as a list. Not checked when stock moves." },
-      { i: "arrows", n: "Putaway Rules", l: "Configuration", d: "Where received goods should go, kept as a list. Not applied on receipt." },
-      { i: "truck", n: "Delivery Methods", l: "Configuration", d: "Carriers and shipping options." },
-      { i: "box", n: "Package Types", l: "Configuration", d: "Box and pallet sizes for packing." }
+      { i: "grid", n: "Storage Categories", l: "Configuration", d: "How much a kind of location holds. A move that would overfill it says so first." },
+      { i: "arrows", n: "Putaway Rules", l: "Configuration", d: "Where received goods belong. A receipt fills the location in from the rule." },
+      { i: "truck", n: "Delivery Methods", l: "Configuration", d: "Carriers and shipping options, picked on a delivery note with their charge." },
+      { i: "box", n: "Package Types", l: "Configuration", d: "Box and pallet sizes, counted and printed on a delivery note." }
     ] },
     site: { intro: "Every screen in the <b>Contracting</b> app:", list: [
       { i: "hardhat", n: "Install Jobs", l: "Install Jobs", d: "Installation work packages scheduled on site." },
@@ -8411,7 +8411,7 @@
     var fromOrder = preset.order || null, poLines = [];
     if (fromOrder) poLines = (await sb.from("purchase_order_lines").select("*").eq("order_id", fromOrder.id).order("sequence")).data || [];
     var vendors = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).eq("is_vendor", true).order("name")).data || [];
-    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var products = (await sb.from("products").select("id,name,default_code,supplier_code,barcode,uom,type,cost_price,material_form,spec,category_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var uoms = (await sb.from("uoms").select("name,base_uom,factor").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var recvUsers = await companyUsers();
     var inv = await ensureInventory();
@@ -8447,6 +8447,13 @@
     var showOrdered = !!fromOrder || linkedOrderIds.length > 0;
     bcTitle("Receive Goods");
     var prodOpts = '<option value="">- pick a product -</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
+    // Where each line is put away. The column only appears when there is a choice
+    // to make: more than one internal location, or a putaway rule to honour.
+    var rcpLocs = (inv && inv.internal) ? inv.internal : [];
+    var rcpLocIds = rcpLocs.map(function (l) { return l.id; });
+    var hasPutaway = ((await putawayRules()) || []).length > 0;
+    var showPut = rcpLocs.length > 1 || hasPutaway;
+    function putOptsHTML(cur) { return rcpLocs.map(function (l) { return '<option value="' + l.id + '"' + (cur === l.id ? " selected" : "") + '>' + esc(l.name) + '</option>'; }).join(""); }
     var vendOpts = '<option value="">(none)</option>' + vendors.map(function (v) { return '<option value="' + v.id + '"' + (((fromOrder && fromOrder.partner_id === v.id) || (preset.supplierId === v.id)) ? " selected" : "") + '>' + esc(v.name) + '</option>'; }).join("");
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="rcp-do">Confirm receipt</button><button id="rcp-discard">Discard</button></div></div>' +
@@ -8460,7 +8467,7 @@
       fld("Source document", '<input id="rcp-origin" value="' + esc(fromOrder ? (fromOrder.number || "") : (preset.origin || "")) + '" placeholder="e.g. PO number, delivery note ref">', "The paperwork this receipt is against - a PO number, supplier delivery note, etc.") +
       '</div></div>' +
       '<div class="o-cf-head u-mt14">Items received</div>' +
-      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:200px">Product</th><th>Description</th><th style="width:74px">Unit</th>' + (showOrdered ? '<th class="num" style="width:70px">Ordered</th>' : "") + '<th class="num" style="width:96px">Qty received</th><th style="width:120px">Destination</th><th style="width:24px"></th></tr></thead><tbody id="rcp-body"></tbody></table></div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th style="min-width:200px">Product</th><th>Description</th><th style="width:74px">Unit</th>' + (showOrdered ? '<th class="num" style="width:70px">Ordered</th>' : "") + '<th class="num" style="width:96px">Qty received</th><th style="width:120px">Destination</th>' + (showPut ? '<th style="width:150px">Put away to</th>' : "") + '<th style="width:24px"></th></tr></thead><tbody id="rcp-body"></tbody></table></div>' +
       '<button class="o-addln" id="rcp-add">+ Add a product</button> <button class="o-addln" id="rcp-scan" style="margin-left:6px">&#128247; Scan barcode</button>' +
       '<div class="sub u-mt10">Each line is routed by its <b>destination</b>: <b>Warehouse</b> into stock, <b>Factory</b> into fabrication (WIP), <b>Site</b> straight to the job (a cost, not stocked). Quantities are valued at the PO price where linked. Enter in any <b>unit</b> - if it converts to the product\'s stock unit we store the converted quantity.</div></div>';
     document.getElementById("rcp-discard").onclick = function () { if (preset.shipmentId) renderShipmentForm(preset.shipmentId); else go(back.action); };
@@ -8480,11 +8487,29 @@
         (showOrdered ? '<td class="num rcp-ord">' + (l.ordered != null ? l.ordered : "") + (outLine != null ? ' <span class="muted u-fs11">(' + (Math.round(outLine * 1000) / 1000) + ' left)</span>' : "") + '</td>' : "") +
         '<td><input class="rcp-qty num" type="number" step="any" min="0"' + (outLine != null ? ' max="' + outLine + '" title="Only ' + (Math.round(outLine * 1000) / 1000) + ' left to receive on this PO line"' : '') + ' value="' + (l.qty != null ? l.qty : 1) + '"></td>' +
         '<td><select class="rcp-dest">' + destOptsHTML(l.destination) + '</select></td>' +
+        (showPut ? '<td><select class="rcp-put">' + putOptsHTML(l.put_loc || null) + '</select></td>' : "") +
         '<td>' + (l.po_line_id ? "" : '<button class="del" type="button" title="Remove">&times;</button>') + '</td>';
       body.appendChild(tr);
       tr._line = l;
+      // the putaway rule fills the location in, and keeps filling it in as the
+      // product on the line changes, until somebody picks a location by hand
+      var put = tr.querySelector(".rcp-put");
+      if (put) {
+        put.onchange = function () { put._touched = true; };
+        tr._applyPut = async function () {
+          if (put._touched) return;
+          var dst = (tr.querySelector(".rcp-dest") || {}).value || "warehouse";
+          var pr = l.po_line_id ? prodBy[l.product_id] : prodBy[(tr.querySelector(".rcp-prod") || {}).value];
+          var want = (dst === "warehouse") ? await putawayLoc(pr, rcpLocIds) : null;
+          if (dst === "factory" && inv && inv.factory) want = inv.factory;
+          put.value = want || (inv ? inv.stock : "") || put.value;
+          put.disabled = dst === "site";
+        };
+        tr._applyPut();
+        var dsel = tr.querySelector(".rcp-dest"); if (dsel) dsel.addEventListener("change", function () { tr._applyPut(); });
+      }
       var ps = tr.querySelector(".rcp-prod");
-      if (ps) { if (l.product_id) ps.value = l.product_id; ps.onchange = function () { var p = prodBy[ps.value]; if (p) { tr.querySelector(".rcp-desc").value = p.name; var ue = tr.querySelector(".rcp-uom"); if (p.uom && !ue.value) setUnitSelect(ue, p.uom); } }; }
+      if (ps) { if (l.product_id) ps.value = l.product_id; ps.onchange = function () { var p = prodBy[ps.value]; if (p) { tr.querySelector(".rcp-desc").value = p.name; var ue = tr.querySelector(".rcp-uom"); if (p.uom && !ue.value) setUnitSelect(ue, p.uom); } if (tr._applyPut) tr._applyPut(); }; }
       wireUnitAdd(tr.querySelector(".rcp-uom"), uoms);
       var del = tr.querySelector(".del"); if (del) del.onclick = function () { tr.remove(); };
     }
@@ -8498,7 +8523,7 @@
       var rows = Array.prototype.map.call(body.querySelectorAll("tr"), function (tr) {
         var l = tr._line || {}, ps = tr.querySelector(".rcp-prod");
         var pid = l.po_line_id ? l.product_id : (ps ? (ps.value || null) : null);
-        return { po_line_id: l.po_line_id || null, product_id: pid, name: (tr.querySelector(".rcp-desc") || {}).value || l.name || "", uom: (tr.querySelector(".rcp-uom") || {}).value || "", qty: parseFloat((tr.querySelector(".rcp-qty") || {}).value) || 0, destination: (tr.querySelector(".rcp-dest") || {}).value || "warehouse", already: l.already || 0, unit_price: l.unit_price, size: l.size, width: l.width, height: l.height };
+        return { po_line_id: l.po_line_id || null, product_id: pid, name: (tr.querySelector(".rcp-desc") || {}).value || l.name || "", uom: (tr.querySelector(".rcp-uom") || {}).value || "", qty: parseFloat((tr.querySelector(".rcp-qty") || {}).value) || 0, destination: (tr.querySelector(".rcp-dest") || {}).value || "warehouse", put_loc: (tr.querySelector(".rcp-put") || {}).value || null, already: l.already || 0, unit_price: l.unit_price, size: l.size, width: l.width, height: l.height };
       }).filter(function (r) { return (r.product_id || r.name) && r.qty > 0.0001; });
       if (!rows.length) { toast("Add at least one product with a quantity"); return; }
       // Guard: for PO-linked lines, never receive more than remains outstanding (checked live,
@@ -8518,6 +8543,24 @@
         rv._recvLineUom = recvLU; rv._liveReceived = Number(cur.qty_received || 0);
       }
       var isReturn = opType === "return";
+      // every line lands somewhere: warn once per location that its storage
+      // category says it is full, before anything is posted
+      if (!isReturn) {
+        var _byLoc = {};
+        rows.forEach(function (r) {
+          if ((r.destination || "warehouse") === "site") return;
+          var pr0 = r.product_id ? prodBy[r.product_id] : null;
+          var su = (pr0 && pr0.uom) || "Unit";
+          var qb = (r.uom && r.uom !== "__addu") ? uomConvert(r.qty, r.uom, su, uoms) : r.qty;
+          var lid = r.put_loc || ((r.destination === "factory" && inv && inv.factory) ? inv.factory : (inv ? inv.stock : null));
+          if (lid) _byLoc[lid] = (_byLoc[lid] || 0) + (Number(qb) || 0);
+        });
+        var _lids = Object.keys(_byLoc);
+        for (var _c = 0; _c < _lids.length; _c++) {
+          var _cw = await capacityWarning(_lids[_c], _byLoc[_lids[_c]]);
+          if (_cw && !confirm(_cw + "\n\nReceive it there anyway?")) return;
+        }
+      }
       var pick = await sb.from("stock_pickings").insert({ company_id: S.company.id, type: opType, partner_id: partnerId, po_id: fromOrder ? fromOrder.id : (linkedOrderIds.length === 1 ? linkedOrderIds[0] : null), location_id: inv ? inv.supplier : null, location_dest_id: inv ? inv.stock : null, scheduled_date: schd, origin: origin || null, state: "done" }).select("id,number").single();
       var pickId = pick.error ? null : (pick.data && pick.data.id);
       var got = 0;
@@ -8533,7 +8576,9 @@
         }
         var dest = r.destination || "warehouse";
         if (!isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
-          var destLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
+          // the line's own putaway location wins, then the factory for fabrication,
+          // then the default stock location
+          var destLoc = r.put_loc || ((dest === "factory" && inv.factory) ? inv.factory : inv.stock);
           if (destLoc) {
             // Warehouse/factory receipt = inventory asset (Dr Inventory / Cr Interim), NOT a
             // project cost. Do NOT tag the move with a project - otherwise Job Cost / Project P&L
@@ -8546,7 +8591,7 @@
             if (!mv.error) { await postStockValue("receive", pr, qtyBase, mv.data && mv.data.id, null, r.unit_price); got++; }
           }
         } else if (isReturn && dest !== "site" && pr && (pr.type === "storable" || pr.type === "consumable") && inv) {
-          var srcLoc = (dest === "factory" && inv.factory) ? inv.factory : inv.stock;
+          var srcLoc = r.put_loc || ((dest === "factory" && inv.factory) ? inv.factory : inv.stock);
           if (srcLoc) { var _b2 = baseFor(pr, qtyBase, { width: r.width, height: r.height, size: r.size }); var _row2 = { company_id: S.company.id, picking_id: pickId, po_line_id: r.po_line_id || null, product_id: pr.id, quantity: qtyBase, uom: stockUnit, location_id: srcLoc, location_dest_id: inv.supplier, received_by: recvBy, state: "done", date: new Date().toISOString() }; if (await baseColsReady()) { _row2.base_qty = _b2.baseQty; _row2.base_uom = _b2.baseUom; _row2.pack_factor = _b2.factor; } var mv2 = await sb.from("stock_moves").insert(_row2).select("id").single(); if (!mv2.error) { await postStockValue("return", pr, qtyBase, mv2.data && mv2.data.id, null, r.unit_price); got++; } }
         }
       }
@@ -10253,8 +10298,32 @@
     bcTitle(id === "new" ? "New" : (d.number || "New"));
     var custOpts = '<option value="">(none)</option>' + partners.map(function (p) { return '<option value="' + p.id + '"' + (d.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
     var projOpts = '<option value="">(none)</option>' + projects.map(function (p) { return '<option value="' + p.id + '"' + (d.project_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("");
+    // How the goods travel and how they are packed: the delivery methods and
+    // package types from Configuration, on the note itself. The three columns
+    // arrive with supabase/209-delivery-method-packages.sql; until that has been
+    // run the panel says so rather than failing a save.
+    var dnMethods = (await sb.from("delivery_methods").select("id,name,carrier,price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var dnPacks = (await sb.from("package_types").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
+    var dnShipCols = ("delivery_method_id" in d) || !(await sb.from("delivery_notes").select("delivery_method_id").limit(1)).error;
+    var dnShipHTML = "";
+    if (!dnShipCols) {
+      dnShipHTML = '<div class="o-cf-head u-mt16">Carrier and packing</div><div class="sub">Run <span class="path">supabase/209-delivery-method-packages.sql</span> once to record the carrier, its charge and the packing on a delivery note.</div>';
+    } else if (!dnMethods.length && !dnPacks.length) {
+      dnShipHTML = '<div class="o-cf-head u-mt16">Carrier and packing</div><div class="sub">Add your carriers in <b>Inventory &rsaquo; Configuration &rsaquo; Delivery Methods</b> and your boxes and pallets in <b>Package Types</b>, and they can be picked here.</div>';
+    } else {
+      var dmOpts = '<option value="">(none)</option>' + dnMethods.map(function (m2) { return '<option value="' + m2.id + '"' + (d.delivery_method_id === m2.id ? " selected" : "") + ' data-price="' + (Number(m2.price) || 0) + '">' + esc(m2.name + (m2.carrier ? " - " + m2.carrier : "")) + '</option>'; }).join("");
+      var pkOpts = '<option value="">(none)</option>' + dnPacks.map(function (p2) { return '<option value="' + p2.id + '"' + (d.package_type_id === p2.id ? " selected" : "") + '>' + esc(p2.name) + '</option>'; }).join("");
+      dnShipHTML = '<div class="o-cf-head u-mt16">Carrier and packing</div><div class="o-groups"><div>' +
+        fld("Delivery method", '<select id="dn-method">' + dmOpts + '</select>', "How the goods travel. Picking one fills in its standard charge.") +
+        fld("Carrier charge", '<input id="dn-charge" type="number" step="any" value="' + (Number(d.carrier_charge) || 0) + '">', "What the carrier charges for this delivery. Starts from the method's standard price.") +
+        '</div><div>' +
+        fld("Package type", '<select id="dn-pack">' + pkOpts + '</select>', "The box, crate or pallet the goods go on.") +
+        fld("Packages", '<input id="dn-packn" type="number" step="any" min="0" value="' + (Number(d.package_count) || 0) + '">', "How many of them.") +
+        fld("Tracking reference", '<input id="dn-track" value="' + esc(d.tracking_ref || "") + '" placeholder="waybill / consignment no.">', "The carrier's waybill or consignment number.") +
+        '</div></div>';
+    }
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dn-save">Save</button><button id="dn-discard">Discard</button></div><div></div></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="dn-save">Save</button><button id="dn-print">Print</button><button id="dn-discard">Discard</button></div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="dn-number" value="' + esc(d.number || "") + '" placeholder="auto (DN-0001)"></div>' +
       '<div class="o-groups"><div>' +
       fld("Deliver to (customer)", '<select id="dn-cust">' + custOpts + '</select>', "The customer receiving the goods.") +
@@ -10263,12 +10332,57 @@
       '</div><div>' +
       fld("Date", '<input id="dn-date" type="date" value="' + esc(d.dn_date || today()) + '">', "") +
       fld("Status", '<select id="dn-status">' + DN_STATUS.map(function (s) { return '<option value="' + s[0] + '"' + ((d.status || "draft") === s[0] ? " selected" : "") + '>' + s[1] + '</option>'; }).join("") + '</select>', "") +
-      '</div></div>' +
+      '</div></div>' + dnShipHTML +
       '<div class="o-cf-head u-mt16">Items delivered</div>' +
       '<table class="o-list o-lines"><thead><tr><th>Item</th><th>Description</th><th>Qty</th><th>Unit</th><th></th></tr></thead><tbody id="dn-lines"></tbody></table>' +
       '<button class="btn u-mt8" id="dn-addline">+ Add item</button>' +
       fld("Notes", '<textarea id="dn-notes" rows="2">' + esc(d.notes || "") + '</textarea>', "") + '</div>';
     document.getElementById("dn-discard").onclick = function () { go("dn.list"); };
+    // The slip the driver carries: what is on the note, how it travelled, how many
+    // packages, and somewhere for the person receiving it to sign.
+    document.getElementById("dn-print").onclick = function () {
+      var cust = (partners.filter(function (p) { return p.id === document.getElementById("dn-cust").value; })[0] || {});
+      var prj = (projects.filter(function (p) { return p.id === document.getElementById("dn-proj").value; })[0] || {});
+      var rows = collectLines("dn-lines");
+      var body = rows.map(function (l, i) {
+        var nm = l.description || "";
+        if (l.kind === "product") { var pp = products.filter(function (p) { return p.id === l.rid; })[0]; if (pp) nm = pp.name + (l.description ? " - " + l.description : ""); }
+        else if (l.kind === "run") { var rr = runs.filter(function (p) { return p.id === l.rid; })[0]; if (rr) nm = rr.name + (l.description ? " - " + l.description : ""); }
+        else if (l.kind === "pitem") { var ii = pitems.filter(function (p) { return p.id === l.rid; })[0]; if (ii) nm = ii.name + (l.description ? " - " + l.description : ""); }
+        return '<tr><td class="r">' + (i + 1) + '</td><td>' + esc(nm || "Item") + '</td><td class="r">' + Number(l.qty || 0) + '</td><td>' + esc(l.unit || "") + '</td></tr>';
+      }).join("");
+      var ship = "";
+      if (document.getElementById("dn-method")) {
+        var mSel = document.getElementById("dn-method"), pSel = document.getElementById("dn-pack");
+        var mName = mSel.value ? mSel.options[mSel.selectedIndex].text : "";
+        var pName = pSel && pSel.value ? pSel.options[pSel.selectedIndex].text : "";
+        var pn = parseFloat(gv("dn-packn")) || 0, trk = gv("dn-track");
+        var bits = [];
+        if (mName) bits.push('<div class="pl">Delivery method</div><div class="pv">' + esc(mName) + '</div>');
+        if (pName || pn) bits.push('<div class="pl u-mt8">Packages</div><div class="pv">' + esc((pn ? pn + " x " : "") + (pName || "package")) + '</div>');
+        if (trk) bits.push('<div class="pl u-mt8">Tracking</div><div class="pv">' + esc(trk) + '</div>');
+        ship = bits.join("");
+      }
+      var html = '<div class="pinv">' + pdocHead("Delivery Note", gv("dn-number") || (d.number || "Draft")) +
+        '<div class="pmeta"><div><div class="pl">Deliver to</div><div class="pv">' + esc(cust.name || "") + '</div>' + pdocPartyAddr(cust) +
+        (gv("dn-shipto") ? '<div class="pl u-mt8">Ship to</div><div class="pv">' + esc(gv("dn-shipto")) + '</div>' : "") + '</div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(gv("dn-date") || today()) + '</div>' +
+        (prj.name ? '<div class="pl u-mt8">Project</div><div class="pv">' + esc(prj.name) + '</div>' : "") + ship + '</div></div>' +
+        '<table class="ptab ptab-grid"><thead><tr><th class="r">Pos</th><th>Item</th><th class="r">Qty</th><th>Unit</th></tr></thead><tbody>' + (body || '<tr><td colspan="4">No items</td></tr>') + '</tbody></table>' +
+        (gv("dn-notes") ? '<div style="margin-top:10px;font-size:11.5px;color:#444">' + esc(gv("dn-notes")) + '</div>' : "") +
+        '<div style="display:flex;gap:40px;margin-top:34px;font-size:11.5px;color:#444">' +
+        '<div style="flex:1"><div style="border-top:1px solid #999;padding-top:4px">Delivered by (name, signature, date)</div></div>' +
+        '<div style="flex:1"><div style="border-top:1px solid #999;padding-top:4px">Received by (name, signature, date)</div></div></div>' +
+        pdocFoot() + '</div>';
+      pdocPrint(html);
+    };
+    // picking a method offers its standard charge, and leaves a typed-in one alone
+    var dnMeth = document.getElementById("dn-method");
+    if (dnMeth) dnMeth.onchange = function () {
+      var ch = document.getElementById("dn-charge"); if (!ch) return;
+      var op = this.options[this.selectedIndex], std = op ? Number(op.getAttribute("data-price") || 0) : 0;
+      if (!Number(ch.value) && std) ch.value = std;
+    };
     var opts = { products: products, runs: runs, pitems: pitems, uoms: dnUoms };
     lines.forEach(function (l) { addLineRow("dn-lines", opts, l); });
     if (!lines.length) addLineRow("dn-lines", opts, {});
@@ -10281,6 +10395,13 @@
         if (dup.length) { toast("Delivery note number " + number + " is already used by another note. Type a different number, or leave the number empty on a new note to get the next free one."); return; }
       }
       var row = { number: number || null, partner_id: document.getElementById("dn-cust").value || null, project_id: document.getElementById("dn-proj").value || null, ship_to: gv("dn-shipto") || null, dn_date: gv("dn-date") || today(), status: document.getElementById("dn-status").value, notes: gv("dn-notes") || null };
+      if (dnShipCols && document.getElementById("dn-method")) {
+        row.delivery_method_id = document.getElementById("dn-method").value || null;
+        row.package_type_id = document.getElementById("dn-pack").value || null;
+        row.package_count = parseFloat(gv("dn-packn")) || 0;
+        row.carrier_charge = parseFloat(gv("dn-charge")) || 0;
+        row.tracking_ref = gv("dn-track") || null;
+      }
       var dnId = id;
       if (id === "new") {
         row.company_id = S.company.id; row.org_id = S.company.org_id;
@@ -18767,6 +18888,77 @@
     moves.forEach(function (m) { var q = Number(m.quantity) || 0; if (internal[m.location_dest_id]) add(m.product_id, m.location_dest_id, q); if (internal[m.location_id]) add(m.product_id, m.location_id, -q); });
     return by;
   }
+  // ---- the inventory rules, and what makes them act ------------------------
+  // Putaway rules, storage categories and kit components used to be lists you
+  // could fill in that changed nothing: goods always landed in the first stock
+  // location, a shelf could be filled past its capacity in silence, and a kit
+  // left the shelf as itself instead of as its parts. The helpers below are
+  // what the receive, deliver and issue paths call so that the rules decide.
+  var PUTAWAY = null, STORECAP = null;
+  async function putawayRules() {
+    if (PUTAWAY && PUTAWAY.company === S.company.id) return PUTAWAY.rows;
+    var r = await sb.from("putaway_rules").select("product_id,category_id,location_id,sequence").eq("company_id", S.company.id).order("sequence");
+    PUTAWAY = { company: S.company.id, rows: r.error ? [] : (r.data || []) };
+    return PUTAWAY.rows;
+  }
+  // Where a product should be put away. A rule naming the product beats a rule
+  // naming its category, and a lower sequence beats a higher one. Returns null
+  // when no rule applies, so the caller keeps its own default location.
+  async function putawayLoc(product, internalIds) {
+    if (!product || !product.id) return null;
+    var rows = await putawayRules(); if (!rows.length) return null;
+    var ok = null;
+    if (internalIds && internalIds.length) { ok = {}; internalIds.forEach(function (id) { ok[id] = 1; }); }
+    var best = null, bestRank = 9;
+    rows.forEach(function (r) {
+      if (!r.location_id || (ok && !ok[r.location_id])) return;
+      var rank = (r.product_id && r.product_id === product.id) ? 0
+        : ((r.category_id && product.category_id && r.category_id === product.category_id) ? 1 : 9);
+      if (rank < bestRank) { bestRank = rank; best = r.location_id; }
+    });
+    return best;
+  }
+  async function storageCaps() {
+    if (STORECAP && STORECAP.company === S.company.id) return STORECAP.by;
+    var by = {};
+    var cats = await sb.from("storage_categories").select("id,name,capacity,max_weight").eq("company_id", S.company.id);
+    if (!cats.error && (cats.data || []).length) {
+      var locs = (await sb.from("stock_locations").select("id,name,storage_category_id").eq("company_id", S.company.id)).data || [];
+      var cat = {}; (cats.data || []).forEach(function (c) { cat[c.id] = c; });
+      locs.forEach(function (l) {
+        var c = l.storage_category_id ? cat[l.storage_category_id] : null;
+        if (c && Number(c.capacity) > 0) by[l.id] = { loc: l.name, cat: c.name, capacity: Number(c.capacity) };
+      });
+    }
+    STORECAP = { company: S.company.id, by: by };
+    return by;
+  }
+  // "Shelf A is full." What a location would hold after this move, against the
+  // capacity on its storage category. Counted in units, which is what a capacity
+  // on a shelf means; a category with only a weight limit is left alone, because
+  // Orbit does not hold a weight for every product. Empty string = nothing to say.
+  async function capacityWarning(locId, addQty) {
+    if (!locId || !(Number(addQty) > 0)) return "";
+    var caps = await storageCaps(), cap = caps[locId];
+    if (!cap) return "";
+    var by = await onHandByLoc(), here = 0;
+    Object.keys(by).forEach(function (pid) { here += Number(by[pid][locId] || 0); });
+    var after = here + Number(addQty);
+    if (after <= cap.capacity + 1e-6) return "";
+    function r2(n) { return Math.round(n * 100) / 100; }
+    return cap.loc + " holds " + r2(here) + " of " + r2(cap.capacity) + " units allowed by its storage category (" + cap.cat + "). This move would take it to " + r2(after) + ".";
+  }
+  // A kit is sold as one line but leaves the shelf as its parts. Returns the
+  // parts and their quantities for a kit, [] for a kit nobody has filled in,
+  // and null when the product is not a kit at all.
+  async function kitParts(product, qty) {
+    if (!product || !product.is_kit) return null;
+    var r = await sb.from("product_kit_components").select("qty, comp:component_product_id(id,name,uom,type,cost_price,material_form,spec,category_id)").eq("kit_product_id", product.id).order("seq");
+    if (r.error) return null;
+    var rows = (r.data || []).filter(function (c) { return c.comp && c.comp.id; });
+    return rows.map(function (c) { return { product: c.comp, qty: (Number(c.qty) || 0) * (Number(qty) || 0) }; }).filter(function (c) { return c.qty > 0; });
+  }
+
   // active reservations per product (committed stock that reduces what is AVAILABLE)
   async function reservedMap() {
     var rows = (await sb.from("stock_reservations").select("product_id,qty").eq("company_id", S.company.id).eq("status", "active")).data || [];
@@ -18794,7 +18986,7 @@
       '<div class="gap"></div>' + locSel +
       '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
-    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom,material_form,spec").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var prods = (await sb.from("products").select("id,name,default_code,type,cost_price,uom,material_form,spec,category_id,is_kit,parent_product_id").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     wireInvBtns(prods);
     var ls = document.getElementById("oh-loc"); if (ls) ls.onchange = function () { OH_LOC = this.value; renderOnHand(); };
     var body = document.getElementById("o-body");
@@ -18803,13 +18995,26 @@
     function qOf(pid) { if (!by[pid]) return 0; if (OH_LOC === "all") return Object.keys(by[pid]).reduce(function (s, l) { return s + by[pid][l]; }, 0); return by[pid][OH_LOC] || 0; }
     var storable = prods.filter(function (p) { return p.type === "storable" || p.type === "consumable"; });
     var list = storable.length ? storable : prods;
+    // A parent product with variants holds no stock of its own: the stock sits on
+    // the children. Show the roll-up on the parent row so the set reads as a set,
+    // and mark a variant so its parent is obvious.
+    var kidsOf = {};
+    list.forEach(function (p) { if (p.parent_product_id) { kidsOf[p.parent_product_id] = kidsOf[p.parent_product_id] || []; kidsOf[p.parent_product_id].push(p); } });
+    var nameOf = {}; list.forEach(function (p) { nameOf[p.id] = p.name; });
     var rows = list.map(function (p) {
       var q = qOf(p.id), val = q * Number(p.cost_price || 0), pk = packInfo(p);
+      var kids = kidsOf[p.id] || [];
+      var kidQty = kids.reduce(function (s, k) { return s + qOf(k.id); }, 0);
+      var kidVal = kids.reduce(function (s, k) { return s + qOf(k.id) * Number(k.cost_price || 0); }, 0);
+      var extra = kids.length ? "<div class='muted' style='font-size:11px'>with " + kids.length + " variant" + (kids.length === 1 ? "" : "s") + ": " + (Math.round((q + kidQty) * 1000) / 1000) + "</div>" : "";
+      var valExtra = kids.length ? "<div class='muted' style='font-size:11px'>" + money(val + kidVal) + "</div>" : "";
+      var kidChip = (p.parent_product_id && nameOf[p.parent_product_id]) ? " <span class='badge draft' title='A variant of " + esc(nameOf[p.parent_product_id]) + "'>variant</span>" : "";
+      var kitChip = p.is_kit ? " <span class='badge partial' title='Delivering this draws down its components'>kit</span>" : "";
       // Honest unit label: a counted item (sheet/bar/roll/container) shows its count
       // unit + the base measure it holds ("sheets  = 11.25 m2"), so a sheet count is
       // never read as an area. Generic items keep their single unit.
       var unitCell = (pk.form !== "generic" && pk.factor) ? (esc(countUomLabel(q, pk)) + "<div class='muted' style='font-size:11px'>= " + msFmt(q * pk.factor, 3) + " " + esc(pk.base) + "</div>") : esc(p.uom || "Unit");
-      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b></td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + "</td><td class='muted'>" + unitCell + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + "</td></tr>";
+      return "<tr><td class='num' style='text-align:left'>" + esc(p.default_code || "") + "</td><td><b>" + esc(p.name) + "</b>" + kidChip + kitChip + "</td><td class='muted'>" + esc(PTYPE[p.type] || p.type) + "</td><td class='num'>" + q + extra + "</td><td class='muted'>" + unitCell + "</td><td class='num'>" + money(p.cost_price) + "</td><td class='num'>" + money(val) + valExtra + "</td></tr>";
     }).join("");
     var totVal = list.reduce(function (s, p) { return s + qOf(p.id) * Number(p.cost_price || 0); }, 0);
     var rules = (await sb.from("reordering_rules").select("product_id,min_qty,location_id").eq("company_id", S.company.id)).data || [];
@@ -18852,7 +19057,9 @@
     if (kind === "receive") lotField = '<div class="row2"><div><label>Lot / Serial (optional)</label>' + fhint("__lot", "A batch or serial number for traceability. Leave blank if not tracked.") + '<input id="k-lot" placeholder="e.g. LOT-2026-014"></div><div><label>Expiry (optional)</label>' + fhint("__exp", "Best-before / expiry date for this lot, if any.") + '<input id="k-exp" type="date"></div></div>';
     else if (kind === "deliver") lotField = '<div><label>Lot / Serial (optional)</label>' + fhint("__lot", "The batch/serial being shipped, for traceability.") + '<input id="k-lot" placeholder="lot shipped"></div>';
     m.innerHTML = '<div class="sheet"><h3>' + titles[kind] + '</h3><div class="form">' +
-      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<div style="display:flex;gap:6px;align-items:center"><select id="k-prod" class="u-flex1">' + opts + '</select><button type="button" class="btn" id="k-scan" title="Scan a barcode / QR" style="padding:8px 11px">&#128247;</button></div></div>' + projField + locField +
+      '<div><label>Product</label>' + fhint("Product", "The storable item you are moving. Only stockable products appear here.") + '<div style="display:flex;gap:6px;align-items:center"><select id="k-prod" class="u-flex1">' + opts + '</select><button type="button" class="btn" id="k-scan" title="Scan a barcode / QR" style="padding:8px 11px">&#128247;</button></div>' +
+      ((kind === "deliver" || kind === "issue") ? '<div class="sub u-mt6" id="k-kitnote"></div>' : "") + '</div>' + projField + locField +
+      (kind === "receive" ? '<div class="sub" id="k-putaway" style="margin-top:-4px"></div>' : "") +
       '<div class="row2"><div><label>' + (kind === "adjust" ? "Counted quantity on hand" : "Quantity") + '</label>' + fhint("__kqty", kind === "adjust" ? "The actual quantity you counted. We adjust stock to match it." : (kind === "receive" ? "How many units are coming into stock." : kind === "deliver" ? "How many units are leaving stock." : kind === "issue" ? "How many units are issued to the project." : "How many units to move between the two locations.")) + '<input id="k-qty" type="number" step="0.01" value="' + (kind === "adjust" ? "0" : "1") + '"></div>' +
       '<div><label>Unit</label>' + fhint("__kuom", "The unit you are entering. If it converts to the product\'s stock unit (set in Units of Measure with a factor), we store the converted quantity.") + unitSelectHTML("k-uom", "", uoms) + '<div class="sub" id="k-uomconv" style="margin-top:4px;min-height:13px;font-size:11px"></div></div></div>' + lotField +
       '</div><div class="foot"><button class="btn" id="k-cancel">Cancel</button><button class="btn pri u-app" id="k-save">' + (kind === "adjust" ? "Apply" : kind === "transfer" ? "Transfer" : "Confirm") + '</button></div></div>';
@@ -18873,6 +19080,31 @@
     kUomSel.addEventListener("change", updConv);
     kQtyIn.addEventListener("input", updConv);
     var kscan = document.getElementById("k-scan"); if (kscan) kscan.onclick = function () { openScanner(function (code) { var p = storable.filter(function (x) { return x.default_code === code || x.id === code || (x.name || "").toLowerCase() === String(code).toLowerCase(); })[0]; if (p) { kProdSel.value = p.id; kProdSel.dispatchEvent(new Event("change")); toast("Selected " + p.name); } else { toast("No product matches: " + code); } }); };
+    // Receiving: the putaway rule picks the location, and says so, instead of
+    // everything landing in the first stock location. Change it and the rule
+    // steps aside for this receipt.
+    async function applyPutaway() {
+      var note = document.getElementById("k-putaway"), locSel = document.getElementById("k-loc");
+      if (!note) return;
+      var p = storable.filter(function (x) { return x.id === kProdSel.value; })[0];
+      var want = await putawayLoc(p, (inv.internal || []).map(function (l) { return l.id; }));
+      if (!want) { note.textContent = ""; return; }
+      var lname = (inv.internal.filter(function (l) { return l.id === want; })[0] || {}).name || "";
+      if (locSel && locSel.value !== want) locSel.value = want;
+      note.innerHTML = 'Putaway rule: goes to <b>' + esc(lname) + '</b>. Change the location to override it.';
+    }
+    // Delivering or issuing a kit: say up front that the parts leave, not the kit.
+    async function showKitNote() {
+      var note = document.getElementById("k-kitnote"); if (!note) return;
+      var p = storable.filter(function (x) { return x.id === kProdSel.value; })[0];
+      if (!p || !p.is_kit) { note.textContent = ""; return; }
+      var parts = await kitParts(p, 1);
+      if (!parts) { note.textContent = ""; return; }
+      if (!parts.length) { note.innerHTML = '<span class="u-bad">This kit has no components yet, so the kit itself will move. Add its parts on the product form.</span>'; return; }
+      note.innerHTML = 'Kit: <b>' + parts.length + '</b> component' + (parts.length === 1 ? "" : "s") + ' will leave stock instead of the kit itself (' + esc(parts.map(function (c) { return (Math.round(c.qty * 1000) / 1000) + " x " + c.product.name; }).join(", ")) + ').';
+    }
+    if (kind === "receive") { applyPutaway(); kProdSel.addEventListener("change", applyPutaway); }
+    if (kind === "deliver" || kind === "issue") { showKitNote(); kProdSel.addEventListener("change", showKitNote); }
     document.getElementById("k-save").onclick = async function () {
       var pid = document.getElementById("k-prod").value, qty = parseFloat(document.getElementById("k-qty").value);
       if (isNaN(qty)) { toast("Enter a quantity"); return; }
@@ -18888,9 +19120,13 @@
       else if (kind === "transfer") { var from = document.getElementById("k-from").value, to = document.getElementById("k-to").value; if (from === to) { toast("Pick two different locations"); return; } if (!(q > 0)) { toast("Quantity must be positive"); return; } src = from; dest = to; }
       else if (kind === "scrap") { src = loc; dest = inv.adjust; vkind = "adjust_down"; if (!(q > 0)) { toast("Quantity must be positive"); return; } }
       else { var cur = ((await onHandByLoc())[pid] || {})[loc] || 0; var diff = qty - cur; if (Math.abs(diff) < 0.0001) { toast("No change"); return; } if (diff > 0) { src = inv.adjust; dest = loc; q = diff; vkind = "adjust_up"; } else { src = loc; dest = inv.adjust; q = -diff; vkind = "adjust_down"; } }
+      // A kit leaves the shelf as its parts, so what matters is whether the PARTS
+      // are there. Worked out before the on-hand guard below, which would otherwise
+      // complain about a kit that never holds stock of its own.
+      var _kitOut = (kind === "deliver" || kind === "issue") ? await kitParts(product0, q) : null;
       // block moves that would drive on-hand negative at the source (manager can override + confirm)
       var _outKinds = { deliver: 1, issue: 1, scrap: 1, transfer: 1 };
-      if (_outKinds[kind] && src) {
+      if (_outKinds[kind] && src && !(_kitOut && _kitOut.length)) {
         var _avail = ((await onHandByLoc())[pid] || {})[src] || 0;
         if (q > _avail + 1e-6) {
           var _msg = "Only " + (Math.round(_avail * 100) / 100) + " on hand here; you're moving " + q + ".";
@@ -18898,6 +19134,43 @@
           if (!confirm(_msg + " Post anyway and allow negative stock?")) return;
         }
       }
+      // the destination's storage category can say it is full: a warning, because
+      // a capacity is an intention and the goods are already on the dock
+      if (dest) {
+        var _capMsg = await capacityWarning(dest, q);
+        if (_capMsg && !confirm(_capMsg + "\n\nPut it there anyway?")) return;
+      }
+      // One move per component, each valued and posted on its own, so the ledger
+      // and the counts both stay right.
+      if (_kitOut && _kitOut.length) {
+        var _shortOf = [];
+        for (var _k = 0; _k < _kitOut.length; _k++) {
+          var _c = _kitOut[_k];
+          if (_c.product.type !== "storable" && _c.product.type !== "consumable") continue;
+          var _have = ((await onHandByLoc())[_c.product.id] || {})[src] || 0;
+          if (_c.qty > _have + 1e-6) _shortOf.push(_c.product.name + " (" + (Math.round(_have * 100) / 100) + " on hand, " + (Math.round(_c.qty * 100) / 100) + " needed)");
+        }
+        if (_shortOf.length) {
+          var _km = "Not enough stock for " + _shortOf.length + " component" + (_shortOf.length === 1 ? "" : "s") + ":\n" + _shortOf.join("\n");
+          if (!canManageApp("inventory")) { toast(_km.replace(/\n/g, " ")); return; }
+          if (!confirm(_km + "\n\nPost anyway and allow negative stock?")) return;
+        }
+        var _done = 0;
+        for (var _k2 = 0; _k2 < _kitOut.length; _k2++) {
+          var _c2 = _kitOut[_k2], _cb = baseFor(_c2.product, _c2.qty);
+          var _crow = { company_id: S.company.id, product_id: _c2.product.id, quantity: _c2.qty, uom: _c2.product.uom || "Unit", location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() };
+          if (await baseColsReady()) { _crow.base_qty = _cb.baseQty; _crow.base_uom = _cb.baseUom; _crow.pack_factor = _cb.factor; }
+          var _cr = await sb.from("stock_moves").insert(_crow).select("id").single();
+          if (_cr.error) { toast("Could not save " + _c2.product.name + ": " + errMsg(_cr.error)); return; }
+          if (vkind) await postStockValue(vkind, _c2.product, _c2.qty, _cr.data && _cr.data.id, projId);
+          _done++;
+        }
+        m.remove();
+        toast((product0.name || "Kit") + ": " + _done + " component" + (_done === 1 ? "" : "s") + " drawn down" + (kind === "issue" ? " and charged to the project" : "") + ".");
+        renderOnHand();
+        return;
+      }
+      if (_kitOut && !_kitOut.length) toast("This kit has no components, so the kit itself moved. Add its parts on the product form.");
       var _b = baseFor(product0, q);
       var _row = { company_id: S.company.id, product_id: pid, quantity: q, uom: stockUnit, location_id: src, location_dest_id: dest, project_id: projId, state: "done", date: new Date().toISOString() };
       if (await baseColsReady()) { _row.base_qty = _b.baseQty; _row.base_uom = _b.baseUom; _row.pack_factor = _b.factor; }

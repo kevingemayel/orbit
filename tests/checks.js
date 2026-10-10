@@ -508,6 +508,33 @@
         return ok(steps.length + " screens, " + kinds.length + " question kinds, all resolved through the app map");
       } },
 
+    { name: "the inventory rules drive the stock paths",
+      why: "Putaway rules, storage categories, kit components, delivery methods and package types were all screens you could fill in that changed nothing: goods landed in the first stock location whatever the rule said, a shelf went past its capacity in silence, a kit left the shelf as itself, and a carrier was never asked for. Each table had a tidy configuration screen, so nothing looked wrong. This check holds the wiring in place: the engine must exist AND be called from the paths that move stock.",
+      run: function (src) {
+        var need = [
+          ["the putaway engine", /async function putawayLoc\(/],
+          ["the capacity check", /async function capacityWarning\(/],
+          ["the kit explosion", /async function kitParts\(/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // the helpers are useless unless the stock paths call them: a definition with
+        // no caller is exactly the shape of the bug this check exists for
+        var callers = [
+          ["putawayLoc", 2], // the goods receipt and the stock modal
+          ["capacityWarning", 2], // the goods receipt and the stock modal
+          ["kitParts", 2] // the modal's note and its save
+        ];
+        var thin = callers.filter(function (c) { return all(src, new RegExp("[^n] " + c[0] + "\\(|await " + c[0] + "\\(", "g")).length < c[1]; });
+        if (thin.length) return bad("defined but barely called: " + thin.map(function (c) { return c[0]; }).join(", "));
+        // and the delivery note has to read the two carrier tables
+        var a = src.indexOf("async function renderDeliveryNoteForm"), b = src.indexOf("COMPANIES (create / subcompany)");
+        var dn = (a >= 0 && b > a) ? src.slice(a, b) : "";
+        var missTbl = ["delivery_methods", "package_types"].filter(function (t) { return dn.indexOf(t) < 0; });
+        if (missTbl.length) return bad("the delivery note never reads: " + missTbl.join(", "));
+        return ok("putaway, capacity and kits all called from the stock paths; the delivery note reads both carrier tables");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

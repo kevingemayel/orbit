@@ -24,7 +24,7 @@ orbitScreenHelp({
 
   "inv.onhand": {
     title: "Overview",
-    what: "The <b>On Hand</b> screen is the front page of Inventory. It lists every stocked product with how many you have, its unit, its cost and what that stock is worth, with three tiles on top: <b>Total stock value</b>, <b>Low-stock items</b> and <b>Expiring / expired lots</b>. It is also where you move stock by hand: receive goods, issue material to a project, deliver, transfer between locations and correct a count.",
+    what: "The <b>On Hand</b> screen is the front page of Inventory. It lists every stocked product with how many you have, its unit, its cost and what that stock is worth, with three tiles on top: <b>Total stock value</b>, <b>Low-stock items</b> and <b>Expiring / expired lots</b>. A product that comes in variations carries its variants' total under its own figure, and each variant is marked <b>variant</b>; a <b>kit</b> is marked too, because delivering one draws down its components rather than the kit. It is also where you move stock by hand: receive goods, issue material to a project, deliver, transfer between locations and correct a count.",
     when: [
       "You want to know how much of an item you hold, what it is worth, or how much sits at one location.",
       "Goods have arrived without a purchase order and need booking into stock (<span class='man-key'>Receive</span>).",
@@ -52,8 +52,9 @@ orbitScreenHelp({
       ["Description (Receive line)", "Fills from the product name. Change it if the paperwork says something different.", "auto"],
       ["Unit (Receive line)", "The unit you are counting in. If Units of Measure holds a conversion to the product's stock unit, Orbit stores the converted quantity.", "optional"],
       ["Qty received (Receive line)", "How many arrived. Lines left at zero are ignored.", "required"],
+      ["Put away to (Receive line)", "The stock location this line lands in. It is filled in from your <b>Putaway Rules</b> (the rule on the product beats the rule on its category) and from <i>Factory</i> when that is the destination; change it and your choice stands for this receipt. The column appears once there is a choice to make. If the location sits in a storage category with a capacity, Orbit says so before posting when the receipt would overfill it.", "optional"],
       ["Destination (Receive line)", "<i>Warehouse</i> puts the goods into stock, <i>Factory</i> into the Factory (WIP) location, <i>Site</i> sends them straight to a job: a Site line is not added to stock and posts nothing from this form.", "optional"],
-      ["Product (Issue, Deliver, Transfer, Adjust)", "The stocked item. The camera button next to it scans a barcode or QR code and selects the matching product.", "required"],
+      ["Product (Issue, Deliver, Transfer, Adjust)", "The stocked item. The camera button next to it scans a barcode or QR code and selects the matching product. Picking a <b>kit</b> on Deliver or Issue says which components will leave stock instead of the kit; picking anything on Receive says which location its putaway rule sends it to.", "required"],
       ["Project / site (Issue to Project)", "The job the material is used on. Only active projects are listed.", "required"],
       ["Location / From location / To location", "Which stock location is affected. Transfer asks for both and they must differ. Shown when the company has more than one internal location; otherwise the main stock location is used.", "optional"],
       ["Quantity / Counted quantity on hand", "How many you are moving. For Adjust it is what you actually counted, and Orbit posts the difference.", "required"],
@@ -257,7 +258,7 @@ orbitScreenHelp({
 
   "dn.list": {
     title: "Delivery Notes",
-    what: "A <b>delivery note</b> is the paperwork that travels with goods: who they went to, which job, the address, and what was on the load. One note can mix stock products, the output of a production run and made-to-size project materials. It is a record only: saving or marking it Delivered does not change stock or post anything.",
+    what: "A <b>delivery note</b> is the paperwork that travels with goods: who they went to, which job, the address, what was on the load, and under <i>Carrier and packing</i> how it travelled and in how many packages. One note can mix stock products, the output of a production run and made-to-size project materials. <b>Print</b> gives the driver a slip with two signature lines, one for whoever hands the goods over and one for whoever receives them. It is still paperwork: saving it, or marking it Delivered, does not change stock or post anything, so use Issue or Deliver on the On Hand screen to move the stock itself.",
     when: [
       "Goods are leaving for a customer or a site and the driver needs a list to hand over.",
       "You want a numbered record of what was sent where, grouped by customer or status.",
@@ -285,13 +286,17 @@ orbitScreenHelp({
       ["Description (on a line)", "What the line is. Filled from the item when empty.", "optional"],
       ["Qty (on a line)", "How many were sent.", "optional"],
       ["Unit (on a line)", "The unit of the quantity. Picking a stock product fills its unit; <i>+ Add a unit...</i> creates a new one.", "optional"],
-      ["Notes", "Anything the driver or the customer should know.", "optional"]
+      ["Notes", "Anything the driver or the customer should know.", "optional"],
+      ["Delivery method, Carrier charge", "How the load travels, from <b>Delivery Methods</b>. Picking a method fills in its standard price, which you can change for this delivery.", "optional"],
+      ["Package type, Packages", "The box, crate or pallet from <b>Package Types</b>, and how many went on the load. Both print on the note.", "optional"],
+      ["Tracking reference", "The carrier's waybill or consignment number.", "optional"]
     ],
     buttons: [
       ["New", "Starts a blank delivery note."],
       ["+ Add item", "Adds another line."],
       ["&times; (on a line)", "Removes that line."],
       ["Save", "Saves the note and all its lines, then returns to the list. Saving again rewrites the lines with what is on screen."],
+      ["Print", "Prints the slip the driver carries: the items, the carrier and packing, and two signature lines, one for whoever hands the goods over and one for whoever receives them."],
       ["Discard", "Returns to the list without saving."],
       ["Select, then Delete", "In the list, tick notes and delete them for good."],
       ["Group By / Kanban view", "Group by Status or Customer, or see the notes as a board by status."]
@@ -827,7 +832,7 @@ orbitScreenHelp({
 
   "inv.storage": {
     title: "Storage Categories",
-    what: "A <b>storage category</b> describes a kind of storage space, such as frozen pallet racking or a small-parts shelf, with its maximum weight, its capacity and notes. At the moment it is a reference list: receipts, transfers and locations do not check it, and no other screen reads it.",
+    what: "A <b>storage category</b> describes a kind of storage space, such as frozen pallet racking or a small-parts shelf, with its maximum weight, its capacity and notes. Put a category on a location and its <b>capacity</b> is checked: receiving or transferring stock into that location warns, before anything is posted, when the move would take it past the number of units the category allows. You can still go ahead, because a capacity is an intention and the goods are already on the dock. The <b>maximum weight</b> is a note for your team, because Orbit does not hold a weight for every product.",
     when: [
       "You want one written list of the kinds of storage you have and their limits.",
       "You are planning how locations will be organised."
@@ -866,7 +871,7 @@ orbitScreenHelp({
 
   "inv.putaway": {
     title: "Putaway Rules",
-    what: "A <b>putaway rule</b> says where a product, or every product in a category, should be stored: <i>when</i> it is this item, <i>store at</i> this location. The list is your team's reference for where goods belong. Orbit does not apply it on its own: the Goods Receipt form sends Warehouse lines to the main stock location, and you move them with Transfer.",
+    what: "A <b>putaway rule</b> says where a product, or every product in a category, should be stored: <i>when</i> it is this item, <i>store at</i> this location. Orbit applies it when goods arrive. A Goods Receipt shows a <b>Put away to</b> column filled in from the rules, and the stock lands there instead of in the main stock location; the Receive stock dialog does the same and says which rule it followed. A rule naming the product beats a rule naming its category, and a lower sequence beats a higher one. Change the location on the line and your choice stands for that receipt.",
     when: [
       "New staff need to know where each kind of goods is put away.",
       "You want one agreed place per product or category written down.",
@@ -910,7 +915,7 @@ orbitScreenHelp({
 
   "inv.delivery": {
     title: "Delivery Methods",
-    what: "A <b>delivery method</b> is one way you send goods out: your own van, a courier, a pallet carrier, customer collection. Each has a name, the carrier, a price and notes, and can be switched off when you stop using it. It is a reference list: delivery notes and orders do not pick from it yet.",
+    what: "A <b>delivery method</b> is one way you send goods out: your own van, a courier, a pallet carrier, customer collection. Each has a name, the carrier, a price and notes, and can be switched off when you stop using it. A <b>delivery note</b> picks one under <i>Carrier and packing</i>: the method fills in its standard charge, which you can change for that delivery, and the method, the packing and any tracking reference print on the note the driver carries.",
     when: [
       "You want the ways you ship, and what each costs, written down in one place.",
       "You change courier and want the old one switched off rather than lost."
@@ -941,7 +946,7 @@ orbitScreenHelp({
     after: "Nothing else changes. No accounting, and no delivery charge is added to any document.",
     links: [
       { name: "Delivery Notes", how: "The paperwork for goods going out; the method is not chosen on the note.", to: "dn.list" },
-      { name: "Package Types", how: "The other shipping reference list.", to: "inv.packages" }
+      { name: "Package Types", how: "The boxes and pallets a delivery note counts.", to: "inv.packages" }
     ],
     mistakes: [
       ["A method was deleted by mistake", "Delete on the dialog does not ask first. Create it again."],
@@ -954,7 +959,7 @@ orbitScreenHelp({
 
   "inv.packages": {
     title: "Package Types",
-    what: "A <b>package type</b> is a standard box, crate or pallet you ship in, with its length, width, height and maximum weight. It is a reference list for whoever packs the goods: no other screen reads it yet, so nothing is calculated from it.",
+    what: "A <b>package type</b> is a standard box, crate or pallet you ship in, with its length, width, height and maximum weight. A <b>delivery note</b> records which one a load went on and how many, under <i>Carrier and packing</i>, and prints it: \"4 x Euro pallet\" is what the driver and the customer count against. The dimensions and weight limit are there for whoever packs the goods.",
     when: [
       "Packers need the standard sizes and weight limits in one place.",
       "You are agreeing pallet or carton sizes with a carrier."

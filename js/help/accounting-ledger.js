@@ -754,7 +754,7 @@ orbitScreenHelp({
       ["Measurements for the form", "Bar: Length per bar (m) and Weight (kg/m). Sheet: Width, Height, Thickness (mm) and Density. Glass: Configuration, Unit width and height, up to three panes and two cavities, and Ug. Liquid: Container size, Unit and Batch size. Roll: Roll length (m) and Roll weight (kg).", "optional"],
       ["Suppliers &amp; prices: supplier, price, basis, unit, MOQ, lead days, date", "On a saved product. One row per supplier's price; supplier and price are needed to add a row.", "optional"],
       ["Extra barcodes: barcode, label", "On a saved product. Other barcodes that also scan to this item; the barcode is needed.", "optional"],
-      ["Kit components: component, Qty", "On a saved kit. The products it is made of and how many of each; a component is needed.", "optional"],
+      ["Kit components: component, Qty", "On a saved kit. The products it is made of and how many of each; a component is needed. Delivering or issuing the kit draws these down instead of the kit itself, each valued and posted on its own.", "optional"],
       ["Variants: axis and values", "On a saved product. An axis such as Colour with values such as Black, White.", "optional"],
       ["Custom fields", "Any fields your company added for products in Custom Fields. A required one must be filled before saving.", "optional"]
     ],
