@@ -7293,6 +7293,10 @@
       var ls = Number(l.quantity) * Number(l.unit_price) * (1 - (Number(l.discount) || 0) / 100); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
     var total = Number(inv.amount_total != null ? inv.amount_total : sub), due = Number(inv.amount_residual != null ? inv.amount_residual : total);
     var partner = inv.partners ? inv.partners.name : "";
+    var termsBlock = (inv.narration && String(inv.narration).trim())
+      ? '<div style="margin:22px 0 0;border-top:1px solid #ddd;padding-top:12px"><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-bottom:6px">Terms and notes</div>' +
+        '<div style="font-size:11.5px;color:#444;line-height:1.5;white-space:pre-wrap">' + esc(String(inv.narration).trim()) + '</div></div>'
+      : "";
     var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:var(--r-sm);font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
     return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#152030">' +
       '<div style="max-width:640px;margin:0 auto">' +
@@ -7304,6 +7308,7 @@
       '<div class="u-r"><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700">Date</div><div>' + esc(inv.invoice_date || "") + '</div><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-top:6px">Due</div><div>' + esc(inv.due_date || "-") + '</div></div></div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Description</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Qty</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Unit Price</th><th style="text-align:right;padding:8px;border-bottom:1px solid #999;font-size:11px;text-transform:uppercase;color:#666">Amount</th></tr></thead><tbody>' + rows + '</tbody></table>' +
       '<div style="margin-left:auto;width:260px;margin-top:14px;font-size:13px"><div style="display:flex;justify-content:space-between;padding:4px 0"><span>Total</span><span style="font-weight:800">' + cc + ' ' + money(total) + '</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid #ddd"><span>Amount Due</span><span>' + cc + ' ' + money(due) + '</span></div></div>' +
+      termsBlock +
       '<div style="margin-top:28px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center">' + esc(co.name || "Space Work") + ' &middot; sent via Orbit</div>' +
       '</div></body></html>';
   }
@@ -7639,6 +7644,15 @@
       (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
       '<div class="pdoc"><div class="pdt">' + docTitle + '</div>' + (docNum ? '<div class="pnum">' + esc(docNum) + '</div>' : "") + '</div></div>';
   }
+  // The terms a customer actually reads: the scope, the exclusions, the payment
+  // terms, the validity. They are pages long on a facade quotation, so they print
+  // after the totals, in their own block, with the line breaks the author typed.
+  // A document with no terms prints nothing at all here.
+  function pdocTerms(t) {
+    t = String(t == null ? "" : t).trim();
+    if (!t) return "";
+    return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb">' + esc(t) + '</div></div>';
+  }
   function pdocFoot() {
     var t = printTplData();
     var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
@@ -7713,6 +7727,7 @@
       '<div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div>' +
       '<div class="pr ptt"><span>Total</span><span>' + cc + " " + money(tot) + '</span></div>' +
       '<div class="pr"><span>Amount Due</span><span>' + cc + " " + money(due) + '</span></div></div>' +
+      pdocTerms(inv.narration) +
       pdocFoot() + '</div>';
     pdocPrint(html);
   }
@@ -8033,6 +8048,11 @@
       fld("Order Date", editable ? '<input id="o-date" type="date" value="' + (order ? order.date_order || today() : today()) + '">' : '<span class="v">' + esc(order.date_order || "") + '</span>') +
       // the promised date: when the goods are due (on-time scores) or, on a blanket agreement, when it expires
       (isSale ? "" : (function () { var _isBpo = !!(order && /^BPO\//.test(order.number || "")); return fld(_isBpo ? "Valid until" : "Expected delivery", editable ? '<input id="o-dplan" type="date" value="' + esc((order && order.date_planned) || "") + '">' : '<span class="v">' + esc((order && order.date_planned) || "-") + '</span>', _isBpo ? "The last day releases can be drawn against this agreement. After it, Blanket Orders shows it as Expired." : "The date the supplier promised the goods. Vendor Scorecards count a delivery as on time when it is received by this date."); })()) +
+      (isSale ? fld("Valid until", editable
+        ? '<input id="o-valid" type="date" value="' + esc((order && order.validity_date) || "") + '">'
+        : '<span class="v">' + esc((order && order.validity_date) || "-") + '</span>'
+        + ((order && order.validity_date && order.state !== "confirmed" && order.validity_date < today()) ? ' <span class="badge unpaid">Expired</span>' : ""),
+        "The last day the customer can accept these prices. A quotation made from a template takes the template's validity.") : "") +
       fld("Reference / Note", editable ? '<input id="o-ref" value="' + esc(order ? order.note || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(order ? order.note || "" : "") + '</span>') +
       '</div></div>';
     var title = order ? (order.number || (isSale ? "Draft Quotation" : "Request for Quotation")) : "New";
@@ -8041,7 +8061,13 @@
       '<div class="o-sheet">' + smart + '<div class="o-title">' + esc(title) + '</div>' + moneyStrip +
       (amend ? '<div class="ob-banner warn" style="margin:0 0 12px">You are editing a confirmed order. A line already ' + (isSale ? "invoiced" : "received or billed") + ' cannot go below that quantity or be removed, and the ' + (isSale ? "invoices" : "receipts and bills") + ' already made are not changed. The version before your changes is kept in this order\'s history.</div>' : '') +
       revisionNoteHTML(orevs, false, "order") + groups +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Order Lines</div></div><div class="o-nb-pg" id="nbpg"></div></div></div>';
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on" data-t="lines">Order Lines</div><div class="tb" data-t="terms">Terms and notes</div></div>' +
+      '<div class="o-nb-pg" id="nbpg"></div>' +
+      '<div class="o-nb-pg" id="nbterms" style="display:none">' +
+      (editable
+        ? '<textarea id="o-terms" class="o-terms" data-enter="own" placeholder="' + (isSale ? "The scope, the exclusions, the payment terms, the validity: everything the customer reads under the prices. It prints at the end of the quotation." : "Anything the supplier should read with this order. It prints at the end.") + '">' + esc(order ? order.narration || "" : "") + '</textarea>'
+        : (order && order.narration ? '<div class="o-terms-ro">' + esc(order.narration) + '</div>' : '<div class="o-empty">No terms on this document.</div>')) +
+      '</div></div></div>';
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
     wireRevisions(orevs, isSale ? "sale_order" : "purchase_order");
     var _smr = document.getElementById("o-sm-rcp"); if (_smr) _smr.onclick = function () {
@@ -8237,6 +8263,18 @@
       recalc();
     }
     renderLines();
+    // two panes, both kept in the page: switching to the terms and back must not
+    // throw away lines the user has typed but not saved
+    document.querySelectorAll(".o-nb-tabs .tb").forEach(function (tb) {
+      tb.onclick = function () {
+        var wantTerms = tb.dataset.t === "terms";
+        document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.classList.toggle("on", x === tb); });
+        var lp = document.getElementById("nbpg"), tp = document.getElementById("nbterms");
+        if (lp) lp.style.display = wantTerms ? "none" : "";
+        if (tp) tp.style.display = wantTerms ? "" : "none";
+        if (wantTerms) { var ta = document.getElementById("o-terms"); if (ta) ta.focus(); }
+      };
+    });
 
     async function save(confirmIt) {
       var partnerId = document.getElementById("o-partner").value;
@@ -8270,7 +8308,9 @@
           p_snapshot: { order: Object.assign({}, order, { partners: undefined }), partner: order.partners ? order.partners.name : "", lines: linesState } });
         if (rr.error) { toast("Could not edit: " + errMsg(rr.error)); return null; }
       }
-      var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(), project_id: document.getElementById("o-proj") ? (document.getElementById("o-proj").value || null) : null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
+      var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(),
+        narration: document.getElementById("o-terms") ? document.getElementById("o-terms").value : (order ? order.narration : null),
+        validity_date: document.getElementById("o-valid") ? (document.getElementById("o-valid").value || null) : (order ? order.validity_date : null), project_id: document.getElementById("o-proj") ? (document.getElementById("o-proj").value || null) : null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
       if (!isSale) hdr.cost_code_id = document.getElementById("o-costcode") ? (document.getElementById("o-costcode").value || null) : null;
       if (!isSale && document.getElementById("o-dplan")) hdr.date_planned = document.getElementById("o-dplan").value || null;
       var oid = id;
@@ -8357,6 +8397,7 @@
       var partnerName = (ps && ps.value) ? ((partners.filter(function (p) { return p.id === ps.value; })[0] || {}).name || "") : (order && order.partners ? order.partners.name : "");
       var dateV = (document.getElementById("o-date") || {}).value || (order && order.date_order) || "";
       var refV = (document.getElementById("o-ref") || {}).value || (order && order.note) || "";
+      var validV = isSale ? (((document.getElementById("o-valid") || {}).value) || (order && order.validity_date) || "") : "";
       var sub = 0, tax = 0, isPO = !isSale;
       // a supplier sees the project's code, never its name
       var projSel = (document.getElementById("o-proj") || {}).value || (order && order.project_id) || "";
@@ -8394,9 +8435,10 @@
       var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + '<th class="r">Tax</th><th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div>' + pdocPartyAddr(partners.filter(function (p) { return p.id === ((ps && ps.value) || (order && order.partner_id)); })[0]) + '</div>' +
-        '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (validV ? '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(validV) + '</div>' : "") + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
         '<table class="ptab ptab-grid"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div><div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(sub + tax) + '</span></div></div>' +
+        pdocTerms(document.getElementById("o-terms") ? document.getElementById("o-terms").value : (order && order.narration)) +
         pdocFoot() + '</div>';
       pdocPrint(html);
     }
@@ -15801,7 +15843,8 @@
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="qt-tname" value="' + esc(t.name || "") + '" placeholder="Template name"></div>' +
-      fld("Note", '<input id="qt-note" value="' + esc(t.note || "") + '" placeholder="Optional note shown on the quote">') +
+      fld("Validity", '<input id="qt-days" type="number" min="0" step="1" value="' + (t.validity_days == null ? "" : Number(t.validity_days)) + '" placeholder="days, for example 14">', "How long a quotation made from this template stays open. It sets the quotation's Valid until date.") +
+      fld("Terms and notes", '<textarea id="qt-note" class="o-terms" data-enter="own" placeholder="The scope, the exclusions, the payment terms: everything the customer reads under the prices. Every quotation made from this template starts with this text, and prints it.">' + esc(t.note || "") + '</textarea>') +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Template lines</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th>Description</th><th class="u-r">Qty</th><th class="u-r">Unit price</th><th></th></tr></thead><tbody id="qt-lines">' + (lines.length ? lines.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="qt-add" class="o-addln">+ Add line</button></div></div>' +
       '</div>';
     document.getElementById("qt-discard").onclick = function () { go("sale.qtempl"); };
@@ -15822,7 +15865,8 @@
     document.getElementById("qt-add").onclick = function () { document.getElementById("qt-lines").insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
     function readLines() { return [].map.call(document.querySelectorAll("#qt-lines tr"), function (tr, i) { return { product_id: tr.querySelector(".qt-prod").value || null, name: tr.querySelector(".qt-name").value || "", quantity: parseFloat(tr.querySelector(".qt-qty").value) || 1, unit_price: parseFloat(tr.querySelector(".qt-price").value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.name || l.product_id; }); }
     async function persist() {
-      var row = { name: gv("qt-tname") || "Template", note: gv("qt-note") };
+      var row = { name: gv("qt-tname") || "Template", note: gv("qt-note"),
+        validity_days: gv("qt-days") === "" ? null : Math.max(0, parseInt(gv("qt-days"), 10) || 0) };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("quote_templates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
       else { if ((await sb.from("quote_templates").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
@@ -15835,7 +15879,11 @@
     var q = document.getElementById("qt-quote"); if (q) q.onclick = async function () {
       var sid = await persist(); if (!sid) return;
       var tl = readLines();
-      var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, note: gv("qt-note") || ("From template: " + (gv("qt-tname") || "")) };
+      // the terms are the template's reason for existing, so they go onto the
+      // quotation itself (and print with it); Reference stays a short reference,
+      // and Valid until comes from the template's own validity
+      var _days = gv("qt-days") === "" ? null : Math.max(0, parseInt(gv("qt-days"), 10) || 0);
+      var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, narration: gv("qt-note") || null, quote_template_id: sid, validity_date: _days ? isoShift(_days) : null, note: ("From template: " + (gv("qt-tname") || "")) };
       var so = await sb.from("sale_orders").insert(hdr).select("id").single();
       if (so.error) { toast(errMsg(so.error)); return; }
       var sub = 0, ln = tl.map(function (l, i) { sub += l.quantity * l.unit_price; return { company_id: S.company.id, order_id: so.data.id, product_id: l.product_id, name: l.name || "Item", quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price, sequence: (i + 1) * 10 }; });

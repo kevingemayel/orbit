@@ -46,7 +46,9 @@ orbitScreenHelp({
       ["Project", "The job this sale belongs to, if any, listed as its code and name. It is copied onto the invoice you create from the order. <span class='man-key'>+ New</span> opens a small <b>New project</b> box with the project's name and its code, so you can start one on the spot.", "optional"],
       ["Currency", "Always the company currency on this screen. It cannot be changed here.", "auto"],
       ["Order Date", "The date of the offer or the order. It starts as today.", "auto"],
-      ["Reference / Note", "Any note you want on the document, for example the customer's enquiry number. It prints under Reference.", "optional"],
+      ["Valid until", "The last day the customer can accept these prices. A quotation made from a template takes the template's own validity, for example 14 days from today. It prints on the quotation, and once the date has passed an <i>Expired</i> badge shows beside it until the order is confirmed.", "optional"],
+      ["Reference / Note", "A short reference, for example the customer's enquiry number. It prints under Reference. The long text, the scope and the conditions, belongs in Terms and notes.", "optional"],
+      ["Terms and notes (the second tab)", "Everything the customer reads under the prices: the scope, what is excluded, the payment milestones, how long the offer stands. It can be pages long, it keeps the line breaks you type, and it prints at the end of the document and goes out with the emailed copy. A quotation made from a template starts with the template's terms, so this is the copy for this one customer: changing it here never changes the template.", "optional"],
       ["Product (on a line)", "Type part of a name or code to search your products. Picking one fills the description, the unit, the Sales price and the sales tax. When the customer has a pricelist, the price is then replaced by the pricelist price.", "optional"],
       ["Description (on a line)", "What the line is for, as the customer will read it. A line with no description and no amount is ignored when you save.", "optional"],
       ["Qty (on a line)", "How many. It starts at 1.", "required"],
@@ -162,7 +164,8 @@ orbitScreenHelp({
     ],
     how: [
       "Open <b>Sales &rsaquo; Configuration &rsaquo; Quotation Templates</b> and click <span class='man-key'>New</span>. For this example, an events caterer sets up its standard buffet for 50 guests.",
-      "Type the name at the top, for example <i>Buffet for 50</i>, and a short <b>Note</b> such as <i>Includes staff and crockery</i>.",
+      "Type the name at the top, for example <i>Buffet for 50</i>, and set <b>Validity</b> to 14 so every quotation from it stands for a fortnight.",
+      "In <b>Terms and notes</b>, write what the customer reads under the prices: what is included, what is not, the payment milestones. This is the master copy, so it is worth writing once and properly. Every quotation made from this template starts with this text and prints it at the end.",
       "On the first line, pick <i>Buffet menu per guest</i> in <b>Product</b>. You should see the description and the unit price fill in from the product. Set <b>Qty</b> to 50.",
       "Add a line for a service with no product: leave Product on <i>(free text)</i>, type <i>Waiting staff, 4 hours</i> in <b>Description</b>, 1 in Qty and 240.00 in <b>Unit price</b>.",
       "Click <span class='man-key'>Save</span>. You should see <i>Saved</i>.",
@@ -171,7 +174,8 @@ orbitScreenHelp({
     ],
     fields: [
       ["Template name", "What you call the template. Left blank, it saves as <i>Template</i>.", "optional"],
-      ["Note", "A note kept on the template. Create quotation copies it into the quotation's <b>Reference / Note</b>. When the template has no note, the quotation's note reads <i>From template:</i> and the template name.", "optional"],
+      ["Validity", "How many days a quotation made from this template stays open. Create quotation turns it into the quotation's <b>Valid until</b> date, counted from the day you make it. Left empty, the quotation has no end date.", "optional"],
+      ["Terms and notes", "The scope, the exclusions and the payment terms, as long as they need to be. Create quotation copies this onto the quotation itself, where it can be edited for that one customer, and it prints at the end of the document. The quotation's own <b>Reference</b> is set to <i>From template:</i> and the template name, so you can see where it came from.", "optional"],
       ["Product (on a line)", "An item from your products, or <i>(free text)</i> for a line with only a description. Picking a product fills the description and unit price from it, on every line, including lines added with + Add line. A description or price you typed yourself is kept; one that came from the product picked before changes to the new product's.", "optional"],
       ["Description (on a line)", "What the line is for. A line with no description and no product is dropped when you save.", "optional"],
       ["Qty (on a line)", "How many. It starts at 1.", "optional"],
@@ -240,6 +244,7 @@ orbitScreenHelp({
       ["Basis (on a line)", "What the Price is per: each, or for materials per sheet, per m2, per kg, per bar, per metre, per container, per litre, per roll or per linear m. Orbit turns it into a price per item using the size, and the Subtotal uses that.", "optional"],
       ["Destination (on a line)", "Where the goods go when received. <b>Warehouse</b> puts them into stock, <b>Factory</b> into the factory location, <b>Site</b> straight to the job as a cost without entering stock.", "optional"],
       ["Tax (on a line)", "The purchase tax on the line.", "optional"],
+      ["Terms and notes (the second tab)", "Anything the supplier should read with the order: site access, delivery conditions, what counts as complete. It keeps your line breaks and prints at the end of the order.", "optional"],
       ["Untaxed Amount, Taxes, Total", "Worked out from the lines.", "auto"],
       ["Ordered, Billed, Paid, Outstanding (the strip under the title)", "Read from the bills raised against this order, so the order answers for itself. <b>Ordered</b> is the order total; <b>Billed</b> is what the posted bills come to; <b>Paid</b> is what has been settled on them; <b>Outstanding</b> is what is still owed, in red while anything is left. A vendor credit note counts backwards, and a bill still in draft is left out with a note saying so. Beside them, badges say whether the goods are <i>Not received</i>, <i>Partly received</i> or <i>Received</i>, whether the order is <i>Not billed</i>, <i>Partly billed</i> or <i>Billed</i>, and whether it is <i>Unpaid</i>, <i>Partly paid</i> or <i>Paid</i>. Once everything is received, billed and settled it also says <i>Closed</i>. The stage bar at the top follows the same story: RFQ, Purchase Order, Received, Billed, Paid.", "auto"]
     ],

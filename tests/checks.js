@@ -586,6 +586,25 @@
         return ok(reads.length + " reads and both inserts are company-scoped");
       } },
 
+    { name: "the terms a customer reads go out with the document",
+      why: "The terms are the offer. A facade quotation carries four to seven thousand characters of scope, exclusions and payment milestones under the prices, and the whole import from Odoo would be pointless if that text sat in the database and never reached the customer. It has to survive the round trip: read into the form, saved from it, and drawn on the printed page AND in the emailed copy, which is the document most customers actually open. The invoice form had a Narration box for a year with no column behind it, which is exactly how this fails quietly.",
+      run: function (src) {
+        var need = [
+          ["one block, drawn the same way everywhere", /function pdocTerms\(t\) \{/],
+          ["on the printed order", /pdocTerms\(document\.getElementById\("o-terms"\)/],
+          ["on the printed invoice", /pdocTerms\(inv\.narration\)/],
+          ["in the emailed invoice", /var termsBlock = \(inv\.narration/],
+          ["a box to type them in", /id="o-terms" class="o-terms"/],
+          ["saved from the order form", /narration: document\.getElementById\("o-terms"\)/],
+          ["saved from the invoice form", /hdr\.narration = document\.getElementById\("f-narr"\)\.value/],
+          ["the template holds the master copy", /id="qt-note" class="o-terms"/],
+          ["and stamps it onto the quotation", /narration: gv\("qt-note"\) \|\| null/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        return gone.length ? bad("the terms never reach: " + gone.join(", "))
+          : ok(need.length + " places carry the terms");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {
