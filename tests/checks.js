@@ -535,6 +535,57 @@
         return ok("putaway, capacity and kits all called from the stock paths; the delivery note reads both carrier tables");
       } },
 
+    { name: "a heading or a note on a document is honoured everywhere it is drawn",
+      why: "A quotation is not a flat price list: a facade quote reads as a heading, the scope under it in words, then the next heading. A line can be an item, a section or a note, and that only works if EVERY place that draws or totals a line knows the difference. Miss one and the damage is quiet: a note is numbered as a position, or worse, counted into the total. The line type must be read from the database into the form, written back on save, skipped by the arithmetic, and drawn on both the screen and the printed document.",
+      run: function (src) {
+        var need = [
+          ["read into the form", /line_type: l\.line_type \|\| "item"/],
+          ["a row for text lines", /function addTextRow\(/],
+          ["written back on save", /line_type: l\.line_type \|\| "item" \}/],
+          ["left out of the order total", /a heading or a note is in no total/],
+          ["left out of the invoice total", /a heading or a note is in no invoice total/],
+          ["not given a position", /if \(tr\.dataset\.ltype && tr\.dataset\.ltype !== "item"\) \{ c\.textContent = ""; return; \}/],
+          ["drawn on the printed document", /if \(l\.line_type === "section" \|\| l\.line_type === "note"\) \{\s*\n?\s*var cols/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // and the buttons that put one there
+        if (!/id="addsec"/.test(src) || !/id="addnote"/.test(src)) return bad("the Section and Note buttons are not on the form");
+        // and both document forms, not just the order: an invoice carries the
+        // headings of the quotation it came from, and the import brought notes in
+        if ((src.match(/function addTextRow\(/g) || []).length < 2) return bad("only one of the two document forms can hold a heading or a note");
+        if (!/line_type: l\.line_type \|\| "item", product_id: l\.product_id, name: l\.name, account_id: acc/.test(src)) return bad("an invoice made from an order drops the headings");
+        return ok(need.length + " places honour the line type, on both forms, with both buttons");
+      } },
+
+    { name: "a discount on a line reaches every total that quotes it",
+      why: "The discount column existed on a line for a year and nothing read it, so a quotation imported with 40 percent off every line showed its gross: 18,000 on a document whose total is 10,800. A discount is only safe when EVERY total agrees - the line's own subtotal, the document total on screen, the amount saved to the database, the read-only view and the printed page - because a quote that prints one number and saves another is worse than no discount at all.",
+      run: function (src) {
+        var need = [
+          ["the line's own subtotal", /var ln = q \* ru\.unit \* \(1 - disc \/ 100\);/],
+          ["the order total on save", /var lineNet = function \(l\) \{ return l\.quantity \* l\.unit_price \* \(1 - \(Number\(l\.discount\) \|\| 0\) \/ 100\); \};/],
+          ["what is written to the line", /discount: Number\(l\.discount\) \|\| 0, tax_id: l\.tax_id, price_subtotal: l\.quantity \* l\.unit_price \* \(1 -/],
+          ["the printed document", /var ls = Number\(l\.quantity \|\| 0\) \* Number\(l\.unit_price \|\| 0\) \* \(1 - disc \/ 100\);/],
+          ["the invoice line total", /var dsc = parseFloat\(\(tr\.querySelector\("\.l-disc"\) \|\| \{\}\)\.value\) \|\| 0, ln = q \* p \* \(1 - dsc \/ 100\);/],
+          ["a cell to type it in", /class="l-disc num"/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        return gone.length ? bad("the discount never reaches: " + gone.join(", "))
+          : ok(need.length + " places apply the line discount");
+      } },
+
+    { name: "a product tree is read by company, never by organisation",
+      why: "classification_nodes was keyed on org_id, so every company in an organisation saw every other one's Family and Type tree: Space Work opened its product form and found ALGECO's 1,811 brands, series and models in the pickers. A catalogue's structure is as private as the catalogue itself. Migration 217 put a company on the node and scoped the policies to it, and this check keeps the app on the same side of the line, because the two failures are silent: a read left on org_id now returns nothing at all, and an insert that forgets the company writes a node no screen can ever show.",
+      run: function (src) {
+        var reads = src.match(/from\("classification_nodes"\)[^;]*?\.eq\("(company_id|org_id)"/g) || [];
+        var byOrg = reads.filter(function (r) { return /org_id/.test(r); });
+        if (!reads.length) return bad("nothing reads classification_nodes any more");
+        if (byOrg.length) return bad(byOrg.length + " classification read(s) still filter on org_id");
+        if (!/classification_nodes"\)\.insert\(\{ company_id: S\.company\.id/.test(src)) return bad("the single-node insert does not stamp the company");
+        if (!/want\[k\] = \{ company_id: S\.company\.id, org_id: S\.company\.org_id, tree: spec\.tree/.test(src)) return bad("the bulk tree import does not stamp the company");
+        return ok(reads.length + " reads and both inserts are company-scoped");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

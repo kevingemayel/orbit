@@ -179,7 +179,8 @@ orbitScreenHelp({
       ["Product (on a line)", "Only shown when you have products. Choosing one fills the description, its sale price, its income account and its sales tax.", "optional"],
       ["Description (on a line)", "What you are charging for, as it prints on the invoice. A line left blank is saved as <i>Service</i>.", "optional"],
       ["Revenue Account (on a line)", "Hidden until you click Show accounting detail. The income account the line posts to. It starts on the first income account in your chart (the lowest code), or on the product's income account when you pick a product, so check it when the line is unusual.", "optional"],
-      ["Qty and Unit Price (on a line)", "How many, and the price of one before tax. The line's Subtotal is the two multiplied. An invoice cannot be posted with a zero total.", "required"],
+      ["Qty and Unit Price (on a line)", "How many, and the price of one before tax. An invoice cannot be posted with a zero total.", "required"],
+      ["Disc % (on a line)", "A percentage off this one line. The line's Subtotal is Qty times Unit Price less the discount, and at 0 it is simply the two multiplied. The invoice total, what is posted to the ledger and the printed document all follow it, and the <b>Disc %</b> column prints only when some line has one.", "optional"],
       ["Tax (on a line)", "The VAT on the line, from your taxes marked for sales or for both. Archived taxes are not offered, unless the line already has one. It is added under Taxes and posted to the sales VAT account.", "optional"],
       ["Narration (Other Info tab)", "A free note kept on the invoice. It can be changed until the invoice is posted.", "optional"],
       ["Source (Other Info tab)", "Where the invoice came from: <i>manual</i> when it was typed here.", "auto"],
@@ -355,6 +356,7 @@ orbitScreenHelp({
       ["Description (on a line)", "What is being credited. A line left blank is saved as <i>Service</i>.", "optional"],
       ["Revenue Account (on a line)", "Hidden until you click Show accounting detail. The income account the line reduces, copied from the invoice line.", "optional"],
       ["Qty and Unit Price (on a line)", "What is being credited, before tax. Reduce them to credit only part of the invoice. A credit note cannot be posted with a zero total.", "required"],
+      ["Disc % (on a line)", "A percentage off this one line. The line's Subtotal is Qty times Unit Price less the discount, and at 0 it is simply the two multiplied. The invoice total, what is posted to the ledger and the printed document all follow it, and the <b>Disc %</b> column prints only when some line has one.", "optional"],
       ["Tax (on a line)", "The VAT to give back, normally the same as on the invoice.", "optional"],
       ["Narration (Other Info tab)", "A free note, for example why the credit was given.", "optional"]
     ],
@@ -593,7 +595,8 @@ orbitScreenHelp({
       ["Product (on a line)", "Only shown when you have products. Choosing one fills the description, its cost price, its expense account and its purchase tax.", "optional"],
       ["Description (on a line)", "What the line is for, as it should read in the ledger. A line left blank is saved as <i>Cost</i>.", "optional"],
       ["Expense Account (on a line)", "Hidden until you click <span class='man-key'>Show accounting detail</span>. The account the line posts to. It starts on the first expense account in your chart (the lowest code), or on the product's expense account when you pick a product, so check it for anything out of the ordinary.", "optional"],
-      ["Qty and Unit Price (on a line)", "How many, and the price of one before tax. The line's Subtotal is the two multiplied. A bill cannot be posted with a zero total.", "required"],
+      ["Qty and Unit Price (on a line)", "How many, and the price of one before tax. A bill cannot be posted with a zero total.", "required"],
+      ["Disc % (on a line)", "A percentage off this one line. The line's Subtotal is Qty times Unit Price less the discount, and at 0 it is simply the two multiplied. The invoice total, what is posted to the ledger and the printed document all follow it, and the <b>Disc %</b> column prints only when some line has one.", "optional"],
       ["Tax (on a line)", "The VAT on the line, from your taxes marked for purchases or for both (Accounting &rsaquo; Configuration &rsaquo; Taxes). It is added under Taxes and posted to the purchase VAT account.", "optional"],
       ["Narration (Other Info tab)", "A free note kept on the bill, for example what the purchase was for. It can be changed until the bill is posted.", "optional"],
       ["Amount, Date, Journal and Reference (Register Payment dialog)", "How much is being paid (starting at the full amount still due, and never more than that), the day it was paid (not on or before the lock date), whether it left the Bank or the Cash, and the transfer or cheque number.", "required"]
@@ -684,6 +687,7 @@ orbitScreenHelp({
       ["Description (on a line)", "What is being credited. A line left blank is saved as <i>Cost</i>.", "optional"],
       ["Expense Account (on a line)", "Hidden until you click Show accounting detail. The expense account the line reduces, copied from the bill line.", "optional"],
       ["Qty and Unit Price (on a line)", "What the supplier credited, before tax. A credit note cannot be posted with a zero total.", "required"],
+      ["Disc % (on a line)", "A percentage off this one line. The line's Subtotal is Qty times Unit Price less the discount, and at 0 it is simply the two multiplied. The invoice total, what is posted to the ledger and the printed document all follow it, and the <b>Disc %</b> column prints only when some line has one.", "optional"],
       ["Tax (on a line)", "The VAT on the credit, normally the same as on the bill.", "optional"],
       ["Narration (Other Info tab)", "A free note, for example why the supplier gave the credit.", "optional"]
     ],

@@ -80,6 +80,12 @@ const MUTATIONS = {
   "the inventory rules drive the stock paths":
     s => s.replace(/var want = \(dst === "warehouse"\) \? await putawayLoc\(pr, rcpLocIds\) : null;/, "var want = null;")
       .replace(/var want = await putawayLoc\(p, \(inv\.internal \|\| \[\]\)\.map\(function \(l\) \{ return l\.id; \}\)\);/, "var want = null;"),
+  "a heading or a note on a document is honoured everywhere it is drawn":
+    s => s.replace('if (tr.dataset.ltype && tr.dataset.ltype !== "item") return;   // a heading or a note is in no total', ""),
+  "a discount on a line reaches every total that quotes it":
+    s => s.replace("var ln = q * ru.unit * (1 - disc / 100);", "var ln = q * ru.unit;"),
+  "a product tree is read by company, never by organisation":
+    s => s.replace('.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")', '.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

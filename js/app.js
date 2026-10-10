@@ -6706,7 +6706,7 @@
       fetch: async function () {
         var rows = (await sb.from("products").select("*").eq("company_id", S.company.id).order("name")).data || [];
         // Attach the classification paths so the list can show and group by them.
-        var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,tree").eq("org_id", S.company.org_id)).data || [];
+        var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,tree").eq("company_id", S.company.id)).data || [];
         var byId = {}; nodes.forEach(function (n) { byId[n.id] = n; });
         function path(id) { var out = [], cur = byId[id], g = 0; while (cur && g++ < 8) { out.unshift(cur.name); cur = cur.parent_id ? byId[cur.parent_id] : null; } return out; }
         rows.forEach(function (p) { p._fam = path(p.family_node_id); p._typ = path(p.type_node_id); });
@@ -6974,7 +6974,7 @@
       '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div></div>';
 
     // ---- notebook rendering ----
-    var linesState = lines.map(function (l) { return { name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
+    var linesState = lines.map(function (l) { return { line_type: l.line_type || "item", name: l.name, discount: Number(l.discount) || 0, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
     function renderTab(t) {
       var pg = document.getElementById("nbpg");
       document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.classList.toggle("on", x.dataset.t === t); });
@@ -6991,26 +6991,53 @@
     function renderLines(pg) {
       if (!editable) {
         var body = linesState.map(function (l) {
+          // a heading or a note prints across the table: no figures of its own
+          if (l.line_type === "section" || l.line_type === "note") {
+            return '<tr><td colspan="6" style="' + (l.line_type === "section" ? "font-weight:700;padding-top:9px" : "font-style:italic;color:var(--slate)") + '">' + esc(l.name || "") + '</td></tr>';
+          }
           var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
-          return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td><td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          return '<tr><td>' + esc(l.name) + '</td><td class="num">' + Number(l.quantity) + '</td><td class="num">' + money(l.unit_price) + '</td><td class="num muted">' + (Number(l.discount) ? Number(l.discount) + '%' : '') + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100)) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th class="u-r">Qty</th><th class="u-r">Unit Price</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totalsHTML();
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th>Description</th><th class="u-r">Qty</th><th class="u-r">Unit Price</th><th class="u-r">Disc %</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totalsHTML();
         return;
       }
       var accOpts = accounts.map(function (a) { return '<option value="' + a.id + '">' + esc(a.code + " " + a.name) + '</option>'; }).join("");
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var prodOpts = '<option value="">-</option>' + products.map(function (p) { return '<option value="' + p.id + '">' + esc((p.default_code ? "[" + p.default_code + "] " : "") + p.name) + '</option>'; }).join("");
-      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:150px">Product</th>' : '') + '<th>Description</th><th class="acct-col" style="width:140px;display:none">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
-        '<button class="o-addln" id="addln">+ Add a line</button><button id="acct-toggle" type="button" style="margin-left:10px;background:none;border:none;color:var(--slate);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline">Show accounting detail</button>' + totalsHTML();
+      pg.innerHTML = '<table class="o-lines"><thead><tr>' + (products.length ? '<th style="width:150px">Product</th>' : '') + '<th>Description</th><th class="acct-col" style="width:140px;display:none">' + (isSale ? "Revenue Account" : "Expense Account") + '</th><th style="width:56px;text-align:right">Qty</th><th style="width:96px;text-align:right">Unit Price</th><th style="width:62px;text-align:right" title="Discount off the line, in percent">Disc %</th><th style="width:112px">Tax</th><th style="width:88px;text-align:right">Subtotal</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table>' +
+        '<button class="o-addln" id="addln">+ Add a line</button><button class="o-addln" id="addsec" type="button" title="A heading that groups the lines under it">+ Section</button><button class="o-addln" id="addnote" type="button" title="Free text printed under the line above">+ Note</button><button id="acct-toggle" type="button" style="margin-left:10px;background:none;border:none;color:var(--slate);font:inherit;font-size:12px;cursor:pointer;text-decoration:underline">Show accounting detail</button>' + totalsHTML();
       var lb = document.getElementById("lnbody");
-      function addRow(l) {
+      // An invoice reads the way the quotation it came from reads: a heading, the
+      // scope under it in words, then the next heading. A section and a note are
+      // lines with their own row, no quantity, price or tax, and no part in any
+      // total or in the ledger (post_invoice skips them, migration 216).
+      function addTextRow(l, afterTr) {
+        l = l || {};
+        var isSection = (l.line_type === "section");
         var tr = document.createElement("tr");
+        tr.className = "l-textrow " + (isSection ? "l-section" : "l-note");
+        tr.dataset.ltype = isSection ? "section" : "note";
+        // every column except the actions: product when it shows, description, the
+        // accounting column, qty, price, discount, tax and subtotal
+        var span = (products.length ? 1 : 0) + 7;
+        tr.innerHTML = '<td colspan="' + span + '"><input class="l-name ' + (isSection ? "l-section-in" : "l-note-in") + '" value="' + esc(l.name || "") + '" placeholder="' + (isSection ? "Heading, for example Curtain wall" : "Note printed under the line above") + '"' +
+          (isSection ? ' style="font-weight:700"' : ' style="font-style:italic"') + '></td>' +
+          '<td><button class="del" type="button" title="Remove">&times;</button></td>';
+        if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
+        tr.querySelector(".del").onclick = function () { tr.remove(); recalc(); };
+        return tr;
+      }
+      function addRow(l) {
+        if (l && (l.line_type === "section" || l.line_type === "note")) return addTextRow(l);
+        var tr = document.createElement("tr");
+        tr.dataset.ltype = "item";
         tr.innerHTML =
           (products.length ? '<td><select class="l-prod">' + prodOpts + '</select></td>' : '') +
           '<td><input class="l-name" value="' + esc(l ? l.name : "") + '" placeholder="Description"></td>' +
           '<td class="acct-col" style="display:none"><select class="l-acct">' + accOpts + '</select></td>' +
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l ? l.quantity : 1) + '"></td>' +
           '<td><input class="l-price num" type="number" step="0.01" value="' + (l ? l.unit_price : 0) + '"></td>' +
+          '<td><input class="l-disc num" type="number" step="any" min="0" max="100" value="' + (l && Number(l.discount) ? Number(l.discount) : 0) + '" title="Discount off this line, in percent"></td>' +
           '<td><select class="l-tax">' + taxOpts + '</select></td>' +
           '<td class="num l-sub">0.00</td><td><button class="del">&times;</button></td>';
         lb.appendChild(tr);
@@ -7031,6 +7058,8 @@
         recalc();
       }
       document.getElementById("addln").onclick = function () { addRow(null); };
+      var _asec = document.getElementById("addsec"); if (_asec) _asec.onclick = function () { var r = addTextRow({ line_type: "section" }); var i = r.querySelector(".l-name"); if (i) i.focus(); };
+      var _anote = document.getElementById("addnote"); if (_anote) _anote.onclick = function () { var r = addTextRow({ line_type: "note" }); var i = r.querySelector(".l-name"); if (i) i.focus(); };
       var atog = document.getElementById("acct-toggle");
       if (atog) atog.onclick = function () { var show = pg.querySelector(".acct-col") && pg.querySelector(".acct-col").style.display === "none"; pg.querySelectorAll(".acct-col").forEach(function (c) { c.style.display = show ? "" : "none"; }); atog.textContent = show ? "Hide accounting detail" : "Show accounting detail"; };
       if (linesState.length) linesState.forEach(addRow); else addRow(null);
@@ -7039,16 +7068,21 @@
     function currentLines() {
       var lb = document.getElementById("lnbody"); if (!lb) return linesState;
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
+        if (tr.dataset.ltype && tr.dataset.ltype !== "item") {
+          return { line_type: tr.dataset.ltype, name: (tr.querySelector(".l-name") || {}).value || "", account_id: null, tax_id: null, quantity: 0, unit_price: 0, discount: 0, product_id: null };
+        }
         var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0;
         var ps = tr.querySelector(".l-prod");
-        return { name: tr.querySelector(".l-name").value.trim() || (isSale ? "Service" : "Cost"), account_id: tr.querySelector(".l-acct").value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, product_id: ps ? (ps.value || null) : null };
+        return { line_type: "item", name: tr.querySelector(".l-name").value.trim() || (isSale ? "Service" : "Cost"), account_id: tr.querySelector(".l-acct").value || null, tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: p, discount: parseFloat((tr.querySelector(".l-disc") || {}).value) || 0, product_id: ps ? (ps.value || null) : null };
       });
     }
     function recalc() {
       var lb = document.getElementById("lnbody"); if (!lb) return;
       var sub = 0, tax = 0;
       lb.querySelectorAll("tr").forEach(function (tr) {
-        var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0, ln = q * p;
+        if (tr.dataset.ltype && tr.dataset.ltype !== "item") return;   // a heading or a note is in no invoice total
+        var q = parseFloat(tr.querySelector(".l-qty").value) || 0, p = parseFloat(tr.querySelector(".l-price").value) || 0;
+        var dsc = parseFloat((tr.querySelector(".l-disc") || {}).value) || 0, ln = q * p * (1 - dsc / 100);
         var ts = tr.querySelector(".l-tax"); var amt = ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0;
         sub += ln; tax += ln * amt / 100; tr.querySelector(".l-sub").textContent = money(ln);
       });
@@ -7070,8 +7104,9 @@
         '<div class="r tt"><span class="k">Total</span><span>' + docCcy + " " + money(total) + '</span></div>' + fxHtml;
     }
     if (!editable) { // compute static totals
-      var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-      var tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+      var _inet = function (l) { return (l.line_type && l.line_type !== "item") ? 0 : l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+      var sub0 = linesState.reduce(function (s, l) { return s + _inet(l); }, 0);
+      var tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + _inet(l) * a / 100; }, 0);
       renderTab("lines"); setTotals(sub0, tax0);
     } else renderTab("lines");
     document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.onclick = function () { renderTab(x.dataset.t); }; });
@@ -7085,11 +7120,15 @@
     async function save(alsoPost) {
       var partnerId = document.getElementById("f-partner").value;
       if (!partnerId) { toast("Pick a " + (isSale ? "customer" : "vendor")); return null; }
-      var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name; });
+      var lns = currentLines().filter(function (l) {
+        if (l.line_type && l.line_type !== "item") return !!String(l.name || "").trim();   // an empty heading or note is dropped
+        return l.quantity * l.unit_price || l.name;
+      });
       if (!lns.length) { toast("Add at least one line"); return null; }
-      var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
+      var lineNet = function (l) { return (l.line_type && l.line_type !== "item") ? 0 : l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+      var untax = lns.reduce(function (s, l) { return s + lineNet(l); }, 0);
       var _taxMap = {}; taxes.forEach(function (t) { _taxMap[t.id] = Number(t.amount) || 0; });
-      var taxTot = lns.reduce(function (s, l) { var a = l.tax_id ? (_taxMap[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+      var taxTot = lns.reduce(function (s, l) { var a = l.tax_id ? (_taxMap[l.tax_id] || 0) : 0; return s + lineNet(l) * a / 100; }, 0);
       if (alsoPost && !(untax > 0.005)) { toast("Cannot post an invoice with a zero total. Add amounts to the lines first."); return null; }
       if (isLocked(document.getElementById("f-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return null; }
       var hdr = {
@@ -7118,7 +7157,7 @@
         if (up.error) { toast("Could not save: " + errMsg(up.error)); return null; }
         await sb.from("invoice_lines").delete().eq("invoice_id", id);
       }
-      var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+      var rows = lns.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, line_type: l.line_type || "item", product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, discount: Number(l.discount) || 0, price_subtotal: lineNet(l) }; });
       var lr = await sb.from("invoice_lines").insert(rows);
       if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return null; }
       if (alsoPost) {
@@ -7244,7 +7283,14 @@
     var isRefund = (inv.move_type || "").indexOf("refund") >= 0, isSale = (inv.move_type || "").indexOf("out_") === 0;
     var docName = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Bill");
     var sub = 0;
-    var rows = (lines || []).map(function (l) { var ls = Number(l.quantity) * Number(l.unit_price); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
+    var _ecell = 'padding:8px;border-bottom:1px solid #eee';
+    var rows = (lines || []).map(function (l) {
+      // the email is the document the customer actually reads, so it shows the same
+      // headings, notes and discounted amounts as the printed page
+      if (l.line_type === "section" || l.line_type === "note") {
+        return '<tr><td colspan="4" style="' + _ecell + ';' + (l.line_type === "section" ? "font-weight:700;padding-top:12px" : "font-style:italic;color:#555") + '">' + esc(l.name || "") + '</td></tr>';
+      }
+      var ls = Number(l.quantity) * Number(l.unit_price) * (1 - (Number(l.discount) || 0) / 100); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
     var total = Number(inv.amount_total != null ? inv.amount_total : sub), due = Number(inv.amount_residual != null ? inv.amount_residual : total);
     var partner = inv.partners ? inv.partners.name : "";
     var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:var(--r-sm);font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
@@ -7433,13 +7479,14 @@
     var moveType = isSale ? "out_refund" : "in_refund";
     var cnTaxes = (await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || [];
     var cnTaxMap = {}; cnTaxes.forEach(function (t) { cnTaxMap[t.id] = Number(t.amount) || 0; });
-    var untax = lines.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (cnTaxMap[l.tax_id] || 0) : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+    var _cnet = function (l) { return (l.line_type && l.line_type !== "item") ? 0 : l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+    var untax = lines.reduce(function (s, l) { return s + _cnet(l); }, 0);
+    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (cnTaxMap[l.tax_id] || 0) : 0; return s + _cnet(l) * a / 100; }, 0);
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: inv.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: today(), currency_code: inv.currency_code || S.company.currency_code, state: "draft", ref: "Credit note for " + (inv.number || ""), amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
-    var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price }; });
+    var rows = lines.map(function (l, i) { return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, line_type: l.line_type || "item", product_id: l.product_id, name: l.name, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, discount: Number(l.discount) || 0, price_subtotal: _cnet(l) }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Lines failed: " + errMsg(lr.error)); return; }
     toast("Credit note created (draft)");
@@ -7549,7 +7596,7 @@
         if (ins.error) throw ins.error;
         var rows = (lines || []).map(function (l, i) {
           return {
-            company_id: other.id, invoice_id: ins.data.id, name: l.name, sequence: (i + 1) * 10,
+            company_id: other.id, invoice_id: ins.data.id, name: l.name, sequence: (i + 1) * 10, line_type: l.line_type || "item",
             quantity: l.quantity, unit_price: l.unit_price, discount: l.discount || 0,
             price_subtotal: l.price_subtotal, price_total: l.price_total,
             // the target company's own tax and account, matched above; null falls back
@@ -7639,10 +7686,20 @@
     var docTitle = isSale ? (isRefund ? "Credit Note" : "Invoice") : (isRefund ? "Vendor Credit Note" : "Vendor Bill");
     var partner = inv.partners ? inv.partners.name : "";
     var sub = 0, tax = 0;
+    // the discount column only appears when something on the document is discounted
+    var anyDisc = (lines || []).some(function (l) { return Number(l.discount) > 0; });
     var body = lines.map(function (l) {
+      // a heading or a note prints across the table: no figures, no part in the totals
+      if (l.line_type === "section" || l.line_type === "note") {
+        var cols = (anyDisc ? 6 : 5);
+        return '<tr><td colspan="' + cols + '" style="' + (l.line_type === "section"
+          ? "font-weight:700;padding-top:9px;border-bottom:1px solid #999"
+          : "font-style:italic;color:#444") + '">' + esc(l.name || "") + '</td></tr>';
+      }
       var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
-      var ls = Number(l.quantity) * Number(l.unit_price); sub += ls; tax += ls * amt / 100;
-      return '<tr><td>' + esc(l.name) + '</td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+      var disc = Number(l.discount) || 0;
+      var ls = Number(l.quantity) * Number(l.unit_price) * (1 - disc / 100); sub += ls; tax += ls * amt / 100;
+      return '<tr><td>' + esc(l.name) + '</td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + '<td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
     }).join("");
     var tot = sub + tax, due = Number(inv.amount_residual != null ? inv.amount_residual : tot);
     var html =
@@ -7651,7 +7708,7 @@
       '<div class="pmeta"><div><div class="pl">Bill to</div><div class="pv">' + esc(partner) + '</div>' + pdocPartyAddr(inv.partners) + '</div>' +
       '<div><div class="pl">' + (isSale ? "Invoice Date" : "Bill Date") + '</div><div class="pv">' + esc(inv.invoice_date || "") + '</div>' +
       '<div class="pl u-mt8">Due Date</div><div class="pv">' + esc(inv.due_date || "-") + '</div></div></div>' +
-      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + '<th class="r">Tax</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
       '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div>' +
       '<div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div>' +
       '<div class="pr ptt"><span>Total</span><span>' + cc + " " + money(tot) + '</span></div>' +
@@ -7820,7 +7877,8 @@
   // Because take-off -> RFQ -> PO conversions copy lines in order, position N is the
   // same item across all three documents (and on their prints), so a buyer can say
   // "position 5" and mean the same line everywhere.
-  function posRenumber(tbodyEl) { if (!tbodyEl) return; var i = 0; Array.prototype.forEach.call(tbodyEl.children, function (tr) { var c = tr.querySelector(".pos-cell"); if (c) { i++; c.textContent = i; } }); }
+  // A heading or a note is not a position on the order, so it is not numbered.
+  function posRenumber(tbodyEl) { if (!tbodyEl) return; var i = 0; Array.prototype.forEach.call(tbodyEl.children, function (tr) { var c = tr.querySelector(".pos-cell"); if (c) { if (tr.dataset.ltype && tr.dataset.ltype !== "item") { c.textContent = ""; return; } i++; c.textContent = i; } }); }
   // Where a purchased line is needed. Drives how a goods receipt is routed:
   // warehouse -> into stock (asset), factory -> WIP location, site -> straight to
   // the job as a cost (never stocked). null is treated as warehouse everywhere.
@@ -7995,7 +8053,7 @@
       rm.querySelectorAll("[data-rc]").forEach(function (b) { b.onclick = function () { rm.remove(); renderReceiptView(rcpts[+b.dataset.rc].id); }; });
     };
 
-    var linesState = lines.map(function (l) { return { id: l.id, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: sizeThk(l.size), price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed, qty_invoiced: l.qty_invoiced }; });
+    var linesState = lines.map(function (l) { return { id: l.id, line_type: l.line_type || "item", discount: Number(l.discount) || 0, name: l.name, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id, uom: l.uom, size: l.size, width: l.width, height: l.height, thk: sizeThk(l.size), price_basis: l.price_basis, destination: l.destination, qty_received: l.qty_received, qty_billed: l.qty_billed, qty_invoiced: l.qty_invoiced }; });
     function totHTML() { return '<div class="o-tot" id="o-tot"></div>'; }
     function setTot(sub, tax) { var el = document.getElementById("o-tot"); if (!el) return; el.innerHTML = '<div class="r"><span class="k">Untaxed Amount</span><span>' + S.company.currency_code + " " + money(sub) + '</span></div><div class="r"><span class="k">Taxes</span><span>' + S.company.currency_code + " " + money(tax) + '</span></div><div class="r tt"><span class="k">Total</span><span>' + S.company.currency_code + " " + money(sub + tax) + '</span></div>'; }
     function pById(idv) { return products.filter(function (x) { return x.id === idv; })[0]; }
@@ -8015,9 +8073,11 @@
     function recalc() {
       var lb = document.getElementById("lnbody"); if (!lb) return; var sub = 0, tax = 0, cc0 = S.company.currency_code;
       lb.querySelectorAll("tr").forEach(function (tr) {
+        if (tr.dataset.ltype && tr.dataset.ltype !== "item") return;   // a heading or a note is in no total
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); tr.dataset.up = ru.unit;
-        var ln = q * ru.unit;
+        var disc = parseFloat((tr.querySelector(".l-disc") || {}).value) || 0;
+        var ln = q * ru.unit * (1 - disc / 100);
         var ts = tr.querySelector(".l-tax"); var amt = ts && ts.value ? Number(ts.options[ts.selectedIndex].getAttribute("data-amt")) : 0;
         sub += ln; tax += ln * amt / 100;
         var subEl = tr.querySelector(".l-sub"); if (subEl) subEl.textContent = money(ln);
@@ -8031,16 +8091,29 @@
     function currentLines() {
       var lb = document.getElementById("lnbody"); if (!lb) return linesState;
       return Array.prototype.map.call(lb.querySelectorAll("tr"), function (tr) {
+        // a heading or a note: text and its place on the document, nothing else
+        if (tr.dataset.ltype && tr.dataset.ltype !== "item") {
+          return { id: tr.dataset.lid || null, line_type: tr.dataset.ltype, name: (tr.querySelector(".l-name") || {}).value || "",
+            quantity: 0, unit_price: 0, product_id: null, tax_id: null, price_subtotal: 0 };
+        }
         var q = parseFloat((tr.querySelector(".l-qty") || {}).value) || 0;
         var ru = rowUnit(tr); var ps = tr.querySelector(".l-prod"); var de = tr.querySelector(".l-dest");
-        return { id: tr.dataset.lid || null, name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2, ru.d3), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), thk: (ru.form === "sheet" ? (ru.d3 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
+        return { id: tr.dataset.lid || null, line_type: "item", discount: parseFloat((tr.querySelector(".l-disc") || {}).value) || 0, name: tr.querySelector(".l-name").value.trim() || "Item", tax_id: tr.querySelector(".l-tax").value || null, quantity: q, unit_price: ru.unit, product_id: ps ? (ps.value || null) : null, uom: (tr.querySelector(".l-uom") ? (tr.querySelector(".l-uom").value || null) : null), width: (!isSale && ru.d1) ? ru.d1 : null, height: (!isSale && ru.d2) ? ru.d2 : null, price_basis: ru.basis, size: lineSizeStr(ru.form, ru.d1, ru.d2, ru.d3), destination: (!isSale && de) ? (de.value || null) : null, sw: (ru.form === "sheet" ? (ru.d1 || null) : null), sh: (ru.form === "sheet" ? (ru.d2 || null) : null), sl: (ru.form === "bar" ? (ru.d1 || null) : null), thk: (ru.form === "sheet" ? (ru.d3 || null) : null), area: (ru.form === "sheet" && ru.d1 && ru.d2 ? ru.d1 * ru.d2 / 1e6 : null) };
       });
     }
     function renderLines() {
       var pg = document.getElementById("nbpg");
       if (!editable) {
         var showMatch = !isSale;
+        var _net = function (l) { return l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+        var _pos = 0;
         var body = linesState.map(function (l, _pi) {
+          // a heading or a note reads across the table, with no numbers against it
+          if (l.line_type === "section" || l.line_type === "note") {
+            var wide = showMatch ? 12 : 8;
+            return '<tr><td></td><td colspan="' + wide + '" style="' + (l.line_type === "section" ? "font-weight:700;padding-top:10px" : "font-style:italic;color:var(--ink2)") + '">' + esc(l.name || "") + '</td></tr>';
+          }
+          _pos++;
           var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
           var matchCells = "";
           if (showMatch) {
@@ -8050,15 +8123,15 @@
           }
           var dimCell = "", destCell = "";
           if (showMatch) { var aa = (Number(l.width) || 0) * (Number(l.height) || 0) / 1e6; dimCell = '<td class="muted">' + (l.width && l.height ? esc(l.width + "x" + l.height) + (aa ? ' <span style="opacity:.7">(' + msFmt(aa, 3) + ' m&sup2;)</span>' : "") : esc(l.size || "")) + '</td>'; destCell = '<td>' + destChip(l.destination) + '</td>'; }
-          return '<tr><td class="num muted">' + (_pi + 1) + '</td><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td><td class="muted">' + esc(l.uom || "") + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(l.quantity * l.unit_price) + '</td></tr>';
+          return '<tr><td class="num muted">' + _pos + '</td><td>' + esc(l.name) + '</td>' + dimCell + destCell + '<td class="num">' + Number(l.quantity) + '</td><td class="muted">' + esc(l.uom || "") + '</td>' + matchCells + '<td class="num">' + money(l.unit_price) + '</td><td class="num muted">' + (Number(l.discount) ? Number(l.discount) + '%' : '') + '</td><td>' + (amt ? amt + "%" : "-") + '</td><td class="num">' + money(_net(l)) + '</td></tr>';
         }).join("");
-        pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:38px">Pos</th><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th class="u-r">' + (showMatch ? "Ordered" : "Qty") + '</th><th>Unit</th>' + (showMatch ? '<th class="u-r">Received</th><th class="u-r">Billed</th><th>3-way match</th>' : '') + '<th class="u-r">Unit Price</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
-        var sub0 = linesState.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+        pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:38px">Pos</th><th>Description</th>' + (showMatch ? '<th>Size / area</th><th>Destination</th>' : "") + '<th class="u-r">' + (showMatch ? "Ordered" : "Qty") + '</th><th>Unit</th>' + (showMatch ? '<th class="u-r">Received</th><th class="u-r">Billed</th><th>3-way match</th>' : '') + '<th class="u-r">Unit Price</th><th class="u-r">Disc %</th><th>Tax</th><th class="u-r">Subtotal</th></tr></thead><tbody>' + body + '</tbody></table>' + totHTML();
+        var sub0 = linesState.reduce(function (s, l) { return s + _net(l); }, 0), tax0 = linesState.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + _net(l) * a / 100; }, 0);
         setTot(sub0, tax0); return;
       }
       var taxOpts = '<option value="">No tax</option>' + taxes.map(function (t) { return '<option value="' + t.id + '" data-amt="' + Number(t.amount) + '">' + esc(t.name) + ' (' + Number(t.amount) + '%)</option>'; }).join("");
       var showSize = !isSale;
-      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px" title="Length for bars, thickness for panels">L / Thk</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
+      pg.innerHTML = '<div class="o-lines-wrap"><table class="o-lines o-lines-mat"><thead><tr><th style="width:38px" title="Position - carried through take-off, RFQ and PO">Pos</th><th style="min-width:170px">Product</th><th style="min-width:120px">Description</th>' + (showSize ? '<th style="width:60px">Size W</th><th style="width:60px">Size H</th><th style="width:60px" title="Length for bars, thickness for panels">L / Thk</th><th style="width:80px;text-align:right">Area</th>' : "") + '<th style="width:76px;text-align:right">Qty</th><th style="width:62px">Unit</th><th style="width:84px;text-align:right">Price</th><th style="width:62px;text-align:right" title="Discount off the line, in percent">Disc %</th>' + (showSize ? '<th style="width:100px">Basis</th><th style="width:112px">Destination</th>' : "") + '<th style="width:100px">Tax</th><th style="width:82px;text-align:right">Subtotal</th><th style="width:' + (showSize ? 56 : 24) + 'px"></th></tr></thead><tbody id="lnbody"></tbody></table></div><button class="o-addln" id="addln">+ Add a line</button> <button class="o-addln" id="addsec" title="A heading that groups the lines under it">+ Section</button> <button class="o-addln" id="addnote" title="Free text printed under the line above">+ Note</button>' + (showSize ? '<span class="sub" style="margin-left:12px">Pick a material - the right measure (sheet W&times;H, bar length, container, roll) and price conversions appear automatically. <b>Destination</b> sets where it is delivered (warehouse into stock, factory to fabrication, site straight to the job). <b>+size</b> repeats the item.</span>' : "") + totHTML();
       var lb = document.getElementById("lnbody");
       function priceValueFor(l, info) {
         var basis = l.price_basis || (info.form ? info.basis : "each"), unit = l.unit_price || 0, f = info.form;
@@ -8068,9 +8141,35 @@
         if (f === "roll") { if (basis === "lm") return info.rlen ? unit / info.rlen : 0; if (basis === "kg") return info.rwt ? unit / info.rwt : 0; return unit; }
         return unit;
       }
+      // A quotation is not a flat price list: a facade quote reads as a heading,
+      // the scope under it in words, then the next heading. A section and a note
+      // are lines with their own row, no quantity, price or tax, and no part in
+      // any total. They keep their place in the order and print with it.
+      function addTextRow(l, afterTr) {
+        l = l || {};
+        var isSection = (l.line_type === "section");
+        var tr = document.createElement("tr");
+        tr.className = "l-row l-textrow " + (isSection ? "l-section" : "l-note");
+        tr.dataset.ltype = isSection ? "section" : "note";
+        if (l.id) tr.dataset.lid = l.id;
+        // every column except Pos and the actions: product, description, the four size
+        // columns when they show, qty, unit, price, discount, basis and destination when
+        // they show, tax, subtotal
+        var span = 2 + (showSize ? 4 : 0) + 3 + 1 + (showSize ? 2 : 0) + 2;
+        tr.innerHTML = '<td class="pos-cell num muted"></td>' +
+          '<td colspan="' + span + '"><input class="l-name ' + (isSection ? "l-section-in" : "l-note-in") + '" value="' + esc(l.name || "") + '" placeholder="' + (isSection ? "Heading, for example Curtain wall" : "Note printed under the line above") + '"' +
+          (isSection ? ' style="font-weight:700"' : ' style="font-style:italic"') + '></td>' +
+          '<td class="l-acts"><button class="del" type="button" title="Remove">&times;</button></td>';
+        if (afterTr && afterTr.nextSibling) lb.insertBefore(tr, afterTr.nextSibling); else lb.appendChild(tr);
+        tr.querySelector(".del").onclick = function () { tr.remove(); posRenumber(lb); recalc(); __dirty = true; };
+        posRenumber(lb);
+        return tr;
+      }
       function addRow(l, afterTr) {
         l = l || {};
+        if (l.line_type === "section" || l.line_type === "note") return addTextRow(l, afterTr);
         var tr = document.createElement("tr"); tr.className = "l-row";
+        tr.dataset.ltype = "item";
         var sel = l.product_id ? pById(l.product_id) : null;
         var info = prodMat(sel);
         var basis = l.price_basis || (info.form ? info.basis : "each");
@@ -8081,6 +8180,7 @@
           '<td><input class="l-qty num" type="number" step="0.01" value="' + (l.quantity != null ? l.quantity : 1) + '" style="width:66px"></td>' +
           '<td>' + unitSelectHTML("l-uom", l.uom || "", ordUoms) + '</td>' +
           '<td><input class="l-price num" type="number" step="any" value="' + (priceValue || 0) + '"></td>' +
+          '<td><input class="l-disc num" type="number" step="any" min="0" max="100" value="' + (Number(l.discount) || 0) + '" title="Discount off this line, in percent"></td>' +
           (showSize ? '<td class="l-basis-cell"></td>' : "") +
           (showSize ? '<td><select class="l-dest">' + destOptsHTML(l.destination) + '</select></td>' : "") +
           '<td><select class="l-tax">' + taxOpts + '</select></td><td class="num l-sub">0.00</td>' +
@@ -8131,6 +8231,8 @@
         recalc();
       }
       document.getElementById("addln").onclick = function () { addRow(null); };
+      var _asec = document.getElementById("addsec"); if (_asec) _asec.onclick = function () { var r = addTextRow({ line_type: "section" }); var i = r.querySelector(".l-name"); if (i) i.focus(); __dirty = true; };
+      var _anote = document.getElementById("addnote"); if (_anote) _anote.onclick = function () { var r = addTextRow({ line_type: "note" }); var i = r.querySelector(".l-name"); if (i) i.focus(); __dirty = true; };
       if (linesState.length) linesState.forEach(function (l) { addRow(l); }); else addRow(null);
       recalc();
     }
@@ -8139,10 +8241,14 @@
     async function save(confirmIt) {
       var partnerId = document.getElementById("o-partner").value;
       if (!partnerId) { toast("Pick a " + (isSale ? "customer" : "vendor")); return null; }
-      var lns = currentLines().filter(function (l) { return l.quantity * l.unit_price || l.name !== "Item"; });
+      var lns = currentLines().filter(function (l) {
+        if (l.line_type && l.line_type !== "item") return !!String(l.name || "").trim();   // an empty heading or note is dropped
+        return l.quantity * l.unit_price || l.name !== "Item";
+      });
       if (!lns.length) { toast("Add at least one line"); return null; }
-      var untax = lns.reduce(function (s, l) { return s + l.quantity * l.unit_price; }, 0);
-      var tax = lns.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + l.quantity * l.unit_price * a / 100; }, 0);
+      var lineNet = function (l) { return l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+      var untax = lns.reduce(function (s, l) { return s + lineNet(l); }, 0);
+      var tax = lns.reduce(function (s, l) { var a = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0; return s + lineNet(l) * a / 100; }, 0);
       if (amend) {
         // what was received, billed or invoiced stays: such a line cannot be removed,
         // change product, or drop below that quantity
@@ -8180,7 +8286,7 @@
         if (order && up.ver) order.updated_at = up.ver;   // refresh version so a second save in the same flow (Confirm) doesn't false-conflict
         if (!amend) await sb.from(ltbl).delete().eq("order_id", id);
       }
-      var rows = lns.map(function (l, i) { var row = { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price }; if (!isSale) row.destination = l.destination || null; return row; }); // sale_order_lines has no `destination` column (only purchase side does); omit the key for sales
+      var rows = lns.map(function (l, i) { var row = { company_id: S.company.id, order_id: oid, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, uom: l.uom || null, size: l.size || null, width: l.width || null, height: l.height || null, price_basis: l.price_basis || null, quantity: l.quantity, unit_price: l.unit_price, discount: Number(l.discount) || 0, tax_id: l.tax_id, price_subtotal: l.quantity * l.unit_price * (1 - (Number(l.discount) || 0) / 100), line_type: l.line_type || "item" }; if (!isSale) row.destination = l.destination || null; return row; }); // sale_order_lines has no `destination` column (only purchase side does); omit the key for sales
       if (amend) {
         // a confirmed order keeps its lines, and with them what was received and billed:
         // changed lines are updated in place, new ones added, removed ones deleted
@@ -8265,16 +8371,27 @@
         var area = (l.area != null ? l.area : ((l.width && l.height) ? Number(l.width) * Number(l.height) / 1e6 : null));
         return { w: w, h: h, len: len, thk: thk, area: area };
       }
+      var anyDisc = (lns || []).some(function (l) { return Number(l.discount) > 0; });
+      var _ppos = 0;
       var body = lns.map(function (l, _pi) {
+        // a heading or a note prints across the table: no position, no figures
+        if (l.line_type === "section" || l.line_type === "note") {
+          var cols = (isPO ? 9 : 5) + (anyDisc ? 1 : 0);
+          return '<tr><td colspan="' + cols + '" style="' + (l.line_type === "section"
+            ? "font-weight:700;padding-top:9px;border-bottom:1px solid #999"
+            : "font-style:italic;color:#444") + '">' + esc(l.name || "") + '</td></tr>';
+        }
+        _ppos++;
         var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
-        var ls = Number(l.quantity || 0) * Number(l.unit_price || 0); sub += ls; tax += ls * amt / 100;
+        var disc = Number(l.discount) || 0;
+        var ls = Number(l.quantity || 0) * Number(l.unit_price || 0) * (1 - disc / 100); sub += ls; tax += ls * amt / 100;
         var d = dimOf(l);
         var third = (d.len != null ? d.len : (d.thk != null ? d.thk : ""));
         var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
         // every row names its item: the product, with the line's description (a mark such as GL01) under it
-        return '<tr><td class="r">' + (_pi + 1) + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td><td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+        return '<tr><td class="r">' + _ppos + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + '<td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
       }).join("");
-      var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Tax</th><th class="r">Amount</th>';
+      var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + '<th class="r">Tax</th><th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div>' + pdocPartyAddr(partners.filter(function (p) { return p.id === ((ps && ps.value) || (order && order.partner_id)); })[0]) + '</div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
@@ -8756,7 +8873,7 @@
     var isSale = kind === "sale", moveType = isSale ? "out_invoice" : "in_invoice";
     // read the lines fresh: what was received, billed or invoiced may have moved since the order opened
     var freshL = (await sb.from(isSale ? "sale_order_lines" : "purchase_order_lines").select("*").eq("order_id", order.id)).data;
-    if (freshL && freshL.length) { var freshBy = {}; freshL.forEach(function (f) { freshBy[f.id] = f; }); lines = lines.map(function (l) { var f = l.id ? freshBy[l.id] : null; return f ? Object.assign({}, l, { quantity: f.quantity, unit_price: f.unit_price, tax_id: f.tax_id, qty_received: f.qty_received, qty_billed: f.qty_billed, qty_invoiced: f.qty_invoiced }) : l; }); }
+    if (freshL && freshL.length) { var freshBy = {}; freshL.forEach(function (f) { freshBy[f.id] = f; }); lines = lines.map(function (l) { var f = l.id ? freshBy[l.id] : null; return f ? Object.assign({}, l, { quantity: f.quantity, unit_price: f.unit_price, discount: f.discount, line_type: f.line_type, tax_id: f.tax_id, qty_received: f.qty_received, qty_billed: f.qty_billed, qty_invoiced: f.qty_invoiced }) : l; }); }
     var pids = lines.map(function (l) { return l.product_id; }).filter(Boolean);
     var prods = pids.length ? ((await sb.from("products").select("id,type,income_account_id,expense_account_id").in("id", pids)).data || []) : [];
     var prodBy = {}; prods.forEach(function (p) { prodBy[p.id] = p; });
@@ -8764,15 +8881,38 @@
     // and not billed yet (goods still to arrive are billed when they come); on a service or
     // description line, what was ordered and not billed yet. An invoice takes what is not yet invoiced.
     var heldBack = false;
-    lines = lines.map(function (l) {
+    var _mapped = lines.map(function (l) {
+      if (l.line_type === "section" || l.line_type === "note") return Object.assign({}, l, { _billQty: 0, _already: 0 });
       var ord = Number(l.quantity || 0), p = l.product_id ? prodBy[l.product_id] : null, isStockL = !!(p && (p.type === "storable" || p.type === "consumable"));
       var already = Number((isSale ? l.qty_invoiced : l.qty_billed) || 0);
       var q = (!isSale && isStockL) ? Math.max(0, Math.min(ord, Number(l.qty_received || 0)) - already) : Math.max(0, ord - already);
       q = Math.round(q * 10000) / 10000;
       if (q < ord - already - 0.0001) heldBack = true;
       return Object.assign({}, l, { _billQty: q, _already: already });
-    }).filter(function (l) { return l._billQty > 0.0001; });
-    if (!lines.length) { toast(isSale ? "Nothing left to invoice: every line of this order is already invoiced." : "Nothing to bill yet: everything received on this order is already billed. Receive the goods first, then create the bill."); return; }
+    });
+    // A heading or a note carries no money, so it can never be "left to invoice".
+    // It comes across so the invoice reads the way the order reads, but only where
+    // something under it is on this document: a heading needs an item between it
+    // and the next heading, a note needs the line it sits under.
+    lines = _mapped.filter(function (l, i) {
+      if (l.line_type === "section") {
+        for (var sj = i + 1; sj < _mapped.length; sj++) {
+          if (_mapped[sj].line_type === "section") return false;
+          if (_mapped[sj].line_type !== "note" && _mapped[sj]._billQty > 0.0001) return true;
+        }
+        return false;
+      }
+      if (l.line_type === "note") {
+        for (var nk = i - 1; nk >= 0; nk--) {
+          if (_mapped[nk].line_type === "note") continue;
+          if (_mapped[nk].line_type === "section") return false;
+          return _mapped[nk]._billQty > 0.0001;
+        }
+        return false;
+      }
+      return l._billQty > 0.0001;
+    });
+    if (!lines.some(function (l) { return (l.line_type || "item") === "item"; })) { toast(isSale ? "Nothing left to invoice: every line of this order is already invoiced." : "Nothing to bill yet: everything received on this order is already billed. Receive the goods first, then create the bill."); return; }
     // For a purchase bill, a storable line was already Dr Inventory / Cr Interim at receipt.
     // The bill must clear the Interim (GRNI) account, NOT expense the material again - the cost
     // is recognized only when the stock is issued. Non-stock lines (service/expense) still post
@@ -8780,20 +8920,23 @@
     var _interimAcc = null; if (!isSale) { try { var _ia = await invAccounts(); _interimAcc = _ia && _ia.susp; } catch (e) { } }
     var taxes = (await sb.from("taxes").select("id,amount").eq("company_id", S.company.id)).data || [];
     var taxAmt = {}; taxes.forEach(function (t) { taxAmt[t.id] = Number(t.amount) || 0; });
-    var untax = lines.reduce(function (s, l) { return s + l._billQty * l.unit_price; }, 0);
-    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (taxAmt[l.tax_id] || 0) : 0; return s + l._billQty * l.unit_price * a / 100; }, 0);
+    // the order's own discount travels with the line: billing the gross would
+    // charge a customer more than the quotation they accepted
+    var _onet = function (l) { return (l.line_type && l.line_type !== "item") ? 0 : l._billQty * l.unit_price * (1 - (Number(l.discount) || 0) / 100); };
+    var untax = lines.reduce(function (s, l) { return s + _onet(l); }, 0);
+    var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (taxAmt[l.tax_id] || 0) : 0; return s + _onet(l) * a / 100; }, 0);
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: isoShift(30), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
     if (!isSale && order.cost_code_id) hdr.cost_code_id = order.cost_code_id;   // the bill books to the order's cost code
     var ins = await sb.from("invoices").insert(hdr).select("id").single();
     if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
     var invId = ins.data.id;
-    var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var isStock = p && (p.type === "storable" || p.type === "consumable"); var acc = isSale ? (p ? p.income_account_id : null) : ((isStock && _interimAcc) ? _interimAcc : (p ? p.expense_account_id : null)); return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l._billQty, unit_price: l.unit_price, price_subtotal: l._billQty * l.unit_price }; });
+    var rows = lines.map(function (l, i) { var p = l.product_id ? prodBy[l.product_id] : null; var isStock = p && (p.type === "storable" || p.type === "consumable"); var acc = isSale ? (p ? p.income_account_id : null) : ((isStock && _interimAcc) ? _interimAcc : (p ? p.expense_account_id : null)); return { company_id: S.company.id, invoice_id: invId, sequence: (i + 1) * 10, line_type: l.line_type || "item", product_id: l.product_id, name: l.name, account_id: acc || null, tax_id: l.tax_id, quantity: l._billQty, unit_price: l.unit_price, discount: Number(l.discount) || 0, price_subtotal: _onet(l) }; });
     var lr = await sb.from("invoice_lines").insert(rows);
     if (lr.error) { toast("Invoice lines failed: " + errMsg(lr.error)); return; }
     // add what this document took to each line's invoiced or billed quantity
     for (var i = 0; i < lines.length; i++) {
-      if (!lines[i].id) continue;
+      if (!lines[i].id || (lines[i].line_type || "item") !== "item") continue;
       var _nowDone = Math.round((lines[i]._already + lines[i]._billQty) * 10000) / 10000;
       if (isSale) await sb.from("sale_order_lines").update({ qty_invoiced: _nowDone }).eq("id", lines[i].id);
       else await sb.from("purchase_order_lines").update({ qty_billed: _nowDone }).eq("id", lines[i].id);
@@ -9500,7 +9643,7 @@
     wireBc();
     var p = id === "new" ? { type: "service", is_active: true } : (await sb.from("products").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromProducts();
-    var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    var clsNodes = (await sb.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")).data || [];
     _prCodeAuto = (id === "new" && !p.default_code);   // auto-build the item code from the tree until the user edits it
     var accs = (await allRows(function () { return sb.from("accounts").select("id,code,name,type_code").eq("company_id", S.company.id).eq("is_active", true).order("code"); }));
     var inc = accs.filter(function (a) { return (a.type_code || "").indexOf("income") === 0; });
@@ -10063,7 +10206,7 @@
     wireBc();
     var it = id === "new" ? (seed || { unit: "pcs", status: "planned" }) : (await sb.from("project_items").select("*").eq("id", id).maybeSingle()).data || {};
     await sugSeedFromProducts();
-    var clsNodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    var clsNodes = (await sb.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")).data || [];
     var projects = (await sb.from("projects").select("id,name").eq("company_id", S.company.id).order("name")).data || [];
     _prCodeAuto = false;
     bcTitle(id === "new" ? "New" : (it.name || ""));
@@ -16800,7 +16943,7 @@
       return { names: [(d[keys[0]] || "").trim(), (d[keys[1]] || "").trim(), (d[keys[2]] || "").trim()], code: (d[keys[3]] || "").trim() };
     }).filter(function (r) { return r.names[0]; });
     rows.sort(function (a, b) { return depthOf(a) - depthOf(b); });
-    var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,code,tree").eq("org_id", S.company.org_id)).data || [];
+    var nodes = (await sb.from("classification_nodes").select("id,parent_id,name,code,tree").eq("company_id", S.company.id)).data || [];
     var byKey = {};
     function keyOf(pid, name) { return (pid || "-") + "|" + String(name || "").toLowerCase(); }
     nodes.forEach(function (n) { if (n.tree === spec.tree) byKey[keyOf(n.parent_id, n.name)] = n; });
@@ -16819,7 +16962,7 @@
         if (pid === undefined) return;
         var nm = r.names[depth - 1], k = keyOf(pid, nm), ends = deep === depth, have = byKey[k];
         if (have) { if (ends) { kept++; if (r.code && !have.code) toCode.push({ node: have, code: r.code }); } return; }
-        if (!want[k]) { want[k] = { org_id: S.company.org_id, tree: spec.tree, parent_id: pid || null, name: nm, code: ends && r.code ? r.code : null, sort: sort++ }; order.push(k); }
+        if (!want[k]) { want[k] = { company_id: S.company.id, org_id: S.company.org_id, tree: spec.tree, parent_id: pid || null, name: nm, code: ends && r.code ? r.code : null, sort: sort++ }; order.push(k); }
         else if (ends && r.code && !want[k].code) want[k].code = r.code;
       });
       for (var at = 0; at < order.length && !failed.length; at += 400) {
@@ -16911,7 +17054,7 @@
         // a product row names its type and its family by code, the way the two trees
         // were imported, so a spreadsheet never has to carry an internal id
         if (spec.resolve === "cls") {
-          var clsRows = (await sb.from("classification_nodes").select("id,code,tree").eq("org_id", S.company.org_id)).data || [];
+          var clsRows = (await sb.from("classification_nodes").select("id,code,tree").eq("company_id", S.company.id)).data || [];
           var byCode = {}; clsRows.forEach(function (n) { if (n.code) byCode[n.tree + "|" + String(n.code).trim().toUpperCase()] = n.id; });
           var missing = {};
           payload.forEach(function (row) {
@@ -18144,7 +18287,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Classification") + '</div><div class="o-body" id="o-body"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     var canEdit = !!(S.role && (S.role.full_access || canManage("settings") || canManage("inventory")));
-    var nodes = (await sb.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")).data || [];
+    var nodes = (await sb.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")).data || [];
     function kids(tree, pid) { return nodes.filter(function (n) { return n.tree === tree && (n.parent_id || null) === (pid || null); }).sort(function (a, b) { return (a.sort || 0) - (b.sort || 0) || (a.name > b.name ? 1 : -1); }); }
     function row(n, depth) {
       var ch = kids(n.tree, n.id), canChild = depth < 2;
@@ -18181,7 +18324,7 @@
       var name = gv("cn-name"); if (!name) { toast("Name is required"); return; }
       var code = (gv("cn-code") || "").toUpperCase();
       var r;
-      if (isNew) { r = await sb.from("classification_nodes").insert({ org_id: S.company.org_id, tree: tree, parent_id: parentId || null, name: name, code: code, sort: Math.round(Date.now() / 1000) % 100000 }); }
+      if (isNew) { r = await sb.from("classification_nodes").insert({ company_id: S.company.id, org_id: S.company.org_id, tree: tree, parent_id: parentId || null, name: name, code: code, sort: Math.round(Date.now() / 1000) % 100000 }); }
       else { r = await sb.from("classification_nodes").update({ name: name, code: code }).eq("id", node.id); }
       if (r.error) { toast(errMsg(r.error)); return; }
       m.remove(); toast("Saved"); if (onDone) onDone();
