@@ -8968,6 +8968,9 @@
     var untax = lines.reduce(function (s, l) { return s + _onet(l); }, 0);
     var tax = lines.reduce(function (s, l) { var a = l.tax_id ? (taxAmt[l.tax_id] || 0) : 0; return s + _onet(l) * a / 100; }, 0);
     var hdr = { company_id: S.company.id, move_type: moveType, partner_id: order.partner_id, number: await nextNumber(moveType), invoice_date: today(), due_date: isoShift(30), currency_code: S.company.currency_code, state: "draft", project_id: order.project_id || null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax, amount_residual: untax + tax };
+    // the terms travel with the money: the invoice is the document the customer
+    // keeps, and it has to say the same thing the accepted quotation said
+    if (order.narration) hdr.narration = order.narration;
     hdr[isSale ? "sale_order_id" : "purchase_order_id"] = order.id;
     if (!isSale && order.cost_code_id) hdr.cost_code_id = order.cost_code_id;   // the bill books to the order's cost code
     var ins = await sb.from("invoices").insert(hdr).select("id").single();

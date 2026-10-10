@@ -594,6 +594,7 @@
           ["on the printed order", /pdocTerms\(document\.getElementById\("o-terms"\)/],
           ["on the printed invoice", /pdocTerms\(inv\.narration\)/],
           ["in the emailed invoice", /var termsBlock = \(inv\.narration/],
+          ["carried onto the invoice made from the order", /if \(order\.narration\) hdr\.narration = order\.narration;/],
           ["a box to type them in", /id="o-terms" class="o-terms"/],
           ["saved from the order form", /narration: document\.getElementById\("o-terms"\)/],
           ["saved from the invoice form", /hdr\.narration = document\.getElementById\("f-narr"\)\.value/],
