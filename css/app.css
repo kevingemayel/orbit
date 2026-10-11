@@ -1124,7 +1124,13 @@ body{top:0!important}
 .pinv .pitem-d{font-size:11px;color:#444;margin-top:2px;white-space:pre-wrap}
 .pinv .pterms{margin-top:22px;border-top:1px solid #ddd;padding-top:12px;page-break-inside:auto}
 .pinv .ptermsh{text-transform:uppercase;font-size:10px;color:#777;font-weight:700;letter-spacing:.04em;margin-bottom:6px}
-.pinv .ptermsb{white-space:pre-wrap;font-size:11.5px;line-height:1.55;color:#222}
+.pinv .ptermsb{font-size:11.5px;line-height:1.55;color:#222}
+.pinv .ptermsl{white-space:pre-wrap}
+.pinv .ptermsgap{height:7px}
+.pinv .ptermsh2{font-weight:700;margin:9px 0 3px}
+.pinv .ptermst{border-collapse:collapse;margin:5px 0 9px;width:100%;font-size:11px}
+.pinv .ptermst th,.pinv .ptermst td{border:1px solid #c9c9c9;padding:3px 6px;text-align:left;vertical-align:top}
+.pinv .ptermst th{background:#f2f2f2;font-weight:700}
 .o-terms{width:100%;min-height:320px;font:inherit;font-size:13px;line-height:1.55;resize:vertical;white-space:pre-wrap}
 .o-terms-ro{white-space:pre-wrap;font-size:13px;line-height:1.55;color:var(--ink2);max-height:none}
 .pinv .pfoot{margin-top:30px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center}

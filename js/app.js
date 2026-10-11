@@ -7651,7 +7651,33 @@
   function pdocTerms(t) {
     t = String(t == null ? "" : t).trim();
     if (!t) return "";
-    return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb">' + esc(t) + '</div></div>';
+    // Terms are plain text, but two shapes in them are not prose and should not
+    // print as prose: a row of a table, which the author wrote with " | "
+    // between the cells, and a heading, which carries the indent it was given.
+    // A payment schedule printed as four columns is read in one glance; the same
+    // schedule as a paragraph of pipes is read by nobody.
+    var out = [], tbl = null;
+    function flush() {
+      if (!tbl) return;
+      var rows = tbl.map(function (cells, i) {
+        var tag = i === 0 ? "th" : "td";
+        return '<tr>' + cells.map(function (c) { return '<' + tag + '>' + esc(c) + '</' + tag + '>'; }).join("") + '</tr>';
+      }).join("");
+      out.push('<table class="ptermst">' + rows + '</table>');
+      tbl = null;
+    }
+    String(t).split(/\n/).forEach(function (ln) {
+      if (ln.indexOf(" | ") >= 0) {
+        (tbl = tbl || []).push(ln.trim().split(" | ").map(function (c) { return c.trim(); }));
+        return;
+      }
+      flush();
+      if (/^\t/.test(ln)) out.push('<div class="ptermsh2">' + esc(ln.replace(/^\t+/, "").trim()) + '</div>');
+      else if (!ln.trim()) out.push('<div class="ptermsgap"></div>');
+      else out.push('<div class="ptermsl">' + esc(ln) + '</div>');
+    });
+    flush();
+    return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb">' + out.join("") + '</div></div>';
   }
   function pdocFoot() {
     var t = printTplData();
@@ -7720,9 +7746,9 @@
           : "font-style:italic;color:#444") + '">' + esc(l.name || "") + '</td></tr>';
       }
       var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
-      var disc = Number(l.discount) || 0;
+      var disc = Number(l.discount) || 0, discTxt = disc ? (Math.round(disc * 100) / 100) + "%" : "";
       var ls = Number(l.quantity) * Number(l.unit_price) * (1 - disc / 100); sub += ls; tax += ls * amt / 100;
-      return '<tr><td><div class="pitem-d">' + esc(l.name) + '</div></td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
+      return '<tr><td><div class="pitem-d">' + esc(l.name) + '</div></td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + discTxt + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
     }).join("");
     var tot = sub + tax, due = Number(inv.amount_residual != null ? inv.amount_residual : tot);
     var html =
@@ -8441,11 +8467,12 @@
         var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
         var disc = Number(l.discount) || 0;
         var ls = Number(l.quantity || 0) * Number(l.unit_price || 0) * (1 - disc / 100); sub += ls; tax += ls * amt / 100;
+        var discTxt = disc ? (Math.round(disc * 100) / 100) + "%" : "";
         var d = dimOf(l);
         var third = (d.len != null ? d.len : (d.thk != null ? d.thk : ""));
         var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
         // every row names its item: the product, with the line's description (a mark such as GL01) under it
-        return '<tr><td class="r">' + _ppos + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
+        return '<tr><td class="r">' + _ppos + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + discTxt + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
       }).join("");
       var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + (anyTax ? '<th class="r">Tax</th>' : '') + '<th class="r">Amount</th>';
       var html = '<div class="pinv">' + pdocHead(isSale ? (confirmed ? "Sales Order" : "Quotation") : (confirmed ? "Purchase Order" : "Request for Quotation"), (order && order.number) || "Draft") +
