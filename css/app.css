@@ -1116,8 +1116,30 @@ body{top:0!important}
 .pinv .ptab th{text-align:left;font-size:11px;text-transform:uppercase;color:#666;border-bottom:1px solid #999;padding:8px}
 .pinv .ptab td{padding:8px;border-bottom:1px solid #e2e2e2}
 .pinv .ptab .r{text-align:right}
-.pinv .ptab-grid th,.pinv .ptab-grid td{border:1px solid #d5d5d5}
+/* four table styles, one company-wide choice (print_settings.table_style) */
 .pinv .ptab-grid{border-collapse:collapse}
+.pinv .ptab-grid th,.pinv .ptab-grid td{border:1px solid #d5d5d5}
+.pinv .ptab-lines th{border-bottom:1px solid #999}
+.pinv .ptab-lines td{border-bottom:1px solid #e2e2e2}
+.pinv .ptab-striped th{border-bottom:1px solid #999}
+.pinv .ptab-striped td{border-bottom:0}
+.pinv .ptab-striped tbody tr:nth-child(odd) td{background:#f4f6f8}
+.pinv .ptab-plain th{border-bottom:1px solid #ddd}
+.pinv .ptab-plain td{border-bottom:0}
+/* and how the header row of that table is dressed */
+.pinv .ptabh-shaded th{background:#efefef;color:#333}
+.pinv .ptabh-accent th{background:var(--print-accent,#2f6bff);color:#fff;border-color:var(--print-accent,#2f6bff)}
+/* four footer arrangements, for documents and for page prints alike */
+.pinv .pfoot.pf-left,.pf.pf-left{text-align:left}
+.pinv .pfoot.pf-centered,.pf.pf-centered{text-align:center}
+.pinv .pfoot.pf-rule,.pf.pf-rule{text-align:center;border-top:2px solid var(--print-accent,#2f6bff)}
+.pinv .pfoot.pf-split,.pf.pf-split{display:flex;justify-content:space-between;align-items:baseline;gap:16px;text-align:left}
+.pinv .pfoot.pf-split .pf-co,.pf.pf-split .pf-co{text-align:right}
+.pinv .pfoot .pf-txt{margin-bottom:2px}
+/* and how big the logo prints */
+.ph .ph-logo-small{max-height:34px}
+.ph .ph-logo-medium{max-height:54px}
+.ph .ph-logo-large{max-height:80px;max-width:240px}
 .pinv .psum{margin-left:auto;width:280px;margin-top:14px}
 .pinv .psum .pr{display:flex;justify-content:space-between;padding:5px 0}
 .pinv .psum .ptt{font-weight:800;font-size:16px;border-top:2px solid #111;margin-top:4px;padding-top:8px}
@@ -2126,6 +2148,14 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .cp-mini-5{border-left:5px solid var(--accent);padding-left:8px}
 .cp-tpl-name{font-weight:600;font-size:13px;margin-top:7px;color:var(--ink)}
 .cp-tpl-desc{font-size:11px;color:var(--muted);line-height:1.35;margin-top:2px}
+.cp-sub{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;margin:18px 0 8px;padding-top:12px;border-top:1px solid var(--line)}
+.cp-checks{display:flex;flex-wrap:wrap;gap:8px 16px;padding:2px 0}
+.cp-chk{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--ink);cursor:pointer}
+.cp-chk input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}
+.cp-doc{padding:0;overflow:hidden}
+.cp-doc .pinv{padding:18px 20px;font-size:11.5px}
+.cp-doc .pinv .ph .ph-title{font-size:16px}
+.cp-doc .pinv .psum{width:200px;margin-top:10px}
 .cp-preview-wrap{margin-top:14px}
 .cp-preview-label{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:6px}
 .cp-preview{background:var(--panel2);border:1px solid var(--line);border-radius:var(--r);padding:16px;overflow-x:auto}

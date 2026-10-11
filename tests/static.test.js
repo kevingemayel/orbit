@@ -92,6 +92,8 @@ const MUTATIONS = {
     s => s.replace('.eq("order_id", id).order("sequence").order("id")', '.eq("order_id", id).order("id")'),
   "the letterhead a company picks is the letterhead on its documents":
     s => s.replace('return buildPrintHeader(printTplData(), docTitle, docNum || "");', 'return "<div class=\"phead\"></div>";'),
+  "the header, the table and the footer of a document are each a setting":
+    s => s.replace(/function pdocTableClass\(over\) \{/, "function pdocTableClassGone(over) {"),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

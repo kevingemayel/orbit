@@ -7676,10 +7676,18 @@
     flush();
     return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb">' + out.join("") + '</div></div>';
   }
-  function pdocFoot() {
-    var t = printTplData();
-    var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
-    return '<div class="pfoot">' + (t.footer ? esc(t.footer) + "<br>" : "") + co + '</div>';
+  function pdocFoot(over) {
+    var t = over || printTplData(), p = pdocFooterParts(t);
+    if (!p.note && !p.details) return "";
+    return '<div class="pfoot pf-' + (t.footer_style || "centered") + '">' +
+      (p.note ? '<div class="pf-txt">' + esc(p.note) + '</div>' : "") +
+      (p.details ? '<div class="pf-co">' + p.details + '</div>' : "") + '</div>';
+  }
+  // The table on a document: the same four styles everywhere, so a quotation, an
+  // invoice and a delivery note look like they came from the same company.
+  function pdocTableClass(over) {
+    var t = over || printTplData();
+    return "ptab ptab-" + (t.table_style || "grid") + " ptabh-" + (t.table_head || "plain");
   }
   // The item a printed order or RFQ line is for: the product's name, with the line's
   // own description under it when it says something more (a position mark such as GL01)
@@ -7761,7 +7769,7 @@
       '<div class="pmeta"><div><div class="pl">Bill to</div><div class="pv">' + esc(partner) + '</div>' + pdocPartyAddr(inv.partners) + '</div>' +
       '<div><div class="pl">' + (isSale ? "Invoice Date" : "Bill Date") + '</div><div class="pv">' + esc(inv.invoice_date || "") + '</div>' +
       '<div class="pl u-mt8">Due Date</div><div class="pv">' + esc(inv.due_date || "-") + '</div></div></div>' +
-      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + (anyTax ? '<th class="r">Tax</th>' : '') + '<th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<table class="' + pdocTableClass() + '"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + (anyTax ? '<th class="r">Tax</th>' : '') + '<th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
       '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div>' +
       '<div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div>' +
       '<div class="pr ptt"><span>Total</span><span>' + cc + " " + money(tot) + '</span></div>' +
@@ -7781,9 +7789,9 @@
       pdocHead("Payslip", (slip.date_from || "") + " to " + (slip.date_to || "")) +
       '<div class="pmeta"><div><div class="pl">Employee</div><div class="pv">' + esc(empName || "") + '</div></div>' +
       '<div><div class="pl">Worked days</div><div class="pv">' + Number(slip.worked_days || 0) + '</div><div class="pl u-mt8">Overtime hours</div><div class="pv">' + Number(slip.ot_hours || 0) + '</div></div></div>' +
-      '<table class="ptab"><thead><tr><th>Earnings</th><th class="r">Amount</th></tr></thead><tbody>' + rows(earn) + '</tbody></table>' +
-      '<table class="ptab"><thead><tr><th>Deductions</th><th class="r">Amount</th></tr></thead><tbody>' + rows(ded) + '</tbody></table>' +
-      (emp.length ? '<table class="ptab"><thead><tr><th>Employer costs</th><th class="r">Amount</th></tr></thead><tbody>' + rows(emp) + '</tbody></table>' : "") +
+      '<table class="' + pdocTableClass() + '"><thead><tr><th>Earnings</th><th class="r">Amount</th></tr></thead><tbody>' + rows(earn) + '</tbody></table>' +
+      '<table class="' + pdocTableClass() + '"><thead><tr><th>Deductions</th><th class="r">Amount</th></tr></thead><tbody>' + rows(ded) + '</tbody></table>' +
+      (emp.length ? '<table class="' + pdocTableClass() + '"><thead><tr><th>Employer costs</th><th class="r">Amount</th></tr></thead><tbody>' + rows(emp) + '</tbody></table>' : "") +
       '<div class="psum"><div class="pr"><span>Gross</span><span>' + cc + " " + money(slip.gross) + '</span></div>' +
       '<div class="pr"><span>Total deductions</span><span>' + cc + " " + money(slip.total_deductions) + '</span></div>' +
       '<div class="pr ptt"><span>Net pay</span><span>' + cc + " " + money(slip.net) + '</span></div>' +
@@ -8482,7 +8490,7 @@
       var html = '<div class="pinv">' + pdocHead(isSale ? (confirmed ? "Sales Order" : "Quotation") : (confirmed ? "Purchase Order" : "Request for Quotation"), (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div>' + pdocPartyAddr(partners.filter(function (p) { return p.id === ((ps && ps.value) || (order && order.partner_id)); })[0]) + '</div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (validV ? '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(validV) + '</div>' : "") + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
-        '<table class="ptab ptab-grid"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
+        '<table class="' + pdocTableClass() + '"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div><div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(sub + tax) + '</span></div></div>' +
         pdocTerms(document.getElementById("o-terms") ? document.getElementById("o-terms").value : (order && order.narration)) +
         pdocFoot() + '</div>';
@@ -10602,7 +10610,7 @@
         (gv("dn-shipto") ? '<div class="pl u-mt8">Ship to</div><div class="pv">' + esc(gv("dn-shipto")) + '</div>' : "") + '</div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(gv("dn-date") || today()) + '</div>' +
         (prj.name ? '<div class="pl u-mt8">Project</div><div class="pv">' + esc(prj.name) + '</div>' : "") + ship + '</div></div>' +
-        '<table class="ptab ptab-grid"><thead><tr><th class="r">Pos</th><th>Item</th><th class="r">Qty</th><th>Unit</th></tr></thead><tbody>' + (body || '<tr><td colspan="4">No items</td></tr>') + '</tbody></table>' +
+        '<table class="' + pdocTableClass() + '"><thead><tr><th class="r">Pos</th><th>Item</th><th class="r">Qty</th><th>Unit</th></tr></thead><tbody>' + (body || '<tr><td colspan="4">No items</td></tr>') + '</tbody></table>' +
         (gv("dn-notes") ? '<div style="margin-top:10px;font-size:11.5px;color:#444">' + esc(gv("dn-notes")) + '</div>' : "") +
         '<div style="display:flex;gap:40px;margin-top:34px;font-size:11.5px;color:#444">' +
         '<div style="flex:1"><div style="border-top:1px solid #999;padding-top:4px">Delivered by (name, signature, date)</div></div>' +
@@ -17570,7 +17578,7 @@
         var html = '<div class="pinv">' + pdocHead("Request for Quotation", rfq.number || "RFQ") +
           '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div>' + (rfqCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(rfqCode) + '</div>' : '') + '</div><div><div class="pl">Reply by</div><div class="pv">' + esc(rfq.deadline || "-") + '</div></div></div>' +
           '<div style="margin:2px 0 12px;color:#444;font-size:12px">Please quote your best price for each item below' + (rfq.note ? '. ' + esc(rfq.note) : '') + '.</div>' +
-          '<table class="ptab"><thead><tr><th class="r">Pos</th><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
+          '<table class="' + pdocTableClass() + '"><thead><tr><th class="r">Pos</th><th>Item</th><th>Size / measure</th><th class="r">Qty</th><th>Unit</th><th class="r" style="width:130px">Your price</th></tr></thead><tbody>' + body + '</tbody></table>' +
           pdocFoot() + '</div>';
         pdocPrint(html);
       }
@@ -17592,7 +17600,7 @@
         var totCells = V.map(function (v) { return '<td class="r"' + (v.partner_id === cheapest ? ' style="font-weight:800"' : '') + '>' + money(vt[v.partner_id]) + '</td>'; }).join("");
         var html = '<div class="pinv">' + pdocHead("Quotation Comparison", rfq.number || "RFQ") +
           '<div class="pmeta"><div><div class="pl">Subject</div><div class="pv">' + esc(rfq.title || "") + '</div></div><div><div class="pl">Suppliers</div><div class="pv">' + V.length + '</div></div></div>' +
-          '<table class="ptab"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '<tr class="u-b"><td>Total</td><td></td>' + totCells + '</tr></tbody></table>' +
+          '<table class="' + pdocTableClass() + '"><thead><tr>' + head + '</tr></thead><tbody>' + rows + '<tr class="u-b"><td>Total</td><td></td>' + totCells + '</tr></tbody></table>' +
           (cheapest ? '<div style="margin-top:12px;font-size:13px"><b>Lowest total:</b> ' + esc(vname(cheapest)) + ' - ' + S.company.currency_code + ' ' + money(cmin) + '</div>' : '') +
           pdocFoot() + '</div>';
         pdocPrint(html);
@@ -18002,7 +18010,15 @@
       // Address line 2 (unit, floor) prints on its own line under line 1; it used to be dropped
       address: [p.address, p.address2].filter(Boolean).join("\n"), city: p.city || "", phone: p.phone || "", phone2: p.phone2 || "",
       email: p.email || "", website: p.website || "", logo: (p.logo != null ? p.logo : (ps.logo || "")) || "",
-      template: Number(ps.template || 1), accent: ps.accent || "#2f6bff", footer: ps.footer || (ps.footer === "" ? "" : ""), show_logo: ps.show_logo !== false
+      template: Number(ps.template || 1), accent: ps.accent || "#2f6bff", footer: ps.footer || (ps.footer === "" ? "" : ""), show_logo: ps.show_logo !== false,
+      // How a document is dressed. Each part is separate on purpose: a company can
+      // want a quiet letterhead over a ruled table, or a bold band over a plain one.
+      logo_size: ps.logo_size || "medium",                                     // small | medium | large
+      header_fields: ps.header_fields || ["tagline", "address", "contact"],    // + "tax"
+      table_style: ps.table_style || "grid",                                   // grid | lines | striped | plain
+      table_head: ps.table_head || "plain",                                    // plain | shaded | accent
+      footer_style: ps.footer_style || "centered",                             // centered | left | split | rule
+      footer_fields: ps.footer_fields || ["note", "legal_name", "tax", "phone", "email", "website"]
     };
     if (over) for (var k in over) d[k] = over[k];
     if (!d.taxLabel) d.taxLabel = ((p.localization && p.localization.taxIdLabel) || (countryPack(d.country) || {}).taxIdLabel || "VAT");
@@ -18014,11 +18030,16 @@
   // The five letterheads. "sub" is what prints under the title: today's date on a
   // page or a report, the document's own number on a quotation or an invoice.
   function buildPrintHeader(t, title, sub) {
-    var logo = (t.show_logo && t.logo) ? '<img alt="" class="ph-logo" src="' + t.logo + '">' : "";
-    var nm = esc(pfDisplayName(t)), date = esc(sub != null ? sub : new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
+    var hf = t.header_fields || ["tagline", "address", "contact"];
+    var has = function (k) { return hf.indexOf(k) >= 0; };
+    var logo = (t.show_logo && t.logo) ? '<img alt="" class="ph-logo ph-logo-' + (t.logo_size || "medium") + '" src="' + t.logo + '">' : "";
+    var nm = esc(pfDisplayName(t)), date = esc(sub != null ? sub : new Date().toLocaleDateString()), ttl = esc(title || ""),
+        addr = has("address") ? pfAddr(t) : "", contact = has("contact") ? pfContact(t) : "";
+    var taxLine = (has("tax") && t.vat) ? esc((t.taxLabel || "VAT") + " " + t.vat) : "";
+    if (taxLine) addr = [addr, taxLine].filter(Boolean).join("<br>");
     // the tagline sits under the name on every letterhead, all five templates
-    var tag = t.tagline ? '<div class="ph-tag">' + esc(t.tagline) + '</div>' : "";
-    var addrContact = [addr, contact].filter(Boolean).join(" &middot; ");
+    var tag = (has("tagline") && t.tagline) ? '<div class="ph-tag">' + esc(t.tagline) + '</div>' : "";
+    var addrContact = [addr.replace(/<br>/g, " &middot; "), contact].filter(Boolean).join(" &middot; ");
     var tmpl = t.template || 1;
     if (tmpl === 2) return '<div class="ph ph-t2">' + logo + '<div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '<div class="ph-meta"><span class="ph-title">' + ttl + '</span> &middot; <span class="ph-date">' + date + '</span></div></div>';
     if (tmpl === 3) return '<div class="ph ph-t3"><div class="ph-band"><div class="ph-band-l">' + logo + '<span class="ph-name">' + nm + '</span>' + tag + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>' + (addrContact ? '<div class="ph-subline">' + addrContact + '</div>' : "") + '</div>';
@@ -18026,9 +18047,23 @@
     if (tmpl === 5) return '<div class="ph ph-t5"><span class="ph-rule"></span>' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addrContact ? '<div class="ph-addr">' + addrContact + '</div>' : "") + '</div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
     return '<div class="ph ph-t1"><div class="ph-brand">' + logo + '<div class="ph-co"><div class="ph-name">' + nm + '</div>' + tag + (addr ? '<div class="ph-addr">' + addr + (contact ? "<br>" + contact : "") + '</div>' : (contact ? '<div class="ph-addr">' + contact + '</div>' : "")) + '</div></div><div class="ph-meta"><div class="ph-title">' + ttl + '</div><div class="ph-date">' + date + '</div></div></div>';
   }
+  // The footer of every printed thing, page or document: which details appear is
+  // the company's choice, and so is how they sit on the line.
+  function pdocFooterParts(t) {
+    var ff = t.footer_fields || ["note", "legal_name", "tax", "phone", "email", "website"];
+    var has = function (k) { return ff.indexOf(k) >= 0; };
+    var bits = [];
+    if (has("legal_name")) bits.push(esc(pfDisplayName(t)));
+    if (has("tax") && t.vat) bits.push(esc((t.taxLabel || "VAT") + " " + t.vat));
+    if (has("address")) { var a = [t.address, t.city, t.country].filter(Boolean).join(", ").replace(/\n/g, ", "); if (a) bits.push(esc(a)); }
+    if (has("phone")) { if (t.phone) bits.push(esc(t.phone)); if (t.phone2) bits.push(esc(t.phone2)); }
+    if (has("email") && t.email) bits.push(esc(t.email));
+    if (has("website") && t.website) bits.push(esc(t.website));
+    return { note: has("note") ? String(t.footer || "") : "", details: bits.filter(Boolean).join(" &middot; ") };
+  }
   function buildPrintFooter(t) {
-    var co = [esc(pfDisplayName(t)), (t.vat ? (t.taxLabel || "VAT") + " " + esc(t.vat) : ""), esc(t.phone), esc(t.email), esc(t.website)].filter(Boolean).join(" &middot; ");
-    return '<div class="pf"><div class="pf-txt">' + esc(t.footer || "") + '</div><div class="pf-co">' + co + '</div></div>';
+    var p = pdocFooterParts(t);
+    return '<div class="pf pf-' + (t.footer_style || "centered") + '"><div class="pf-txt">' + esc(p.note) + '</div><div class="pf-co">' + p.details + '</div></div>';
   }
   function currentPrintTitle() { var bcEl = document.querySelector(".o-bc"), titleEl = bcEl ? bcEl.querySelector("span:last-child") : null; return titleEl ? titleEl.textContent.trim() : ((document.querySelector(".o-title") || {}).textContent || "").trim(); }
   function applyPrintFrame(title) {
@@ -18151,6 +18186,21 @@
     var c = (await sb.from("companies").select("*").eq("id", S.company.id).maybeSingle()).data || {};
     var p = c.profile || {}, ps = c.print_settings || {}, soc = p.social || {};
     var ta = 'style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);color:var(--ink);font:inherit;resize:vertical"';
+    // the design settings as they stand, with the same defaults the printers use
+    var tps = printTplData();
+    // the row just read from the database wins over whatever this session had cached
+    ["logo_size", "table_style", "table_head", "footer_style"].forEach(function (k) { if (ps[k]) tps[k] = ps[k]; });
+    if (ps.header_fields) tps.header_fields = ps.header_fields;
+    if (ps.footer_fields) tps.footer_fields = ps.footer_fields;
+    var hfSel = tps.header_fields, ffSel = tps.footer_fields;
+    function cpChecks(key, opts, sel) {
+      return '<div class="cp-checks">' + opts.map(function (o) {
+        return '<label class="cp-chk"><input type="checkbox" data-' + key + '="' + o[0] + '"' + (sel.indexOf(o[0]) >= 0 ? " checked" : "") + '> <span>' + esc(o[1]) + '</span></label>';
+      }).join("") + '</div>';
+    }
+    function cpPicked(key) {
+      return [].map.call(document.querySelectorAll('[data-' + key + ']:checked'), function (x) { return x.getAttribute("data-" + key); });
+    }
     var tmplCards = PRINT_TEMPLATES.map(function (m) {
       return '<label class="cp-tpl" data-tpl="' + m.id + '"><input type="radio" name="cp-tpl" value="' + m.id + '"' + ((Number(ps.template || 1)) === m.id ? " checked" : "") + '><div class="cp-tpl-card"><div class="cp-tpl-mini cp-mini-' + m.id + '"><span class="cm-logo"></span><span class="cm-lines"><span></span><span></span></span></div><div class="cp-tpl-name">' + esc(m.name) + '</div><div class="cp-tpl-desc">' + esc(m.desc) + '</div></div></label>';
     }).join("");
@@ -18197,18 +18247,43 @@
       fld("X (Twitter)", '<input id="cp-x" value="' + esc(soc.x || "") + '">') +
       fld("YouTube", '<input id="cp-youtube" value="' + esc(soc.youtube || "") + '">') +
       '</div></div></div>' +
-      '<div class="card"><h3 class="cp-sec">Print template</h3><div class="sub" style="margin:-4px 0 12px">Pick a header &amp; footer layout. The logo appears on every printout. This is what people see on your documents.</div>' +
+      '<div class="card"><h3 class="cp-sec">Document design</h3><div class="sub" style="margin:-4px 0 12px">The letterhead, the table and the footer of everything you print: the quotation, the invoice, the purchase order, the delivery note, the payslip and any page sent with Print. Each part is set on its own, and the preview underneath is the real thing.</div>' +
+      '<h4 class="cp-sub">Header</h4>' +
       '<div class="o-groups"><div>' +
-      fld("Logo", '<div id="cp-logo-wrap"></div>', "PNG or JPG. Appears on every printed report.") +
+      fld("Logo", '<div id="cp-logo-wrap"></div>', "PNG or JPG. Upload it, change it or take it off again here.") +
       fld("Accent colour", '<input id="cp-accent" type="color" value="' + esc(ps.accent || "#2f6bff") + '" style="width:56px;height:32px;padding:2px;border:1px solid var(--line);border-radius:var(--r-sm);background:var(--panel2)">') +
       '</div><div>' +
-      fld("Show logo", '<select id="cp-showlogo"><option value="1">Yes</option><option value="0">No</option></select>', "Keep on so your brand is on every document.") +
-      fld("Footer note", '<input id="cp-footer" value="' + esc(ps.footer || "") + '" placeholder="e.g. Thank you for your business">') +
+      fld("Show the logo", '<select id="cp-showlogo"><option value="1">Yes, print it</option><option value="0">No, name only</option></select>', "No prints the company name on its own, with no image at all.") +
+      fld("Logo size", '<select id="cp-logosize"><option value="small">Small</option><option value="medium">Medium</option><option value="large">Large</option></select>') +
+      '</div><div>' +
+      fld("Show in the header", cpChecks("hf", [["tagline", "Tagline"], ["address", "Address"], ["contact", "Phone, email, website"], ["tax", "Tax number"]], hfSel),
+          "Tick what belongs on the letterhead. Anything you leave out can still go in the footer.") +
       '</div></div>' +
       '<div class="cp-tpls">' + tmplCards + '</div>' +
+      '<h4 class="cp-sub">Table</h4>' +
+      '<div class="o-groups"><div>' +
+      fld("Line table style", '<select id="cp-tablestyle">' +
+        ['["grid", "Grid: every cell boxed"]', '["lines", "Lines: a rule under each row"]', '["striped", "Striped: shaded alternate rows"]', '["plain", "Plain: no rules at all"]']
+          .map(function (o) { var v = JSON.parse(o); return '<option value="' + v[0] + '"' + (tps.table_style === v[0] ? " selected" : "") + '>' + v[1] + '</option>'; }).join("") +
+        '</select>', "How the lines of a quotation, an invoice or a delivery note are ruled.") +
+      fld("Table header row", '<select id="cp-tablehead">' +
+        ['["plain", "Plain"]', '["shaded", "Shaded grey"]', '["accent", "Your accent colour"]']
+          .map(function (o) { var v = JSON.parse(o); return '<option value="' + v[0] + '"' + (tps.table_head === v[0] ? " selected" : "") + '>' + v[1] + '</option>'; }).join("") + '</select>') +
+      '</div><div></div></div>' +
+      '<h4 class="cp-sub">Footer</h4>' +
+      '<div class="o-groups"><div>' +
+      fld("Footer layout", '<select id="cp-footerstyle">' +
+        ['["centered", "Centred under the page"]', '["left", "Left aligned"]', '["split", "Note left, details right"]', '["rule", "Accent rule above"]']
+          .map(function (o) { var v = JSON.parse(o); return '<option value="' + v[0] + '"' + (tps.footer_style === v[0] ? " selected" : "") + '>' + v[1] + '</option>'; }).join("") + '</select>') +
+      fld("Footer note", '<input id="cp-footer" value="' + esc(ps.footer || "") + '" placeholder="e.g. Thank you for your business">') +
+      '</div><div>' +
+      fld("Show in the footer", cpChecks("ff", [["note", "Footer note"], ["legal_name", "Legal name"], ["tax", "Tax number"], ["address", "Address"], ["phone", "Phone"], ["email", "Email"], ["website", "Website"]], ffSel),
+          "Untick everything and no footer is printed at all.") +
+      '</div></div>' +
       '<div class="cp-preview-wrap"><div class="cp-preview-label">Live preview</div><div class="cp-preview" id="cp-preview"></div></div>' +
       '</div></div>';
     if (ps.show_logo === false) document.getElementById("cp-showlogo").value = "0";
+    document.getElementById("cp-logosize").value = tps.logo_size;
     var logoData = (p.logo != null ? p.logo : (ps.logo || "")) || "";
     function curData() {
       var _addr = [gv("cp-addr"), gv("cp-addr2")].filter(Boolean).join("\n");
@@ -18217,10 +18292,37 @@
         address: _addr, city: gv("cp-city"), website: gv("cp-web"),
         phone: collectPhone("cp-phone").combined || "", phone2: collectPhone("cp-phone2").combined || "", email: gv("cp-email"), logo: logoData,
         template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1),
-        accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1"
+        accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1",
+        logo_size: gv("cp-logosize") || "medium", header_fields: cpPicked("hf"),
+        table_style: gv("cp-tablestyle") || "grid", table_head: gv("cp-tablehead") || "plain",
+        footer_style: gv("cp-footerstyle") || "centered", footer_fields: cpPicked("ff")
       });
     }
-    function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Quotation", "SO-0001") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
+    // A real document, drawn by the same builders that print one: change a setting
+    // and this is exactly what the customer will be holding.
+    function samplePrintDoc(t) {
+      var row = function (n, d, q, p, a) {
+        return '<tr><td class="r">' + n + '</td><td><b>Design phase</b><div class="pitem-d">' + d + '</div></td><td class="r">' + q + '</td><td class="r">' + p + '</td><td class="r">' + a + '</td></tr>';
+      };
+      return '<div class="pinv">' + buildPrintHeader(t, "Quotation", "SO-0001") +
+        '<div class="pmeta"><div><div class="pl">Customer</div><div class="pv">A customer of yours</div>' +
+        '<div style="font-size:11.5px;color:#444;margin-top:2px">Beirut, Lebanon</div></div>' +
+        '<div><div class="pl">Date</div><div class="pv">' + esc(new Date().toISOString().slice(0, 10)) + '</div>' +
+        '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(isoShift(14)) + '</div></div></div>' +
+        '<table class="' + pdocTableClass(t) + '"><thead><tr><th class="r">Pos</th><th>Item</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th></tr></thead><tbody>' +
+        row(1, "Curtain wall, review and typical details", 1, "3,000.00", "3,000.00") +
+        row(2, "External cladding scope", 1, "2,500.00", "2,500.00") +
+        row(3, "Entrances and ground floor glazing", 1, "2,500.00", "2,500.00") +
+        '</tbody></table>' +
+        '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>USD 8,000.00</span></div>' +
+        '<div class="pr ptt"><span>Total</span><span>USD 8,000.00</span></div></div>' +
+        pdocFoot(t) + '</div>';
+    }
+    function paintPreview() {
+      var t = curData();
+      document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff");
+      document.getElementById("cp-preview").innerHTML = '<div class="cp-paper cp-doc">' + samplePrintDoc(t) + '</div>';
+    }
     function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
     function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img alt="Company logo" src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:var(--r);padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn u-ptr">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
     paintLogo(); paintPreview();
@@ -18276,7 +18378,10 @@
       var ph1 = collectPhone("cp-phone"), ph2 = collectPhone("cp-phone2");
       var profile = { tagline: gv("cp-tagline") || null, address: gv("cp-addr"), address2: gv("cp-addr2"), city: gv("cp-city"), state: gv("cp-state"), postal_code: gv("cp-zip"), phone: ph1.combined || "", phone_cc: ph1.cc, phone_area: ph1.area, phone_num: ph1.num, phone2: ph2.combined || "", phone2_cc: ph2.cc, phone2_area: ph2.area, phone2_num: ph2.num, email: gv("cp-email"), website: gv("cp-web"), logo: logoData || null, vat_registered: gv("cp-vatreg"), industry: gv("cp-industry"), fiscal_year_start: document.getElementById("cp-fystart").value, default_markup_pct: Number(gv("cp-markup")) || 0, loyalty_earn_pct: Number(gv("cp-loyearn")) || 0, loyalty_point_value: Number(gv("cp-loyval")) || 0, wps_employer_id: gv("cp-wpseid") || "", wps_bank_code: gv("cp-wpsbank") || "", social: { linkedin: gv("cp-linkedin"), instagram: gv("cp-instagram"), facebook: gv("cp-facebook"), x: gv("cp-x"), youtube: gv("cp-youtube") } };
       if (locState) profile.localization = locState;
-      var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1" };
+      var print_settings = { template: Number((document.querySelector('input[name="cp-tpl"]:checked') || {}).value || 1), accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1",
+        logo_size: gv("cp-logosize") || "medium", header_fields: cpPicked("hf"),
+        table_style: gv("cp-tablestyle") || "grid", table_head: gv("cp-tablehead") || "plain",
+        footer_style: gv("cp-footerstyle") || "centered", footer_fields: cpPicked("ff") };
       var upd = { name: gv("cp-name") || c.name, legal_name: gv("cp-legal"), tax_id: gv("cp-vat"), country: gv("cp-country"), currency_code: (gv("cp-cur") || "USD").toUpperCase().slice(0, 3) || "USD", profile: profile, print_settings: print_settings };
       var r = await sb.from("companies").update(upd).eq("id", S.company.id);
       sv.disabled = false;
@@ -18814,7 +18919,7 @@
       '<div class="pdoc"><div class="pdt">Transmittal</div><div class="pnum">' + esc(t.number || "Draft") + '</div></div></div>' +
       '<div class="pmeta"><div><div class="pl">To</div><div class="pv">' + esc(t.to_party || "") + '</div>' + (projName ? '<div class="pl u-mt8">Project</div><div class="pv">' + esc(projName) + '</div>' : '') + '</div>' +
       '<div><div class="pl">Date</div><div class="pv">' + esc(t.transmittal_date || "") + '</div><div class="pl u-mt8">Purpose</div><div class="pv">' + esc(t.purpose || "") + '</div></div></div>' +
-      '<table class="ptab"><thead><tr><th>#</th><th>Document</th><th>Ref</th><th>Rev</th><th class="r">Copies</th></tr></thead><tbody>' + (body || '<tr><td colspan="5">No documents listed</td></tr>') + '</tbody></table>' +
+      '<table class="' + pdocTableClass() + '"><thead><tr><th>#</th><th>Document</th><th>Ref</th><th>Rev</th><th class="r">Copies</th></tr></thead><tbody>' + (body || '<tr><td colspan="5">No documents listed</td></tr>') + '</tbody></table>' +
       (t.notes ? '<div class="pmuted u-mt12">' + esc(t.notes) + '</div>' : '') +
       '<div class="pfoot">' + esc(co.name) + ' &middot; Generated by Orbit</div></div>';
     var wrap = document.createElement("div"); wrap.className = "o-print"; wrap.innerHTML = html;
@@ -22314,7 +22419,7 @@
       var html = '<div class="pinv">' + pdocHead("Interim Payment Certificate", cert.number || "Draft") +
         '<div class="pmeta"><div><div class="pl">Project</div><div class="pv">' + esc((proj && proj.name) || "") + '</div></div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(gv("pc-date") || cert.date_to || "") + '</div></div></div>' +
-        '<table class="ptab"><thead><tr><th>Ref</th><th>Description</th><th class="r">Contract</th><th class="r">Complete</th><th class="r">To date</th><th class="r">This period</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        '<table class="' + pdocTableClass() + '"><thead><tr><th>Ref</th><th>Description</th><th class="r">Contract</th><th class="r">Complete</th><th class="r">To date</th><th class="r">This period</th></tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum">' + summaryRows + '</div>' + pdocFoot() + '</div>';
       pdocPrint(html);
     }
@@ -28551,7 +28656,7 @@
       var html = '<div class="pinv">' + pdocHead("Estimate", gv("tn-num") || t.number || "Draft") +
         '<div class="pmeta"><div><div class="pl">Client</div><div class="pv">' + esc(clientName) + '</div><div class="pl u-mt8">Project</div><div class="pv">' + esc(gv("tn-name") || t.name || "") + '</div></div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(gv("tn-date") || "") + '</div>' + (gv("tn-valid") ? '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(gv("tn-valid")) + '</div>' : "") + '</div></div>' +
-        '<table class="ptab"><thead><tr><th>Code</th><th>Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+        '<table class="' + pdocTableClass() + '"><thead><tr><th>Code</th><th>Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum"><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(total) + '</span></div></div>' +
         pdocFoot() + '</div>';
       pdocPrint(html);

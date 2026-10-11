@@ -628,6 +628,27 @@
         return ok("five letterheads, one builder, used by the preview and by every document");
       } },
 
+    { name: "the header, the table and the footer of a document are each a setting",
+      why: "One \"print template\" picker set a letterhead and nothing else: the table was ruled the way each printer happened to write it, the footer always printed the same five details, and the logo could only be swapped, never arranged. A company's paperwork is not one choice, it is a header, a table and a footer, each with a style and a content of its own. If a printer stops reading one of these settings, the screen keeps offering the choice and the document quietly ignores it, which is the failure this check exists to catch.",
+      run: function (src) {
+        var need = [
+          ["the settings themselves", /header_fields: ps\.header_fields[\s\S]{0,400}footer_fields: ps\.footer_fields/],
+          ["the header honours its fields", /var hf = t\.header_fields \|\| \["tagline", "address", "contact"\];/],
+          ["one table class for every document", /function pdocTableClass\(over\) \{/],
+          ["one footer, built from the chosen fields", /function pdocFooterParts\(t\) \{/],
+          ["the document footer uses it", /function pdocFoot\(over\) \{\s*\r?\n\s*var t = over \|\| printTplData\(\), p = pdocFooterParts\(t\);/],
+          ["and so does a page print", /function buildPrintFooter\(t\) \{\s*\r?\n\s*var p = pdocFooterParts\(t\);/],
+          ["the logo can be sized", /ph-logo ph-logo-' \+ \(t\.logo_size \|\| "medium"\)/],
+          ["the screen offers all of it", /id="cp-tablestyle"[\s\S]{0,3000}id="cp-footerstyle"/],
+          ["and saves all of it", /footer_style: gv\("cp-footerstyle"\) \|\| "centered", footer_fields: cpPicked\("ff"\) \};/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        var hard = (src.match(/<table class="ptab[ "]/g) || []).length;
+        if (hard) return bad(hard + " document table(s) still hardcode their own style");
+        return ok(need.length + " parts of the design are settings the printers read");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

@@ -487,7 +487,10 @@ orbitScreenHelp({
       "Click <span class='man-key'>Apply United Kingdom pack</span>. You should see <b>Applied United Kingdom pack &middot; 4 tax rate(s) added &middot; Save to keep the format</b>. The tax rates are added straight away; the fiscal ID label and formats are kept when you save.",
       "Under <b>Tax &amp; accounting</b>, set <b>VAT / sales-tax registered</b> to <i>Yes - we charge tax</i> and choose the month in <b>Fiscal year starts</b>.",
       "Under <b>Contact</b>, type the street and number in <b>Address line 1</b>, <i>Manchester</i> in <b>City</b>, the shop's number in <b>Phone</b> and <i>orders@example.com</i> in <b>Email</b>.",
-      "Under <b>Print template</b>, click <span class='man-key'>Upload logo</span> and choose your logo file. Pick the <b>Accent band</b> layout, set an <b>Accent colour</b> and type <i>Thank you for your custom</i> in <b>Footer note</b>. You should see the <b>Live preview</b> change as you go.",
+      "Under <b>Document design</b>, click <span class='man-key'>Upload logo</span> and choose your logo file. <b>Show the logo</b> takes it off again whenever you want, and <b>Logo size</b> sets how big it prints.",
+      "Still in <b>Header</b>, tick what belongs on the letterhead: leave <b>Tagline</b> and <b>Address</b> on and turn <b>Tax number</b> off, because it is going in the footer. Then pick the <b>Accent band</b> layout and set an <b>Accent colour</b>.",
+      "Under <b>Table</b>, set <b>Line table style</b> to <i>Lines</i> and <b>Table header row</b> to <i>Shaded grey</i>.",
+      "Under <b>Footer</b>, set <b>Footer layout</b> to <i>Note left, details right</i>, type <i>Thank you for your custom</i> in <b>Footer note</b>, and tick <b>Legal name</b>, <b>Tax number</b>, <b>Phone</b> and <b>Email</b> under <b>Show in the footer</b>. You should see the <b>Live preview</b>, which is a real document, change as you go.",
       "Click <span class='man-key'>Save</span> at the top of the page. You should see <b>Company profile saved</b>.",
       "Open a customer invoice and print it. You should see the <b>same letterhead as the preview</b>: the logo, <i>Northside Bakery Ltd</i>, the tagline and the address arranged the way the Accent band layout arranges them, with <b>INVOICE</b> and its number where the preview showed the document title, and the footer note with your <b>VAT Reg. No.</b> at the bottom."
     ],
@@ -521,7 +524,14 @@ orbitScreenHelp({
       ["Accent colour", "The colour of the lines, bands and highlights on printouts.", "optional"],
       ["Show logo", "Yes prints the logo; No leaves it off every printout.", "optional"],
       ["Footer note", "A short line printed at the bottom of documents and reports next to your company details, for example payment instructions or a thank you.", "optional"],
-      ["Layout (Classic, Centered, Accent band, Minimal, Side rule)", "How the letterhead is arranged. It is the head of <b>everything</b> you print: a page or report sent with Print or Ctrl+P, and every document, so the quotation, the invoice, the purchase order, the delivery note and the payslip all carry the layout you pick here. The live preview beside the choices is the real thing, with the document's own title and number where a page shows the date.", "optional"]
+      ["Layout (Classic, Centered, Accent band, Minimal, Side rule)", "How the letterhead is arranged. It is the head of <b>everything</b> you print: a page or report sent with Print or Ctrl+P, and every document, so the quotation, the invoice, the purchase order, the delivery note and the payslip all carry the layout you pick here. The live preview is a real document, drawn by the same code that prints one.", "optional"],
+      ["Show the logo", "Yes prints your logo at the top of every document and report. No leaves it off altogether and prints the company name on its own, which is what you want on pre-printed paper. <b>Remove</b> beside the logo deletes the file itself.", "optional"],
+      ["Logo size", "Small, Medium or Large: how tall the logo prints.", "optional"],
+      ["Show in the header", "What sits under your name on the letterhead: the <b>Tagline</b>, the <b>Address</b>, <b>Phone, email, website</b> and the <b>Tax number</b>. Anything you leave out here can still be printed in the footer.", "optional"],
+      ["Line table style", "How the lines of a document are ruled, the same way on every document: <b>Grid</b> boxes every cell, <b>Lines</b> rules under each row, <b>Striped</b> shades alternate rows, <b>Plain</b> has no rules at all.", "optional"],
+      ["Table header row", "The row of column names: <b>Plain</b>, <b>Shaded grey</b>, or <b>Your accent colour</b> with white text.", "optional"],
+      ["Footer layout", "How the foot of the page sits: <b>Centred</b>, <b>Left aligned</b>, <b>Note left, details right</b>, or <b>Accent rule above</b> for a line in your accent colour across the bottom.", "optional"],
+      ["Show in the footer", "Which details print at the bottom of every document: the <b>Footer note</b>, your <b>Legal name</b>, <b>Tax number</b>, <b>Address</b>, <b>Phone</b>, <b>Email</b> and <b>Website</b>. Untick them all and no footer is printed at all.", "optional"]
     ],
     buttons: [
       ["Save", "Saves everything on the page for this company. The city must be filled in."],
