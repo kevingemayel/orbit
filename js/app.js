@@ -26620,7 +26620,13 @@
         variance: Math.round((homeCount - expected) * 100) / 100,
         declared_ccy: declared
       }).eq("id", POS.session.id);
-      m.remove(); POS.session = null; toast("Shift closed"); renderPOS();
+      m.remove();
+      // the shift goes to the accounts as it closes: one entry for the money it
+      // took, the VAT on it and the stock it sold. Nothing to press afterwards.
+      var _posted = await sb.rpc("post_pos_session", { p_session: POS.session.id });
+      POS.session = null;
+      toast(_posted && _posted.error ? ("Shift closed. It is not in the accounts yet: " + errMsg(_posted.error)) : "Shift closed and posted to the accounts");
+      renderPOS();
     };
   }
   function cfgPosOrders() {
@@ -26646,9 +26652,42 @@
     var ids = rows.map(function (r) { return r.id; });
     var tot = {}; if (ids.length) { var os = (await sb.from("pos_orders").select("session_id,total").in("session_id", ids)).data || []; os.forEach(function (o) { tot[o.session_id] = (tot[o.session_id] || 0) + (Number(o.total) || 0); }); }
     var body = document.getElementById("o-body");
-    body.innerHTML = '<div class="o-rt-wrap" style="max-width:820px"><table class="o-list"><thead><tr><th>Opened</th><th>Register</th><th>Status</th><th class="num">Sales</th><th class="num">Opening</th><th class="num">Counted</th><th class="num">Variance</th></tr></thead><tbody>' +
+    // A till session is only half the story: an order taken at a table when no
+    // drawer is open belongs to no session at all, and in this database that is
+    // every single one of them. So the money is posted by DAY as well, and the
+    // days the accounts have not seen yet are listed here with the button that
+    // sends them.
+    var unposted = (await sb.from("pos_orders").select("id,total,created_at,journal_entry_id,status")
+      .eq("company_id", S.company.id).eq("status", "paid").is("journal_entry_id", null)
+      .order("created_at", { ascending: false }).limit(2000)).data || [];
+    var byDay = {}; unposted.forEach(function (o) {
+      var d = String(o.created_at || "").slice(0, 10); if (!d) return;
+      if (!byDay[d]) byDay[d] = { day: d, n: 0, total: 0 };
+      byDay[d].n++; byDay[d].total += Number(o.total) || 0;
+    });
+    var days = Object.keys(byDay).sort().reverse().map(function (d) { return byDay[d]; });
+    var daysHtml = days.length
+      ? '<div class="card" style="max-width:820px;margin-bottom:14px"><h3 style="margin:0 0 4px">Not in the accounts yet</h3>' +
+        '<div class="sub" style="margin:0 0 10px">A day posts as one entry: the takings by the way they were paid, the sales, the VAT, the tips, the drawer over and short, and the cost of anything that came out of stock.</div>' +
+        '<table class="o-list"><thead><tr><th>Day</th><th class="num">Orders</th><th class="num">Takings</th><th></th></tr></thead><tbody>' +
+        days.map(function (d) {
+          return '<tr><td>' + esc(d.day) + '</td><td class="num">' + d.n + '</td><td class="num">' + money(d.total) + '</td>' +
+            '<td class="u-r"><button class="btn sm pri pos-post" data-day="' + esc(d.day) + '">Post to accounts</button></td></tr>';
+        }).join("") + '</tbody></table></div>'
+      : '';
+    body.innerHTML = daysHtml + '<div class="o-rt-wrap" style="max-width:820px"><table class="o-list"><thead><tr><th>Opened</th><th>Register</th><th>Status</th><th class="num">Sales</th><th class="num">Opening</th><th class="num">Counted</th><th class="num">Variance</th></tr></thead><tbody>' +
       (rows.length ? rows.map(function (r) { var v = r.status === "closed" ? (Number(r.closing_cash) || 0) - (Number(r.expected_cash) || 0) : null; return '<tr><td>' + esc((r.opened_at || "").slice(0, 16).replace("T", " ")) + '</td><td>' + esc(r.register || "") + '</td><td>' + (r.status === "open" ? '<span class="badge partial">Open</span>' : '<span class="badge paid">Closed</span>') + '</td><td class="num">' + money(tot[r.id] || 0) + '</td><td class="num">' + money(r.opening_cash) + '</td><td class="num">' + (r.closing_cash != null ? money(r.closing_cash) : "-") + '</td><td class="num">' + (v == null ? "-" : '<span style="color:' + (Math.abs(v) < 0.005 ? "var(--good)" : "var(--bad)") + '">' + money(v) + '</span>') + '</td></tr>'; }).join("") : '<tr><td colspan="7" class="muted u-p10">No sessions yet.</td></tr>') +
       '</tbody></table></div>';
+    body.querySelectorAll(".pos-post").forEach(function (b) {
+      b.onclick = async function () {
+        b.disabled = true;
+        var r = await sb.rpc("post_pos_day", { p_company: S.company.id, p_store: null, p_date: b.dataset.day });
+        b.disabled = false;
+        if (r.error) { toast(errMsg(r.error)); return; }
+        toast("That day is in the accounts");
+        renderPosSessions();
+      };
+    });
   }
 
   // ============================ E-INVOICING (Peppol BIS / PINT AE) ============================
