@@ -88,6 +88,8 @@ const MUTATIONS = {
     s => s.replace('.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")', '.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")'),
   "the terms a customer reads go out with the document":
     s => s.replace("pdocTerms(inv.narration) +", ""),
+  "a document's lines come back in the order they were written":
+    s => s.replace('.eq("order_id", id).order("sequence").order("id")', '.eq("order_id", id).order("id")'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

@@ -606,6 +606,16 @@
           : ok(need.length + " places carry the terms");
       } },
 
+    { name: "a document's lines come back in the order they were written",
+      why: "The order form read its lines with .order(\"id\"), and an id here is a random uuid. So every quotation and every purchase order opened with its lines shuffled, the positions were renumbered into that shuffle on save, and the printed document showed the scope in an order nobody chose: on Francois Eid's quotation the heading \"Down Payments\" sat between line 1 and line 2 and the first item of the scope printed last. Sequence is the order the author put the lines in; id is only a tie-break for two lines that share one.",
+      run: function (src) {
+        if (!/\.eq\("order_id", id\)\.order\("sequence"\)\.order\("id"\)/.test(src)) return bad("the order form does not read its lines by sequence");
+        var byIdOnly = src.match(/order_lines"\)[^;]{0,120}\.order\("id"\)(?!\s*\))/g) || [];
+        var lineReads = (src.match(/from\("invoice_lines"\)\.select\([^)]*\)\.eq\("invoice_id", id\)\.order\("sequence"\)/g) || []).length;
+        if (!lineReads) return bad("the invoice form does not read its lines by sequence");
+        return ok("both document forms read their lines by sequence");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

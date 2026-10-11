@@ -7670,9 +7670,17 @@
   }
   function pdocItemHTML(prod, desc) {
     desc = String(desc || "").trim(); if (desc === "Item" && prod) desc = "";
-    if (!prod || !prod.name) return esc(desc || "Item");
+    if (!prod || !prod.name) return '<div class="pitem-d">' + esc(desc || "Item") + '</div>';
+    // A line written as "<product> <what this one covers>" printed the product's
+    // name twice: once in bold and again at the front of the description. The
+    // prefix comes off, so the row reads "Architectural Design Phase" and then
+    // "Curtain wall", which is what the customer is paying for.
+    var lead = prod.name.replace(/\s+/g, " ").trim();
+    if (lead && desc.replace(/\s+/g, " ").toLowerCase().indexOf(lead.toLowerCase()) === 0) {
+      desc = desc.replace(/\s+/g, " ").slice(lead.length).replace(/^[\s:;,.-]+/, "");
+    }
     return '<b>' + esc(prod.name) + '</b>' +
-      (desc && desc !== prod.name ? '<div style="font-size:11px;color:#444;margin-top:2px">' + esc(desc) + '</div>' : '') +
+      (desc && desc !== prod.name ? '<div class="pitem-d">' + esc(desc) + '</div>' : '') +
       (prod.supplier_code ? '<div style="font-size:10.5px;color:#666;margin-top:1px">Supplier code: ' + esc(prod.supplier_code) + '</div>' : '');
   }
   // A project code is the short abbreviation suppliers see on RFQs and purchase orders
@@ -7702,10 +7710,11 @@
     var sub = 0, tax = 0;
     // the discount column only appears when something on the document is discounted
     var anyDisc = (lines || []).some(function (l) { return Number(l.discount) > 0; });
+    var anyTax = (lines || []).some(function (l) { return !!l.tax_id; });
     var body = lines.map(function (l) {
       // a heading or a note prints across the table: no figures, no part in the totals
       if (l.line_type === "section" || l.line_type === "note") {
-        var cols = (anyDisc ? 6 : 5);
+        var cols = 4 + (anyDisc ? 1 : 0) + (anyTax ? 1 : 0);
         return '<tr><td colspan="' + cols + '" style="' + (l.line_type === "section"
           ? "font-weight:700;padding-top:9px;border-bottom:1px solid #999"
           : "font-style:italic;color:#444") + '">' + esc(l.name || "") + '</td></tr>';
@@ -7713,7 +7722,7 @@
       var amt = l.tax_id ? (taxes.filter(function (t) { return t.id === l.tax_id; })[0] || {}).amount || 0 : 0;
       var disc = Number(l.discount) || 0;
       var ls = Number(l.quantity) * Number(l.unit_price) * (1 - disc / 100); sub += ls; tax += ls * amt / 100;
-      return '<tr><td>' + esc(l.name) + '</td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + '<td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+      return '<tr><td><div class="pitem-d">' + esc(l.name) + '</div></td><td class="r">' + Number(l.quantity) + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
     }).join("");
     var tot = sub + tax, due = Number(inv.amount_residual != null ? inv.amount_residual : tot);
     var html =
@@ -7722,7 +7731,7 @@
       '<div class="pmeta"><div><div class="pl">Bill to</div><div class="pv">' + esc(partner) + '</div>' + pdocPartyAddr(inv.partners) + '</div>' +
       '<div><div class="pl">' + (isSale ? "Invoice Date" : "Bill Date") + '</div><div class="pv">' + esc(inv.invoice_date || "") + '</div>' +
       '<div class="pl u-mt8">Due Date</div><div class="pv">' + esc(inv.due_date || "-") + '</div></div></div>' +
-      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + '<th class="r">Tax</th><th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
+      '<table class="ptab"><thead><tr><th>Description</th><th class="r">Qty</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + (anyTax ? '<th class="r">Tax</th>' : '') + '<th class="r">Amount</th></tr></thead><tbody>' + body + '</tbody></table>' +
       '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div>' +
       '<div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div>' +
       '<div class="pr ptt"><span>Total</span><span>' + cc + " " + money(tot) + '</span></div>' +
@@ -7953,7 +7962,10 @@
     var order = null, lines = [];
     if (id !== "new") {
       order = (await sb.from(tbl).select("*, partners(name)").eq("id", id).maybeSingle()).data;
-      lines = (await sb.from(ltbl).select("*").eq("order_id", id).order("id")).data || [];
+      // by sequence, with the id only as a tie-break: ordering by id alone is
+      // ordering by a random uuid, which shuffled every order's lines on every
+      // open and then renumbered the positions into that shuffle on save
+      lines = (await sb.from(ltbl).select("*").eq("order_id", id).order("sequence").order("id")).data || [];
     }
     var confirmed = order && (order.state === "sale" || order.state === "purchase" || order.state === "done");
     // Edit on a confirmed order opens the same form with its lines editable; what was
@@ -8051,7 +8063,7 @@
       (isSale ? fld("Valid until", editable
         ? '<input id="o-valid" type="date" value="' + esc((order && order.validity_date) || "") + '">'
         : '<span class="v">' + esc((order && order.validity_date) || "-") + '</span>'
-        + ((order && order.validity_date && order.state !== "confirmed" && order.validity_date < today()) ? ' <span class="badge unpaid">Expired</span>' : ""),
+        + ((order && order.validity_date && !confirmed && order.validity_date < today()) ? ' <span class="badge unpaid">Expired</span>' : ""),
         "The last day the customer can accept these prices. A quotation made from a template takes the template's validity.") : "") +
       fld("Reference / Note", editable ? '<input id="o-ref" value="' + esc(order ? order.note || "" : "") + '" placeholder="optional">' : '<span class="v">' + esc(order ? order.note || "" : "") + '</span>') +
       '</div></div>';
@@ -8397,7 +8409,8 @@
       var partnerName = (ps && ps.value) ? ((partners.filter(function (p) { return p.id === ps.value; })[0] || {}).name || "") : (order && order.partners ? order.partners.name : "");
       var dateV = (document.getElementById("o-date") || {}).value || (order && order.date_order) || "";
       var refV = (document.getElementById("o-ref") || {}).value || (order && order.note) || "";
-      var validV = isSale ? (((document.getElementById("o-valid") || {}).value) || (order && order.validity_date) || "") : "";
+      // how long the offer stands matters on an offer, not on an order already placed
+      var validV = (isSale && !confirmed) ? (((document.getElementById("o-valid") || {}).value) || (order && order.validity_date) || "") : "";
       var sub = 0, tax = 0, isPO = !isSale;
       // a supplier sees the project's code, never its name
       var projSel = (document.getElementById("o-proj") || {}).value || (order && order.project_id) || "";
@@ -8413,11 +8426,13 @@
         return { w: w, h: h, len: len, thk: thk, area: area };
       }
       var anyDisc = (lns || []).some(function (l) { return Number(l.discount) > 0; });
+      // a Tax column on a document with no tax on it is eight rows of "-"
+      var anyTax = (lns || []).some(function (l) { return !!l.tax_id; });
       var _ppos = 0;
       var body = lns.map(function (l, _pi) {
         // a heading or a note prints across the table: no position, no figures
         if (l.line_type === "section" || l.line_type === "note") {
-          var cols = (isPO ? 9 : 5) + (anyDisc ? 1 : 0);
+          var cols = (isPO ? 10 : 6) + (anyDisc ? 1 : 0) + (anyTax ? 1 : 0);   // Pos, Item, [4 size columns], Qty, Unit, Price, [Disc], [Tax], Amount
           return '<tr><td colspan="' + cols + '" style="' + (l.line_type === "section"
             ? "font-weight:700;padding-top:9px;border-bottom:1px solid #999"
             : "font-style:italic;color:#444") + '">' + esc(l.name || "") + '</td></tr>';
@@ -8430,10 +8445,10 @@
         var third = (d.len != null ? d.len : (d.thk != null ? d.thk : ""));
         var dims = isPO ? '<td class="r">' + (d.w != null ? d.w : "") + '</td><td class="r">' + (d.h != null ? d.h : "") + '</td><td class="r">' + third + '</td><td class="r">' + (d.area != null ? msFmt(d.area, 3) + " m&sup2;" : "") + '</td>' : "";
         // every row names its item: the product, with the line's description (a mark such as GL01) under it
-        return '<tr><td class="r">' + _ppos + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + '<td class="r">' + (amt ? amt + "%" : "-") + '</td><td class="r">' + money(ls) + '</td></tr>';
+        return '<tr><td class="r">' + _ppos + '</td><td>' + pdocItemHTML(l.product_id ? pById(l.product_id) : null, l.name) + '</td>' + dims + '<td class="r">' + Number(l.quantity || 0) + '</td><td>' + esc(l.uom || "") + '</td><td class="r">' + money(l.unit_price) + '</td>' + (anyDisc ? '<td class="r">' + (disc ? disc + '%' : '') + '</td>' : '') + (anyTax ? '<td class="r">' + (amt ? amt + "%" : "-") + '</td>' : '') + '<td class="r">' + money(ls) + '</td></tr>';
       }).join("");
-      var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + '<th class="r">Tax</th><th class="r">Amount</th>';
-      var html = '<div class="pinv">' + pdocHead(isSale ? "Quotation" : "Purchase Order", (order && order.number) || "Draft") +
+      var head = '<th class="r">Pos</th><th>Item</th>' + (isPO ? '<th class="r">Size W</th><th class="r">Size H</th><th class="r">L / Thk</th><th class="r">Area</th>' : "") + '<th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th>' + (anyDisc ? '<th class="r">Disc %</th>' : '') + (anyTax ? '<th class="r">Tax</th>' : '') + '<th class="r">Amount</th>';
+      var html = '<div class="pinv">' + pdocHead(isSale ? (confirmed ? "Sales Order" : "Quotation") : (confirmed ? "Purchase Order" : "Request for Quotation"), (order && order.number) || "Draft") +
         '<div class="pmeta"><div><div class="pl">' + (isSale ? "Customer" : "Vendor") + '</div><div class="pv">' + esc(partnerName) + '</div>' + pdocPartyAddr(partners.filter(function (p) { return p.id === ((ps && ps.value) || (order && order.partner_id)); })[0]) + '</div>' +
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (validV ? '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(validV) + '</div>' : "") + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
         '<table class="ptab ptab-grid"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
