@@ -1626,6 +1626,7 @@
       { i: "truck", n: "Wholesale accounts", l: "Roastery", d: "Office coffee and HORECA, by delivery day and route." },
       { i: "book", n: "Training academy", l: "Roastery", d: "Courses sold to the public and used to certify staff." },
       { i: "heart", n: "Loyalty programmes", l: "Guests", d: "Points, a stamp card, or spend tiers." },
+      { i: "person", n: "Loyalty accounts", l: "Guests", d: "One per customer: points, stamps, tier, what they have spent, and every movement." },
       { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Card and wallet balances, recorded for reference." },
       { i: "refresh", n: "Subscription plans", l: "Guests", d: "The unlimited pass and the bean box, with limits." },
       { i: "send", n: "Feedback and complaints", l: "Guests", d: "Every score and complaint, with an owner and an SLA." },
@@ -1955,7 +1956,7 @@
         { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
         { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"]] },
-        { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
+        { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Loyalty accounts", "gst.accounts"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
         { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["All bookings", "dlv.reservations"]] },
         { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] }
@@ -2099,7 +2100,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.accounts": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -4597,6 +4598,7 @@
       case "rst.wholesale": return renderList(cfgWholesale());
       case "rst.courses": return renderList(cfgTrainingCourses());
       case "gst.loyalty": return renderList(cfgLoyaltyPrograms());
+      case "gst.accounts": return renderList(cfgLoyaltyAccounts());
       case "gst.storedvalue": return renderList(cfgStoredValue());
       case "gst.subs": return renderList(cfgSubscriptionPlans());
       case "gst.feedback": return renderList(cfgFeedback());
@@ -23869,6 +23871,10 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Register") + '<div class="gap"></div><span id="pos-sesstag" class="muted u-fs12"></span> <button class="o-filtbtn" id="pos-drop">Drop to safe</button> <button class="o-filtbtn" id="pos-close">Close register</button></div><div id="pos-main"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     POS.session = (await sb.from("pos_sessions").select("*").eq("company_id", S.company.id).eq("status", "open").order("opened_at", { ascending: false }).limit(1).maybeSingle()).data || null;
+    // The loyalty rules in force: the active programme if the shop set one up,
+    // otherwise the two numbers on the company profile. Read once per shift so
+    // the till and the database agree about what a point is worth.
+    POS.loy = (await sb.rpc("loyalty_rules", { p_company: S.company.id })).data || {};
     var vt = (await sb.from("taxes").select("amount,amount_type,scope").eq("company_id", S.company.id).eq("is_active", true)).data || [];
     var salesVat = vt.filter(function (t) { return (t.amount_type === "percent" || t.amount_type == null) && (t.scope == null || /sale|out|both/i.test(t.scope)); });
     // highest sales rate = the standard rate; a 0% exemption must not win on row order
@@ -23966,7 +23972,7 @@
     var voucherDisc = 0; var gross = POS.cart.reduce(function (a, l) { return a + l.price * l.qty; }, 0);
     var afterPromo = gross - promoDisc;
     if (POS.voucher) { voucherDisc = POS.voucher.kind === "percent" ? afterPromo * (Number(POS.voucher.value) || 0) / 100 : Math.min(Number(POS.voucher.value) || 0, afterPromo); }
-    var ptVal = Number((S.company.profile || {}).loyalty_point_value) || 0;
+    var ptVal = Number((POS.loy || {}).redeem_value) || 0;
     var redeemDisc = Math.min((Number(POS.redeem) || 0) * ptVal, Math.max(0, afterPromo - voucherDisc));
     var discount = promoDisc + voucherDisc + redeemDisc;
     var sub = gross - discount; if (sub < 0) sub = 0;
@@ -23988,11 +23994,13 @@
   }
   function posCharge() {
     var cust = POS.customers.filter(function (x) { return x.id === POS.partner; })[0];
-    var prof = S.company.profile || {}; var ptVal = Number(prof.loyalty_point_value) || 0; var earnPct = Number(prof.loyalty_earn_pct) || 0;
+    var loy = POS.loy || {}, isStamp = loy.kind === "stamp";
+    var ptVal = Number(loy.redeem_value) || 0, earnRate = Number(loy.earn_per_currency) || 0;
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>Take payment</h3><div class="form">' +
       '<div style="display:flex;gap:8px"><div class="u-flex1"><label>Voucher code</label><input id="pos-vcode" placeholder="optional"></div><button class="btn" id="pos-vapply" style="align-self:flex-end">Apply</button></div><div id="pos-vmsg" class="muted" style="font-size:12px;margin-top:-4px"></div>' +
-      (cust && ptVal > 0 && Number(cust.loyalty_points) > 0 ? '<div><label>Redeem points (' + (Number(cust.loyalty_points) || 0) + ' available &middot; ' + money(ptVal) + '/pt)</label><input id="pos-redeem" type="number" min="0" step="1" value="0"></div>' : '') +
+      (cust && isStamp ? '<div class="sub">' + esc(loy.name || "Stamp card") + ': this visit earns a stamp' + (loy.stamps_required ? ', and ' + loy.stamps_required + ' make a reward' : '') + '.</div>' : '') +
+      (cust && !isStamp && ptVal > 0 && Number(cust.loyalty_points) > 0 ? '<div><label>Redeem points (' + (Number(cust.loyalty_points) || 0) + ' available &middot; ' + money(ptVal) + '/pt)</label><input id="pos-redeem" type="number" min="0" step="1" value="0"></div>' : '') +
       '<label>What they hand over</label><div id="pos-pad" class="tp"></div>' +
       '<div class="sub" id="pos-summary" style="margin-top:4px"></div>' +
       '</div><div class="foot"><button class="btn" id="pos-x">Cancel</button><button class="btn pri u-app" id="pos-done">Complete sale</button></div></div>';
@@ -24001,7 +24009,7 @@
     function refresh() {
       POS.redeem = parseFloat(gv("pos-redeem")) || 0;
       var t = posTotals();
-      document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span class="u-bad">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && earnPct > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnPct / 100) + ' pts' : '');
+      document.getElementById("pos-summary").innerHTML = 'Subtotal ' + money(t.gross) + (t.discount > 0 ? ' &middot; discount <span class="u-bad">-' + money(t.discount) + '</span>' : '') + ' &middot; VAT ' + money(t.tax) + ' &middot; <b>Total ' + money(t.tot) + '</b>' + (cust && isStamp ? ' &middot; earns a stamp' : cust && earnRate > 0 ? ' &middot; earns ' + Math.floor(t.sub * earnRate) + ' pts' : '');
       if (posPad) posPad.setDue(t.tot);
     }
     loadFxRates().then(function () { posPad = tenderPad("pos-pad", posTotals().tot); });
@@ -24023,7 +24031,7 @@
     document.getElementById("pos-done").onclick = async function () {
       var t = posTotals();
       if (!posPad || !posPad.ready) { var pt = posPad ? posPad.totals() : null; toast(pt && pt.missing ? "No exchange rate for " + pt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the sale yet"); return; }
-      var earned = cust && earnPct > 0 ? Math.floor(t.sub * earnPct / 100) : 0;
+      var earned = cust && !isStamp && earnRate > 0 ? Math.floor(t.sub * earnRate) : 0;
       var redeemedPts = ptVal > 0 ? Math.round(t.redeemDisc / ptVal) : 0;
       var doneBtn = document.getElementById("pos-done"); doneBtn.disabled = true;
       // The order is written as a draft and only becomes paid once its lines and payments
@@ -24046,8 +24054,25 @@
       if (fin.error) { await posUndoSale("sale", fin.error); return; }
       var warn = [];
       if (POS.voucher) { var vu = await sb.from("pos_vouchers").update({ used_at: new Date().toISOString(), used_order_id: oid }).eq("id", POS.voucher.id); if (vu.error) warn.push("the voucher could not be marked used, so delete it in Vouchers"); }
-      if (cust && (earned || redeemedPts)) { var newPts = (Number(cust.loyalty_points) || 0) + earned - redeemedPts; var lu = await sb.from("partners").update({ loyalty_points: newPts }).eq("id", cust.id); if (lu.error) warn.push("the customer's points could not be updated, so correct them on the contact"); else cust.loyalty_points = newPts; }
-      m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; posPaintCart(); toast("Sale complete · " + money(t.tot) + (earned ? " · +" + earned + " pts" : "") + (warn.length ? ". But " + warn.join(", and ") + "." : ""));
+      // One call does the lot: it opens the customer's account if they have
+      // none, earns, redeems, counts the stamp, fills the card, moves the tier
+      // and keeps the running total on the contact in step. It also writes a
+      // row per movement, which is what makes a refund able to take back
+      // exactly what this sale gave.
+      var loyMsg = "";
+      if (cust) {
+        var lp = await sb.rpc("loyalty_post", { p_company: S.company.id, p_partner: cust.id, p_order: oid, p_spend: t.sub, p_redeem_points: redeemedPts, p_store: POS.session.store_id || null });
+        if (lp.error) warn.push("the customer's loyalty could not be recorded, so correct it on their account");
+        else {
+          var lo = lp.data || {};
+          cust.loyalty_points = Number(lo.points_balance) || 0;
+          if (Number(lo.earned) || Number(lo.redeemed)) await sb.from("pos_orders").update({ loyalty_earned: Number(lo.earned) || 0, loyalty_redeemed: Number(lo.redeemed) || 0 }).eq("id", oid);
+          if (lo.kind === "stamp") loyMsg = " · stamp " + (Number(lo.stamps_balance) || 0) + (loy.stamps_required ? "/" + loy.stamps_required : "");
+          else if (Number(lo.earned)) loyMsg = " · +" + Number(lo.earned) + " pts";
+          if (Number(lo.reward_due)) loyMsg += " · a reward is due";
+        }
+      }
+      m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; posPaintCart(); toast("Sale complete · " + money(t.tot) + loyMsg + (warn.length ? ". But " + warn.join(", and ") + "." : ""));
     };
   }
   // POS returns: pick a paid order and refund it (creates a negative refund order + reverses loyalty).
@@ -24102,8 +24127,13 @@
         if (rp.error) { await undoRefund("payment", rp.error); return; }
         var ro = await sb.from("pos_orders").update({ status: "refunded" }).eq("id", b.dataset.id);
         if (ro.error) { await undoRefund("", ro.error); return; }
+        // what that sale actually wrote, with the sign turned round, rather
+        // than a recalculation that would differ whenever the rules have
+        // changed since the sale
         var pointsMsg = "";
-        var earn = Number(b.dataset.earn) || 0; if (b.dataset.pid && earn) { var c = (await sb.from("partners").select("loyalty_points").eq("id", b.dataset.pid).maybeSingle()).data; if (c) { var pu = await sb.from("partners").update({ loyalty_points: (Number(c.loyalty_points) || 0) - earn }).eq("id", b.dataset.pid); if (pu.error) pointsMsg = ". The points it earned could not be taken back, so correct them on the contact"; } }
+        var lr = await sb.rpc("loyalty_reverse", { p_order: b.dataset.id, p_note: "Refunded at the till" });
+        if (lr.error) pointsMsg = ". The loyalty it earned could not be taken back, so correct it on the customer's account";
+        else if (lr.data && (Number(lr.data.points) || Number(lr.data.stamps))) pointsMsg = ". Loyalty taken back: " + (Number(lr.data.points) || 0) + " points, " + (Number(lr.data.stamps) || 0) + " stamps";
         toast("Refunded " + money(tot) + pointsMsg); renderPosReturns();
       };
     });
@@ -25153,6 +25183,96 @@
         { k: "birthday_reward", l: "Birthday reward", t: "text" },
         { k: "starts_on", l: "Starts", t: "date" }, { k: "ends_on", l: "Ends", t: "date" }, { k: "is_active", l: "Active", t: "check", def: true }] });
   }
+  // A customer's loyalty account, and every movement on it. The till writes
+  // these through loyalty_post (migration 237), which is the only thing that
+  // may: it earns, redeems, counts the stamp, fills the card and keeps the
+  // running total on the contact in step, all in one call, so no screen can
+  // leave the two disagreeing.
+  function cfgLoyaltyAccounts() {
+    return {
+      title: "Loyalty accounts", pageSize: 100, table: "loyalty_accounts",
+      fetch: async function () {
+        var r = await sb.from("loyalty_accounts").select("*").eq("company_id", S.company.id).order("last_activity_at", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var pids = rows.map(function (a) { return a.partner_id; }).filter(Boolean);
+        var pm = {}, gm = {};
+        if (pids.length) ((await sb.from("partners").select("id,name,phone").in("id", pids)).data || []).forEach(function (p) { pm[p.id] = p; });
+        ((await sb.from("loyalty_programs").select("id,name,kind,stamps_required").eq("company_id", S.company.id)).data || []).forEach(function (g) { gm[g.id] = g; });
+        rows.forEach(function (a) {
+          var p = pm[a.partner_id] || {}, g = gm[a.program_id] || {};
+          a._name = p.name || ""; a._phone = p.phone || ""; a._prog = g.name || ""; a._kind = g.kind || ""; a._req = g.stamps_required || 0;
+        });
+        return rows;
+      },
+      searchText: function (a) { return [a._name, a._phone, a._prog, a.tier].join(" "); },
+      columns: [
+        { label: "Customer", get: function (a) { return '<b>' + esc(a._name || "(deleted contact)") + '</b>' + (a._phone ? '<div class="muted u-fs11">' + esc(a._phone) + '</div>' : ""); } },
+        { label: "Programme", get: function (a) { return esc(a._prog || "(none)"); } },
+        { label: "Points", num: true, get: function (a) { return money(a.points_balance); } },
+        { label: "Stamps", num: true, get: function (a) { return a._req ? (Number(a.stamps_balance) || 0) + " / " + a._req : String(Number(a.stamps_balance) || 0); } },
+        { label: "Reward due", get: function (a) { return Number(a.reward_due || 0) > 0 ? '<span class="badge paid">' + a.reward_due + ' waiting</span>' : '<span class="muted">-</span>'; } },
+        { label: "Tier", get: function (a) { return esc(a.tier || ""); } },
+        { label: "Spent with you", num: true, get: function (a) { return money(a.lifetime_spend); } },
+        { label: "Visits", num: true, get: function (a) { return String(Number(a.visits) || 0); } },
+        { label: "Last seen", get: function (a) { return '<span class="muted">' + esc(String(a.last_activity_at || "").slice(0, 10)) + '</span>'; } }
+      ],
+      filters: [
+        { label: "A reward is waiting", test: function (a) { return Number(a.reward_due || 0) > 0; } },
+        { label: "Has points to spend", test: function (a) { return Number(a.points_balance || 0) > 0; } },
+        { label: "Not seen in 90 days", test: function (a) { return !a.last_activity_at || a.last_activity_at < new Date(Date.now() - 90 * 864e5).toISOString(); } }
+      ],
+      groupBy: [
+        { label: "Tier", get: function (a) { return a.tier || "(none)"; } },
+        { label: "Programme", get: function (a) { return a._prog || "(none)"; } }
+      ],
+      emptyHint: "One account per customer, opened by their first sale. It is where the points, the stamps, the tier and what they have spent with you actually live. The running total on the contact is a copy of the points here.",
+      onOpen: function (a) { openLoyaltyAccount(a); }
+    };
+  }
+  async function openLoyaltyAccount(a) {
+    var tx = (await sb.from("loyalty_transactions").select("*").eq("account_id", a.id).order("created_at", { ascending: false }).limit(200)).data || [];
+    var oids = tx.map(function (t) { return t.order_id; }).filter(Boolean);
+    var om = {};
+    if (oids.length) ((await sb.from("pos_orders").select("id,number").in("id", oids)).data || []).forEach(function (o) { om[o.id] = o.number; });
+    var KINDS = { earn: "Earned", redeem: "Spent", stamp: "A stamp", reward: "Reward given", reverse: "Taken back on a refund", adjust: "Corrected by hand" };
+    var rows = tx.map(function (t) {
+      var pts = Number(t.points) || 0, st = Number(t.stamps) || 0;
+      return '<tr><td class="muted">' + esc(String(t.created_at || "").replace("T", " ").slice(0, 16)) + '</td>' +
+        '<td>' + esc(KINDS[t.kind] || fnbTitle(t.kind || "")) + '</td>' +
+        '<td class="num"' + (pts < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + (pts ? (pts > 0 ? "+" : "") + money(pts) : "") + '</td>' +
+        '<td class="num">' + (st ? (st > 0 ? "+" : "") + st : "") + '</td>' +
+        '<td>' + esc(om[t.order_id] || "") + '</td><td class="muted">' + esc(t.note || "") + '</td></tr>';
+    }).join("");
+    var inner =
+      '<div class="cp-sub">' + esc(a._name || "This customer") + (a._prog ? ' &middot; ' + esc(a._prog) : "") + (a.tier ? ' &middot; ' + esc(a.tier) : "") + '</div>' +
+      '<div class="kpis" style="margin:10px 0 4px">' +
+      '<div class="kpi"><div class="l">Points</div><div class="n">' + money(a.points_balance) + '</div></div>' +
+      '<div class="kpi"><div class="l">Stamps</div><div class="n">' + (Number(a.stamps_balance) || 0) + (a._req ? ' / ' + a._req : "") + '</div></div>' +
+      '<div class="kpi"><div class="l">Spent with you</div><div class="n">' + money(a.lifetime_spend) + '</div></div>' +
+      '<div class="kpi"><div class="l">Visits</div><div class="n">' + (Number(a.visits) || 0) + '</div></div>' +
+      '</div>' +
+      (Number(a.reward_due || 0) > 0 ? '<div class="o-note"><b>' + a.reward_due + ' reward' + (a.reward_due === 1 ? "" : "s") + ' waiting.</b> Ring the free item up at the till at zero as usual, then press <b>Give the reward</b> here so the card is used up.</div>' : "") +
+      '<div class="o-cf-head u-mt14">Every movement</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>When</th><th>What</th><th class="num">Points</th><th class="num">Stamps</th><th>Sale</th><th>Note</th></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="6" class="muted" style="padding:14px">Nothing yet. The first sale against this customer writes the first line.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div class="sub u-mt8">Only the till writes these, and it writes them as one movement per thing that happened, so a refund takes back exactly what its own sale gave rather than whatever today&rsquo;s rules would work out.</div>';
+    var m = plotModal("Loyalty account", inner, null, true);
+    if (Number(a.reward_due || 0) > 0) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = "Give the reward";
+      b.title = "Use up one full card";
+      b.onclick = async function () {
+        b.disabled = true;
+        var r = await sb.rpc("loyalty_claim_reward", { p_account: a.id, p_order: null });
+        if (r.error) { toast(errMsg(r.error)); b.disabled = false; return; }
+        m.remove(); toast("Given. " + ((r.data && r.data.reward_due) || 0) + " still waiting."); renderView();
+      };
+      m.querySelector(".foot").insertBefore(b, m.querySelector(".foot").firstChild);
+    }
+  }
+
   function cfgStoredValue() {
     return fnbCfg({ title: "Gift cards & wallets", table: "stored_value_accounts", one: "card", order: [["created_at", false]],
       hint: "A loaded card is money you owe, not money you have earned. The balance sits as a liability until it is spent. Orbit records the card and its balance for reference; nothing is posted.",

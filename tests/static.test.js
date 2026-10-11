@@ -94,6 +94,8 @@ const MUTATIONS = {
     s => s.replace('return buildPrintHeader(printTplData(), docTitle, docNum || "");', 'return "<div class=\"phead\"></div>";'),
   "the header, the table and the footer of a document are each a setting":
     s => s.replace(/function pdocTableClass\(over\) \{/, "function pdocTableClassGone(over) {"),
+  "loyalty runs off the programme the shop set up":
+    s => s.replace("var ptVal = Number((POS.loy || {}).redeem_value) || 0;", "var ptVal = Number((S.company.profile || {}).loyalty_point_value) || 0;"),
   "the drawer count knows what left the drawer":
     s => s.replace("var expected = (Number(POS.session.opening_cash) || 0) + cashHome - dropHome;", "var expected = (Number(POS.session.opening_cash) || 0) + cashHome;"),
   "a cheque only touches the bank when the bank pays it":

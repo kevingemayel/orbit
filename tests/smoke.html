@@ -130,6 +130,38 @@
     })[0] || null;
   }
 
+  // Some screens keep their real work behind a control that is not "New", and
+  // the register is the one that matters: Take payment is where the money, the
+  // tender pad and the loyalty live, and none of it was ever opened by this
+  // test. A reference error in that modal shipped twice before this existed.
+  // Each entry is a list of [label, what to do], run in order after the route.
+  // Rows injected into the fixtures here are taken back out at the end, so no
+  // other screen sees them.
+  var EXTRA = {
+    "pos.terminal": [
+      ["a customer and an item", function (w) {
+        var f = w.__smoke.fixtures;
+        f.tables.partners = [{ id: "00000000-0000-4000-8000-0000000000p1", company_id: f.company.id, org_id: f.org.id, name: "Smoke Customer", is_customer: true, loyalty_points: 20 }];
+        f.tables.products = [{ id: "00000000-0000-4000-8000-0000000000r1", company_id: f.company.id, name: "Smoke Item", list_price: 10, is_active: true, uom: "unit" }];
+        f.tables.pos_sessions = [{ id: "00000000-0000-4000-8000-0000000000s1", company_id: f.company.id, register: "Main", status: "open", opening_cash: 100, opened_at: "2026-01-01T08:00:00Z" }];
+        w.__orbitSmoke.go("pos.terminal");
+      }],
+      ["one on the cart", function (w) {
+        var t = w.document.querySelector("[data-pid]"); if (t) t.click();
+        var c = w.document.getElementById("pos-cust");
+        if (c && c.options.length > 1) { c.selectedIndex = 1; c.dispatchEvent(new w.Event("change")); }
+      }],
+      ["Take payment", function (w) {
+        var b = w.document.getElementById("pos-charge"); if (b) b.click();
+      }],
+      ["and the fixtures put back", function (w) {
+        var f = w.__smoke.fixtures;
+        var m = w.document.querySelector(".modal.on"); if (m) m.remove();
+        delete f.tables.partners; delete f.tables.products; delete f.tables.pos_sessions;
+      }]
+    ]
+  };
+
   // ---- boot ----
   sumEl.textContent = "loading the app...";
   var w = await bootFrame(), h = w.__orbitSmoke;
@@ -182,6 +214,19 @@
     var label = squash(btn.textContent, 40);
     var res2 = await step(w, function () { btn.click(); });
     addRow({ route: r.action + " > " + label, app: r.app, errors: res2.errors, note: res2.note, opened: res2.opened });
+  }
+
+  for (var ei = 0; ei < routes.length; ei++) {
+    var er = routes[ei], extra = EXTRA[er.action];
+    if (!extra) continue;
+    if (!alive()) { w = await bootFrame(); h = w.__orbitSmoke; if (!h) break; }
+    sumEl.textContent = "running the deeper steps on " + er.action;
+    await step(w, (function (a, app) { return function () { h.home(); h.S.app = app; h.go(a); }; })(er.action, er.app));
+    for (var xi = 0; xi < extra.length; xi++) {
+      var xlabel = extra[xi][0], xfn = extra[xi][1];
+      var xr = await step(w, (function (fn) { return function () { fn(w); }; })(xfn));
+      addRow({ route: er.action + " > " + xlabel, app: er.app, errors: xr.errors, note: xr.note, opened: xr.opened });
+    }
   }
 
   // ---- summary ----

@@ -1688,6 +1688,58 @@ orbitScreenHelp({
     tips: [
       "Put a To date on every approval, so the list can be reviewed when approvals lapse."
     ]
+  },
+
+  "gst.accounts": {
+    title: "Loyalty accounts",
+    what: "One account per customer, opened by their first sale. It holds their points, their stamps, the tier they have reached, what they have spent with you and how many times they have been in, and under it every movement that got them there. The running total you see on a contact is a copy of the points here; this is the side with the history behind it.",
+    when: [
+      "A customer says they should have more points than the till shows, and you want to see what actually happened.",
+      "Somebody has a full stamp card and you are giving them the free one.",
+      "You want the list of people who have a reward waiting, or who have not been in for three months.",
+      "You are deciding whether the programme is worth running, and want to see spend per customer against visits."
+    ],
+    how: [
+      "Open <b>Kitchen &rsaquo; Guests &rsaquo; Loyalty accounts</b>. Every customer who has ever been rung up with their name on the sale is here, most recently seen first.",
+      "There is no <span class='man-key'>New</span> button, and that is deliberate: an account is opened by the first sale, so it can never exist for somebody who has never been in.",
+      "Click <b>A reward is waiting</b> under Filters to see only the full cards.",
+      "Open one. The four figures across the top are points, stamps out of what makes a reward, what they have spent with you and how many visits. Under them is every movement: earned, spent, a stamp, a reward given, and anything taken back on a refund, each with the sale it came from.",
+      "For a full card: ring the free item up at the till at zero, the same as any other giveaway, then come back here and click <span class='man-key'>Give the reward</span>. You should see <i>Given. 0 still waiting.</i> and a <b>Reward given</b> line in the movements.",
+      "To see where the rules come from, open <b>Loyalty programmes</b>: whichever programme is active is the one the till is using, and what is in force is read fresh at the start of every shift."
+    ],
+    fields: [
+      ["Customer", "Who the account belongs to. It cannot be changed; the account follows the contact.", "auto"],
+      ["Programme", "The programme that was live when the account was opened.", "auto"],
+      ["Points", "What they can spend. The same number the till shows and the contact carries.", "auto"],
+      ["Stamps", "How far along the card they are, out of the number the programme says makes a reward.", "auto"],
+      ["Reward due", "How many full cards are waiting to be claimed. A card that fills starts again, so somebody who never claims does not lose them.", "auto"],
+      ["Tier", "Moved on what they have spent with you, at the thresholds the programme sets.", "auto"],
+      ["Spent with you", "Everything rung up against them since the account opened, before any refund.", "auto"],
+      ["Visits", "How many sales carried their name.", "auto"],
+      ["Last seen", "The last movement of any kind.", "auto"]
+    ],
+    buttons: [
+      ["Give the reward", "Uses up one full card and records that it was given. The free item itself is rung up at the till at zero."]
+    ],
+    after: "<p>Nothing on this screen is typed, which is the point of it. Only the till writes to an account, and it writes through one call that earns, redeems, counts the stamp, fills the card, moves the tier and copies the points onto the contact in the same breath, so the two can never drift apart.</p><p>Every movement is its own line. That is what lets a refund take back exactly what its own sale gave, instead of recalculating from today's rules and taking back a different number because the programme changed last month.</p><p>Loyalty does not post to the ledger. Points are a discount you have promised, not money, and the discount reaches the books when it is spent, as a discount on that sale.</p>",
+    links: [
+      { name: "Loyalty programmes", how: "Where points per unit, the value of a point, the stamps for a reward and the tiers are set. The newest active programme is the one in force.", to: "gst.loyalty" },
+      { name: "Register", how: "Where the account is written. The charge screen shows what a point is worth and offers to spend them.", to: "pos.terminal" },
+      { name: "Returns", how: "Refunding a sale takes back exactly the loyalty that sale gave.", to: "pos.returns" },
+      { name: "Customers", how: "The contact carries a copy of the points, for the screens that only need the number.", to: "contacts" }
+    ],
+    mistakes: [
+      ["That card is not full yet.", "There is no reward waiting. Check the stamps figure against what the programme asks for."],
+      ["That customer has 120 points, not 300.", "The till was asked to spend more than the account holds. Points can only be spent down to nothing."],
+      ["The customer's loyalty could not be recorded, so correct it on their account", "The sale went through but the loyalty call did not, usually a connection drop mid-sale. Open the account and see what the last movement was; a missing earn is the only thing to put right."],
+      ["Nothing on the account, but they have been in", "The sale was rung up without their name on it. Loyalty needs the customer chosen at the till before the payment is taken."],
+      ["Points earned but the programme looks wrong", "Whichever programme is active and inside its dates wins, newest first. Switch the old one off rather than leaving two live."]
+    ],
+    tips: [
+      "Start with a stamp card. It is the easiest to explain at a counter and the only kind a customer can check themselves.",
+      "Filter to <b>Not seen in 90 days</b> for the list worth a message. People with points sitting unspent are the cheapest custom to win back.",
+      "A programme switched off mid-month does not wipe anybody's balance: the accounts stay, and the next sale earns on whatever is live then."
+    ]
   }
 
 });

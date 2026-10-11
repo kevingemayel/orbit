@@ -695,6 +695,26 @@
         return ok(need.length + " pieces present: the drop is deducted, the button is wired, and every money move posts");
       } },
 
+    { name: "loyalty runs off the programme the shop set up",
+      why: "There were two loyalty systems that never met: a Loyalty programmes screen where you set points per unit, the value of a point, how many stamps make a reward and what the reward is, and a till that read none of it and kept one running number on the contact. A shop could configure buy-nine-get-one and nothing would ever count to nine. One engine now, in the database, and this check keeps every part of the till pointed at it.",
+      run: function (src) {
+        var need = [
+          ["the till reads the rules in force", /sb\.rpc\("loyalty_rules", \{ p_company: S\.company\.id \}\)/],
+          ["a point is worth what the programme says", /var ptVal = Number\(\(POS\.loy \|\| \{\}\)\.redeem_value\) \|\| 0;/],
+          ["earning is per unit spent", /var earned = cust && !isStamp && earnRate > 0 \? Math\.floor\(t\.sub \* earnRate\) : 0;/],
+          ["a stamp card says so at the till", /cust && isStamp \?/],
+          ["the sale writes the account", /sb\.rpc\("loyalty_post", \{ p_company: S\.company\.id, p_partner: cust\.id, p_order: oid/],
+          ["the refund takes back what that sale gave", /sb\.rpc\("loyalty_reverse", \{ p_order: b\.dataset\.id/],
+          ["a full card is claimed through the database", /sb\.rpc\("loyalty_claim_reward", \{ p_account: a\.id/],
+          ["and the accounts have a screen", /case "gst\.accounts": return renderList\(cfgLoyaltyAccounts\(\)\);/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        var byhand = (src.match(/from\("partners"\)\.update\(\{ loyalty_points:/g) || []).length;
+        if (byhand) return bad(byhand + " place(s) write the points straight onto the contact, which leaves it disagreeing with the account behind it");
+        return ok(need.length + " parts read one engine, and nothing writes the points behind its back");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {
