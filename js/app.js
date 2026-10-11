@@ -1627,7 +1627,7 @@
       { i: "book", n: "Training academy", l: "Roastery", d: "Courses sold to the public and used to certify staff." },
       { i: "heart", n: "Loyalty programmes", l: "Guests", d: "Points, a stamp card, or spend tiers." },
       { i: "person", n: "Loyalty accounts", l: "Guests", d: "One per customer: points, stamps, tier, what they have spent, and every movement." },
-      { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Card and wallet balances, recorded for reference." },
+      { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Card balances as money you owe: loading posts, spending moves it, expiry is income." },
       { i: "refresh", n: "Subscription plans", l: "Guests", d: "The unlimited pass and the bean box, with limits." },
       { i: "send", n: "Feedback and complaints", l: "Guests", d: "Every score and complaint, with an owner and an SLA." },
       { i: "coin", n: "Aggregator payouts", l: "Delivery", d: "What they said they would pay against what they paid." },
@@ -24030,7 +24030,7 @@
     document.getElementById("pos-x").onclick = function () { POS.voucher = null; POS.redeem = 0; m.remove(); };
     document.getElementById("pos-done").onclick = async function () {
       var t = posTotals();
-      if (!posPad || !posPad.ready) { var pt = posPad ? posPad.totals() : null; toast(pt && pt.missing ? "No exchange rate for " + pt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the sale yet"); return; }
+      if (!posPad || !posPad.ready) { var pt = posPad ? posPad.totals() : null, pp = posPad && posPad.problem ? posPad.problem() : null; toast(pp ? pp : pt && pt.missing ? "No exchange rate for " + pt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the sale yet"); return; }
       var earned = cust && !isStamp && earnRate > 0 ? Math.floor(t.sub * earnRate) : 0;
       var redeemedPts = ptVal > 0 ? Math.round(t.redeemDisc / ptVal) : 0;
       var doneBtn = document.getElementById("pos-done"); doneBtn.disabled = true;
@@ -25273,21 +25273,164 @@
     }
   }
 
+  // A loaded card is money you owe, so the balance on this screen is never
+  // typed: it is what the movements add up to. Loading posts (migration 238),
+  // paying with it at a till moves it through a trigger on the tender itself,
+  // and an expired balance becomes income as breakage, which is the only point
+  // at which it is yours.
+  var SV_KINDS = { wallet: "Wallet", gift_card: "Gift card", corporate: "Corporate account" };
   function cfgStoredValue() {
-    return fnbCfg({ title: "Gift cards & wallets", table: "stored_value_accounts", one: "card", order: [["created_at", false]],
-      hint: "A loaded card is money you owe, not money you have earned. The balance sits as a liability until it is spent. Orbit records the card and its balance for reference; nothing is posted.",
-      select: "*, partners(name)",
-      cols: [{ l: "Card", k: "card_number", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" },
-        { l: "Holder", k: "partner_id", fmt: function (r) { return esc(r.partners ? r.partners.name : ""); } },
-        { l: "Balance", k: "balance", fmt: "money", num: true }, { l: "Expires", k: "expires_on", fmt: "date" }, { l: "Status", k: "status", fmt: "badge" }],
-      filters: [{ label: "With a balance", test: function (r) { return Number(r.balance || 0) > 0; } }],
-      fields: [{ k: "card_number", l: "Card number", t: "text", req: true },
-        { k: "kind", l: "Kind", t: "select", opts: [["wallet", "Wallet"], ["gift_card", "Gift card"], ["corporate", "Corporate account"]], req: true },
-        { k: "partner_id", l: "Holder", t: "select", lookup: lkPartners },
-        { k: "balance", l: "Balance", t: "num" }, { k: "expires_on", l: "Expires", t: "date" },
-        { k: "status", l: "Status", t: "select", opts: [["active", "Active"], ["frozen", "Frozen"], ["expired", "Expired"], ["closed", "Closed"]] }],
-      note: "Loading a card is not a sale. In the accounts, revenue belongs when the balance is spent, and expired balance is breakage. Orbit does not make these entries." });
+    return {
+      title: "Gift cards & wallets", pageSize: 100, table: "stored_value_accounts",
+      fetch: async function () {
+        var r = await sb.from("stored_value_accounts").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var pids = rows.map(function (s) { return s.partner_id; }).filter(Boolean), pm = {};
+        if (pids.length) ((await sb.from("partners").select("id,name").in("id", pids)).data || []).forEach(function (p) { pm[p.id] = p.name; });
+        rows.forEach(function (s) { s._holder = pm[s.partner_id] || ""; });
+        return rows;
+      },
+      searchText: function (s) { return [s.card_number, s._holder, s.kind, s.status].join(" "); },
+      columns: [
+        { label: "Card", get: function (s) { return '<b>' + esc(s.card_number || "") + '</b>'; } },
+        { label: "Kind", get: function (s) { return esc(SV_KINDS[s.kind] || s.kind || ""); } },
+        { label: "Holder", get: function (s) { return s._holder ? esc(s._holder) : '<span class="muted">bearer</span>'; } },
+        { label: "Balance", num: true, get: function (s) { return '<b>' + money(s.balance) + '</b>'; } },
+        { label: "Expires", get: function (s) { return '<span class="muted">' + esc(s.expires_on || "never") + '</span>'; } },
+        { label: "Status", get: function (s) { return '<span class="badge ' + (s.status === "active" ? "paid" : s.status === "frozen" ? "partial" : "unpaid") + '">' + esc(fnbTitle(s.status || "active")) + '</span>'; } }
+      ],
+      filters: [
+        { label: "With a balance", test: function (s) { return Number(s.balance || 0) > 0.004; } },
+        { label: "Expiring in 30 days", test: function (s) { return s.expires_on && s.expires_on >= today() && s.expires_on <= fmtD(new Date(Date.now() + 30 * 864e5)); } },
+        { label: "Past its date", test: function (s) { return s.expires_on && s.expires_on < today() && Number(s.balance || 0) > 0.004; } }
+      ],
+      groupBy: [
+        { label: "Kind", get: function (s) { return SV_KINDS[s.kind] || s.kind || ""; } },
+        { label: "Status", get: function (s) { return fnbTitle(s.status || "active"); } }
+      ],
+      emptyHint: "A card or a wallet somebody has paid into. The money is yours to hold, not yours to keep: loading one puts it on the balance sheet as something you owe, and it only becomes income when it is spent or when it expires unspent.",
+      onOpen: function (s) { openStoredValueCard(s); }, onNew: function () { openStoredValueCard(null); }
+    };
   }
+  async function openStoredValueCard(s) {
+    var isNew = !s || !s.id;
+    s = s || { kind: "gift_card", status: "active", balance: 0, issued_on: today() };
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name").limit(1000)).data || [];
+    var tx = s.id ? ((await sb.from("stored_value_transactions").select("*").eq("account_id", s.id).order("created_at", { ascending: false }).limit(200)).data || []) : [];
+    var oids = tx.map(function (t) { return t.order_id; }).filter(Boolean), om = {};
+    if (oids.length) ((await sb.from("pos_orders").select("id,number").in("id", oids)).data || []).forEach(function (o) { om[o.id] = o.number; });
+    var TK = { load: "Loaded", spend: "Spent", "change back": "Change put back", adjust: "Corrected by hand", expired: "Expired, written off" };
+    var rows = tx.map(function (t) {
+      var a = Number(t.amount) || 0;
+      return '<tr><td class="muted">' + esc(String(t.created_at || "").replace("T", " ").slice(0, 16)) + '</td>' +
+        '<td>' + esc(TK[t.kind] || fnbTitle(t.kind || "")) + '</td>' +
+        '<td class="num"' + (a < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + (a > 0 ? "+" : "") + money(a) + '</td>' +
+        '<td class="num">' + money(t.balance_after) + '</td>' +
+        '<td>' + esc(om[t.order_id] || "") + '</td><td class="muted">' + esc(t.note || "") + '</td></tr>';
+    }).join("");
+    var inner =
+      '<div class="row2"><div>' + fld("Card number", '<input id="sv-num" value="' + esc(s.card_number || "") + '" placeholder="As printed, or scanned">', "What the cashier will type or scan. It has to be unique enough to find.") + '</div>' +
+      '<div>' + fld("Kind", '<select id="sv-kind">' + Object.keys(SV_KINDS).map(function (k) {
+        return '<option value="' + k + '"' + (s.kind === k ? " selected" : "") + '>' + esc(SV_KINDS[k]) + '</option>';
+      }).join("") + '</select>', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Holder", '<select id="sv-holder"><option value="">Bearer, whoever has it</option>' + partners.map(function (p) {
+        return '<option value="' + p.id + '"' + (s.partner_id === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>';
+      }).join("") + '</select>', "A wallet or a corporate account belongs to somebody. A gift card usually does not.") + '</div>' +
+      '<div>' + fld("Status", '<select id="sv-status">' + [["active", "Active"], ["frozen", "Frozen"], ["expired", "Expired"], ["closed", "Closed"]].map(function (k) {
+        return '<option value="' + k[0] + '"' + ((s.status || "active") === k[0] ? " selected" : "") + '>' + k[1] + '</option>';
+      }).join("") + '</select>', "Only an active card can pay for anything.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Issued", '<input id="sv-issued" type="date" value="' + esc(s.issued_on || today()) + '">', "") + '</div>' +
+      '<div>' + fld("Expires", '<input id="sv-exp" type="date" value="' + esc(s.expires_on || "") + '">', "Leave it empty and the card never expires. With a date, anything unspent becomes income the morning after it passes.") + '</div></div>' +
+      (isNew
+        ? '<div class="o-note">Save the card, then <b>Load</b> it with what the customer paid. The balance is never typed: it is what the movements add up to.</div>'
+        : '<div class="kpis" style="margin:12px 0 4px">' +
+          '<div class="kpi"><div class="l">On the card</div><div class="n">' + money(s.balance) + '</div></div>' +
+          '<div class="kpi"><div class="l">Loaded in total</div><div class="n">' + money(tx.filter(function (t) { return t.kind === "load"; }).reduce(function (a, t) { return a + (Number(t.amount) || 0); }, 0)) + '</div></div>' +
+          '<div class="kpi"><div class="l">Spent</div><div class="n">' + money(-tx.filter(function (t) { return t.kind === "spend"; }).reduce(function (a, t) { return a + (Number(t.amount) || 0); }, 0)) + '</div></div>' +
+          '<div class="kpi"><div class="l">Movements</div><div class="n">' + tx.length + '</div></div>' +
+          '</div>' +
+          '<div class="o-cf-head u-mt14">Every movement</div>' +
+          '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>When</th><th>What</th><th class="num">Amount</th><th class="num">Left on it</th><th>Sale</th><th>Note</th></tr></thead><tbody>' +
+          (rows || '<tr><td colspan="6" class="muted" style="padding:14px">Nothing on it yet. <b>Load</b> puts the first money on.</td></tr>') +
+          '</tbody></table></div>' +
+          '<div class="sub u-mt8">Loading posts the money into the bank or the till and raises what you owe on cards. Paying with the card at a till moves the balance as the tender is taken, so no screen can take the payment and forget to spend it. An expired balance becomes income as breakage, overnight.</div>');
+
+    var m = plotModal(isNew ? "New card" : "Card " + (s.card_number || ""), inner, async function () {
+      var num = (gv("sv-num") || "").trim();
+      if (!num) { toast("Give the card a number"); return; }
+      var row = {
+        card_number: num, kind: document.getElementById("sv-kind").value,
+        partner_id: document.getElementById("sv-holder").value || null,
+        status: document.getElementById("sv-status").value,
+        issued_on: gv("sv-issued") || today(), expires_on: gv("sv-exp") || null,
+        currency_code: s.currency_code || S.company.currency_code
+      };
+      var r, id = s.id;
+      if (id) r = await sb.from("stored_value_accounts").update(row).eq("id", id);
+      else { row.company_id = S.company.id; row.balance = 0; r = await sb.from("stored_value_accounts").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    function act(label, title, fn) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = label; if (title) b.title = title;
+      b.onclick = async function () { b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    if (s.id) {
+      act("Load", "Put money on the card. It posts: the till or the bank up, what you owe on cards up.", function () { openCardLoad(s, m); });
+      act("Correct the balance", "A goodwill top-up or a write-off, with the reason kept", function () { openCardAdjust(s, m); });
+    }
+    if (s.id && canManageApp(S.app) && Math.abs(Number(s.balance || 0)) < 0.005 && !tx.length) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this card? It has no balance and no history.")) return;
+        var d = await sb.from("stored_value_accounts").delete().eq("id", s.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+  async function openCardLoad(s, parent) {
+    var accs = (await sb.from("cash_accounts").select("id,name,kind").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || [];
+    var inner =
+      '<div class="row2"><div>' + fld("Amount", '<input id="cl-amt" type="number" step="0.01" value="">', "What the customer handed over.") + '</div>' +
+      '<div>' + fld("On", '<input id="cl-date" type="date" value="' + today() + '">', "") + '</div></div>' +
+      fld("Money went into", '<select id="cl-acc"><option value="">' + esc("(the cash journal's own account)") + '</option>' + accs.map(function (a) {
+        return '<option value="' + a.id + '">' + esc(a.name) + '</option>';
+      }).join("") + '</select>', "The till or the bank account that actually received it.") +
+      fld("Note", '<input id="cl-note" placeholder="e.g. Sold at the counter">', "") +
+      '<div class="o-note">This is not a sale. The money goes into the till or the bank and the same amount is recorded as <b>owed on cards</b>, because it is the customer&rsquo;s until they spend it. The revenue arrives later, as they spend it.</div>';
+    var mm = plotModal("Load card " + (s.card_number || ""), inner, async function () {
+      var amt = parseFloat(gv("cl-amt")) || 0;
+      if (!(amt > 0)) { toast("How much is going on the card?"); return; }
+      var r = await sb.rpc("stored_value_load", {
+        p_account: s.id, p_amount: amt, p_date: gv("cl-date") || today(),
+        p_from_cash_account: document.getElementById("cl-acc").value || null, p_note: gv("cl-note") || null
+      });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast(money(amt) + " loaded. It is on the balance sheet as owed, not as income."); renderView();
+    });
+  }
+  async function openCardAdjust(s, parent) {
+    var inner =
+      fld("Change the balance by", '<input id="ca-amt" type="number" step="0.01" value="" placeholder="e.g. 10 or -10">',
+        "A plus is value given away, which is a cost to you. A minus writes balance off, which is income.") +
+      fld("Why", '<input id="ca-note" placeholder="e.g. Goodwill after a complaint">', "Kept on the movement and on the ledger entry. Always worth writing.") +
+      '<div class="o-note">Current balance ' + money(s.balance) + '. A top-up posts to your default expense account, because value given without money taken is a giveaway. A write-off posts to card breakage, because it is balance you will never have to honour.</div>';
+    var mm = plotModal("Correct card " + (s.card_number || ""), inner, async function () {
+      var amt = parseFloat(gv("ca-amt"));
+      if (!amt) { toast("By how much?"); return; }
+      var r = await sb.rpc("stored_value_adjust", { p_account: s.id, p_amount: amt, p_note: gv("ca-note") || null });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast("Corrected, and posted."); renderView();
+    });
+  }
+
   function cfgSubscriptionPlans() {
     return fnbCfg({ title: "Subscription plans", table: "subscription_plans", one: "plan", order: [["name", true]],
       hint: "An unlimited-coffee pass, a bean box, a corporate plan. A daily limit can be recorded on a pass; the tills do not enforce it.",
@@ -26291,6 +26434,43 @@
     var pad = { due: due, rows: rows, ready: true };
     var root = document.getElementById(rootId);
     if (!root) return pad;
+    // A wallet or gift card tender has to say WHICH card, or the money comes
+    // from nowhere: the balance is never moved and the night posts the takings
+    // against the card liability of a card nobody named. The list is fetched
+    // the first time a wallet row appears and the pad repaints when it lands.
+    var cards = null, cardsAsked = false;
+    function isCardMethod(mm) { return mm === "wallet" || mm === "voucher"; }
+    function cardById(id) { return (cards || []).filter(function (c) { return c.id === id; })[0] || null; }
+    function loadCards() {
+      cardsAsked = true;
+      sb.from("stored_value_accounts").select("id,card_number,kind,balance,partner_id,expires_on")
+        .eq("company_id", S.company.id).eq("status", "active").order("card_number").limit(500)
+        .then(function (x) { cards = x.data || []; paint(); });
+    }
+    function cardRow(r, i) {
+      if (!cards) { if (!cardsAsked) loadCards(); return '<div class="tp-row tp-chg"><span class="tp-lbl">Card</span><span class="muted">finding the cards...</span></div>'; }
+      var c = cardById(r.card);
+      return '<div class="tp-row tp-chg"><span class="tp-lbl">Card</span>' +
+        '<select class="tp-card" data-i="' + i + '"><option value="">Which card?</option>' +
+        cards.map(function (x) {
+          return '<option value="' + x.id + '"' + (r.card === x.id ? " selected" : "") + '>' + esc(x.card_number || "") + ' - ' + money(x.balance) + ' on it</option>';
+        }).join("") + '</select>' +
+        '<b>' + (c ? money(c.balance) + " left" : "") + '</b></div>';
+    }
+    function cardProblem() {
+      for (var i = 0; i < rows.length; i++) {
+        var r = rows[i];
+        if (!isCardMethod(r.method)) continue;
+        if (!r.card) return "Which card is paying?";
+        var c = cardById(r.card);
+        if (!c) continue;
+        var home_amt = homeValue(r);
+        if (home_amt != null && home_amt > Number(c.balance || 0) + 0.005) {
+          return "Card " + (c.card_number || "") + " has only " + money(c.balance) + " on it";
+        }
+      }
+      return null;
+    }
 
     function ccySel(v, i) {
       return '<select class="tp-ccy" data-i="' + i + '">' + ccys.map(function (c) {
@@ -26324,14 +26504,16 @@
             '<input class="tp-amt" data-i="' + i + '" type="number" step="0.01" value="' + (r.amt != null ? r.amt : "") + '" aria-label="Amount in ' + r.ccy + '">' +
             '<span class="tp-eq">' + (r.ccy === home ? "" : (h == null ? '<span class="u-bad">no rate</span>' : "= " + money(h))) + '</span>' +
             (rows.length > 1 ? '<button type="button" class="tp-x" data-i="' + i + '" title="Remove this tender">&times;</button>' : '<span></span>') +
-            '</div>';
+            '</div>' + (isCardMethod(r.method) ? cardRow(r, i) : "");
         }).join("") + '</div>' +
         '<div class="tp-foot"><button type="button" class="btn sm" id="tp-add">Add another currency</button>' +
         '<span class="tp-sum" id="tp-sum"></span></div>' +
         '<div id="tp-change"></div>';
       var t = totals();
       var sm = root.querySelector("#tp-sum");
+      var cp = cardProblem();
       sm.innerHTML = t.missing ? '<b class="u-bad">No rate for ' + esc(t.missing) + ' today</b>'
+        : cp ? '<b class="u-bad">' + esc(cp) + '</b>'
         : t.short > 0.005 ? '<b class="u-bad">' + money(t.short) + ' short</b>'
           : t.change > 0.005 ? 'Change <b>' + money(t.change) + '</b>'
             : '<b class="u-good">Exact</b>';
@@ -26346,7 +26528,10 @@
           pad.changeCcy = this.value; await rateFor(this.value); paint();
         };
       } else ch.innerHTML = "";
-      pad.ready = !t.missing && t.short <= 0.005;
+      pad.ready = !t.missing && !cp && t.short <= 0.005;
+      root.querySelectorAll(".tp-card").forEach(function (el) {
+        el.onchange = function () { rows[+el.dataset.i].card = el.value || null; paint(); };
+      });
       root.querySelectorAll(".tp-amt").forEach(function (el) {
         el.oninput = function () { rows[+el.dataset.i].amt = parseFloat(el.value); var t2 = totals(); repaintSummary(t2); };
         el.onchange = function () { paint(); };
@@ -26355,7 +26540,12 @@
         el.onchange = async function () { rows[+el.dataset.i].ccy = el.value; await rateFor(el.value); paint(); };
       });
       root.querySelectorAll(".tp-meth").forEach(function (el) {
-        el.onchange = function () { rows[+el.dataset.i].method = el.value; };
+        el.onchange = function () {
+          var r = rows[+el.dataset.i];
+          r.method = el.value;
+          if (!isCardMethod(r.method)) r.card = null;
+          paint();   // a wallet row grows a card picker, and loses it again
+        };
       });
       root.querySelectorAll(".tp-x").forEach(function (el) {
         el.onclick = function () { rows.splice(+el.dataset.i, 1); paint(); };
@@ -26375,10 +26565,12 @@
     }
     function repaintSummary(t) {
       var sm = root.querySelector("#tp-sum"); if (!sm) return;
+      var cp = cardProblem();
       sm.innerHTML = t.missing ? '<b class="u-bad">No rate for ' + esc(t.missing) + '</b>'
+        : cp ? '<b class="u-bad">' + esc(cp) + '</b>'
         : t.short > 0.005 ? '<b class="u-bad">' + money(t.short) + ' short</b>'
           : t.change > 0.005 ? 'Change <b>' + money(t.change) + '</b>' : '<b class="u-good">Exact</b>';
-      pad.ready = !t.missing && t.short <= 0.005;
+      pad.ready = !t.missing && !cp && t.short <= 0.005;
       if (opts.onChange) opts.onChange(t);
     }
     // the rows to write: one per tender, plus change as a negative tender
@@ -26388,7 +26580,8 @@
         var amt = Number(r.amt) || 0; if (!amt) return;
         var rt = rates[r.ccy]; if (rt == null) return;
         out.push(Object.assign({}, base, {
-          method: r.method, currency_code: r.ccy, amount_ccy: svcR2(amt), fx_rate: rt, amount: svcR2(amt * rt)
+          method: r.method, currency_code: r.ccy, amount_ccy: svcR2(amt), fx_rate: rt, amount: svcR2(amt * rt),
+          stored_value_account_id: isCardMethod(r.method) ? (r.card || null) : null
         }));
       });
       if (t.change > 0.005) {
@@ -26400,6 +26593,8 @@
       return out;
     };
     pad.totals = totals;
+    // why the pad is not ready, in words, so the refusal names the real reason
+    pad.problem = cardProblem;
     pad.setDue = function (d) { due = d; pad.due = d; if (rows.length === 1) rows[0].amt = svcR2(d); paint(); };
     paint();
     return pad;
@@ -26440,7 +26635,7 @@
       var amt = Number(m.__amount != null ? m.__amount : due);
       if (!(amt > 0)) { toast("Nothing to settle"); return; }
       if (amt > due + 0.005) { toast("That is more than is still owed"); return; }
-      if (!billPad || !billPad.ready) { var bt = billPad ? billPad.totals() : null; toast(bt && bt.missing ? "No exchange rate for " + bt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover this share yet"); return; }
+      if (!billPad || !billPad.ready) { var bt = billPad ? billPad.totals() : null, bp = billPad && billPad.problem ? billPad.problem() : null; toast(bp ? bp : bt && bt.missing ? "No exchange rate for " + bt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover this share yet"); return; }
       var rows = billPad.payments({
         company_id: S.company.id, order_id: oid, tip_amount: 0,
         reference: gv("bill-ref") || null, store_id: SERVICE.store || t.store_id || null,
@@ -26990,7 +27185,7 @@
       '<div><label>Reference</label><input id="ct-ref" placeholder="card auth, last 4"></div>';
     var pad = null;
     var m = plotModal("Take " + money(T.tot), inner, async function () {
-      if (!pad || !pad.ready) { var tt = pad ? pad.totals() : null; toast(tt && tt.missing ? "No exchange rate for " + tt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the bill yet"); return; }
+      if (!pad || !pad.ready) { var tt = pad ? pad.totals() : null, tp = pad && pad.problem ? pad.problem() : null; toast(tp ? tp : tt && tt.missing ? "No exchange rate for " + tt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the bill yet"); return; }
       var rows = pad.payments({
         company_id: S.company.id, order_id: SERVICE.order.id, tip_amount: 0,
         reference: gv("ct-ref") || null, store_id: SERVICE.store || null,

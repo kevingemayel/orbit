@@ -1000,51 +1000,62 @@ orbitScreenHelp({
 
   "gst.storedvalue": {
     title: "Gift cards and wallets",
-    what: "A register of <b>stored value</b>: gift cards, customer wallets and corporate accounts, each with its card number, holder, balance, expiry and status. Money loaded onto a card is money you owe the holder until it is spent, not income. This screen records the card and its balance; it does not post anything to the accounts or take payments at the till.",
+    what: "A register of <b>stored value</b>: gift cards, customer wallets and corporate accounts. Money loaded onto a card is money you owe the holder until they spend it, so it sits on the balance sheet as a liability and not as income. The balance on this screen is never typed: it is what the movements add up to, and every card carries its own history of loads, spends and corrections.",
     when: [
       "A gift card is sold or a corporate account is opened.",
-      "A balance needs correcting after it was used.",
-      "A card is lost and should be frozen, or has expired."
+      "A customer wants to put money on a wallet.",
+      "A card is lost and should be frozen, or has expired.",
+      "A complaint ends in a goodwill top-up, or a balance has to be written off.",
+      "Month end, to tie the cards with a balance against what the ledger says you owe on them."
     ],
     how: [
-      "Open <b>Kitchen &rsaquo; Guests &rsaquo; Gift cards and wallets</b> and click <span class='man-key'>New</span>. In this example a restaurant sells a gift card worth 50.",
-      "Type the number printed on the card, <i>GC-100245</i>, in <b>Card number</b>. It must be different from every other card.",
-      "Choose <b>Gift card</b> in <b>Kind</b>. Pick the buyer in <b>Holder</b> if you know them.",
-      "Type 50 in <b>Balance</b> and set <b>Expires</b> to a year from today.",
-      "Choose <b>Active</b> in <b>Status</b>, or leave it on (none): a new card starts as Active.",
-      "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the card with a balance of 50.00.",
-      "When the guest spends 18 of it, open the card, change <b>Balance</b> to 32 and save. Orbit does not reduce it for you.",
-      "Use <span class='man-key'>Filters</span> &rsaquo; <b>With a balance</b> to see every card that still holds money."
+      "Open <b>Kitchen &rsaquo; Guests &rsaquo; Gift cards and wallets</b> and click <span class='man-key'>New</span>. In this example a restaurant sells a gift card for 50.",
+      "Type the number printed on the card, <i>GC-100245</i>, in <b>Card number</b>. It is what the cashier will type or scan, so it has to be unique enough to find.",
+      "Choose <b>Gift card</b> in <b>Kind</b>, leave <b>Holder</b> on <i>Bearer</i> for a card anyone can use, and set <b>Expires</b> to a year out, or leave it empty for a card that never expires.",
+      "Click <span class='man-key'>Save</span>. The card appears with a balance of 0.00, because nothing has been paid onto it yet.",
+      "Open it again and click <span class='man-key'>Load</span>. Type 50 in <b>Amount</b>, choose the till the money went into, and save. You should see <i>50.00 loaded. It is on the balance sheet as owed, not as income.</i>",
+      "Open the card once more. The four figures across the top read 50.00 on the card, 50.00 loaded in total, nothing spent and one movement, with that movement listed underneath.",
+      "When the guest comes in and spends 18 of it: at the register, press <span class='man-key'>Charge</span> and set the tender to <b>Wallet / gift card</b>. A <b>Card</b> box appears under it; pick GC-100245 and it shows what is left. Take the payment as usual.",
+      "Back on the card, the balance is 32.00 and there is a <b>Spent</b> movement against that sale. Nobody typed it.",
+      "For a goodwill top-up or a write-off, click <span class='man-key'>Correct the balance</span>, put in the amount (a minus to take it off) and the reason."
     ],
     fields: [
-      ["Card number", "The number on the card, unique in the company.", "required"],
+      ["Card number", "The number on the card. It is what gets typed or scanned at the till.", "required"],
       ["Kind", "Wallet, Gift card or Corporate account.", "required"],
-      ["Holder", "The customer or company that holds it. Any contact can be chosen.", "optional"],
-      ["Balance", "What is left on the card. You keep it up to date. Left blank, a new card starts at 0.", "optional"],
-      ["Expires", "When the balance can no longer be used.", "optional"],
-      ["Status", "Active, Frozen, Expired or Closed. Left on (none), a new card starts as Active.", "optional"]
+      ["Holder", "The customer or company it belongs to. A wallet or a corporate account has one; a gift card usually does not.", "optional"],
+      ["Status", "Active, Frozen, Expired or Closed. Only an active card can pay for anything, which is what makes Frozen the right answer to a lost card.", "required"],
+      ["Issued", "The day it was given out.", "optional"],
+      ["Expires", "Leave it empty and the card never expires. With a date, anything left unspent becomes income as breakage the morning after it passes.", "optional"],
+      ["Balance", "Not a field. It is what the movements add up to, which is why it can be trusted.", "auto"]
     ],
     buttons: [
-      ["New", "Opens a blank card. Only for people who can manage the Kitchen app."],
-      ["Save", "Saves the card."],
-      ["Cancel", "Closes the form without saving."],
-      ["Delete", "Removes the card after <i>Delete this record?</i>."],
-      ["Filters", "<b>With a balance</b> shows cards whose balance is above 0."],
-      ["Export", "Downloads the list, for example to reconcile outstanding balances, as a CSV file."]
+      ["Load", "Puts money on the card and posts it: the till or the bank up, what you owe on cards up. This is not a sale."],
+      ["Correct the balance", "A goodwill top-up, which posts as a cost, or a write-off, which posts as breakage. The reason is kept on both the movement and the ledger entry."],
+      ["Delete", "Only a card with no balance and no history at all."],
+      ["Filters", "<b>With a balance</b>, <b>Expiring in 30 days</b> and <b>Past its date</b>."],
+      ["Export", "Downloads the list, which is the figure to tie against the ledger at month end."]
     ],
-    after: "Nothing is posted. Selling a card, spending it and letting it expire are not recorded in the ledger from this screen, and the Register cannot take payment against a card. Keep your books right by recording money received for cards against a liability account through Accounting, and use the <b>With a balance</b> export to check that account.",
+    after: "<p><b>Loading</b> posts the money into the till or the bank and the same amount onto <b>4198 Gift cards and wallets</b>. Nothing is income yet: you are holding somebody else's money.</p><p><b>Spending</b> it at a till moves the balance as the tender is taken, through the database rather than a screen, so no till can take a card payment and forget to spend it, and a card without the balance refuses the payment instead of going quietly negative. The night's posting sends that tender to 4198, so what you owe comes down exactly as the revenue is earned.</p><p><b>Expiry</b> is the only point at which an unspent balance becomes yours. A nightly job writes off every card past its date: 4198 down, <b>7580 Gift card breakage</b> up, the card zeroed and marked expired. It is the one entry an auditor will ask about, so it is a posting with a date and a card number rather than a judgement.</p>",
     links: [
-      { name: "Customers", how: "The Holder is a contact.", to: "contacts" },
-      { name: "Vouchers", how: "Codes a cashier redeems at checkout for a fixed amount or a percentage off.", to: "pos.vouchers" }
+      { name: "Register", how: "Where a card is spent: set the tender to Wallet / gift card and pick the card.", to: "pos.terminal" },
+      { name: "Chart of Accounts", how: "4198 Gift cards and wallets, and 7580 Gift card breakage, created for every company.", to: "accounts" },
+      { name: "Balance Sheet", how: "What you owe on cards appears here, which is the whole reason loading posts.", to: "rep.bs" },
+      { name: "Vouchers", how: "A different thing: a code redeemed for a discount, with no balance and no liability.", to: "pos.vouchers" },
+      { name: "Customers", how: "The holder is a contact.", to: "contacts" }
     ],
     mistakes: [
-      ["Card number is required", "Type the number on the card."],
-      ["A record with Card number GC-100245 already exists. Use a different one.", "That number is already registered. Open the existing card instead of adding a second."],
-      ["Fill in Balance. It is required.", "The Balance box of an existing card was emptied. Type the amount, or 0."],
-      ["Fill in Status. It is required.", "An existing card had its Status set back to (none). Choose Active, Frozen, Expired or Closed."]
+      ["Which card is paying?", "The tender is set to Wallet / gift card but no card was picked. The sale will not go through without one, because the money has to come off something."],
+      ["Card GC-100245 has only 32.00 on it", "The tender is for more than the balance. Take the rest in cash or on a card: add a second tender line."],
+      ["Card GC-100245 is frozen. It cannot be used to pay.", "Somebody froze it, usually because it was reported lost. Unfreeze it on the card, or issue a new one."],
+      ["Card GC-100245 expired on 2026-09-30.", "The balance has already been written off as breakage. A goodwill gesture here is a new card, or a correction with the reason written down."],
+      ["That card is expired. Only an active card can be loaded.", "Loading a dead card would recreate a liability that was already written off. Issue a new card."],
+      ["Give the card a number", "Card number is empty."],
+      ["This company has no gift card account.", "Only if the account was deleted. Create one and point at it in Settings, Companies, Accounting accounts."]
     ],
     tips: [
-      "Freeze a lost card straight away by setting Status to Frozen, then issue a new number with the remaining balance."
+      "Freeze a lost card straight away by setting Status to Frozen. The balance stays, and the till refuses it.",
+      "Export <b>With a balance</b> at month end and compare the total with 4198 on the balance sheet. They are built to agree; a gap means somebody corrected a balance outside Orbit.",
+      "A card with no expiry date is a liability you carry forever. Most places give a year, which is also the point at which it becomes income if nobody comes back."
     ]
   },
 

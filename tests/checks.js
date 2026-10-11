@@ -715,6 +715,26 @@
         return ok(need.length + " parts read one engine, and nothing writes the points behind its back");
       } },
 
+    { name: "a gift card is money you owe, and the till says which card",
+      why: "The card screen used to say \"nothing is posted\", which hid a real money bug: the Wallet / gift card tender posted to the BANK, so a card paying for a coffee recorded money arriving that never arrived and never touched the card's balance. Loading now posts a liability, the tender names the card it is paying from, and the balance is moved by the database rather than by a screen. Take the card off the tender and the whole thing silently goes back to being wrong.",
+      run: function (src) {
+        var need = [
+          ["loading a card posts", /sb\.rpc\("stored_value_load", \{/],
+          ["a correction posts too", /sb\.rpc\("stored_value_adjust", \{ p_account: s\.id/],
+          ["a wallet tender knows it needs a card", /function isCardMethod\(mm\) \{ return mm === "wallet" \|\| mm === "voucher"; \}/],
+          ["and says so before the sale goes through", /pad\.ready = !t\.missing && !cp && t\.short <= 0\.005;/],
+          ["the tender carries the card", /stored_value_account_id: isCardMethod\(r\.method\) \? \(r\.card \|\| null\) : null/],
+          ["the balance is shown, never typed", /\{ label: "Balance", num: true, get: function \(s\) \{ return '<b>' \+ money\(s\.balance\) \+ '<\/b>'; \} \}/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // the balance must not be an editable field on the card form, and the
+        // screen must not claim the old record-only behaviour any more
+        if (/id="sv-bal"/.test(src)) return bad("the card form still lets the balance be typed");
+        if (/nothing is posted/i.test(src)) return bad("a screen still tells the user nothing is posted");
+        return ok(need.length + " parts present: loading posts, the tender names its card, and the balance follows the movements");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {
