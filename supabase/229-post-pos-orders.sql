@@ -138,15 +138,8 @@ begin
   if cogs_acc is not null and stock_acc is not null then
     select sl.id into dst_loc from public.stock_locations sl
      where sl.company_id = cid and sl.usage = 'customer' and coalesce(sl.is_active, true) order by sl.name limit 1;
-    for l in
-      select ol.product_id, sum(ol.qty) as qty, (array_agg(b.store_id))[1] as store_id,
-             max(p.cost_price) as cost, max(p.uom) as uom
-        from public.pos_order_lines ol
-        join _batch b on b.id = ol.order_id
-        join public.products p on p.id = ol.product_id
-       where p.type in ('storable', 'consumable')
-       group by ol.product_id
-      having sum(ol.qty) > 0
+    -- a kit sold at the till takes out its components, not itself (233)
+    for l in select * from public.pos_stock_lines(array(select id from _batch))
     loop
       select sl.id into src_loc from public.stock_locations sl
         left join public.stores st on st.id = l.store_id

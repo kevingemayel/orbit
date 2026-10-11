@@ -10688,6 +10688,8 @@
     // the fourth item marks a pointer added later (migrations 187 and 199): shown only once the column exists
     ["salary_payable_account_id", "Salaries payable", "Net pay owed to staff. A posted payslip credits it, and a Salary payment in Counter starts on it and debits it.", true],
     ["payroll_deductions_account_id", "Payroll deductions", "Tax withheld, social security and anything else kept back from pay, plus the employer's own share, until it is paid over. A posted payslip credits it.", true]
+    ["fx_gain_account_id", "Exchange gain", "Where a foreign balance posts when the rate moved in your favour, on a payment or at period close.", true],
+    ["fx_loss_account_id", "Exchange loss", "Where a foreign balance posts when the rate moved against you.", true]
   ];
   function stockGlHTML(c, accs) {
     if (!accs.length) return "";
