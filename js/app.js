@@ -14488,7 +14488,8 @@
     if (id !== "new" && st === "draft") btns += '<button id="sg-send">Send for signature</button>';
     if (id !== "new" && st === "pending" && allSigned) btns += '<button id="sg-complete">Mark fully signed</button>';
     var stages = '<div class="o-stages"><span class="st ' + (st === "draft" ? "on" : "done") + '">Draft</span><span class="st ' + (st === "pending" ? "on" : (st === "signed" ? "done" : "")) + '">Awaiting signatures</span><span class="st ' + (st === "signed" ? "on" : "") + '">Signed</span></div>';
-    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:var(--r-sm)">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del u-xbtn">&times;</button></td>' : '<td></td>') + '</tr>'; }
+    function sigRow(g) { g = g || {}; var signed = !!g.signed_at; return '<tr data-sig="' + (g.id || "") + '"><td>' + (id === "new" || st === "draft" ? '<input class="sg-name" value="' + esc(g.signer_name || "") + '" placeholder="Signer name">' : esc(g.signer_name || "")) + '</td><td>' + (id === "new" || st === "draft" ? '<input class="sg-role" value="' + esc(g.signer_role || "") + '" placeholder="Role">' : esc(g.signer_role || "")) + '</td>' +
+        '<td>' + (id === "new" || st === "draft" ? '<input class="sg-email" type="email" value="' + esc(g.signer_email || "") + '" placeholder="their@email">' : esc(g.signer_email || "")) + '</td><td>' + (signed ? '<span class="badge paid">Signed ' + esc((g.signed_at || "").slice(0, 10)) + '</span>' + (g.signature_data && g.signature_data.indexOf("data:image") === 0 ? ' <img alt="Signature" src="' + g.signature_data + '" style="height:26px;vertical-align:middle;border:1px solid var(--line);border-radius:var(--r-sm)">' : (g.signature_data ? ' <i>' + esc(g.signature_data) + '</i>' : '')) : (st === "pending" ? '<button class="sg-sign" data-id="' + g.id + '" style="padding:3px 10px;border:1px solid var(--accent);border-radius:var(--r-sm);background:var(--accent);color:#fff;font:inherit;font-size:12px;cursor:pointer">Sign</button>' : '<span class="muted">not sent</span>')) + '</td>' + (st === "draft" ? '<td><button class="sg-del u-xbtn">&times;</button></td>' : '<td></td>') + '</tr>'; }
     document.querySelector(".o-form").innerHTML =
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div class="o-sheet"><div class="o-title"><input id="sg-title" value="' + esc(s.title || "") + '" placeholder="What is being signed"' + (done ? " disabled" : "") + '></div>' +
@@ -14499,11 +14500,15 @@
       fld("Project", '<select id="sg-proj"' + (st !== "draft" ? " disabled" : "") + '>' + projOpts + '</select>') +
       fld("Notes", '<input id="sg-notes" value="' + esc(s.notes || "") + '"' + (done ? " disabled" : "") + '>') +
       '</div></div>' +
-      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Signers</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Name</th><th>Role</th><th>Signature</th><th></th></tr></thead><tbody id="sg-lines">' + (sigs.length ? sigs.map(sigRow).join("") : (st === "draft" ? sigRow() : '')) + '</tbody></table>' + (st === "draft" ? '<button id="sg-add" class="o-addln">+ Add signer</button>' : '') + '</div></div>' +
+      // A signature request with no document is a list of names. The document is
+      // attached here, and the signer sees it on the page their link opens.
+      (id === "new" ? '<div class="o-note">Save the request, then attach the document to it.</div>' : attachBlockHTML("sign_request", id, { label: "The document" })) +
+      '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Signers</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Name</th><th>Role</th><th>Email</th><th>Signature</th><th></th></tr></thead><tbody id="sg-lines">' + (sigs.length ? sigs.map(sigRow).join("") : (st === "draft" ? sigRow() : '')) + '</tbody></table>' + (st === "draft" ? '<button id="sg-add" class="o-addln">+ Add signer</button>' : '') + '</div></div>' +
       '</div>';
     var db = document.getElementById("sg-discard"); if (db) db.onclick = function () { go("sign.list"); };
     function wireDel() { document.querySelectorAll("#sg-lines .sg-del").forEach(function (x) { x.onclick = function () { x.closest("tr").remove(); }; }); }
     wireDel();
+    if (id !== "new") wireAttach("sign_request");
     var addb = document.getElementById("sg-add"); if (addb) addb.onclick = function () { document.getElementById("sg-lines").insertAdjacentHTML("beforeend", sigRow()); wireDel(); };
     document.querySelectorAll(".sg-sign").forEach(function (b) { b.onclick = function () { openSignatureModal(b.dataset.id, id); }; });
     async function persist() {
@@ -14518,7 +14523,7 @@
       else { if ((await sb.from("sign_requests").update(row).eq("id", id)).error) { toast("Save failed"); return null; } }
       if (st === "draft") {
         await sb.from("sign_signatures").delete().eq("request_id", sid);
-        var rows = [].map.call(document.querySelectorAll("#sg-lines tr"), function (tr, i) { return { company_id: S.company.id, request_id: sid, signer_name: ((tr.querySelector(".sg-name") || {}).value || "").trim(), signer_role: ((tr.querySelector(".sg-role") || {}).value || "").trim(), sequence: (i + 1) * 10 }; }).filter(function (g) { return g.signer_name; });
+        var rows = [].map.call(document.querySelectorAll("#sg-lines tr"), function (tr, i) { return { company_id: S.company.id, request_id: sid, signer_name: ((tr.querySelector(".sg-name") || {}).value || "").trim(), signer_role: ((tr.querySelector(".sg-role") || {}).value || "").trim(), signer_email: ((tr.querySelector(".sg-email") || {}).value || "").trim() || null, sequence: (i + 1) * 10 }; }).filter(function (g) { return g.signer_name; });
         if (rows.length) await sb.from("sign_signatures").insert(rows);
       }
       return sid;
@@ -14531,7 +14536,30 @@
       var sid = await persist(); if (!sid) return;
       var sgCount = (await sb.from("sign_signatures").select("id", { count: "exact", head: true }).eq("request_id", sid)).count || 0;
       if (!sgCount) { toast("The signers could not be saved, so the request was not sent. Check the names and try again."); return; }
-      await sb.from("sign_requests").update({ status: "pending" }).eq("id", sid); toast("Sent for signature"); renderSignForm(sid);
+      // Each signer gets their own link, minted server-side and hashed in the
+      // database, so one person's link can never sign for another. A signer with
+      // no email is left for whoever is standing in front of them to sign on the
+      // spot, and the request still goes to pending.
+      var people = (await sb.from("sign_signatures").select("id,signer_name,signer_email").eq("request_id", sid).order("sequence")).data || [];
+      var sent = 0, failed = [];
+      var sess = (await sb.auth.getSession()).data.session;
+      for (var pi = 0; pi < people.length; pi++) {
+        var p = people[pi];
+        if (!p.signer_email) continue;
+        try {
+          var res = await fetch("/api/send-sign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: "Bearer " + (sess ? sess.access_token : "") },
+            body: JSON.stringify({ signature_id: p.id })
+          });
+          var jr = await res.json().catch(function () { return {}; });
+          if (jr && jr.ok) sent++; else failed.push((p.signer_name || "A signer") + ": " + ((jr && jr.error) || "could not be emailed"));
+        } catch (e) { failed.push((p.signer_name || "A signer") + ": " + String(e.message || e)); }
+      }
+      await sb.from("sign_requests").update({ status: "pending", sent_at: new Date().toISOString() }).eq("id", sid);
+      toast(sent ? (sent + " signer(s) emailed their link" + (failed.length ? ", " + failed.length + " could not be" : ""))
+                 : (failed.length ? failed[0] : "Sent for signature. No signer has an email, so nobody was emailed."));
+      renderSignForm(sid);
     };
     var cmp = document.getElementById("sg-complete"); if (cmp) cmp.onclick = async function () { await sb.from("sign_requests").update({ status: "signed" }).eq("id", id); toast("Marked fully signed"); renderSignForm(id); };
   }

@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign a document</title>
+<meta name="robots" content="noindex,nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="/js/vendor/supabase-js.min.js?v=2.116.0"></script>
+<style>
+:root{--paper:#f6f4ef;--card:#fff;--ink:#181a1f;--ink2:#6b6b6b;--line:#e6e2d9;--accent:#2f6bff;--yes:#16a34a;--no:#dc2626}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:Onest,system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:20px;max-width:560px;width:100%;padding:30px;box-shadow:0 10px 40px rgba(24,26,31,.09)}
+.eyebrow{font-size:12px;letter-spacing:2px;text-transform:uppercase;color:var(--accent);font-weight:700}
+h1{font-size:25px;margin:6px 0 2px;text-wrap:balance}
+.meta{color:var(--ink2);font-size:14px;margin-bottom:18px}
+.docs{border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:14px 0;font-size:14px}
+.docs .d{display:flex;align-items:center;gap:8px;padding:3px 0}
+.notes{white-space:pre-wrap;font-size:14px;color:var(--ink2);line-height:1.5;margin:10px 0 0}
+label{display:block;font-size:13px;font-weight:600;margin:16px 0 5px}
+input[type=text],textarea{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:11px;font:inherit;background:#fff;color:var(--ink)}
+.padwrap{position:relative;margin-top:6px}
+canvas{width:100%;height:170px;border:1px dashed var(--line);border-radius:12px;background:#fff;touch-action:none;display:block}
+.padhint{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:#c9c5bb;font-size:14px;pointer-events:none}
+.row{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
+button{font:inherit;font-weight:600;border-radius:11px;padding:12px 18px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer}
+button.pri{background:var(--accent);border-color:var(--accent);color:#fff;flex:1}
+button.no{color:var(--no)}
+button:disabled{opacity:.55;cursor:default}
+.clear{position:absolute;right:10px;bottom:10px;padding:5px 10px;font-size:12px;border-radius:9px}
+.big{text-align:center;padding:26px 0}
+.em{font-size:44px;line-height:1}
+.note{font-size:12.5px;color:var(--ink2);margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card" id="card"><div class="big"><div class="em">&#9203;</div><p>Loading&hellip;</p></div></div>
+<script src="config.js"></script>
+<script>
+(function () {
+  var sb = window.supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_ANON_KEY);
+  var token = new URLSearchParams(location.search).get("t");
+  var card = document.getElementById("card");
+
+  function esc(s) { return (s == null ? "" : String(s)).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function done(em, title, sub) { card.innerHTML = '<div class="big"><div class="em">' + em + '</div><h1>' + esc(title) + '</h1>' + (sub ? '<p class="meta">' + esc(sub) + '</p>' : '') + '</div>'; }
+  function fail(msg, sub) { done("&#128577;", msg, sub); }
+
+  if (!token) { fail("This link is missing its code.", "Ask for the signature email to be sent again."); return; }
+
+  sb.rpc("sign_lookup", { p_token: token }).then(function (r) {
+    var d = r.data || {};
+    if (r.error || d.error) { fail(d.error || "This link is not valid any more.", "Ask for a new one."); return; }
+    if (d.signed_at) { done("&#9989;", "You have already signed this.", "Nothing more to do."); return; }
+    if (d.declined_at) { done("&#128711;", "You declined this request.", "Speak to " + (d.company || "the sender") + " if that was a mistake."); return; }
+    draw(d);
+  }).catch(function () { fail("Something went wrong opening this link."); });
+
+  function draw(d) {
+    var docs = (d.documents || []);
+    card.innerHTML =
+      '<div class="eyebrow">Signature requested</div>' +
+      '<h1>' + esc(d.title || d.number || "Document") + '</h1>' +
+      '<div class="meta">' + esc(d.company || "") + (d.number ? ' &middot; ' + esc(d.number) : '') + '</div>' +
+      (docs.length
+        ? '<div class="docs"><div style="font-size:12px;color:#6b6b6b;margin-bottom:4px">What you are signing</div>' + docs.map(function (f) { return '<div class="d">&#128196; ' + esc(f.name || "Document") + '</div>'; }).join("") + '</div>'
+        : '') +
+      (d.notes ? '<div class="notes">' + esc(d.notes) + '</div>' : '') +
+      '<label for="nm">Your name</label>' +
+      '<input id="nm" type="text" value="' + esc(d.signer_name || "") + '" placeholder="As you would write it">' +
+      '<label>Sign here</label>' +
+      '<div class="padwrap"><canvas id="pad"></canvas><div class="padhint" id="hint">Draw your signature</div>' +
+      '<button class="clear" id="clr" type="button">Clear</button></div>' +
+      '<div class="row"><button class="pri" id="go">Sign</button><button class="no" id="no">Decline</button></div>' +
+      '<div class="note">Signing records your name, the drawing above and the time, against this document.</div>';
+
+    var pad = document.getElementById("pad"), hint = document.getElementById("hint");
+    var ctx = pad.getContext("2d"), drawing = false, used = false, last = null;
+    function size() {
+      var r = pad.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+      var data = used ? pad.toDataURL() : null;
+      pad.width = Math.round(r.width * dpr); pad.height = Math.round(r.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.strokeStyle = "#181a1f";
+      if (data) { var img = new Image(); img.onload = function () { ctx.drawImage(img, 0, 0, r.width, r.height); }; img.src = data; }
+    }
+    size();
+    window.addEventListener("resize", size);
+    function at(e) {
+      var r = pad.getBoundingClientRect();
+      var p = e.touches ? e.touches[0] : e;
+      return { x: p.clientX - r.left, y: p.clientY - r.top };
+    }
+    function start(e) { e.preventDefault(); drawing = true; last = at(e); if (!used) { used = true; hint.style.display = "none"; } }
+    function move(e) {
+      if (!drawing) return; e.preventDefault();
+      var p = at(e);
+      ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+      last = p;
+    }
+    function end() { drawing = false; }
+    pad.addEventListener("mousedown", start); pad.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    pad.addEventListener("touchstart", start, { passive: false });
+    pad.addEventListener("touchmove", move, { passive: false });
+    pad.addEventListener("touchend", end);
+    document.getElementById("clr").onclick = function () {
+      ctx.clearRect(0, 0, pad.width, pad.height); used = false; hint.style.display = "";
+    };
+
+    document.getElementById("go").onclick = function () {
+      if (!used) { alert("Draw your signature in the box first."); return; }
+      var btn = this; btn.disabled = true; btn.textContent = "Signing…";
+      sb.rpc("sign_record", { p_token: token, p_name: document.getElementById("nm").value, p_data: pad.toDataURL("image/png") })
+        .then(function (r) {
+          var o = r.data || {};
+          if (r.error || o.error) { btn.disabled = false; btn.textContent = "Sign"; alert(o.error || "That did not save. Try again."); return; }
+          done("&#9989;", "Signed, thank you.", o.all_signed ? "Everyone has now signed this document." : "We will let you know when the others have signed.");
+        }).catch(function () { btn.disabled = false; btn.textContent = "Sign"; alert("That did not save. Try again."); });
+    };
+
+    document.getElementById("no").onclick = function () {
+      var why = prompt("Decline to sign. What should they know?") || "";
+      var btn = this; btn.disabled = true;
+      sb.rpc("sign_decline", { p_token: token, p_reason: why }).then(function (r) {
+        var o = r.data || {};
+        if (r.error || o.error) { btn.disabled = false; alert(o.error || "That did not save."); return; }
+        done("&#128711;", "Declined.", "They have been told, with your reason.");
+      }).catch(function () { btn.disabled = false; alert("That did not save."); });
+    };
+  }
+})();
+</script>
+</body>
+</html>

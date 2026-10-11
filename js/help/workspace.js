@@ -1704,7 +1704,7 @@ orbitScreenHelp({
 
   "sign.list": {
     title: "Signature Requests",
-    what: "The <b>Sign</b> app keeps a register of documents that need signing off, such as a payment certificate, a subcontract, a purchase order or a contract, and of who has to sign each one. Once a request is sent for signature, each signer signs inside Orbit by typing their name and drawing a signature, and Orbit records the date and time. Orbit does not email anyone or hold the document itself: the request records the sign-off, and its Reference ties it to the document.",
+    what: "The <b>Sign</b> app keeps a register of documents that need signing off, such as a payment certificate, a subcontract, a purchase order or a contract, and of who has to sign each one. The document is attached to the request, and <b>Send for signature</b> emails <b>each signer their own link</b>: it opens one page on any device, shows what is being signed and the notes that came with it, and takes a signature drawn with a finger or a mouse. The link is theirs alone, works once, and stops working after 30 days, so one signer can never sign for another. A signer can also decline, with a reason. Anyone standing in front of you can still sign inside Orbit instead, and a signer with no email address is left for that.",
     when: [
       "A contract, subcontract or payment certificate needs a recorded sign-off from named people before you act on it.",
       "You want one list showing which documents are still awaiting signatures and which are signed.",
