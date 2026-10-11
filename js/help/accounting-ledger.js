@@ -123,7 +123,8 @@ orbitScreenHelp({
     how: [
       "Open <b>Accounting &rsaquo; Accounting &rsaquo; Bank Statements</b> and click <span class='man-key'>New</span>. For this example, a retail shop enters three lines from its August statement.",
       "Type <i>Bank - August 2026</i> in <b>Name</b>, leave <b>Journal</b> on Bank, set <b>Statement Date</b> to 31 August 2026 and check that <b>Start Balance</b> shows where July's statement closed, 13,089.00. Type the closing balance printed on the statement, 14,320.50, in <b>End Balance</b>.",
-      "On the first line set the date to 5 August, type <i>Card terminal settlement</i> in <b>Label</b> and 3,250.00 in <b>Amount (+in / -out)</b>.",
+      "Quicker than typing: click <span class='man-key'>Import from a file</span> and pick the CSV your bank gives you. Orbit finds the date, the description and the amount whatever the columns are called, reads money in and money out as one signed amount, and understands both 1,250.00 and 1.250,00. The lines appear filled in for you to check before saving.",
+      "By hand instead: on the first line set the date to 5 August, type <i>Card terminal settlement</i> in <b>Label</b> and 3,250.00 in <b>Amount (+in / -out)</b>.",
       "Click <span class='man-key'>+ Add a line</span> and enter 12 August, <i>Bank charges</i>, -18.50.",
       "Click <span class='man-key'>+ Add a line</span> again and enter 28 August, <i>Shop rent August</i>, -2,000.00.",
       "Click <span class='man-key'>Save</span>. You should see <i>Statement saved</i>, the header turn read-only and <i>0 of 3 lines reconciled</i> above the lines, followed by <i>start 13,089.00 plus lines 1,231.50 = 14,320.50 (matches the end balance)</i>.",

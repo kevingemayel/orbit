@@ -286,7 +286,7 @@ orbitScreenHelp({
 
   "ops.checkruns": {
     title: "Checklist runs",
-    what: "A <b>checklist run</b> is one time a checklist was done: the opening round on Monday at the harbour shop, the closing clean on Friday night. Each run records which checklist, where, which shift, who completed it, a score and whether it passed. The screen keeps the record of the round as a whole; the individual ticks and readings are not entered here.",
+    what: "A <b>checklist run</b> is one time a checklist was done: the opening round on Monday at the harbour shop, the closing clean on Friday night. Each run records which checklist, where, which shift, who completed it, a score and whether it passed. <b>Fill in the round</b> asks the template's questions one by one: a yes or no, a reading with the range it must stay inside, or a line of text, each with room to say what was done about a failure. Saving them scores the round and fails it outright when a critical check fails.",
     when: [
       "A shift finishes its opening, closing, cleaning or food safety round.",
       "A round failed and you want it on record with a note of what went wrong.",
@@ -338,7 +338,7 @@ orbitScreenHelp({
 
   "ops.checktpl": {
     title: "Checklist templates",
-    what: "A <b>checklist template</b> names a routine round that every store runs the same way: opening checks, closing clean, fridge temperatures, a brand audit. Each template has a kind and how often it is due. Checklist runs pick from the active templates. The template holds the name, kind and frequency; the items of the round are not listed on this screen.",
+    what: "A <b>checklist template</b> names a routine round that every store runs the same way: opening checks, closing clean, fridge temperatures, a brand audit. Each template has a kind and how often it is due. Checklist runs pick from the active templates. Its questions live on it too, under <b>The questions</b>: one line each, with a type (yes/no, a number with its allowed range, or free text), the section it belongs to and the order they are asked in.",
     when: [
       "You introduce a new routine, such as an hourly toilet check.",
       "You want every branch to record the same rounds under the same names.",

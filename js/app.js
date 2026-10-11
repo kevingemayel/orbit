@@ -19069,7 +19069,9 @@
     var pg = document.getElementById("nbpg");
 
     if (isNew) {
-      pg.innerHTML = '<table class="o-lines"><thead><tr><th style="width:120px">Date</th><th>Label</th><th style="width:120px;text-align:right">Amount (+in / -out)</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>';
+      pg.innerHTML = '<div style="margin-bottom:8px"><label class="o-filtbtn u-ptr">Import from a file<input type="file" accept=".csv,text/csv" id="bs-import" style="display:none"></label>' +
+        '<span class="sub" style="margin-left:8px">A CSV from your bank: it finds the date, the description and the amount whatever the columns are called.</span></div>' +
+        '<table class="o-lines"><thead><tr><th style="width:120px">Date</th><th>Label</th><th style="width:120px;text-align:right">Amount (+in / -out)</th><th style="width:24px"></th></tr></thead><tbody id="lnbody"></tbody></table><button class="o-addln" id="addln">+ Add a line</button>';
       var lb = document.getElementById("lnbody");
       function addRow() {
         var tr = document.createElement("tr");
@@ -19077,6 +19079,99 @@
         lb.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); };
       }
       document.getElementById("addln").onclick = addRow; addRow();
+      // Typing a bank statement in by hand is the reason reconciliation gets put
+      // off until the quarter. Every bank exports CSV; the columns are never the
+      // same, so the date, the description and the amount are recognised by what
+      // they are called, and a bank that splits money in and money out into two
+      // columns is read as one signed amount.
+      var imp = document.getElementById("bs-import");
+      if (imp) imp.onchange = async function () {
+        var file = imp.files && imp.files[0]; if (!file) return;
+        var text = await file.text();
+        // csvParse gives rows of cells; the first row is the header
+        var grid = csvParse(text);
+        if (grid.length < 2) { toast("That file has no rows Orbit can read"); return; }
+        var head = grid[0].map(function (h) { return String(h || "").trim(); });
+        var rows = grid.slice(1).map(function (cells) {
+          var o = {};
+          head.forEach(function (h, i) { o[h] = cells[i]; });
+          return o;
+        });
+        function pick(r, names, exactOnly) {
+          var keys = Object.keys(r);
+          for (var i = 0; i < names.length; i++) {
+            for (var k = 0; k < keys.length; k++) {
+              var kk = keys[k].toLowerCase().replace(/[^a-z]/g, "");
+              if (kk === names[i]) return r[keys[k]];
+            }
+          }
+          if (exactOnly) return "";
+          for (var j = 0; j < names.length; j++) {
+            for (var m2 = 0; m2 < keys.length; m2++) {
+              var k2 = keys[m2].toLowerCase().replace(/[^a-z]/g, "");
+              // "Value Date" is not the amount column, however much it contains "value"
+              if (/date/.test(k2)) continue;
+              if (k2.indexOf(names[j]) >= 0) return r[keys[m2]];
+            }
+          }
+          return "";
+        }
+        function num(v) {
+          var t = String(v == null ? "" : v).replace(/[^0-9.,()-]/g, "").trim();
+          if (!t) return 0;
+          var neg = /^\(.*\)$/.test(t); if (neg) t = t.replace(/[()]/g, "");
+          // 1.234,56 and 1,234.56 and 15,00 all mean what they look like: of the two
+          // separators the LAST one is the decimal point, and a lone comma a digit or
+          // two from the end is a decimal point rather than a thousands mark
+          var lastC = t.lastIndexOf(","), lastD = t.lastIndexOf(".");
+          if (lastC >= 0 && lastD >= 0) {
+            if (lastC > lastD) t = t.replace(/\./g, "").replace(",", ".");
+            else t = t.replace(/,/g, "");
+          } else if (lastC >= 0) {
+            t = /,\d{1,2}$/.test(t) ? t.replace(",", ".") : t.replace(/,/g, "");
+          }
+          var n = parseFloat(t) || 0;
+          return neg ? -n : n;
+        }
+        function dateOf(v) {
+          var t = String(v == null ? "" : v).trim();
+          var m3 = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/.exec(t);
+          if (m3) {
+            var y = m3[3].length === 2 ? "20" + m3[3] : m3[3];
+            return y + "-" + ("0" + m3[2]).slice(-2) + "-" + ("0" + m3[1]).slice(-2);   // day first, as every bank here writes it
+          }
+          var d = new Date(t);
+          return isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+        }
+        var made = 0;
+        rows.forEach(function (r) {
+          var dt = dateOf(pick(r, ["date", "valuedate", "transactiondate", "postingdate"]));
+          var label = String(pick(r, ["description", "label", "details", "narrative", "reference", "memo"]) || "").trim();
+          // one signed column if the bank gives one, otherwise money in less money out
+          var amt = num(pick(r, ["amount", "value"], true));
+          if (!amt) {
+            var inAmt = num(pick(r, ["credit", "moneyin", "deposit", "paidin"]));
+            var outAmt = num(pick(r, ["debit", "moneyout", "withdrawal", "paidout"]));
+            amt = inAmt - outAmt;
+          }
+          if (!amt) amt = num(pick(r, ["amount", "value"]));
+          if (!dt && !label && !amt) return;
+          var tr = document.createElement("tr");
+          tr.innerHTML = '<td><input class="l-date" type="date" value="' + esc(dt || today()) + '"></td>' +
+            '<td><input class="l-label" value="' + esc(label) + '"></td>' +
+            '<td><input class="l-amt num" type="number" step="0.01" value="' + amt + '"></td>' +
+            '<td><button class="del" type="button">&times;</button></td>';
+          lb.appendChild(tr); tr.querySelector(".del").onclick = function () { tr.remove(); };
+          made++;
+        });
+        // the empty row the form starts with is in the way once a file has been read
+        [].forEach.call(lb.querySelectorAll("tr"), function (tr) {
+          var lbl = (tr.querySelector(".l-label") || {}).value, amt = (tr.querySelector(".l-amt") || {}).value;
+          if (!lbl && (!amt || Number(amt) === 0) && lb.querySelectorAll("tr").length > 1) tr.remove();
+        });
+        imp.value = "";
+        toast(made + " line(s) read from the file. Check them, then Save.");
+      };
       // the start balance follows the journal and date chosen, until it is typed over
       var bStart = document.getElementById("b-start"), bJrn = document.getElementById("b-jrn"), bDate = document.getElementById("b-date"), startTyped = false;
       if (bStart) bStart.oninput = function () { startTyped = true; };
@@ -24171,12 +24266,18 @@
   // --- Section 9: operations and compliance ---
   function cfgChecklistTemplates() {
     return fnbCfg({ title: "Checklist templates", table: "checklist_templates", one: "template", order: [["name", true]],
-      hint: "Opening, closing, hourly cleaning, fridge temperatures, brand audits. A template is the name of a round and how often it runs; it holds no item lines.",
+      hint: "Opening, closing, hourly cleaning, fridge temperatures, brand audits. A template is the round itself: its name, how often it runs, and the questions it asks.",
       cols: [{ l: "Template", k: "name", fmt: "b" }, { l: "Kind", k: "kind", fmt: "badge" }, { l: "Frequency", k: "frequency", fmt: "muted" }, { l: "Active", k: "is_active", fmt: "bool" }],
       fields: [{ k: "name", l: "Name", t: "text", req: true },
         { k: "kind", l: "Kind", t: "select", opts: [["opening", "Opening"], ["closing", "Closing"], ["hourly", "Hourly"], ["handover", "Shift handover"], ["cleaning", "Cleaning"], ["haccp", "HACCP / food safety"], ["audit", "Audit"]], req: true },
         { k: "frequency", l: "Frequency", t: "select", opts: [["daily", "Daily"], ["per_shift", "Per shift"], ["weekly", "Weekly"], ["monthly", "Monthly"]] },
-        { k: "is_active", l: "Active", t: "check", def: true }] });
+        { k: "is_active", l: "Active", t: "check", def: true }],
+      lines: {
+        table: "checklist_template_items", fk: "template_id", title: "The questions",
+        hint: "One line per thing to check. Type: yes/no, a number (with the range it must stay inside), or free text. Critical marks the ones that fail the whole round.",
+        cols: [{ k: "text", l: "Question" }, { k: "section", l: "Section" }, { k: "input_type", l: "Type" },
+               { k: "min_value", l: "Min", t: "num" }, { k: "max_value", l: "Max", t: "num" }, { k: "sort", l: "Order", t: "num" }]
+      } });
   }
   function cfgChecklistRuns() {
     return fnbCfg({ title: "Checklist runs", table: "checklist_runs", one: "run", order: [["run_date", false]],
@@ -24190,7 +24291,72 @@
         { k: "template_id", l: "Checklist", t: "select", lookup: function () { return fnbLookup("cltemplates", function () { return fnbCo("checklist_templates", "id,name").eq("is_active", true).order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }, req: true },
         { k: "store_id", l: "Store", t: "select", lookup: lkStores },
         { k: "shift", l: "Shift", t: "text" }, { k: "status", l: "Status", t: "select", opts: [["open", "Open"], ["complete", "Complete"], ["failed", "Failed"]] },
-        { k: "score", l: "Score", t: "num" }, { k: "completed_by", l: "Completed by", t: "text" }, { k: "note", l: "Note", t: "textarea" }] });
+        { k: "score", l: "Score", t: "num" }, { k: "completed_by", l: "Completed by", t: "text" }, { k: "note", l: "Note", t: "textarea" }],
+      actions: [{
+        label: "Fill in the round", title: "Answer the checklist question by question",
+        run: function (rec, m) { m.remove(); return openChecklistRun(rec); }
+      }] });
+  }
+  // A round that cannot be answered is a line in a diary. The questions come from
+  // the template, the answers are saved against the run, and the score is what
+  // share of them passed - so a failed fridge temperature is a number somebody
+  // can act on rather than a note nobody reads.
+  async function openChecklistRun(run) {
+    var items = (await sb.from("checklist_template_items").select("*").eq("template_id", run.template_id).order("sort")).data || [];
+    if (!items.length) { toast("That checklist has no questions yet. Add them on its template."); return; }
+    var prev = (await sb.from("checklist_results").select("*").eq("run_id", run.id)).data || [];
+    var byItem = {}; prev.forEach(function (r) { byItem[r.item_id] = r; });
+    var inner = items.map(function (it) {
+      var r = byItem[it.id] || {}, t = it.input_type || "bool";
+      var ctl;
+      if (t === "number") {
+        ctl = '<input class="ck-v" data-i="' + it.id + '" data-t="number" type="number" step="any" value="' + (r.value_num == null ? "" : esc(String(r.value_num))) + '">' +
+          ((it.min_value != null || it.max_value != null) ? '<span class="sub" style="margin-left:8px">allowed ' + (it.min_value == null ? "" : esc(String(it.min_value))) + ' to ' + (it.max_value == null ? "" : esc(String(it.max_value))) + '</span>' : "");
+      } else if (t === "text") {
+        ctl = '<input class="ck-v" data-i="' + it.id + '" data-t="text" value="' + esc(r.value_text || "") + '">';
+      } else {
+        ctl = '<select class="ck-v" data-i="' + it.id + '" data-t="bool"><option value="">(not checked)</option>' +
+          '<option value="1"' + (r.value_bool === true ? " selected" : "") + '>Yes</option>' +
+          '<option value="0"' + (r.value_bool === false ? " selected" : "") + '>No</option></select>';
+      }
+      return '<div style="margin-bottom:10px"><label>' + esc(it.text || "Check") + (it.is_critical ? ' <span class="badge unpaid">critical</span>' : "") + '</label>' +
+        (it.section ? '<div class="sub" style="margin:-2px 0 4px">' + esc(it.section) + '</div>' : "") + ctl +
+        '<input class="ck-note" data-i="' + it.id + '" placeholder="What was done about it (only if it failed)" style="margin-top:4px">' + '</div>';
+    }).join("");
+    plotModal("Checklist: " + (run.run_date || ""), inner, async function (m) {
+      var rows = [], pass = 0, total = 0, anyCritical = false;
+      items.forEach(function (it) {
+        var el = document.querySelector('.ck-v[data-i="' + it.id + '"]');
+        if (!el || el.value === "") return;
+        var row = { company_id: S.company.id, run_id: run.id, item_id: it.id, recorded_at: new Date().toISOString() };
+        var ok = true;
+        if (el.dataset.t === "number") {
+          var n = Number(el.value); row.value_num = n;
+          if (it.min_value != null && n < Number(it.min_value)) ok = false;
+          if (it.max_value != null && n > Number(it.max_value)) ok = false;
+        } else if (el.dataset.t === "text") { row.value_text = el.value; }
+        else { row.value_bool = el.value === "1"; ok = el.value === "1"; }
+        var note = (document.querySelector('.ck-note[data-i="' + it.id + '"]') || {}).value || "";
+        if (note) row.corrective_action = note;
+        row.is_breach = !ok;
+        if (!ok && it.is_critical) anyCritical = true;
+        total++; if (ok) pass++;
+        rows.push(row);
+      });
+      if (!rows.length) { toast("Answer at least one question"); return; }
+      await sb.from("checklist_results").delete().eq("run_id", run.id);
+      var ins = await sb.from("checklist_results").insert(rows);
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      var score = total ? Math.round((pass / total) * 100) : null;
+      await sb.from("checklist_runs").update({
+        score: score,
+        status: anyCritical || score < 100 ? (anyCritical ? "failed" : "complete") : "complete",
+        completed_at: new Date().toISOString()
+      }).eq("id", run.id);
+      m.remove();
+      toast(pass + " of " + total + " passed" + (anyCritical ? ", a critical check failed" : ""));
+      renderView();
+    }, true);
   }
   function cfgEquipment() {
     return fnbCfg({ title: "Equipment", table: "equipment", one: "machine", order: [["name", true]],
