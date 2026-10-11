@@ -141,3 +141,27 @@ Two things worth knowing:
   own data, or a broken token makes everything pass.
 
 Last full run: 31/31, teardown clean.
+
+## 4. Dead-schema sweep - deliberate, read-only
+
+```bash
+powershell -NoProfile -ExecutionPolicy Bypass -File tests\dead-schema.ps1
+```
+
+Answers one question with evidence instead of memory: **which tables can
+nothing in the product reach?** It checks every table in `public` against the
+table names `js/app.js` quotes, every database function body and view
+definition, and the Cloudflare functions and the website worker.
+
+A table with rows in it that no screen can show and nothing can write is the
+most expensive kind of gap, because it looks finished from the inside: the
+schema is there, the help page describes it, and a demo never touches it. The
+first run, on 11 October 2026, found **36**; it is now **22**, of which only 7
+hold a single row. The work that closed the others is in migrations 229 to 239.
+
+The second list it prints, "the app cannot reach it but SQL or the edge does",
+is the normal shape for a table only a posting function touches. It is not a
+gap.
+
+Run it after any build that was meant to close one, and before saying a module
+is finished.
