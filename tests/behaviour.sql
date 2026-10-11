@@ -185,6 +185,28 @@ badstock as (
   select * from stockctrl
    where abs(ledger_stock - layers) > 0.05 and (ledger_stock <> 0 or layers <> 0)),
 
+-- 20. A cheque in flight is money that is promised and not yet moved, and the
+--     two holding accounts exist to carry exactly that. Their balance must come
+--     to the value of every cheque still in hand or with the bank. If it drifts,
+--     either a cheque was moved on without posting or an entry was written to a
+--     cheque account by hand, and in both cases the bank position is a guess.
+chqctrl as (
+  select c.id company_id, c.name,
+         round(coalesce((select sum(l.debit - l.credit) from public.journal_lines l
+                           join public.journal_entries e on e.id = l.entry_id and e.state = 'posted'
+                          where l.company_id = c.id
+                            and l.account_id = public.company_account(c.id, 'cheques_receivable')), 0), 2)
+       - round(coalesce((select sum(l.credit - l.debit) from public.journal_lines l
+                           join public.journal_entries e on e.id = l.entry_id and e.state = 'posted'
+                          where l.company_id = c.id
+                            and l.account_id = public.company_account(c.id, 'cheques_payable')), 0), 2) ledger_chq,
+         round(coalesce((select sum(case when q.direction = 'out' then -q.amount else q.amount end)
+                           from public.cheques q
+                          where q.company_id = c.id and q.status in ('pending', 'deposited')), 0), 2) live_chq
+    from public.companies c),
+badchq as (
+  select * from chqctrl where abs(ledger_chq - live_chq) > 0.05),
+
 -- ------------------------------------------------------------- multi-currency
 -- 18. A posted document in a currency that is not the company's own needs a
 --     rate on or before its date. Without one the conversion is a silent 1:1,
@@ -284,6 +306,10 @@ results as (
          (select count(*) from badstock),
          (select coalesce(string_agg(name || ' ledger ' || ledger_stock || ' vs layers ' || layers, '; '), '') from (select * from badstock limit 3) x),
          'the balance sheet carries stock that is either not there or was never priced'
+  union all select 20, 'accounting', 'the cheque accounts hold exactly the cheques in flight',
+         (select count(*) from badchq),
+         (select coalesce(string_agg(name || ' ledger ' || ledger_chq || ' vs in flight ' || live_chq, '; '), '') from (select * from badchq limit 3) x),
+         'a cheque moved on without posting leaves the bank position and the balance sheet disagreeing'
   union all select 18, 'currency', 'every foreign-currency entry has a rate',
          (select count(*) from norate),
          (select coalesce(string_agg(name || ' ' || entry_number || ' ' || currency_code || ' on ' || date, '; '), '') from (select * from norate limit 3) x),

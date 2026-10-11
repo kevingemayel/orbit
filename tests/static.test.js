@@ -94,6 +94,8 @@ const MUTATIONS = {
     s => s.replace('return buildPrintHeader(printTplData(), docTitle, docNum || "");', 'return "<div class=\"phead\"></div>";'),
   "the header, the table and the footer of a document are each a setting":
     s => s.replace(/function pdocTableClass\(over\) \{/, "function pdocTableClassGone(over) {"),
+  "a cheque only touches the bank when the bank pays it":
+    s => s.replace('sb.rpc("cheque_clear"', 'sb.from("cheques").update({ status: "cleared" })'),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

@@ -883,6 +883,109 @@ orbitScreenHelp({
       "If your chart does not use Orbit's standard codes, set every pointer on day one, before the first bill or stock receipt.",
       "Choose the currency carefully when creating a company: changing it later does not convert anything already posted."
     ]
+  },
+
+  "acc.cheques": {
+    title: "Cheque Register",
+    what: "A cheque dated weeks ahead is a promise, not money. The register holds each one from the day the paper changes hands to the day the bank either pays it or does not. Recording a cheque settles the invoice or the bill it is against, but against a holding account rather than your bank, so your bank balance stays honest until the cheque actually clears. The same register holds the cheques you write to suppliers.",
+    when: [
+      "A customer hands you a cheque dated next month and you want the invoice closed without pretending the money is in the bank.",
+      "You write a supplier a post-dated cheque and want to know, later, what is going to leave the account and when.",
+      "A cheque comes back unpaid and the debt has to go back onto the customer with the invoice open again.",
+      "A customer's cheque is signed over to one of your suppliers, which settles what you owe them without any bank being involved.",
+      "You want to know what is in the drawer: open <b>Accounting &rsaquo; Reporting &rsaquo; Cheque Position</b>."
+    ],
+    how: [
+      "Open <b>Accounting &rsaquo; Accounting &rsaquo; Cheque Register</b> and click <span class='man-key'>New</span>. For this example a customer settles a 2,400.00 invoice with a cheque dated six weeks out.",
+      "Leave <b>Way</b> on <i>Received from a customer</i>. Type the number printed on the paper, <i>0045127</i>, in <b>Cheque number</b> and 2,400.00 in <b>Amount</b>.",
+      "Type <i>Bank Audi</i> in <b>Bank</b> and, if the name signed on the cheque is not the company you invoiced, type it in <b>Name on the cheque</b>. This happens constantly and it is worth recording, because the bank will care.",
+      "Choose the customer in <b>Customer</b>, then open <b>Against</b> and pick the invoice. The list shows every posted invoice with something still due and what that is, for example <i>INV/2026/00031 - 2,400.00 still due</i>.",
+      "Set <b>Dated</b> to today, the day the cheque arrived, and <b>Banks on</b> to the date written on the cheque. <b>Banks on</b> is the one that matters: it is the first day the cheque can be presented and it is what the Cheque Position is built from.",
+      "Click <span class='man-key'>Save</span>. You should see <i>Saved</i> and the cheque in the list with the status <b>Not in the register yet</b>. Nothing is in the books at this point.",
+      "Open it again and click <span class='man-key'>Record in the register</span>. You should see <i>In the register. The document is settled against the cheque account, not the bank.</i> The invoice now shows <b>Paid</b> with nothing due, 5113 Cheques receivable holds 2,400.00, and the bank is untouched.",
+      "Six weeks later you take it to the bank. Open the cheque and click <span class='man-key'>Deposit</span>. The status becomes <b>With the bank</b>. Nothing posts: it is the same asset, it has just left your drawer.",
+      "Two days later the bank credits you. Open it and click <span class='man-key'>Cleared</span>, set the date on the statement, choose which of your accounts it went into, and save. <i>Only now</i> does the bank account move, and 5113 empties.",
+      "If the bank refuses it instead, click <span class='man-key'>Returned unpaid</span>, put in the date, the bank's charge and the reason. The 2,400.00 goes straight back onto the customer, the invoice reopens for exactly what it was, and the charge posts to your expenses."
+    ],
+    fields: [
+      ["Way", "Received from a customer, or written to a supplier. A cheque coming in is held as an asset until it clears; one going out as a liability until the bank pays it. It cannot be changed once the cheque is in the register.", "required"],
+      ["Cheque number", "The number printed on the paper. It is how the bank, your customer and your own file will refer to it.", "required"],
+      ["Amount", "What the cheque is for. Against a document it cannot be more than that document still owes.", "required"],
+      ["Bank", "Whose bank the cheque is drawn on. Not a pointer at anything; it is there because it is the first thing anyone asks.", "optional"],
+      ["Name on the cheque", "Who signed it, or who it is made out to. Often a different name from the account you are billing.", "optional"],
+      ["Customer / Supplier", "Who the cheque belongs to. Where it is not against a document, this is the account the value lands on, which is what makes a deposit show up on their statement.", "optional"],
+      ["Against", "The invoice or bill the cheque pays. Picking one settles it the moment the cheque is recorded. Leave it on account for a deposit or an advance.", "optional"],
+      ["Dated", "The day the cheque changed hands. This is the date the settlement entry carries.", "required"],
+      ["Banks on", "The date written on the cheque: the first day it can be presented. Everything in the Cheque Position hangs off this.", "required"],
+      ["Bank account", "Which of your own accounts it will go through. Only used on the day it clears, and you can still change it then.", "optional"],
+      ["Notes", "Anything worth remembering. Cancelling a cheque writes the reason here.", "optional"]
+    ],
+    buttons: [
+      ["Record in the register", "Posts the cheque and settles the document behind it. Until you press this, nothing is in the books."],
+      ["Deposit", "Records that the cheque has been handed to the bank. A date, no posting."],
+      ["Cleared", "The bank paid it. Asks for the statement date and the account, then moves the bank and empties the holding account."],
+      ["Returned unpaid", "The bank refused it. Asks for the date, the bank's charge and the reason, puts the debt back and reopens the document."],
+      ["Sign over", "Endorses a cheque you received to one of your suppliers. What you owe them goes down by its value and no bank is involved."],
+      ["Void the cheque", "Torn up before it cleared. Any posting is undone and whatever it settled is owed again."],
+      ["Delete", "Only for a cheque that was never recorded, or one already cancelled. A posted cheque is history and stays."]
+    ],
+    after: "<p>Recording a cheque received posts <b>5113 Cheques receivable</b> against <b>what customers owe you</b>, so the invoice closes and the balance sheet shows the cheque for what it is: an asset that is not cash yet. A cheque written posts <b>what you owe suppliers</b> against <b>4030 Cheques payable</b>. Clearing is the only step that touches a bank account.</p><p>The balance on those two accounts is, by construction, the value of every cheque still in flight, so the register and the balance sheet can never disagree. A nightly check (number 20 of the money tests) proves it.</p><p>Returning a cheque unpaid unpicks the match on the invoice, puts the residual back to exactly what it was and marks the payment cancelled, so the chase list picks the customer up again the same day.</p>",
+    links: [
+      { name: "Cheque Position", how: "What the cheques in flight will do to the bank, week by week.", to: "acc.chqpos" },
+      { name: "Invoices", how: "Register Payment on a posted invoice has a Cheque option that records the cheque here for you.", to: "inv.out" },
+      { name: "Bills", how: "The same, for a cheque you write a supplier.", to: "inv.in" },
+      { name: "Chart of Accounts", how: "5113 Cheques receivable and 4030 Cheques payable, created for every company.", to: "accounts" },
+      { name: "Companies", how: "Change which accounts cheques are held in, if your chart uses different codes.", to: "companies" },
+      { name: "Aged Receivable", how: "A returned cheque puts the customer straight back on it.", to: "rep.aged.recv" }
+    ],
+    mistakes: [
+      ["That cheque is for more than INV/2026/00031 still owes (2,400.00).", "The cheque covers more than one document, or part of it is an advance. Record a cheque for what this document owes and a second one on account, or leave Against empty and apply it later."],
+      ["Post INV/2026/00031 before putting a cheque against it.", "The document is still a draft. Post it first; a draft is not owed yet."],
+      ["Only a cheque still in flight can clear.", "It has already cleared, been returned, signed over or cancelled. Open it and read the note at the bottom, which says what happened and when."],
+      ["Only a cheque you have received can be signed over.", "You cannot endorse a cheque you wrote. Cancel it and write a new one to the right supplier."],
+      ["This cheque is already in the register.", "Somebody recorded it already, probably from the invoice's Register Payment. Check the list before entering it twice."],
+      ["This company has no cheque holding account.", "Only happens if the account was deleted. Create one and point at it in Settings, Companies, Accounting accounts."],
+      ["Your role cannot record a cheque. It needs Work in Accounting.", "The database refuses it, not the screen. Ask for Work in Accounting in Settings, Users."]
+    ],
+    tips: [
+      "Quickest route: open the posted invoice, click Register Payment, choose <b>Cheque</b> under How, and type the number and the date. The cheque appears here already recorded.",
+      "Group the list by <b>Banks in</b> to see the months ahead, or filter to <b>Ready to bank</b> for every cheque whose date has passed and that is still in your hands.",
+      "Signing a customer's cheque over to a supplier is normal practice here and it is the one move that settles both sides without any bank balance changing. Orbit records it as exactly that.",
+      "A cheque with no document behind it leaves a credit on the customer, which is what an advance is. Apply it later by invoicing them and registering the payment against the credit."
+    ]
+  },
+
+  "acc.chqpos": {
+    title: "Cheque Position",
+    what: "One row per week, for every cheque still in flight: what is coming in, what is going out, the net for that week and the running total. It answers the question a drawer full of post-dated cheques exists to raise and cannot answer by itself, which is what the bank account is going to look like over the next six months.",
+    when: [
+      "Before promising a supplier a payment date.",
+      "Before writing a post-dated cheque of your own, to see what week it would land in.",
+      "When the bank balance is lower than you expected: <b>Already bankable</b> is the first place to look.",
+      "At month end, to explain the gap between what the ledger says you are owed and what is actually in the bank."
+    ],
+    how: [
+      "Open <b>Accounting &rsaquo; Reporting &rsaquo; Cheque Position</b>. It needs nothing from you: it reads the register.",
+      "Read the four figures along the top. <b>Cheques in hand</b> is everything customers have given you that has not cleared. <b>Cheques written</b> is the same for the ones you signed. <b>Net to come</b> is the difference, and it is the number to compare with what you owe this month.",
+      "<b>Already bankable</b> is the net value of cheques whose date has passed and which still have not cleared. Anything sitting here is either in a drawer nobody took to the bank, or a cheque that is quietly not going to be paid.",
+      "Go down the table. A week shown in amber is already in the past. A negative <b>Net that week</b> is a week where more leaves than arrives.",
+      "<b>Running</b> is the cumulative effect on the bank if every cheque behaves. Where it dips, you need cash from somewhere else that week.",
+      "Click <span class='man-key'>Print</span> for a copy on your letterhead, or <span class='man-key'>Export</span> for the figures in a spreadsheet."
+    ],
+    after: "<p>Nothing. This screen only reads.</p>",
+    links: [
+      { name: "Cheque Register", how: "Where each of these cheques is recorded and moved on.", to: "acc.cheques" },
+      { name: "Cash Flow Forecast", how: "The wider picture: invoices and bills by due date, not just cheques.", to: "rep.cashfwd" },
+      { name: "Aged Receivable", how: "What is owed with no cheque behind it at all.", to: "rep.aged.recv" }
+    ],
+    mistakes: [
+      ["No cheques in flight.", "Either nothing is recorded yet, or every cheque has cleared. Both are fine; the register is the place to check which."],
+      ["A cheque I know about is not here", "Only cheques in hand or with the bank are counted. A cleared cheque is already in the bank balance and a returned one is a debt again, so neither belongs on this page."]
+    ],
+    tips: [
+      "The running total is not a cash forecast on its own. It is the cheque part of one, and the part most easily forgotten.",
+      "If Already bankable keeps growing, the problem is usually that nobody is taking cheques to the bank, not that customers are not paying."
+    ]
   }
 
 });

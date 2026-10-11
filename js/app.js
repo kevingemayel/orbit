@@ -1504,6 +1504,8 @@
       { i: "truck", n: "Vendors", l: "Vendors", d: "Everyone you buy from." },
       { i: "book", n: "Journal Entries", l: "Accounting", d: "Raw double-entry postings for adjustments the everyday screens don't cover." },
       { i: "bank", n: "Bank Statements", l: "Accounting", d: "Reconcile Orbit against your real bank, line by line." },
+      { i: "docMoney", n: "Cheque Register", l: "Accounting", d: "Post-dated cheques in and out, held until the bank pays them." },
+      { i: "clock", n: "Cheque Position", l: "Reporting", d: "What the cheques in your drawer will do to the bank, week by week." },
       { i: "building", n: "Assets", l: "Accounting", d: "Fixed assets and their automatic depreciation schedule." },
       { i: "list", n: "Chart of Accounts", l: "Accounting", d: "The full list of money folders every entry sorts into." },
       { i: "arrows", n: "FX Revaluation", l: "Accounting", d: "Restate unpaid foreign balances at month-end rates." },
@@ -1795,8 +1797,8 @@
         { label: "Cockpit", action: "cockpit" },
         { label: "Customers", items: [["Invoices", "inv.out"], ["Recurring Invoices", "inv.recurring"], ["Credit Notes", "inv.outr"], ["Payments", "pay.in"], ["Customers", "cust"]] },
         { label: "Vendors", items: [["Bills", "inv.in"], ["Refunds", "inv.inr"], ["Payments", "pay.out"], ["Vendors", "vend"]] },
-        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Assets", "assets.list"], ["Asset dashboard", "assets.dash"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
-        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Statement of Account", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
+        { label: "Accounting", items: [["Journal Entries", "moves"], ["Bank Statements", "bank"], ["Cheque Register", "acc.cheques"], ["Assets", "assets.list"], ["Asset dashboard", "assets.dash"], ["Chart of Accounts", "accounts"], ["FX Revaluation", "acc.revalue"]] },
+        { label: "Reporting", items: [["Profit and Loss", "rep.pl"], ["Balance Sheet", "rep.bs"], ["General Ledger", "rep.gl"], ["Trial Balance", "rep.tb"], ["Partner Ledger", "rep.partner"], ["Aged Receivable", "rep.aged.recv"], ["Aged Payable", "rep.aged.pay"], ["Budgets", "budget.list"], ["Cash Flow Forecast", "rep.cashfwd"], ["Cheque Position", "acc.chqpos"], ["Collections", "rep.collections"], ["VAT / Tax Report", "rep.tax"], ["Statement of Account", "rep.stmt"], ["Consolidation", "rep.cons"], ["Data Health Check", "rep.health"], ["Traceability", "rep.trace"]] },
         { label: "Configuration", items: [["Taxes", "taxes"], ["E-invoicing", "acc.einvoice"], ["Payment Terms", "acc.payterms"], ["Exchange Rates", "rates"], ["Period Lock", "settings.lock"], ["Follow-up Levels", "fu.levels"], ["Products", "products"], ["Companies", "companies"]] }
       ]
     },
@@ -2081,7 +2083,7 @@
     "settings.setup": "settings", "settings.import": "settings", "settings.customfields": "settings", "settings.classification": "inventory", "settings.terminology": "settings", "settings.automations": "settings", "settings.privacy": "settings", "settings.backups": "settings", "settings.networks": "settings", "settings.api": "settings", "platform.pending": "settings", "platform.tenants": "settings", "settings.audit": "settings", "site.incidents": "site", companies: "settings", taxes: "accounting", products: "sales", "so.list": "sales", "po.list": "purchase",
     "est.list": "estimation", "mfg.wo": "manufacturing", "mfg.panels": "manufacturing", "mfg.boms": "manufacturing", "inst.jobs": "site", "doc.search": "documents", "doc.drawings": "site", "doc.subs": "site", "doc.rfis": "site", "doc.trans": "site",
     "pur.req": "purchase", "pur.cutlist": "purchase", "pur.nesting": "purchase", "rep.trace": "accounting", "pur.procstatus": "purchase", "pur.scorecards": "purchase", "pur.blanket": "purchase", "pur.sccert": "purchase", "pur.match": "purchase", "rfq.list": "purchase", "shp.list": "purchase", "shp.board": "purchase", "shp.new": "purchase",
-    "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", appearance: "settings",
+    "inv.outr": "accounting", "inv.inr": "accounting", "inv.recurring": "accounting", rates: "accounting", "rep.cons": "accounting", "rep.cashfwd": "accounting", "rep.health": "accounting", "rep.collections": "accounting", cockpit: "accounting", "assets.list": "accounting", "assets.dash": "accounting", "budget.list": "accounting", "fu.levels": "accounting", bank: "accounting", "acc.cheques": "accounting", "acc.chqpos": "accounting", appearance: "settings",
     "inv.onhand": "inventory", "inv.recost": "inventory", "inv.receipts": "inventory", "inv.moves": "inventory", "inv.issues": "inventory", "inv.cats": "inventory", "inv.uoms": "inventory", wh: "inventory", "inv.reorder": "inventory", "inv.planning": "inventory", "inv.cyclecount": "inventory", loc: "inventory", lots: "inventory",
     "inv.scrap": "inventory", "inv.storage": "inventory", "inv.putaway": "inventory", "inv.delivery": "inventory", "inv.packages": "inventory", "sale.pricelists": "sales", "sale.qtempl": "sales",
     "proj.list": "project", "task.list": "project", "ts.list": "project", "pc.list": "site", "var.list": "site", "sc.list": "site", "proj.pnl": "site", "proj.retention": "site", "proj.wip": "site", "proj.jobcost": "site", "cost.codes": "site", "proj.labels": "project", "acc.payterms": "accounting",
@@ -4693,6 +4695,8 @@
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
+      case "acc.cheques": return renderList(cfgCheques());
+      case "acc.chqpos": return renderChequePosition();
       case "appearance": return renderAppearance();
       case "inv.onhand": return renderOnHand();
       case "inv.recost": return renderRecost();
@@ -11965,17 +11969,48 @@
     var m = document.createElement("div"); m.className = "modal on"; m.id = "paymodal";
     m.innerHTML = '<div class="sheet"><h3>Register Payment &middot; ' + esc(inv.number || "") + '</h3><div class="form">' +
       '<div><label>Amount (' + esc(inv.currency_code || S.company.currency_code) + ')</label>' + fhint("__amt", "How much is being paid now, in the invoice currency. Defaults to the full amount still due.") + '<input id="p-amt" type="number" step="0.01" value="' + due + '"></div>' +
-      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date the money was received or paid.") + '<input id="p-date" type="date" value="' + today() + '"></div><div><label>Journal</label>' + fhint("Journal", "Which account the money moves through: your bank or cash on hand.") + '<select id="p-jrn"><option value="BNK">Bank</option><option value="CSH">Cash</option></select></div></div>' +
+      '<div class="row2"><div><label>Date</label>' + fhint("Date", "The date the money was received or paid.") + '<input id="p-date" type="date" value="' + today() + '"></div><div><label>How</label>' + fhint("Journal", "Which account the money moves through: your bank, cash on hand, or a cheque that has not cleared yet.") + '<select id="p-jrn"><option value="BNK">Bank transfer</option><option value="CSH">Cash</option><option value="CHQ">Cheque</option></select></div></div>' +
       '<div><label>Reference</label>' + fhint("Reference", "Optional: the transfer/receipt number for your records.") + '<input id="p-ref" placeholder="Receipt / transfer ref"></div>' +
+      '<div id="p-chq" style="display:none;display:grid;gap:12px">' +
+      '<div class="row2"><div><label>Cheque number</label>' + fhint("__cnum", "The number printed on the cheque.") + '<input id="p-cnum" placeholder="As printed on the cheque"></div>' +
+      '<div><label>Banks on</label>' + fhint("__cdue", "The date written on the cheque: the first day it can be presented.") + '<input id="p-cdue" type="date" value="' + today() + '"></div></div>' +
+      '<div><label>Bank</label>' + fhint("__cbank", "Whose bank the cheque is drawn on.") + '<input id="p-cbank" placeholder="e.g. Bank Audi"></div>' +
+      '<div class="o-note">A cheque is not money yet. This settles the document now against your cheque account, puts the cheque in the <b>Cheque Register</b>, and leaves the bank balance alone until the day it clears.</div>' +
+      '</div>' +
       '</div><div class="foot"><button class="btn" id="p-cancel">Cancel</button><button class="btn pri u-app" id="p-save">Register</button></div></div>';
     document.body.appendChild(m);
     m.querySelector(".form").style.cssText = "padding:16px 18px;display:grid;gap:12px";
     document.getElementById("p-cancel").onclick = function () { m.remove(); };
+    var _how = document.getElementById("p-jrn"), _chq = document.getElementById("p-chq");
+    _chq.style.display = "none";
+    _how.onchange = function () {
+      _chq.style.display = this.value === "CHQ" ? "grid" : "none";
+      if (this.value === "CHQ") { var d = document.getElementById("p-cdue"); if (!d.value) d.value = today(); }
+    };
     document.getElementById("p-save").onclick = async function () {
       var amt = parseFloat(document.getElementById("p-amt").value);
       if (!(amt > 0)) { toast("Enter an amount"); return; }
-      if (isLocked(document.getElementById("p-date").value)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
-      var r = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: document.getElementById("p-date").value, p_journal_code: document.getElementById("p-jrn").value, p_method: "bank", p_ref: document.getElementById("p-ref").value });
+      var pdate = document.getElementById("p-date").value;
+      if (isLocked(pdate)) { toast("Period locked on/before " + S.company.lock_date + " - choose a later date"); return; }
+      // A cheque takes a different road: it becomes a record in the register and
+      // settles the document against the cheque account, so the bank balance only
+      // moves on the day the bank actually pays it.
+      if (_how.value === "CHQ") {
+        var cnum = gv("p-cnum");
+        if (!cnum) { toast("Type the number printed on the cheque"); return; }
+        var ins = await sb.from("cheques").insert({
+          company_id: S.company.id, direction: (inv.move_type || "").indexOf("out_") === 0 ? "in" : "out",
+          cheque_number: cnum, bank_name: gv("p-cbank") || null, partner_id: inv.partner_id || null,
+          invoice_id: inv.id, amount: amt, currency_code: inv.currency_code || S.company.currency_code,
+          issue_date: pdate, due_date: gv("p-cdue") || pdate, reference: gv("p-ref") || null
+        }).select("id").single();
+        if (ins.error) { toast("Could not record the cheque: " + errMsg(ins.error)); return; }
+        var cr = await sb.rpc("cheque_post", { p_cheque: ins.data.id });
+        if (cr.error) { await sb.from("cheques").delete().eq("id", ins.data.id); toast("Could not record the cheque: " + errMsg(cr.error)); return; }
+        m.remove(); toast("Cheque " + cnum + " recorded. It is in the Cheque Register until it clears."); if (onDone) onDone();
+        return;
+      }
+      var r = await sb.rpc("register_payment", { p_invoice: inv.id, p_amount: amt, p_date: pdate, p_journal_code: _how.value, p_method: _how.value === "CSH" ? "cash" : "bank", p_ref: document.getElementById("p-ref").value });
       if (r.error) { toast("Could not register: " + errMsg(r.error)); return; }
       m.remove(); toast("Payment registered"); if (onDone) onDone();
     };
@@ -19025,6 +19060,282 @@
       '<h3 style="font-size:14px;margin:20px 0 6px">By entity</h3><div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Entity</td><td>Cur</td><td class="num">Backlog</td><td class="num">Cash</td><td class="num">Active</td><td class="num">Over budget</td><td class="num">Margin risk</td></tr></thead><tbody>' + coRows + '</tbody></table></div>' +
       '<div class="sub u-mt8">Backlog = signed contract value minus certified to date. Over budget = actual cost above the cost budget. Margin at risk = certified revenue below actual cost. Figures translated to ' + esc(ref) + ' at your exchange rates.</div>';
     document.querySelectorAll(".cp-card[data-go]").forEach(function (el) { el.onclick = function () { go(el.dataset.go); }; });
+  }
+
+  // ============================ CHEQUE REGISTER ============================
+  // A post-dated cheque is a promise, not money, and most of the trade here runs
+  // on them. The register holds each one from the day the paper changes hands to
+  // the day the bank either pays it or does not. The books follow it: receiving a
+  // cheque settles the invoice against a holding account, never the bank, so
+  // nothing lands in the bank until the bank says so. Every move posts in the
+  // database (migration 235) rather than here, so a cheque can never be advanced
+  // by a screen that forgot to post the entry behind it.
+  var CHQ_STATUS = {
+    draft: "Not in the register yet", pending: "In hand", deposited: "With the bank",
+    cleared: "Cleared", bounced: "Returned unpaid", endorsed: "Signed over", cancelled: "Cancelled"
+  };
+  function chqBadge(s) {
+    if (s === "cleared" || s === "endorsed") return "paid";
+    if (s === "bounced" || s === "cancelled") return "unpaid";
+    if (s === "draft") return "draft";
+    return "partial";
+  }
+  function chqLive(c) { return c.status === "pending" || c.status === "deposited"; }
+  function cfgCheques() {
+    return {
+      title: "Cheque Register", pageSize: 100, table: "cheques",
+      fetch: async function () {
+        var r = await sb.from("cheques").select("*").eq("company_id", S.company.id).order("due_date", { ascending: true });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [], pids = {}, iids = {};
+        rows.forEach(function (c) {
+          if (c.partner_id) pids[c.partner_id] = 1;
+          if (c.endorsed_to_id) pids[c.endorsed_to_id] = 1;
+          if (c.invoice_id) iids[c.invoice_id] = 1;
+        });
+        var pk = Object.keys(pids), ik = Object.keys(iids), pm = {}, im = {};
+        if (pk.length) ((await sb.from("partners").select("id,name").in("id", pk)).data || []).forEach(function (p) { pm[p.id] = p.name; });
+        if (ik.length) ((await sb.from("invoices").select("id,number").in("id", ik)).data || []).forEach(function (i) { im[i.id] = i.number; });
+        rows.forEach(function (c) {
+          c._party = pm[c.partner_id] || ""; c._to = pm[c.endorsed_to_id] || ""; c._doc = im[c.invoice_id] || "";
+        });
+        return rows;
+      },
+      searchText: function (c) { return [c.cheque_number, c._party, c._doc, c.bank_name, c.drawer_name, c.reference].join(" "); },
+      columns: [
+        { label: "Cheque", get: function (c) { return '<b>' + esc(c.cheque_number || "") + '</b>' + (c.bank_name ? '<div class="muted u-fs11">' + esc(c.bank_name) + '</div>' : ""); } },
+        { label: "Way", get: function (c) { return c.direction === "out" ? "Written" : "Received"; } },
+        { label: "Party", get: function (c) { return esc(c._party || c.drawer_name || "") + (c._to ? '<div class="muted u-fs11">signed over to ' + esc(c._to) + '</div>' : ""); } },
+        { label: "Against", get: function (c) { return c._doc ? esc(c._doc) : '<span class="muted">on account</span>'; } },
+        { label: "Amount", num: true, get: function (c) { return money(c.amount); } },
+        { label: "Banks on", get: function (c) { return '<span class="muted">' + esc(c.due_date || "") + '</span>'; } },
+        { label: "Status", get: function (c) { return '<span class="badge ' + chqBadge(c.status) + '">' + esc(CHQ_STATUS[c.status] || c.status || "") + '</span>'; } }
+      ],
+      filters: [
+        { label: "Received", test: function (c) { return c.direction !== "out"; } },
+        { label: "Written", test: function (c) { return c.direction === "out"; } },
+        { label: "Still in flight", test: function (c) { return chqLive(c); } },
+        { label: "Ready to bank", test: function (c) { return chqLive(c) && String(c.due_date || "") <= today(); } },
+        { label: "Returned unpaid", test: function (c) { return c.status === "bounced"; } }
+      ],
+      groupBy: [
+        { label: "Status", get: function (c) { return CHQ_STATUS[c.status] || c.status || ""; } },
+        { label: "Way", get: function (c) { return c.direction === "out" ? "Written" : "Received"; } },
+        { label: "Party", get: function (c) { return c._party || c.drawer_name || "(nobody)"; } },
+        { label: "Banks in", get: function (c) { return String(c.due_date || "").slice(0, 7) || "(no date)"; } }
+      ],
+      emptyHint: "A cheque dated weeks ahead is not money yet. Record it here and the invoice is settled, but against a holding account instead of the bank, so your bank balance stays honest until the cheque clears. Cheque position shows what is going to hit the bank and when.",
+      onOpen: function (c) { openChequeModal(c); }, onNew: function () { openChequeModal(null); }
+    };
+  }
+
+  async function openChequeModal(c) {
+    var isNew = !c || !c.id;
+    c = c || { direction: "in", status: "draft", amount: 0, issue_date: today(), due_date: today(), currency_code: S.company.currency_code };
+    var editable = c.status === "draft";
+    var dirIn = c.direction !== "out";
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name").limit(1000)).data || [];
+    var docs = editable ? ((await sb.from("invoices").select("id,number,amount_residual,move_type")
+      .eq("company_id", S.company.id).eq("state", "posted")
+      .in("move_type", dirIn ? ["out_invoice", "out_refund"] : ["in_invoice", "in_refund"])
+      .gt("amount_residual", 0.005).order("number").limit(500)).data || []) : [];
+    var banks = (await sb.from("accounts").select("id,code,name").eq("company_id", S.company.id)
+      .eq("type_code", "asset_cash").eq("is_active", true).order("code").limit(200)).data || [];
+    function opts(list, sel, blank) {
+      return '<option value="">' + esc(blank) + '</option>' + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(sel || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("");
+    }
+    var ro = editable ? "" : " disabled";
+    var inner =
+      fld("Way", '<select id="cq-dir"' + ro + '><option value="in"' + (dirIn ? " selected" : "") + '>Received from a customer</option><option value="out"' + (!dirIn ? " selected" : "") + '>Written to a supplier</option></select>',
+        "A cheque coming in is held as an asset until it clears. One going out is held as a liability until the bank pays it.") +
+      '<div class="row2"><div>' + fld("Cheque number", '<input id="cq-num" value="' + esc(c.cheque_number || "") + '" placeholder="As printed on the cheque"' + ro + '>', "The number printed on the paper. It is how the bank and your customer will refer to it.") + '</div>' +
+      '<div>' + fld("Amount", '<input id="cq-amt" type="number" step="0.01" value="' + (c.amount != null ? c.amount : "") + '"' + ro + '>', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Bank", '<input id="cq-bank" value="' + esc(c.bank_name || "") + '" placeholder="e.g. Bank Audi"' + ro + '>', "Whose bank the cheque is drawn on.") + '</div>' +
+      '<div>' + fld("Name on the cheque", '<input id="cq-drawer" value="' + esc(c.drawer_name || "") + '"' + ro + '>', "Who signed it, or who it is made out to. Often not the same as the account you are billing.") + '</div></div>' +
+      fld(dirIn ? "Customer" : "Supplier", '<select id="cq-party"' + ro + '>' + opts(partners.map(function (p) { return [p.id, p.name]; }), c.partner_id, "(nobody yet)") + '</select>', "") +
+      (editable
+        ? fld("Against", '<select id="cq-inv"><option value="">On account, no document</option>' + docs.map(function (d) {
+            return '<option value="' + d.id + '"' + (c.invoice_id === d.id ? " selected" : "") + '>' + esc(d.number || "") + ' - ' + money(d.amount_residual) + ' still due</option>';
+          }).join("") + '</select>',
+          "Pick the invoice or bill the cheque pays and it is settled the moment the cheque is recorded. Leave it on account for a deposit or an advance.")
+        : fld("Against", '<input value="' + esc(c._doc || "On account") + '" disabled>', "")) +
+      '<div class="row2"><div>' + fld("Dated", '<input id="cq-issue" type="date" value="' + esc(c.issue_date || today()) + '"' + ro + '>', "The day the cheque changed hands, which is the day the books record it.") + '</div>' +
+      '<div>' + fld("Banks on", '<input id="cq-due" type="date" value="' + esc(c.due_date || today()) + '"' + ro + '>', "The date written on the cheque: the first day it can be presented. This is what the cheque position is built on.") + '</div></div>' +
+      fld("Bank account", '<select id="cq-bacc"' + ro + '>' + opts(banks.map(function (a) { return [a.id, a.code + " " + a.name]; }), c.bank_account_id, "(the bank journal's own account)") + '</select>',
+        "Which of your bank accounts it will go through. Only used when the cheque clears.") +
+      fld("Notes", '<textarea id="cq-notes" rows="2"' + ro + '>' + esc(c.notes || "") + '</textarea>', "") +
+      (c.status === "bounced" && c.bounce_reason ? '<div class="o-note">Returned on ' + esc(c.bounced_on || "") + ': ' + esc(c.bounce_reason) + (Number(c.bank_charge || 0) > 0 ? '. Bank charge ' + money(c.bank_charge) : "") + '</div>' : "") +
+      (c.status === "cleared" ? '<div class="o-note">Cleared on ' + esc(c.cleared_on || "") + '. The bank account moved on that date, not before.</div>' : "") +
+      (c.status === "endorsed" ? '<div class="o-note">Signed over to ' + esc(c._to || "a supplier") + ' on ' + esc(c.endorsed_on || "") + '. It settled what you owed them without the bank seeing it.</div>' : "") +
+      (editable && !isNew ? '<div class="o-note">Nothing is in the books yet. <b>Record in the register</b> posts it and settles the document.</div>' : "");
+
+    var m = plotModal(isNew ? "New cheque" : "Cheque " + (c.cheque_number || ""), inner, editable ? async function () {
+      var row = {
+        direction: document.getElementById("cq-dir").value,
+        cheque_number: (gv("cq-num") || "").trim(),
+        amount: parseFloat(gv("cq-amt")) || 0,
+        bank_name: gv("cq-bank") || null,
+        drawer_name: gv("cq-drawer") || null,
+        partner_id: document.getElementById("cq-party").value || null,
+        invoice_id: document.getElementById("cq-inv").value || null,
+        issue_date: gv("cq-issue") || today(),
+        due_date: gv("cq-due") || today(),
+        bank_account_id: document.getElementById("cq-bacc").value || null,
+        notes: gv("cq-notes") || null,
+        currency_code: c.currency_code || S.company.currency_code
+      };
+      if (!row.cheque_number) { toast("Type the number printed on the cheque"); return; }
+      if (!(row.amount > 0)) { toast("A cheque needs an amount"); return; }
+      var r, id = c.id;
+      if (id) r = await sb.from("cheques").update(row).eq("id", id);
+      else { row.company_id = S.company.id; r = await sb.from("cheques").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    } : null, true);
+
+    // the direction decides which documents can be paid, so changing it reloads
+    if (editable) {
+      document.getElementById("cq-dir").onchange = function () {
+        var draft = {
+          id: c.id, status: "draft", direction: this.value, cheque_number: gv("cq-num"), amount: parseFloat(gv("cq-amt")) || 0,
+          bank_name: gv("cq-bank"), drawer_name: gv("cq-drawer"), partner_id: document.getElementById("cq-party").value || null,
+          issue_date: gv("cq-issue"), due_date: gv("cq-due"), bank_account_id: document.getElementById("cq-bacc").value || null,
+          notes: gv("cq-notes"), currency_code: c.currency_code
+        };
+        m.remove(); openChequeModal(draft);
+      };
+    }
+
+    function act(label, title, fn) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = label; if (title) b.title = title;
+      b.onclick = async function () { b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    async function call(rpc, args, ok) {
+      var r = await sb.rpc(rpc, args);
+      if (r.error) { toast(errMsg(r.error)); return false; }
+      m.remove(); toast(ok); renderView(); return true;
+    }
+    if (c.id && c.status === "draft") {
+      act("Record in the register", "Post the cheque and settle the document it is against", function () {
+        return call("cheque_post", { p_cheque: c.id }, "In the register. The document is settled against the cheque account, not the bank.");
+      });
+    }
+    if (c.id && chqLive(c)) {
+      if (c.direction !== "out" && c.status === "pending") {
+        act("Deposit", "Record that the cheque has been handed to the bank", function () {
+          return call("cheque_deposit", { p_cheque: c.id, p_date: today() }, "With the bank. Nothing posts: it is the same asset until it clears.");
+        });
+      }
+      act("Cleared", "The bank paid it. This is when your bank account moves.", function () { openChequeClear(c, m); });
+      act("Returned unpaid", "The bank refused it. The debt goes straight back.", function () { openChequeBounce(c, m); });
+      if (c.direction !== "out") {
+        act("Sign over", "Endorse this cheque to a supplier to settle what you owe them", function () { openChequeEndorse(c, m, partners); });
+      }
+    }
+    if (c.id && (c.status === "draft" || chqLive(c))) {
+      act("Void the cheque", "Torn up before it cleared. Any posting is undone.", async function () {
+        var why = prompt("Void this cheque. What happened?") || "";
+        return call("cheque_cancel", { p_cheque: c.id, p_reason: why, p_date: today() }, "Cancelled. Whatever it settled is owed again.");
+      });
+    }
+    if (c.id && canManageApp(S.app) && (c.status === "draft" || c.status === "cancelled")) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this cheque record?")) return;
+        var d = await sb.from("cheques").delete().eq("id", c.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+
+  function openChequeClear(c, parent) {
+    var banks = [];
+    sb.from("accounts").select("id,code,name").eq("company_id", S.company.id).eq("type_code", "asset_cash").eq("is_active", true).order("code").limit(200)
+      .then(function (r) {
+        banks = r.data || [];
+        var inner =
+          '<div class="row2"><div>' + fld("Cleared on", '<input id="cc-date" type="date" value="' + esc(c.due_date > today() ? today() : (c.due_date || today())) + '">', "The date on the bank statement, which is the date the entry carries.") + '</div>' +
+          '<div>' + fld("Bank account", '<select id="cc-acc"><option value="">' + esc("(the bank journal's own account)") + '</option>' + banks.map(function (a) {
+            return '<option value="' + a.id + '"' + (c.bank_account_id === a.id ? " selected" : "") + '>' + esc(a.code + " " + a.name) + '</option>';
+          }).join("") + '</select>', "") + '</div></div>' +
+          '<div class="o-note">' + (c.direction === "out" ? "The bank has paid it. Your bank balance goes down by " : "The money is in. Your bank balance goes up by ") + money(c.amount) + ', and the cheque leaves the holding account.</div>';
+        var mm = plotModal("Cheque " + (c.cheque_number || "") + " cleared", inner, async function () {
+          var r = await sb.rpc("cheque_clear", { p_cheque: c.id, p_date: gv("cc-date") || today(), p_bank_account: document.getElementById("cc-acc").value || null });
+          if (r.error) { toast(errMsg(r.error)); return; }
+          mm.remove(); if (parent) parent.remove(); toast("Cleared. The bank account has moved."); renderView();
+        });
+      });
+  }
+  function openChequeBounce(c, parent) {
+    var inner =
+      '<div class="row2"><div>' + fld("Returned on", '<input id="cb-date" type="date" value="' + today() + '">', "The date the bank returned it, which is the date the debt comes back.") + '</div>' +
+      '<div>' + fld("Bank charge", '<input id="cb-charge" type="number" step="0.01" value="0">', "What the bank charged you for the returned cheque. Posted to your default expense account.") + '</div></div>' +
+      fld("Why", '<input id="cb-why" placeholder="e.g. Insufficient funds">', "Worth recording: it is what you will quote when you chase.") +
+      '<div class="o-note">' + money(c.amount) + ' goes straight back onto ' + (c.direction === "out" ? "what you owe" : "what you are owed") + (c.invoice_id ? ", and the document it settled is owed again for exactly what it was" : "") + '.</div>';
+    var mm = plotModal("Cheque " + (c.cheque_number || "") + " returned unpaid", inner, async function () {
+      var r = await sb.rpc("cheque_bounce", {
+        p_cheque: c.id, p_date: gv("cb-date") || today(), p_reason: gv("cb-why") || "",
+        p_charge: parseFloat(gv("cb-charge")) || 0, p_charge_account: null
+      });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast("Returned. The debt is back where it was."); renderView();
+    });
+  }
+  function openChequeEndorse(c, parent, partners) {
+    var inner =
+      fld("Signed over to", '<select id="ce-to"><option value="">Pick the supplier</option>' + (partners || []).map(function (p) {
+        return '<option value="' + p.id + '">' + esc(p.name) + '</option>';
+      }).join("") + '</select>', "Whoever you are handing the cheque to. What you owe them goes down by the cheque's value.") +
+      fld("Handed over on", '<input id="ce-date" type="date" value="' + today() + '">', "") +
+      '<div class="o-note">The cheque leaves your hands and settles ' + money(c.amount) + ' of what you owe them. No bank account is involved, which is exactly why this is done.</div>';
+    var mm = plotModal("Sign over cheque " + (c.cheque_number || ""), inner, async function () {
+      var to = document.getElementById("ce-to").value;
+      if (!to) { toast("Pick who the cheque goes to"); return; }
+      var r = await sb.rpc("cheque_endorse", { p_cheque: c.id, p_to: to, p_date: gv("ce-date") || today() });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast("Signed over. What you owe them has gone down."); renderView();
+    });
+  }
+
+  // The question a drawer full of cheques exists to answer, and the reason the
+  // two holding accounts are worth having: what is going to hit the bank, and
+  // when. Only cheques still in flight count: a cleared one is already in the
+  // bank balance and a returned one is a debt, not a cheque.
+  async function renderChequePosition() {
+    var cc = S.company.currency_code;
+    document.getElementById("o-main").innerHTML = repChrome("Cheque Position", true);
+    wireBc(); wireBookBar();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    var weeks = (await sb.rpc("cheque_position", { p_company: S.company.id, p_weeks: 26 })).data || [];
+    var live = (await sb.from("cheques").select("direction,amount,due_date,status").eq("company_id", S.company.id).in("status", ["pending", "deposited"])).data || [];
+    var tin = 0, tout = 0, late = 0;
+    live.forEach(function (c) {
+      var a = Number(c.amount || 0);
+      if (c.direction === "out") tout += a; else tin += a;
+      if (String(c.due_date || "") < today()) late += (c.direction === "out" ? -a : a);
+    });
+    var rows = weeks.map(function (w) {
+      var past = String(w.week_start) < today();
+      return '<tr><td' + (past ? ' style="color:var(--warn-t)"' : '') + '>' + esc(w.week_start) + (past ? ' <span class="muted">(already due)</span>' : '') + '</td>' +
+        '<td class="num">' + money(w.cheques_in) + '</td><td class="num">' + money(w.cheques_out) + '</td>' +
+        '<td class="num"' + (Number(w.net) < 0 ? ' style="color:var(--bad-t)"' : '') + '>' + money(w.net) + '</td>' +
+        '<td class="num"><b>' + money(w.running) + '</b></td></tr>';
+    }).join("");
+    var kpi = function (l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; };
+    document.getElementById("rep").innerHTML = repHead("Cheque position - what is going to hit the bank", cc) +
+      '<div class="kpis" style="margin:14px 0 4px">' + kpi("Cheques in hand", tin) + kpi("Cheques written", tout) + kpi("Net to come", tin - tout) + kpi("Already bankable", late) + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Week beginning</td><td class="num">Coming in</td><td class="num">Going out</td><td class="num">Net that week</td><td class="num">Running</td></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="5" class="muted">No cheques in flight. Record one in the Cheque Register and it appears here on the week it can be banked.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div class="sub u-mt8">Only cheques still in flight are counted: in hand or with the bank. A cleared cheque is already in your bank balance and a returned one is a debt again, so neither belongs here. <b>Already bankable</b> is the net value of cheques whose date has passed and that have still not cleared, which is the first place to look when the bank balance is lower than you expected. Every figure is in ' + esc(cc) + '.</div>';
   }
 
   // ============================ BANK STATEMENTS + RECONCILIATION ============================

@@ -649,6 +649,29 @@
         return ok(need.length + " parts of the design are settings the printers read");
       } },
 
+    { name: "a cheque only touches the bank when the bank pays it",
+      why: "The whole point of the register is that a post-dated cheque settles the invoice without putting money in the bank. If a screen moved a cheque on by writing its status, the holding account and the bank would both be wrong and nothing would say so. Every move has to go through the database functions in migration 235.",
+      run: function (src) {
+        var need = [
+          ["the register is on the Accounting menu", /\["Cheque Register", "acc\.cheques"\]/],
+          ["and routed", /case "acc\.cheques": return renderList\(cfgCheques\(\)\);/],
+          ["the position report is routed", /case "acc\.chqpos": return renderChequePosition\(\);/],
+          ["recording it posts in the database", /call\("cheque_post", \{ p_cheque: c\.id \}/],
+          ["banking it does too", /call\("cheque_deposit", \{ p_cheque: c\.id/],
+          ["so does clearing", /sb\.rpc\("cheque_clear", \{ p_cheque: c\.id/],
+          ["and returning it unpaid", /sb\.rpc\("cheque_bounce", \{/],
+          ["and signing it over", /sb\.rpc\("cheque_endorse", \{ p_cheque: c\.id/],
+          ["and cancelling it", /call\("cheque_cancel", \{ p_cheque: c\.id/],
+          ["a cheque taken off an invoice goes to the register", /if \(_how\.value === "CHQ"\)/],
+          ["and is posted there, not banked", /sb\.rpc\("cheque_post", \{ p_cheque: ins\.data\.id \}\)/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        var byhand = (src.match(/\.update\(\{\s*status: "(cleared|bounced|endorsed|deposited)"/g) || []).length;
+        if (byhand) return bad(byhand + " place(s) move a cheque on by writing its status instead of posting");
+        return ok(need.length + " moves all go through the database, and none is faked by a status write");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {
