@@ -1755,6 +1755,8 @@
       { i: "receipt", n: "Sales", l: "Sales", d: "Every till sale, searchable, with its total and status." },
       { i: "refresh", n: "Returns", l: "Returns", d: "Refund a whole sale in cash and take back its loyalty points." },
       { i: "door", n: "Sessions", l: "Sessions", d: "Each shift, its opening float, closing count and variance." },
+      { i: "coin", n: "Cash drops", l: "Setup", d: "Money taken out of the drawer and put in the safe, deducted from the drawer count." },
+      { i: "hand", n: "Tip pools", l: "Setup", d: "What the till took in tips over a period, split between the people who worked it." },
       { i: "percent", n: "Promotions", l: "Setup", d: "Rules that apply themselves so nobody has to remember them." },
       { i: "ticket", n: "Vouchers", l: "Setup", d: "Codes a customer brings, each spendable once." }
     ] },
@@ -1950,7 +1952,7 @@
         { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
         { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
-        { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"]] },
+        { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
         { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"]] },
         { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
@@ -1966,7 +1968,7 @@
         { label: "Sales", action: "pos.orders" },
         { label: "Returns", action: "pos.returns" },
         { label: "Sessions", action: "pos.sessions" },
-        { label: "Setup", items: [["Promotions", "pos.promos"], ["Vouchers", "pos.vouchers"]] }
+        { label: "Setup", items: [["Promotions", "pos.promos"], ["Vouchers", "pos.vouchers"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] }
       ]
     },
     recruitment: {
@@ -1989,7 +1991,7 @@
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] },
         { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
         { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
-        { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
+        { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Tip pools", "tips.pools"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
         { label: "Expenses", action: "hr.exp" }
       ]
     },
@@ -2041,6 +2043,7 @@
         { label: "Cash Desk", action: "cash.desk" },
         { label: "Movements", action: "cash.moves" },
         { label: "Handovers", action: "cash.handovers" },
+        { label: "Cash drops", action: "cash.drops" },
         { label: "Daily Close", action: "cash.close" },
         { label: "Configuration", items: [["Cash Accounts", "cash.accounts"], ["Payment Methods", "cash.methods"]] }
       ]
@@ -2101,7 +2104,7 @@
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
     "events.list": "events", "events.new": "events",
-    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter",
+    "cash.desk": "counter", "cash.moves": "counter", "cash.handovers": "counter", "cash.close": "counter", "cash.accounts": "counter", "cash.methods": "counter", "cash.drops": "counter", "tips.pools": "hr",
     "appt.cal": "appoint", "appt.list": "appoint", "appt.clients": "appoint", "appt.services": "appoint", "appt.avail": "appoint", "appt.settings": "appoint",
     "plot.dash": "plot", "plot.buildings": "plot", "plot.units": "plot", "plot.owners": "plot", "plot.tenancies": "plot", "plot.charges": "plot", "plot.runs": "plot", "plot.meetings": "plot", "plot.resolutions": "plot", "plot.notices": "plot", "plot.suggestions": "plot",
     "plot.arrears": "plot", "plot.expenses": "plot", "plot.budget": "plot", "plot.projects": "plot", "plot.tasks": "plot", "plot.checklist": "plot", "plot.checkins": "plot", "plot.announce": "plot", "plot.docs": "plot",
@@ -4695,6 +4698,8 @@
       case "settings.lock": return openLockDateModal();
       case "rates": return renderList(cfgRates());
       case "bank": return renderList(cfgBankStatements());
+      case "cash.drops": return renderList(cfgCashDrops());
+      case "tips.pools": return renderList(cfgTipPools());
       case "acc.cheques": return renderList(cfgCheques());
       case "acc.chqpos": return renderChequePosition();
       case "appearance": return renderAppearance();
@@ -19062,6 +19067,358 @@
     document.querySelectorAll(".cp-card[data-go]").forEach(function (el) { el.onclick = function () { go(el.dataset.go); }; });
   }
 
+  // ===================== CASH DROPS AND TIP POOLS =====================
+  // Two things that happen on a busy floor and had nowhere to be recorded.
+  //
+  // A cash drop is money taken out of the drawer and put in the safe, which a
+  // busy till does two or three times a day so a whole day's takings is never
+  // sitting in an open drawer. The close has to know about them or the drawer
+  // counts short by exactly what was dropped, and a real variance cannot be
+  // told apart from a drop nobody deducted. session_drawer subtracts them in
+  // the database (migration 236), so every screen that asks what the drawer
+  // should hold gets the same answer.
+  //
+  // Tips taken on card are the company's money until they are handed over, so
+  // they sit on their own liability account. A pool pulls what the till took
+  // over a period, the cash jar is declared by hand because nothing can know
+  // it, and the split is by hours worked, by points or evenly.
+  function cfgCashDrops() {
+    return {
+      title: "Cash drops", pageSize: 100, table: "cash_drops",
+      fetch: async function () {
+        var r = await sb.from("cash_drops").select("*").eq("company_id", S.company.id).order("dropped_at", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var accs = (await sb.from("cash_accounts").select("id,name").eq("company_id", S.company.id)).data || [];
+        var am = {}; accs.forEach(function (a) { am[a.id] = a.name; });
+        var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id)).data || [];
+        var sm = {}; stores.forEach(function (s) { sm[s.id] = s.name; });
+        rows.forEach(function (d) { d._from = am[d.from_account_id] || ""; d._to = am[d.to_account_id] || ""; d._store = sm[d.store_id] || ""; });
+        return rows;
+      },
+      searchText: function (d) { return [d.dropped_by, d.witnessed_by, d.reference, d.note, d._from, d._to, d._store].join(" "); },
+      columns: [
+        { label: "When", get: function (d) { return '<span class="muted">' + esc(String(d.dropped_at || "").replace("T", " ").slice(0, 16)) + '</span>'; } },
+        { label: "Amount", num: true, get: function (d) { return '<b>' + money(d.amount) + '</b>'; } },
+        { label: "Out of", get: function (d) { return esc(d._from || "(not said)"); } },
+        { label: "Into", get: function (d) { return esc(d._to || "(not said)"); } },
+        { label: "Dropped by", get: function (d) { return esc(d.dropped_by || "") + (d.witnessed_by ? '<div class="muted u-fs11">witnessed by ' + esc(d.witnessed_by) + '</div>' : ""); } },
+        { label: "Store", get: function (d) { return esc(d._store || ""); } },
+        { label: "In the books", get: function (d) {
+            if (d.entry_id) return '<span class="badge paid">Posted</span>';
+            if (d.posted_at) return '<span class="badge partial">Recorded</span>';
+            return '<span class="badge draft">Not yet</span>';
+          } }
+      ],
+      filters: [
+        { label: "Not in the books yet", test: function (d) { return !d.posted_at; } },
+        { label: "Today", test: function (d) { return String(d.dropped_at || "").slice(0, 10) === today(); } }
+      ],
+      groupBy: [
+        { label: "Day", get: function (d) { return String(d.dropped_at || "").slice(0, 10) || "(no date)"; } },
+        { label: "Dropped by", get: function (d) { return d.dropped_by || "(nobody named)"; } },
+        { label: "Store", get: function (d) { return d._store || "(no store)"; } }
+      ],
+      emptyHint: "Money taken out of a drawer and put in the safe. Record every one: what the drawer should hold at close is what came in less what was taken out of it, and a drop nobody recorded looks exactly like cash gone missing.",
+      onOpen: function (d) { openCashDropModal(d); }, onNew: function () { openCashDropModal(null); }
+    };
+  }
+  function cdNow() {
+    var d = new Date(), p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  async function openCashDropModal(d) {
+    var isNew = !d || !d.id;
+    d = d || { amount: 0, dropped_at: new Date().toISOString(), dropped_by: (S.profile && S.profile.full_name) || "" };
+    var editable = !d.posted_at;
+    var accs = (await sb.from("cash_accounts").select("id,name,kind").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || [];
+    var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var sess = (await sb.from("pos_sessions").select("id,register,opened_at,status").eq("company_id", S.company.id).order("opened_at", { ascending: false }).limit(30)).data || [];
+    var ro = editable ? "" : " disabled";
+    function sel(id, list, cur, blank) {
+      return '<select id="' + id + '"' + ro + '><option value="">' + esc(blank) + '</option>' + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(cur || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("") + '</select>';
+    }
+    var inner =
+      '<div class="row2"><div>' + fld("Amount", '<input id="cd-amt" type="number" step="0.01" value="' + (d.amount != null ? d.amount : "") + '"' + ro + '>', "How much came out of the drawer.") + '</div>' +
+      '<div>' + fld("When", '<input id="cd-when" type="datetime-local" value="' + esc(String(d.dropped_at || "").replace(" ", "T").slice(0, 16) || cdNow()) + '"' + ro + '>', "The time matters: it is how a drop is matched to a shift.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Out of", sel("cd-from", accs.map(function (a) { return [a.id, a.name]; }), d.from_account_id, "(the till, not said)"), "Which cash account the money left. Set up in Counter, Cash Accounts.") + '</div>' +
+      '<div>' + fld("Into", sel("cd-to", accs.map(function (a) { return [a.id, a.name]; }), d.to_account_id, "(the safe, not said)"), "Where it went. Name both and the drop posts as a real movement; name neither and it is a control record only.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Dropped by", '<input id="cd-by" value="' + esc(d.dropped_by || "") + '"' + ro + '>', "Whoever took the money out of the drawer.") + '</div>' +
+      '<div>' + fld("Witnessed by", '<input id="cd-wit" value="' + esc(d.witnessed_by || "") + '"' + ro + '>', "A second name is what makes a drop evidence rather than an assertion.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Shift", sel("cd-sess", sess.map(function (s) { return [s.id, (s.register || "Register") + " " + String(s.opened_at || "").slice(0, 16).replace("T", " ") + (s.status === "open" ? " (open)" : "")]; }), d.session_id, "(no shift)"), "The shift the money came out of. The drawer count for that shift is reduced by it.") + '</div>' +
+      '<div>' + fld("Store", sel("cd-store", stores.map(function (s) { return [s.id, s.name]; }), d.store_id, "(no store)"), "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Reference", '<input id="cd-ref" value="' + esc(d.reference || "") + '"' + ro + '>', "The bag or envelope number, if you use them.") + '</div>' +
+      '<div>' + fld("Note", '<input id="cd-note" value="' + esc(d.note || "") + '"' + ro + '>', "") + '</div></div>' +
+      (d.entry_id ? '<div class="o-note">Posted as a movement between the two cash accounts.</div>'
+        : d.posted_at ? '<div class="o-note">Recorded. Nothing posted, because the money did not move between two different cash accounts: the till and the safe are the same line in your ledger. The drawer count for the shift still counts it.</div>'
+        : isNew ? "" : '<div class="o-note">Not in the books yet. <b>Record in the books</b> posts the movement, and the shift&rsquo;s drawer count already counts it either way.</div>');
+
+    var m = plotModal(isNew ? "New cash drop" : "Cash drop", inner, editable ? async function () {
+      var row = {
+        amount: parseFloat(gv("cd-amt")) || 0,
+        dropped_at: (gv("cd-when") || cdNow()) + ":00",
+        from_account_id: document.getElementById("cd-from").value || null,
+        to_account_id: document.getElementById("cd-to").value || null,
+        dropped_by: gv("cd-by") || null, witnessed_by: gv("cd-wit") || null,
+        session_id: document.getElementById("cd-sess").value || null,
+        store_id: document.getElementById("cd-store").value || null,
+        reference: gv("cd-ref") || null, note: gv("cd-note") || null,
+        currency_code: S.company.currency_code
+      };
+      if (!(row.amount > 0)) { toast("A drop needs an amount"); return; }
+      if (row.from_account_id && row.from_account_id === row.to_account_id) { toast("The money cannot go back into the same account it came out of"); return; }
+      var r, id = d.id;
+      if (id) r = await sb.from("cash_drops").update(row).eq("id", id);
+      else { row.company_id = S.company.id; r = await sb.from("cash_drops").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    } : null, true);
+
+    if (d.id && !d.posted_at) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = "Record in the books";
+      b.title = "Post the movement between the two cash accounts";
+      b.onclick = async function () {
+        b.disabled = true;
+        var r = await sb.rpc("cash_drop_post", { p_drop: d.id });
+        if (r.error) { toast(errMsg(r.error)); b.disabled = false; return; }
+        m.remove(); toast(r.data ? "Posted: the money is in the safe account" : "Recorded. There was nothing to post, because both ends are the same ledger account.");
+        renderView();
+      };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    if (d.id && canManageApp(S.app) && !d.entry_id) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this drop? The shift's drawer count will go back up by " + money(d.amount) + ".")) return;
+        var x = await sb.from("cash_drops").delete().eq("id", d.id);
+        if (x.error) { toast(errMsg(x.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+  // The cashier's own route: one button on the register, mid-shift, no screens.
+  async function posDropToSafe() {
+    if (!POS.session) { toast("Open the register first"); return; }
+    var accs = (await sb.from("cash_accounts").select("id,name,kind").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || [];
+    var tills = accs.filter(function (a) { return a.kind !== "bank"; });
+    var inner =
+      fld("Amount", '<input id="pd-amt" type="number" step="0.01" value="">', "How much is leaving the drawer right now.") +
+      '<div class="row2"><div>' + fld("Out of", '<select id="pd-from"><option value="">(the till)</option>' + tills.map(function (a) { return '<option value="' + a.id + '">' + esc(a.name) + '</option>'; }).join("") + '</select>', "") + '</div>' +
+      '<div>' + fld("Into", '<select id="pd-to"><option value="">(the safe)</option>' + tills.map(function (a) { return '<option value="' + a.id + '">' + esc(a.name) + '</option>'; }).join("") + '</select>', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Dropped by", '<input id="pd-by" value="' + esc((S.profile && S.profile.full_name) || "") + '">', "") + '</div>' +
+      '<div>' + fld("Witnessed by", '<input id="pd-wit" value="">', "") + '</div></div>' +
+      '<div class="o-note">The drawer count at close goes down by this, so the shift still balances. Name both accounts and it posts as a movement between them.</div>';
+    var m = plotModal("Drop to the safe", inner, async function () {
+      var amt = parseFloat(gv("pd-amt")) || 0;
+      if (!(amt > 0)) { toast("How much is going to the safe?"); return; }
+      var from = document.getElementById("pd-from").value || null, to = document.getElementById("pd-to").value || null;
+      if (from && from === to) { toast("Pick two different accounts"); return; }
+      var ins = await sb.from("cash_drops").insert({
+        company_id: S.company.id, session_id: POS.session.id, store_id: POS.session.store_id || null,
+        amount: amt, dropped_by: gv("pd-by") || null, witnessed_by: gv("pd-wit") || null,
+        dropped_at: new Date().toISOString(), from_account_id: from, to_account_id: to,
+        currency_code: S.company.currency_code
+      }).select("id").single();
+      if (ins.error) { toast(errMsg(ins.error)); return; }
+      var r = await sb.rpc("cash_drop_post", { p_drop: ins.data.id });
+      m.remove();
+      toast(r.error ? ("Drop recorded, but not posted: " + errMsg(r.error))
+        : (money(amt) + " to the safe. The drawer count at close is " + money(amt) + " lower."));
+    });
+  }
+
+  function cfgTipPools() {
+    return {
+      title: "Tip pools", pageSize: 60, table: "tip_pools",
+      fetch: async function () {
+        var r = await sb.from("tip_pools").select("*").eq("company_id", S.company.id).order("period_end", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var ids = rows.map(function (p) { return p.id; });
+        var cnt = {}, paid = {};
+        if (ids.length) {
+          ((await sb.from("tip_allocations").select("pool_id,amount").in("pool_id", ids)).data || []).forEach(function (a) {
+            cnt[a.pool_id] = (cnt[a.pool_id] || 0) + 1; paid[a.pool_id] = (paid[a.pool_id] || 0) + (Number(a.amount) || 0);
+          });
+        }
+        var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id)).data || [];
+        var sm = {}; stores.forEach(function (s) { sm[s.id] = s.name; });
+        rows.forEach(function (p) {
+          p._people = cnt[p.id] || 0; p._split = paid[p.id] || 0; p._store = sm[p.store_id] || "";
+          p._total = (Number(p.card_tips) || 0) + (Number(p.cash_tips_declared) || 0) +
+            (p.share_service_charge === false ? 0 : (Number(p.service_charge) || 0));
+        });
+        return rows;
+      },
+      searchText: function (p) { return [p.period_start, p.period_end, p.method, p.status, p.note, p._store].join(" "); },
+      columns: [
+        { label: "Period", get: function (p) { return '<b>' + esc(p.period_start || "") + '</b> <span class="muted">to</span> <b>' + esc(p.period_end || "") + '</b>' + (p._store ? '<div class="muted u-fs11">' + esc(p._store) + '</div>' : ""); } },
+        { label: "Card tips", num: true, get: function (p) { return money(p.card_tips); } },
+        { label: "Cash declared", num: true, get: function (p) { return money(p.cash_tips_declared); } },
+        { label: "Service charge", num: true, get: function (p) { return money(p.service_charge) + (p.share_service_charge === false ? ' <span class="muted u-fs11">(kept)</span>' : ""); } },
+        { label: "In the pool", num: true, get: function (p) { return '<b>' + money(p._total) + '</b>'; } },
+        { label: "Split", get: function (p) { return p._people ? (p._people + " people &middot; " + money(p._split)) : '<span class="muted">not yet</span>'; } },
+        { label: "How", get: function (p) { return esc(TIP_METHODS[p.method] || p.method || "By hours"); } },
+        { label: "Status", get: function (p) { return '<span class="badge ' + (p.status === "paid" ? "paid" : p.status === "allocated" ? "partial" : "draft") + '">' + esc(fnbTitle(p.status || "draft")) + '</span>'; } }
+      ],
+      filters: [
+        { label: "Not paid out", test: function (p) { return p.status !== "paid"; } },
+        { label: "Nothing in the pool", test: function (p) { return !p._total; } }
+      ],
+      groupBy: [
+        { label: "Status", get: function (p) { return fnbTitle(p.status || "draft"); } },
+        { label: "Store", get: function (p) { return p._store || "(all stores)"; } }
+      ],
+      emptyHint: "Tips taken on card are the company's money until they are handed over, so they sit on their own account and not in income. A pool covers a period, pulls what the till actually took, takes the cash jar as a declared figure, and splits the lot by hours worked, by points or evenly.",
+      onOpen: function (p) { openTipPoolModal(p); }, onNew: function () { openTipPoolModal(null); }
+    };
+  }
+  var TIP_METHODS = { hours: "By hours worked", points: "By points", equal: "Evenly" };
+  async function openTipPoolModal(p) {
+    var isNew = !p || !p.id;
+    var firstOfWeek = new Date(); firstOfWeek.setDate(firstOfWeek.getDate() - 6);
+    p = p || { period_start: fmtD(firstOfWeek), period_end: today(), method: "hours", share_service_charge: true, status: "draft", card_tips: 0, cash_tips_declared: 0, service_charge: 0 };
+    var paidOut = p.status === "paid";
+    var ro = paidOut ? " disabled" : "";
+    var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name").limit(500)).data || [];
+    var allocs = p.id ? ((await sb.from("tip_allocations").select("*").eq("pool_id", p.id).order("amount", { ascending: false })).data || []) : [];
+    var total = (Number(p.card_tips) || 0) + (Number(p.cash_tips_declared) || 0) + (p.share_service_charge === false ? 0 : (Number(p.service_charge) || 0));
+    var em = {}; emps.forEach(function (e) { em[e.id] = e.name; });
+    function allocRow(a) {
+      a = a || {};
+      return '<tr data-id="' + esc(a.id || "") + '">' +
+        '<td><select class="tp-emp"' + ro + '><option value="">(pick a person)</option>' + emps.map(function (e) {
+          return '<option value="' + e.id + '"' + (a.employee_id === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>';
+        }).join("") + '</select></td>' +
+        '<td><input class="tp-hours" type="number" step="0.25" style="width:80px;text-align:right" value="' + (a.hours != null ? a.hours : "") + '"' + ro + '></td>' +
+        '<td><input class="tp-points" type="number" step="0.5" style="width:70px;text-align:right" value="' + (a.points != null ? a.points : 1) + '"' + ro + '></td>' +
+        '<td class="num"><b>' + money(a.amount) + '</b></td>' +
+        '<td>' + (paidOut ? "" : '<button class="del" type="button" title="Remove">&times;</button>') + '</td></tr>';
+    }
+    var inner =
+      '<div class="row2"><div>' + fld("From", '<input id="tp-from" type="date" value="' + esc(p.period_start || "") + '"' + ro + '>', "The first day of the period the tips were earned.") + '</div>' +
+      '<div>' + fld("To", '<input id="tp-to" type="date" value="' + esc(p.period_end || "") + '"' + ro + '>', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Store", '<select id="tp-store"' + ro + '><option value="">(every store)</option>' + stores.map(function (s) {
+        return '<option value="' + s.id + '"' + (p.store_id === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>';
+      }).join("") + '</select>', "") + '</div>' +
+      '<div>' + fld("Split", '<select id="tp-method"' + ro + '>' + Object.keys(TIP_METHODS).map(function (k) {
+        return '<option value="' + k + '"' + ((p.method || "hours") === k ? " selected" : "") + '>' + esc(TIP_METHODS[k]) + '</option>';
+      }).join("") + '</select>', "Hours worked is the usual rule and the only one Orbit can fill in by itself. Points are for a house that weights one job above another.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Card tips", '<input id="tp-card" type="number" step="0.01" value="' + (Number(p.card_tips) || 0) + '"' + ro + '>', "What the till took as a tip on a card or a transfer. Pull from the till fills this in.") + '</div>' +
+      '<div>' + fld("Cash tips declared", '<input id="tp-cash" type="number" step="0.01" value="' + (Number(p.cash_tips_declared) || 0) + '"' + ro + '>', "What went into the jar. Nothing can know this, so it is typed, and it should be what the staff themselves declared.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Service charge", '<input id="tp-svc" type="number" step="0.01" value="' + (Number(p.service_charge) || 0) + '"' + ro + '>', "The service charge the till added to bills over the period.") + '</div>' +
+      '<div>' + fld("Share the service charge", '<select id="tp-share"' + ro + '><option value="1"' + (p.share_service_charge !== false ? " selected" : "") + '>Yes, it goes in the pool</option><option value="0"' + (p.share_service_charge === false ? " selected" : "") + '>No, the house keeps it</option></select>', "Houses differ, and this is the question staff ask first. Whatever you choose, say so to them.") + '</div></div>' +
+      fld("Note", '<input id="tp-note" value="' + esc(p.note || "") + '"' + ro + '>', "") +
+      '<div class="o-cf-head u-mt14">In the pool: ' + money(total) + '</div>' +
+      '<div class="sub" style="margin:-2px 0 6px">Add the people who worked the period with their hours, or press <b>Split the pool</b> and Orbit fills them in from the hours actually clocked.</div>' +
+      '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>Person</th><th>Hours</th><th>Points</th><th class="num">Gets</th><th style="width:28px"></th></tr></thead><tbody id="tp-rows">' +
+      (allocs.length ? allocs.map(allocRow).join("") : "") + '</tbody></table></div>' +
+      (paidOut ? "" : '<button class="btn sm" type="button" id="tp-add">+ Add a person</button>') +
+      (paidOut ? '<div class="o-note">Paid out on ' + esc(p.paid_on || "") + ' ' + (p.paid_via === "payroll" ? "through the payroll" : "in cash") + '. The tips account has been cleared of it.</div>' : "");
+
+    var m = plotModal(isNew ? "New tip pool" : "Tip pool " + (p.period_start || "") + " to " + (p.period_end || ""), inner, paidOut ? null : async function () {
+      var row = {
+        period_start: gv("tp-from") || today(), period_end: gv("tp-to") || today(),
+        store_id: document.getElementById("tp-store").value || null,
+        method: document.getElementById("tp-method").value,
+        card_tips: parseFloat(gv("tp-card")) || 0,
+        cash_tips_declared: parseFloat(gv("tp-cash")) || 0,
+        service_charge: parseFloat(gv("tp-svc")) || 0,
+        share_service_charge: document.getElementById("tp-share").value === "1",
+        note: gv("tp-note") || null
+      };
+      if (row.period_end < row.period_start) { toast("The period ends before it starts"); return; }
+      var r, id = p.id;
+      if (id) r = await sb.from("tip_pools").update(row).eq("id", id);
+      else { row.company_id = S.company.id; row.status = "draft"; r = await sb.from("tip_pools").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      // the people and their hours, rewritten as a set, with the amounts left
+      // to the database to work out
+      if (id) {
+        var rows = [].map.call(document.querySelectorAll("#tp-rows tr"), function (tr) {
+          return {
+            company_id: S.company.id, pool_id: id,
+            employee_id: tr.querySelector(".tp-emp").value || null,
+            hours: parseFloat(tr.querySelector(".tp-hours").value) || 0,
+            points: parseFloat(tr.querySelector(".tp-points").value) || 0,
+            amount: 0
+          };
+        }).filter(function (a) { return a.employee_id; });
+        await sb.from("tip_allocations").delete().eq("pool_id", id);
+        if (rows.length) { var ar = await sb.from("tip_allocations").insert(rows); if (ar.error) { toast("People: " + errMsg(ar.error)); return; } }
+      }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    if (!paidOut) {
+      var tb = document.getElementById("tp-rows");
+      function wireDel() { tb.querySelectorAll(".del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+      wireDel();
+      document.getElementById("tp-add").onclick = function () { tb.insertAdjacentHTML("beforeend", allocRow(null)); wireDel(); };
+    }
+    function act(label, title, fn) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = label; if (title) b.title = title;
+      b.onclick = async function () { b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    if (p.id && !paidOut) {
+      act("Pull from the till", "Read the card tips and the service charge the till actually took over the period", async function () {
+        var r = await sb.rpc("tip_pool_pull", { p_pool: p.id });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var o = r.data || {};
+        m.remove(); toast("Card tips " + money(o.card_tips) + ", service charge " + money(o.service_charge) + " over the period");
+        renderView();
+      });
+      act("Split the pool", "Work out what each person gets, and fill in the people from their clocked hours if the list is empty", async function () {
+        var r = await sb.rpc("tip_pool_allocate", { p_pool: p.id });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var o = r.data || {};
+        m.remove(); toast(money(o.total) + " split between " + o.people + " people" + (o.seeded ? " (filled in from clocked hours)" : ""));
+        renderView();
+      });
+    }
+    if (p.id && p.status === "allocated") {
+      act("Pay it out", "Clear the tips account and record the money going to the staff", function () { openTipPayout(p, m); });
+    }
+    if (p.id && canManageApp(S.app) && !paidOut) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this pool and its split?")) return;
+        await sb.from("tip_allocations").delete().eq("pool_id", p.id);
+        var x = await sb.from("tip_pools").delete().eq("id", p.id);
+        if (x.error) { toast(errMsg(x.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+  async function openTipPayout(p, parent) {
+    var accs = (await sb.from("cash_accounts").select("id,name,kind").eq("company_id", S.company.id).eq("is_active", true).order("sort").order("name")).data || [];
+    var split = (await sb.from("tip_allocations").select("amount").eq("pool_id", p.id)).data || [];
+    var tot = split.reduce(function (s, a) { return s + (Number(a.amount) || 0); }, 0);
+    var inner =
+      fld("How they are paid", '<select id="tx-via"><option value="cash">Handed over in cash</option><option value="payroll">Added to the payroll</option></select>',
+        "Cash takes it out of a till or the safe. Payroll puts it on what you owe in wages, so it goes out with the next run.") +
+      fld("Out of", '<select id="tx-acc"><option value="">(the cash journal\'s own account)</option>' + accs.map(function (a) {
+        return '<option value="' + a.id + '">' + esc(a.name) + '</option>';
+      }).join("") + '</select>', "Only used when they are handed cash.") +
+      '<div class="o-note">' + money(tot) + ' to ' + split.length + ' people. The tips account is cleared by that amount, with one line per person so the ledger names who was paid what.</div>';
+    var mm = plotModal("Pay out the tips", inner, async function () {
+      var via = document.getElementById("tx-via").value;
+      var r = await sb.rpc("tip_pool_post", { p_pool: p.id, p_via: via, p_cash_account: document.getElementById("tx-acc").value || null });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast("Paid out. The tips account is clear of it."); renderView();
+    });
+  }
+
   // ============================ CHEQUE REGISTER ============================
   // A post-dated cheque is a promise, not money, and most of the trade here runs
   // on them. The register holds each one from the day the paper changes hands to
@@ -23509,7 +23866,7 @@
   }
   async function renderPOS() {
     var main = document.getElementById("o-main"); posStyle();
-    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Register") + '<div class="gap"></div><span id="pos-sesstag" class="muted u-fs12"></span> <button class="o-filtbtn" id="pos-close">Close register</button></div><div id="pos-main"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
+    main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Register") + '<div class="gap"></div><span id="pos-sesstag" class="muted u-fs12"></span> <button class="o-filtbtn" id="pos-drop">Drop to safe</button> <button class="o-filtbtn" id="pos-close">Close register</button></div><div id="pos-main"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div>';
     wireBc();
     POS.session = (await sb.from("pos_sessions").select("*").eq("company_id", S.company.id).eq("status", "open").order("opened_at", { ascending: false }).limit(1).maybeSingle()).data || null;
     var vt = (await sb.from("taxes").select("amount,amount_type,scope").eq("company_id", S.company.id).eq("is_active", true)).data || [];
@@ -23520,6 +23877,7 @@
     var wrap = document.getElementById("pos-main");
     if (!POS.session) {
       document.getElementById("pos-close").style.display = "none";
+      document.getElementById("pos-drop").style.display = "none";
       wrap.innerHTML = '<div style="max-width:360px;margin:60px auto"><div class="card"><h3 class="u-mb4">Open the register</h3><div class="sub" style="margin-bottom:12px">Count the cash in the drawer to start a shift.</div>' +
         fld("Opening cash", '<input id="pos-opencash" type="number" step="0.01" value="0">') + '<button class="btn pri" id="pos-open" style="background:var(--app);border-color:var(--app);margin-top:6px">Open register</button></div></div>';
       document.getElementById("pos-open").onclick = async function () {
@@ -23530,6 +23888,7 @@
     }
     document.getElementById("pos-sesstag").textContent = "Register open · opened " + (POS.session.opened_at || "").slice(11, 16);
     document.getElementById("pos-close").onclick = function () { posCloseSession(); };
+    document.getElementById("pos-drop").onclick = function () { posDropToSafe(); };
     POS.products = (await sb.from("products").select("id,name,price:list_price,category_id").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(1000)).data || [];
     POS.cart = []; POS.partner = null; POS.voucher = null; POS.redeem = 0;
     var today = fmtD(new Date());
@@ -27244,9 +27603,18 @@
     var cashHome = 0;
     var pays = (await sb.from("pos_payments").select("amount,method, pos_orders!inner(session_id)").eq("pos_orders.session_id", POS.session.id)).data || [];
     pays.forEach(function (p) { if (p.method === "cash" || p.method === "change") cashHome += Number(p.amount) || 0; });
-    var expected = (Number(POS.session.opening_cash) || 0) + cashHome;
+    // Money dropped to the safe mid-shift has left the drawer. Without this the
+    // count is short by exactly what was dropped, and a real variance cannot be
+    // told apart from a drop nobody deducted. session_drawer already takes them
+    // off the per-currency figures; this is the home-currency total that is
+    // written onto the shift.
+    var drops = (await sb.from("cash_drops").select("amount,currency_code").eq("session_id", POS.session.id)).data || [];
+    var dropHome = 0;
+    drops.forEach(function (d) { if (!d.currency_code || d.currency_code === home) dropHome += Number(d.amount) || 0; });
+    var expected = (Number(POS.session.opening_cash) || 0) + cashHome - dropHome;
     var m = document.createElement("div"); m.className = "modal on";
-    m.innerHTML = '<div class="sheet"><h3>Close register</h3><div class="form"><div class="sub">' + sales.length + ' sale(s) this shift. Count each currency in the drawer; what Orbit expects is beside it.</div>' +
+    m.innerHTML = '<div class="sheet"><h3>Close register</h3><div class="form"><div class="sub">' + sales.length + ' sale(s) this shift. Count each currency in the drawer; what Orbit expects is beside it.' +
+      (drops.length ? ' <b>' + drops.length + ' drop' + (drops.length === 1 ? "" : "s") + ' to the safe (' + money(dropHome) + ') ' + (drops.length === 1 ? "has" : "have") + ' already been taken off.</b>' : "") + '</div>' +
       ccys.map(function (c) {
         return '<div class="row2" style="align-items:flex-end"><div><label>Counted ' + esc(c) + '</label>' +
           '<input class="pos-cnt" data-c="' + esc(c) + '" type="number" step="0.01" value="' + (Math.round(byCcy[c] * 100) / 100) + '"></div>' +

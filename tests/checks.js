@@ -672,6 +672,29 @@
         return ok(need.length + " moves all go through the database, and none is faked by a status write");
       } },
 
+    { name: "the drawer count knows what left the drawer",
+      why: "A cash drop is money taken out of the till mid-shift and put in the safe. If the close does not deduct it, the drawer counts short by exactly what was dropped, and a real cash variance cannot be told apart from money somebody moved properly. This is the check that keeps the deduction, the button the cashier actually uses, and the posting wired together.",
+      run: function (src) {
+        var need = [
+          ["cash drops are routed", /case "cash\.drops": return renderList\(cfgCashDrops\(\)\);/],
+          ["and on the Counter menu", /\{ label: "Cash drops", action: "cash\.drops" \}/],
+          ["the register has its own drop button", /id="pos-drop">Drop to safe<\/button>/],
+          ["wired to the till's own route", /document\.getElementById\("pos-drop"\)\.onclick = function \(\) \{ posDropToSafe\(\); \};/],
+          ["the close reads the shift's drops", /from\("cash_drops"\)\.select\("amount,currency_code"\)\.eq\("session_id", POS\.session\.id\)/],
+          ["and takes them off what it expects", /var expected = \(Number\(POS\.session\.opening_cash\) \|\| 0\) \+ cashHome - dropHome;/],
+          ["a drop posts in the database", /sb\.rpc\("cash_drop_post", \{ p_drop:/],
+          ["tip pools are routed", /case "tips\.pools": return renderList\(cfgTipPools\(\)\);/],
+          ["the takings are pulled, not typed", /sb\.rpc\("tip_pool_pull", \{ p_pool: p\.id \}\)/],
+          ["the split is worked out in the database", /sb\.rpc\("tip_pool_allocate", \{ p_pool: p\.id \}\)/],
+          ["and paying out posts it", /sb\.rpc\("tip_pool_post", \{ p_pool: p\.id, p_via: via/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        var typed = (src.match(/from\("tip_allocations"\)[\s\S]{0,200}?amount: parseFloat/g) || []).length;
+        if (typed) return bad("a tip share is typed into the allocation instead of being worked out");
+        return ok(need.length + " pieces present: the drop is deducted, the button is wired, and every money move posts");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

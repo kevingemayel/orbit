@@ -1354,6 +1354,66 @@ orbitScreenHelp({
     tips: [
       "Always fill in the email: it is how the privacy tools find the person if they ask what you hold."
     ]
+  },
+
+  "tips.pools": {
+    title: "Tip pools",
+    what: "Tips taken on a card are the company's money until they are handed over, so they are something you owe, not income. A <b>tip pool</b> covers a period, gathers what was actually taken in that period, and splits it between the people who worked it. Paying it out clears what you owe them. The screen holds three figures: card tips, the cash jar as the staff declared it, and the service charge, with a say on whether the house shares that last one.",
+    when: [
+      "Every week or fortnight, whenever you hand tips over.",
+      "A member of staff asks what they are owed, and on what basis.",
+      "You want the service charge treated differently from the tips.",
+      "Month end, to see that the tips account has been cleared and nothing is quietly owed."
+    ],
+    how: [
+      "Open <b>Employees &rsaquo; Payroll &rsaquo; Tip pools</b> and click <span class='man-key'>New</span>. For this example a cafe shares last week's tips between the people who worked it.",
+      "<b>From</b> and <b>To</b> are filled in as the last seven days. Leave <b>Store</b> on every store, or pick one branch.",
+      "Leave <b>Split</b> on <i>By hours worked</i>. That is the usual rule and the only one Orbit can fill in by itself.",
+      "Click <span class='man-key'>Save</span>, then open the pool again and click <span class='man-key'>Pull from the till</span>. You should see something like <i>Card tips 240.00, service charge 310.00 over the period</i>, both filled in for you.",
+      "Ask the staff what went into the jar and type it in <b>Cash tips declared</b>, for example 85.00. Nothing in any till knows this figure, so it has to be declared, and it should be their number rather than yours.",
+      "Decide <b>Share the service charge</b>. Yes puts the 310.00 in the pool; no leaves it with the house. Whichever you pick, tell the staff: it is the question they ask first.",
+      "Click <span class='man-key'>Split the pool</span>. With nobody listed, Orbit fills the list in from the hours actually clocked in the period and divides by them. You should see <i>635.00 split between 6 people (filled in from clocked hours)</i>.",
+      "Look down the list. Change anybody's hours, add somebody who was missed, click <span class='man-key'>Save</span> and <span class='man-key'>Split the pool</span> again. The last rounding cent lands on the biggest share, so the split always comes to the pool exactly.",
+      "Click <span class='man-key'>Pay it out</span>, choose <i>Handed over in cash</i> and the till or safe it comes out of, and save. The tips account is cleared, with one line per person so the ledger names who was paid what."
+    ],
+    fields: [
+      ["From / To", "The period the tips were earned in. Pull from the till reads exactly this window.", "required"],
+      ["Store", "One branch, or every store.", "optional"],
+      ["Split", "By hours worked, by points, or evenly. Points are for a house that weights a chef above a runner; they are typed per person.", "required"],
+      ["Card tips", "What the till took as a tip on a card or a transfer over the period. Pull from the till fills this in.", "auto"],
+      ["Cash tips declared", "What went into the jar. Typed, because no till can know it.", "optional"],
+      ["Service charge", "The service charge the till added to bills over the period. Pull from the till fills this in.", "auto"],
+      ["Share the service charge", "Whether it goes into the pool or stays with the house.", "required"],
+      ["Person / Hours / Points", "One row per person who worked the period. Hours drive the usual split, points the weighted one.", "optional"],
+      ["Gets", "What that person's share comes to. Worked out by Split the pool, never typed.", "auto"]
+    ],
+    buttons: [
+      ["Pull from the till", "Reads the card tips and the service charge the till actually took over the period and store."],
+      ["Split the pool", "Works out each share. With an empty list it first fills in everybody who clocked hours in the period."],
+      ["Pay it out", "Asks whether they are being handed cash or paid through the payroll, then posts it and clears the tips account."],
+      ["Delete", "Only before it is paid out. It removes the split with it."]
+    ],
+    after: "<p>Nothing posts until <b>Pay it out</b>. Pulling and splitting only write figures onto the pool and its people, so a pool can be argued over and re-split as often as it takes.</p><p>Paying out posts one entry: <b>Tips owed to staff</b> down by the total, with a line naming each person and what they got, and the other side either the till or the safe it was paid from, or <b>salaries payable</b> when it goes through the payroll and out with the next run. The tips side of that account was credited when the shift was posted, so a company that pays out every pool ends each month with nothing owed, which is the figure worth checking.</p><p>Once paid, a pool is locked. It cannot be re-split or paid again.</p>",
+    links: [
+      { name: "Sessions", how: "Closing a shift posts its card tips to the tips account, which is what a pool later clears.", to: "pos.sessions" },
+      { name: "Attendances", how: "The clocked hours Split the pool fills the list in from.", to: "hr.att" },
+      { name: "Employees", how: "Who can appear in a pool.", to: "hr.emp" },
+      { name: "Payslip Runs", how: "Where tips go out when you pay them through the payroll instead of in cash.", to: "hr.runs" },
+      { name: "Chart of Accounts", how: "4280 Tips owed to staff, created for every company.", to: "accounts" }
+    ],
+    mistakes: [
+      ["There is nothing in this pool yet. Pull the takings, or declare the cash tips.", "Every figure is zero. Press Pull from the till, or type what was in the jar."],
+      ["Nobody has hours clocked in this period. Add the people who worked it, with their hours, and split again.", "No attendance was recorded for the period, so there is nothing to divide by. Add the people by hand with their hours, then split."],
+      ["This pool splits by hours and nobody has any. Enter the hours each person worked, or split evenly.", "The people are listed but their hours are empty. Fill them in, or change Split to Evenly."],
+      ["This pool has already been paid out.", "A paid pool is history. Start a new one for the next period."],
+      ["This company has no salaries payable account, so tips cannot go through payroll.", "Set it in Settings, Companies, Accounting accounts, or hand the tips over in cash."],
+      ["The period ends before it starts", "From is later than To. Swap them."]
+    ],
+    tips: [
+      "Run a pool for every period, even a quiet one. The tips account should come back to nothing; a balance that only grows means somebody has not been paid.",
+      "Keep the <b>Note</b> field for the rule you actually used, in words. It is the first thing anybody asks about six months later.",
+      "The declared cash figure is the staff's number. Writing your own in it is the fastest way to lose their trust in the whole arrangement."
+    ]
   }
 
 });

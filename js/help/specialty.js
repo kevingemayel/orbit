@@ -1104,6 +1104,60 @@ orbitScreenHelp({
       "Always record the serial number: a warranty that names only the product matches every unit of that model.",
       "The badge is information only. Tick Covered on the ticket's lines that the warranty pays for."
     ]
+  },
+
+  "cash.drops": {
+    title: "Cash drops",
+    what: "A <b>cash drop</b> is money taken out of a till drawer during a shift and put somewhere safer: the safe, the office, a bag for the bank. A busy counter does it two or three times a day so a whole day's takings is never sitting in an open drawer. This screen is the record of every one, and it is what keeps the end-of-shift count honest: what the drawer should hold at close is what came in, less what was taken out of it.",
+    when: [
+      "A till is getting full and somebody takes money out of it mid-shift.",
+      "The end-of-day cash is bagged for the bank out of the drawer rather than the safe.",
+      "A shift came up short and you want to see whether a drop explains it.",
+      "You are checking who has been taking money out of drawers, and who witnessed it."
+    ],
+    how: [
+      "Open <b>Counter &rsaquo; Cash drops</b> and click <span class='man-key'>New</span>. For this example a lunch rush has left 300.00 more in the drawer than anyone wants there.",
+      "Type 300.00 in <b>Amount</b> and check <b>When</b>: it defaults to now, and the time is what ties the drop to the shift that was running.",
+      "Set <b>Out of</b> to the till the money came out of and <b>Into</b> to the safe. Both come from the list in <b>Counter &rsaquo; Configuration &rsaquo; Cash Accounts</b>.",
+      "Put your own name in <b>Dropped by</b> and the name of whoever watched you count it in <b>Witnessed by</b>. The second name is what makes a drop evidence rather than an assertion.",
+      "Choose the <b>Shift</b> the money came out of. The shift's expected drawer count drops by 300.00 the moment you save.",
+      "Click <span class='man-key'>Save</span>, then open the drop again and click <span class='man-key'>Record in the books</span>. You should see <i>Posted: the money is in the safe account</i>, and the ledger now shows 300.00 less in the till and 300.00 more in the safe.",
+      "Quicker, and where it actually happens: on the register itself, click <span class='man-key'>Drop to safe</span>, type the amount and save. The drop is recorded and posted in one go without leaving the till."
+    ],
+    fields: [
+      ["Amount", "How much came out of the drawer.", "required"],
+      ["When", "The date and time it happened. The time is how a drop is matched to a shift, so leave it as now unless you are catching up on yesterday.", "required"],
+      ["Out of", "The cash account the money left, usually the till. From Counter, Cash Accounts.", "optional"],
+      ["Into", "Where it went, usually the safe. Name both ends and the drop posts as a real movement between them; name neither and it is a control record only, which is still what the drawer count needs.", "optional"],
+      ["Dropped by", "Whoever took the money out.", "optional"],
+      ["Witnessed by", "Whoever watched. Two names on a cash movement is the cheapest control there is.", "optional"],
+      ["Shift", "The register session the money came out of. Without it the drop is still in the books but the drawer count for that shift does not know about it.", "optional"],
+      ["Store", "Which branch, where you have more than one.", "optional"],
+      ["Reference", "The bag or envelope number, if you use them.", "optional"],
+      ["Note", "Anything worth remembering.", "optional"]
+    ],
+    buttons: [
+      ["Record in the books", "Posts the movement from one cash account to the other. Where both ends are the same ledger account there is nothing to post and it says so."],
+      ["Delete", "Only before it is posted. The shift's drawer count goes back up by the amount."]
+    ],
+    after: "<p>Saving a drop immediately lowers what the shift's drawer is expected to hold, on the register's close screen and anywhere else that asks. That is the point of it: without the drop, the count comes up short by exactly the amount dropped, and a real variance cannot be told apart from money somebody moved properly.</p><p>Recording it in the books posts one entry: the receiving cash account up, the till down. Nothing is income or expense, because nothing was earned or spent; the money only moved. Where the company keeps a single cash account, the till and the safe are the same line in the ledger and there is nothing to post.</p>",
+    links: [
+      { name: "Register", how: "The Drop to safe button records one mid-shift without leaving the till.", to: "pos.terminal" },
+      { name: "Sessions", how: "Each shift's expected cash is what it took, less its drops.", to: "pos.sessions" },
+      { name: "Cash Accounts", how: "The tills, safes and bank accounts a drop can move between.", to: "cash.accounts" },
+      { name: "Cash Desk", how: "The running balance of each of those accounts.", to: "cash.desk" }
+    ],
+    mistakes: [
+      ["The money cannot go back into the same account it came out of", "Out of and Into are the same account. Pick the safe, or leave one of them empty."],
+      ["This drop is already in the books.", "Somebody posted it. A posted drop is history and is not posted twice; if it was wrong, raise the correction in Journal Entries."],
+      ["Your role cannot record a cash drop. It needs Work in Counter, the till or Kitchen.", "The database refuses it, not the screen. Ask for Work in one of those apps in Settings, Users."],
+      ["The shift still counts short", "The drop has no Shift on it, so the count cannot know about it. Open the drop and choose the session."]
+    ],
+    tips: [
+      "Record the drop as it happens, not at close. A drop reconstructed from memory at midnight is the main reason cash counts are argued about.",
+      "Group the list by <b>Day</b> to see a week of drops at a glance, or by <b>Dropped by</b> when something does not add up.",
+      "A drop is not a handover. A <b>handover</b> passes responsibility for a whole balance from one person to another; a drop just moves money to a safer place."
+    ]
   }
 
 });
