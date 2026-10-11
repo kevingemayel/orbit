@@ -531,7 +531,7 @@ orbitScreenHelp({
       ["Line table style", "How the lines of a document are ruled, the same way on every document: <b>Grid</b> boxes every cell, <b>Lines</b> rules under each row, <b>Striped</b> shades alternate rows, <b>Plain</b> has no rules at all.", "optional"],
       ["Table header row", "The row of column names: <b>Plain</b>, <b>Shaded grey</b>, or <b>Your accent colour</b> with white text.", "optional"],
       ["Footer layout", "How the foot of the page sits: <b>Centred</b>, <b>Left aligned</b>, <b>Note left, details right</b>, or <b>Accent rule above</b> for a line in your accent colour across the bottom.", "optional"],
-      ["Show in the footer", "Which details print at the bottom of every document: the <b>Footer note</b>, your <b>Legal name</b>, <b>Tax number</b>, <b>Address</b>, <b>Phone</b>, <b>Email</b> and <b>Website</b>. Untick them all and no footer is printed at all.", "optional"]
+      ["Show in the footer", "Which details print at the bottom of every document: the <b>Footer note</b>, your <b>Legal name</b>, <b>Tagline</b>, <b>Tax number</b>, <b>Address</b>, <b>Phone</b>, <b>Email</b>, <b>Website</b> and the <b>Date printed</b>. Untick them all and no footer is printed at all. Page numbers are not in this list because a web page cannot count its own printed pages: the browser adds them, under More settings, Headers and footers, in its print dialog.", "optional"]
     ],
     buttons: [
       ["Save", "Saves everything on the page for this company. The city must be filled in."],

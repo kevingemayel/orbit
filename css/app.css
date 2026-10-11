@@ -1047,6 +1047,13 @@ select.gce{cursor:pointer;appearance:auto}
 body{top:0!important}
 .goog-te-gadget{font-size:0!important;color:transparent!important}
 .goog-te-combo{font:inherit!important;font-size:13px!important;padding:6px 9px!important;border:1px solid var(--line)!important;border-radius:8px!important;background:var(--panel2)!important;color:var(--ink)!important;max-width:100%!important;margin:0!important}
+/* A primary button is a primary button wherever it sits. Written as
+   <button class="pri"> outside a toolbar it had no rule at all and fell back to
+   the browser's own grey chrome, which is the Windows XP look. */
+button.pri{border:1px solid transparent;background:var(--accent);color:#fff;border-radius:var(--r);padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 1px 2px rgba(22,23,28,.14),0 4px 12px -3px rgba(22,23,28,.28);transition:filter .12s,transform .12s}
+button.pri:hover{filter:brightness(1.05);color:#fff;transform:translateY(-1px)}
+button.pri:active{transform:translateY(0)}
+button.pri:disabled{opacity:.55;cursor:default;transform:none;box-shadow:none}
 .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:var(--r);padding:8px 14px;font:inherit;font-weight:600;font-size:13px;cursor:pointer;box-shadow:0 1px 1px rgba(22,23,28,.04);transition:transform .08s,box-shadow .12s,filter .12s,background .12s,border-color .12s}
 .btn:hover{background:var(--panel2);border-color:var(--ink3)}
 .btn.pri{background:var(--accent);border-color:transparent;color:#fff;box-shadow:0 1px 2px rgba(22,23,28,.14),0 4px 12px -3px rgba(22,23,28,.28)}

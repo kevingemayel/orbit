@@ -8040,7 +8040,12 @@
     var invCount = 0, firstInvId = null, ordBills = [];
     // the bills or invoices raised against this order, with what is still owed on each,
     // so the order itself can say whether it is paid without opening another screen
-    if (order) { ordBills = (await sb.from("invoices").select("id,number,state,move_type,amount_total,amount_residual,currency_code,invoice_date").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id).order("invoice_date")).data || []; invCount = ordBills.length; firstInvId = ordBills[0] ? ordBills[0].id : null; }
+    if (order) { ordBills = (await sb.from("invoices").select("id,number,state,move_type,amount_total,amount_residual,currency_code,invoice_date").eq(isSale ? "sale_order_id" : "purchase_order_id", order.id).order("invoice_date")).data || []; // a cancelled document still belongs to the order and still shows in the
+      // Invoices list with its badge, but it is not one of the invoices this order
+      // HAS: counting it told Francois Eid's order it had two invoices when one of
+      // them had been voided, and the button opened the voided one first.
+      var liveBills = ordBills.filter(function (v) { return v.state !== "cancel"; });
+      invCount = liveBills.length; firstInvId = liveBills[0] ? liveBills[0].id : null; }
     // receipts made from this purchase order, and the versions kept by each edit
     var rcpts = (order && !isSale) ? ((await sb.from("stock_pickings").select("id,number,type,scheduled_date").eq("po_id", order.id).order("created_at")).data || []) : [];
     var orevs = order ? ((await sb.from("document_revisions").select("id,created_at,actor_email,reposted_at,snapshot").eq("doc_type", isSale ? "sale_order" : "purchase_order").eq("doc_id", order.id).order("created_at", { ascending: false })).data || []) : [];
@@ -9102,7 +9107,7 @@
       return '<div class="o-matspec u-mt14"><div class="o-cf-head">What they can supply</div><div class="sub" style="margin:-2px 0 9px">Tick the products or services this supplier offers. Not listed? Add it and it is saved for next time.</div><div class="cap-list" id="cap-list">' + boxes + '</div><div class="cap-add"><input id="cap-new" data-enter="own" placeholder="Add a type, e.g. Insulation"><button type="button" class="o-filtbtn" id="cap-addbtn">Add</button></div></div>';
     }
     function bankRow(b) { b = b || {}; return '<tr><td><input class="pb-bank" value="' + esc(b.bank_name || "") + '" placeholder="Bank"></td><td><input class="pb-acc" value="' + esc(b.account_number || "") + '"></td><td><input class="pb-iban" value="' + esc(b.iban || "") + '"></td><td><input class="pb-cur" value="' + esc(b.currency_code || "") + '" style="width:70px"></td><td><button class="pb-del u-xbtn">&times;</button></td></tr>'; }
-    var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice")).count || 0);
+    var invCount = id === "new" ? 0 : ((await sb.from("invoices").select("id", { count: "exact", head: true }).eq("company_id", S.company.id).eq("partner_id", id).eq("move_type", isCust ? "out_invoice" : "in_invoice").neq("state", "cancel")).count || 0);
     bcTitle(id === "new" ? "New" : (p.name || ""));
     var smart = id !== "new" ? '<div class="o-smart"><button class="sb" id="sm-inv"><span class="v">' + invCount + '</span><span class="k">' + (isCust ? "Invoices" : "Bills") + '</span></button><button class="sb" id="sm-stmt"><span class="v">&#9776;</span><span class="k">Statement</span></button></div>' : "";
     document.querySelector(".o-form").innerHTML =
@@ -18054,11 +18059,14 @@
     var has = function (k) { return ff.indexOf(k) >= 0; };
     var bits = [];
     if (has("legal_name")) bits.push(esc(pfDisplayName(t)));
+    if (has("tagline") && t.tagline) bits.push(esc(t.tagline));
     if (has("tax") && t.vat) bits.push(esc((t.taxLabel || "VAT") + " " + t.vat));
     if (has("address")) { var a = [t.address, t.city, t.country].filter(Boolean).join(", ").replace(/\n/g, ", "); if (a) bits.push(esc(a)); }
     if (has("phone")) { if (t.phone) bits.push(esc(t.phone)); if (t.phone2) bits.push(esc(t.phone2)); }
     if (has("email") && t.email) bits.push(esc(t.email));
     if (has("website") && t.website) bits.push(esc(t.website));
+    // the day it was printed, in the reader's own date format
+    if (has("date")) bits.push(esc(new Date().toLocaleDateString()));
     return { note: has("note") ? String(t.footer || "") : "", details: bits.filter(Boolean).join(" &middot; ") };
   }
   function buildPrintFooter(t) {
@@ -18277,8 +18285,8 @@
           .map(function (o) { var v = JSON.parse(o); return '<option value="' + v[0] + '"' + (tps.footer_style === v[0] ? " selected" : "") + '>' + v[1] + '</option>'; }).join("") + '</select>') +
       fld("Footer note", '<input id="cp-footer" value="' + esc(ps.footer || "") + '" placeholder="e.g. Thank you for your business">') +
       '</div><div>' +
-      fld("Show in the footer", cpChecks("ff", [["note", "Footer note"], ["legal_name", "Legal name"], ["tax", "Tax number"], ["address", "Address"], ["phone", "Phone"], ["email", "Email"], ["website", "Website"]], ffSel),
-          "Untick everything and no footer is printed at all.") +
+      fld("Show in the footer", cpChecks("ff", [["note", "Footer note"], ["legal_name", "Legal name"], ["tagline", "Tagline"], ["tax", "Tax number"], ["address", "Address"], ["phone", "Phone"], ["email", "Email"], ["website", "Website"], ["date", "Date printed"]], ffSel),
+          "Untick everything and no footer is printed at all. Page numbers come from the browser's own print dialog, under More settings, Headers and footers.") +
       '</div></div>' +
       '<div class="cp-preview-wrap"><div class="cp-preview-label">Live preview</div><div class="cp-preview" id="cp-preview"></div></div>' +
       '</div></div>';
