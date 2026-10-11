@@ -7701,9 +7701,16 @@
     // name twice: once in bold and again at the front of the description. The
     // prefix comes off, so the row reads "Architectural Design Phase" and then
     // "Curtain wall", which is what the customer is paying for.
+    // The prefix comes off the FRONT of the text and the rest is left exactly as
+    // it is: flattening the whitespace to find the prefix would also flatten the
+    // line breaks the scope is written with, and the list would print as a
+    // paragraph again.
     var lead = prod.name.replace(/\s+/g, " ").trim();
-    if (lead && desc.replace(/\s+/g, " ").toLowerCase().indexOf(lead.toLowerCase()) === 0) {
-      desc = desc.replace(/\s+/g, " ").slice(lead.length).replace(/^[\s:;,.-]+/, "");
+    if (lead) {
+      var rx = new RegExp("^\\s*" + lead.split(/\s+/).map(function (w) {
+        return w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      }).join("\\s+") + "\\s*[:;,.\\-]*\\s*", "i");
+      desc = desc.replace(rx, "");
     }
     return '<b>' + esc(prod.name) + '</b>' +
       (desc && desc !== prod.name ? '<div class="pitem-d">' + esc(desc) + '</div>' : '') +
