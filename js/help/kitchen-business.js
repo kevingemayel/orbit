@@ -1751,6 +1751,64 @@ orbitScreenHelp({
       "Filter to <b>Not seen in 90 days</b> for the list worth a message. People with points sitting unspent are the cheapest custom to win back.",
       "A programme switched off mid-month does not wipe anybody's balance: the accounts stay, and the next sale earns on whatever is live then."
     ]
+  },
+
+  "rst.bookings": {
+    title: "Course bookings",
+    what: "A place on one of your courses: who is on it, when, what they were charged, whether it has been invoiced and paid, and whether they walked away with a certificate. A paying guest is invoiced from here, once. Your own staff are on the same list and are not charged, because training your own people is a cost, not a sale.",
+    when: [
+      "Somebody books a place, by phone, in person or through the website.",
+      "A course has run and you are invoicing the places on it.",
+      "Certificates are going out.",
+      "You want to know which places are still unpaid, or which courses actually fill."
+    ],
+    how: [
+      "Open <b>Kitchen &rsaquo; Roastery &rsaquo; Course bookings</b> and click <span class='man-key'>New</span>. In this example a cafe sells a place on a 6-hour latte art course for 120.",
+      "Pick the course in <b>Course</b>. The list shows each course with its price. Set <b>When</b> to the session date.",
+      "Choose the customer in <b>A paying guest</b>, and leave <b>Or our own staff</b> empty. Pick one or the other, never both.",
+      "Leave <b>Fee</b> empty to use the course price, or type a different figure for a discount you have agreed.",
+      "Click <span class='man-key'>Save</span>. The booking shows as <b>Booked</b> and <b>Not yet</b> invoiced.",
+      "Click <span class='man-key'>Invoice the place</span>. A draft customer invoice is raised for the fee, with the course name and the session date on the line, and the booking records which invoice it was. You should see <i>Invoice raised as a draft. Post it when you are ready.</i>",
+      "Open the invoice from <b>Invoices</b>, check it and post it. Register the payment there as usual, then tick <b>Paid</b> on the booking if you track it here as well.",
+      "After the course, set <b>Status</b> to <i>Attended</i> and save. Click <span class='man-key'>Issue the certificate</span> and a reference is filled in with today's date.",
+      "For your own staff: pick them in <b>Or our own staff</b> and leave the guest empty. The fee column reads <i>internal</i> and there is nothing to invoice."
+    ],
+    fields: [
+      ["Course", "Which course. Set them up in Training academy.", "required"],
+      ["When", "The session date.", "required"],
+      ["A paying guest", "Somebody outside the business, who gets invoiced.", "optional"],
+      ["Or our own staff", "One of your own people, who does not. One or the other, not both.", "optional"],
+      ["Fee", "What they are being charged. Left empty, the course price is used when the place is invoiced.", "optional"],
+      ["Status", "Booked, Attended, Did not turn up or Cancelled. Attended is what unlocks the certificate.", "required"],
+      ["Paid", "Your own note that the money is in. The invoice is the record that counts.", "optional"],
+      ["Certificate reference", "Filled in by Issue the certificate, or typed if you number them your own way.", "optional"],
+      ["Note", "Anything worth remembering about the place.", "optional"]
+    ],
+    buttons: [
+      ["Invoice the place", "Raises a draft customer invoice for the fee and ties it to this booking, so a place cannot be invoiced twice."],
+      ["Issue the certificate", "Only once the status is Attended. Fills in a reference and today's date."],
+      ["Delete", "Only a booking with no invoice behind it."]
+    ],
+    after: "<p><b>Invoice the place</b> creates a real draft invoice in Accounting: customer, one line naming the course and the session date, and the fee. It is a draft on purpose, so somebody can look at it before it goes out. Posting it, taking the payment and chasing it all happen there, and the booking keeps the link so the same place is never invoiced twice.</p><p>Nothing else posts. A certificate is a reference and a date; a place for your own staff costs nothing and raises nothing.</p>",
+    links: [
+      { name: "Training academy", how: "The courses, their length and their price.", to: "rst.courses" },
+      { name: "Invoices", how: "Where the invoice this screen raises is posted, sent and chased.", to: "inv.out" },
+      { name: "Customers", how: "A paying guest is a contact.", to: "contacts" },
+      { name: "Certifications", how: "Where a qualification is recorded against one of your own people, for good.", to: "hr.certs" }
+    ],
+    mistakes: [
+      ["Which course?", "No course is chosen."],
+      ["Who is on it? Either a paying guest or one of our own staff.", "Both are empty. A booking belongs to somebody."],
+      ["One or the other, not both", "A guest and a staff member are both filled in. A place is either sold or internal; it cannot be both."],
+      ["There is no fee on this booking or on the course, so there is nothing to invoice", "The course is free, or its price is empty. Put the fee on the booking, or on the course."],
+      ["Invoice the place is not there", "It is either a staff place or already invoiced. The Invoiced column says which."],
+      ["Issue the certificate is not there", "The status is not Attended yet, or a reference is already filled in."]
+    ],
+    tips: [
+      "Filter to <b>Still to invoice</b> after a course has run: it is the list of money you have earned and not asked for.",
+      "<b>Attended, no certificate</b> is the other list worth clearing, because a certificate nobody sent is the thing a guest remembers.",
+      "Group by <b>Course</b> to see which ones actually fill. A course that never fills is a price problem or a day problem, and the bookings tell you which."
+    ]
   }
 
 });

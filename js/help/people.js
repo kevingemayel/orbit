@@ -522,7 +522,7 @@ orbitScreenHelp({
       { name: "Shift Templates", how: "Reusable role and times you load into a shift.", to: "hr.shifttmpl" },
       { name: "Calendar", how: "Each planned shift shows on its date.", to: "cal.month" },
       { name: "Projects", how: "A shift can be tagged with an active project.", to: "proj.list" },
-      { name: "Roster", how: "A separate weekly grid of named shifts per person, per day.", to: "hr.roster" }
+      { name: "Week planner", how: "A weekly grid of named shifts per person, per day.", to: "hr.rosterweek" }
     ],
     mistakes: [
       ["Hours do not match the times", "Hours are typed, not worked out. Correct the Hours box."],
@@ -720,43 +720,106 @@ orbitScreenHelp({
 
   "hr.roster": {
     title: "Roster",
-    what: "A weekly rota grid: one row per active employee, one column per day from Monday to Sunday. In each cell you pick a shift from the Shifts list, or Off. A change is saved the moment you make it.",
+    what: "Every shift, one row each: who works it, the date, the hours, the role, the store and whether it has been published to the team. The last column, <b>Watch out</b>, is why this screen exists: each shift is checked against what that person said they can work, the leave already approved and the rest of their day, and anything that disagrees is reported. It is a warning and never a refusal.",
     when: [
-      "Each week, to publish who works which shift.",
-      "Someone swaps a day and the rota needs updating."
+      "Going through next week's shifts before publishing them.",
+      "A shift was given out and nobody turned up, and you want to know whether it was ever possible.",
+      "Somebody needs to hand a shift over.",
+      "You want a shift with real hours and a store on it, rather than a name in a grid cell."
     ],
     how: [
-      "Make sure your shifts exist on <b>Employees &rsaquo; Attendances &rsaquo; Shifts</b>. For this example, a hotel reception rotas Morning and Evening shifts.",
-      "Open <b>Employees &rsaquo; Attendances &rsaquo; Roster</b>. You should see <i>Week of</i> and this week's Monday date, and a grid of your active employees.",
-      "Click <span class='man-key'>Next</span> to move to next week.",
-      "In the first receptionist's row, choose <i>Morning</i> under Mon, Tue and Wed. After each choice you should see <i>Roster updated</i>.",
-      "Choose <i>Evening</i> under Thu and Fri, and leave Sat and Sun on <i>Off</i>.",
-      "Fill in the other receptionists the same way.",
-      "Click <span class='man-key'>This week</span> to come back to the current week."
+      "Open <b>Employees &rsaquo; Attendances &rsaquo; Roster</b>. Every shift is listed, newest first.",
+      "Click <span class='man-key'>Filters</span> &rsaquo; <b>Something is wrong with it</b>. What is left is the list to deal with before the rota goes out.",
+      "Open one. For this example, a barista is on Friday 08:00 to 13:00 and told you in September that she cannot work Friday mornings.",
+      "The shift opens with a framed note: <i>Worth checking before you publish this: Said they are not available on a Friday (06:00 to 12:00): School run.</i> Underneath it reads <i>None of this stops you: you may know something the form does not.</i>",
+      "Either change the <b>From</b> and <b>To</b> hours, or change the <b>Employee</b>, and click <span class='man-key'>Save</span>. Open it again and the note is gone.",
+      "To publish, set <b>Published</b> to <i>Published to the team</i> and save. Until then the shift is a draft nobody has been told about.",
+      "If the person cannot work it and you have nobody to swap in yet, click <span class='man-key'>Hand it over</span>: choose give-away or swap, type the reason, and it waits in <b>Shift swaps</b> for a decision.",
+      "For filling in a whole week quickly, use <b>Week planner</b>: a grid with a cell per person per day, and a red <b>!</b> on any cell with the same problem."
     ],
     fields: [
-      ["Day cell", "The shift the employee works that day, from your active shifts, or Off. Choosing a shift saves it; choosing Off removes that day from the rota.", "optional"]
+      ["Employee", "Who works it.", "required"],
+      ["Date", "The day.", "required"],
+      ["From / To", "The hours. Leave both empty for a shift with no set hours; with hours, they are what availability is checked against.", "optional"],
+      ["Role", "What they are doing, for example Barista or Floor.", "optional"],
+      ["Store", "Which branch, where you have more than one.", "optional"],
+      ["Break (minutes)", "Unpaid break inside the shift.", "optional"],
+      ["Published", "Until it is published the rota is a draft nobody has been told about.", "optional"],
+      ["Note", "Anything worth saying. A hand-over writes who the shift came from here.", "optional"],
+      ["Watch out", "Not a field. What the database found wrong with this shift, in words.", "auto"]
     ],
     buttons: [
-      ["Prev", "Shows the week before."],
-      ["This week", "Jumps back to the current week."],
-      ["Next", "Shows the week after."]
+      ["New", "Opens the old range assigner: one person, one shift, over a run of days."],
+      ["Hand it over", "Asks for the shift to be given away or swapped. Nothing changes until it is approved."],
+      ["Delete", "Takes the shift off the rota."],
+      ["Filters", "<b>Something is wrong with it</b>, <b>Worth a look</b>, <b>From today on</b> and <b>Not published yet</b>."],
+      ["Group By", "<b>Employee</b>, <b>Date</b> or <b>Store</b>."]
     ],
-    after: "Nothing posts to the accounts, and the roster is not read by payroll: payslips use attendance and the contract. Planning and Labour standards are separate screens. An employee can have one shift per day.",
+    after: "<p>Nothing posts to the accounts, and the rota is not read by payroll: payslips use attendance and the contract.</p><p>What a shift is checked against: a rule on <b>Availability</b> saying the person cannot work those hours (reported as a problem), a rule saying when they <i>are</i> free with the shift falling outside it (a softer note), leave that somebody has already approved, and another shift of theirs the same day over the same hours. A split shift is fine: lunch and then dinner is the ordinary shape of a restaurant day, and only an overlap is reported.</p><p>None of it blocks a save. The person building a rota knows things the form does not, and a system that refuses on a rule it half understands gets worked around rather than used.</p>",
     links: [
-      { name: "Shifts", how: "The shift names offered in each cell.", to: "hr.shifts" },
+      { name: "Week planner", how: "The same rota as a grid, for filling in a week quickly.", to: "hr.rosterweek" },
+      { name: "Availability", how: "What people said they can and cannot work, which is what Watch out reads.", to: "hr.avail" },
+      { name: "Shift swaps", how: "Where a hand-over waits, and where approving it moves the shift.", to: "hr.swaps" },
+      { name: "Shifts", how: "The named patterns the week planner puts into a cell.", to: "hr.shifts" },
       { name: "Attendances", how: "What people actually worked, which is what payroll pays.", to: "hr.att" },
-      { name: "Planning", how: "A separate list of dated shifts with roles, projects and open slots.", to: "hr.planning" }
+      { name: "Requests", how: "Approved leave here is one of the things a shift is checked against.", to: "hr.leaves" }
     ],
     mistakes: [
-      ["Add employees first.", "There are no active employees. Add them in Employees."],
-      ["Create a shift first (Attendances > Shifts).", "There are no active shifts to choose. Create one on the Shifts screen."],
-      ["Could not save: (reason)", "The change was refused, for example because your role cannot edit the Employees app. The cell may look changed: reload the week to see what is really saved."],
-      ["A shift is missing from the cells", "It was archived on the Shifts screen. Only active shifts are offered."]
+      ["Something is wrong with it, but I know they can work it", "Publish it anyway. The warning is information; if their availability has changed, change it on the Availability screen so the rota stops asking."],
+      ["Watch out says On annual leave", "Somebody approved that leave. Either the leave or the shift is wrong; the leave is usually the one with a paper trail."],
+      ["Watch out says Also rostered the same day", "Two shifts of theirs run over the same hours. A split shift with a gap is fine; this is an actual clash."],
+      ["Could not save: (reason)", "The database refused it, for example because your role cannot write in the Employees app."],
+      ["Hand it over is not there", "A request is already waiting on this shift. Decide it in Shift swaps first."]
     ],
     tips: [
+      "Work the list down with <b>Something is wrong with it</b> on, then publish. It takes a minute and it is the whole difference between a rota that holds and one that does not.",
+      "Put the hours on a shift. Without them, availability can only be checked by the day, which is far less use.",
+      "Group by <b>Employee</b> to read somebody's month, or by <b>Store</b> to see a branch's week."
+    ]
+  },
+
+  "hr.rosterweek": {
+    title: "Week planner",
+    what: "The same rota as a grid: one row per active employee, one column per day from Monday to Sunday, and a shift name or <i>Off</i> in each cell. A change saves the moment you make it. A cell carrying a red <b>!</b> clashes with something, and hovering it says what.",
+    when: [
+      "Filling in a whole week from nothing, which is much faster here than one shift at a time.",
+      "Looking at the shape of a week: who is on too much, who is on nothing.",
+      "Moving a week forward or back to plan ahead."
+    ],
+    how: [
+      "Make sure your shifts exist on <b>Employees &rsaquo; Attendances &rsaquo; Shifts</b>. For this example, a hotel reception rotas Morning and Evening.",
+      "Open <b>Employees &rsaquo; Attendances &rsaquo; Week planner</b>. You should see <i>Week of</i> and this week's Monday, and a grid of your active employees.",
+      "Click <span class='man-key'>Next</span> to move to next week.",
+      "In the first receptionist's row, choose <i>Morning</i> under Mon, Tue and Wed. After each choice you should see <i>Roster updated</i>.",
+      "Choose <i>Evening</i> under Thu and Fri and leave Sat and Sun on <i>Off</i>.",
+      "If a cell shows a red <b>!</b>, hover it: <i>Said they are not available on a Friday (06:00 to 12:00): School run</i>, or <i>On annual from 15 to 17 October</i>. Pick somebody else, or go to <b>Roster</b> and open the shift to see it in full.",
+      "Click <span class='man-key'>This week</span> to come back."
+    ],
+    fields: [
+      ["Day cell", "The named shift that person works that day, or Off. Choosing a shift saves it; choosing Off takes that day off the rota.", "optional"]
+    ],
+    buttons: [
+      ["Prev", "The week before."],
+      ["This week", "Back to the current week."],
+      ["Next", "The week after."]
+    ],
+    after: "<p>Nothing posts. A cell writes one shift on the rota with the pattern's name; the hours, the store, the role and publishing live on the shift itself, over on <b>Roster</b>.</p><p>A person can now have more than one shift in a day, because a split shift is normal. This grid shows one cell per day, so where there are two it shows the first; open <b>Roster</b> to see both.</p>",
+    links: [
+      { name: "Roster", how: "The same shifts in full: hours, store, role, publishing, and the reason behind any warning.", to: "hr.roster" },
+      { name: "Shifts", how: "The named patterns offered in each cell.", to: "hr.shifts" },
+      { name: "Availability", how: "What puts the red mark on a cell.", to: "hr.avail" }
+    ],
+    mistakes: [
+      ["Add employees first.", "There are no active employees."],
+      ["Create a shift first (Attendances > Shifts).", "There are no active shifts to choose. Create one on the Shifts screen."],
+      ["Could not save: (reason)", "The change was refused, for example because your role cannot edit the Employees app. Reload the week to see what is really saved."],
+      ["A shift is missing from the cells", "It was archived on the Shifts screen. Only active shifts are offered."],
+      ["A cell shows Off but Roster shows a shift that day", "The shift has no pattern on it, only hours. The grid can only show a pattern; the Roster list shows everything."]
+    ],
+    tips: [
+      "Fill the week here, then go to <b>Roster</b> with <b>Something is wrong with it</b> on and fix what it found.",
       "The grid shows only active employees, so archive leavers to keep it short.",
-      "The grid has no print button; use Print from your browser if you need a paper copy."
+      "No print button: use your browser's own Print if you need it on paper."
     ]
   },
 
@@ -1413,6 +1476,106 @@ orbitScreenHelp({
       "Run a pool for every period, even a quiet one. The tips account should come back to nothing; a balance that only grows means somebody has not been paid.",
       "Keep the <b>Note</b> field for the rule you actually used, in words. It is the first thing anybody asks about six months later.",
       "The declared cash figure is the staff's number. Writing your own in it is the fastest way to lose their trust in the whole arrangement."
+    ]
+  },
+
+  "hr.avail": {
+    title: "Availability",
+    what: "What each person has told you about when they can and cannot work. A rule with a weekday repeats every week, so \"not Friday mornings\" is written once. A rule with a date is just that day. Every shift on the rota is checked against these, and anything that disagrees shows under <b>Watch out</b> on the Roster. It is a warning and never a refusal: a manager may know something the form does not.",
+    when: [
+      "Somebody joins and tells you the hours they are free.",
+      "A student's term timetable changes.",
+      "Somebody can work the next three Saturdays but not the fourth.",
+      "The rota keeps being given out for a shift nobody turns up to, and you want to know why."
+    ],
+    how: [
+      "Open <b>Employees &rsaquo; Attendances &rsaquo; Availability</b> and click <span class='man-key'>New</span>. In this example a barista cannot work Friday mornings because of a school run.",
+      "Pick the person, set <b>Can they work then</b> to <i>No</i>, choose <b>Every</b> <i>Friday</i>, and put 06:00 in <b>From</b> and 12:00 in <b>To</b>.",
+      "Type <i>School run</i> in <b>Why</b>. Write it: it is what a manager reads before asking them to come in anyway.",
+      "Click <span class='man-key'>Save</span>. Now open <b>Roster</b> and put that person on a Friday 08:00 to 13:00 shift. The row shows <b>1 problem</b>, and opening it reads <i>Said they are not available on a Friday (06:00 to 12:00): School run</i>.",
+      "To say when somebody <i>is</i> free rather than when they are not, add a rule with <b>Can they work then</b> on <i>Yes</i> and the hours. A shift outside every one of those hours then raises a softer note: <i>Rostered 13:00 to 23:00, but they are only free 14:00-22:00</i>.",
+      "For a one-off, leave <b>Every</b> empty and put the day in <b>Or just this date</b>."
+    ],
+    fields: [
+      ["Person", "Whose availability this is.", "required"],
+      ["Can they work then", "No is the one that matters: it is what stops a shift being given out that nobody turns up for.", "required"],
+      ["Every", "A weekday, for something that repeats. Leave it empty if you are giving a date.", "optional"],
+      ["Or just this date", "One day only. Give this or a weekday, not both.", "optional"],
+      ["From / To", "The hours the rule covers. Leave them empty and it covers the whole day.", "optional"],
+      ["Why", "A sentence. It is the difference between a manager respecting the rule and overriding it blind.", "optional"]
+    ],
+    buttons: [
+      ["New", "Adds a rule."],
+      ["Filters", "<b>Cannot work</b> and <b>A single date</b>."],
+      ["Group By", "<b>Person</b>, to read somebody's whole week at once."]
+    ],
+    after: "<p>Nothing is scheduled or changed by this screen. It is read by the Roster, which compares every shift against it and reports what disagrees. Orbit deliberately does not build a rota from availability: guessing who should work is a judgement about people, and a wrong guess that looks official is worse than no guess.</p>",
+    links: [
+      { name: "Roster", how: "Where the rules are checked. Anything that disagrees shows under Watch out.", to: "hr.roster" },
+      { name: "Shift swaps", how: "What a person asks for when the rota has already gone out.", to: "hr.swaps" },
+      { name: "Requests", how: "Approved leave is checked by the Roster too, from here rather than from availability.", to: "hr.leaves" },
+      { name: "Employees", how: "Who can appear on this screen.", to: "hr.emp" }
+    ],
+    mistakes: [
+      ["Both a weekday and a date are filled in", "The date wins and the weekday is ignored. Clear one of them so the rule reads the way you meant it."],
+      ["The rota shows no warning for a rule I added", "Check the hours. A rule from 06:00 to 12:00 only clashes with a shift that actually runs in those hours."],
+      ["I said somebody is free 14:00 to 22:00 and the rota complains anyway", "A shift that starts before 14:00 or ends after 22:00 is outside the hours they gave. That is the softer note, not a problem: publish it if they have agreed."],
+      ["Person is required", "Pick who the rule is about."]
+    ],
+    tips: [
+      "Ask for availability once, at the start, and keep it here rather than in a phone. It is the single most common cause of a shift nobody covers.",
+      "A rule with no hours covers the whole day, which is the right way to record \"never Sundays\".",
+      "Delete a rule when somebody's life changes rather than adding a contradicting one: the rota reads them all."
+    ]
+  },
+
+  "hr.swaps": {
+    title: "Shift swaps",
+    what: "Somebody asking to give up a shift, or to swap one. A request starts on the rota: open the shift and press <span class='man-key'>Hand it over</span>. It sits here until somebody decides it, and approving it moves the shift onto whoever is taking it, which is the only thing a request like this is for.",
+    when: [
+      "A person cannot work a shift that has already been published.",
+      "Two people have agreed to swap and want it recorded rather than remembered.",
+      "You are going through the week's requests before the rota goes out.",
+      "You want to see who keeps giving shifts away."
+    ],
+    how: [
+      "A request is made from the rota, not here. Open <b>Employees &rsaquo; Attendances &rsaquo; Roster</b>, open the shift, and click <span class='man-key'>Hand it over</span>.",
+      "Choose <i>Give it away to anyone who will take it</i> or <i>Swap it with somebody</i>, pick the person if one has already agreed, type the reason and save. You should see <i>Asked. It is waiting in Shift swaps.</i>",
+      "Open <b>Shift swaps</b>. The request shows the shift, who is giving it up, who is taking it (or <i>nobody yet</i>) and why.",
+      "Open it. If nobody has taken it, pick somebody in <b>Taken by</b> once they agree.",
+      "Before approving, look at the rota for that person: if they are on leave or have said they cannot work it, the rota will already be saying so.",
+      "Click <span class='man-key'>Approve</span>. You should see <i>Approved. Rita works 2026-10-16 now.</i> and the rota row changes to them, with a note recording who it came from.",
+      "Click <span class='man-key'>Decline</span> instead and the rota is left exactly as it was, with the reason kept on the request."
+    ],
+    fields: [
+      ["Shift", "The date and hours being handed over. Not editable: change the shift on the rota instead.", "auto"],
+      ["Given up by", "Whoever asked.", "auto"],
+      ["Taken by", "Who will work it. A request can be approved only once this is filled in, because approving means moving the shift onto somebody.", "optional"],
+      ["Why", "The reason, as given. Worth keeping.", "optional"],
+      ["Status", "Requested until decided, then Approved or Declined. A decided request is never decided again.", "auto"]
+    ],
+    buttons: [
+      ["Approve", "Moves the shift to the person taking it and notes where it came from."],
+      ["Decline", "Says no. The rota is untouched."],
+      ["Save", "Records a taker or an edited reason without deciding anything."]
+    ],
+    after: "<p>Approving changes the rota row itself: the employee becomes the person taking it, and the shift's note records who handed it over, so the history is on the shift rather than only on the request. Declining changes nothing at all.</p><p>A decided request is locked. If a swap needs undoing, change the rota directly: a second swap request pretending to reverse the first would leave two half-truths in the record.</p>",
+    links: [
+      { name: "Roster", how: "Where requests start, and what approving one changes.", to: "hr.roster" },
+      { name: "Availability", how: "Worth checking before approving: it is what the rota warns against.", to: "hr.avail" },
+      { name: "Employees", how: "Who can give up or take a shift.", to: "hr.emp" }
+    ],
+    mistakes: [
+      ["Nobody has taken this shift yet, so there is nothing to approve. Find a taker first, or decline it.", "A giveaway with no taker cannot be approved: the shift has to go to somebody. Fill in Taken by, or decline it and change the rota yourself."],
+      ["That shift is already theirs.", "The person taking it is the one already on the shift. Pick somebody else."],
+      ["That request has already been decided (approved).", "It is history. Change the rota directly if something needs undoing."],
+      ["The person taking the shift does not work for this company.", "They were removed since the request was made. Pick somebody current."],
+      ["The shift this is about no longer exists.", "Somebody took it off the rota. Decline the request and rebuild the shift."]
+    ],
+    tips: [
+      "Group by <b>Status</b> and filter to <b>Waiting on a decision</b> for the only list that matters on a Monday morning.",
+      "A giveaway with no taker is a shift up for grabs. Leaving it here, visible, is better than a message nobody reads.",
+      "Approve rather than editing the rota by hand even when you know who is covering: the note on the shift is what settles an argument later."
     ]
   }
 

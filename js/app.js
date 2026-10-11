@@ -1625,6 +1625,7 @@
       { i: "gauge", n: "Grinder dial-in", l: "Roastery", d: "Dose, yield and time, with the ratio worked out." },
       { i: "truck", n: "Wholesale accounts", l: "Roastery", d: "Office coffee and HORECA, by delivery day and route." },
       { i: "book", n: "Training academy", l: "Roastery", d: "Courses sold to the public and used to certify staff." },
+      { i: "clipboardCheck", n: "Course bookings", l: "Roastery", d: "Who is on a course, what they were charged, and their certificate." },
       { i: "heart", n: "Loyalty programmes", l: "Guests", d: "Points, a stamp card, or spend tiers." },
       { i: "person", n: "Loyalty accounts", l: "Guests", d: "One per customer: points, stamps, tier, what they have spent, and every movement." },
       { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Card balances as money you owe: loading posts, spending moves it, expiry is income." },
@@ -1670,7 +1671,10 @@
       { i: "calendar", n: "Planning", l: "Planning", d: "Who is assigned where over the coming weeks." },
       { i: "clock", n: "Shift Templates", l: "Planning", d: "Reusable shift patterns." },
       { i: "fingerprint", n: "Attendances", l: "Attendances", d: "Clock-in and clock-out records." },
-      { i: "calendar", n: "Roster", l: "Attendances", d: "The shift rota: who works when." },
+      { i: "calendar", n: "Roster", l: "Attendances", d: "Who works which shift, with a warning when it clashes with what they said they can work." },
+      { i: "grid", n: "Week planner", l: "Attendances", d: "A week on one grid, a cell per person per day, with a warning on any cell that clashes." },
+      { i: "clock", n: "Availability", l: "Attendances", d: "What each person told you about when they can and cannot work." },
+      { i: "refresh", n: "Shift swaps", l: "Attendances", d: "Somebody asking to give up or swap a shift, and the decision that moves it." },
       { i: "clock", n: "Shifts", l: "Attendances", d: "The shift definitions people are worked to." },
       { i: "sun", n: "Time Off Requests", l: "Time Off", d: "Leave requests to approve or reject." },
       { i: "calendar", n: "Leave Allocations", l: "Time Off", d: "Leave entitlement granted to staff." },
@@ -1955,7 +1959,7 @@
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
         { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
-        { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"]] },
+        { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"], ["Course bookings", "rst.bookings"]] },
         { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Loyalty accounts", "gst.accounts"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
         { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["All bookings", "dlv.reservations"]] },
         { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
@@ -1988,9 +1992,9 @@
       menus: [
         { label: "Employees", items: [["Employees", "hr.emp"], ["Departments", "hr.dept"], ["Job Positions", "hr.jobs"], ["Contracts", "hr.contracts"]] },
         { label: "Talent", items: [["Skills", "hr.skills"], ["Employee Skills", "hr.empskills"], ["Certifications", "hr.certs"], ["Onboarding", "hr.onboard"], ["Appraisals", "hr.appraisals"]] },
-        { label: "Planning", items: [["Planning", "hr.planning"], ["Shift Templates", "hr.shifttmpl"]] },
+        { label: "Planning", items: [["Planning", "hr.planning"], ["Shift Templates", "hr.shifttmpl"], ["Availability", "hr.avail"]] },
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] },
-        { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Shifts", "hr.shifts"]] },
+        { label: "Attendances", items: [["Attendances", "hr.att"], ["Roster", "hr.roster"], ["Week planner", "hr.rosterweek"], ["Availability", "hr.avail"], ["Shift swaps", "hr.swaps"], ["Shifts", "hr.shifts"]] },
         { label: "Time Off", items: [["Requests", "hr.leaves"], ["Allocations", "hr.alloc"]] },
         { label: "Payroll", items: [["Payslip Runs", "hr.runs"], ["Payslips", "hr.slips"], ["Tip pools", "tips.pools"], ["Salary Structures", "hr.struct"], ["Salary Heads", "hr.heads"], ["End of Service", "hr.eos"], ["Payroll Consolidation", "hr.payconsol"]] },
         { label: "Expenses", action: "hr.exp" }
@@ -2094,7 +2098,7 @@
     "crm.pipe": "crm", "crm.leads": "crm", "crm.stages": "crm",
     "hr.emp": "hr", "hr.dept": "hr", "hr.jobs": "hr", "hr.leaves": "hr", "hr.att": "hr", "hr.exp": "hr",
     "hr.contracts": "hr", "hr.roster": "hr", "hr.shifts": "hr", "hr.alloc": "hr", "hr.runs": "hr", "hr.slips": "hr", "hr.struct": "hr", "hr.heads": "hr", "hr.eos": "hr", "hr.payconsol": "hr",
-    "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr",
+    "hr.skills": "hr", "hr.empskills": "hr", "hr.certs": "hr", "hr.onboard": "hr", "hr.appraisals": "hr", "hr.planning": "hr", "hr.shifttmpl": "hr", "hr.avail": "hr", "hr.swaps": "hr", "hr.rosterweek": "hr", "rst.bookings": "kitchen",
     contacts: "contacts", "contact.tags": "contacts", "contact.caps": "contacts", "contact.dedupe": "contacts", "settings.users": "settings", "settings.access": "settings", "settings.roles": "settings", "settings.numbering": "settings", "settings.print": "settings", "settings.profile": "settings", "settings.lock": "accounting", "approvals.inbox": "settings", "approvals.rules": "settings", "portal.admin": "settings",
     "desk": "desk", "cal.month": "calendar", "cal.agenda": "calendar", "sign.list": "sign", "rec.applicants": "recruitment", "kb.articles": "knowledge",
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
@@ -4769,10 +4773,14 @@
       case "hr.att": return renderList(cfgAttendances());
       case "hr.exp": return renderList(cfgExpenses());
       case "hr.contracts": return renderList(cfgContracts());
-      case "hr.roster": return renderRoster();
+      case "hr.roster": return renderList(cfgRoster());
+      case "hr.rosterweek": return renderRoster();
       case "hr.eos": return renderEOS();
       case "hr.payconsol": return renderPayrollConsolidation();
       case "hr.shifts": return renderList(cfgShifts());
+      case "hr.avail": return renderList(cfgPeopleAvailability());
+      case "hr.swaps": return renderList(cfgShiftSwaps());
+      case "rst.bookings": return renderList(cfgTrainingBookings());
       case "hr.alloc": return renderList(cfgLeaveAllocations());
       case "hr.runs": return renderList(cfgPayslipRuns());
       case "hr.slips": return renderList(cfgPayslips());
@@ -22317,19 +22325,425 @@
       m.remove(); toast("Saved"); renderView();
     };
   }
+  // ===================== WHO CAN ACTUALLY WORK IT =====================
+  // 77 rows of stated availability sat in the database and nothing read them,
+  // so a rota was built by somebody who could not see what people had already
+  // said. The problems are worked out in the database (roster_problems,
+  // migration 239) and shown on the rota as warnings, never refusals: a manager
+  // who knows better than the form must still be able to put somebody on.
+  var DOW_NAMES = [["0", "Sunday"], ["1", "Monday"], ["2", "Tuesday"], ["3", "Wednesday"], ["4", "Thursday"], ["5", "Friday"], ["6", "Saturday"]];
+  function cfgPeopleAvailability() {
+    return fnbCfg({
+      title: "Availability", table: "employee_availability", one: "availability rule", order: [["employee_id", true]],
+      hint: "What each person has told you about when they can and cannot work. A rule with a weekday repeats every week; one with a date is just that day. The rota checks every shift against these and warns when they disagree, and it never silently changes a shift.",
+      select: "*, hr_employees(name)",
+      cols: [
+        { l: "Person", k: "employee_id", fmt: function (r) { return '<b>' + esc(r.hr_employees ? r.hr_employees.name : "") + '</b>'; } },
+        { l: "When", k: "day_of_week", fmt: function (r) {
+            if (r.on_date) return esc(r.on_date);
+            var d = DOW_NAMES.filter(function (x) { return String(x[0]) === String(r.day_of_week); })[0];
+            return d ? ("Every " + d[1]) : '<span class="muted">any day</span>';
+          } },
+        { l: "From", k: "from_time" }, { l: "To", k: "to_time" },
+        { l: "Can work", k: "is_available", fmt: function (r) {
+            return r.is_available === false ? '<span class="badge unpaid">Cannot</span>' : '<span class="badge paid">Can</span>';
+          } },
+        { l: "Why", k: "note", fmt: "muted" }
+      ],
+      filters: [
+        { label: "Cannot work", test: function (r) { return r.is_available === false; } },
+        { label: "A single date", test: function (r) { return !!r.on_date; } }
+      ],
+      groupBy: [{ label: "Person", get: function (r) { return r.hr_employees ? r.hr_employees.name : "(nobody)"; } }],
+      fields: [
+        { k: "employee_id", l: "Person", t: "select", lookup: lkEmployees, req: true },
+        { k: "is_available", l: "Can they work then", t: "check", def: true, hint: "No is the one that matters: it is what stops a shift being given out that nobody will turn up for." },
+        { k: "day_of_week", l: "Every", t: "select", opts: DOW_NAMES, hint: "Leave this empty and give a date instead for a one-off." },
+        { k: "on_date", l: "Or just this date", t: "date" },
+        { k: "from_time", l: "From", t: "time" }, { k: "to_time", l: "To", t: "time" },
+        { k: "note", l: "Why", t: "text", hint: "Worth writing. It is what a manager reads before asking them to come in anyway." }
+      ],
+      note: "Give either a weekday or a date, not both. With times, the rule covers only those hours; without them, the whole day."
+    });
+  }
+
+  function cfgShiftSwaps() {
+    return {
+      title: "Shift swaps", pageSize: 80, table: "shift_swaps",
+      fetch: async function () {
+        var r = await sb.from("shift_swaps").select("*").eq("company_id", S.company.id).order("created_at", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var eids = [], rids = [];
+        rows.forEach(function (s) {
+          if (s.from_employee_id) eids.push(s.from_employee_id);
+          if (s.to_employee_id) eids.push(s.to_employee_id);
+          if (s.roster_id) rids.push(s.roster_id);
+        });
+        var em = {}, rm = {};
+        if (eids.length) ((await sb.from("hr_employees").select("id,name").in("id", eids)).data || []).forEach(function (e) { em[e.id] = e.name; });
+        if (rids.length) ((await sb.from("hr_roster").select("id,work_date,start_time,end_time,role,store_id").in("id", rids)).data || []).forEach(function (x) { rm[x.id] = x; });
+        rows.forEach(function (s) {
+          s._from = em[s.from_employee_id] || ""; s._to = em[s.to_employee_id] || "";
+          var x = rm[s.roster_id] || {};
+          s._date = x.work_date || ""; s._role = x.role || "";
+          s._times = x.start_time ? (String(x.start_time).slice(0, 5) + " to " + String(x.end_time || "").slice(0, 5)) : "";
+        });
+        return rows;
+      },
+      searchText: function (s) { return [s._from, s._to, s._date, s.reason, s.status, s.kind].join(" "); },
+      columns: [
+        { label: "Shift", get: function (s) { return '<b>' + esc(s._date || "(gone)") + '</b>' + (s._times ? '<div class="muted u-fs11">' + esc(s._times) + (s._role ? " " + esc(s._role) : "") + '</div>' : ""); } },
+        { label: "Given up by", get: function (s) { return esc(s._from || ""); } },
+        { label: "Taken by", get: function (s) { return s._to ? esc(s._to) : '<span class="muted">nobody yet</span>'; } },
+        { label: "Kind", get: function (s) { return esc(s.kind === "giveaway" ? "Giving it away" : s.kind === "swap" ? "A straight swap" : fnbTitle(s.kind || "")); } },
+        { label: "Why", get: function (s) { return '<span class="muted">' + esc(s.reason || "") + '</span>'; } },
+        { label: "Status", get: function (s) { return '<span class="badge ' + (s.status === "approved" ? "paid" : s.status === "declined" ? "unpaid" : "draft") + '">' + esc(fnbTitle(s.status || "requested")) + '</span>'; } },
+        { label: "Decided", get: function (s) { return '<span class="muted">' + esc(String(s.decided_at || "").slice(0, 10)) + '</span>'; } }
+      ],
+      filters: [
+        { label: "Waiting on a decision", test: function (s) { return !s.status || ["requested", "pending", "offered"].indexOf(s.status) >= 0; } },
+        { label: "Nobody has taken it", test: function (s) { return !s.to_employee_id; } }
+      ],
+      groupBy: [{ label: "Status", get: function (s) { return fnbTitle(s.status || "requested"); } }],
+      emptyHint: "Somebody asking to give up a shift, or to swap one. Requests start on the rota: open a shift and press Hand it over. Approving one moves the shift to whoever is taking it, which is the only thing a request like this is for.",
+      onOpen: function (s) { openShiftSwap(s); }
+    };
+  }
+  async function openShiftSwap(s) {
+    var open = !s.status || ["requested", "pending", "offered"].indexOf(s.status) >= 0;
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(500)).data || [];
+    var inner =
+      '<div class="cp-sub">' + esc(s._date || "a shift that no longer exists") + (s._times ? ' &middot; ' + esc(s._times) : "") + (s._role ? ' &middot; ' + esc(s._role) : "") + '</div>' +
+      fld("Given up by", '<input value="' + esc(s._from || "") + '" disabled>', "") +
+      (open
+        ? fld("Taken by", '<select id="sw-to"><option value="">Nobody yet</option>' + emps.map(function (e) {
+            return '<option value="' + e.id + '"' + (s.to_employee_id === e.id ? " selected" : "") + '>' + esc(e.name) + '</option>';
+          }).join("") + '</select>', "Approving moves the shift onto this person, so it cannot be approved until somebody has agreed to work it.")
+        : fld("Taken by", '<input value="' + esc(s._to || "nobody") + '" disabled>', "")) +
+      fld("Why", open ? '<input id="sw-why" value="' + esc(s.reason || "") + '">' : '<input value="' + esc(s.reason || "") + '" disabled>', "") +
+      (open
+        ? '<div class="o-note">Approving this hands the shift over for real: the rota changes and the note on it records who it came from. Check the rota for warnings against the person taking it first.</div>'
+        : '<div class="o-note">' + esc(fnbTitle(s.status || "")) + (s.decided_at ? ' on ' + esc(String(s.decided_at).slice(0, 10)) : "") + '. The rota was changed at that point and is not changed again by anything here.</div>');
+    var m = plotModal("Shift swap", inner, open ? async function () {
+      var r = await sb.from("shift_swaps").update({
+        to_employee_id: document.getElementById("sw-to").value || null,
+        reason: gv("sw-why") || null
+      }).eq("id", s.id);
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    } : null, true);
+    if (open) {
+      function act(label, title, approve) {
+        var b = document.createElement("button");
+        b.className = "btn"; b.textContent = label; b.title = title;
+        b.onclick = async function () {
+          b.disabled = true;
+          var to = document.getElementById("sw-to").value || null;
+          if (approve && to && to !== s.to_employee_id) await sb.from("shift_swaps").update({ to_employee_id: to }).eq("id", s.id);
+          var why = gv("sw-why") || null;
+          var r = await sb.rpc("shift_swap_decide", { p_swap: s.id, p_approve: approve, p_reason: why });
+          if (r.error) { toast(errMsg(r.error)); b.disabled = false; return; }
+          var o = r.data || {};
+          m.remove();
+          toast(approve ? ("Approved. " + (o.now_worked_by || "They") + " work " + (o.date || "it") + " now.") : "Declined. The rota is unchanged.");
+          renderView();
+        };
+        m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+      }
+      act("Approve", "Hand the shift over and change the rota", true);
+      act("Decline", "Say no. The rota is left alone.", false);
+    }
+  }
+
   function cfgRoster() {
     return {
-      title: "Roster", pageSize: 120,
-      fetch: function () { return sb.from("hr_roster").select("*, hr_employees(name), hr_shifts(name)").eq("company_id", S.company.id).order("work_date", { ascending: false }).then(function (r) { return r.data || []; }); },
-      searchText: function (r) { return (r.hr_employees ? r.hr_employees.name : "") + " " + (r.hr_shifts ? r.hr_shifts.name : ""); },
+      title: "Roster", pageSize: 120, table: "hr_roster",
+      fetch: async function () {
+        var r = await sb.from("hr_roster").select("*, hr_employees(name), hr_shifts(name)")
+          .eq("company_id", S.company.id).order("work_date", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        // What people have already said about when they can work, what leave is
+        // approved, and who is on twice. Worked out in the database so the rota,
+        // the shift and any report all read the same answer.
+        var probs = (await sb.rpc("roster_problems", {
+          p_company: S.company.id,
+          p_from: fmtD(new Date(Date.now() - 120 * 864e5)),
+          p_to: fmtD(new Date(Date.now() + 200 * 864e5))
+        })).data || [];
+        var pm = {};
+        probs.forEach(function (p) { (pm[p.roster_id] = pm[p.roster_id] || []).push(p); });
+        var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id)).data || [];
+        var sm = {}; stores.forEach(function (x) { sm[x.id] = x.name; });
+        rows.forEach(function (x) { x._probs = pm[x.id] || []; x._store = sm[x.store_id] || ""; });
+        return rows;
+      },
+      searchText: function (r) { return [(r.hr_employees || {}).name, (r.hr_shifts || {}).name, r._store, r.role, r.status, r.note].join(" "); },
       columns: [
         { label: "Date", get: function (r) { return '<span class="muted">' + esc(r.work_date || "") + '</span>'; } },
         { label: "Employee", get: function (r) { return '<b>' + esc(r.hr_employees ? r.hr_employees.name : "") + '</b>'; } },
-        { label: "Shift", get: function (r) { return esc(r.hr_shifts ? r.hr_shifts.name : ""); } }
+        { label: "Hours", get: function (r) { return r.start_time ? esc(String(r.start_time).slice(0, 5) + " to " + String(r.end_time || "").slice(0, 5)) : '<span class="muted">all day</span>'; } },
+        { label: "Role", get: function (r) { return esc(r.role || (r.hr_shifts ? r.hr_shifts.name : "")); } },
+        { label: "Store", get: function (r) { return esc(r._store || ""); } },
+        { label: "Status", get: function (r) { return r.published_at || r.status === "published" ? '<span class="badge paid">Published</span>' : '<span class="badge draft">' + esc(fnbTitle(r.status || "draft")) + '</span>'; } },
+        { label: "Watch out", get: function (r) {
+            if (!r._probs.length) return '<span class="muted">-</span>';
+            var high = r._probs.filter(function (p) { return p.severity === "high"; }).length;
+            return '<span class="badge ' + (high ? "unpaid" : "partial") + '" title="' + esc(r._probs.map(function (p) { return p.problem; }).join(" | ")) + '">' +
+              r._probs.length + (high ? " problem" : " note") + (r._probs.length === 1 ? "" : "s") + '</span>' +
+              '<div class="muted u-fs11">' + esc(r._probs[0].problem.slice(0, 60)) + '</div>';
+          } }
       ],
-      groupBy: [{ label: "Employee", get: function (r) { return r.hr_employees ? r.hr_employees.name : "None"; } }, { label: "Date", get: function (r) { return r.work_date || "None"; } }],
-      onNew: function () { openRosterModal(); }
+      filters: [
+        { label: "Something is wrong with it", test: function (r) { return r._probs.some(function (p) { return p.severity === "high"; }); } },
+        { label: "Worth a look", test: function (r) { return r._probs.length > 0; } },
+        { label: "From today on", test: function (r) { return String(r.work_date || "") >= today(); } },
+        { label: "Not published yet", test: function (r) { return !r.published_at && r.status !== "published"; } }
+      ],
+      groupBy: [
+        { label: "Employee", get: function (r) { return r.hr_employees ? r.hr_employees.name : "None"; } },
+        { label: "Date", get: function (r) { return r.work_date || "None"; } },
+        { label: "Store", get: function (r) { return r._store || "(no store)"; } }
+      ],
+      emptyHint: "Who works when. A shift is checked against what that person said they can work, the leave already approved and the rest of their day, and anything that disagrees shows under Watch out. It is a warning, not a refusal.",
+      onOpen: function (r) { openRosterRow(r); }, onNew: function () { openRosterModal(); }
     };
+  }
+  async function openRosterRow(r) {
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(500)).data || [];
+    var stores = (await sb.from("stores").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var swaps = (await sb.from("shift_swaps").select("*").eq("roster_id", r.id).order("created_at", { ascending: false })).data || [];
+    var open = swaps.filter(function (s) { return !s.status || ["requested", "pending", "offered"].indexOf(s.status) >= 0; })[0];
+    function sel(id, list, cur, blank) {
+      return '<select id="' + id + '">' + (blank ? '<option value="">' + esc(blank) + '</option>' : "") + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(cur || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("") + '</select>';
+    }
+    var inner =
+      '<div class="row2"><div>' + fld("Employee", sel("rr-emp", emps.map(function (e) { return [e.id, e.name]; }), r.employee_id, null), "") + '</div>' +
+      '<div>' + fld("Date", '<input id="rr-date" type="date" value="' + esc(r.work_date || today()) + '">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("From", '<input id="rr-from" type="time" value="' + esc(String(r.start_time || "").slice(0, 5)) + '">', "Leave both empty for a shift with no set hours.") + '</div>' +
+      '<div>' + fld("To", '<input id="rr-to" type="time" value="' + esc(String(r.end_time || "").slice(0, 5)) + '">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Role", '<input id="rr-role" value="' + esc(r.role || "") + '" placeholder="e.g. Barista">', "") + '</div>' +
+      '<div>' + fld("Store", sel("rr-store", stores.map(function (s) { return [s.id, s.name]; }), r.store_id, "(no store)"), "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Break (minutes)", '<input id="rr-break" type="number" step="5" value="' + (r.break_minutes != null ? r.break_minutes : "") + '">', "") + '</div>' +
+      '<div>' + fld("Published", '<select id="rr-pub"><option value="0"' + (r.published_at ? "" : " selected") + '>Not yet</option><option value="1"' + (r.published_at ? " selected" : "") + '>Published to the team</option></select>', "Until it is published the rota is a draft nobody has been told about.") + '</div></div>' +
+      fld("Note", '<input id="rr-note" value="' + esc(r.note || "") + '">', "") +
+      (r._probs && r._probs.length
+        ? '<div class="o-note"><b>Worth checking before you publish this:</b><ul style="margin:6px 0 0 16px;padding:0">' +
+          r._probs.map(function (p) { return '<li>' + esc(p.problem) + '</li>'; }).join("") + '</ul>' +
+          'None of this stops you: you may know something the form does not.</div>'
+        : "") +
+      (open
+        ? '<div class="o-note">' + esc((open.kind === "swap" ? "A swap" : "A hand-over")) + ' has been asked for' +
+          (open.reason ? ': ' + esc(open.reason) : "") + '. Decide it in <b>Shift swaps</b>.</div>'
+        : "");
+
+    var m = plotModal("Shift on " + (r.work_date || ""), inner, async function () {
+      var pub = document.getElementById("rr-pub").value === "1";
+      var row = {
+        employee_id: document.getElementById("rr-emp").value || null,
+        work_date: gv("rr-date") || r.work_date,
+        start_time: gv("rr-from") || null, end_time: gv("rr-to") || null,
+        role: gv("rr-role") || null,
+        store_id: document.getElementById("rr-store").value || null,
+        break_minutes: gv("rr-break") === "" ? null : parseInt(gv("rr-break"), 10),
+        note: gv("rr-note") || null,
+        status: pub ? "published" : "draft",
+        published_at: pub ? (r.published_at || new Date().toISOString()) : null
+      };
+      var x = await sb.from("hr_roster").update(row).eq("id", r.id);
+      if (x.error) { toast(errMsg(x.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    if (!open) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = "Hand it over"; b.title = "Ask for this shift to be given away or swapped";
+      b.onclick = async function () {
+        b.disabled = true;
+        var mm = plotModal("Hand over the shift on " + (r.work_date || ""),
+          fld("What is being asked", '<select id="ho-kind"><option value="giveaway">Give it away to anyone who will take it</option><option value="swap">Swap it with somebody</option></select>', "") +
+          fld("Taken by", '<select id="ho-to"><option value="">Nobody yet, see who offers</option>' + emps.filter(function (e) { return e.id !== r.employee_id; }).map(function (e) {
+            return '<option value="' + e.id + '">' + esc(e.name) + '</option>';
+          }).join("") + '</select>', "Leave it empty to put the shift up for anyone; a manager can fill it in later and approve it then.") +
+          fld("Why", '<input id="ho-why" placeholder="e.g. Exam that morning">', "") +
+          '<div class="o-note">This only asks. Nothing on the rota changes until somebody approves it in <b>Shift swaps</b>.</div>',
+          async function () {
+            var ins = await sb.from("shift_swaps").insert({
+              company_id: S.company.id, roster_id: r.id, from_employee_id: r.employee_id,
+              to_employee_id: document.getElementById("ho-to").value || null,
+              kind: document.getElementById("ho-kind").value, status: "requested",
+              reason: gv("ho-why") || null
+            });
+            if (ins.error) { toast(errMsg(ins.error)); return; }
+            mm.remove(); m.remove(); toast("Asked. It is waiting in Shift swaps."); renderView();
+          });
+        b.disabled = false;
+      };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    if (canManageApp(S.app)) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Take this shift off the rota?")) return;
+        var d = await sb.from("hr_roster").delete().eq("id", r.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Off the rota"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+
+  // The other half of the academy: who is actually booked on a course. The
+  // courses screen existed; the 12 bookings against them could not be seen.
+  function cfgTrainingBookings() {
+    return {
+      title: "Course bookings", pageSize: 100, table: "training_bookings",
+      fetch: async function () {
+        var r = await sb.from("training_bookings").select("*").eq("company_id", S.company.id).order("session_date", { ascending: false });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var cids = rows.map(function (b) { return b.course_id; }).filter(Boolean);
+        var pids = rows.map(function (b) { return b.partner_id; }).filter(Boolean);
+        var eids = rows.map(function (b) { return b.employee_id; }).filter(Boolean);
+        var iids = rows.map(function (b) { return b.invoice_id; }).filter(Boolean);
+        var cm = {}, pm = {}, em = {}, im = {};
+        if (cids.length) ((await sb.from("training_courses").select("id,name,price,duration_hours").in("id", cids)).data || []).forEach(function (c) { cm[c.id] = c; });
+        if (pids.length) ((await sb.from("partners").select("id,name").in("id", pids)).data || []).forEach(function (p) { pm[p.id] = p.name; });
+        if (eids.length) ((await sb.from("hr_employees").select("id,name").in("id", eids)).data || []).forEach(function (e) { em[e.id] = e.name; });
+        if (iids.length) ((await sb.from("invoices").select("id,number,state").in("id", iids)).data || []).forEach(function (i) { im[i.id] = i; });
+        rows.forEach(function (b) {
+          var c = cm[b.course_id] || {};
+          b._course = c.name || ""; b._price = c.price; b._hours = c.duration_hours;
+          b._who = pm[b.partner_id] || em[b.employee_id] || "";
+          b._staff = !!b.employee_id;
+          b._inv = im[b.invoice_id] || null;
+        });
+        return rows;
+      },
+      searchText: function (b) { return [b._course, b._who, b.status, b.certificate_ref].join(" "); },
+      columns: [
+        { label: "Course", get: function (b) { return '<b>' + esc(b._course || "") + '</b>' + (b._hours ? '<div class="muted u-fs11">' + Number(b._hours) + ' hours</div>' : ""); } },
+        { label: "Who", get: function (b) { return esc(b._who || "") + (b._staff ? ' <span class="muted u-fs11">(staff)</span>' : ""); } },
+        { label: "When", get: function (b) { return '<span class="muted">' + esc(b.session_date || "") + '</span>'; } },
+        { label: "Fee", num: true, get: function (b) { return b._staff ? '<span class="muted">internal</span>' : money(b.amount != null ? b.amount : b._price); } },
+        { label: "Invoiced", get: function (b) {
+            if (b._staff) return '<span class="muted">-</span>';
+            if (b._inv) return '<span class="badge ' + (b._inv.state === "posted" ? "paid" : "draft") + '">' + esc(b._inv.number || "draft") + '</span>';
+            return '<span class="badge draft">Not yet</span>';
+          } },
+        { label: "Paid", get: function (b) { return b.paid ? '<span class="badge paid">Yes</span>' : b._staff ? '<span class="muted">-</span>' : '<span class="badge">No</span>'; } },
+        { label: "Certificate", get: function (b) { return b.certificate_ref ? esc(b.certificate_ref) + '<div class="muted u-fs11">' + esc(b.certificate_issued_on || "") + '</div>' : '<span class="muted">-</span>'; } },
+        { label: "Status", get: function (b) { return '<span class="badge ' + fnbBadge(b.status || "booked") + '">' + esc(fnbTitle(b.status || "booked")) + '</span>'; } }
+      ],
+      filters: [
+        { label: "Still to invoice", test: function (b) { return !b._staff && !b.invoice_id; } },
+        { label: "Attended, no certificate", test: function (b) { return b.status === "attended" && !b.certificate_ref; } },
+        { label: "Our own staff", test: function (b) { return !!b.employee_id; } }
+      ],
+      groupBy: [
+        { label: "Course", get: function (b) { return b._course || "(none)"; } },
+        { label: "Status", get: function (b) { return fnbTitle(b.status || "booked"); } }
+      ],
+      emptyHint: "A place on a course: who is on it, when, what they were charged and whether they walked away with a certificate. A paying guest can be invoiced from here, once; our own staff are not charged.",
+      onOpen: function (b) { openTrainingBooking(b); }, onNew: function () { openTrainingBooking(null); }
+    };
+  }
+  async function openTrainingBooking(b) {
+    var isNew = !b || !b.id;
+    b = b || { status: "booked", session_date: today(), paid: false };
+    var courses = (await sb.from("training_courses").select("id,name,price").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name").limit(1000)).data || [];
+    var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).order("name").limit(500)).data || [];
+    function sel(id, list, cur, blank) {
+      return '<select id="' + id + '">' + (blank ? '<option value="">' + esc(blank) + '</option>' : "") + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(cur || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("") + '</select>';
+    }
+    var inner =
+      '<div class="row2"><div>' + fld("Course", sel("tb-course", courses.map(function (c) { return [c.id, c.name + (c.price ? " - " + money(c.price) : "")]; }), b.course_id, "Pick the course"), "") + '</div>' +
+      '<div>' + fld("When", '<input id="tb-date" type="date" value="' + esc(b.session_date || today()) + '">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("A paying guest", sel("tb-partner", partners.map(function (p) { return [p.id, p.name]; }), b.partner_id, "(not a guest)"), "Somebody outside the business, who gets invoiced.") + '</div>' +
+      '<div>' + fld("Or our own staff", sel("tb-emp", emps.map(function (e) { return [e.id, e.name]; }), b.employee_id, "(not staff)"), "Our own people are not charged. Pick one or the other, not both.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Fee", '<input id="tb-amt" type="number" step="0.01" value="' + (b.amount != null ? b.amount : "") + '">', "Left empty, the course price is used when the place is invoiced.") + '</div>' +
+      '<div>' + fld("Status", sel("tb-status", [["booked", "Booked"], ["attended", "Attended"], ["no_show", "Did not turn up"], ["cancelled", "Cancelled"]], b.status || "booked", null), "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Paid", '<select id="tb-paid"><option value="0"' + (b.paid ? "" : " selected") + '>Not yet</option><option value="1"' + (b.paid ? " selected" : "") + '>Yes</option></select>', "") + '</div>' +
+      '<div>' + fld("Certificate reference", '<input id="tb-cert" value="' + esc(b.certificate_ref || "") + '">', "Filled in for you by Issue the certificate, or typed if you number them your own way.") + '</div></div>' +
+      fld("Note", '<input id="tb-note" value="' + esc(b.note || "") + '">', "") +
+      (b._inv ? '<div class="o-note">Invoiced as <b>' + esc(b._inv.number || "a draft") + '</b> (' + esc(b._inv.state || "") + '). A place is invoiced once; open the invoice itself to change it.</div>' : "") +
+      (b.certificate_issued_on ? '<div class="o-note">Certificate ' + esc(b.certificate_ref || "") + ' issued on ' + esc(b.certificate_issued_on) + '.</div>' : "");
+
+    var m = plotModal(isNew ? "New booking" : "Booking", inner, async function () {
+      var row = {
+        course_id: document.getElementById("tb-course").value || null,
+        session_date: gv("tb-date") || today(),
+        partner_id: document.getElementById("tb-partner").value || null,
+        employee_id: document.getElementById("tb-emp").value || null,
+        amount: gv("tb-amt") === "" ? null : parseFloat(gv("tb-amt")),
+        status: document.getElementById("tb-status").value,
+        paid: document.getElementById("tb-paid").value === "1",
+        certificate_ref: gv("tb-cert") || null,
+        note: gv("tb-note") || null
+      };
+      if (!row.course_id) { toast("Which course?"); return; }
+      if (!row.partner_id && !row.employee_id) { toast("Who is on it? Either a paying guest or one of our own staff."); return; }
+      if (row.partner_id && row.employee_id) { toast("One or the other, not both"); return; }
+      var r, id = b.id;
+      if (id) r = await sb.from("training_bookings").update(row).eq("id", id);
+      else { row.company_id = S.company.id; r = await sb.from("training_bookings").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    function act(label, title, fn) {
+      var x = document.createElement("button");
+      x.className = "btn"; x.textContent = label; x.title = title;
+      x.onclick = async function () { x.disabled = true; try { await fn(); } finally { x.disabled = false; } };
+      m.querySelector(".foot").insertBefore(x, m.querySelector("[data-s]") || null);
+    }
+    if (b.id && b.partner_id && !b.invoice_id) {
+      act("Invoice the place", "Raise a draft customer invoice for this place on the course", async function () {
+        var course = courses.filter(function (c) { return c.id === b.course_id; })[0] || {};
+        var amt = b.amount != null ? Number(b.amount) : Number(course.price) || 0;
+        if (!(amt > 0)) { toast("There is no fee on this booking or on the course, so there is nothing to invoice"); return; }
+        var hdr = { company_id: S.company.id, move_type: "out_invoice", partner_id: b.partner_id,
+          number: await nextNumber("out_invoice"), invoice_date: today(), due_date: isoShift(14), state: "draft",
+          currency_code: S.company.currency_code, ref: "Course: " + (course.name || ""),
+          amount_untaxed: amt, amount_tax: 0, amount_total: amt, amount_residual: amt };
+        var ins = await sb.from("invoices").insert(hdr).select("id").single();
+        if (ins.error) { toast("Could not create: " + errMsg(ins.error)); return; }
+        var li = await sb.from("invoice_lines").insert([{
+          company_id: S.company.id, invoice_id: ins.data.id, sequence: 10, line_type: "item",
+          name: (course.name || "Course") + " on " + (b.session_date || today()),
+          quantity: 1, unit_price: amt, discount: 0, price_subtotal: amt
+        }]);
+        if (li.error) { toast("Lines failed: " + errMsg(li.error)); return; }
+        await sb.from("training_bookings").update({ invoice_id: ins.data.id, amount: amt }).eq("id", b.id);
+        m.remove(); toast("Invoice raised as a draft. Post it when you are ready."); renderView();
+      });
+    }
+    if (b.id && b.status === "attended" && !b.certificate_ref) {
+      act("Issue the certificate", "Give this place a certificate reference and today's date", async function () {
+        var ref = "CERT-" + today().replace(/-/g, "") + "-" + String(b.id).slice(0, 4).toUpperCase();
+        var r = await sb.from("training_bookings").update({ certificate_ref: ref, certificate_issued_on: today() }).eq("id", b.id);
+        if (r.error) { toast(errMsg(r.error)); return; }
+        m.remove(); toast("Certificate " + ref + " issued"); renderView();
+      });
+    }
+    if (b.id && canManageApp(S.app) && !b.invoice_id) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this booking?")) return;
+        var d = await sb.from("training_bookings").delete().eq("id", b.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
   }
   async function openRosterModal() {
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
@@ -22728,24 +23142,47 @@
     document.getElementById("rst-today").onclick = function () { ROSTER_WEEK = null; renderRoster(); };
     var emps = (await sb.from("hr_employees").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
     var shifts = (await sb.from("hr_shifts").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
-    var roster = (await sb.from("hr_roster").select("employee_id,work_date,shift_id").eq("company_id", S.company.id).gte("work_date", days[0]).lte("work_date", days[6])).data || [];
-    var rmap = {}; roster.forEach(function (r) { rmap[r.employee_id + "|" + r.work_date] = r.shift_id; });
+    var roster = (await sb.from("hr_roster").select("id,employee_id,work_date,shift_id").eq("company_id", S.company.id).gte("work_date", days[0]).lte("work_date", days[6])).data || [];
+    var rmap = {}, ridmap = {};
+    roster.forEach(function (r) {
+      var k = r.employee_id + "|" + r.work_date;
+      if (rmap[k] === undefined) { rmap[k] = r.shift_id; ridmap[k] = r.id; }   // a split shift shows its first half here
+    });
+    // what people have already said, and the leave already approved: the cell a
+    // manager is about to change is the only place this is any use
+    var rprob = (await sb.rpc("roster_problems", { p_company: S.company.id, p_from: days[0], p_to: days[6] })).data || [];
+    var pmap = {};
+    rprob.forEach(function (p) {
+      var k = p.employee_id + "|" + p.work_date;
+      (pmap[k] = pmap[k] || []).push(p);
+    });
     var dow = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     var head = '<tr><th style="text-align:left">Employee</th>' + days.map(function (d, i) { return '<th>' + dow[i] + '<br><span class="muted">' + d.slice(5) + '</span></th>'; }).join("") + '</tr>';
     var body = emps.map(function (e) {
       return '<tr><td style="text-align:left"><b>' + esc(e.name) + '</b></td>' + days.map(function (d) {
-        var cur = rmap[e.id + "|" + d] || "";
-        return '<td><select class="rst-cell" data-emp="' + e.id + '" data-date="' + d + '"><option value=""' + (!cur ? " selected" : "") + '>Off</option>' + shifts.map(function (s) { return '<option value="' + s.id + '"' + (cur === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></td>';
+        var k = e.id + "|" + d, cur = rmap[k] || "", probs = pmap[k] || [];
+        var high = probs.filter(function (p) { return p.severity === "high"; }).length;
+        var warn = probs.length ? ' style="border-color:var(--' + (high ? "bad" : "warn") + '-t);border-width:2px" title="' + esc(probs.map(function (p) { return p.problem; }).join(" | ")) + '"' : "";
+        return '<td>' + (probs.length ? '<span class="rst-warn" title="' + esc(probs.map(function (p) { return p.problem; }).join(" | ")) + '">!</span>' : "") +
+          '<select class="rst-cell" data-emp="' + e.id + '" data-date="' + d + '" data-id="' + (ridmap[k] || "") + '"' + warn + '><option value=""' + (!cur ? " selected" : "") + '>Off</option>' + shifts.map(function (s) { return '<option value="' + s.id + '"' + (cur === s.id ? " selected" : "") + '>' + esc(s.name) + '</option>'; }).join("") + '</select></td>';
       }).join("") + '</tr>';
     }).join("");
     var rst = document.getElementById("rst"); rst.className = "";
     rst.innerHTML = !emps.length ? '<div class="o-empty">Add employees first.</div>' : !shifts.length ? '<div class="o-empty">Create a shift first (Attendances &gt; Shifts).</div>' : '<div class="o-rt-wrap"><table class="o-rt o-roster">' + head + body + '</table></div>';
     document.querySelectorAll(".rst-cell").forEach(function (sel) {
       sel.onchange = async function () {
-        var emp = sel.dataset.emp, date = sel.dataset.date, sh = sel.value, r;
-        if (sh) r = await sb.from("hr_roster").upsert({ company_id: S.company.id, employee_id: emp, work_date: date, shift_id: sh }, { onConflict: "employee_id,work_date" });
-        else r = await sb.from("hr_roster").delete().eq("company_id", S.company.id).eq("employee_id", emp).eq("work_date", date);
-        if (r && r.error) toast("Could not save: " + errMsg(r.error)); else toast("Roster updated");
+        var emp = sel.dataset.emp, date = sel.dataset.date, sh = sel.value, rid = sel.dataset.id || null, r;
+        // not an upsert any more: one person can have two shifts in a day (a
+        // split shift is the ordinary shape of a restaurant day), so there is no
+        // unique key to conflict on. The cell changes the row it is showing.
+        if (sh && rid) r = await sb.from("hr_roster").update({ shift_id: sh }).eq("id", rid);
+        else if (sh) {
+          r = await sb.from("hr_roster").insert({ company_id: S.company.id, employee_id: emp, work_date: date, shift_id: sh }).select("id").single();
+          if (!r.error && r.data) sel.dataset.id = r.data.id;
+        } else if (rid) { r = await sb.from("hr_roster").delete().eq("id", rid); sel.dataset.id = ""; }
+        else r = null;
+        if (r && r.error) toast("Could not save: " + errMsg(r.error));
+        else { toast("Roster updated"); if (sh) renderRoster(); }
       };
     });
   }

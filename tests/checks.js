@@ -735,6 +735,32 @@
         return ok(need.length + " parts present: loading posts, the tender names its card, and the balance follows the movements");
       } },
 
+    { name: "the rota checks who can actually work it",
+      why: "77 rows of stated availability sat in the database and nothing read them, so a rota was built by somebody who could not see what people had already said: the shift went out, nobody turned up, and the manager found out on the morning. The problems are worked out in the database and shown on the rota as warnings, never refusals. Drop the call and the rota silently goes back to knowing nothing.",
+      run: function (src) {
+        var need = [
+          ["the week planner asks about every cell", /sb\.rpc\("roster_problems", \{ p_company: S\.company\.id, p_from: days\[0\], p_to: days\[6\] \}\)/],
+          ["and the planner is routed", /case "hr\.rosterweek": return renderRoster\(\);/],
+          ["and shows it on the row", /\{ label: "Watch out", get: function \(r\) \{/],
+          ["a shift can be handed over", /from\("shift_swaps"\)\.insert\(\{/],
+          ["and the decision moves it in the database", /sb\.rpc\("shift_swap_decide", \{ p_swap: s\.id/],
+          ["availability has its own screen", /case "hr\.avail": return renderList\(cfgPeopleAvailability\(\)\);/],
+          ["so do the requests", /case "hr\.swaps": return renderList\(cfgShiftSwaps\(\)\);/],
+          ["a course place can be invoiced", /case "rst\.bookings": return renderList\(cfgTrainingBookings\(\)\);/],
+          ["exactly once", /from\("training_bookings"\)\.update\(\{ invoice_id: ins\.data\.id, amount: amt \}\)/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // BOTH the list and the week planner have to ask. One of them reading the
+        // problems and the other not is how a rota gets built blind on the screen
+        // people actually use.
+        var calls = (src.match(/sb\.rpc\("roster_problems",/g) || []).length;
+        if (calls < 2) return bad("only " + calls + " place(s) read the problems; the rota list and the week planner both must");
+        // the rota must warn, not refuse: nothing may block a save on a problem
+        if (/_probs\.length\)\s*\{\s*toast/.test(src)) return bad("the rota refuses a shift over a warning, which takes the judgement away from the manager");
+        return ok(need.length + " parts present: the rota reads availability, warns rather than refuses, and a swap really moves the shift");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

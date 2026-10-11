@@ -3032,3 +3032,14 @@ body{background:transparent}
   .pstmt-meta,.pstmt-box,.pstmt-age,.pstmt-h2{break-inside:avoid;page-break-inside:avoid}
   .pstmt-h2{break-after:avoid;page-break-after:avoid}
 }
+
+/* A rota cell that disagrees with what somebody said they can work, or with
+   leave already approved. A warning, never a block: hover it for the reason. */
+.o-roster td { position: relative; }
+.rst-warn {
+  position: absolute; top: 1px; right: 3px; z-index: 1;
+  width: 15px; height: 15px; border-radius: 50%;
+  background: var(--bad-t); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 15px; text-align: center;
+  cursor: help; pointer-events: auto;
+}
