@@ -489,7 +489,7 @@ orbitScreenHelp({
       "Under <b>Contact</b>, type the street and number in <b>Address line 1</b>, <i>Manchester</i> in <b>City</b>, the shop's number in <b>Phone</b> and <i>orders@example.com</i> in <b>Email</b>.",
       "Under <b>Print template</b>, click <span class='man-key'>Upload logo</span> and choose your logo file. Pick the <b>Accent band</b> layout, set an <b>Accent colour</b> and type <i>Thank you for your custom</i> in <b>Footer note</b>. You should see the <b>Live preview</b> change as you go.",
       "Click <span class='man-key'>Save</span> at the top of the page. You should see <b>Company profile saved</b>.",
-      "Open a customer invoice and print it. You should see the logo, <i>Northside Bakery Ltd</i>, the tagline, the address and <b>VAT Reg. No.</b> with your number at the top, and the footer note at the bottom."
+      "Open a customer invoice and print it. You should see the <b>same letterhead as the preview</b>: the logo, <i>Northside Bakery Ltd</i>, the tagline and the address arranged the way the Accent band layout arranges them, with <b>INVOICE</b> and its number where the preview showed the document title, and the footer note with your <b>VAT Reg. No.</b> at the bottom."
     ],
     fields: [
       ["Company name", "The short name used across Orbit, for example in the company picker. Left blank, the name already saved is kept. Printouts use the legal name instead when one is set.", "optional"],
@@ -521,7 +521,7 @@ orbitScreenHelp({
       ["Accent colour", "The colour of the lines, bands and highlights on printouts.", "optional"],
       ["Show logo", "Yes prints the logo; No leaves it off every printout.", "optional"],
       ["Footer note", "A short line printed at the bottom of documents and reports next to your company details, for example payment instructions or a thank you.", "optional"],
-      ["Layout (Classic, Centered, Accent band, Minimal, Side rule)", "How the header of a page or report printed with Print or Ctrl+P is arranged. Invoices, bills, orders, certificates and payslips keep their own document layout but use the same logo, details, accent colour and footer note.", "optional"]
+      ["Layout (Classic, Centered, Accent band, Minimal, Side rule)", "How the letterhead is arranged. It is the head of <b>everything</b> you print: a page or report sent with Print or Ctrl+P, and every document, so the quotation, the invoice, the purchase order, the delivery note and the payslip all carry the layout you pick here. The live preview beside the choices is the real thing, with the document's own title and number where a page shows the date.", "optional"]
     ],
     buttons: [
       ["Save", "Saves everything on the page for this company. The city must be filled in."],

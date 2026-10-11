@@ -7634,15 +7634,12 @@
   // ============================ PRINT / PDF ============================
   // Branded header/footer for the purpose-built .o-print documents (invoice, payslip, ...).
   // Pulls the logo + company details from the Company Profile so every document is branded.
+  // A quotation, an invoice, a delivery note: the head of the page is the company's
+  // letterhead, the one chosen in Settings, Company Profile, and the one the live
+  // preview there shows. It used to be a sixth layout of its own, so changing the
+  // template moved the preview and changed nothing a customer ever received.
   function pdocHead(docTitle, docNum) {
-    var t = printTplData();
-    var logo = (t.show_logo && t.logo) ? '<img alt="" class="plogo" src="' + t.logo + '">' : "";
-    var lines = [pfAddr(t), pfContact(t)].filter(Boolean).join("<br>");
-    if (t.vat) lines += (lines ? "<br>" : "") + (t.taxLabel || "VAT") + ": " + esc(t.vat);
-    return '<div class="phead"><div class="pfrom">' + logo + '<div class="pfrom-txt"><div class="pname">' + esc(pfDisplayName(t)) + '</div>' +
-      (t.tagline ? '<div class="ptag">' + esc(t.tagline) + '</div>' : "") +
-      (lines ? '<div class="pmuted">' + lines + '</div>' : "") + '</div></div>' +
-      '<div class="pdoc"><div class="pdt">' + docTitle + '</div>' + (docNum ? '<div class="pnum">' + esc(docNum) + '</div>' : "") + '</div></div>';
+    return buildPrintHeader(printTplData(), docTitle, docNum || "");
   }
   // The terms a customer actually reads: the scope, the exclusions, the payment
   // terms, the validity. They are pages long on a facade quotation, so they print
@@ -18014,9 +18011,11 @@
   function pfDisplayName(t) { return t.legal_name || t.name || (S.company && S.company.name) || ""; }
   function pfContact(t) { var a = []; if (t.phone) a.push("Tel " + t.phone + (t.phone2 ? " / " + t.phone2 : "")); if (t.email) a.push(t.email); if (t.website) a.push(t.website); return a.map(esc).join(" &middot; "); }
   function pfAddr(t) { var a = []; if (t.address) a.push(esc(t.address).replace(/\n/g, "<br>")); var cc = [t.city, t.country].filter(Boolean).map(esc).join(", "); if (cc) a.push(cc); return a.join("<br>"); }
-  function buildPrintHeader(t, title) {
+  // The five letterheads. "sub" is what prints under the title: today's date on a
+  // page or a report, the document's own number on a quotation or an invoice.
+  function buildPrintHeader(t, title, sub) {
     var logo = (t.show_logo && t.logo) ? '<img alt="" class="ph-logo" src="' + t.logo + '">' : "";
-    var nm = esc(pfDisplayName(t)), date = esc(new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
+    var nm = esc(pfDisplayName(t)), date = esc(sub != null ? sub : new Date().toLocaleDateString()), ttl = esc(title || ""), addr = pfAddr(t), contact = pfContact(t);
     // the tagline sits under the name on every letterhead, all five templates
     var tag = t.tagline ? '<div class="ph-tag">' + esc(t.tagline) + '</div>' : "";
     var addrContact = [addr, contact].filter(Boolean).join(" &middot; ");
@@ -18221,7 +18220,7 @@
         accent: gv("cp-accent"), footer: gv("cp-footer"), show_logo: gv("cp-showlogo") === "1"
       });
     }
-    function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Sample Document") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
+    function paintPreview() { var t = curData(); document.documentElement.style.setProperty("--print-accent", t.accent || "#2f6bff"); document.getElementById("cp-preview").innerHTML = '<div class="cp-paper">' + buildPrintHeader(t, "Quotation", "SO-0001") + '<div class="cp-body-fill"></div>' + buildPrintFooter(t) + '</div>'; }
     function wireLogo() { var inp = document.getElementById("cp-logo-in"); if (inp) inp.onchange = async function () { if (!inp.files[0]) return; try { logoData = await imgFileToDataUrl(inp.files[0], 400); paintLogo(); paintPreview(); } catch (e) { toast("Could not read that image"); } }; var cl = document.getElementById("cp-logo-clear"); if (cl) cl.onclick = function () { logoData = ""; paintLogo(); paintPreview(); }; }
     function paintLogo() { document.getElementById("cp-logo-wrap").innerHTML = (logoData ? '<img alt="Company logo" src="' + logoData + '" style="max-height:52px;max-width:180px;border:1px solid var(--line);border-radius:var(--r);padding:4px;background:#fff;vertical-align:middle"> ' : "") + '<label class="o-filtbtn u-ptr">' + (logoData ? "Change" : "Upload logo") + '<input type="file" accept="image/*" id="cp-logo-in" style="display:none"></label>' + (logoData ? ' <button class="o-filtbtn" id="cp-logo-clear" type="button">Remove</button>' : ""); wireLogo(); }
     paintLogo(); paintPreview();

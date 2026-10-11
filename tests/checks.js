@@ -616,6 +616,18 @@
         return ok("both document forms read their lines by sequence");
       } },
 
+    { name: "the letterhead a company picks is the letterhead on its documents",
+      why: "Company Profile offers five letterheads and shows a live preview of the one you choose. Printed documents drew a sixth head of their own, so choosing a template moved the preview and changed nothing a customer ever received: the quotation, the invoice and the delivery note all came out of the same fixed layout. One builder draws the head now, for the page prints and for the documents, and the preview previews the real thing.",
+      run: function (src) {
+        if (!/function pdocHead\(docTitle, docNum\) \{\s*\r?\n\s*return buildPrintHeader\(printTplData\(\), docTitle, docNum \|\| ""\);/.test(src))
+          return bad("a printed document does not go through the letterhead builder");
+        if (!/function buildPrintHeader\(t, title, sub\)/.test(src)) return bad("the letterhead builder cannot take a document number");
+        var layouts = (src.match(/if \(tmpl === [2-5]\) return '<div class="ph ph-t[2-5]"/g) || []).length;
+        if (layouts < 4) return bad("only " + (layouts + 1) + " of the five letterheads are drawn");
+        if (!/buildPrintHeader\(t, "Quotation", "SO-0001"\)/.test(src)) return bad("the live preview does not show a document head");
+        return ok("five letterheads, one builder, used by the preview and by every document");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

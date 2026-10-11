@@ -2063,6 +2063,13 @@ table.sg thead th{background:var(--panel2);position:relative;padding:3px 5px;tex
 .ph .ph-addr{font-size:10.5px;color:#444;line-height:1.45;margin-top:2px}
 .ph .ph-title{font-weight:700;font-size:14px;color:#111}
 .ph .ph-date{font-size:10.5px;color:#666}
+/* a printed document uses the same five letterheads, with the document title at document weight */
+.pinv .ph{margin-bottom:16px}
+.pinv .ph .ph-title{font-size:20px;text-transform:uppercase;letter-spacing:.02em}
+.pinv .ph .ph-date{font-size:12px;color:#555;margin-top:2px}
+.pinv .ph-t3 .ph-title{font-size:17px}
+.pinv .ph-t4 .ph-title{font-size:15px}
+.pinv .ph-t2 .ph-meta{margin-top:8px}
 .ph-t1{display:flex;align-items:flex-start;gap:16px;padding-bottom:8px;border-bottom:2px solid var(--print-accent,#2f6bff)}
 .ph-t1 .ph-brand{display:flex;align-items:flex-start;gap:12px;flex:1}
 .ph-t1 .ph-meta{text-align:right;margin-left:auto}
