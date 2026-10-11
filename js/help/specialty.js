@@ -928,6 +928,8 @@ orbitScreenHelp({
     buttons: [
       ["New", "Opens a blank ticket."],
       ["Save", "Saves the ticket and its lines and returns to the list."],
+      ["Create Invoice", "Raises a draft customer invoice for every line NOT ticked Covered, priced as you entered it, with the ticket number as its reference. The covered lines print on it as a note, so the customer can see what the warranty paid for. Once raised, the button becomes <b>Open invoice</b>."],
+      ["Issue parts", "Takes the parts on this ticket out of stock: one movement per part line that names a product and a quantity, including those under warranty, because a part fitted is a part gone from the shelf."],
       ["Discard", "Returns to the list without saving."],
       ["+ Add line", "Adds a labour, part or expense line."],
       ["&times; (on a line)", "Removes the line. It is gone when you Save."],

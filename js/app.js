@@ -23416,6 +23416,33 @@
       onOpen: function (r) { fnbModal(spec, r); }, onNew: function () { fnbModal(spec, null); }
     };
   }
+  // A record with no lines is a note about a thing rather than the thing: a
+  // stock count with no counted quantities, a transfer with no items. One hook
+  // on the generic screen gives any of them a line grid, and another gives it
+  // the buttons that make the record do something (post the count, dispatch the
+  // transfer), so the two never have to be rebuilt per screen.
+  function fnbLineRow(ls, r, prods) {
+    r = r || {};
+    return '<tr>' + ls.cols.map(function (c) {
+      var v = r[c.k];
+      if (c.t === "product") {
+        return '<td><select class="fl" data-k="' + c.k + '"><option value="">(pick an item)</option>' +
+          prods.map(function (p) { return '<option value="' + p.id + '"' + (v === p.id ? " selected" : "") + '>' + esc(p.name) + '</option>'; }).join("") + '</select></td>';
+      }
+      if (c.t === "num") return '<td><input class="fl num" data-k="' + c.k + '" type="number" step="any" style="width:88px;text-align:right" value="' + (v == null ? "" : esc(String(v))) + '"></td>';
+      return '<td><input class="fl" data-k="' + c.k + '" value="' + esc(v == null ? "" : String(v)) + '"></td>';
+    }).join("") + '<td><button class="del" type="button" title="Remove">&times;</button></td></tr>';
+  }
+  function fnbReadLines(ls) {
+    return [].map.call(document.querySelectorAll("#fnb-lrows tr"), function (tr) {
+      var o = {};
+      tr.querySelectorAll(".fl").forEach(function (el) {
+        var v = el.value;
+        o[el.dataset.k] = (el.type === "number") ? (v === "" ? null : Number(v)) : (v === "" ? null : v);
+      });
+      return o;
+    }).filter(function (o) { return ls.cols.some(function (c) { return o[c.k] != null && o[c.k] !== ""; }); });
+  }
   async function fnbModal(spec, rec) {
     var opts = {};
     for (var i = 0; i < spec.fields.length; i++) {
@@ -23423,23 +23450,61 @@
       if (f.lookup) opts[f.k] = await f.lookup();
     }
     var inner = spec.fields.map(function (f) { return fnbField(f, rec, opts); }).join("");
+    var ls = spec.lines, lineRows = [], lineProds = [];
+    if (ls) {
+      if (ls.cols.some(function (c) { return c.t === "product"; })) {
+        lineProds = (await fnbCo("products", "id,name,cost_price,uom").order("name")).data || [];
+      }
+      if (rec && rec.id) lineRows = (await sb.from(ls.table).select("*").eq(ls.fk, rec.id).order("id")).data || [];
+      inner += '<div class="o-cf-head u-mt14">' + esc(ls.title || "Lines") + '</div>' +
+        (ls.hint ? '<div class="sub" style="margin:-2px 0 6px">' + esc(ls.hint) + '</div>' : "") +
+        '<div class="o-rt-wrap"><table class="o-lines"><thead><tr>' + ls.cols.map(function (c) { return '<th>' + esc(c.l) + '</th>'; }).join("") +
+        '<th style="width:28px"></th></tr></thead><tbody id="fnb-lrows">' +
+        lineRows.map(function (r) { return fnbLineRow(ls, r, lineProds); }).join("") + '</tbody></table></div>' +
+        '<button class="btn sm" type="button" id="fnb-ladd">+ Add line</button>';
+    }
     if (spec.note) inner += '<div class="o-note">' + spec.note + '</div>';
     var m = plotModal((rec ? "Edit " : "New ") + (spec.one || spec.title.replace(/s$/, "").toLowerCase()), inner, async function () {
       var row = fnbRead(spec.fields);
       var missing = spec.fields.filter(function (f) { return f.req && (row[f.k] == null || row[f.k] === ""); });
       if (missing.length) { toast(missing[0].l + " is required"); return; }
       if (spec.before) { var ok = spec.before(row, rec); if (ok === false) return; }
-      var r;
+      var r, pid = rec && rec.id;
       if (rec && rec.id) r = await sb.from(spec.table).update(row).eq("id", rec.id);
       else {
         // a field left on (none) or blank is left out of a new record, so the column's own
         // default applies; sending an explicit null broke every NOT NULL column with a default
         Object.keys(row).forEach(function (k) { if (row[k] == null) delete row[k]; });
-        row.company_id = S.company.id; r = await sb.from(spec.table).insert(row);
+        row.company_id = S.company.id; r = await sb.from(spec.table).insert(row).select("id").single();
+        if (!r.error && r.data) pid = r.data.id;
       }
       if (r.error) { toast(errMsg(r.error)); return; }
+      if (ls && pid) {
+        await sb.from(ls.table).delete().eq(ls.fk, pid);
+        var rows = fnbReadLines(ls).map(function (o) {
+          o.company_id = S.company.id; o[ls.fk] = pid;
+          return ls.derive ? ls.derive(o) : o;
+        });
+        if (rows.length) { var lr = await sb.from(ls.table).insert(rows); if (lr.error) { toast("Lines: " + errMsg(lr.error)); return; } }
+      }
       m.remove(); fnbClearLookups(); toast("Saved"); renderView();
     }, spec.wide);
+    if (ls) {
+      var lb = document.getElementById("fnb-lrows");
+      function wireDel() { lb.querySelectorAll(".del").forEach(function (b) { b.onclick = function () { b.closest("tr").remove(); }; }); }
+      wireDel();
+      document.getElementById("fnb-ladd").onclick = function () {
+        lb.insertAdjacentHTML("beforeend", fnbLineRow(ls, null, lineProds)); wireDel();
+      };
+    }
+    (spec.actions || []).forEach(function (a) {
+      if (!rec || !rec.id) return;
+      if (a.when && !a.when(rec)) return;
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = a.label; if (a.title) b.title = a.title;
+      b.onclick = async function () { b.disabled = true; try { await a.run(rec, m); } finally { b.disabled = false; } };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]"));
+    });
     if (rec && rec.id && canManageApp(S.app)) {
       var del = document.createElement("button");
       del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
@@ -23886,7 +23951,7 @@
   function cfgStockCounts() {
     return fnbCfg({
       title: "Stock counts", table: "stock_counts", one: "count", order: [["count_date", false]],
-      hint: "Record each count: date, store, type, whether it was blind, and its status. Quantities are not entered here and stock is not adjusted.",
+      hint: "Count the shelf, type what you found, and post it. What you counted against what the system expected moves in or out of stock, and the value of the difference posts against your stock adjustment account.",
       select: "*, stores(name)",
       cols: [{ l: "Date", k: "count_date", fmt: "date" }, { l: "Reference", k: "reference", fmt: "b" }, { l: "Type", k: "count_type", fmt: "badge" },
         { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } }, { l: "Blind", k: "is_blind", fmt: "bool" }, { l: "Status", k: "status", fmt: "badge" }],
@@ -23898,13 +23963,29 @@
         { k: "is_blind", l: "Blind count", t: "check", def: true },
         { k: "status", l: "Status", t: "select", opts: [["draft", "Draft"], ["counting", "Counting"], ["review", "Review"], ["approved", "Approved"], ["posted", "Posted"], ["cancelled", "Cancelled"]] },
         { k: "counted_by", l: "Counted by", t: "text" }, { k: "note", l: "Note", t: "textarea" }
-      ]
+      ],
+      lines: {
+        table: "stock_count_lines", fk: "count_id", title: "What was counted",
+        hint: "Expected is what the system thinks is there. Counted is what is on the shelf. The difference is what posts.",
+        cols: [{ k: "product_id", l: "Item", t: "product" }, { k: "expected_qty", l: "Expected", t: "num" },
+               { k: "counted_qty", l: "Counted", t: "num" }, { k: "unit_cost", l: "Unit cost", t: "num" }, { k: "note", l: "Note" }],
+        derive: function (o) { o.variance_qty = Math.round(((Number(o.counted_qty) || 0) - (Number(o.expected_qty) || 0)) * 10000) / 10000; return o; }
+      },
+      actions: [{
+        label: "Post the count", title: "Move the differences in and out of stock, and post what they are worth",
+        when: function (r) { return r.status !== "posted"; },
+        run: async function (rec, m) {
+          var r = await sb.rpc("post_stock_count", { p_count: rec.id });
+          if (r.error) { toast(errMsg(r.error)); return; }
+          m.remove(); toast("Counted, adjusted and posted"); renderView();
+        }
+      }]
     });
   }
   function cfgTransfers() {
     return fnbCfg({
       title: "Stock transfers", table: "stock_transfers", one: "transfer", order: [["requested_at", false]],
-      hint: "A transfer between two of your own stores, tracked by status. Items and quantities are not entered here and no stock moves.",
+      hint: "A transfer between two of your own stores. Put the items on it, then Dispatch moves them out of the sending store and Receive takes them into the receiving one.",
       select: "*, from_store:from_store_id(name), to_store:to_store_id(name)",
       cols: [{ l: "Number", k: "number", fmt: "b" }, { l: "From", k: "from_store_id", fmt: function (r) { return esc(r.from_store ? r.from_store.name : ""); } },
         { l: "To", k: "to_store_id", fmt: function (r) { return esc(r.to_store ? r.to_store.name : ""); } },
@@ -23917,8 +23998,67 @@
         { k: "status", l: "Status", t: "select", opts: [["requested", "Requested"], ["approved", "Approved"], ["dispatched", "Dispatched"], ["received", "Received"], ["cancelled", "Cancelled"]] },
         { k: "note", l: "Note", t: "textarea" }
       ],
-      before: function (row) { if (row.from_store_id && row.from_store_id === row.to_store_id) { toast("A store cannot transfer to itself"); return false; } }
+      before: function (row) { if (row.from_store_id && row.from_store_id === row.to_store_id) { toast("A store cannot transfer to itself"); return false; } },
+      lines: {
+        table: "stock_transfer_lines", fk: "transfer_id", title: "What is being sent",
+        cols: [{ k: "product_id", l: "Item", t: "product" }, { k: "qty_requested", l: "Requested", t: "num" },
+               { k: "qty_dispatched", l: "Sent", t: "num" }, { k: "qty_received", l: "Received", t: "num" }, { k: "note", l: "Note" }],
+        derive: function (o) {
+          o.discrepancy_qty = Math.round(((Number(o.qty_received) || 0) - (Number(o.qty_dispatched) || 0)) * 10000) / 10000;
+          return o;
+        }
+      },
+      actions: [
+        { label: "Dispatch", title: "Take what is being sent out of the sending store's stock",
+          when: function (r) { return r.status === "requested" || r.status === "approved"; },
+          run: function (rec, m) { return fnbMoveTransfer(rec, m, "dispatch"); } },
+        { label: "Receive", title: "Take it into the receiving store's stock",
+          when: function (r) { return r.status === "dispatched"; },
+          run: function (rec, m) { return fnbMoveTransfer(rec, m, "receive"); } }
+      ]
     });
+  }
+  // Stock between two of your own stores. Dispatch takes it out of the sender and
+  // parks it in transit; Receive takes it from there into the receiver, so stock
+  // in a van is neither in the shop it left nor the one it has not reached.
+  async function fnbMoveTransfer(rec, m, step) {
+    var lines = (await sb.from("stock_transfer_lines").select("*").eq("transfer_id", rec.id)).data || [];
+    var use = lines.filter(function (l) {
+      var q = step === "dispatch" ? (Number(l.qty_dispatched) || Number(l.qty_requested) || 0) : (Number(l.qty_received) || Number(l.qty_dispatched) || 0);
+      return l.product_id && q > 0;
+    });
+    if (!use.length) { toast("Put at least one item with a quantity on this transfer first"); return; }
+    var stores = (await sb.from("stores").select("id,warehouse_id").eq("company_id", S.company.id)).data || [];
+    var locs = (await sb.from("stock_locations").select("id,usage,warehouse_id,name").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    function locOf(storeId) {
+      var st = stores.filter(function (x) { return x.id === storeId; })[0];
+      var inWh = st && st.warehouse_id ? locs.filter(function (l) { return l.usage === "internal" && l.warehouse_id === st.warehouse_id; })[0] : null;
+      return (inWh || locs.filter(function (l) { return l.usage === "internal"; })[0] || {}).id;
+    }
+    var transit = (locs.filter(function (l) { return l.usage === "transit"; })[0] || locs.filter(function (l) { return /transit/i.test(l.name || ""); })[0] || {}).id;
+    var from = step === "dispatch" ? locOf(rec.from_store_id) : (transit || locOf(rec.from_store_id));
+    var to = step === "dispatch" ? (transit || locOf(rec.to_store_id)) : locOf(rec.to_store_id);
+    if (!from || !to) { toast("This company needs an internal location for each store before stock can move"); return; }
+    var moves = use.map(function (l) {
+      var q = step === "dispatch" ? (Number(l.qty_dispatched) || Number(l.qty_requested) || 0) : (Number(l.qty_received) || Number(l.qty_dispatched) || 0);
+      return { company_id: S.company.id, product_id: l.product_id, quantity: q, uom: l.uom || null,
+        location_id: from, location_dest_id: to, state: "done", date: new Date().toISOString(),
+        store_id: step === "dispatch" ? rec.from_store_id : rec.to_store_id };
+    });
+    var mv = await sb.from("stock_moves").insert(moves);
+    if (mv.error) { toast(errMsg(mv.error)); return; }
+    var upd = step === "dispatch"
+      ? { status: "dispatched", dispatched_at: new Date().toISOString() }
+      : { status: "received", received_at: new Date().toISOString() };
+    await sb.from("stock_transfers").update(upd).eq("id", rec.id);
+    if (step === "dispatch") {
+      for (var i = 0; i < use.length; i++) {
+        if (!use[i].qty_dispatched) await sb.from("stock_transfer_lines").update({ qty_dispatched: Number(use[i].qty_requested) || 0 }).eq("id", use[i].id);
+      }
+    }
+    m.remove();
+    toast(step === "dispatch" ? (moves.length + " item(s) sent") : (moves.length + " item(s) received"));
+    renderView();
   }
   function cfgAvailability() {
     return fnbCfg({
@@ -26880,7 +27020,10 @@
     function paintTot() { var tt = billTotals(); var e = document.getElementById("tk-tot"); if (e) e.innerHTML = 'Billable <b>' + money(tt.bill) + '</b>' + (tt.cov ? ' &nbsp; <span class="muted">Covered ' + money(tt.cov) + '</span>' : ''); }
     var w0 = warrantyFor(t.product_id, t.serial_no, t.partner_id);
     document.querySelector(".o-form").innerHTML =
-      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tk-save">Save</button><button id="tk-disc">Discard</button></div>' +
+      '<div class="o-statusbar"><div class="o-sb-btns"><button class="pri" id="tk-save">Save</button><button id="tk-disc">Discard</button>' +
+      (id !== "new" && !t.invoice_id ? '<button id="tk-bill" title="Raise a customer invoice for the lines that are not covered by warranty">Create Invoice</button>' : "") +
+      (id !== "new" && t.invoice_id ? '<button id="tk-openinv">Open invoice</button>' : "") +
+      (id !== "new" ? '<button id="tk-issue" title="Take the parts on this ticket out of stock">Issue parts</button>' : "") + '</div>' +
       '<div class="o-stages">' + SVC_STATUS.slice(0, 6).map(function (s) { var on = t.status === s[0]; return '<span class="st ' + (on ? "on" : "") + '">' + s[1] + '</span>'; }).join("") + '</div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="tk-title" value="' + esc(t.title || "") + '" placeholder="Short description, e.g. AC not cooling"></div>' +
       '<div id="tk-warr" style="margin:0 0 10px">' + (w0 ? '<div class="badge paid">Under ' + esc(svcLabel(SVC_WTYPE, w0.wtype)) + ' warranty' + (w0.end_date ? ' until ' + esc(w0.end_date) : '') + ' &middot; covers ' + esc(svcLabel(SVC_COVERS, w0.covers)) + '</div>' : '') + '</div>' +
@@ -26924,6 +27067,67 @@
       var pls = lines.filter(function (l) { return (Number(l.qty) || Number(l.hours) || 0) !== 0 || l.description; }).map(function (l, i) { return { company_id: S.company.id, ticket_id: tid, kind: l.kind || "part", description: (l.description || "").slice(0, 200), qty: l.kind === "labor" ? 0 : (Number(l.qty) || 0), hours: l.kind === "labor" ? (Number(l.hours) || 0) : 0, unit_price: Number(l.unit_price) || 0, covered: !!l.covered, seq: (i + 1) * 10 }; });
       if (pls.length) { var li = await sb.from("service_ticket_lines").insert(pls); if (li.error) { toast(errMsg(li.error)); return; } }
       toast("Saved"); go("svc.tickets");
+    };
+
+    // A ticket that cannot bill is a job sheet, not a service module. The lines
+    // are already priced and already say which of them a warranty covers, so an
+    // invoice is the uncovered ones, in the customer's name, with the ticket's
+    // number on it. The covered ones print on the invoice as a note so the
+    // customer sees what the warranty paid for.
+    var billBtn = document.getElementById("tk-bill");
+    if (billBtn) billBtn.onclick = async function () {
+      if (!t.partner_id) { toast("Pick the customer this ticket belongs to first"); return; }
+      var billable = lines.filter(function (l) { return !l.covered && ((l.kind === "labor" ? Number(l.hours) : Number(l.qty)) || 0) > 0; });
+      if (!billable.length) { toast("Nothing to bill: every line is covered by the warranty, or has no quantity"); return; }
+      billBtn.disabled = true;
+      var untax = billable.reduce(function (sum, l) { return sum + (l.kind === "labor" ? Number(l.hours) || 0 : Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0);
+      var hdr = { company_id: S.company.id, move_type: "out_invoice", partner_id: t.partner_id,
+        number: await nextNumber("out_invoice"), invoice_date: today(), due_date: isoShift(30), state: "draft",
+        currency_code: S.company.currency_code, ref: "Service ticket " + (t.number || ""),
+        amount_untaxed: untax, amount_tax: 0, amount_total: untax, amount_residual: untax };
+      var ins = await sb.from("invoices").insert(hdr).select("id").single();
+      if (ins.error) { billBtn.disabled = false; toast("Could not create: " + errMsg(ins.error)); return; }
+      var rows = billable.map(function (l, i) {
+        var q = l.kind === "labor" ? Number(l.hours) || 0 : Number(l.qty) || 0;
+        return { company_id: S.company.id, invoice_id: ins.data.id, sequence: (i + 1) * 10, line_type: "item",
+          product_id: l.product_id || null, name: l.description || (l.kind === "labor" ? "Labour" : "Part"),
+          quantity: q, unit_price: Number(l.unit_price) || 0, discount: 0, price_subtotal: q * (Number(l.unit_price) || 0) };
+      });
+      var covered = lines.filter(function (l) { return l.covered && (l.description || l.product_id); });
+      if (covered.length) {
+        rows.push({ company_id: S.company.id, invoice_id: ins.data.id, sequence: (rows.length + 1) * 10, line_type: "note",
+          name: "Covered by warranty, not charged: " + covered.map(function (l) { return l.description || "part"; }).join(", "),
+          quantity: 0, unit_price: 0, discount: 0, price_subtotal: 0 });
+      }
+      var li = await sb.from("invoice_lines").insert(rows);
+      if (li.error) { billBtn.disabled = false; toast("Lines failed: " + errMsg(li.error)); return; }
+      await sb.from("service_tickets").update({ invoice_id: ins.data.id }).eq("id", id);
+      toast("Invoice created (draft)");
+      renderInvoiceForm(ins.data.id, "out_invoice");
+    };
+    var openInv = document.getElementById("tk-openinv");
+    if (openInv) openInv.onclick = function () { renderInvoiceForm(t.invoice_id, "out_invoice"); };
+
+    // The parts fitted on a job came off a shelf or out of a van. Issuing them
+    // moves them out of stock at the ticket's date, so On Hand is the truth
+    // rather than the last count.
+    var issueBtn = document.getElementById("tk-issue");
+    if (issueBtn) issueBtn.onclick = async function () {
+      var parts = lines.filter(function (l) { return l.kind === "part" && l.product_id && (Number(l.qty) || 0) > 0; });
+      if (!parts.length) { toast("No part on this ticket has a product and a quantity"); return; }
+      issueBtn.disabled = true;
+      var locs = (await sb.from("stock_locations").select("id,usage,name").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+      var src = (locs.filter(function (l) { return l.usage === "internal"; })[0] || {}).id;
+      var dst = (locs.filter(function (l) { return l.usage === "customer"; })[0] || {}).id;
+      if (!src || !dst) { issueBtn.disabled = false; toast("This company has no internal and customer location to move stock between"); return; }
+      var moves = parts.map(function (l) {
+        return { company_id: S.company.id, product_id: l.product_id, quantity: Number(l.qty) || 0,
+          location_id: src, location_dest_id: dst, state: "done", date: t.closed_at || new Date().toISOString() };
+      });
+      var mv = await sb.from("stock_moves").insert(moves);
+      issueBtn.disabled = false;
+      if (mv.error) { toast("Could not issue: " + errMsg(mv.error)); return; }
+      toast(moves.length + " part(s) taken out of stock");
     };
   }
   function cfgWarranties() {

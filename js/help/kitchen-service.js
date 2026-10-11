@@ -734,7 +734,7 @@ orbitScreenHelp({
 
   "sc.counts": {
     title: "Stock counts",
-    what: "A register of stock counts: when a count was done, where, what kind (full, cycle or spot), whether it was blind, who counted and its status. It is a record of the count itself; this screen has no lines for counted quantities and does not change stock.",
+    what: "A stock count: when it was done, where, what kind (full, cycle or spot), whether it was blind, who counted, and <b>what they found, item by item</b>. Posting it is what makes the system agree with the shelf: every difference between expected and counted moves in or out of stock, and what the difference is worth posts to your stock adjustment account.",
     when: [
       "You plan or carry out a stock count and want it on record.",
       "You need to see which counts are still open and which are finished.",
@@ -781,7 +781,7 @@ orbitScreenHelp({
 
   "sc.transfers": {
     title: "Transfers",
-    what: "A register of stock moving between two of your own stores, such as a central kitchen sending prepared food to an outlet. Each transfer records where from, where to, when it was requested and its status. This screen has no lines for items or quantities and does not move stock.",
+    what: "Stock moving between two of your own stores, such as a central kitchen sending prepared food to an outlet: where from, where to, <b>what is on it</b> and how far along it is. <b>Dispatch</b> takes the items out of the sending store and parks them in transit, so stock in a van belongs to neither shop; <b>Receive</b> takes them into the receiving store.",
     when: [
       "One store asks another for stock.",
       "A delivery between your stores is sent or arrives and its status should be updated.",
