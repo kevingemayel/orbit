@@ -9,7 +9,9 @@
 # can write is the most expensive kind of gap, because it looks finished from
 # the inside: the schema is there, the help page describes it, and a demo never
 # touches it. Asking the question as evidence rather than memory found 36 such
-# tables on 11 October 2026 and drove the work that closed fourteen of them.
+# tables on 11 October 2026 and drove the work that closed every one that had a
+# row in it: 15 are left and all of them are empty, bar two rows of site_content
+# left over from the old spacework.ai site editor.
 #
 # How it answers. Every table in public is checked against:
 #   - js/app.js, for the table name in quotes (how the client names a table)

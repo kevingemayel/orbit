@@ -1356,6 +1356,57 @@ orbitScreenHelp({
       "Saving rewrites every line from the screen, Waste % included, so check the figures before you save.",
       "Write the recipe per natural batch (a tray, a mix, a sheet) and set Output qty to what it yields."
     ]
+  },
+
+  "ops.maintlog": {
+    title: "Service history",
+    what: "Work actually done on a machine: the date, what was done, who did it, what it cost and how many hours it was out of service. A scheduled job logged from <b>Maintenance</b> writes a line here and moves that schedule on in the same step, so a schedule is closed by the work rather than by somebody editing its dates. An unplanned repair is logged straight onto this screen.",
+    when: [
+      "An engineer has been and gone.",
+      "Somebody on the team descaled a machine and it should be written down.",
+      "You are deciding whether to replace a machine, and want its cost and downtime over a year.",
+      "A supplier is quoting for a service contract and you want the real history to compare it with."
+    ],
+    how: [
+      "For a job that was on the schedule: open <b>Kitchen &rsaquo; Operations &rsaquo; Maintenance</b>, open the overdue descale, and click <span class='man-key'>Log the work</span>.",
+      "Set <b>Done on</b> to the day it was done, choose <i>Descale</i>, type the engineer in <b>Done by</b>, 35 in <b>What it cost</b> and 1.5 in <b>Hours out of service</b>, then save. You should see <i>Logged. Next due 2026-11-11.</i>",
+      "The schedule now reads <b>Last done</b> today and <b>Next due</b> a month out, and the line is listed under <b>What has been done to this machine</b> on the schedule itself.",
+      "For an unplanned repair: open <b>Service history</b> and click <span class='man-key'>New</span>. Pick the machine, choose <i>A repair</i>, and fill in the rest. It is marked <b>Unplanned</b> and moves no schedule, because there was none.",
+      "Group the list by <b>Machine</b> and the history of each one reads in order. Filter to <b>Unplanned</b> and what is left is the breakdowns, which is the list that tells you what to replace."
+    ],
+    fields: [
+      ["Machine", "Which one. Set them up in Equipment.", "required"],
+      ["When", "The day the work was done. For a scheduled job it is what the next due date is counted from.", "required"],
+      ["What was done", "A service, a repair, descale, backflush, a filter change, an inspection.", "optional"],
+      ["Done by", "The engineer, the supplier, or whoever on the team did it.", "optional"],
+      ["What it cost", "Parts and labour. It is the figure that adds up to the real cost of owning the machine.", "optional"],
+      ["Hours out of service", "How long it could not be used. Worth recording: it is the other half of the cost.", "optional"],
+      ["Note", "What was actually wrong, in words.", "optional"]
+    ],
+    buttons: [
+      ["New", "An unplanned job. It moves no schedule."],
+      ["Log the work", "On the Maintenance screen, not here: it writes the line and moves the schedule on together."],
+      ["Filters", "<b>Unplanned</b>, <b>Cost something</b> and <b>This month</b>."],
+      ["Group By", "<b>Machine</b>, <b>What</b> or <b>Month</b>."]
+    ],
+    after: "<p>Nothing posts to the accounts. The cost here is a note about the machine, not a bill: the bill belongs in Purchase, against the supplier who sent it.</p><p>Logging a scheduled job sets that schedule's <b>Last done</b> to the date and its <b>Next due</b> to that date plus its frequency, in one step, in the database. That is the whole difference between a reminder and a maintenance record: a reminder somebody edits by hand drifts, and then nobody trusts it.</p>",
+    links: [
+      { name: "Maintenance", how: "The schedules. Log the work there and it lands here.", to: "ops.maintenance" },
+      { name: "Equipment", how: "The machines these records belong to.", to: "ops.equipment" },
+      { name: "Bills", how: "Where the engineer's invoice belongs, so it reaches the books.", to: "inv.in" },
+      { name: "Assets", how: "Where a machine's book value and depreciation live, if it is capitalised.", to: "assets.list" }
+    ],
+    mistakes: [
+      ["Machine is required", "Pick which one."],
+      ["Your role cannot record maintenance. It needs Work in Kitchen, Service, Projects or Inventory.", "The database refuses it, not the screen."],
+      ["That schedule no longer exists.", "Somebody deleted the schedule between opening it and logging the work. Log it here as unplanned instead."],
+      ["The schedule did not move", "The line was added here rather than through Log the work, so it is unplanned by definition. Open the schedule and log it there."]
+    ],
+    tips: [
+      "Record the hours down even roughly. A machine that costs little to fix and stops service for a day is the expensive one.",
+      "Filter to <b>Unplanned</b> and group by <b>Machine</b> before any conversation about a service contract.",
+      "Log it the day it happens. A service history reconstructed at year end is worth nothing to anyone."
+    ]
   }
 
 });

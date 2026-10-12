@@ -156,8 +156,10 @@ definition, and the Cloudflare functions and the website worker.
 A table with rows in it that no screen can show and nothing can write is the
 most expensive kind of gap, because it looks finished from the inside: the
 schema is there, the help page describes it, and a demo never touches it. The
-first run, on 11 October 2026, found **36**; it is now **22**, of which only 7
-hold a single row. The work that closed the others is in migrations 229 to 239.
+first run, on 11 October 2026, found **36**; it is now **15**, and every one of
+those is empty except `site_content`, which holds two rows left over from the old
+spacework.ai site editor and belongs to nothing in Orbit. The work that closed
+the others is in migrations 229 to 241.
 
 The second list it prints, "the app cannot reach it but SQL or the edge does",
 is the normal shape for a table only a posting function touches. It is not a

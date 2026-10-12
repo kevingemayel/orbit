@@ -783,6 +783,30 @@
         return ok(need.length + " parts present: the till offers it, the database counts it, and the billing posts");
       } },
 
+    { name: "a record has a way in and a way out",
+      why: "The last four tables with rows and no way to them: work done on a machine, a delivery zone, a franchise marketing levy and an aggregator dispute. Each is closed the same way, by giving the record an entry and an exit rather than a screen. The generic form grew one hook to do it - a child list it shows and does not own - because the alternative was four more screens, and a screen is how these became records nobody reads in the first place.",
+      run: function (src) {
+        var need = [
+          ["the form can show records it does not own", /for \(var ci = 0; ci < \(spec\.children \|\| \[\]\)\.length; ci\+\+\) \{/],
+          ["a maintenance schedule is closed by the work", /sb\.rpc\("maintenance_log_add", \{/],
+          ["and shows what has been done to the machine", /\{ title: "What has been done to this machine", table: "maintenance_logs", fk: "schedule_id"/],
+          ["a delivery takes its zone's fee", /if \(!row\.zone_id \|\| \(row\.fee != null && row\.fee !== ""\)\) return;/],
+          ["a payout shows what is disputed", /\{ title: "What they are arguing about", table: "aggregator_disputes", fk: "payout_id"/],
+          ["a dispute is raised in the database", /sb\.rpc\("aggregator_dispute_raise", \{ p_payout: p\.id/],
+          ["and closed there", /sb\.rpc\("aggregator_dispute_close", \{/],
+          ["the fund balance is worked out in the database", /sb\.rpc\("marketing_fund_balance", \{ p_company: S\.company\.id/],
+          ["the service history has a screen", /case "ops\.maintlog": return renderList\(cfgMaintenanceLog\(\)\);/],
+          ["so do the zones", /case "dlv\.zones": return renderList\(cfgDeliveryZones\(\)\);/],
+          ["and the fund", /case "fr\.fund": return renderMarketingFund\(\);/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // a child list is read-only on purpose: it must never write
+        var block = src.slice(src.indexOf("spec.children || []"), src.indexOf("spec.children || []") + 1600);
+        if (/\.insert\(|\.update\(|\.delete\(/.test(block)) return bad("the child list writes, which is not what a child list is for");
+        return ok(need.length + " parts present, and the child list only reads");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

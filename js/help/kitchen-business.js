@@ -1920,6 +1920,103 @@ orbitScreenHelp({
       "Set <b>Next due</b> to the real delivery day, not today: it is the date the whole schedule steps from.",
       "Pause rather than delete. A paused line still says what was agreed, which is what you want when somebody rings up in three months."
     ]
+  },
+
+  "dlv.zones": {
+    title: "Delivery zones",
+    what: "Where you deliver, what it costs and the smallest order you will take there. A delivery picks its zone and the fee comes from here, so a rider is not deciding it at the door and two customers in the same street are not charged differently.",
+    when: [
+      "Setting delivery up for the first time.",
+      "A zone's fee changes, or fuel does.",
+      "You stop delivering somewhere: switch the zone off rather than deleting it.",
+      "A branch delivers to a different set of areas from the others."
+    ],
+    how: [
+      "Open <b>Kitchen &rsaquo; Delivery &rsaquo; Delivery zones</b> and click <span class='man-key'>New</span>.",
+      "Type <i>Gemmayze</i> in <b>Zone</b>, leave <b>Store</b> empty for a zone every branch delivers to, and put 3 in <b>Delivery fee</b>.",
+      "Put 15 in <b>Smallest order</b> and 30 in <b>Should take (minutes)</b>, then save.",
+      "Now open <b>Own deliveries</b> and click <span class='man-key'>New</span>. Choose <i>Gemmayze</i> in <b>Zone</b> and leave <b>Delivery fee</b> empty: on saving it fills in as 3.00 from the zone.",
+      "Where a fee was agreed differently, type it and it is left alone.",
+      "When you stop delivering to a zone, set <b>Delivering there</b> to No. It disappears from the list a delivery can choose and the old deliveries keep their zone."
+    ],
+    fields: [
+      ["Zone", "What you call the area. It is what a rider and a cashier will say.", "required"],
+      ["Store", "One branch, or empty for a zone every branch delivers to.", "optional"],
+      ["Delivery fee", "What you charge to deliver there. A delivery with no fee typed takes this one.", "optional"],
+      ["Smallest order", "The order value below which you would rather not go. Recorded, not enforced: somebody may have agreed it.", "optional"],
+      ["Should take (minutes)", "What you promise. It is the number to measure the real delivery times against.", "optional"],
+      ["Delivering there", "No takes it off the list a new delivery can choose.", "optional"]
+    ],
+    buttons: [
+      ["New", "Adds a zone."],
+      ["Filters", "<b>Not delivering</b>."],
+      ["Group By", "<b>Store</b>, where branches deliver to different areas."]
+    ],
+    after: "<p>Nothing posts. A zone is read by a delivery when it is saved: a delivery with a zone and no fee takes the zone's fee, and one with a fee already typed keeps it.</p><p>The map polygon is not drawn on this screen. A zone here is a name, a fee and a minimum, which is what the till and the rider actually need; drawing boundaries is a mapping feature and is not pretended at.</p>",
+    links: [
+      { name: "Own deliveries", how: "Where a zone is used, and where its fee lands.", to: "dlv.deliveries" },
+      { name: "Stores", how: "The branches a zone can belong to.", to: "estate.stores" }
+    ],
+    mistakes: [
+      ["Zone is required", "Give it a name."],
+      ["A delivery took the wrong fee", "The fee was already typed on the delivery, so the zone was not used. Clear it and save again."],
+      ["A zone is missing from the delivery form", "It is switched off. Set Delivering there back to Yes."]
+    ],
+    tips: [
+      "Name zones the way your riders already name them, not the way a map does.",
+      "Set <b>Should take</b> honestly. It is the only number that makes the delivery times on the Service times screen mean anything.",
+      "A minimum order is worth recording even if nobody enforces it: it is the conversation you have with the branch, not with the customer."
+    ]
+  },
+
+  "fr.fund": {
+    title: "Marketing fund",
+    what: "What each franchisee has contributed to the marketing fund, what has been spent out of it, and what is left. The balance is the only figure a franchisee ever asks about, and it is money the brand is holding on their behalf rather than its own.",
+    when: [
+      "A levy is charged for the period.",
+      "A campaign has been paid for out of the fund.",
+      "A franchisee asks what is left, which they will.",
+      "Year end, when the fund has to be accounted for to the network."
+    ],
+    how: [
+      "Open <b>Kitchen &rsaquo; Franchise &rsaquo; Marketing fund</b>. The three figures along the top are the whole network: levied, spent, and held on their behalf.",
+      "The table under them is one row per franchisee with their own balance, and under that is every entry in date order.",
+      "Click <span class='man-key'>New entry</span>. For a levy: pick the franchisee, leave <b>What</b> on <i>A levy they contributed</i>, type the amount and save.",
+      "For a national campaign: leave <b>Franchisee</b> empty, choose <i>Money spent out of the fund</i>, type the amount and name the campaign, for example <i>Ramadan radio</i>.",
+      "The balance updates straight away. A franchisee's row shows what they have put in, what has been spent against them, and the difference.",
+      "Click <span class='man-key'>Print</span> for a copy on your letterhead, which is what to hand over at a network meeting, or <span class='man-key'>Export</span> for the figures."
+    ],
+    fields: [
+      ["Franchisee", "Whose levy it is, or who the spend is for. Empty means the whole network, which is the usual shape of a national campaign.", "optional"],
+      ["When", "The date it belongs to.", "required"],
+      ["What", "A levy they contributed, or money spent out of the fund.", "required"],
+      ["Amount", "Always a positive number. What it is decides which way it counts.", "required"],
+      ["Campaign", "What the money went on. It is how the spend reads back to a franchisee.", "optional"],
+      ["Description", "Anything worth saying.", "optional"]
+    ],
+    buttons: [
+      ["New entry", "Records a levy charged or money spent."],
+      ["Print", "The fund on your letterhead."],
+      ["Export", "The figures as a CSV file."]
+    ],
+    after: "<p>Nothing here posts to the ledger, and that is deliberate: the levy reaches the books as an <b>invoice</b> to the franchisee, raised in Sales, and the spend reaches them as a <b>supplier bill</b>. This screen is the fund's own record of who contributed what and what it was spent on, which is the thing the brand owes the network an answer about.</p><p>A levy is money in; anything else is money out. The balance is what you are holding and have not yet spent on their behalf.</p>",
+    links: [
+      { name: "Royalty run", how: "Works out the royalty and the marketing levy due on reported sales, which is where the levy figure comes from.", to: "fr.royaltyrun" },
+      { name: "Franchisees", how: "Who can appear here.", to: "fr.franchisees" },
+      { name: "Invoices", how: "Where a levy becomes real money owed.", to: "inv.out" },
+      { name: "Bills", how: "Where the agency's invoice belongs.", to: "inv.in" }
+    ],
+    mistakes: [
+      ["How much?", "The amount is empty or zero."],
+      ["A spend made the balance negative", "More has been spent than was contributed. It is allowed, because it happens, but it is worth knowing: the brand is funding the difference."],
+      ["Nothing in the fund yet", "No entries. New entry records the first one."],
+      ["The balance does not match the ledger", "It is not meant to. This is the fund's own record; the ledger has the invoices and the bills. Link the invoice on the entry when you raise it."]
+    ],
+    tips: [
+      "Record the levy for every period, even when nothing is spent. A fund with contributions and no spend is a conversation waiting to happen.",
+      "Name the campaign, always. <i>Ramadan radio</i> reads back to a franchisee; <i>marketing</i> does not.",
+      "Print it before a network meeting rather than during one."
+    ]
   }
 
 });

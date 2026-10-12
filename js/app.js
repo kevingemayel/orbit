@@ -1615,7 +1615,8 @@
       { i: "clipboardCheck", n: "Checklist runs", l: "Operations", d: "Each opening, closing, cleaning or HACCP round done, with its score and whether it failed." },
       { i: "list", n: "Checklist templates", l: "Operations", d: "Name each round and how often it runs." },
       { i: "wrench", n: "Equipment", l: "Operations", d: "Machines, where they are and whether they are running." },
-      { i: "refresh", n: "Maintenance", l: "Operations", d: "Backflush, descale, filter change, service, with overdue at a glance." },
+      { i: "refresh", n: "Maintenance", l: "Operations", d: "Backflush, descale, filter change, service, with overdue at a glance. Logging the work closes the schedule." },
+      { i: "history", n: "Service history", l: "Operations", d: "Work actually done on a machine: who, what it cost, how long it was down." },
       { i: "award", n: "Store audits", l: "Operations", d: "Brand standards and food safety, scored." },
       { i: "target", n: "Audit actions", l: "Operations", d: "Each finding with an owner and a date." },
       { i: "shield", n: "Exception report", l: "Loss prevention", d: "Recorded voids and discounts ranked by cashier against the average. The tills do not record them." },
@@ -1635,12 +1636,14 @@
       { i: "send", n: "Feedback and complaints", l: "Guests", d: "Every score and complaint, with an owner and an SLA." },
       { i: "coin", n: "Aggregator payouts", l: "Delivery", d: "What they said they would pay against what they paid." },
       { i: "globe", n: "Aggregator accounts", l: "Delivery", d: "One row per platform per store, carrying their commission." },
-      { i: "truck", n: "Own deliveries", l: "Delivery", d: "Riders, fees and cash settlement." },
+      { i: "truck", n: "Own deliveries", l: "Delivery", d: "Riders, the fee that comes from the zone, and cash settlement." },
+      { i: "pin", n: "Delivery zones", l: "Delivery", d: "Where you deliver, what it costs and the smallest order you will take." },
       { i: "calendar", n: "Reservations", l: "Delivery", d: "Bookings and the waitlist." },
       { i: "people", n: "Franchisees", l: "Franchise", d: "Agreements, territories and renewal dates." },
       { i: "percent", n: "Royalty schemes", l: "Franchise", d: "Percent, fixed or a percent with a floor. Tiered bands cannot be entered." },
       { i: "docMoney", n: "Reported sales", l: "Franchise", d: "What each franchisee declares, which royalty is charged on." },
       { i: "coin", n: "Royalty run", l: "Franchise", d: "Works out royalty and marketing due on reported sales. No invoice is created." },
+      { i: "coin", n: "Marketing fund", l: "Franchise", d: "What each franchisee has contributed, what has been spent, and what is left." },
       { i: "compass", n: "Development pipeline", l: "Franchise", d: "Lead to open door, with a stage gate at each step." },
       { i: "shield", n: "Approved suppliers", l: "Franchise", d: "Who may be bought from, what is mandatory, and rebates." },
       { i: "clock", n: "Labour standards", l: "Planning", d: "Sales per labour hour and the minimum crew per daypart." },
@@ -1959,12 +1962,12 @@
         { label: "Menu", items: [["Menus", "menu.list"], ["Modifiers", "menu.modgroups"], ["Channels", "menu.channels"], ["Price list", "menu.prices"], ["Menu engineering", "menu.engineering"], ["Recipes", "mfg.boms"], ["Items", "products"]] },
         { label: "Stock control", items: [["Cost variance", "sc.variance"], ["Waste log", "sc.waste"], ["Stock counts", "sc.counts"], ["Transfers", "sc.transfers"], ["Availability (86)", "sc.availability"], ["Waste reasons", "sc.wastereasons"]] },
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
-        { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
+        { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Service history", "ops.maintlog"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
         { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Standing orders", "rst.standing"], ["Training academy", "rst.courses"], ["Course bookings", "rst.bookings"]] },
         { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Loyalty accounts", "gst.accounts"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Passes and subscriptions", "gst.passes"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
-        { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["All bookings", "dlv.reservations"]] },
-        { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
+        { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["Delivery zones", "dlv.zones"], ["All bookings", "dlv.reservations"]] },
+        { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Marketing fund", "fr.fund"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] }
       ]
     },
@@ -2106,7 +2109,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.accounts": "kitchen", "gst.storedvalue": "kitchen", "gst.passes": "kitchen", "rst.standing": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "ops.maintlog": "kitchen", "dlv.zones": "kitchen", "fr.fund": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.accounts": "kitchen", "gst.storedvalue": "kitchen", "gst.passes": "kitchen", "rst.standing": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -4587,6 +4590,9 @@
       case "ops.checktpl": return renderList(cfgChecklistTemplates());
       case "ops.equipment": return renderList(cfgEquipment());
       case "ops.maintenance": return renderList(cfgMaintenance());
+      case "ops.maintlog": return renderList(cfgMaintenanceLog());
+      case "dlv.zones": return renderList(cfgDeliveryZones());
+      case "fr.fund": return renderMarketingFund();
       case "ops.audits": return renderList(cfgAudits());
       case "ops.auditactions": return renderList(cfgAuditActions());
       case "ops.exceptions": return renderExceptionReport();
@@ -24664,6 +24670,19 @@
   function lkChannels() { return fnbLookup("channels", function () { return fnbCo("sales_channels", "id,name").eq("is_active", true).order("sort").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
   function lkFranchisees() { return fnbLookup("franchisees", function () { return fnbCo("franchisees", "id,name").order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
   function lkEquipment() { return fnbLookup("equipment", function () { return fnbCo("equipment", "id,name").order("name").then(function (r) { return (r.data || []).map(function (x) { return [x.id, x.name]; }); }); }); }
+  // Zones are the one lookup whose rows are needed whole, not as a pair, because
+  // the fee on the row is what a delivery takes. fnbLookupRaw keeps them beside
+  // the pairs the select is built from.
+  var _fnbRaw = {};
+  function fnbLookupRaw(k) { return _fnbRaw[k] || null; }
+  function lkZones() {
+    return fnbLookup("zones", function () {
+      return fnbCo("delivery_zones", "id,name,fee,min_order").eq("is_active", true).order("name").then(function (r) {
+        _fnbRaw.zonesraw = r.data || [];
+        return (r.data || []).map(function (x) { return [x.id, x.name + (x.fee != null ? " - " + money(x.fee) : "")]; });
+      });
+    });
+  }
 
   function fnbFmt(v, fmt, row) {
     if (typeof fmt === "function") return fmt(row, v);
@@ -24775,6 +24794,27 @@
         '<th style="width:28px"></th></tr></thead><tbody id="fnb-lrows">' +
         lineRows.map(function (r) { return fnbLineRow(ls, r, lineProds); }).join("") + '</tbody></table></div>' +
         '<button class="btn sm" type="button" id="fnb-ladd">+ Add line</button>';
+    }
+    // Records this one is the parent of, shown and not edited: the orders in a
+    // payout, the disputes against it. A child list that cannot be typed into is
+    // the honest way to show something another screen owns.
+    for (var ci = 0; ci < (spec.children || []).length; ci++) {
+      var ch = spec.children[ci], crows = [];
+      if (rec && rec.id) {
+        var cq = sb.from(ch.table).select(ch.select || "*").eq(ch.fk, rec.id);
+        if (ch.order) cq = cq.order(ch.order[0], { ascending: ch.order[1] !== false });
+        var cr = await cq.limit(ch.limit || 200);
+        crows = cr.data || [];
+      }
+      inner += '<div class="o-cf-head u-mt14">' + esc(ch.title) + (crows.length ? ' (' + crows.length + ')' : '') + '</div>' +
+        (ch.hint ? '<div class="sub" style="margin:-2px 0 6px">' + esc(ch.hint) + '</div>' : '') +
+        '<div class="o-rt-wrap"><table class="o-lines"><thead><tr>' +
+        ch.cols.map(function (c) { return '<th' + (c.num ? ' class="num"' : '') + '>' + esc(c.l) + '</th>'; }).join("") +
+        '</tr></thead><tbody>' +
+        (crows.length
+          ? crows.map(function (r) { return '<tr>' + ch.cols.map(function (c) { return '<td' + (c.num ? ' class="num"' : '') + '>' + fnbFmt(r[c.k], c.fmt, r) + '</td>'; }).join("") + '</tr>'; }).join("")
+          : '<tr><td colspan="' + ch.cols.length + '" class="muted" style="padding:12px">' + esc(ch.empty || "Nothing yet.") + '</td></tr>') +
+        '</tbody></table></div>';
     }
     if (spec.note) inner += '<div class="o-note">' + spec.note + '</div>';
     var m = plotModal((rec ? "Edit " : "New ") + (spec.one || spec.title.replace(/s$/, "").toLowerCase()), inner, async function () {
@@ -25574,6 +25614,177 @@
       renderView();
     }, true);
   }
+  // ===================== THE LAST RECORD-ONLY TABLES =====================
+  // Four small ones, each the same shape: a record written once by something
+  // that no longer exists and then read by nothing. The engines are in
+  // migration 241; these are the ways in and out.
+  function cfgMaintenanceLog() {
+    return fnbCfg({
+      title: "Service history", table: "maintenance_logs", one: "service record", order: [["log_date", false]],
+      hint: "Work actually done on a machine: who did it, what it cost and how long it was out of service. Logging a scheduled job from the Maintenance screen writes a line here and moves that schedule on, so a schedule is closed by the work rather than by editing dates.",
+      select: "*, equipment(name, category)",
+      cols: [
+        { l: "When", k: "log_date", fmt: "date" },
+        { l: "Machine", k: "equipment_id", fmt: function (r) { return '<b>' + esc(r.equipment ? r.equipment.name : "") + '</b>'; } },
+        { l: "What", k: "kind", fmt: "badge" },
+        { l: "By", k: "done_by" },
+        { l: "Cost", k: "cost", fmt: "money", num: true },
+        { l: "Hours down", k: "downtime_hours", num: true },
+        { l: "Planned", k: "schedule_id", fmt: function (r) { return r.schedule_id ? '<span class="badge paid">Scheduled</span>' : '<span class="badge partial">Unplanned</span>'; } },
+        { l: "Note", k: "note", fmt: "muted" }
+      ],
+      filters: [
+        { label: "Unplanned", test: function (r) { return !r.schedule_id; } },
+        { label: "Cost something", test: function (r) { return Number(r.cost || 0) > 0; } },
+        { label: "This month", test: function (r) { return String(r.log_date || "").slice(0, 7) === today().slice(0, 7); } }
+      ],
+      groupBy: [
+        { label: "Machine", get: function (r) { return r.equipment ? r.equipment.name : "(none)"; } },
+        { label: "What", get: function (r) { return fnbTitle(r.kind || ""); } },
+        { label: "Month", get: function (r) { return String(r.log_date || "").slice(0, 7) || "(no date)"; } }
+      ],
+      fields: [
+        { k: "equipment_id", l: "Machine", t: "select", lookup: lkEquipment, req: true },
+        { k: "log_date", l: "When", t: "date", req: true, def: today() },
+        { k: "kind", l: "What was done", t: "select", opts: [["service", "A service"], ["repair", "A repair"], ["descale", "Descale"], ["backflush", "Backflush"], ["filter", "Filter change"], ["inspection", "An inspection"], ["other", "Something else"]] },
+        { k: "done_by", l: "Done by", t: "text", hint: "The engineer, the supplier, or whoever on the team did it." },
+        { k: "cost", l: "What it cost", t: "num" },
+        { k: "downtime_hours", l: "Hours out of service", t: "num", hint: "The figure that tells you whether a machine is worth keeping." },
+        { k: "note", l: "Note", t: "textarea" }
+      ],
+      note: "A line added here is an unplanned job and moves no schedule. To close a scheduled job, open it in <b>Maintenance</b> and use <b>Log the work</b>: that writes the line and moves the next due date on in one step."
+    });
+  }
+  // The action that turns a reminder into a maintenance record.
+  async function openMaintLogWork(sch, parent) {
+    var inner =
+      '<div class="cp-sub">' + esc(sch.task || "Scheduled work") + (sch.equipment ? ' on ' + esc(sch.equipment.name) : "") + '</div>' +
+      '<div class="row2"><div>' + fld("Done on", '<input id="ml-date" type="date" value="' + today() + '">', "The date the work was done, which is what the next due date is counted from.") + '</div>' +
+      '<div>' + fld("What was done", '<select id="ml-kind">' + [["service", "A service"], ["repair", "A repair"], ["descale", "Descale"], ["backflush", "Backflush"], ["filter", "Filter change"], ["inspection", "An inspection"]].map(function (o) {
+        return '<option value="' + o[0] + '">' + o[1] + '</option>';
+      }).join("") + '</select>', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Done by", '<input id="ml-by" placeholder="The engineer, or whoever did it">', "") + '</div>' +
+      '<div>' + fld("What it cost", '<input id="ml-cost" type="number" step="0.01" value="">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Hours out of service", '<input id="ml-down" type="number" step="0.5" value="">', "") + '</div>' +
+      '<div>' + fld("Note", '<input id="ml-note">', "") + '</div></div>' +
+      '<div class="o-note">This writes the work into the service history and moves <b>' + esc(sch.task || "the schedule") + '</b> on by ' +
+      (sch.frequency_days ? sch.frequency_days + ' days' : 'its frequency') + ', so nobody has to edit the dates.</div>';
+    var mm = plotModal("Log the work", inner, async function () {
+      var r = await sb.rpc("maintenance_log_add", {
+        p_equipment: sch.equipment_id, p_schedule: sch.id, p_date: gv("ml-date") || today(),
+        p_kind: document.getElementById("ml-kind").value, p_done_by: gv("ml-by") || null,
+        p_cost: parseFloat(gv("ml-cost")) || 0, p_downtime: parseFloat(gv("ml-down")) || 0,
+        p_note: gv("ml-note") || null
+      });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      var o = r.data || {};
+      mm.remove(); if (parent) parent.remove();
+      toast("Logged." + (o.next_due ? " Next due " + o.next_due + "." : ""));
+      renderView();
+    });
+  }
+
+  function cfgDeliveryZones() {
+    return fnbCfg({
+      title: "Delivery zones", table: "delivery_zones", one: "zone", order: [["name", true]],
+      hint: "Where you deliver, what it costs and the smallest order you will take. A delivery picks its zone and the fee comes from here, so the rider is not deciding it at the door.",
+      select: "*, stores(name)",
+      cols: [
+        { l: "Zone", k: "name", fmt: "b" },
+        { l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : "every store"); } },
+        { l: "Fee", k: "fee", fmt: "money", num: true },
+        { l: "Smallest order", k: "min_order", fmt: "money", num: true },
+        { l: "Should take", k: "max_minutes", num: true, fmt: function (r) { return r.max_minutes ? r.max_minutes + " min" : ""; } },
+        { l: "Delivering", k: "is_active", fmt: "bool" }
+      ],
+      filters: [{ label: "Not delivering", test: function (r) { return r.is_active === false; } }],
+      groupBy: [{ label: "Store", get: function (r) { return r.stores ? r.stores.name : "Every store"; } }],
+      fields: [
+        { k: "name", l: "Zone", t: "text", req: true, ph: "e.g. Gemmayze" },
+        { k: "store_id", l: "Store", t: "select", lookup: lkStores, hint: "Leave it empty for a zone every branch delivers to." },
+        { k: "fee", l: "Delivery fee", t: "num" },
+        { k: "min_order", l: "Smallest order", t: "num", hint: "A delivery under this is flagged when it is saved. It is not refused: somebody may have agreed it." },
+        { k: "max_minutes", l: "Should take (minutes)", t: "num", step: "1", hint: "What you promise. It is the number to measure the real times against." },
+        { k: "is_active", l: "Delivering there", t: "check", def: true }
+      ],
+      note: "The map polygon is not drawn here. A zone is a name, a fee and a minimum, which is what the till and the rider need."
+    });
+  }
+
+  // The only figure a franchisee ever asks about: what is left in the fund.
+  async function renderMarketingFund() {
+    var cc = S.company.currency_code;
+    document.getElementById("o-main").innerHTML = repChrome("Marketing fund", true);
+    wireBc();
+    document.getElementById("rp-print").onclick = function () { window.print(); };
+    var ex = document.getElementById("rp-export"); if (ex) ex.onclick = exportRepCsv;
+    var bal = (await sb.rpc("marketing_fund_balance", { p_company: S.company.id, p_franchisee: null })).data || [];
+    var ent = (await sb.from("marketing_fund_entries").select("*").eq("company_id", S.company.id).order("entry_date", { ascending: false }).limit(300)).data || [];
+    var frs = (await sb.from("franchisees").select("id,name").eq("company_id", S.company.id)).data || [];
+    var fm = {}; frs.forEach(function (f) { fm[f.id] = f.name; });
+    var isIn = function (k) { return ["levy", "contribution", "in"].indexOf(String(k || "levy").toLowerCase()) >= 0; };
+    var tLev = bal.reduce(function (a, b) { return a + Number(b.levied || 0); }, 0);
+    var tSp = bal.reduce(function (a, b) { return a + Number(b.spent || 0); }, 0);
+    var rows = bal.map(function (b) {
+      return '<tr><td><b>' + esc(b.franchisee || "(no franchisee)") + '</b></td>' +
+        '<td class="num">' + money(b.levied) + '</td><td class="num">' + money(b.spent) + '</td>' +
+        '<td class="num"><b>' + money(b.balance) + '</b></td>' +
+        '<td class="num">' + (b.entries || 0) + '</td><td class="muted">' + esc(b.last_entry || "") + '</td></tr>';
+    }).join("");
+    var entRows = ent.map(function (e) {
+      var inn = isIn(e.kind);
+      return '<tr><td class="muted">' + esc(e.entry_date || "") + '</td>' +
+        '<td>' + esc(fm[e.franchisee_id] || "") + '</td>' +
+        '<td>' + (inn ? '<span class="badge paid">Levy in</span>' : '<span class="badge partial">' + esc(fnbTitle(e.kind || "spend")) + '</span>') + '</td>' +
+        '<td>' + esc(e.campaign || "") + '</td><td class="muted">' + esc(e.description || "") + '</td>' +
+        '<td class="num"' + (inn ? '' : ' style="color:var(--bad-t)"') + '>' + (inn ? "" : "-") + money(e.amount) + '</td></tr>';
+    }).join("");
+    var kpi = function (l, v) { return '<div class="kpi"><div class="l">' + l + '</div><div class="n">' + cc + ' ' + money(v) + '</div></div>'; };
+    document.getElementById("rep").innerHTML = repHead("Marketing fund", cc) +
+      '<div class="kpis" style="margin:14px 0 4px">' + kpi("Levied in total", tLev) + kpi("Spent", tSp) + kpi("Held on their behalf", tLev - tSp) + '</div>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>Franchisee</td><td class="num">Levied</td><td class="num">Spent</td><td class="num">Balance</td><td class="num">Entries</td><td>Last entry</td></tr></thead><tbody>' +
+      (rows || '<tr><td colspan="6" class="muted">Nothing in the fund yet. <b>New entry</b> records a levy charged or money spent.</td></tr>') +
+      '</tbody></table></div>' +
+      '<div style="margin:14px 0 6px"><button class="btn sm pri u-app" id="mf-new">New entry</button></div>' +
+      '<h3 style="font-size:14px;margin:18px 0 6px">Every entry</h3>' +
+      '<div class="o-rt-wrap"><table class="o-rt"><thead><tr><td>When</td><td>Franchisee</td><td>What</td><td>Campaign</td><td>Description</td><td class="num">Amount</td></tr></thead><tbody>' +
+      (entRows || '<tr><td colspan="6" class="muted">Nothing yet.</td></tr>') + '</tbody></table></div>' +
+      '<div class="sub u-mt8">A <b>levy</b> is money the franchisee has contributed and the brand is holding. Anything else is money spent out of it. The balance is what you owe them in advertising, which is the figure to have ready before they ask. Nothing here posts to the ledger: invoice the levy through Sales so it reaches the books, and link that invoice on the entry.</div>';
+    var nb = document.getElementById("mf-new");
+    if (nb) nb.onclick = function () { openMarketingFundEntry(null, frs); };
+    document.querySelectorAll("#rep tbody tr").forEach(function (tr) { tr.style.cursor = "default"; });
+  }
+  async function openMarketingFundEntry(e, frs) {
+    e = e || { entry_date: today(), kind: "levy" };
+    frs = frs || ((await sb.from("franchisees").select("id,name").eq("company_id", S.company.id).order("name")).data || []);
+    var inner =
+      '<div class="row2"><div>' + fld("Franchisee", '<select id="mf-fr"><option value="">(the whole network)</option>' + frs.map(function (f) {
+        return '<option value="' + f.id + '"' + (e.franchisee_id === f.id ? " selected" : "") + '>' + esc(f.name) + '</option>';
+      }).join("") + '</select>', "Leave it empty for spend that covers everybody, which is the usual shape of a national campaign.") + '</div>' +
+      '<div>' + fld("When", '<input id="mf-date" type="date" value="' + esc(e.entry_date || today()) + '">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("What", '<select id="mf-kind"><option value="levy"' + (e.kind === "spend" ? "" : " selected") + '>A levy they contributed</option><option value="spend"' + (e.kind === "spend" ? " selected" : "") + '>Money spent out of the fund</option></select>', "") + '</div>' +
+      '<div>' + fld("Amount", '<input id="mf-amt" type="number" step="0.01" value="' + (e.amount != null ? e.amount : "") + '">', "Always a positive number. What it is decides which way it counts.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Campaign", '<input id="mf-camp" value="' + esc(e.campaign || "") + '" placeholder="e.g. Ramadan radio">', "") + '</div>' +
+      '<div>' + fld("Description", '<input id="mf-desc" value="' + esc(e.description || "") + '">', "") + '</div></div>' +
+      '<div class="o-note">This is the fund&rsquo;s own record, not the books. Invoice a levy through Sales so it reaches the ledger.</div>';
+    var m = plotModal(e.id ? "Fund entry" : "New fund entry", inner, async function () {
+      var row = {
+        franchisee_id: document.getElementById("mf-fr").value || null,
+        entry_date: gv("mf-date") || today(),
+        kind: document.getElementById("mf-kind").value,
+        amount: Math.abs(parseFloat(gv("mf-amt")) || 0),
+        campaign: gv("mf-camp") || null,
+        description: gv("mf-desc") || null
+      };
+      if (!(row.amount > 0)) { toast("How much?"); return; }
+      var r;
+      if (e.id) r = await sb.from("marketing_fund_entries").update(row).eq("id", e.id);
+      else { row.company_id = S.company.id; r = await sb.from("marketing_fund_entries").insert(row); }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderMarketingFund();
+    }, true);
+  }
+
   function cfgEquipment() {
     return fnbCfg({ title: "Equipment", table: "equipment", one: "machine", order: [["name", true]],
       hint: "Espresso machines, grinders, ovens, fridges. What you own, where it is, and whether it is running.",
@@ -25605,6 +25816,15 @@
         { k: "frequency_days", l: "Every N days", t: "num", step: "1" },
         { k: "last_done", l: "Last done", t: "date" }, { k: "next_due", l: "Next due", t: "date" },
         { k: "is_active", l: "Active", t: "check", def: true }],
+      // A reminder becomes a maintenance record when the work that closes it is
+      // written down rather than the dates being edited.
+      actions: [{ label: "Log the work", title: "Record what was done and move the next due date on",
+        run: function (rec, m) { return openMaintLogWork(rec, m); } }],
+      children: [{ title: "What has been done to this machine", table: "maintenance_logs", fk: "schedule_id",
+        order: ["log_date", false], empty: "Nothing logged against this schedule yet.",
+        cols: [{ l: "When", k: "log_date", fmt: "date" }, { l: "What", k: "kind", fmt: "badge" },
+               { l: "By", k: "done_by" }, { l: "Cost", k: "cost", fmt: "money", num: true },
+               { l: "Hours down", k: "downtime_hours", num: true }, { l: "Note", k: "note", fmt: "muted" }] }],
       // Next due follows the job: a new schedule, or a change to Last done or Every N days,
       // moves it to Last done plus Every N days, unless Next due was typed in the same save.
       before: function (row, rec) {
@@ -26252,24 +26472,89 @@
         { k: "statement_other", l: "Other deductions", t: "num" }, { k: "statement_net", l: "Net actually paid", t: "num" },
         { k: "received_on", l: "Received", t: "date" },
         { k: "status", l: "Status", t: "select", opts: [["draft", "Draft"], ["matched", "Matched"], ["disputed", "Disputed"], ["settled", "Settled"]] },
-        { k: "note", l: "Note", t: "textarea" }] });
+        { k: "note", l: "Note", t: "textarea" }],
+      children: [
+        { title: "What they are arguing about", table: "aggregator_disputes", fk: "payout_id",
+          order: ["raised_on", false], empty: "Nothing disputed on this payout.",
+          cols: [{ l: "Raised", k: "raised_on", fmt: "date" }, { l: "Amount", k: "amount", fmt: "money", num: true },
+                 { l: "Why", k: "reason" }, { l: "Status", k: "status", fmt: "badge" },
+                 { l: "Closed", k: "resolved_on", fmt: "date" }, { l: "Note", k: "note", fmt: "muted" }] }
+      ],
+      actions: [
+        { label: "Raise a dispute", title: "Record what you are claiming back and why",
+          run: function (rec, m) { return openAggDispute(rec, m); } },
+        { label: "Close a dispute", title: "Mark the oldest open dispute resolved or lost",
+          when: function (rec) { return rec.status === "disputed"; },
+          run: function (rec, m) { return openAggDisputeClose(rec, m); } }
+      ] });
+  }
+  async function openAggDispute(p, parent) {
+    var v = Number(p.variance || 0);
+    var inner =
+      fld("Amount", '<input id="ad-amt" type="number" step="0.01" value="' + (v ? v : "") + '">',
+        "What you are claiming back. The difference on this payout is filled in for you.") +
+      fld("Why", '<input id="ad-why" placeholder="e.g. Four orders missing from the statement">',
+        "Say it plainly: this is what gets quoted back to them.") +
+      '<div class="o-note">The payout is marked <b>disputed</b> until every dispute on it is closed, and then it goes back to matched by itself.</div>';
+    var mm = plotModal("Raise a dispute", inner, async function () {
+      var amt = parseFloat(gv("ad-amt"));
+      if (!amt) { toast("How much is in dispute?"); return; }
+      var why = gv("ad-why");
+      if (!why) { toast("Say what is being disputed"); return; }
+      var r = await sb.rpc("aggregator_dispute_raise", { p_payout: p.id, p_amount: amt, p_reason: why, p_order: null });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      mm.remove(); if (parent) parent.remove(); toast("Raised. The payout is marked disputed."); renderView();
+    });
+  }
+  async function openAggDisputeClose(p, parent) {
+    var open = (await sb.from("aggregator_disputes").select("*").eq("payout_id", p.id).eq("status", "open").order("raised_on")).data || [];
+    if (!open.length) { toast("Nothing is open on this payout"); return; }
+    var inner =
+      fld("Which one", '<select id="dc-id">' + open.map(function (d) {
+        return '<option value="' + d.id + '">' + esc((d.raised_on || "") + " - " + money(d.amount) + " - " + (d.reason || "")) + '</option>';
+      }).join("") + '</select>', "") +
+      fld("How it ended", '<select id="dc-out"><option value="resolved">They paid it</option><option value="lost">They would not, so it is written off</option></select>', "") +
+      fld("Note", '<input id="dc-note" placeholder="e.g. Paid in the next statement">', "") +
+      '<div class="o-note">When nothing is left open on this payout it goes back to <b>matched</b> by itself.</div>';
+    var mm = plotModal("Close a dispute", inner, async function () {
+      var r = await sb.rpc("aggregator_dispute_close", {
+        p_dispute: document.getElementById("dc-id").value,
+        p_outcome: document.getElementById("dc-out").value,
+        p_note: gv("dc-note") || null
+      });
+      if (r.error) { toast(errMsg(r.error)); return; }
+      var o = r.data || {};
+      mm.remove(); if (parent) parent.remove();
+      toast(o.still_open ? ("Closed. " + o.still_open + " still open on this payout.") : "Closed. Nothing is left open, so the payout is matched again.");
+      renderView();
+    });
   }
   function cfgDeliveries() {
     return fnbCfg({ title: "Deliveries", table: "deliveries", one: "delivery", order: [["assigned_at", false]],
       hint: "Your own riders. Cash collected is tracked separately until it is settled, because that is where it goes missing.",
-      select: "*, stores(name), hr_employees(name)",
+      select: "*, stores(name), hr_employees(name), delivery_zones(name, fee)",
       cols: [{ l: "Store", k: "store_id", fmt: function (r) { return esc(r.stores ? r.stores.name : ""); } },
         { l: "Rider", k: "rider_employee_id", fmt: function (r) { return esc(r.hr_employees ? r.hr_employees.name : ""); } },
+        { l: "Zone", k: "zone_id", fmt: function (r) { return esc(r.delivery_zones ? r.delivery_zones.name : ""); } },
         { l: "Address", k: "address", fmt: "muted" }, { l: "Fee", k: "fee", fmt: "money", num: true },
         { l: "Cash", k: "cash_collected", fmt: "money", num: true }, { l: "Settled", k: "settled", fmt: "bool" }, { l: "Status", k: "status", fmt: "badge" }],
       filters: [{ label: "Cash not settled", test: function (r) { return Number(r.cash_collected || 0) > 0 && !r.settled; } }],
       fields: [{ k: "store_id", l: "Store", t: "select", lookup: lkStores },
+        { k: "zone_id", l: "Zone", t: "select", lookup: lkZones, hint: "Where it is going. The fee comes from the zone, so the rider is not deciding it at the door." },
         { k: "rider_employee_id", l: "Rider", t: "select", lookup: lkEmployees },
         { k: "address", l: "Address", t: "text" }, { k: "phone", l: "Phone", t: "text" },
-        { k: "fee", l: "Delivery fee", t: "num" }, { k: "cash_collected", l: "Cash collected", t: "num" },
+        { k: "fee", l: "Delivery fee", t: "num", hint: "Filled in from the zone when one is chosen and left empty. Change it if the fee was agreed differently." },
+        { k: "cash_collected", l: "Cash collected", t: "num" },
         { k: "settled", l: "Cash settled", t: "check" },
         { k: "status", l: "Status", t: "select", opts: [["pending", "Pending"], ["assigned", "Assigned"], ["picked_up", "Picked up"], ["delivered", "Delivered"], ["failed", "Failed"]] },
-        { k: "note", l: "Note", t: "textarea" }] });
+        { k: "note", l: "Note", t: "textarea" }],
+      // the fee belongs to the zone, so a delivery with a zone and no fee takes
+      // the zone's. A fee already typed is left alone: somebody agreed it.
+      before: function (row) {
+        if (!row.zone_id || (row.fee != null && row.fee !== "")) return;
+        var z = (fnbLookupRaw("zonesraw") || []).filter(function (x) { return x.id === row.zone_id; })[0];
+        if (z && z.fee != null) row.fee = Number(z.fee);
+      } });
   }
   function cfgReservations() {
     return fnbCfg({ title: "Reservations", table: "reservations", one: "reservation", order: [["reserved_for", false]],
