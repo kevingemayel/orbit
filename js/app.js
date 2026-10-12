@@ -1630,6 +1630,8 @@
       { i: "person", n: "Loyalty accounts", l: "Guests", d: "One per customer: points, stamps, tier, what they have spent, and every movement." },
       { i: "card", n: "Gift cards and wallets", l: "Guests", d: "Card balances as money you owe: loading posts, spending moves it, expiry is income." },
       { i: "refresh", n: "Subscription plans", l: "Guests", d: "The unlimited pass and the bean box, with limits." },
+      { i: "ticket", n: "Passes and subscriptions", l: "Guests", d: "Who holds a pass, how much of it they have used, and when it bills again." },
+      { i: "truck", n: "Standing orders", l: "Roastery", d: "What a wholesale account takes every week, raised as an order when it comes round." },
       { i: "send", n: "Feedback and complaints", l: "Guests", d: "Every score and complaint, with an owner and an SLA." },
       { i: "coin", n: "Aggregator payouts", l: "Delivery", d: "What they said they would pay against what they paid." },
       { i: "globe", n: "Aggregator accounts", l: "Delivery", d: "One row per platform per store, carrying their commission." },
@@ -1959,8 +1961,8 @@
         { label: "Estate", items: [["Stores", "estate.stores"], ["Brands", "estate.brands"], ["Regions", "estate.regions"], ["Tables", "estate.tables"], ["Licences and documents", "estate.docs"]] },
         { label: "Operations", items: [["Checklist runs", "ops.checkruns"], ["Checklist templates", "ops.checktpl"], ["Equipment", "ops.equipment"], ["Maintenance", "ops.maintenance"], ["Store audits", "ops.audits"], ["Audit actions", "ops.auditactions"], ["Cash drops", "cash.drops"], ["Tip pools", "tips.pools"]] },
         { label: "Loss prevention", items: [["Exception report", "ops.exceptions"], ["Reason codes", "ops.reasons"]] },
-        { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Training academy", "rst.courses"], ["Course bookings", "rst.bookings"]] },
-        { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Loyalty accounts", "gst.accounts"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
+        { label: "Roastery", items: [["Green lots", "rst.lots"], ["Roast batches", "rst.batches"], ["Grinder dial-in", "rst.grinder"], ["Wholesale accounts", "rst.wholesale"], ["Standing orders", "rst.standing"], ["Training academy", "rst.courses"], ["Course bookings", "rst.bookings"]] },
+        { label: "Guests", items: [["Loyalty programmes", "gst.loyalty"], ["Loyalty accounts", "gst.accounts"], ["Gift cards and wallets", "gst.storedvalue"], ["Subscription plans", "gst.subs"], ["Passes and subscriptions", "gst.passes"], ["Feedback and complaints", "gst.feedback"], ["Customers", "contacts"]] },
         { label: "Delivery", items: [["Aggregator payouts", "dlv.payouts"], ["Aggregator accounts", "dlv.accounts"], ["Own deliveries", "dlv.deliveries"], ["All bookings", "dlv.reservations"]] },
         { label: "Franchise", items: [["Franchisees", "fr.franchisees"], ["Royalty schemes", "fr.schemes"], ["Reported sales", "fr.sales"], ["Royalty run", "fr.royaltyrun"], ["Development pipeline", "fr.pipeline"], ["Approved suppliers", "fr.suppliers"]] },
         { label: "Planning", items: [["Labour standards", "hr.labour"], ["Sales forecast", "hr.forecast"]] }
@@ -2104,7 +2106,7 @@
     "web.sites": "website", "web.subs": "website", "web.site": "website", "web.page": "website", "web.jobs": "website", "web.job": "website", "web.applications": "website", "web.connect": "website",
     "svc.tickets": "service", "svc.ticket": "service", "svc.warranties": "service", "svc.warranty": "service", "svc.schedule": "service", "svc.ppm": "service",
     "acc.einvoice": "accounting",
-    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.accounts": "kitchen", "gst.storedvalue": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
+    "estate.stores": "kitchen", "estate.brands": "kitchen", "estate.regions": "kitchen", "estate.tables": "kitchen", "estate.docs": "kitchen", "ops.checkruns": "kitchen", "ops.checktpl": "kitchen", "ops.equipment": "kitchen", "ops.maintenance": "kitchen", "ops.audits": "kitchen", "ops.auditactions": "kitchen", "ops.exceptions": "kitchen", "ops.reasons": "kitchen", "sc.variance": "kitchen", "sc.waste": "kitchen", "sc.counts": "kitchen", "sc.transfers": "kitchen", "sc.availability": "kitchen", "sc.wastereasons": "kitchen", "rst.lots": "kitchen", "rst.batches": "kitchen", "rst.grinder": "kitchen", "rst.wholesale": "kitchen", "rst.courses": "kitchen", "gst.loyalty": "kitchen", "gst.accounts": "kitchen", "gst.storedvalue": "kitchen", "gst.passes": "kitchen", "rst.standing": "kitchen", "gst.subs": "kitchen", "gst.feedback": "kitchen", "dlv.payouts": "kitchen", "dlv.accounts": "kitchen", "dlv.deliveries": "kitchen", "dlv.reservations": "kitchen", "fr.franchisees": "kitchen", "fr.schemes": "kitchen", "fr.sales": "kitchen", "fr.royaltyrun": "kitchen", "fr.pipeline": "kitchen", "fr.suppliers": "kitchen", "hr.labour": "hr", "hr.forecast": "insights", "site.field": "site", "kitchen.book": "kitchen", "kitchen.counter": "kitchen", "kitchen.collect": "kitchen", "kitchen.floor": "kitchen", "kitchen.kds": "kitchen", "kitchen.times": "kitchen", "menu.list": "kitchen", "menu.modgroups": "kitchen", "menu.channels": "kitchen", "menu.prices": "kitchen", "menu.engineering": "kitchen", "pos.terminal": "pos", "pos.orders": "pos", "pos.sessions": "pos", "pos.returns": "pos", "pos.promos": "pos", "pos.vouchers": "pos",
     "site.snags": "site", "site.insp": "site", "site.inspt": "site", "site.plant": "site", "site.plantutil": "site", "site.diary": "site", "proj.schedule": "project", "proj.board": "project", "proj.mywork": "project",
     "dash.home": "insights", "dash.forecast": "insights", "dash.schedules": "insights",
     "tools.list": "site", "proj.materials": "site", "mfg.runs": "manufacturing", "mfg.dies": "manufacturing", "dn.list": "inventory",
@@ -4604,6 +4606,8 @@
       case "gst.loyalty": return renderList(cfgLoyaltyPrograms());
       case "gst.accounts": return renderList(cfgLoyaltyAccounts());
       case "gst.storedvalue": return renderList(cfgStoredValue());
+      case "gst.passes": return renderList(cfgSubscriptions());
+      case "rst.standing": return renderList(cfgStandingOrders());
       case "gst.subs": return renderList(cfgSubscriptionPlans());
       case "gst.feedback": return renderList(cfgFeedback());
       case "dlv.payouts": return renderList(cfgAggregatorPayouts());
@@ -24333,7 +24337,7 @@
     document.getElementById("pos-close").onclick = function () { posCloseSession(); };
     document.getElementById("pos-drop").onclick = function () { posDropToSafe(); };
     POS.products = (await sb.from("products").select("id,name,price:list_price,category_id").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(1000)).data || [];
-    POS.cart = []; POS.partner = null; POS.voucher = null; POS.redeem = 0;
+    POS.cart = []; POS.partner = null; POS.voucher = null; POS.redeem = 0; POS.pass = null; POS.usePass = false;
     var today = fmtD(new Date());
     POS.promos = (await sb.from("pos_promotions").select("*").eq("company_id", S.company.id).eq("active", true)).data || [];
     POS.promos = POS.promos.filter(function (pr) { return (!pr.start_date || pr.start_date <= today) && (!pr.end_date || pr.end_date >= today); });
@@ -24368,7 +24372,19 @@
       posAdd(tile.dataset.pid);
       this.value = ""; paintGrid(""); this.focus();
     };
-    document.getElementById("pos-cust").onchange = function () { POS.partner = this.value || null; var c = POS.customers.filter(function (x) { return x.id === POS.partner; })[0]; if (c && c.pricelist_id && POS.pricelists.filter(function (l) { return l.id === c.pricelist_id; })[0]) { document.getElementById("pos-pl").value = c.pricelist_id; POS.pricelist = c.pricelist_id; loadPl(c.pricelist_id); } posPaintCart(); };
+    document.getElementById("pos-cust").onchange = async function () {
+      POS.partner = this.value || null; POS.pass = null; POS.usePass = false;
+      var c = POS.customers.filter(function (x) { return x.id === POS.partner; })[0];
+      if (c && c.pricelist_id && POS.pricelists.filter(function (l) { return l.id === c.pricelist_id; })[0]) { document.getElementById("pos-pl").value = c.pricelist_id; POS.pricelist = c.pricelist_id; loadPl(c.pricelist_id); }
+      // What this person is entitled to right now: the plan, what it includes
+      // and how many are left today. One call, so the till does not have to
+      // understand the rules. The limits are enforced when it is used.
+      if (POS.partner) {
+        var pr = await sb.rpc("subscription_for", { p_company: S.company.id, p_partner: POS.partner, p_product: null });
+        if (!pr.error && pr.data && pr.data.ok) POS.pass = pr.data;
+      }
+      posPaintCart();
+    };
     document.getElementById("pos-pl").onchange = function () { POS.pricelist = this.value; loadPl(this.value); };
     document.getElementById("pos-charge").onclick = function () { posCharge(); };
     window.__posPaint = paintGrid; paintGrid("");
@@ -24411,10 +24427,25 @@
     if (POS.voucher) { voucherDisc = POS.voucher.kind === "percent" ? afterPromo * (Number(POS.voucher.value) || 0) / 100 : Math.min(Number(POS.voucher.value) || 0, afterPromo); }
     var ptVal = Number((POS.loy || {}).redeem_value) || 0;
     var redeemDisc = Math.min((Number(POS.redeem) || 0) * ptVal, Math.max(0, afterPromo - voucherDisc));
-    var discount = promoDisc + voucherDisc + redeemDisc;
+    // One of the included item, free, when the customer has a pass with
+    // something left on it today. One, not the whole line: a pass covers a
+    // coffee, not a round.
+    var passDisc = 0, passLine = posPassLine();
+    if (POS.usePass && passLine) passDisc = Math.min(passLine.price, Math.max(0, afterPromo - voucherDisc - redeemDisc));
+    var discount = promoDisc + voucherDisc + redeemDisc + passDisc;
     var sub = gross - discount; if (sub < 0) sub = 0;
     var tax = sub * POS.vat / 100, tot = sub + tax;
-    return { gross: gross, discount: discount, promoDisc: promoDisc, voucherDisc: voucherDisc, redeemDisc: redeemDisc, sub: sub, tax: tax, tot: tot };
+    return { gross: gross, discount: discount, promoDisc: promoDisc, voucherDisc: voucherDisc, redeemDisc: redeemDisc, passDisc: passDisc, sub: sub, tax: tax, tot: tot };
+  }
+  // The line on the cart a pass would cover: the item the plan includes, or any
+  // line at all for a plan that names no item.
+  function posPassLine() {
+    var p = POS.pass;
+    if (!p || !p.ok || !p.can_redeem) return null;
+    var lines = POS.cart.filter(function (l) { return !p.product || l.product_id === p.product; });
+    if (!lines.length) return null;
+    // the dearest one, because that is what a customer would choose
+    return lines.slice().sort(function (a, b) { return b.price - a.price; })[0];
   }
   function posPaintCart() {
     var el = document.getElementById("pos-cartlines"); if (!el) return;
@@ -24432,10 +24463,14 @@
   function posCharge() {
     var cust = POS.customers.filter(function (x) { return x.id === POS.partner; })[0];
     var loy = POS.loy || {}, isStamp = loy.kind === "stamp";
+    var passLine = posPassLine();
     var ptVal = Number(loy.redeem_value) || 0, earnRate = Number(loy.earn_per_currency) || 0;
     var m = document.createElement("div"); m.className = "modal on";
     m.innerHTML = '<div class="sheet"><h3>Take payment</h3><div class="form">' +
       '<div style="display:flex;gap:8px"><div class="u-flex1"><label>Voucher code</label><input id="pos-vcode" placeholder="optional"></div><button class="btn" id="pos-vapply" style="align-self:flex-end">Apply</button></div><div id="pos-vmsg" class="muted" style="font-size:12px;margin-top:-4px"></div>' +
+      (passLine ? '<div><label>On their pass</label>' + fhint("__pass", "One of the item the pass includes, free. The limits are checked when the sale goes through.") +
+        '<select id="pos-pass"><option value="0"' + (POS.usePass ? "" : " selected") + '>No, charge for it</option><option value="1"' + (POS.usePass ? " selected" : "") + '>Yes, ' + esc(passLine.name) + ' on the ' + esc(POS.pass.plan || "pass") + '</option></select>' +
+        '<div class="fd">' + esc(POS.pass.plan || "Pass") + (POS.pass.left_today != null ? ', ' + POS.pass.left_today + ' left today' : ', no daily limit') + (POS.pass.left_this_period != null ? ', ' + POS.pass.left_this_period + ' left this period' : '') + '.</div></div>' : '') +
       (cust && isStamp ? '<div class="sub">' + esc(loy.name || "Stamp card") + ': this visit earns a stamp' + (loy.stamps_required ? ', and ' + loy.stamps_required + ' make a reward' : '') + '.</div>' : '') +
       (cust && !isStamp && ptVal > 0 && Number(cust.loyalty_points) > 0 ? '<div><label>Redeem points (' + (Number(cust.loyalty_points) || 0) + ' available &middot; ' + money(ptVal) + '/pt)</label><input id="pos-redeem" type="number" min="0" step="1" value="0"></div>' : '') +
       '<label>What they hand over</label><div id="pos-pad" class="tp"></div>' +
@@ -24463,12 +24498,17 @@
       refresh();
     };
     var rd = document.getElementById("pos-redeem"); if (rd) rd.oninput = refresh;
+    var pz = document.getElementById("pos-pass");
+    if (pz) pz.onchange = function () { POS.usePass = this.value === "1"; refresh(); };
     refresh();
     document.getElementById("pos-x").onclick = function () { POS.voucher = null; POS.redeem = 0; m.remove(); };
     document.getElementById("pos-done").onclick = async function () {
       var t = posTotals();
       if (!posPad || !posPad.ready) { var pt = posPad ? posPad.totals() : null, pp = posPad && posPad.problem ? posPad.problem() : null; toast(pp ? pp : pt && pt.missing ? "No exchange rate for " + pt.missing + " today - add one in Accounting, Configuration, Exchange Rates" : "That does not cover the sale yet"); return; }
       var earned = cust && !isStamp && earnRate > 0 ? Math.floor(t.sub * earnRate) : 0;
+      // the pass is used up at the moment the sale goes through, not when the
+      // cashier ticks the box, so an abandoned sale does not spend it
+      var passUsed = POS.usePass && t.passDisc > 0 && POS.pass && POS.pass.subscription;
       var redeemedPts = ptVal > 0 ? Math.round(t.redeemDisc / ptVal) : 0;
       var doneBtn = document.getElementById("pos-done"); doneBtn.disabled = true;
       // The order is written as a draft and only becomes paid once its lines and payments
@@ -24497,6 +24537,17 @@
       // row per movement, which is what makes a refund able to take back
       // exactly what this sale gave.
       var loyMsg = "";
+      if (passUsed) {
+        var sr = await sb.rpc("subscription_redeem", { p_subscription: POS.pass.subscription, p_order: oid, p_store: POS.session.store_id || null });
+        if (sr.error) warn.push("the pass could not be used, so the sale is charged in full: " + errMsg(sr.error));
+        else {
+          var so = sr.data || {};
+          loyMsg += " \u00b7 on the " + (so.plan || "pass") + (so.left_today != null ? ", " + so.left_today + " left today" : "");
+          POS.pass.used_today = so.used_today; POS.pass.left_today = so.left_today;
+          POS.pass.left_this_period = so.left_this_period;
+          POS.pass.can_redeem = (so.left_today == null || so.left_today > 0) && (so.left_this_period == null || so.left_this_period > 0);
+        }
+      }
       if (cust) {
         var lp = await sb.rpc("loyalty_post", { p_company: S.company.id, p_partner: cust.id, p_order: oid, p_spend: t.sub, p_redeem_points: redeemedPts, p_store: POS.session.store_id || null });
         if (lp.error) warn.push("the customer's loyalty could not be recorded, so correct it on their account");
@@ -24509,7 +24560,7 @@
           if (Number(lo.reward_due)) loyMsg += " · a reward is due";
         }
       }
-      m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; posPaintCart(); toast("Sale complete · " + money(t.tot) + loyMsg + (warn.length ? ". But " + warn.join(", and ") + "." : ""));
+      m.remove(); POS.cart = []; POS.voucher = null; POS.redeem = 0; POS.usePass = false; posPaintCart(); toast("Sale complete · " + money(t.tot) + loyMsg + (warn.length ? ". But " + warn.join(", and ") + "." : ""));
     };
   }
   // POS returns: pick a paid order and refund it (creates a negative refund order + reverses loyalty).
@@ -25866,6 +25917,276 @@
       if (r.error) { toast(errMsg(r.error)); return; }
       mm.remove(); if (parent) parent.remove(); toast("Corrected, and posted."); renderView();
     });
+  }
+
+  // ===================== A PASS THE TILL HONOURS =====================
+  // A plan could be configured - unlimited coffee, 2 a day, 40 a month - and
+  // the help page admitted the rest: the tills did not enforce it. So a shop
+  // took the money and then had nothing to ring the coffee up against. The
+  // limits live in the database (migration 240) because a limit a screen
+  // enforces is a limit the next screen forgets.
+  var SUB_STATUS = { active: "Active", paused: "Paused", cancelled: "Cancelled", expired: "Expired" };
+  function cfgSubscriptions() {
+    return {
+      title: "Passes and subscriptions", pageSize: 100, table: "subscriptions",
+      action: { label: "Bill everything due", run: async function (btn) {
+        btn.disabled = true;
+        var r = await sb.rpc("subscription_bill", { p_company: S.company.id, p_on: today() });
+        btn.disabled = false;
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var o = r.data || {};
+        toast(o.billed ? (o.billed + " pass(es) billed, " + money(o.total) + " invoiced and posted") : "Nothing is due today");
+        renderView();
+      } },
+      fetch: async function () {
+        var r = await sb.from("subscriptions").select("*").eq("company_id", S.company.id).order("next_billing_on", { ascending: true });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var pids = rows.map(function (s) { return s.partner_id; }).filter(Boolean);
+        var pm = {}, gm = {}, im = {};
+        if (pids.length) ((await sb.from("partners").select("id,name").in("id", pids)).data || []).forEach(function (p) { pm[p.id] = p.name; });
+        ((await sb.from("subscription_plans").select("id,name,price,period,daily_limit,period_limit").eq("company_id", S.company.id)).data || []).forEach(function (g) { gm[g.id] = g; });
+        var iids = rows.map(function (s) { return s.last_invoice_id; }).filter(Boolean);
+        if (iids.length) ((await sb.from("invoices").select("id,number,state").in("id", iids)).data || []).forEach(function (i) { im[i.id] = i; });
+        rows.forEach(function (s) {
+          var g = gm[s.plan_id] || {};
+          s._who = pm[s.partner_id] || ""; s._plan = g.name || ""; s._price = g.price; s._period = g.period;
+          s._daily = g.daily_limit; s._limit = g.period_limit; s._inv = im[s.last_invoice_id] || null;
+        });
+        return rows;
+      },
+      searchText: function (s) { return [s._who, s._plan, s.status, s.note].join(" "); },
+      columns: [
+        { label: "Who", get: function (s) { return '<b>' + esc(s._who || "") + '</b>'; } },
+        { label: "Pass", get: function (s) { return esc(s._plan || "") + (s._daily ? '<div class="muted u-fs11">' + s._daily + ' a day</div>' : ""); } },
+        { label: "Price", num: true, get: function (s) { return money(s._price) + (s._period ? ' <span class="muted u-fs11">' + esc(s._period) + '</span>' : ""); } },
+        { label: "Used this period", num: true, get: function (s) {
+            var u = Number(s.redemptions_this_period) || 0;
+            return s._limit ? (u + " / " + s._limit) : String(u);
+          } },
+        { label: "Since", get: function (s) { return '<span class="muted">' + esc(s.started_on || "") + '</span>'; } },
+        { label: "Next bill", get: function (s) {
+            if (!s.next_billing_on) return '<span class="muted">-</span>';
+            var due = String(s.next_billing_on) <= today();
+            return '<span class="' + (due ? "u-bad" : "muted") + '">' + esc(s.next_billing_on) + (due ? " (due)" : "") + '</span>';
+          } },
+        { label: "Last invoice", get: function (s) { return s._inv ? '<span class="badge ' + (s._inv.state === "posted" ? "paid" : "draft") + '">' + esc(s._inv.number || "") + '</span>' : '<span class="muted">-</span>'; } },
+        { label: "Status", get: function (s) { return '<span class="badge ' + (s.status === "active" ? "paid" : s.status === "paused" ? "partial" : "unpaid") + '">' + esc(SUB_STATUS[s.status] || fnbTitle(s.status || "active")) + '</span>'; } }
+      ],
+      filters: [
+        { label: "Due to be billed", test: function (s) { return s.status === "active" && s.next_billing_on && String(s.next_billing_on) <= today(); } },
+        { label: "Active", test: function (s) { return (s.status || "active") === "active"; } },
+        { label: "Used it all this period", test: function (s) { return s._limit && (Number(s.redemptions_this_period) || 0) >= s._limit; } }
+      ],
+      groupBy: [
+        { label: "Pass", get: function (s) { return s._plan || "(none)"; } },
+        { label: "Status", get: function (s) { return SUB_STATUS[s.status] || fnbTitle(s.status || "active"); } }
+      ],
+      emptyHint: "Somebody's pass: which plan, since when, how much of it they have used this period and when it bills again. The till reads this, honours the daily and period limits and refuses past them, and a nightly job raises and posts the next period's invoice.",
+      onOpen: function (s) { openSubscription(s); }, onNew: function () { openSubscription(null); }
+    };
+  }
+  async function openSubscription(s) {
+    var isNew = !s || !s.id;
+    s = s || { status: "active", started_on: today(), next_billing_on: today(), redemptions_this_period: 0 };
+    var plans = (await sb.from("subscription_plans").select("id,name,price,period,daily_limit,period_limit").eq("company_id", S.company.id).eq("is_active", true).order("name")).data || [];
+    var partners = (await sb.from("partners").select("id,name").eq("company_id", S.company.id).order("name").limit(1000)).data || [];
+    var used = s.id ? ((await sb.from("subscription_redemptions").select("*").eq("subscription_id", s.id).order("redeemed_at", { ascending: false }).limit(100)).data || []) : [];
+    var cancelled = s.status === "cancelled";
+    var ro = cancelled ? " disabled" : "";
+    function sel(id, list, cur, blank) {
+      return '<select id="' + id + '"' + ro + '>' + (blank ? '<option value="">' + esc(blank) + '</option>' : "") + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(cur || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("") + '</select>';
+    }
+    var inner =
+      '<div class="row2"><div>' + fld("Pass", sel("sb-plan", plans.map(function (p) { return [p.id, p.name + (p.price ? " - " + money(p.price) + " " + (p.period || "") : "")]; }), s.plan_id, "Pick the plan"), "Set the plans up in Subscription plans: the price, how often it bills, what it includes and the limits.") + '</div>' +
+      '<div>' + fld("Who", sel("sb-who", partners.map(function (p) { return [p.id, p.name]; }), s.partner_id, "Pick the customer"), "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Since", '<input id="sb-start" type="date" value="' + esc(s.started_on || today()) + '"' + ro + '>', "") + '</div>' +
+      '<div>' + fld("Next bill", '<input id="sb-next" type="date" value="' + esc(s.next_billing_on || "") + '"' + ro + '>', "The nightly run bills every active pass on or past this date, then moves it on by the plan's period.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Status", sel("sb-status", [["active", "Active"], ["paused", "Paused"]], s.status === "paused" ? "paused" : "active", null), "Use Cancel the pass rather than setting this to cancelled, so the reason and the date are recorded.") + '</div>' +
+      '<div>' + fld("Used this period", '<input id="sb-used" type="number" step="1" value="' + (Number(s.redemptions_this_period) || 0) + '"' + ro + '>', "The till keeps this. Change it only to correct something.") + '</div></div>' +
+      fld("Note", '<input id="sb-note" value="' + esc(s.note || "") + '"' + ro + '>', "") +
+      (cancelled ? '<div class="o-note">Cancelled on ' + esc(s.cancelled_on || "") + (s.cancel_reason ? ': ' + esc(s.cancel_reason) : "") + '. It bills no more and the till refuses it. What they had already paid for stands.</div>' : "") +
+      (s.id && used.length
+        ? '<div class="o-cf-head u-mt14">' + used.length + ' use(s) recorded</div>' +
+          '<div class="o-rt-wrap"><table class="o-lines"><thead><tr><th>When</th><th>Sale</th></tr></thead><tbody>' +
+          used.slice(0, 40).map(function (u) {
+            return '<tr><td class="muted">' + esc(String(u.redeemed_at || "").replace("T", " ").slice(0, 16)) + '</td><td class="muted">' + esc(u.order_id ? String(u.order_id).slice(0, 8) : "") + '</td></tr>';
+          }).join("") + '</tbody></table></div>'
+        : s.id ? '<div class="o-note">Nothing taken on it yet. The till writes a line here every time it is used.</div>' : "");
+
+    var m = plotModal(isNew ? "New pass" : "Pass", inner, cancelled ? null : async function () {
+      var row = {
+        plan_id: document.getElementById("sb-plan").value || null,
+        partner_id: document.getElementById("sb-who").value || null,
+        started_on: gv("sb-start") || today(),
+        next_billing_on: gv("sb-next") || null,
+        status: document.getElementById("sb-status").value,
+        redemptions_this_period: parseInt(gv("sb-used"), 10) || 0,
+        note: gv("sb-note") || null
+      };
+      if (!row.plan_id) { toast("Which pass?"); return; }
+      if (!row.partner_id) { toast("Whose pass is it?"); return; }
+      var r, id = s.id;
+      if (id) r = await sb.from("subscriptions").update(row).eq("id", id);
+      else { row.company_id = S.company.id; r = await sb.from("subscriptions").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(r.error.code === "23505" ? "That customer already has an active pass on this plan." : errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    function act(label, title, fn) {
+      var b = document.createElement("button");
+      b.className = "btn"; b.textContent = label; b.title = title;
+      b.onclick = async function () { b.disabled = true; try { await fn(); } finally { b.disabled = false; } };
+      m.querySelector(".foot").insertBefore(b, m.querySelector("[data-s]") || null);
+    }
+    if (s.id && !cancelled) {
+      act("Bill it now", "Raise and post this period's invoice, and move the billing date on", async function () {
+        var r = await sb.rpc("subscription_bill", { p_company: S.company.id, p_on: s.next_billing_on || today() });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var o = r.data || {};
+        m.remove(); toast(o.billed ? (o.billed + " pass(es) billed, " + money(o.total) + " posted") : "Nothing was due on that date");
+        renderView();
+      });
+      act("Cancel the pass", "Stop it billing, with the reason kept", async function () {
+        var why = prompt("Cancel this pass. Why?") || "";
+        var r = await sb.rpc("subscription_cancel", { p_subscription: s.id, p_reason: why, p_on: today() });
+        if (r.error) { toast(errMsg(r.error)); return; }
+        m.remove(); toast("Cancelled. It bills no more and the till will refuse it."); renderView();
+      });
+    }
+    if (s.id && canManageApp(S.app) && !used.length) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this pass? It has never been used.")) return;
+        var d = await sb.from("subscriptions").delete().eq("id", s.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
+  }
+
+  // A wholesale customer's weekly twenty kilos. The dates were written down and
+  // nothing read them, so somebody kept a spreadsheet beside Orbit.
+  function cfgStandingOrders() {
+    return {
+      title: "Standing orders", pageSize: 100, table: "standing_orders",
+      action: { label: "Raise what is due", run: async function (btn) {
+        btn.disabled = true;
+        var r = await sb.rpc("standing_orders_raise", { p_company: S.company.id, p_on: today() });
+        btn.disabled = false;
+        if (r.error) { toast(errMsg(r.error)); return; }
+        var o = r.data || {};
+        toast(o.orders ? (o.orders + " order(s) raised with " + o.lines + " line(s). They are drafts in Quotations.") : "Nothing is due today");
+        renderView();
+      } },
+      fetch: async function () {
+        var r = await sb.from("standing_orders").select("*").eq("company_id", S.company.id).order("next_date", { ascending: true });
+        if (r.error) { toast(errMsg(r.error)); return []; }
+        var rows = r.data || [];
+        var aids = rows.map(function (x) { return x.wholesale_account_id; }).filter(Boolean);
+        var pids = rows.map(function (x) { return x.product_id; }).filter(Boolean);
+        var am = {}, pm = {}, partners = {};
+        if (aids.length) {
+          var accs = (await sb.from("wholesale_accounts").select("id,partner_id,route,delivery_day").in("id", aids)).data || [];
+          var apids = accs.map(function (a) { return a.partner_id; }).filter(Boolean);
+          if (apids.length) ((await sb.from("partners").select("id,name").in("id", apids)).data || []).forEach(function (p) { partners[p.id] = p.name; });
+          accs.forEach(function (a) { am[a.id] = a; });
+        }
+        if (pids.length) ((await sb.from("products").select("id,name,list_price").in("id", pids)).data || []).forEach(function (p) { pm[p.id] = p; });
+        rows.forEach(function (x) {
+          var a = am[x.wholesale_account_id] || {}, p = pm[x.product_id] || {};
+          x._who = partners[a.partner_id] || ""; x._route = a.route || ""; x._day = a.delivery_day || "";
+          x._product = p.name || ""; x._value = (Number(x.qty) || 0) * (Number(p.list_price) || 0);
+        });
+        return rows;
+      },
+      searchText: function (x) { return [x._who, x._product, x._route, x.frequency, x.note].join(" "); },
+      columns: [
+        { label: "Account", get: function (x) { return '<b>' + esc(x._who || "") + '</b>' + (x._route ? '<div class="muted u-fs11">' + esc(x._route) + (x._day ? " &middot; " + esc(x._day) : "") + '</div>' : ""); } },
+        { label: "Item", get: function (x) { return esc(x._product || ""); } },
+        { label: "Each time", num: true, get: function (x) { return (Number(x.qty) || 0) + (x.uom ? " " + esc(x.uom) : ""); } },
+        { label: "Worth", num: true, get: function (x) { return money(x._value); } },
+        { label: "How often", get: function (x) { return esc(fnbTitle(x.frequency || "weekly")); } },
+        { label: "Next", get: function (x) {
+            if (!x.next_date) return '<span class="muted">-</span>';
+            var due = String(x.next_date) <= today();
+            return '<span class="' + (due ? "u-bad" : "muted") + '">' + esc(x.next_date) + (due ? " (due)" : "") + '</span>';
+          } },
+        { label: "Last raised", get: function (x) { return '<span class="muted">' + esc(x.last_raised_on || "never") + '</span>'; } },
+        { label: "Running", get: function (x) { return x.is_active === false ? '<span class="badge">Paused</span>' : '<span class="badge paid">Yes</span>'; } }
+      ],
+      filters: [
+        { label: "Due now", test: function (x) { return x.is_active !== false && x.next_date && String(x.next_date) <= today(); } },
+        { label: "Paused", test: function (x) { return x.is_active === false; } }
+      ],
+      groupBy: [
+        { label: "Account", get: function (x) { return x._who || "(none)"; } },
+        { label: "Round", get: function (x) { return x._route || "(no round)"; } }
+      ],
+      emptyHint: "What a wholesale account takes every week without being asked. Raise what is due turns every line that has come round into a draft sales order, one per account, and moves its date on. A line nobody has looked at for months raises one order, not one for every week missed.",
+      onOpen: function (x) { openStandingOrder(x); }, onNew: function () { openStandingOrder(null); }
+    };
+  }
+  async function openStandingOrder(x) {
+    var isNew = !x || !x.id;
+    x = x || { frequency: "weekly", next_date: today(), is_active: true, qty: 0 };
+    var accs = (await sb.from("wholesale_accounts").select("id,partner_id,route").eq("company_id", S.company.id).eq("is_active", true)).data || [];
+    var apids = accs.map(function (a) { return a.partner_id; }).filter(Boolean), pn = {};
+    if (apids.length) ((await sb.from("partners").select("id,name").in("id", apids)).data || []).forEach(function (p) { pn[p.id] = p.name; });
+    var prods = (await sb.from("products").select("id,name").eq("company_id", S.company.id).eq("is_active", true).order("name").limit(1000)).data || [];
+    function sel(id, list, cur, blank) {
+      return '<select id="' + id + '">' + (blank ? '<option value="">' + esc(blank) + '</option>' : "") + list.map(function (o) {
+        return '<option value="' + esc(o[0]) + '"' + (String(cur || "") === String(o[0]) ? " selected" : "") + '>' + esc(o[1]) + '</option>';
+      }).join("") + '</select>';
+    }
+    var inner =
+      fld("Account", sel("so-acct", accs.map(function (a) { return [a.id, (pn[a.partner_id] || "(no contact)") + (a.route ? " - " + a.route : "")]; }), x.wholesale_account_id, "Pick the wholesale account"),
+        "Set the accounts up in Wholesale accounts. The order is raised for that account's contact.") +
+      fld("Item", sel("so-prod", prods.map(function (p) { return [p.id, p.name]; }), x.product_id, "Pick the item"), "") +
+      '<div class="row2"><div>' + fld("Quantity each time", '<input id="so-qty" type="number" step="any" value="' + (x.qty != null ? x.qty : "") + '">', "") + '</div>' +
+      '<div>' + fld("Unit", '<input id="so-uom" value="' + esc(x.uom || "") + '" placeholder="e.g. kg">', "") + '</div></div>' +
+      '<div class="row2"><div>' + fld("How often", sel("so-freq", [["daily", "Every day"], ["weekly", "Every week"], ["fortnightly", "Every fortnight"], ["monthly", "Every month"]], x.frequency || "weekly", null), "") + '</div>' +
+      '<div>' + fld("Next due", '<input id="so-next" type="date" value="' + esc(x.next_date || today()) + '">', "Raise what is due picks up every line on or past this date, then moves it to the next one in the future.") + '</div></div>' +
+      '<div class="row2"><div>' + fld("Running", '<select id="so-active"><option value="1"' + (x.is_active !== false ? " selected" : "") + '>Yes</option><option value="0"' + (x.is_active === false ? " selected" : "") + '>Paused</option></select>', "Pause it over a holiday rather than deleting it.") + '</div>' +
+      '<div>' + fld("Note", '<input id="so-note" value="' + esc(x.note || "") + '">', "") + '</div></div>' +
+      (x.last_raised_on ? '<div class="o-note">Last raised on ' + esc(x.last_raised_on) + '.</div>' : "");
+
+    var m = plotModal(isNew ? "New standing order" : "Standing order", inner, async function () {
+      var row = {
+        wholesale_account_id: document.getElementById("so-acct").value || null,
+        product_id: document.getElementById("so-prod").value || null,
+        qty: parseFloat(gv("so-qty")) || 0,
+        uom: gv("so-uom") || null,
+        frequency: document.getElementById("so-freq").value,
+        next_date: gv("so-next") || today(),
+        is_active: document.getElementById("so-active").value === "1",
+        note: gv("so-note") || null
+      };
+      if (!row.wholesale_account_id) { toast("Which account?"); return; }
+      if (!row.product_id) { toast("Which item?"); return; }
+      if (!(row.qty > 0)) { toast("How much, each time?"); return; }
+      var r, id = x.id;
+      if (id) r = await sb.from("standing_orders").update(row).eq("id", id);
+      else { row.company_id = S.company.id; r = await sb.from("standing_orders").insert(row).select("id").single(); if (!r.error && r.data) id = r.data.id; }
+      if (r.error) { toast(errMsg(r.error)); return; }
+      m.remove(); toast("Saved"); renderView();
+    }, true);
+
+    if (x.id && canManageApp(S.app)) {
+      var del = document.createElement("button");
+      del.className = "btn"; del.style.cssText = "margin-right:auto;color:var(--bad-t)"; del.textContent = "Delete";
+      del.onclick = async function () {
+        if (!confirm("Delete this standing order? Pausing it keeps the history.")) return;
+        var d = await sb.from("standing_orders").delete().eq("id", x.id);
+        if (d.error) { toast(errMsg(d.error)); return; }
+        m.remove(); toast("Deleted"); renderView();
+      };
+      m.querySelector(".foot").insertBefore(del, m.querySelector(".foot").firstChild);
+    }
   }
 
   function cfgSubscriptionPlans() {

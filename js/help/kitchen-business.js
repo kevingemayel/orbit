@@ -1809,6 +1809,117 @@ orbitScreenHelp({
       "<b>Attended, no certificate</b> is the other list worth clearing, because a certificate nobody sent is the thing a guest remembers.",
       "Group by <b>Course</b> to see which ones actually fill. A course that never fills is a price problem or a day problem, and the bookings tell you which."
     ]
+  },
+
+  "gst.passes": {
+    title: "Passes and subscriptions",
+    what: "Who holds one of your passes: which plan, since when, how much of it they have used this period, and when it bills again. This is the half that acts. The till reads it, honours the daily and the period limit, refuses past them with a sentence a cashier can read out, and a nightly job raises and posts the next period's invoice.",
+    when: [
+      "Somebody buys an unlimited pass or a subscription box.",
+      "A pass is being cancelled.",
+      "Month end, to see which passes are due to bill and which are not being used.",
+      "A customer says the till would not let them have their coffee and you want to see why."
+    ],
+    how: [
+      "Set the plan up first in <b>Subscription plans</b>: the price, how often it bills, the item it includes and the limits. For this example, an unlimited-coffee pass at 40 a month, 2 a day, 40 a period.",
+      "Open <b>Kitchen &rsaquo; Guests &rsaquo; Passes and subscriptions</b> and click <span class='man-key'>New</span>. Pick the pass and the customer, leave <b>Since</b> on today and <b>Next bill</b> on today, and save.",
+      "Click <span class='man-key'>Bill it now</span>. The first month's invoice is raised and posted, the billing date moves on a month, and the period count resets to nothing.",
+      "Now the till. Open the register, choose that customer, ring up the coffee and press <span class='man-key'>Charge</span>. A box reads <b>On their pass</b>: <i>Yes, Flat white on the Unlimited coffee</i>, and under it <i>Unlimited coffee, 2 left today, 40 left this period</i>.",
+      "Choose yes. The coffee comes off the bill and the total drops to nothing. Take the payment as usual and the sale completes with <i>on the Unlimited coffee, 1 left today</i>.",
+      "Try a third coffee the same day and the sale is charged in full with the reason: <i>That pass covers 2 a day and 2 has already been taken today.</i>",
+      "Back on this screen, the pass shows <b>2 / 40</b> used this period and every use is listed when you open it.",
+      "Nothing needs pressing each month: the nightly run bills every pass that is due. <span class='man-key'>Bill everything due</span> on this screen does the same thing now, when you want to see it happen."
+    ],
+    fields: [
+      ["Pass", "Which plan. The plan carries the price, the period, the included item and the limits.", "required"],
+      ["Who", "The customer who holds it. One active pass per customer per plan.", "required"],
+      ["Since", "When they started.", "required"],
+      ["Next bill", "The nightly run bills every active pass on or past this date, then moves it on by the plan's period. Empty means it never bills again.", "optional"],
+      ["Status", "Active or Paused. Use Cancel the pass rather than setting this, so the reason and the date are recorded.", "required"],
+      ["Used this period", "Kept by the till. Change it only to correct something.", "auto"],
+      ["Note", "Anything worth remembering.", "optional"]
+    ],
+    buttons: [
+      ["Bill it now", "Raises and posts the invoice for this period and moves the billing date on."],
+      ["Bill everything due", "On the list: the same thing for every pass whose date has come, which is what the nightly run does."],
+      ["Cancel the pass", "Stops it billing and stops the till honouring it. What they have already paid for stands."],
+      ["Delete", "Only a pass that has never been used."]
+    ],
+    after: "<p>Billing raises a <b>posted</b> customer invoice for the plan's price, one line naming the plan and the period, then advances the billing date and resets the period count. It is posted rather than drafted because it is a price agreed in advance for a period that has started, and a nightly job cannot ask anyone to check it. The invoice number comes from the same Document Numbering settings the rest of Orbit uses.</p><p>Using a pass at the till writes a line against it and takes one off the day's and the period's count, in the database, at the moment the sale goes through. So an abandoned sale does not spend it, and no till can honour a pass and forget to count it. Cancelling clears the billing date, which is what stops it.</p>",
+    links: [
+      { name: "Subscription plans", how: "The price, the period, the included item and the limits.", to: "gst.subs" },
+      { name: "Register", how: "Where a pass is used: pick the customer and the charge screen offers it.", to: "pos.terminal" },
+      { name: "Invoices", how: "Where the billing invoices land, posted.", to: "inv.out" },
+      { name: "Customers", how: "Who can hold one.", to: "contacts" }
+    ],
+    mistakes: [
+      ["That pass covers 2 a day and 2 has already been taken today.", "The daily limit. The sale is charged in full; the pass starts again tomorrow."],
+      ["That pass covers 40 this period and 40 have been taken. It starts again on 2026-11-11.", "The period limit, which resets when the pass next bills."],
+      ["That pass is cancelled. It cannot be used.", "It was cancelled. Sell them a new one; the old one stays as history."],
+      ["That customer already has an active pass on this plan.", "One active pass per customer per plan, so a double sale cannot happen by accident. Open the existing one."],
+      ["On their pass is not offered at the till", "Either nothing on the cart is the item the plan includes, or the limit is already used up for today. Open the pass here and the counts say which."],
+      ["Which pass? / Whose pass is it?", "The plan or the customer is empty."]
+    ],
+    tips: [
+      "Filter to <b>Due to be billed</b> before the first of the month if you want to see what the nightly run will do.",
+      "<b>Used it all this period</b> is the list of your heaviest users, which is the figure that tells you whether the pass is priced right.",
+      "A pass with no daily limit is genuinely unlimited. If that is not what you meant, the limit belongs on the plan."
+    ]
+  },
+
+  "rst.standing": {
+    title: "Standing orders",
+    what: "What a wholesale account takes every week without being asked: the item, the quantity, how often, and the date it next comes round. <span class='man-key'>Raise what is due</span> turns every line whose date has come into a draft sales order, one per account, and moves the dates on.",
+    when: [
+      "A wholesale customer agrees a weekly quantity.",
+      "Every delivery day, to raise the orders for the round.",
+      "A customer is closed for a fortnight and the line should pause.",
+      "You want to see what the round is worth before you load the van."
+    ],
+    how: [
+      "The account comes first: <b>Kitchen &rsaquo; Roastery &rsaquo; Wholesale accounts</b>, with its contact, price tier, round and delivery day.",
+      "Open <b>Standing orders</b> and click <span class='man-key'>New</span>. For this example a cafe takes 20 kg of house blend every week.",
+      "Pick the account, pick the item, type 20 in <b>Quantity each time</b> and <i>kg</i> in <b>Unit</b>, leave <b>How often</b> on <i>Every week</i> and set <b>Next due</b> to the next delivery day.",
+      "Click <span class='man-key'>Save</span>. The row shows what it is worth at the item's price and when it is next due.",
+      "On the delivery day, click <span class='man-key'>Raise what is due</span>. You should see <i>1 order(s) raised with 1 line(s). They are drafts in Quotations.</i>",
+      "Open <b>Sales &rsaquo; Quotations</b>: a draft order for that account with the line on it. Check it, confirm it and deliver it the way you would any order.",
+      "Back here, <b>Next</b> has moved on a week and <b>Last raised</b> shows today. Pressing the button again the same day raises nothing.",
+      "Nothing needs pressing at all if you leave it: a nightly job does the same thing."
+    ],
+    fields: [
+      ["Account", "The wholesale account. The order is raised for that account's contact.", "required"],
+      ["Item", "What they take.", "required"],
+      ["Quantity each time", "How much, per delivery.", "required"],
+      ["Unit", "kg, cases, bags. It goes onto the order line.", "optional"],
+      ["How often", "Every day, week, fortnight or month.", "required"],
+      ["Next due", "The date it next comes round. Raise what is due picks up every line on or past this date.", "required"],
+      ["Running", "Pause it over a holiday rather than deleting it, so the history and the agreement stay.", "optional"],
+      ["Note", "Anything worth remembering.", "optional"]
+    ],
+    buttons: [
+      ["Raise what is due", "One draft sales order per account, with a line per standing order that has come round, and the dates moved on."],
+      ["Delete", "Removes the agreement. Pausing it keeps the history."],
+      ["Filters", "<b>Due now</b> and <b>Paused</b>."],
+      ["Group By", "<b>Account</b> or <b>Round</b>, which is how a van is actually loaded."]
+    ],
+    after: "<p>An order is raised as a <b>draft</b>, not confirmed: a standing order is an agreement about quantity, not permission to invoice without anybody looking. It carries a line per due standing order, priced at the item's list price, and a note saying where it came from. Confirm it, deliver it and invoice it the way you would any other order.</p><p>A line nobody has looked at for months raises <b>one</b> order, today, and its date lands on the next one in the future. It does not raise an order for every week that was missed: those deliveries did not happen, and a stack of invoices for them would be worse than nothing.</p>",
+    links: [
+      { name: "Wholesale accounts", how: "The accounts, their rounds and their delivery days.", to: "rst.wholesale" },
+      { name: "Quotations", how: "Where the raised orders land, as drafts.", to: "so.list" },
+      { name: "Items", how: "Where the price on the line comes from.", to: "products" }
+    ],
+    mistakes: [
+      ["Which account? / Which item? / How much, each time?", "One of the three required fields is empty."],
+      ["Nothing is due today", "No line has a date on or before today. The <b>Due now</b> filter shows which, if any."],
+      ["It raised an order I did not expect", "A line was due. Check <b>Next</b> on the row: a line left running over a closure keeps coming round. Pause it instead."],
+      ["The order has no price on a line", "The item has no list price. Set one on the item, or price the order by hand before confirming it."],
+      ["Two orders for the same account", "Only if the account has two sets of lines with different due dates. Each run raises one order per account for whatever is due that day."]
+    ],
+    tips: [
+      "Group by <b>Round</b> and the list reads like a loading sheet.",
+      "Set <b>Next due</b> to the real delivery day, not today: it is the date the whole schedule steps from.",
+      "Pause rather than delete. A paused line still says what was agreed, which is what you want when somebody rings up in three months."
+    ]
   }
 
 });

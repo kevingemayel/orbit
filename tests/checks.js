@@ -761,6 +761,28 @@
         return ok(need.length + " parts present: the rota reads availability, warns rather than refuses, and a swap really moves the shift");
       } },
 
+    { name: "a pass is honoured by the till and counted by the database",
+      why: "A plan could be configured - unlimited coffee, 2 a day, 40 a month - and the help page admitted the rest: the tills did not enforce it. So a shop took the money and then had nothing to ring the coffee up against, and the limit was a number in a table. The limits live in the database because a limit a screen enforces is a limit the next screen forgets, and the pass is spent when the sale goes through rather than when the cashier ticks the box, so an abandoned sale does not spend it.",
+      run: function (src) {
+        var need = [
+          ["the till asks what the customer is entitled to", /sb\.rpc\("subscription_for", \{ p_company: S\.company\.id, p_partner: POS\.partner/],
+          ["the pass takes one off the bill", /if \(POS\.usePass && passLine\) passDisc = Math\.min\(passLine\.price/],
+          ["and only one", /return lines\.slice\(\)\.sort\(function \(a, b\) \{ return b\.price - a\.price; \}\)\[0\];/],
+          ["it is spent on the sale, not on the tick", /var passUsed = POS\.usePass && t\.passDisc > 0 && POS\.pass && POS\.pass\.subscription;/],
+          ["through the database", /sb\.rpc\("subscription_redeem", \{ p_subscription: POS\.pass\.subscription, p_order: oid/],
+          ["billing is a posting, not a screen", /sb\.rpc\("subscription_bill", \{ p_company: S\.company\.id/],
+          ["a pass can be cancelled with its reason", /sb\.rpc\("subscription_cancel", \{ p_subscription: s\.id/],
+          ["and a standing order raises itself", /sb\.rpc\("standing_orders_raise", \{ p_company: S\.company\.id/],
+          ["both have a screen", /case "gst\.passes": return renderList\(cfgSubscriptions\(\)\);/],
+          ["and so do the standing orders", /case "rst\.standing": return renderList\(cfgStandingOrders\(\)\);/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // the count must never be kept by the browser
+        if (/redemptions_this_period:\s*\(?Number/.test(src)) return bad("a screen works out the period count instead of reading it");
+        return ok(need.length + " parts present: the till offers it, the database counts it, and the billing posts");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

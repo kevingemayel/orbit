@@ -94,6 +94,8 @@ const MUTATIONS = {
     s => s.replace('return buildPrintHeader(printTplData(), docTitle, docNum || "");', 'return "<div class=\"phead\"></div>";'),
   "the header, the table and the footer of a document are each a setting":
     s => s.replace(/function pdocTableClass\(over\) \{/, "function pdocTableClassGone(over) {"),
+  "a pass is honoured by the till and counted by the database":
+    s => s.replace("var passUsed = POS.usePass && t.passDisc > 0 && POS.pass && POS.pass.subscription;", "var passUsed = false;"),
   "the rota checks who can actually work it":
     s => s.replace('sb.rpc("roster_problems", {', 'Promise.resolve({ data: [] }) || sb.rpc("nothing", {'),
   "a gift card is money you owe, and the till says which card":
