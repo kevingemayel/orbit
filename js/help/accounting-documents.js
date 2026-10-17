@@ -427,9 +427,12 @@ orbitScreenHelp({
       ["Amount (Register Payment dialog)", "How much is being paid now, in the invoice currency. It starts at the full amount still due, and Orbit never records more than that.", "required"],
       ["Date (Register Payment dialog)", "The day the money arrived. It cannot be on or before the lock date.", "required"],
       ["Journal (Register Payment dialog)", "Bank or Cash: where the money went. It decides which account the money is posted into.", "optional"],
-      ["Reference (Register Payment dialog)", "The transfer or receipt number, shown in this list.", "optional"]
+      ["Reference (Register Payment dialog)", "The transfer or receipt number, shown in this list.", "optional"],
+      ["Receipt no. (payment view)", "Filled in the first time a receipt is printed or emailed, and never changed afterwards. It is the number the customer quotes back at you, and the number the Statement of Account shows against the payment.", "auto"]
     ],
     buttons: [
+      ["Receipt", "On a customer payment. Prints the receipt for it, on your letterhead. The first press gives the payment its receipt number and it keeps that number, so the same payment always produces the same paper."],
+      ["Email receipt", "Sends that receipt to the customer. The preview in the box is the email itself. An address that is not yet on the contact can be saved onto it from here, because Orbit only sends to an address the company already holds."],
       ["Register Payment", "On a posted invoice with money still owing. Opens the dialog to record a payment."],
       ["Register", "In the dialog. Posts the payment and matches it to the invoice."],
       ["Cancel", "Closes the dialog without recording anything."],

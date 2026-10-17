@@ -207,6 +207,28 @@ chqctrl as (
 badchq as (
   select * from chqctrl where abs(ledger_chq - live_chq) > 0.05),
 
+-- ------------------------------------------------------------- documents sent out
+-- 21. The Statement of Account is a document that goes to a customer, so the
+--     figure at the bottom of it has to be the figure in the ledger. The
+--     statement is now worked out by partner_statement(), and the report, the
+--     printed page and the email all read it, so one function being wrong would
+--     be wrong on all three at once and the customer would be the one to find
+--     out. Read every contact that has posted lines, and compare what the
+--     function carries forward against the ledger it was built from.
+stmtdrift as (
+  select c.name as company, p.name as who,
+         round(coalesce(sum(l.debit - l.credit), 0), 2) as ledger_bal,
+         (select s.balance from public.partner_statement(c.id, p.id, null::date, null::date) s
+           where s.row_kind = 'closing') as stmt_bal
+    from public.partners p
+    join public.companies c on c.id = p.company_id
+    join public.journal_lines l on l.partner_id = p.id and l.company_id = p.company_id
+    join public.journal_entries e on e.id = l.entry_id and e.state = 'posted'
+   group by c.id, c.name, p.id, p.name),
+badstmt as (
+  select * from stmtdrift
+   where abs(coalesce(stmt_bal, 0) - ledger_bal) > 0.05),
+
 -- ------------------------------------------------------------- multi-currency
 -- 18. A posted document in a currency that is not the company's own needs a
 --     rate on or before its date. Without one the conversion is a silent 1:1,
@@ -318,6 +340,10 @@ results as (
          (select count(*) from badtender),
          (select coalesce(string_agg(number || ' ' || currency_code || ' ' || amount_ccy || ' x ' || fx_rate || ' <> ' || amount, '; '), '') from (select * from badtender limit 3) x),
          'the drawer count and the sales figure disagree, and only one is the money in the till'
+  union all select 21, 'accounting', 'a statement closes where the ledger says it does',
+         (select count(*) from badstmt),
+         (select coalesce(string_agg(company || ' / ' || who || ' statement ' || coalesce(stmt_bal::text, 'null') || ' vs ledger ' || ledger_bal, '; '), '') from (select * from badstmt limit 3) x),
+         'the document the customer reads and the balance sheet would be telling two different stories'
   union all select 15, 'tenancy', 'no row points at a company that does not exist',
          (select coalesce(sum(n), 0) from orphans),
          (select coalesce(string_agg(t || ' ' || n, '; '), '') from orphans where n > 0),

@@ -596,6 +596,7 @@ orbitScreenHelp({
       "At the foot of the table, <b>Movements in the period</b> with Debit 4,500.00, Credit 3,000.00 and 1,500.00, then the shaded <b>Balance carried forward</b> row, 4,500.00 at 2026-06-30.",
       "Under the table, <b>How the open balance ages</b>: the same balance split into <i>Not yet due</i>, <i>1 to 30 days</i>, <i>31 to 60 days</i>, <i>61 to 90 days</i> and <i>Over 90 days</i>, so the client can see what is late.",
       "Click <span class='man-key'>Print</span>. The printer gets this same sheet, full page width, with the column headings repeated at the top of every page and no row cut in half. Choose Save as PDF, then email it to the client.",
+      "Press <span class='man-key'>Email</span> to send it to the contact instead of printing it. The box shows the address on their record, a subject, and a cover note if you want one, above a preview of the email itself. The <b>Document</b> column in the email names the paper the customer holds: the invoice number as it is printed on their invoice, and the receipt number for a payment once a receipt has been issued, so they can tick your statement off against their own file.",
       "To read an account instead, switch the first list to <b>For an account</b> and type its code or name. If it has sub-accounts, tick <b>With its auxiliaries</b> to include them; a <b>Trial balance by auxiliary</b> table then shows each one's brought forward, debit, credit and carried forward."
     ],
     fields: [
@@ -609,7 +610,8 @@ orbitScreenHelp({
     ],
     buttons: [
       ["Export", "Downloads the statement table as a CSV file."],
-      ["Print", "Sends the printer the same sheet you are looking at, so nothing moves or is cut off. Choose Save as PDF in the print window to get a file you can email."]
+      ["Print", "Sends the printer the same sheet you are looking at, so nothing moves or is cut off. Choose Save as PDF in the print window to get a file you can email."],
+      ["Email", "Shown when the statement is for a contact. Sends it straight to them, so you do not have to print to PDF and attach it by hand. The preview in the box is the email itself. If the contact has no address on file, type one and leave <b>Save this address on the contact</b> ticked, because Orbit only sends to an address the company already holds."]
     ],
     links: [
       { name: "Customers", how: "Each customer's form has a <span class='man-key'>Statement</span> button that opens this screen for them.", to: "cust" },

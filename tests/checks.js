@@ -807,6 +807,33 @@
         return ok(need.length + " parts present, and the child list only reads");
       } },
 
+    { name: "a receipt exists, and a statement can be sent",
+      why: "Orbit could email an invoice and nothing else. A customer who paid had no receipt at all - the payment had a record, an Edit and a Reverse, and no piece of paper - and the statement of account printed but could not be sent. Both documents are now worked out in the database, so the screen, the printed page and the email are three renderings of one answer. The email body is built server-side on purpose: the browser posts ids, never HTML, or anyone who can reach the endpoint could send arbitrary mail from the company's verified domain. The preview is the real email fetched back from a dry run, so there is no second renderer to drift.",
+      run: function (src) {
+        var need = [
+          ["the receipt document comes from the database", /sb\.rpc\("payment_receipt", \{ p_payment: paymentId \}\)/],
+          ["a receipt is numbered, once", /sb\.rpc\("payment_receipt_issue", \{ p_payment: paymentId \}\)/],
+          ["money received has a receipt to print", /id="pv-rcpt"/],
+          ["and one to email", /id="pv-mail"/],
+          ["the printed receipt is on the company letterhead", /return '<div class="pinv">' \+ pdocHead\("Receipt", p\.receipt_no \|\| ""\)/],
+          ["a statement can be emailed", /id="rp-mail"/],
+          ["the statement send names the contact and the period", /payload: \{ kind: "statement", partner_id: partnerId, from: fromD \|\| null, to_date: toD \|\| null \}/],
+          ["both go through one endpoint", /fetch\("\/api\/send-document", \{ method: "POST"/],
+          ["the preview is the email itself, fetched back", /var j = await call\(\{ dry_run: true \}\);/],
+          ["and is shown as the server rendered it", /if \(j && j\.html\) \{ fr\.srcdoc = j\.html; return; \}/],
+          ["an address the company does not hold is no longer a dead end", /payload\.save_email = true;/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // The browser must post ids and let the server render. If it ever posts a body,
+        // the endpoint becomes a way to send any HTML from a verified domain.
+        var i = src.indexOf("function openSendDocModal(spec)");
+        if (i < 0) return bad("the send box is gone");
+        var block = src.slice(i, i + 3200);
+        if (/(^|[\s,{])html\s*:/m.test(block)) return bad("the send box posts HTML to the server, which it must never do");
+        return ok(need.length + " parts present, and the browser posts ids rather than markup");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

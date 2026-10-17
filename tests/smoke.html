@@ -138,6 +138,33 @@
   // Rows injected into the fixtures here are taken back out at the end, so no
   // other screen sees them.
   var EXTRA = {
+    // A receipt is rendered from a document the database hands back, and nothing
+    // above opens a payment, so without these steps a broken receipt would ship
+    // with every check green: the structural check proves the button is wired, not
+    // that pressing it works.
+    "pay.in": [
+      ["a customer payment to open", function (w) {
+        var f = w.__smoke.fixtures;
+        f.tables.partners = [{ id: "00000000-0000-4000-8000-0000000000p1", company_id: f.company.id, org_id: f.org.id, name: "Smoke Customer", is_customer: true }];
+        f.tables.payments = [{ id: "00000000-0000-4000-8000-00000000y001", company_id: f.company.id, partner_id: "00000000-0000-4000-8000-0000000000p1", payment_type: "inbound", date: "2026-10-07", amount: 1500, currency_code: "USD", state: "posted", reference: "Down payment", memo: "Payment for INV/2026/00003" }];
+        w.__orbitSmoke.go("pay.in");
+      }],
+      ["open it", function (w) {
+        var el = w.document.querySelector("#o-main [data-id]"); if (el) el.click();
+      }],
+      ["print the receipt", function (w) {
+        var b = w.document.getElementById("pv-rcpt"); if (b) b.click();
+      }],
+      ["and open the send box", function (w) {
+        var b = w.document.getElementById("pv-mail"); if (b) b.click();
+      }],
+      ["with the fixtures put back", function (w) {
+        var f = w.__smoke.fixtures;
+        var ms = w.document.querySelectorAll(".modal.on");
+        for (var i = 0; i < ms.length; i++) ms[i].remove();
+        delete f.tables.partners; delete f.tables.payments;
+      }]
+    ],
     "pos.terminal": [
       ["a customer and an item", function (w) {
         var f = w.__smoke.fixtures;

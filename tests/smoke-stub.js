@@ -91,7 +91,22 @@
   };
   // What an rpc returns when an empty company would not return []. The user is
   // a platform operator in their own organisation, so the platform screens open.
-  var RPC = { is_platform_admin: true, my_home_orgs: [ORG_ID], my_pending_invites: [] };
+  var RPC = {
+    is_platform_admin: true, my_home_orgs: [ORG_ID], my_pending_invites: [],
+    // the receipt is a document the database works out, so a screen that renders one
+    // needs the shape back from here or it is never exercised
+    payment_receipt_issue: "RCT/2026/0001",
+    payment_receipt: {
+      payment: { id: "00000000-0000-4000-8000-00000000y001", receipt_no: "RCT/2026/0001", date: "2026-10-07",
+                 amount: 1500, currency_code: "USD", method: "bank", reference: "Down payment",
+                 memo: "Payment for INV/2026/00003", payment_type: "inbound", state: "posted" },
+      company: { id: CO_ID, name: "Smoke Test Company", currency_code: "USD" },
+      partner: { name: "Smoke Customer", email: "" },
+      invoice: { number: "INV/2026/00003", invoice_date: "2026-10-07", amount_total: 10000,
+                 amount_residual: 8500, currency_code: "USD" },
+      account_balance: 8500
+    }
+  };
   SMOKE.fixtures = { tables: TABLES, rpc: RPC, user: USER, company: COMPANY, org: ORG };
 
   var seq = 0;

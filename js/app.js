@@ -6000,10 +6000,13 @@
     m.innerHTML = '<div class="sheet"><h3 style="display:flex;align-items:center;gap:8px">Payment ' + esc(p.reference || "") + recNavHTML(p.id) + '</h3>' +
       '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
       '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' + histH +
-      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (canW ? '<button class="btn" id="pv-edit">Edit</button><button class="btn u-bad" id="pv-rev">Reverse payment</button>' : '') + '</div></div>';
+      '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (inbound ? '<button class="btn" id="pv-rcpt">Receipt</button><button class="btn" id="pv-mail">Email receipt</button>' : '') + (canW ? '<button class="btn" id="pv-edit">Edit</button><button class="btn u-bad" id="pv-rev">Reverse payment</button>' : '') + '</div></div>';
     document.body.appendChild(m);
     document.getElementById("pv-close").onclick = function () { m.remove(); };
     wireRecNav(m);
+    // money received has a piece of paper: printed, or emailed to the payer
+    var rc = document.getElementById("pv-rcpt"); if (rc) rc.onclick = function () { printReceipt(p); };
+    var mb = document.getElementById("pv-mail"); if (mb) mb.onclick = function () { emailReceipt(p); };
     var eb = document.getElementById("pv-edit"); if (eb) eb.onclick = function () { m.remove(); openPaymentEdit(p); };
     if (opts && opts.edit && eb) eb.click();
     var rb = document.getElementById("pv-rev"); if (rb) rb.onclick = async function () {
@@ -7307,6 +7310,130 @@
       } catch (e) { toast("Send failed: " + (e && e.message)); btn.disabled = false; btn.textContent = "Send email"; }
     };
   }
+  // ============================ RECEIPT AND STATEMENT ============================
+  // The two documents a customer asks for once an invoice has gone out. Both are
+  // worked out in the database (payment_receipt, partner_statement) so the screen,
+  // the printed page and the email are three renderings of one answer. The email is
+  // rendered server-side and the preview below is those very bytes, fetched back,
+  // which is why the box can promise that it is what the customer receives.
+  async function receiptDoc(paymentId) {
+    var r = await sb.rpc("payment_receipt", { p_payment: paymentId });
+    if (r.error) { toast("Could not read the receipt: " + errMsg(r.error)); return null; }
+    return r.data;
+  }
+  async function issueReceiptNo(paymentId) {
+    var r = await sb.rpc("payment_receipt_issue", { p_payment: paymentId });
+    if (r.error) { toast(errMsg(r.error)); return null; }
+    return r.data;
+  }
+  // The printed receipt, on the company letterhead every other document uses.
+  function receiptDocHTML(d) {
+    var co = d.company || {}, p = d.payment || {}, pt = d.partner || {}, inv = d.invoice;
+    var cc = p.currency_code || co.currency_code || "USD";
+    var bal = Number(d.account_balance || 0);
+    // the party block above already names who paid, so the detail table does not
+    var rows = [["Date", p.date || ""],
+                ["Method", p.method || "-"], ["Reference", p.reference || p.memo || "-"]]
+      .filter(function (r) { return r[1] !== ""; })
+      .map(function (r) { return '<tr><td class="prk">' + esc(r[0]) + '</td><td class="prv">' + esc(String(r[1])) + '</td></tr>'; }).join("");
+    var against = inv
+      ? '<table class="' + pdocTableClass() + '"><thead><tr><th>What this was for</th><th class="num">Amount</th></tr></thead><tbody>' +
+        '<tr><td>Invoice ' + esc(inv.number || "") + ' of ' + esc(inv.invoice_date || "") + '</td><td class="num">' + moneyC(inv.amount_total, inv.currency_code || cc) + '</td></tr>' +
+        '<tr><td>Paid by this receipt</td><td class="num">' + moneyC(p.amount, cc) + '</td></tr>' +
+        '<tr class="ptot"><td>Still outstanding on that invoice</td><td class="num">' + moneyC(inv.amount_residual, inv.currency_code || cc) + '</td></tr>' +
+        '</tbody></table>'
+      : '<p class="prnote">This payment is not matched to a single invoice; it is credited to the account.</p>';
+    var standing = Math.abs(bal) < 0.005 ? "The account is now settled in full."
+      : bal > 0 ? "The account stands at " + moneyC(bal) + " outstanding."
+                : "The account is in credit by " + moneyC(-bal) + ".";
+    return '<div class="pinv">' + pdocHead("Receipt", p.receipt_no || "") +
+      '<div class="prparty"><div class="plab">Received from</div><div class="pname">' + esc(pt.name || "") + '</div>' + pdocPartyAddr(pt) + '</div>' +
+      '<div class="prbig"><div class="prbigl">Received with thanks</div><div class="prbigv">' + moneyC(p.amount, cc) + '</div></div>' +
+      '<table class="prmeta">' + rows + '</table>' + against +
+      '<p class="prstand">' + esc(standing) + '</p>' + pdocFoot() + '</div>';
+  }
+  async function printReceipt(payment) {
+    var no = await issueReceiptNo(payment.id);
+    if (!no) return;
+    var d = await receiptDoc(payment.id);
+    if (!d) return;
+    pdocPrint(receiptDocHTML(d));
+  }
+
+  // One send box for both documents. It asks the server to render the email and
+  // shows that back, so there is no second renderer in the browser to drift.
+  // Orbit only emails an address the company already holds, which used to be a
+  // dead end: the send refused and told you to go and edit the contact somewhere
+  // else. When the contact has no address, the box offers to put this one on it.
+  function openSendDocModal(spec) {
+    var m = document.createElement("div"); m.className = "modal on"; m.id = "senddocmodal";
+    var needSave = !spec.onFile;
+    m.innerHTML = '<div class="sheet wide"><h3>Email ' + esc(spec.title) + '</h3><div class="form" style="padding:16px 18px;display:grid;gap:12px;max-height:76vh;overflow:auto">' +
+      '<div class="row2"><div><label>To</label>' + fhint("To", "Where the email is sent. Defaults to the contact\u2019s email; you can change it.") +
+      '<input id="sd-to" type="email" value="' + esc(spec.to || "") + '" placeholder="customer@email.com"></div>' +
+      '<div><label>Subject</label>' + fhint("Subject") + '<input id="sd-subj" value="' + esc(spec.subject || "") + '"></div></div>' +
+      (needSave ? '<label class="u-ptr" style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="checkbox" id="sd-save" checked><span>Save this address on ' + esc(spec.who || "the contact") + '. Orbit only sends to an address the company already holds, so without this the send is refused.</span></label>' : '') +
+      '<div><label>Message (optional)</label>' + fhint("__note", "A short cover note shown at the top of the email, above the document.") +
+      '<textarea id="sd-note" rows="3" placeholder="' + esc(spec.placeholder || "") + '"></textarea></div>' +
+      '<div><label>Preview: this is exactly what your customer receives</label><iframe id="sd-preview" style="width:100%;height:360px;border:1px solid var(--line);border-radius:var(--r);background:#fff"></iframe></div>' +
+      '</div><div class="foot"><button class="btn" id="sd-cancel">Cancel</button><button class="btn pri u-app" id="sd-send">Send email</button></div></div>';
+    document.body.appendChild(m);
+    var tm = null;
+    async function call(extra) {
+      var sess = (await sb.auth.getSession()).data.session;
+      if (!sess) { toast("Sign in again"); return { error: "Not signed in" }; }
+      var payload = Object.assign({}, spec.payload, {
+        to: document.getElementById("sd-to").value.trim(),
+        subject: document.getElementById("sd-subj").value.trim(),
+        note: document.getElementById("sd-note").value
+      }, extra || {});
+      var sv = document.getElementById("sd-save");
+      if (sv && sv.checked) payload.save_email = true;
+      var res = await fetch("/api/send-document", { method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer " + sess.access_token }, body: JSON.stringify(payload) });
+      return await res.json().catch(function () { return { error: "Server error (HTTP " + res.status + ")" }; });
+    }
+    async function preview() {
+      var fr = document.getElementById("sd-preview"); if (!fr) return;
+      var j = await call({ dry_run: true });
+      if (!fr.isConnected) return;
+      if (j && j.html) { fr.srcdoc = j.html; return; }
+      fr.srcdoc = '<p style="font-family:Arial;padding:16px;color:#a33">' + esc((j && j.error) || "The preview could not be built.") + '</p>';
+    }
+    document.getElementById("sd-note").addEventListener("input", function () { clearTimeout(tm); tm = setTimeout(preview, 400); });
+    preview();
+    document.getElementById("sd-cancel").onclick = function () { m.remove(); };
+    document.getElementById("sd-send").onclick = async function () {
+      var btn = this; btn.disabled = true; btn.textContent = "Sending...";
+      var j = await call();
+      if (!j || j.error || !j.ok) { toast((j && j.error) || "Send failed"); btn.disabled = false; btn.textContent = "Send email"; return; }
+      m.remove(); toast("Sent to " + j.to);
+      if (spec.after) spec.after(j);
+    };
+  }
+  async function emailReceipt(payment) {
+    var no = await issueReceiptNo(payment.id);
+    if (!no) return;
+    var d = await receiptDoc(payment.id);
+    if (!d) return;
+    var pt = d.partner || {};
+    openSendDocModal({
+      title: "receipt " + no, who: pt.name, to: pt.email || "", onFile: !!(pt.email && pt.email.trim()),
+      subject: "Receipt " + no + " from " + S.company.name,
+      placeholder: "e.g. Thank you for your payment. Your receipt is below.",
+      payload: { kind: "receipt", payment_id: payment.id, partner_id: payment.partner_id }
+    });
+  }
+  async function emailStatement(partnerId, fromD, toD) {
+    var pt = (await sb.from("partners").select("name,email").eq("id", partnerId).maybeSingle()).data || {};
+    openSendDocModal({
+      title: "statement for " + (pt.name || "this contact"), who: pt.name,
+      to: pt.email || "", onFile: !!(pt.email && pt.email.trim()),
+      subject: "Statement of account from " + S.company.name,
+      placeholder: "e.g. Please find your statement to date below. Do let us know if anything looks wrong.",
+      payload: { kind: "statement", partner_id: partnerId, from: fromD || null, to_date: toD || null }
+    });
+  }
+
   function emailPreviewHtml(inv, lines, note) {
     var co = S.company, cc = inv.currency_code || co.currency_code || "USD";
     var isRefund = (inv.move_type || "").indexOf("refund") >= 0, isSale = (inv.move_type || "").indexOf("out_") === 0;
@@ -12439,7 +12566,8 @@
       : '<input id="st-acct" class="o-filtbtn" list="st-accts" style="min-width:240px" placeholder="Account code or name" aria-label="Account" autocomplete="off" value="' + esc(accLabel(accById[STMT_ACCT])) + '"><datalist id="st-accts">' + accts.map(function (a) { return '<option value="' + esc(accLabel(a)) + '"></option>'; }).join("") + '</datalist>' +
         (STMT_ACCT && kidsOf(STMT_ACCT).length ? '<label class="o-filtbtn u-ptr"><input type="checkbox" id="st-aux"' + (STMT_AUX ? " checked" : "") + '> With its auxiliaries</label>' : '');
     document.getElementById("o-main").innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML("Statement of Account") + '<div class="gap"></div>' + modeSel + pick + periodSelect() + bookBarHTML() +
-      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button></div>' +
+      '<button class="o-filtbtn" id="rp-export">Export</button><button class="o-filtbtn" id="rp-print">Print</button>' +
+      (isContact ? '<button class="o-filtbtn" id="rp-mail">Email</button>' : '') + '</div>' +
       '<div class="o-form-bg"><div class="o-report wide" id="rep"><div class="o-empty">' + (isContact ? "Choose a contact" : "Choose an account") + ' and a period above.</div></div></div></div>';
     wireBc();
     STMT_DOC = "";
@@ -12447,6 +12575,12 @@
     // rather than letting the browser re-flow the app page.
     document.getElementById("rp-print").onclick = function () { if (STMT_DOC) pdocPrint(STMT_DOC); else window.print(); };
     var _ex = document.getElementById("rp-export"); if (_ex) _ex.onclick = exportRepCsv;
+    // a statement is a document that gets sent, so it can be sent from here
+    var _ml = document.getElementById("rp-mail");
+    if (_ml) _ml.onclick = function () {
+      if (!STMT_PID) { toast("Choose a contact first."); return; }
+      emailStatement(STMT_PID, pr.from || null, pr.to || null);
+    };
     function again() { renderStatement(); }
     wirePeriod(again);
     document.getElementById("st-mode").onchange = function () { STMT_MODE = this.value; again(); };
