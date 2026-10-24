@@ -138,6 +138,23 @@
   // Rows injected into the fixtures here are taken back out at the end, so no
   // other screen sees them.
   var EXTRA = {
+    // The statement returns early until a contact is chosen, so the route step alone
+    // never runs the part that builds the document: the sort, the document numbers it
+    // looks up, and the guard that stops if the user has navigated away.
+    "rep.stmt": [
+      ["a contact to run it for", function (w) {
+        var f = w.__smoke.fixtures;
+        f.tables.partners = [{ id: "00000000-0000-4000-8000-0000000000p1", company_id: f.company.id, org_id: f.org.id, name: "Smoke Customer", is_customer: true, payment_days: 30 }];
+        w.__orbitSmoke.go("rep.stmt");
+      }],
+      ["chosen", function (w) {
+        var sel = w.document.getElementById("st-pid");
+        if (sel && sel.options.length > 1) { sel.selectedIndex = 1; sel.dispatchEvent(new w.Event("change")); }
+      }],
+      ["and the fixtures put back", function (w) {
+        delete w.__smoke.fixtures.tables.partners;
+      }]
+    ],
     // A receipt is rendered from a document the database hands back, and nothing
     // above opens a payment, so without these steps a broken receipt would ship
     // with every check green: the structural check proves the button is wired, not

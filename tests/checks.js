@@ -817,7 +817,7 @@
           ["and one to email", /id="pv-mail"/],
           ["the printed receipt is on the company letterhead", /return '<div class="pinv">' \+ pdocHead\("Receipt", p\.receipt_no \|\| ""\)/],
           ["a statement can be emailed", /id="rp-mail"/],
-          ["the statement send names the contact and the period", /payload: \{ kind: "statement", partner_id: partnerId, from: fromD \|\| null, to_date: toD \|\| null \}/],
+          ["the statement send names the contact, the period and the book", /payload: \{ kind: "statement", partner_id: partnerId, from: fromD \|\| null, to_date: toD \|\| null, book: \(S\.book && S\.book\.id\) \|\| null \}/],
           ["both go through one endpoint", /fetch\("\/api\/send-document", \{ method: "POST"/],
           ["the preview is the email itself, fetched back", /var j = await call\(\{ dry_run: true \}\);/],
           ["and is shown as the server rendered it", /if \(j && j\.html\) \{ fr\.srcdoc = j\.html; return; \}/],
@@ -832,6 +832,25 @@
         var block = src.slice(i, i + 3200);
         if (/(^|[\s,{])html\s*:/m.test(block)) return bad("the send box posts HTML to the server, which it must never do");
         return ok(need.length + " parts present, and the browser posts ids rather than markup");
+      } },
+
+    { name: "a statement reads the same on the screen, on paper and in the email",
+      why: "The statement exists three times over: the report on the screen, the sheet the printer gets, and the email the customer opens. They are only worth having if they agree. Two ways they did not. A title passed to the letterhead as an <h1> printed as its own tag, because buildPrintHeader escapes what it is given, as it must - the customer read a line of HTML at the top of their statement. And on one date the payment sorted above the invoice it settled, so the running balance dipped into a credit that never existed; that was fixed in partner_statement and the screen kept its own sort, which is exactly how two renderings drift. The screen also showed the journal's entry number where the customer needs the number printed on the paper in their hand.",
+      run: function (src) {
+        var need = [
+          ["the statement's title is text", /pdocHead\("Statement of Account", "As at " \+ asAt\)/],
+          ["a charge is read before the payment that settles it", /var xd = \(Number\(x\.debit\) \|\| 0\) > 0 \? 0 : 1, yd = \(Number\(y\.debit\) \|\| 0\) > 0 \? 0 : 1;/],
+          ["the document column shows the number the customer holds", /stDocNo\(e\) \|\| e\.entry_number/],
+          ["looked up from their invoices", /STMT_DOCNO\["i:" \+ iv\.id\] = iv\.number;/],
+          ["and from the receipts issued to them", /STMT_DOCNO\["e:" \+ p\.entry_id\] = p\.receipt_no;/],
+          ["the emailed statement reads the book the screen is on", /book: \(S\.book && S\.book\.id\) \|\| null/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // the letterhead escapes its title, so markup handed to it prints as a tag
+        var m = src.match(/pdocHead\(\s*['"]\s*</);
+        if (m) return bad("a print title is passed as markup, which the letterhead escapes and prints literally");
+        return ok(need.length + " parts present, and no print title is markup");
       } },
 
     { name: "no em dash",

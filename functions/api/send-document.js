@@ -80,7 +80,10 @@ export async function onRequestPost(context) {
       who2 = pt.name || "";
       const from = body.from && /^\d{4}-\d{2}-\d{2}$/.test(String(body.from)) ? String(body.from) : null;
       const upto = body.to_date && /^\d{4}-\d{2}-\d{2}$/.test(String(body.to_date)) ? String(body.to_date) : null;
-      const sRes = await rpc("partner_statement", { p_company: companyId, p_partner: partnerId, p_from: from, p_to: upto });
+      // the statement must read the same book the report does, or a company with
+      // statutory and management books emails a figure that mixes them
+      const bookId = UUID.test(String(body.book || "")) ? String(body.book) : null;
+      const sRes = await rpc("partner_statement", { p_company: companyId, p_partner: partnerId, p_from: from, p_to: upto, p_book: bookId });
       const rows = await sRes.json().catch(() => null);
       if (!Array.isArray(rows)) return json({ error: "Could not build the statement.", detail: rows }, 200);
       const co = pt.companies || {};

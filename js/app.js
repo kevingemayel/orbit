@@ -7430,7 +7430,7 @@
       to: pt.email || "", onFile: !!(pt.email && pt.email.trim()),
       subject: "Statement of account from " + S.company.name,
       placeholder: "e.g. Please find your statement to date below. Do let us know if anything looks wrong.",
-      payload: { kind: "statement", partner_id: partnerId, from: fromD || null, to_date: toD || null }
+      payload: { kind: "statement", partner_id: partnerId, from: fromD || null, to_date: toD || null, book: (S.book && S.book.id) || null }
     });
   }
 
@@ -12607,7 +12607,7 @@
     var rep = document.getElementById("rep");
     rep.innerHTML = '<div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div>';
     // narration and the journal name give each row a readable document type and description
-    var SEL_RICH = "debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id,narration,source_type,journals(code,name)), partners(name)";
+    var SEL_RICH = "debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(id,date,entry_number,ref,state,book_id,narration,source_type,source_id,journals(code,name)), partners(name)";
     var SEL_PLAIN = "debit,credit,label,amount_currency,currency_code,account_id, accounts!inner(code,name), journal_entries!inner(date,entry_number,ref,state,book_id), partners(name)";
     function stmtLines(sel) {
       return allRows(function () {
@@ -12622,6 +12622,15 @@
     // statement without first asking again for the columns every schema is sure to have
     if (!lines.length) lines = await stmtLines(SEL_PLAIN);
     if (!document.getElementById("rep")) return;
+    // the numbers the contact actually holds, keyed the way stDocNo looks them up
+    var STMT_DOCNO = {};
+    if (isContact && STMT_PID) {
+      var dnInv = (await sb.from("invoices").select("id,number").eq("company_id", S.company.id).eq("partner_id", STMT_PID)).data || [];
+      dnInv.forEach(function (iv) { if (iv.number) STMT_DOCNO["i:" + iv.id] = iv.number; });
+      var dnPay = (await sb.from("payments").select("entry_id,receipt_no").eq("company_id", S.company.id).eq("partner_id", STMT_PID)).data || [];
+      dnPay.forEach(function (p) { if (p.entry_id && p.receipt_no) STMT_DOCNO["e:" + p.entry_id] = p.receipt_no; });
+      if (!document.getElementById("rep")) return;
+    }
     function r2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
     var open = 0, inP = [], byAcc = {};
     lines.forEach(function (l) {
@@ -12632,7 +12641,11 @@
     });
     inP.sort(function (x, y) {
       var a = x.journal_entries || {}, b = y.journal_entries || {};
-      return a.date < b.date ? -1 : a.date > b.date ? 1 : String(a.entry_number || "").localeCompare(String(b.entry_number || ""));
+      if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+      // the charge, then the payment that settles it
+      var xd = (Number(x.debit) || 0) > 0 ? 0 : 1, yd = (Number(y.debit) || 0) > 0 ? 0 : 1;
+      if (xd !== yd) return xd - yd;
+      return String(a.entry_number || "").localeCompare(String(b.entry_number || ""));
     });
     // Six columns on a contact statement is what a customer or supplier expects to read:
     // date, the document, what it was for, debit, credit, running balance. The account is a
@@ -12649,6 +12662,11 @@
     }
     // a second line inside a cell: the space keeps the words apart when the row is exported to CSV
     function stSub(txt) { return txt ? '<span class="pstmt-sm"> ' + txt + '</span>' : ""; }
+    // A statement is read against the customer's own papers, so the document column
+    // carries the number they hold: the invoice number as printed on their invoice,
+    // or the receipt number once a receipt has been issued. The journal's own entry
+    // number means nothing to them. STMT_DOCNO is filled in below, for a contact.
+    function stDocNo(e) { return STMT_DOCNO[e.source_type === "invoice" ? "i:" + e.source_id : "e:" + e.id] || ""; }
     var cols = showAcc
       ? '<colgroup><col style="width:10%"><col style="width:17%"><col style="width:17%"><col style="width:20%"><col style="width:12%"><col style="width:12%"><col style="width:12%"></colgroup>'
       : '<colgroup><col style="width:11%"><col style="width:20%"><col style="width:32%"><col style="width:12.3%"><col style="width:12.3%"><col style="width:12.4%"></colgroup>';
@@ -12659,7 +12677,7 @@
       bal = r2(bal + d - c); td += d; tc += c;
       var fx = l.currency_code && l.currency_code !== cc && Number(l.amount_currency) ? moneyC(Math.abs(Number(l.amount_currency)), l.currency_code) : "";
       body += '<tr><td>' + esc(e.date || "") + '</td>' +
-        '<td><b>' + esc(e.entry_number || "") + '</b>' + stSub(esc(stDocType(e))) + stSub(esc(e.ref || "")) + '</td>' +
+        '<td><b>' + esc(stDocNo(e) || e.entry_number || "") + '</b>' + stSub(esc(stDocType(e))) + stSub(esc(e.ref || "")) + '</td>' +
         (showAcc ? '<td>' + esc((ac.code || "") + " " + (ac.name || "")) + '</td>' : '') +
         '<td>' + esc(l.label || e.narration || (l.partners && l.partners.name) || "") + stSub(fx) + '</td>' +
         '<td class="num">' + (d ? money(d) : "") + '</td><td class="num">' + (c ? money(c) : "") + '</td><td class="num">' + money(bal) + '</td></tr>';
@@ -12702,7 +12720,7 @@
       });
       if (anyAge) {
         var ageNames = ["Not yet due", "1 to 30 days", "31 to 60 days", "61 to 90 days", "Over 90 days"];
-        ageHTML = '<h2 class="pstmt-h2">How the open balance ages, at ' + esc(ageAt) + '</h2>' +
+        ageHTML = '<h2 class="pstmt-h2">What is due, and what is late, at ' + esc(ageAt) + '</h2>' +
           '<div class="pstmt-tw"><table class="pstmt-age"><thead><tr>' + ageNames.map(function (nm) { return '<th>' + nm + '</th>'; }).join("") + '<th>Total open</th></tr></thead>' +
           '<tbody><tr>' + buckets.map(function (v) { return '<td>' + money(r2(v)) + '</td>'; }).join("") + '<td class="t">' + money(r2(agedTot)) + '</td></tr></tbody></table></div>' +
           '<div class="pstmt-note">Ageing reads the invoices, bills and credit notes still open today and sorts them by how long they are past their due date. It can differ from the balance above when a payment has not yet been matched to a document.</div>';
@@ -12732,7 +12750,7 @@
       (pt && pt.payment_days != null && pt.payment_days !== "" ? factRow("Payment terms", Number(pt.payment_days) === 0 ? "Due on receipt" : Number(pt.payment_days) + " days") : "") +
       '</table>';
     var docHTML = '<div class="pinv pstmt">' +
-      pdocHead('<h1 class="pdt-t">Statement of Account</h1>', "As at " + asAt) +
+      pdocHead("Statement of Account", "As at " + asAt) +
       '<div class="pstmt-meta"><div class="pstmt-party">' + partyBlk + '</div><div class="pstmt-facts">' + facts + '</div></div>' +
       '<div class="pstmt-box"><div class="pstmt-box-l"><div class="k">Balance carried forward at ' + esc(asAt) + '</div><div class="n">' + verdict + '</div></div><div class="v">' + moneyC(bal, cc) + '</div></div>' +
       '<div class="pstmt-tw"><table class="o-rt st-tbl">' + cols + '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div>' +
@@ -13995,7 +14013,7 @@
       '<tr><td class="k">Questions raised</td><td class="v">' + (totals.wide + totals.gap + totals.note) + '</td></tr>' +
       '<tr><td class="k">Reviewed by</td><td class="v">' + esc(S.user.email || "") + '</td></tr></table>';
     var docHTML = '<div class="pinv pstmt ar-sheet">' +
-      pdocHead('<h1 class="pdt-t">Access review</h1>', "As at " + today()) +
+      pdocHead("Access review", "As at " + today()) +
       '<div class="pstmt-meta"><div class="pstmt-party"><div class="pstmt-lbl">What this page is</div>' +
       '<div class="pstmt-name">Who can do what in ' + esc(S.company.name) + '</div>' +
       '<div class="pstmt-addr">Every person who can sign in to this organisation and reach this company, the apps their role opens and how deep, the money they see, what they may sign off, and the questions worth asking about each of them. The levels are the ones the database itself checks on every save, delete and approval, so this is what they can really do, not what a screen suggests.</div></div>' +

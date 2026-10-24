@@ -94,6 +94,9 @@ const MUTATIONS = {
     s => s.replace('return buildPrintHeader(printTplData(), docTitle, docNum || "");', 'return "<div class=\"phead\"></div>";'),
   "the header, the table and the footer of a document are each a setting":
     s => s.replace(/function pdocTableClass\(over\) \{/, "function pdocTableClassGone(over) {"),
+  "a statement reads the same on the screen, on paper and in the email":
+    s => s.replace('pdocHead("Statement of Account", "As at " + asAt)',
+                    'pdocHead(\'<h1 class="pdt-t">Statement of Account</h1>\', "As at " + asAt)'),
   "a receipt exists, and a statement can be sent":
     s => s.replace('<button class="o-filtbtn" id="rp-mail">Email</button>', ""),
   "a record has a way in and a way out":

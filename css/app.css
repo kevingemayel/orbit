@@ -2984,7 +2984,6 @@ body{background:transparent}
 /* the shaded header, totals and carried-forward rows carry the reading order, so they have to
    survive the printer's habit of dropping background colour */
 .pstmt{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.pstmt .pdt-t{font:inherit;font-size:22px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;color:#333;margin:0}
 .pstmt-meta{display:flex;gap:26px;align-items:flex-start;margin:18px 0 0}
 .pstmt-party{flex:1 1 auto;min-width:0}
 .pstmt-facts{flex:0 0 auto;min-width:220px}
