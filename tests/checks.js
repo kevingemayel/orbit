@@ -853,6 +853,28 @@
         return ok(need.length + " parts present, and no print title is markup");
       } },
 
+
+    { name: "a document can carry the paper it came from",
+      why: "Every document in Orbit began as something on paper or in an email: the supplier's quotation, the bill as it arrived, the slip from the transfer, the delivery note the driver signed. Until this existed there was nowhere on those documents to keep it, so the record said 6,000 and the only evidence of why sat in somebody's downloads folder. The panel is easy to half-add, in two ways that both fail silently. A block rendered with no wireAttach is a dead upload button: the file dialog opens and nothing happens. And a form that lets a file be chosen before the record exists must flush the staging list when it saves, or the file is dropped without a word.",
+      run: function (src) {
+        var need = [
+          ["an order keeps its own paperwork", /attachBlockHTML\(attEnt, id === "new" \? "" : id,/],
+          ["under a key that keeps buying apart from selling", /var attEnt = isSale \? "sale_order" : "purchase_order";/],
+          ["an invoice or a bill keeps the document behind it", /attachBlockHTML\("invoice", id === "new" \? "" : id,/],
+          ["a payment keeps the proof the money moved", /attachBlockHTML\("payment", p\.id,/],
+          ["a goods receipt keeps the delivery note", /attachBlockHTML\("stock_picking", id,/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        // a panel nobody wired is an upload button that does nothing
+        var dead = ["attEnt", '"invoice"', '"payment"', '"stock_picking"'].filter(function (e) { return src.indexOf("wireAttach(" + e + ")") < 0; });
+        if (dead.length) return bad("a panel with no wireAttach, so the upload button does nothing, for: " + dead.join(", "));
+        // a file chosen before the record exists is only kept if the save flushes it
+        if (!/await mediaFlush\(attEnt, oid\);/.test(src)) return bad("an order saved for the first time drops the file that was chosen on it");
+        if (!/await mediaFlush\("invoice", invId\);/.test(src)) return bad("an invoice saved for the first time drops the file that was chosen on it");
+        return ok(need.length + " documents carry their source, each wired, and a first save keeps the file");
+      } },
+
     { name: "no em dash",
       why: "A standing house rule for all Orbit copy.",
       run: function (src, css, help) {

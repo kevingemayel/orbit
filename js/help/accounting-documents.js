@@ -190,7 +190,8 @@ orbitScreenHelp({
       ["Amount (Register Payment dialog)", "How much is being paid now, in the invoice currency. It starts at the full amount still due. Orbit never records more than the amount due.", "required"],
       ["Date (Register Payment dialog)", "The day the money arrived. It cannot be on or before the lock date.", "required"],
       ["Journal (Register Payment dialog)", "Bank or Cash: which one the money went into.", "optional"],
-      ["Reference (Register Payment dialog)", "The transfer or receipt number. It shows against the payment in Customer Payments.", "optional"]
+      ["Reference (Register Payment dialog)", "The transfer or receipt number. It shows against the payment in Customer Payments.", "optional"],
+      ["Photos &amp; documents", "The paperwork behind the invoice: the customer's purchase order, the delivery note they signed, the email approving an extra. Kept on the invoice and still there after posting, so a query three months later is answered from the document rather than from memory.", "optional"]
     ],
     buttons: [
       ["New", "Starts a blank invoice."],
@@ -428,7 +429,8 @@ orbitScreenHelp({
       ["Date (Register Payment dialog)", "The day the money arrived. It cannot be on or before the lock date.", "required"],
       ["Journal (Register Payment dialog)", "Bank or Cash: where the money went. It decides which account the money is posted into.", "optional"],
       ["Reference (Register Payment dialog)", "The transfer or receipt number, shown in this list.", "optional"],
-      ["Receipt no. (payment view)", "Filled in the first time a receipt is printed or emailed, and never changed afterwards. It is the number the customer quotes back at you, and the number the Statement of Account shows against the payment.", "auto"]
+      ["Receipt no. (payment view)", "Filled in the first time a receipt is printed or emailed, and never changed afterwards. It is the number the customer quotes back at you, and the number the Statement of Account shows against the payment.", "auto"],
+      ["Photos &amp; documents (payment view)", "The proof the money moved: the transfer slip, a photograph of the cheque, the card receipt. Open the payment from this list and the panel is at the bottom of it. It is there after the payment is posted, because the slip usually reaches you after the money does.", "optional"]
     ],
     buttons: [
       ["Receipt", "On a customer payment. Prints the receipt for it, on your letterhead. The first press gives the payment its receipt number and it keeps that number, so the same payment always produces the same paper."],
@@ -602,7 +604,8 @@ orbitScreenHelp({
       ["Disc % (on a line)", "A percentage off this one line. The line's Subtotal is Qty times Unit Price less the discount, and at 0 it is simply the two multiplied. The invoice total, what is posted to the ledger and the printed document all follow it, and the <b>Disc %</b> column prints only when some line has one.", "optional"],
       ["Tax (on a line)", "The VAT on the line, from your taxes marked for purchases or for both (Accounting &rsaquo; Configuration &rsaquo; Taxes). It is added under Taxes and posted to the purchase VAT account.", "optional"],
       ["Narration (Other Info tab)", "A note kept on the bill, for example what the purchase was for. It can be changed until the bill is posted, and it prints at the end of the document.", "optional"],
-      ["Amount, Date, Journal and Reference (Register Payment dialog)", "How much is being paid (starting at the full amount still due, and never more than that), the day it was paid (not on or before the lock date), whether it left the Bank or the Cash, and the transfer or cheque number.", "required"]
+      ["Amount, Date, Journal and Reference (Register Payment dialog)", "How much is being paid (starting at the full amount still due, and never more than that), the day it was paid (not on or before the lock date), whether it left the Bank or the Cash, and the transfer or cheque number.", "required"],
+      ["Photos &amp; documents", "The bill as the supplier sent it, kept on the bill: their PDF, or a photograph of the paper invoice. <span class='man-key'>Add</span> chooses the file; on a brand new bill it is held until you press Save. It stays there after posting, which is the whole point, because whoever checks this bill next year can then read what actually arrived instead of trusting the typing.", "optional"]
     ],
     buttons: [
       ["New", "Starts a blank bill."],
@@ -760,7 +763,8 @@ orbitScreenHelp({
       ["Amount (Register Payment dialog)", "How much is being paid now, in the bill's currency. It starts at the full amount still due, and Orbit never records more than that.", "required"],
       ["Date (Register Payment dialog)", "The day the money left. It cannot be on or before the lock date.", "required"],
       ["Journal (Register Payment dialog)", "Bank or Cash: where the money came from. It decides which account the payment is posted out of.", "optional"],
-      ["Reference (Register Payment dialog)", "The transfer or cheque number, shown in this list.", "optional"]
+      ["Reference (Register Payment dialog)", "The transfer or cheque number, shown in this list.", "optional"],
+      ["Photos &amp; documents (payment view)", "The proof the money left: the bank's transfer confirmation, the cheque you wrote, the receipt the supplier gave you. Open the payment from this list and the panel is at the bottom of it. It is the answer to \"did we really pay this\", kept beside the payment itself.", "optional"]
     ],
     buttons: [
       ["Register Payment", "On a posted bill with money still owing. Opens the dialog to record a payment."],

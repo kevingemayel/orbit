@@ -132,7 +132,8 @@ orbitScreenHelp({
       ["Quantity", "What the receipt put into stock (or sent back, on a return), in the product's stock unit, after any corrections.", "auto"],
       ["New quantity", "Shown while editing. Enter the quantity that really came in; 0 takes the whole line back out.", "required"],
       ["Value", "The stock value of the line, at the cost the goods came in at.", "auto"],
-      ["Journal entries", "The entries that put the value into stock: one for the receipt and one for each correction. Click one to open it.", "auto"]
+      ["Journal entries", "The entries that put the value into stock: one for the receipt and one for each correction. Click one to open it.", "auto"],
+      ["Photos &amp; documents (a receipt)", "The delivery note the driver signed, the waybill, a photograph of what came off the lorry, kept on the receipt. Open a receipt from this list and the panel is at the bottom of it. It is the evidence behind the stock figure, and the first thing anybody asks for when a supplier disputes a short delivery.", "optional"]
     ],
     buttons: [
       ["Receive goods", "Opens a blank goods receipt for goods that came without a purchase order."],

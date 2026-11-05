@@ -113,6 +113,8 @@ const MUTATIONS = {
     s => s.replace("var expected = (Number(POS.session.opening_cash) || 0) + cashHome - dropHome;", "var expected = (Number(POS.session.opening_cash) || 0) + cashHome;"),
   "a cheque only touches the bank when the bank pays it":
     s => s.replace('sb.rpc("cheque_clear"', 'sb.from("cheques").update({ status: "cleared" })'),
+  "a document can carry the paper it came from":
+    s => s.replace("wireAttach(attEnt);", ""),
   "no em dash": s => s.replace("Fabrication", "Fabri—cation"),
 };
 

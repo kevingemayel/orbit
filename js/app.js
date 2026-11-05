@@ -6000,8 +6000,11 @@
     m.innerHTML = '<div class="sheet"><h3 style="display:flex;align-items:center;gap:8px">Payment ' + esc(p.reference || "") + recNavHTML(p.id) + '</h3>' +
       '<div style="margin:6px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:var(--r);display:flex;justify-content:space-between;align-items:center"><span style="color:var(--ink2)">Amount</span><span style="font-size:22px;font-weight:800">' + esc(moneyC(p.amount, p.currency_code)) + '</span></div>' +
       '<table style="font-size:13.5px;border-collapse:collapse;margin-bottom:6px">' + rowsH + '</table>' + histH +
+      // the proof the money moved: the transfer slip, the cheque, the card receipt
+      attachBlockHTML("payment", p.id, { label: "The proof the money moved: the transfer slip, the cheque, the card receipt", accept: "image/*,application/pdf" }) +
       '<div class="foot"><button class="btn" id="pv-close">Close</button>' + (inbound ? '<button class="btn" id="pv-rcpt">Receipt</button><button class="btn" id="pv-mail">Email receipt</button>' : '') + (canW ? '<button class="btn" id="pv-edit">Edit</button><button class="btn u-bad" id="pv-rev">Reverse payment</button>' : '') + '</div></div>';
     document.body.appendChild(m);
+    wireAttach("payment");
     document.getElementById("pv-close").onclick = function () { m.remove(); };
     wireRecNav(m);
     // money received has a piece of paper: printed, or emailed to the payer
@@ -6866,6 +6869,7 @@
     main.innerHTML = '<div class="o-view"><div class="o-cp">' + bcHTML(id === "new" ? "New" : "...", parent, id) + '</div><div class="o-form-bg"><div class="o-form"><div class="o-sheet"><div class="o-empty o-skel" role="status" aria-label="Loading"><i></i><i></i><i></i><i></i></div></div></div></div></div>';
     wireBc();
 
+    mediaClearStage();   // a file chosen on a new document that was then abandoned does not follow us here
     var inv = null, lines = [];
     if (id !== "new") {
       inv = (await sb.from("invoices").select("*, partners(name,email,street,building,floor,city,country)").eq("id", id).maybeSingle()).data;
@@ -7003,7 +7007,13 @@
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div>' + stages + '</div>' +
       '<div id="f-credit-warn" style="padding:12px 20px 0"></div>' +
       '<div class="o-sheet">' + smart + ribbon + revisionNoteHTML(revs, !!inv && inv.state === "draft", postedDocNoun(moveType)) + '<div class="o-title">' + esc(title) + '</div>' + groups +
-      '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div></div>';
+      '<div class="o-nb"><div class="o-nb-tabs">' + tabs.join("") + '</div><div class="o-nb-pg" id="nbpg"></div></div>' +
+      // the bill as the supplier sent it, or the order the customer sent us: on the
+      // document, not in somebody's mail, so the next person to open it can see
+      // what was actually agreed without asking anybody
+      attachBlockHTML("invoice", id === "new" ? "" : id, { label: isSale ? "The paperwork behind this invoice: the customer's purchase order, the signed delivery note" : "The bill as the supplier sent it, and anything that came with it", accept: "image/*,application/pdf" }) +
+      '</div>';
+    wireAttach("invoice");
 
     // ---- notebook rendering ----
     var linesState = lines.map(function (l) { return { line_type: l.line_type || "item", name: l.name, discount: Number(l.discount) || 0, account_id: l.account_id, tax_id: l.tax_id, quantity: l.quantity, unit_price: l.unit_price, product_id: l.product_id }; });
@@ -7183,6 +7193,7 @@
         var ins = await sb.from("invoices").insert(hdr).select("id").single();
         if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; }
         invId = ins.data.id;
+        await mediaFlush("invoice", invId);
       } else {
         var up = await guardedUpdate("invoices", hdr, id, inv && inv.updated_at);
         if (up.conflict) { conflictToast("invoice"); return null; }
@@ -8148,6 +8159,8 @@
   }
   async function renderOrderForm(id, kind, opts) {
     var isSale = kind === "sale", tbl = isSale ? "sale_orders" : "purchase_orders", ltbl = isSale ? "sale_order_lines" : "purchase_order_lines";
+    var attEnt = isSale ? "sale_order" : "purchase_order";   // where this order files its own paperwork
+    mediaClearStage();   // a file chosen on a new order that was then abandoned does not follow us here
     var listAction = isSale ? "so.list" : "po.list";
     var parent = { action: listAction, title: isSale ? "Quotations" : "Purchase Orders" };
     var main = document.getElementById("o-main");
@@ -8278,7 +8291,14 @@
       (editable
         ? '<textarea id="o-terms" class="o-terms" data-enter="own" placeholder="' + (isSale ? "The scope, the exclusions, the payment terms, the validity: everything the customer reads under the prices. It prints at the end of the quotation." : "Anything the supplier should read with this order. It prints at the end.") + '">' + esc(order ? order.narration || "" : "") + '</textarea>'
         : (order && order.narration ? '<div class="o-terms-ro">' + esc(order.narration) + '</div>' : '<div class="o-empty">No terms on this document.</div>')) +
-      '</div></div></div>';
+      '</div></div>' +
+      // The paper the order came from, kept on the order itself: the supplier's
+      // quotation, the copy they countersigned, the customer's own purchase order.
+      // Three quotes for one job are three draft orders, and this is where each
+      // one's PDF lives, so the figure on the line can be read against its source.
+      attachBlockHTML(attEnt, id === "new" ? "" : id, { label: isSale ? "The customer's paperwork: their purchase order, the quotation they signed" : "The supplier's paperwork: their quotation, the order they countersigned", accept: "image/*,application/pdf" }) +
+      '</div>';
+    wireAttach(attEnt);
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
     wireRevisions(orevs, isSale ? "sale_order" : "purchase_order");
     var _smr = document.getElementById("o-sm-rcp"); if (_smr) _smr.onclick = function () {
@@ -8528,7 +8548,7 @@
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.currency_code = S.company.currency_code; hdr.state = confirmIt ? (isSale ? "sale" : "purchase") : "draft"; hdr.number = await nextOrderNumber(kind);
         var ins = await sb.from(tbl).insert(hdr).select("id,updated_at").single(); if (ins.error) { toast("Could not save: " + errMsg(ins.error)); return null; } oid = ins.data.id;
-        id = oid; order = order || {}; order.updated_at = ins.data.updated_at;   // a follow-up save (e.g. Confirm) must UPDATE this row, not insert a duplicate
+        id = oid; order = order || {}; order.updated_at = ins.data.updated_at; await mediaFlush(attEnt, oid);   // a follow-up save (e.g. Confirm) must UPDATE this row, not insert a duplicate
       } else {
         if (confirmIt) hdr.state = isSale ? "sale" : "purchase";
         var up = await guardedUpdate(tbl, hdr, id, order && order.updated_at);
@@ -9061,7 +9081,10 @@
           '<div class="o-tot"><div class="r tt"><span class="k">Stock value</span><span>' + esc(moneyC(total)) + '</span></div></div>'
         : '<div class="sub">Nothing on this receipt went into stock. A line sent straight to a site is a cost of that job, and a line with no stocked product is not kept in stock, so neither is listed here.</div>') +
       (editing ? '<div class="sub u-mt10">A changed quantity adds a correcting movement to this receipt: ' + (isReturn ? 'a higher quantity sends more back to the supplier, a lower one brings the difference back into stock' : 'a higher quantity brings the difference into stock, a lower one takes it back out') + '. Each is valued at the cost the goods came in at and posted as its own journal entry, and the purchase order\'s received quantity follows. The version before the edit is kept in this receipt\'s history.</div>' : '') +
+      // the delivery note that came with the lorry, filed on the receipt it belongs to
+      attachBlockHTML("stock_picking", id, { label: "The delivery note, the waybill, a photograph of what arrived", accept: "image/*,application/pdf" }) +
       '</div>';
+    wireAttach("stock_picking");
     wireRevisions(revs, "stock_picking");
     form.querySelectorAll("[data-je]").forEach(function (a) { a.onclick = function (e) { e.preventDefault(); renderJournalEntryForm(a.dataset.je); }; });
     ["rv-po", "rv-po-b"].forEach(function (bid) { var b = document.getElementById(bid); if (b) b.onclick = function (e) { e.preventDefault(); renderOrderForm(po.id, "purchase"); }; });
