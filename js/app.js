@@ -7000,7 +7000,7 @@
     // notebook
     var tabs = ['<div class="tb on" data-t="lines">' + (isSale ? "Invoice Lines" : "Bill Lines") + '</div>'];
     if (inv && inv.state === "posted") tabs.push('<div class="tb" data-t="gl">Journal Items</div>');
-    tabs.push('<div class="tb" data-t="other">Other Info</div>');
+    tabs.push('<div class="tb" data-t="other">Terms and notes</div>');
 
     var title = inv ? (inv.number || "Draft " + (isRefund ? "Credit Note" : (isSale ? "Invoice" : "Bill"))) : "New";
     document.querySelector(".o-form").innerHTML =
@@ -7022,7 +7022,16 @@
       document.querySelectorAll(".o-nb-tabs .tb").forEach(function (x) { x.classList.toggle("on", x.dataset.t === t); });
       if (t === "lines") renderLines(pg);
       else if (t === "gl") pg.innerHTML = glTable();
-      else { var edN = (!inv || inv.state !== "posted"); pg.innerHTML = '<div class="o-groups"><div>' + fld("Narration", edN ? '<textarea id="f-narr" style="width:100%;min-height:70px" placeholder="Notes / payment terms shown on this document">' + esc(inv ? inv.narration || "" : "") + '</textarea>' : '<span class="v">' + esc(inv ? inv.narration || "-" : "-") + '</span>', "Free-text notes stored on the document.") + '</div><div>' + fld("Source", '<span class="v">' + (inv ? esc(inv.source_type || "manual") : "manual") + '</span>') + '</div></div>'; }
+      else {
+        // The terms are the half of an invoice that is words rather than figures:
+        // the scope, the payment terms, the milestone this invoice claims. They
+        // print with it and go out with the emailed copy, so they are edited here
+        // in full, not in a three-line box labelled with a bookkeeping word.
+        var edN = (!inv || inv.state !== "posted");
+        pg.innerHTML = fld("Terms and notes", edN ? rtEditorHTML("f-narr", inv ? inv.narration : "", "The scope, the payment terms, the milestone being claimed: everything the customer reads under the figures.") : (inv && inv.narration ? rtViewHTML(inv.narration) : '<div class="o-empty">No terms on this document.</div>'), "Printed at the end of the document, and sent with it when you email the invoice.") +
+          '<div class="o-groups"><div>' + fld("Source", '<span class="v">' + (inv ? esc(inv.source_type || "manual") : "manual") + '</span>') + '</div><div></div></div>';
+        if (edN) rtWire("f-narr");
+      }
     }
     function glTable() {
       var td = 0, tc = 0;
@@ -7185,7 +7194,7 @@
         amount_untaxed: untax, amount_tax: taxTot, amount_total: untax + taxTot, amount_residual: untax + taxTot
       };
       hdr.currency_code = document.getElementById("f-cur") ? document.getElementById("f-cur").value : docCcy;
-      if (document.getElementById("f-narr")) hdr.narration = document.getElementById("f-narr").value;
+      if (document.getElementById("f-narr")) hdr.narration = rtValue("f-narr");
       var invId = id;
       if (id === "new") {
         hdr.company_id = S.company.id; hdr.move_type = moveType; hdr.state = "draft";
@@ -7460,9 +7469,12 @@
       var ls = Number(l.quantity) * Number(l.unit_price) * (1 - (Number(l.discount) || 0) / 100); sub += ls; return '<tr><td style="padding:8px;border-bottom:1px solid #eee">' + esc(l.name) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + Number(l.quantity) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(l.unit_price) + '</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">' + money(ls) + '</td></tr>'; }).join("");
     var total = Number(inv.amount_total != null ? inv.amount_total : sub), due = Number(inv.amount_residual != null ? inv.amount_residual : total);
     var partner = inv.partners ? inv.partners.name : "";
-    var termsBlock = (inv.narration && String(inv.narration).trim())
+    // An email client throws away a style sheet, so the terms carry their own
+    // styling inline here, and the preview shows what the customer will get.
+    var _terms = rtHTML(inv.narration, { inline: true });
+    var termsBlock = _terms
       ? '<div style="margin:22px 0 0;border-top:1px solid #ddd;padding-top:12px"><div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-bottom:6px">Terms and notes</div>' +
-        '<div style="font-size:11.5px;color:#444;line-height:1.5;white-space:pre-wrap">' + esc(String(inv.narration).trim()) + '</div></div>'
+        '<div style="font-size:11.5px;color:#444;line-height:1.5">' + _terms + '</div></div>'
       : "";
     var noteBlock = (note && note.trim()) ? '<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:var(--r-sm);font-size:13.5px;white-space:pre-wrap;color:#333">' + esc(note) + '</div>' : '';
     return '<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:16px;background:#fff;font-family:Segoe UI,Arial,sans-serif;color:#152030">' +
@@ -7490,7 +7502,7 @@
     "Due Date": "When payment is expected. Used for aging and reminders.",
     "Journal": "The accounting journal this posts to (set automatically).",
     "Currency": "Currency of this document. Defaults to your company currency.",
-    "Narration": "Free-text notes stored on the underlying journal entry.",
+    "Terms and notes": "The words half of the document: the scope, the exclusions, the payment terms. Formatted text, printed at the end of the document and sent with the emailed copy.",
     "Source": "Where this entry originated (e.g. an invoice or a stock move).",
     "Email": "Address used to email invoices and documents to this contact.",
     "Phone": "Contact phone number.",
@@ -7808,40 +7820,380 @@
   function pdocHead(docTitle, docNum) {
     return buildPrintHeader(printTplData(), docTitle, docNum || "");
   }
-  // The terms a customer actually reads: the scope, the exclusions, the payment
-  // terms, the validity. They are pages long on a facade quotation, so they print
-  // after the totals, in their own block, with the line breaks the author typed.
-  // A document with no terms prints nothing at all here.
-  function pdocTerms(t) {
-    t = String(t == null ? "" : t).trim();
-    if (!t) return "";
-    // Terms are plain text, but two shapes in them are not prose and should not
-    // print as prose: a row of a table, which the author wrote with " | "
-    // between the cells, and a heading, which carries the indent it was given.
-    // A payment schedule printed as four columns is read in one glance; the same
-    // schedule as a paragraph of pipes is read by nobody.
+  // ===========================================================================
+  // RICH TEXT, for the one field on a document that is a document in its own
+  // right: the terms.
+  //
+  // A facade quotation's terms run to eight or fourteen thousand characters of
+  // scope, exclusions, submittal procedure and payment milestones, and that text
+  // IS the offer. It is not prose: it has headings, indented sub-clauses, bold
+  // defined terms, and a payment schedule that is a four column table. Held as
+  // plain text it reads as a wall, and a table flattened to one line of pipes is
+  // read by nobody. So the terms are held as a small fixed subset of HTML.
+  //
+  // Three rules keep that from becoming a hole:
+  //   1. Nothing is trusted. Every string is rebuilt from a parsed tree through
+  //      an allowlist, on the way in AND on the way out, so terms written in one
+  //      company can never carry a script, a style sheet, a remote image or an
+  //      event handler onto somebody else's screen or into an email.
+  //   2. No attribute survives. The three that come out the other side are
+  //      written by this function: a link's href, checked against http, https
+  //      and mailto; a cell's colspan and rowspan, as numbers within range; and
+  //      an indent class chosen from a list of three. Nothing is passed through.
+  //   3. Plain text still works. Every note typed before this existed, and
+  //      anything pasted as text, reads and edits exactly as it did.
+  //
+  // Pictures are deliberately not kept: a remote image in a document is a
+  // tracking pixel in an email and a cross-origin fetch in the app, and a
+  // photograph belongs on the document as an attachment, in your own storage.
+  var RT_KEEP = { p: 1, br: 1, hr: 1, strong: 1, b: 1, em: 1, i: 1, u: 1, s: 1, sup: 1, sub: 1, h2: 1, h3: 1, h4: 1, ul: 1, ol: 1, li: 1, table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, th: 1, td: 1, a: 1, blockquote: 1 };
+  // Dropped with everything inside them. Everything else that is not in the keep
+  // list is unwrapped instead: Odoo wraps every single line in a span and a font
+  // carrying its own editor's size and colour, and Word adds more layers on top,
+  // so the words inside are kept and the wrapper is not.
+  var RT_DROP = { script: 1, style: 1, iframe: 1, frame: 1, frameset: 1, object: 1, embed: 1, applet: 1, link: 1, meta: 1, base: 1, head: 1, title: 1, form: 1, input: 1, button: 1, select: 1, option: 1, optgroup: 1, textarea: 1, svg: 1, math: 1, video: 1, audio: 1, source: 1, track: 1, canvas: 1, map: 1, area: 1, img: 1, picture: 1, noscript: 1, template: 1, slot: 1, dialog: 1, colgroup: 1, col: 1, caption: 1 };
+  var RT_BLOCKWRAP = { div: 1, address: 1 };          // a block of its own: one line in a wrapper becomes a paragraph
+  var RT_RENAME = { h1: "h2", h5: "h4", h6: "h4", strike: "s", del: "s", ins: "u" };
+  // A paragraph with nothing in it is a blank line somebody typed, so it stays.
+  // An empty heading is the old editor leaving its own indent behind, so it goes.
+  var RT_KEEPEMPTY = { table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, th: 1, td: 1, p: 1 };
+  var RT_INDENT = { p: 1, h2: 1, h3: 1, h4: 1, li: 1 };
+  var RT_HASBLOCK = /<(?:p|h[2-4]|ul|ol|li|table|tr|blockquote|hr)[\s>]/i;
+  var RT_STEP = 26;                                   // one indent level, in pixels
+  // An email client throws away a style sheet, so the same subset carries its
+  // styling inline when the terms are going into an email instead of onto a page.
+  var RT_MAIL = {
+    p: "margin:0 0 7px", h2: "font-size:13px;font-weight:700;margin:15px 0 5px", h3: "font-size:12px;font-weight:700;margin:12px 0 4px",
+    h4: "font-size:11.5px;font-weight:700;margin:10px 0 3px", ul: "margin:5px 0 8px 20px;padding:0", ol: "margin:5px 0 8px 20px;padding:0",
+    li: "margin:0 0 3px", table: "border-collapse:collapse;width:100%;margin:8px 0 11px;font-size:11px",
+    th: "border:1px solid #c9c9c9;padding:4px 6px;text-align:left;vertical-align:top;background:#f2f2f2;font-weight:700",
+    td: "border:1px solid #c9c9c9;padding:4px 6px;text-align:left;vertical-align:top",
+    blockquote: "margin:7px 0;padding-left:10px;border-left:2px solid #ddd;color:#555", a: "color:#152030"
+  };
+  // Does this string carry markup, or is it the plain text every note held before?
+  function rtIsHTML(s) {
+    return /<(?:p|div|br|table|tr|t[dh]|ul|ol|li|h[1-6]|strong|b|em|i|u|s|span|font|blockquote|a)\b[^>]*>/i.test(String(s == null ? "" : s));
+  }
+  // The sanitiser. Parsed, walked, and written out again from the allowlist: what
+  // comes back was built by this function, never passed through from the input.
+  function rtClean(html, opts) {
+    var s = String(html == null ? "" : html);
+    if (!s.trim()) return "";
+    opts = opts || {};
+    var doc = null;
+    try { doc = new DOMParser().parseFromString("<!doctype html><body>" + s + "</body>", "text/html"); } catch (e) { doc = null; }
+    if (!doc || !doc.body) return "<p>" + esc(rtToText(s)) + "</p>";   // no parser: the words, as words
+    var headRow = null, asHead = false;
+    function kids(n) { var o = "", c = n.childNodes, i; for (i = 0; i < c.length; i++) o += one(c[i]); return o; }
+    // One block, with whatever the allowlist allows it to say about itself: an
+    // indent level, and in an email the styling a style sheet would have given it.
+    function block(tag, inner, lv, extra) {
+      var at = extra || "", bits = [];
+      if (opts.inline) {
+        if (RT_MAIL[tag]) bits.push(RT_MAIL[tag]);
+        if (lv) bits.push("padding-left:" + (lv * RT_STEP) + "px");
+        if (bits.length) at += ' style="' + bits.join(";") + '"';
+      } else if (lv) {
+        at += ' class="rt-in' + lv + '"';
+      }
+      return "<" + tag + at + ">" + inner + "</" + tag + ">";
+    }
+    // Odoo writes an indented sub-clause as a forty-pixel tab span, and the plain
+    // text these notes passed through on the way here kept it as a leading tab.
+    // Either way it is an indent, and an indent is the only thing a class is
+    // allowed to say: the value comes from the list above, never from the input.
+    function indentOf(n, inner) {
+      var lv = 0, m = /\brt-in([1-3])\b/.exec(n.getAttribute("class") || "");
+      if (m) lv = +m[1];
+      var t = /^\t{1,3}/.exec(inner);
+      if (t) lv = Math.max(lv, t[0].length);
+      return lv;
+    }
+    function one(n) {
+      if (n.nodeType === 3) return esc(String(n.nodeValue).replace(/[\u200B-\u200D\u2060\uFEFF]/g, ""));
+      if (n.nodeType !== 1) return "";                                  // a comment carries nothing a reader can see
+      var tag = n.tagName.toLowerCase();
+      if (RT_DROP[tag]) return "";                                      // and its contents with it
+      if (RT_RENAME[tag]) tag = RT_RENAME[tag];
+      if (!RT_KEEP[tag]) {
+        var inner = kids(n);
+        if (RT_BLOCKWRAP[tag] && inner.trim() && !RT_HASBLOCK.test(inner)) {
+          var dlv = indentOf(n, inner);
+          return block("p", inner.replace(/^\t+/, ""), dlv);
+        }
+        return inner;                                                   // unknown or decorative: keep the words, drop the tag
+      }
+      if (tag === "br" || tag === "hr") return "<" + tag + ">";
+      if (tag === "table") {
+        // Odoo writes its header row as plain cells, so the first row of a table
+        // with no header cell in it at all is read as the header: a payment
+        // schedule whose column names print like data is one nobody can read.
+        var prevHead = headRow;
+        headRow = n.querySelector("th") ? null : n.querySelector("tr");
+        var body = kids(n);
+        headRow = prevHead;
+        return body.indexOf("<tr") < 0 ? "" : block("table", body, 0);
+      }
+      if (tag === "tr") {
+        var prevAs = asHead; asHead = (headRow === n);
+        var cells = kids(n);
+        asHead = prevAs;
+        return "<tr>" + cells + "</tr>";
+      }
+      if (tag === "td" && asHead) tag = "th";
+      var at = "";
+      if (tag === "a") {
+        var href = String(n.getAttribute("href") || "").replace(/[\u0000-\u0020]/g, "");
+        if (!/^(?:https?:\/\/|mailto:)/i.test(href)) return kids(n);    // a link that is not a link is just its words
+        at = ' href="' + esc(href) + '" target="_blank" rel="noopener noreferrer"';
+      }
+      if (tag === "th" || tag === "td") {
+        var cs = parseInt(n.getAttribute("colspan"), 10), rs = parseInt(n.getAttribute("rowspan"), 10);
+        if (cs > 1 && cs < 40) at += ' colspan="' + cs + '"';
+        if (rs > 1 && rs < 200) at += ' rowspan="' + rs + '"';
+      }
+      var in2 = kids(n);
+      var lv = 0;
+      if (RT_INDENT[tag]) { lv = indentOf(n, in2); in2 = in2.replace(/^\t+/, ""); }
+      // an empty heading or list item is the old editor leaving its indent behind
+      if (!RT_KEEPEMPTY[tag] && !in2.replace(/<br>/g, "").replace(/[\s\u00A0]+/g, "")) return "";
+      return block(tag, in2, lv, at);
+    }
+    return kids(doc.body).replace(/(?:<br>\s*)+$/, "").trim();
+  }
+  // The same text as text: for a plain-text copy, for searching, and to answer
+  // "is there anything in this box at all".
+  function rtToText(html) {
+    var s = String(html == null ? "" : html);
+    if (!rtIsHTML(s)) return s;
+    s = s.replace(/<(script|style)\b[\s\S]*?<\/\1>/gi, "");
+    s = s.replace(/<\/t[dh]>\s*(?=<t[dh])/gi, " | ");                   // a row stays one line, its cells separated
+    s = s.replace(/<li\b[^>]*>/gi, "\n- ");
+    s = s.replace(/<br\s*\/?>/gi, "\n");
+    s = s.replace(/<\/(?:p|div|h[1-6]|tr|li|ul|ol|table|blockquote)>/gi, "\n");
+    s = s.replace(/<[^>]*>/g, "");
+    s = s.replace(/&nbsp;/gi, " ").replace(/&lt;/gi, "<").replace(/&gt;/gi, ">").replace(/&quot;/gi, '"').replace(/&#0*39;|&apos;/gi, "'").replace(/&amp;/gi, "&");
+    s = s.replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+    return s.trim();
+  }
+  // Plain text as rich text, by the two shapes the old plain-text terms used: a
+  // row of a table written with " | " between the cells, and an indented line.
+  function rtFromText(t) {
+    t = String(t == null ? "" : t);
+    if (!t.trim()) return "";
     var out = [], tbl = null;
     function flush() {
       if (!tbl) return;
-      var rows = tbl.map(function (cells, i) {
-        var tag = i === 0 ? "th" : "td";
-        return '<tr>' + cells.map(function (c) { return '<' + tag + '>' + esc(c) + '</' + tag + '>'; }).join("") + '</tr>';
-      }).join("");
-      out.push('<table class="ptermst">' + rows + '</table>');
+      out.push('<table>' + tbl.map(function (cells, i) {
+        var tg = i === 0 ? "th" : "td";
+        return '<tr>' + cells.map(function (c) { return '<' + tg + '>' + esc(c) + '</' + tg + '>'; }).join("") + '</tr>';
+      }).join("") + '</table>');
       tbl = null;
     }
-    String(t).split(/\n/).forEach(function (ln) {
-      if (ln.indexOf(" | ") >= 0) {
-        (tbl = tbl || []).push(ln.trim().split(" | ").map(function (c) { return c.trim(); }));
-        return;
-      }
+    t.split(/\r?\n/).forEach(function (ln) {
+      if (ln.indexOf(" | ") >= 0) { (tbl = tbl || []).push(ln.trim().split(" | ").map(function (c) { return c.trim(); })); return; }
       flush();
-      if (/^\t/.test(ln)) out.push('<div class="ptermsh2">' + esc(ln.replace(/^\t+/, "").trim()) + '</div>');
-      else if (!ln.trim()) out.push('<div class="ptermsgap"></div>');
-      else out.push('<div class="ptermsl">' + esc(ln) + '</div>');
+      if (!ln.trim()) return;
+      var tabs = /^\t{1,3}/.exec(ln);
+      out.push(tabs ? '<p class="rt-in' + tabs[0].length + '">' + esc(ln.replace(/^\t+/, "")) + '</p>'
+                    : '<p>' + esc(ln) + '</p>');
     });
     flush();
-    return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb">' + out.join("") + '</div></div>';
+    return out.join("");
+  }
+  // The one entry point every renderer uses: give it whatever is stored and it
+  // gives back safe HTML, whether what is stored is rich text or plain text.
+  function rtHTML(v, opts) {
+    var raw = String(v == null ? "" : v);
+    if (!raw.trim()) return "";
+    return rtClean(rtIsHTML(raw) ? raw : rtFromText(raw), opts);
+  }
+  // ---- the editor -----------------------------------------------------------
+  // document.execCommand is deprecated and is still the only way to do this
+  // without a library, and Orbit has no build step and no dependencies. It is
+  // used only for the formatting commands; everything saved goes through rtClean.
+  function rtTool(act, label, title) {
+    return '<button type="button" class="rt-b" data-rt="' + act + '" title="' + esc(title) + '" aria-label="' + esc(title) + '">' + label + '</button>';
+  }
+  function rtEditorHTML(id, value, ph) {
+    return '<div class="rt">' +
+      '<div class="rt-tools" role="toolbar" aria-label="Text formatting">' +
+      rtTool("bold", "<b>B</b>", "Bold (Ctrl+B)") + rtTool("italic", "<i>I</i>", "Italic (Ctrl+I)") + rtTool("underline", "<u>U</u>", "Underline (Ctrl+U)") +
+      '<span class="rt-sep"></span>' +
+      rtTool("h2", "H1", "Heading") + rtTool("h3", "H2", "Sub-heading") + rtTool("p", "T", "Normal text") +
+      '<span class="rt-sep"></span>' +
+      rtTool("ul", "&bull;", "Bulleted list") + rtTool("ol", "1.", "Numbered list") +
+      rtTool("out", "&larr;", "Less indent (Shift+Tab)") + rtTool("in", "&rarr;", "More indent (Tab)") +
+      '<span class="rt-sep"></span>' +
+      rtTool("table", "Table", "Insert a table") + rtTool("link", "Link", "Turn the selected words into a link") + rtTool("clear", "Clear", "Remove the formatting from the selected text") +
+      '</div>' +
+      '<div class="rt-ed rtb" id="' + esc(id) + '" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Terms and notes" data-ph="' + esc(ph || "") + '">' + rtHTML(value) + '</div>' +
+      '</div>';
+  }
+  function rtCaretIn(el) {
+    if (!el) return;
+    var r = document.createRange(), s = window.getSelection();
+    r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
+  }
+  function rtTableHTML(rows, cols) {
+    var h = "", body = "", i, j, tds;
+    for (j = 0; j < cols; j++) h += "<th>&nbsp;</th>";
+    for (i = 1; i < rows; i++) { tds = ""; for (j = 0; j < cols; j++) tds += "<td>&nbsp;</td>"; body += "<tr>" + tds + "</tr>"; }
+    return '<table><tr>' + h + '</tr>' + body + '</table><p><br></p>';
+  }
+  // Pick the size the way every other editor lets you pick it, by dragging across
+  // a grid. Typing two numbers into a prompt to get a table is a step too many.
+  function rtGrid(btn, pick) {
+    var open = document.querySelector(".rt-grid");
+    if (open) { open.remove(); return; }
+    var ROWS = 6, COLS = 8, cells = "", r, c;
+    for (r = 1; r <= ROWS; r++) for (c = 1; c <= COLS; c++) cells += '<i data-r="' + r + '" data-c="' + c + '"></i>';
+    var g = document.createElement("div");
+    g.className = "rt-grid";
+    g.innerHTML = '<div class="rt-gw" style="grid-template-columns:repeat(' + COLS + ',15px)">' + cells + '</div><div class="rt-gl">Drag across for the size</div>';
+    document.body.appendChild(g);
+    var b = btn.getBoundingClientRect();
+    g.style.left = Math.max(8, Math.min(Math.round(b.left), window.innerWidth - g.offsetWidth - 8)) + "px";
+    g.style.top = Math.round(b.bottom + 5) + "px";
+    g.addEventListener("mousedown", function (e) { e.preventDefault(); });
+    g.addEventListener("mouseover", function (e) {
+      var t = e.target.closest("i"); if (!t) return;
+      var R = +t.getAttribute("data-r"), C = +t.getAttribute("data-c");
+      g.querySelectorAll("i").forEach(function (x) { x.classList.toggle("on", +x.getAttribute("data-r") <= R && +x.getAttribute("data-c") <= C); });
+      g.querySelector(".rt-gl").textContent = C + " across, " + R + " down";
+    });
+    g.addEventListener("click", function (e) {
+      var t = e.target.closest("i"); if (!t) return;
+      g.remove(); pick(+t.getAttribute("data-r"), +t.getAttribute("data-c"));
+    });
+    setTimeout(function () {
+      document.addEventListener("mousedown", function away(ev) {
+        if (!g.contains(ev.target)) { g.remove(); document.removeEventListener("mousedown", away, true); }
+      }, true);
+    }, 0);
+  }
+  function rtWire(id) {
+    var ed = document.getElementById(id);
+    if (!ed || ed.getAttribute("data-rt-on")) return;
+    ed.setAttribute("data-rt-on", "1");
+    var wrap = ed.closest(".rt"), tools = wrap ? wrap.querySelector(".rt-tools") : null;
+    function bump() { ed.dispatchEvent(new Event("input", { bubbles: true })); }
+    function blank() { ed.classList.toggle("rt-blank", !rtToText(ed.innerHTML).trim() && !ed.querySelector("table,hr")); }
+    function cmd(c, v) {
+      if (!ed.contains(document.activeElement)) ed.focus();
+      try { document.execCommand(c, false, v == null ? null : v); } catch (e) { }
+      bump(); blank();
+    }
+    // the block the caret is in, which is what an indent applies to
+    function caretBlock() {
+      var sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return null;
+      var n = sel.getRangeAt(0).startContainer;
+      var el = n.nodeType === 1 ? n : n.parentNode;
+      var b = el && el.closest ? el.closest("p,h2,h3,h4,li,td,th") : null;
+      return b && ed.contains(b) ? b : null;
+    }
+    function indent(by) {
+      var b = caretBlock();
+      if (!b || b.tagName === "TD" || b.tagName === "TH") return false;
+      var m = /\brt-in([1-3])\b/.exec(b.className || ""), lv = m ? +m[1] : 0;
+      var next = Math.min(3, Math.max(0, lv + by));
+      b.className = (b.className || "").replace(/\brt-in[1-3]\b/g, "").trim();
+      if (next) b.classList.add("rt-in" + next);
+      if (!b.className) b.removeAttribute("class");
+      bump();
+      return true;
+    }
+    if (tools) {
+      // mousedown is where the selection would be lost, so the toolbar never takes it
+      tools.addEventListener("mousedown", function (e) { e.preventDefault(); });
+      tools.addEventListener("click", function (e) {
+        var b = e.target.closest("[data-rt]"); if (!b) return;
+        e.preventDefault();
+        var a = b.getAttribute("data-rt");
+        if (a === "bold" || a === "italic" || a === "underline") return cmd(a);
+        if (a === "h2" || a === "h3" || a === "p") return cmd("formatBlock", "<" + a + ">");
+        if (a === "ul") return cmd("insertUnorderedList");
+        if (a === "ol") return cmd("insertOrderedList");
+        if (a === "in") { indent(1); return; }
+        if (a === "out") { indent(-1); return; }
+        if (a === "clear") { cmd("removeFormat"); return cmd("formatBlock", "<p>"); }
+        // the grid is dragged across with a mouse, so a keyboard gets a table
+        // straight away instead of a picker it cannot drive (detail 0 = not a click)
+        if (a === "table") return e.detail ? rtGrid(b, function (r, c) { cmd("insertHTML", rtTableHTML(r, c)); }) : cmd("insertHTML", rtTableHTML(3, 4));
+        if (a === "link") {
+          var sel = String(window.getSelection() || "");
+          if (!sel.trim()) { toast("Select the words that should become a link first"); return; }
+          var u = prompt("Where should “" + sel.slice(0, 40) + "” link to?", "https://");
+          if (!u) return;
+          u = u.trim();
+          if (!/^(?:https?:\/\/|mailto:)/i.test(u)) u = (u.indexOf("@") > 0 && u.indexOf(" ") < 0 ? "mailto:" : "https://") + u;
+          return cmd("createLink", u);
+        }
+      });
+    }
+    // Pasting is the whole point: the terms come out of Odoo, Word or a mail, and
+    // they arrive with the table intact and the sending editor's junk left behind.
+    ed.addEventListener("paste", function (e) {
+      var cd = e.clipboardData; if (!cd) return;
+      var html = cd.getData("text/html"), txt = cd.getData("text/plain");
+      e.preventDefault();
+      var ins = html && html.trim() ? rtClean(html) : rtFromText(txt);
+      try { document.execCommand("insertHTML", false, ins); }
+      catch (x) { try { document.execCommand("insertText", false, txt || ""); } catch (y) { } }
+      bump(); blank();
+    });
+    // Tab walks the cells of a table and grows it at the end, the way a
+    // spreadsheet does. Anywhere else it indents the paragraph, which is what a
+    // numbered sub-clause needs and what Tab did in the editor these came from.
+    ed.addEventListener("keydown", function (e) {
+      if (e.key !== "Tab") return;
+      var cell = caretBlock();
+      cell = cell && (cell.tagName === "TD" || cell.tagName === "TH") ? cell : null;
+      if (!cell) { if (indent(e.shiftKey ? -1 : 1)) e.preventDefault(); return; }
+      e.preventDefault();
+      var tab = cell.closest("table"), cells = [].slice.call(tab.querySelectorAll("th,td"));
+      var at = cells.indexOf(cell) + (e.shiftKey ? -1 : 1);
+      if (at < 0) return;
+      if (at >= cells.length) {
+        var row = cell.closest("tr"), n = row.children.length, tr = document.createElement("tr"), k, td;
+        for (k = 0; k < n; k++) { td = document.createElement("td"); td.innerHTML = "&nbsp;"; tr.appendChild(td); }
+        row.parentNode.insertBefore(tr, row.nextSibling);
+        cells = [].slice.call(tab.querySelectorAll("th,td"));
+        bump();
+      }
+      rtCaretIn(cells[at]);
+    });
+    ed.addEventListener("input", blank);
+    blank();
+  }
+  // What to save. An empty box saves as nothing rather than as a stray tag, so
+  // "has this document got terms" stays a question the data can answer.
+  function rtValue(id) {
+    var ed = document.getElementById(id);
+    if (!ed) return null;
+    var h = rtClean(ed.innerHTML);
+    return (rtToText(h).trim() || /<(?:table|hr)[\s>]/i.test(h)) ? h : "";
+  }
+  // The terms as a block to read rather than edit: a confirmed order, a posted
+  // invoice, a printed page, an email.
+  function rtViewHTML(v, opts) {
+    var h = rtHTML(v, opts);
+    return h ? '<div class="rtb">' + h + '</div>' : "";
+  }
+  // A test seam. tests/richtext.html drives these directly, because "does the
+  // sanitiser actually drop a script tag" is not a question the source text can
+  // answer, and a sanitiser nobody has watched work is a sanitiser nobody has.
+  // They are pure string functions and hold nothing of the session.
+  window.__rt = { clean: rtClean, toText: rtToText, fromText: rtFromText, html: rtHTML, isHTML: rtIsHTML };
+  // The terms a customer actually reads: the scope, the exclusions, the payment
+  // terms, the validity. They are pages long on a facade quotation, so they print
+  // after the totals, in their own block, formatted the way they were written.
+  // A document with no terms prints nothing at all here.
+  function pdocTerms(t) {
+    var h = rtHTML(t);
+    if (!h) return "";
+    return '<div class="pterms"><div class="ptermsh">Terms and notes</div><div class="ptermsb rtb">' + h + '</div></div>';
   }
   function pdocFoot(over) {
     var t = over || printTplData(), p = pdocFooterParts(t);
@@ -8289,8 +8641,8 @@
       '<div class="o-nb-pg" id="nbpg"></div>' +
       '<div class="o-nb-pg" id="nbterms" style="display:none">' +
       (editable
-        ? '<textarea id="o-terms" class="o-terms" data-enter="own" placeholder="' + (isSale ? "The scope, the exclusions, the payment terms, the validity: everything the customer reads under the prices. It prints at the end of the quotation." : "Anything the supplier should read with this order. It prints at the end.") + '">' + esc(order ? order.narration || "" : "") + '</textarea>'
-        : (order && order.narration ? '<div class="o-terms-ro">' + esc(order.narration) + '</div>' : '<div class="o-empty">No terms on this document.</div>')) +
+        ? rtEditorHTML("o-terms", order ? order.narration : "", isSale ? "The scope, the exclusions, the payment terms, the validity: everything the customer reads under the prices. It prints at the end of the quotation." : "Anything the supplier should read with this order. It prints at the end.")
+        : (order && order.narration ? rtViewHTML(order.narration) : '<div class="o-empty">No terms on this document.</div>')) +
       '</div></div>' +
       // The paper the order came from, kept on the order itself: the supplier's
       // quotation, the copy they countersigned, the customer's own purchase order.
@@ -8299,6 +8651,7 @@
       attachBlockHTML(attEnt, id === "new" ? "" : id, { label: isSale ? "The customer's paperwork: their purchase order, the quotation they signed" : "The supplier's paperwork: their quotation, the order they countersigned", accept: "image/*,application/pdf" }) +
       '</div>';
     wireAttach(attEnt);
+    rtWire("o-terms");
     if (order && invCount) { var _smb = document.getElementById("o-sm-inv"); if (_smb) _smb.onclick = function () { renderInvoiceForm(firstInvId, isSale ? "out_invoice" : "in_invoice"); }; }
     wireRevisions(orevs, isSale ? "sale_order" : "purchase_order");
     var _smr = document.getElementById("o-sm-rcp"); if (_smr) _smr.onclick = function () {
@@ -8540,7 +8893,7 @@
         if (rr.error) { toast("Could not edit: " + errMsg(rr.error)); return null; }
       }
       var hdr = { partner_id: partnerId, date_order: document.getElementById("o-date").value, note: document.getElementById("o-ref").value.trim(),
-        narration: document.getElementById("o-terms") ? document.getElementById("o-terms").value : (order ? order.narration : null),
+        narration: document.getElementById("o-terms") ? rtValue("o-terms") : (order ? order.narration : null),
         validity_date: document.getElementById("o-valid") ? (document.getElementById("o-valid").value || null) : (order ? order.validity_date : null), project_id: document.getElementById("o-proj") ? (document.getElementById("o-proj").value || null) : null, amount_untaxed: untax, amount_tax: tax, amount_total: untax + tax };
       if (!isSale) hdr.cost_code_id = document.getElementById("o-costcode") ? (document.getElementById("o-costcode").value || null) : null;
       if (!isSale && document.getElementById("o-dplan")) hdr.date_planned = document.getElementById("o-dplan").value || null;
@@ -8673,7 +9026,7 @@
         '<div><div class="pl">Date</div><div class="pv">' + esc(dateV) + '</div>' + (validV ? '<div class="pl u-mt8">Valid until</div><div class="pv">' + esc(validV) + '</div>' : "") + (refV ? '<div class="pl u-mt8">Reference</div><div class="pv">' + esc(refV) + '</div>' : "") + (projCode ? '<div class="pl u-mt8">Project code</div><div class="pv">' + esc(projCode) + '</div>' : "") + '</div></div>' +
         '<table class="' + pdocTableClass() + '"><thead><tr>' + head + '</tr></thead><tbody>' + body + '</tbody></table>' +
         '<div class="psum"><div class="pr"><span>Untaxed Amount</span><span>' + cc + " " + money(sub) + '</span></div><div class="pr"><span>Taxes</span><span>' + cc + " " + money(tax) + '</span></div><div class="pr ptt"><span>Total</span><span>' + cc + " " + money(sub + tax) + '</span></div></div>' +
-        pdocTerms(document.getElementById("o-terms") ? document.getElementById("o-terms").value : (order && order.narration)) +
+        pdocTerms(document.getElementById("o-terms") ? rtValue("o-terms") : (order && order.narration)) +
         pdocFoot() + '</div>';
       pdocPrint(html);
     }
@@ -16171,9 +16524,10 @@
       '<div class="o-statusbar"><div class="o-sb-btns">' + btns + '</div><div></div></div>' +
       '<div class="o-sheet"><div class="o-title"><input id="qt-tname" value="' + esc(t.name || "") + '" placeholder="Template name"></div>' +
       fld("Validity", '<input id="qt-days" type="number" min="0" step="1" value="' + (t.validity_days == null ? "" : Number(t.validity_days)) + '" placeholder="days, for example 14">', "How long a quotation made from this template stays open. It sets the quotation's Valid until date.") +
-      fld("Terms and notes", '<textarea id="qt-note" class="o-terms" data-enter="own" placeholder="The scope, the exclusions, the payment terms: everything the customer reads under the prices. Every quotation made from this template starts with this text, and prints it.">' + esc(t.note || "") + '</textarea>') +
+      fld("Terms and notes", rtEditorHTML("qt-note", t.note, "The scope, the exclusions, the payment terms: everything the customer reads under the prices. Every quotation made from this template starts with this text, and prints it.")) +
       '<div class="o-nb"><div class="o-nb-tabs"><div class="tb on">Template lines</div></div><div class="o-nb-pg"><table class="o-lines"><thead><tr><th>Product</th><th>Description</th><th class="u-r">Qty</th><th class="u-r">Unit price</th><th></th></tr></thead><tbody id="qt-lines">' + (lines.length ? lines.map(rowHtml).join("") : rowHtml()) + '</tbody></table><button id="qt-add" class="o-addln">+ Add line</button></div></div>' +
       '</div>';
+    rtWire("qt-note");
     document.getElementById("qt-discard").onclick = function () { go("sale.qtempl"); };
     // Picking a product fills the line from it, on lines added later as well: the
     // description and price follow the product unless they were typed by hand.
@@ -16192,7 +16546,7 @@
     document.getElementById("qt-add").onclick = function () { document.getElementById("qt-lines").insertAdjacentHTML("beforeend", rowHtml()); wireDel(); };
     function readLines() { return [].map.call(document.querySelectorAll("#qt-lines tr"), function (tr, i) { return { product_id: tr.querySelector(".qt-prod").value || null, name: tr.querySelector(".qt-name").value || "", quantity: parseFloat(tr.querySelector(".qt-qty").value) || 1, unit_price: parseFloat(tr.querySelector(".qt-price").value) || 0, sequence: (i + 1) * 10 }; }).filter(function (l) { return l.name || l.product_id; }); }
     async function persist() {
-      var row = { name: gv("qt-tname") || "Template", note: gv("qt-note"),
+      var row = { name: gv("qt-tname") || "Template", note: rtValue("qt-note"),
         validity_days: gv("qt-days") === "" ? null : Math.max(0, parseInt(gv("qt-days"), 10) || 0) };
       var sid = id;
       if (id === "new") { row.company_id = S.company.id; var ins = await sb.from("quote_templates").insert(row).select("id").single(); if (ins.error) { toast(errMsg(ins.error)); return null; } sid = ins.data.id; }
@@ -16210,7 +16564,7 @@
       // quotation itself (and print with it); Reference stays a short reference,
       // and Valid until comes from the template's own validity
       var _days = gv("qt-days") === "" ? null : Math.max(0, parseInt(gv("qt-days"), 10) || 0);
-      var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, narration: gv("qt-note") || null, quote_template_id: sid, validity_date: _days ? isoShift(_days) : null, note: ("From template: " + (gv("qt-tname") || "")) };
+      var hdr = { company_id: S.company.id, number: await nextOrderNumber("sale"), partner_id: null, state: "draft", date_order: today(), currency_code: S.company.currency_code, amount_untaxed: 0, amount_total: 0, narration: rtValue("qt-note") || null, quote_template_id: sid, validity_date: _days ? isoShift(_days) : null, note: ("From template: " + (gv("qt-tname") || "")) };
       var so = await sb.from("sale_orders").insert(hdr).select("id").single();
       if (so.error) { toast(errMsg(so.error)); return; }
       var sub = 0, ln = tl.map(function (l, i) { sub += l.quantity * l.unit_price; return { company_id: S.company.id, order_id: so.data.id, product_id: l.product_id, name: l.name || "Item", quantity: l.quantity, unit_price: l.unit_price, price_subtotal: l.quantity * l.unit_price, sequence: (i + 1) * 10 }; });

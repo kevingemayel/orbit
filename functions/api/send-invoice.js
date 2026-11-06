@@ -6,7 +6,7 @@
 // wrapped so the function always returns JSON (never hangs into a 502).
 const SUPA = "https://hlkwzbkgkwywomuvilwe.supabase.co";
 const ANON = "sb_publishable_lp-wGR9RM2Ws-BvA-Z5XpQ_F_YZk1SW";
-const VERSION = "send-v3";
+const VERSION = "send-v4";
 
 export async function onRequestGet(context) {
   const { env } = context;
@@ -52,7 +52,7 @@ export async function onRequestPost(context) {
     if (!inv) return json({ error: "Invoice not found." }, 404);
 
     stage = "fetch-lines";
-    const lRes = await tfetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invQ + "&select=name,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr }, 8000);
+    const lRes = await tfetch(supaUrl + "/rest/v1/invoice_lines?invoice_id=eq." + invQ + "&select=name,line_type,discount,quantity,unit_price,price_subtotal&order=sequence", { headers: authHdr }, 8000);
     const lines = await lRes.json().catch(() => []);
 
     const recipient = (body.to || (inv.partners && inv.partners.email) || "").trim();
@@ -109,9 +109,19 @@ function buildHtml(inv, lines, docName, co, note) {
   const cc = inv.currency_code || co.currency_code || "USD";
   const noteBlock = (note && String(note).trim()) ? `<div style="margin:18px 0;padding:13px 15px;background:#f4f6f9;border-left:3px solid #152030;border-radius:6px;font-size:13.5px;white-space:pre-wrap;color:#333">${esc(note)}</div>` : "";
   let sub = 0;
+  const cell = "padding:8px;border-bottom:1px solid #eee";
   const rows = (lines || []).map(l => {
-    const ls = Number(l.quantity) * Number(l.unit_price); sub += ls;
-    return `<tr><td style="padding:8px;border-bottom:1px solid #eee">${esc(l.name)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${Number(l.quantity)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(l.unit_price)}</td><td style="padding:8px;border-bottom:1px solid #eee;text-align:right">${money(ls)}</td></tr>`;
+    // a heading or a note prints across the table: no figures, no part in the
+    // total. The printed page and the in-app preview both show them, so the
+    // copy the customer opens has to show them too or it is a different document.
+    if (l.line_type === "section" || l.line_type === "note") {
+      const how = l.line_type === "section" ? "font-weight:700;padding-top:12px" : "font-style:italic;color:#555";
+      return `<tr><td colspan="4" style="${cell};${how}">${esc(l.name || "")}</td></tr>`;
+    }
+    const disc = Number(l.discount) || 0;
+    const ls = Number(l.quantity) * Number(l.unit_price) * (1 - disc / 100); sub += ls;
+    const price = money(l.unit_price) + (disc ? ` <span style="color:#888">less ${Math.round(disc * 100) / 100}%</span>` : "");
+    return `<tr><td style="${cell}">${esc(l.name)}</td><td style="${cell};text-align:right">${Number(l.quantity)}</td><td style="${cell};text-align:right">${price}</td><td style="${cell};text-align:right">${money(ls)}</td></tr>`;
   }).join("");
   const total = Number(inv.amount_total != null ? inv.amount_total : sub);
   const due = Number(inv.amount_residual != null ? inv.amount_residual : total);
@@ -134,6 +144,105 @@ function buildHtml(inv, lines, docName, co, note) {
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span>Total</span><span style="font-weight:800">${cc} ${money(total)}</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0;border-top:1px solid #ddd"><span>Amount Due</span><span>${cc} ${money(due)}</span></div>
     </div>
+    ${termsHtml(inv.narration)}
     <div style="margin-top:28px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center">${esc(co.name || "Space Work")} &middot; sent via Orbit</div>
   </div>`;
+}
+
+// ---------------------------------------------------------------------------
+// The terms: the half of an invoice that is words rather than figures. The scope,
+// the payment terms, the milestone being claimed, and on a facade quotation a
+// four column payment schedule. They are held as a small fixed subset of HTML so
+// that schedule stays a table and a defined term stays bold.
+//
+// This body is sent from the company's own verified domain, so the subset is
+// rebuilt here from an allowlist before it goes. The app does the same with a
+// real parser when the terms are saved; this is the second pass, in a worker with
+// no DOM, and it keeps NO attribute at all except a link's href (http, https or
+// mailto) and a cell's colspan and rowspan. Everything dangerous is removed with
+// its contents, every other unknown tag is dropped and its words kept, and an
+// email client throws style sheets away so each kept tag carries its own style.
+const TERM_OK = { p: 1, br: 1, hr: 1, strong: 1, b: 1, em: 1, i: 1, u: 1, s: 1, sup: 1, sub: 1, h2: 1, h3: 1, h4: 1, ul: 1, ol: 1, li: 1, table: 1, thead: 1, tbody: 1, tfoot: 1, tr: 1, th: 1, td: 1, a: 1, blockquote: 1 };
+const TERM_IN = { p: 1, h2: 1, h3: 1, h4: 1, li: 1 };
+const TERM_RENAME = { h1: "h2", h5: "h4", h6: "h4", strike: "s", del: "s", ins: "u" };
+const TERM_WHOLE = /<(script|style|svg|math|iframe|object|embed|applet|noscript|template|form|select|textarea)\b[^>]*>[\s\S]*?<\/\1\s*>/gi;
+const TERM_STYLE = {
+  p: "margin:0 0 7px", h2: "font-size:13px;font-weight:700;margin:15px 0 5px", h3: "font-size:12px;font-weight:700;margin:12px 0 4px",
+  h4: "font-size:11.5px;font-weight:700;margin:10px 0 3px", ul: "margin:5px 0 8px 20px;padding:0", ol: "margin:5px 0 8px 20px;padding:0",
+  li: "margin:0 0 3px", table: "border-collapse:collapse;width:100%;margin:8px 0 11px;font-size:11px",
+  th: "border:1px solid #c9c9c9;padding:4px 6px;text-align:left;vertical-align:top;background:#f2f2f2;font-weight:700",
+  td: "border:1px solid #c9c9c9;padding:4px 6px;text-align:left;vertical-align:top",
+  blockquote: "margin:7px 0;padding-left:10px;border-left:2px solid #ddd;color:#555", a: "color:#152030"
+};
+// Plain text, the way every note was held before the terms became rich text, and
+// the way the printed page has always read it: a row of a table is a line with
+// " | " between the cells, and an indented line is a sub-heading.
+function termsFromText(t) {
+  const out = [];
+  let tbl = null;
+  const flush = () => {
+    if (!tbl) return;
+    out.push("<table>" + tbl.map((cells, i) => {
+      const tg = i === 0 ? "th" : "td";
+      return "<tr>" + cells.map(c => "<" + tg + ">" + esc(c) + "</" + tg + ">").join("") + "</tr>";
+    }).join("") + "</table>");
+    tbl = null;
+  };
+  String(t).split(/\r?\n/).forEach(ln => {
+    if (ln.indexOf(" | ") >= 0) { (tbl = tbl || []).push(ln.trim().split(" | ").map(c => c.trim())); return; }
+    flush();
+    if (!ln.trim()) return;
+    const tabs = /^\t{1,3}/.exec(ln);
+    out.push(tabs ? '<p class="rt-in' + tabs[0].length + '">' + esc(ln.replace(/^\t+/, "")) + "</p>"
+                  : "<p>" + esc(ln) + "</p>");
+  });
+  flush();
+  return out.join("");
+}
+function termsClean(html) {
+  let s = String(html).replace(/<!--[\s\S]*?-->/g, "").replace(TERM_WHOLE, "");
+  // A link that is not a link is just its words, closing tag and all, so the
+  // whole anchor is unwrapped here rather than leaving a stray </a> behind.
+  s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi, (m, attrs, inner) => {
+    const h = /\bhref\s*=\s*(?:"([^"]*)"|\x27([^\x27]*)\x27|([^\s>]+))/i.exec(attrs) || [];
+    const href = String(h[1] || h[2] || h[3] || "").replace(/[\u0000-\u0020]/g, "");
+    return /^(?:https?:\/\/|mailto:)/i.test(href) ? m : inner;
+  });
+  s = s.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (m, slash, name, attrs) => {
+    let tag = name.toLowerCase();
+    if (TERM_RENAME[tag]) tag = TERM_RENAME[tag];
+    if (!TERM_OK[tag]) return "";
+    if (slash) return "</" + tag + ">";
+    let at = "";
+    if (tag === "a") {
+      const h = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i.exec(attrs) || [];
+      const href = String(h[1] || h[2] || h[3] || "").replace(/[\u0000-\u0020]/g, "");
+      if (!/^(?:https?:\/\/|mailto:)/i.test(href)) return "";
+      at = ' href="' + esc(href) + '" target="_blank" rel="noopener noreferrer"';
+    }
+    if (tag === "th" || tag === "td") {
+      const cs = parseInt((/\bcolspan\s*=\s*"?(\d+)/i.exec(attrs) || [])[1], 10);
+      const rs = parseInt((/\browspan\s*=\s*"?(\d+)/i.exec(attrs) || [])[1], 10);
+      if (cs > 1 && cs < 40) at += ' colspan="' + cs + '"';
+      if (rs > 1 && rs < 200) at += ' rowspan="' + rs + '"';
+    }
+    // the one class the sanitiser writes, turned into the padding an email can read
+    const lv = TERM_IN[tag] ? Number((/\brt-in([1-3])\b/.exec(attrs) || [])[1] || 0) : 0;
+    const bits = [];
+    if (TERM_STYLE[tag]) bits.push(TERM_STYLE[tag]);
+    if (lv) bits.push("padding-left:" + (lv * 26) + "px");
+    if (bits.length) at += ' style="' + bits.join(";") + '"';
+    return "<" + tag + at + ">";
+  });
+  return s.replace(/<(?![/a-zA-Z])/g, "&lt;").replace(/[\u200B-\u200D\u2060\uFEFF]/g, "").trim();
+}
+function termsHtml(narration) {
+  const raw = String(narration == null ? "" : narration);
+  if (!raw.trim()) return "";
+  const isHtml = /<(?:p|div|br|table|tr|t[dh]|ul|ol|li|h[1-6]|strong|b|em|i|u|s|span|font|blockquote|a)\b[^>]*>/i.test(raw);
+  const body = termsClean(isHtml ? raw : termsFromText(raw));
+  if (!body) return "";
+  return '<div style="margin:22px 0 0;border-top:1px solid #ddd;padding-top:12px">' +
+    '<div style="text-transform:uppercase;font-size:10px;color:#888;font-weight:700;margin-bottom:6px">Terms and notes</div>' +
+    '<div style="font-size:11.5px;color:#444;line-height:1.5">' + body + '</div></div>';
 }

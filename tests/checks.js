@@ -593,17 +593,42 @@
           ["one block, drawn the same way everywhere", /function pdocTerms\(t\) \{/],
           ["on the printed order", /pdocTerms\(document\.getElementById\("o-terms"\)/],
           ["on the printed invoice", /pdocTerms\(inv\.narration\)/],
-          ["in the emailed invoice", /var termsBlock = \(inv\.narration/],
+          ["in the emailed invoice", /var termsBlock = _terms/],
           ["carried onto the invoice made from the order", /if \(order\.narration\) hdr\.narration = order\.narration;/],
-          ["a box to type them in", /id="o-terms" class="o-terms"/],
+          ["a box to type them in", /rtEditorHTML\("o-terms",/],
           ["saved from the order form", /narration: document\.getElementById\("o-terms"\)/],
-          ["saved from the invoice form", /hdr\.narration = document\.getElementById\("f-narr"\)\.value/],
-          ["the template holds the master copy", /id="qt-note" class="o-terms"/],
-          ["and stamps it onto the quotation", /narration: gv\("qt-note"\) \|\| null/]
+          ["saved from the invoice form", /hdr\.narration = rtValue\("f-narr"\)/],
+          ["the template holds the master copy", /rtEditorHTML\("qt-note",/],
+          ["and stamps it onto the quotation", /narration: rtValue\("qt-note"\) \|\| null/]
         ];
         var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
         return gone.length ? bad("the terms never reach: " + gone.join(", "))
           : ok(need.length + " places carry the terms");
+      } },
+
+    { name: "rich text on a document is rebuilt, never passed through",
+      why: "The terms are a small subset of HTML, which is the only way a payment schedule prints as a table and a defined term prints bold. That subset is also the one place in Orbit where what one person types becomes another person's markup: a quotation's terms are drawn on the form, printed, and emailed from the company's own verified domain. So nothing is passed through. rtClean parses the string and writes a new one from an allowlist, keeping no attribute but a link's href and a cell's span; every renderer goes through rtHTML; and what the editor holds goes through rtClean again on the way to the database. A renderer that drops the stored value straight into a page is stored cross-site scripting with the customer's own quotation as the carrier, and it is invisible until the day somebody pastes the wrong thing in.",
+      run: function (src) {
+        var need = [
+          ["a real parser, not a regular expression", /function rtClean\(html, opts\) \{/],
+          ["an allowlist of tags", /var RT_KEEP = \{/],
+          ["a drop list that takes the contents with it", /if \(RT_DROP\[tag\]\) return "";/],
+          ["one way in for every renderer", /function rtHTML\(v, opts\) \{/],
+          ["the printed page goes through it", /function pdocTerms\(t\) \{\s*var h = rtHTML\(t\);/],
+          ["the emailed copy goes through it", /var _terms = rtHTML\(inv\.narration, \{ inline: true \}\);/],
+          ["a document read rather than edited goes through it", /function rtViewHTML\(v, opts\) \{\s*var h = rtHTML\(v, opts\);/],
+          ["plain text written before this still reads", /function rtFromText\(t\) \{/],
+          ["and the sanitiser can be driven by a test", /window\.__rt = \{ clean: rtClean/]
+        ];
+        var gone = need.filter(function (p) { return !p[1].test(src); }).map(function (p) { return p[0]; });
+        if (gone.length) return bad("missing: " + gone.join(", "));
+        if (!/var h = rtClean\(ed\.innerHTML\);/.test(src)) return bad("what the editor holds is saved without being cleaned again");
+        if (/img: 1/.test((/var RT_KEEP = \{[^}]*\}/.exec(src) || [""])[0])) return bad("the allowlist keeps images, so a document can carry a tracking pixel into an email");
+        // the shape this replaced: the stored value escaped straight into markup.
+        // It is safe and it is why a four column payment schedule printed as pipes.
+        var raw = src.match(/esc\((?:String\()?(?:inv|order|t)\.narration/g) || [];
+        if (raw.length) return bad(raw.length + " place(s) still put the terms on a page as escaped text: use rtViewHTML or pdocTerms");
+        return ok(need.length + " guards in place, and no renderer passes the stored value through");
       } },
 
     { name: "a document's lines come back in the order they were written",

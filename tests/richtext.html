@@ -1,0 +1,182 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Orbit rich text</title>
+<style>
+  body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;background:#fbfbfa;color:#16171c}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:15px;margin:26px 0 4px}
+  .sum{font-size:13px;margin:0 0 18px;font-weight:700}
+  .c{border:1px solid #e5e5e2;border-left:3px solid #ccc;border-radius:10px;padding:10px 14px;margin:7px 0;background:#fff}
+  .c.ok{border-left-color:#16a34a} .c.no{border-left-color:#dc2626;background:#fef4f4}
+  .n{font-weight:600} .d{font-size:12.5px;color:#555;font-family:ui-monospace,monospace;margin-top:3px;word-break:break-all}
+  .tag{float:right;font-size:11px;font-weight:700} .ok .tag{color:#16a34a} .no .tag{color:#dc2626}
+</style>
+<h1>Rich text on a document, running for real</h1>
+<p class="sum" id="sum">loading app.js...</p>
+<div id="out"></div>
+
+<!-- app.js needs these two before it will run at all -->
+<script>
+  window.cfg = { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "test" };
+  var _chain = new Proxy(function () { return _chain; }, {
+    get: function (t, k) {
+      if (k === "then") return function (res) { return Promise.resolve({ data: [], error: null, count: 0 }).then(res); };
+      return _chain;
+    },
+    apply: function () { return _chain; }
+  });
+  window.supabase = { createClient: function () { return _chain; } };
+</script>
+<script src="../js/app.js"></script>
+<script>
+(function () {
+  var results = [];
+  function t(name, fn) {
+    var r; try { r = fn(); } catch (e) { r = { ok: false, detail: e.message }; }
+    results.push({ name: name, ok: !!(r && r.ok), detail: (r && r.detail) || "" });
+  }
+  var RT = window.__rt;
+
+  // ---- what must never get through ----------------------------------------
+  t("a script tag goes, and its code with it", function () {
+    var out = RT.clean('<p>Terms</p><script>alert(1)<\/script><p>apply</p>');
+    return { ok: out.indexOf("script") < 0 && out.indexOf("alert") < 0 && /Terms/.test(out) && /apply/.test(out), detail: out };
+  });
+  t("an event handler cannot survive, because no attribute does", function () {
+    var out = RT.clean('<p onclick="steal()" onmouseover="x" style="position:fixed">Payment terms</p>');
+    return { ok: out === "<p>Payment terms</p>", detail: out };
+  });
+  t("a style sheet goes, and its rules with it", function () {
+    var out = RT.clean('<style>body{display:none}</style><p>Scope</p>');
+    return { ok: out === "<p>Scope</p>", detail: out };
+  });
+  t("an image is dropped, so a document cannot carry a tracking pixel", function () {
+    var out = RT.clean('<p>a<img src="https://x/p.gif" onerror="alert(1)">b</p>');
+    return { ok: out.indexOf("img") < 0 && out.indexOf("alert") < 0 && /a/.test(out) && /b/.test(out), detail: out };
+  });
+  t("an svg, an iframe and an object are dropped whole", function () {
+    var out = RT.clean('<svg><script>alert(1)<\/script></svg><iframe src="x"></iframe><object data="y"></object><p>Only this</p>');
+    return { ok: out === "<p>Only this</p>", detail: out };
+  });
+  t("a javascript: link is left as plain words", function () {
+    var out = RT.clean('<p>See <a href="javascript:alert(1)">our site</a></p>');
+    return { ok: out === "<p>See our site</p>", detail: out };
+  });
+  t("a data: link is left as plain words too", function () {
+    var out = RT.clean('<p><a href="data:text/html,<script>alert(1)<\/script>">click</a></p>');
+    return { ok: out === "<p>click</p>", detail: out };
+  });
+  t("a real link survives, and opens without handing over the page", function () {
+    var out = RT.clean('<p><a href="https://spacework.ai/terms" class="x">Terms</a></p>');
+    return { ok: /href="https:\/\/spacework\.ai\/terms"/.test(out) && /rel="noopener noreferrer"/.test(out) && out.indexOf("class") < 0, detail: out };
+  });
+  t("the sanitiser is the same on the way out as on the way in", function () {
+    var once = RT.clean('<div><span style="color:red"><strong>A</strong> b</span></div>');
+    var twice = RT.clean(once);
+    return { ok: once === twice && once === "<p><strong>A</strong> b</p>", detail: once + "  then  " + twice };
+  });
+
+  // ---- what came out of Odoo must arrive intact ----------------------------
+  t("Odoo's span and font wrappers go, and the words stay", function () {
+    var out = RT.clean('<p><strong><span class="o_small-fs">SPACEWORK SARL</span></strong><span class="o_small-fs"> of Beirut</span></p>');
+    return { ok: out === "<p><strong>SPACEWORK SARL</strong> of Beirut</p>", detail: out };
+  });
+  t("the editor's invisible characters are not carried over", function () {
+    var out = RT.clean('<p>​a. Facade concept drawings.﻿</p>');
+    return { ok: out === "<p>a. Facade concept drawings.</p>", detail: JSON.stringify(out) };
+  });
+  t("an empty heading Odoo left behind disappears", function () {
+    var out = RT.clean('<h2 data-oe-version="2.0"><font><span class="oe-tabs">\t</span></font></h2><p>1. Scope of Work</p>');
+    return { ok: out === "<p>1. Scope of Work</p>", detail: out };
+  });
+  t("a blank line somebody typed is kept", function () {
+    var out = RT.clean('<p>one</p><p><br></p><p>two</p>');
+    return { ok: out === "<p>one</p><p><br></p><p>two</p>", detail: out };
+  });
+  t("the payment schedule is a table, and its first row is the header", function () {
+    var src = '<table class="table o_table" style="width:668px"><tbody>' +
+      '<tr><td><span>Milestone</span></td><td>Description</td><td>Percentage</td><td>Amount USD</td></tr>' +
+      '<tr><td>1</td><td>Advance payment</td><td>25%</td><td>2,700</td></tr></tbody></table>';
+    var out = RT.clean(src);
+    var heads = (out.match(/<th>/g) || []).length, cells = (out.match(/<td>/g) || []).length;
+    return { ok: heads === 4 && cells === 4 && out.indexOf("style") < 0 && /Amount USD/.test(out), detail: heads + " header cells, " + cells + " body cells: " + out };
+  });
+  t("a cell that spans columns keeps saying so, within reason", function () {
+    var out = RT.clean('<table><tr><th colspan="2">A</th></tr><tr><td colspan="4000">B</td><td rowspan="abc">C</td></tr></table>');
+    return { ok: /<th colspan="2">/.test(out) && out.indexOf('colspan="4000"') < 0 && out.indexOf("rowspan") < 0, detail: out };
+  });
+  t("a heading level Orbit does not use is pulled to one it does", function () {
+    var out = RT.clean("<h1>Agreement</h1><h5>Annex</h5>");
+    return { ok: out === "<h2>Agreement</h2><h4>Annex</h4>", detail: out };
+  });
+  t("a list stays a list", function () {
+    var out = RT.clean('<ul><li>Shop drawings</li><li>Calculations</li></ul>');
+    return { ok: out === "<ul><li>Shop drawings</li><li>Calculations</li></ul>", detail: out };
+  });
+  t("Odoo's forty-pixel tab span is an indent, and the only class allowed to say so", function () {
+    var out = RT.clean('<h2><span class="oe-tabs" style="width: 40px;">\t</span><strong>1. Scope of Work</strong></h2>' +
+                       '<p class="o_small-fs evil" style="x">plain</p>');
+    return { ok: out === '<h2 class="rt-in1"><strong>1. Scope of Work</strong></h2><p>plain</p>', detail: out };
+  });
+  t("an indent cannot be made up: a class from outside the list is dropped", function () {
+    var out = RT.clean('<p class="rt-in9">a</p><p class="rt-in1 sneaky">b</p>');
+    return { ok: out === '<p>a</p><p class="rt-in1">b</p>', detail: out };
+  });
+  t("and it survives being cleaned again, so saving twice does not flatten it", function () {
+    var once = RT.clean('<p>\t\ta</p>'), twice = RT.clean(once);
+    return { ok: once === '<p class="rt-in2">a</p>' && twice === once, detail: once + "  then  " + twice };
+  });
+  t("an indent reaches an email as a padding, because a class needs a style sheet", function () {
+    var out = RT.html("\ta. 25% on signature", { inline: true });
+    return { ok: /padding-left:26px/.test(out) && out.indexOf("class") < 0, detail: out };
+  });
+  t("a table with no rows in it is not a table", function () {
+    var out = RT.clean("<table><tbody></tbody></table>");
+    return { ok: out === "", detail: JSON.stringify(out) };
+  });
+
+  // ---- the plain text written before any of this still works ---------------
+  t("plain text is recognised as plain text", function () {
+    return { ok: RT.isHTML("1. Scope of Work\nAll mentioned works") === false && RT.isHTML("<p>x</p>") === true, detail: "" };
+  });
+  t("a row written with pipes becomes a real table", function () {
+    var out = RT.html("5.2 Payment milestones:\nMilestone | Description | %\n1 | Advance | 25%");
+    return { ok: /<th>Milestone<\/th>/.test(out) && /<td>Advance<\/td>/.test(out) && /<p>5\.2 Payment milestones:<\/p>/.test(out), detail: out };
+  });
+  t("an indented line stays indented", function () {
+    var out = RT.html("5. Fees\n\ta. 25% on signature\n\t\ti. net of tax");
+    return { ok: out === '<p>5. Fees</p><p class="rt-in1">a. 25% on signature</p><p class="rt-in2">i. net of tax</p>', detail: out };
+  });
+  t("plain text with angle brackets in it is text, not markup", function () {
+    var out = RT.html("Delivery < 4 weeks & no VAT");
+    return { ok: out === "<p>Delivery &lt; 4 weeks &amp; no VAT</p>", detail: out };
+  });
+  t("a table row reads back as one line, not ten fragments", function () {
+    var txt = RT.toText('<table><tr><th>Milestone</th><th>%</th></tr><tr><td>1</td><td>25%</td></tr></table>');
+    return { ok: txt === "Milestone | %\n1 | 25%", detail: JSON.stringify(txt) };
+  });
+  t("an empty box is empty, whatever tags are in it", function () {
+    return { ok: RT.toText("<p><br></p><p>&nbsp;</p>").trim() === "", detail: JSON.stringify(RT.toText("<p><br></p>")) };
+  });
+
+  // ---- the emailed copy ----------------------------------------------------
+  t("an emailed copy carries its styling inline, because email throws CSS away", function () {
+    var out = RT.html('<table><tr><td>1</td></tr></table><p>x</p>', { inline: true });
+    return { ok: /<table style="border-collapse:collapse/.test(out) && /<th style="border:1px solid/.test(out) && /<p style="margin:0 0 7px">x<\/p>/.test(out), detail: out };
+  });
+  t("and the same subset, so nothing gets through that way either", function () {
+    var out = RT.html('<p onclick="x">a</p><script>b<\/script>', { inline: true });
+    return { ok: out.indexOf("onclick") < 0 && out.indexOf("script") < 0, detail: out };
+  });
+
+  var pass = results.filter(function (r) { return r.ok; }).length;
+  var s = document.getElementById("sum");
+  s.textContent = pass + " of " + results.length + " passed";
+  s.style.color = pass === results.length ? "#16a34a" : "#dc2626";
+  document.getElementById("out").innerHTML = results.map(function (r) {
+    return '<div class="c ' + (r.ok ? "ok" : "no") + '"><span class="tag">' + (r.ok ? "PASS" : "FAIL") + '</span>' +
+      '<div class="n">' + r.name + '</div>' +
+      '<div class="d">' + String(r.detail).replace(/&/g, "&amp;").replace(/</g, "&lt;") + '</div></div>';
+  }).join("");
+})();
+</script>

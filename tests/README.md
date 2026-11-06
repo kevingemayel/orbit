@@ -55,6 +55,25 @@ is not installed locally. It also reads the mutations out of `static.test.js` an
 shows that every check fails on its broken source, so "tests the tests" works
 without Node as well.
 
+## 2a. Rich text on a document - browser
+
+`tests/richtext.html` drives the terms sanitiser directly, through the test seam
+`window.__rt`, because "does it actually drop a script tag" is not a question the
+source text can answer. It asserts what must never get through (a script, a style
+sheet, an event handler, an image, an svg, a `javascript:` or `data:` link, a
+made-up indent class), what must arrive intact out of Odoo or Word (the span and
+font wrappers unwrapped, the payment schedule as a table with a header row, a
+`colspan` within range, the indents), and that the plain text every note held
+before still reads the same.
+
+`tests/richtext-import.html` is the agreement test for the import.
+`supabase/244-odoo-terms-as-rich-text.sql` was written by
+`supabase/odoo-notes-to-rich-text.pl`, which had to reimplement the
+sanitiser's rules because there is no DOM in perl, and two implementations of one
+set of rules are two sets of rules unless something checks. The page reads every
+literal back out of that SQL, puts it through the app's own sanitiser, and
+requires it back unchanged. Run it before running the migration: 27 of 27.
+
 ## 2b. Screen smoke test - browser
 
 Serve the repo root over http and open `tests/smoke.html`, for example

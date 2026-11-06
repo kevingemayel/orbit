@@ -86,6 +86,8 @@ const MUTATIONS = {
     s => s.replace("var ln = q * ru.unit * (1 - disc / 100);", "var ln = q * ru.unit;"),
   "a product tree is read by company, never by organisation":
     s => s.replace('.from("classification_nodes").select("*").eq("company_id", S.company.id).order("sort")', '.from("classification_nodes").select("*").eq("org_id", S.company.org_id).order("sort")'),
+  "rich text on a document is rebuilt, never passed through":
+    s => s.replace("var h = rtHTML(t);", 'var h = esc(String(t == null ? "" : t));'),
   "the terms a customer reads go out with the document":
     s => s.replace("pdocTerms(inv.narration) +", ""),
   "a document's lines come back in the order they were written":

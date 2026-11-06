@@ -1165,14 +1165,60 @@ button.pri:disabled{opacity:.55;cursor:default;transform:none;box-shadow:none}
 .pinv .pterms{margin-top:22px;border-top:1px solid #ddd;padding-top:12px;page-break-inside:auto}
 .pinv .ptermsh{text-transform:uppercase;font-size:10px;color:#777;font-weight:700;letter-spacing:.04em;margin-bottom:6px}
 .pinv .ptermsb{font-size:11.5px;line-height:1.55;color:#222}
-.pinv .ptermsl{white-space:pre-wrap}
-.pinv .ptermsgap{height:7px}
-.pinv .ptermsh2{font-weight:700;margin:9px 0 3px}
-.pinv .ptermst{border-collapse:collapse;margin:5px 0 9px;width:100%;font-size:11px}
-.pinv .ptermst th,.pinv .ptermst td{border:1px solid #c9c9c9;padding:3px 6px;text-align:left;vertical-align:top}
-.pinv .ptermst th{background:#f2f2f2;font-weight:700}
-.o-terms{width:100%;min-height:320px;font:inherit;font-size:13px;line-height:1.55;resize:vertical;white-space:pre-wrap}
-.o-terms-ro{white-space:pre-wrap;font-size:13px;line-height:1.55;color:var(--ink2);max-height:none}
+/* The terms, on the printed page: the block's own rules below, pulled down to
+   document sizes and printing colours rather than screen ones. */
+.pinv .ptermsb p{margin:0 0 6px}
+.pinv .ptermsb h2{font-size:12.5px;margin:12px 0 4px}
+.pinv .ptermsb h3{font-size:12px;margin:10px 0 3px}
+.pinv .ptermsb h4{font-size:11.5px;margin:9px 0 3px}
+.pinv .ptermsb ul,.pinv .ptermsb ol{margin:4px 0 7px;padding-left:20px}
+.pinv .ptermsb table{margin:5px 0 9px;font-size:11px}
+.pinv .ptermsb th,.pinv .ptermsb td{border:1px solid #c9c9c9;padding:3px 6px;color:#222}
+.pinv .ptermsb th{background:#f2f2f2}
+.pinv .ptermsb a{color:#222}
+.pinv .ptermsb blockquote{border-left-color:#ddd;color:#555}
+.pinv .ptermsb hr{border-top-color:#ddd}
+/* ---------------------------------------------------------------------------
+   RICH TEXT. One block of rules, used in three places that must agree: the
+   editor on the form, the read-only copy on a confirmed document, and the
+   printed page. A quotation that looks one way on screen and another way in
+   the customer's hand is two documents, and only one of them was checked. */
+.rtb{font-size:13px;line-height:1.6;color:var(--ink)}
+.rtb>:first-child{margin-top:0}
+.rtb p{margin:0 0 8px}
+.rtb h2{font-size:14.5px;font-weight:700;margin:16px 0 6px;line-height:1.35}
+.rtb h3{font-size:13.5px;font-weight:700;margin:13px 0 5px}
+.rtb h4{font-size:13px;font-weight:700;margin:11px 0 4px}
+.rtb ul,.rtb ol{margin:6px 0 9px;padding-left:22px}
+.rtb li{margin:0 0 4px}
+.rtb strong,.rtb b{font-weight:700}
+.rtb blockquote{margin:8px 0;padding-left:11px;border-left:2px solid var(--line);color:var(--ink2)}
+.rtb hr{border:0;border-top:1px solid var(--line);margin:12px 0}
+.rtb a{color:var(--sw-pri)}
+.rtb table{border-collapse:collapse;width:100%;margin:8px 0 12px;font-size:12.5px}
+.rtb th,.rtb td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+.rtb th{background:var(--panel2);font-weight:700}
+/* An indented sub-clause. The class is the only one the sanitiser will write, and
+   it writes it from a list of three, so there are exactly three rules to carry. */
+.rtb .rt-in1{padding-left:26px}
+.rtb .rt-in2{padding-left:52px}
+.rtb .rt-in3{padding-left:78px}
+.rt{border:1px solid var(--line);border-radius:var(--r);background:var(--panel2);overflow:hidden}
+.rt-tools{display:flex;flex-wrap:wrap;align-items:center;gap:2px;padding:5px 6px;border-bottom:1px solid var(--line);background:var(--panel)}
+.rt-b{min-width:28px;height:27px;padding:0 7px;border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--ink2);font:inherit;font-size:12.5px;line-height:1;cursor:pointer}
+.rt-b:hover{background:var(--panel2);color:var(--ink);border-color:var(--line)}
+.rt-sep{width:1px;height:18px;margin:0 4px;background:var(--line);flex:0 0 auto}
+.rt-ed{min-height:340px;max-height:62vh;overflow:auto;padding:12px 14px;background:var(--panel);outline:none}
+.rt-ed:focus-visible{box-shadow:inset 0 0 0 2px var(--sw-pri)}
+.rt-ed.rt-blank:before{content:attr(data-ph);color:var(--muted);display:block;pointer-events:none}
+.rt-ed table{min-width:55%}
+.rt-ed th,.rt-ed td{min-width:42px}
+.rt-grid{position:fixed;z-index:120;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh);padding:8px}
+.rt-gw{display:grid;gap:2px}
+.rt-gw i{width:15px;height:15px;border:1px solid var(--line);border-radius:2px;background:var(--panel2);cursor:pointer}
+.rt-gw i.on{background:var(--sw-pri);border-color:var(--sw-pri)}
+.rt-gl{margin-top:7px;font-size:11.5px;color:var(--ink2);text-align:center}
+@media print{.rt-grid{display:none}}
 .pinv .pfoot{margin-top:30px;border-top:1px solid #ddd;padding-top:10px;color:#888;font-size:11px;text-align:center}
 @page{size:A4;margin:12mm}
 /* 80mm thermal: the bill, the receipt and the kitchen docket. A restaurant
